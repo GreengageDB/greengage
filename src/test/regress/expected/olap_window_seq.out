@@ -31,11 +31,6 @@ select rank() over (), *
 from sale; --error - order by req'd
  rank | cn | vn | pn  |     dt     | qty  | prc  
 ------+----+----+-----+------------+------+------
-    1 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
-    1 |  3 | 30 | 600 | 06-01-1401 |   12 |    5
-    1 |  4 | 40 | 800 | 06-01-1401 |    1 |    1
-    1 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
-    1 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
     1 |  2 | 40 | 100 | 01-01-1401 | 1100 | 2400
     1 |  3 | 40 | 200 | 04-01-1401 |    1 |    0
     1 |  1 | 20 | 100 | 05-01-1401 |    1 |    0
@@ -43,6 +38,11 @@ from sale; --error - order by req'd
     1 |  1 | 50 | 400 | 06-01-1401 |    1 |    0
     1 |  1 | 30 | 500 | 06-01-1401 |   12 |    5
     1 |  4 | 40 | 700 | 06-01-1401 |    1 |    1
+    1 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
+    1 |  3 | 30 | 600 | 06-01-1401 |   12 |    5
+    1 |  4 | 40 | 800 | 06-01-1401 |    1 |    1
+    1 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
+    1 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
 (12 rows)
 
 select dense_rank() over (), * 
@@ -56,11 +56,11 @@ from sale; --error - order by order by req'd
           1 |  1 | 50 | 400 | 06-01-1401 |    1 |    0
           1 |  1 | 30 | 500 | 06-01-1401 |   12 |    5
           1 |  4 | 40 | 700 | 06-01-1401 |    1 |    1
-          1 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
-          1 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
           1 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
           1 |  3 | 30 | 600 | 06-01-1401 |   12 |    5
           1 |  4 | 40 | 800 | 06-01-1401 |    1 |    1
+          1 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
+          1 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
 (12 rows)
 
 -- 2 -- Plan trivial windows over various input plan types --
@@ -68,18 +68,18 @@ select row_number() over (), pn, cn, vn, dt, qty, prc
 from sale; -- mvd 1->1
  row_number | pn  | cn | vn |     dt     | qty  | prc  
 ------------+-----+----+----+------------+------+------
-          1 | 200 |  1 | 10 | 03-01-1401 |    1 |    0
-          2 | 500 |  3 | 30 | 06-01-1401 |   12 |    5
-          3 | 400 |  2 | 50 | 06-01-1401 |    1 |    0
-          4 | 600 |  3 | 30 | 06-01-1401 |   12 |    5
-          5 | 800 |  4 | 40 | 06-01-1401 |    1 |    1
-          6 | 100 |  2 | 40 | 01-01-1401 | 1100 | 2400
-          7 | 200 |  3 | 40 | 04-01-1401 |    1 |    0
-          8 | 100 |  1 | 20 | 05-01-1401 |    1 |    0
-          9 | 300 |  1 | 30 | 05-02-1401 |    1 |    0
-         10 | 400 |  1 | 50 | 06-01-1401 |    1 |    0
-         11 | 500 |  1 | 30 | 06-01-1401 |   12 |    5
-         12 | 700 |  4 | 40 | 06-01-1401 |    1 |    1
+          1 | 100 |  2 | 40 | 01-01-1401 | 1100 | 2400
+          2 | 200 |  3 | 40 | 04-01-1401 |    1 |    0
+          3 | 100 |  1 | 20 | 05-01-1401 |    1 |    0
+          4 | 300 |  1 | 30 | 05-02-1401 |    1 |    0
+          5 | 400 |  1 | 50 | 06-01-1401 |    1 |    0
+          6 | 500 |  1 | 30 | 06-01-1401 |   12 |    5
+          7 | 700 |  4 | 40 | 06-01-1401 |    1 |    1
+          8 | 400 |  2 | 50 | 06-01-1401 |    1 |    0
+          9 | 600 |  3 | 30 | 06-01-1401 |   12 |    5
+         10 | 800 |  4 | 40 | 06-01-1401 |    1 |    1
+         11 | 200 |  1 | 10 | 03-01-1401 |    1 |    0
+         12 | 500 |  3 | 30 | 06-01-1401 |   12 |    5
 (12 rows)
 
 select row_number() over (), s.pn, s.cn, s.vn, s.dt, s.qty, s.prc, c.cname, c.cloc, p.pname, p.pcolor
@@ -87,18 +87,18 @@ from sale s, customer c, product p
 where s.cn = c.cn and s.pn = p.pn; -- mvd 1->1
  row_number | pn  | cn | vn |     dt     | qty  | prc  |    cname     |     cloc     |   pname   |  pcolor   
 ------------+-----+----+----+------------+------+------+--------------+--------------+-----------+-----------
-          1 | 300 |  1 | 30 | 05-02-1401 |    1 |    0 | Macbeth      | Inverness    | Castle    | Grey
-          2 | 400 |  1 | 50 | 06-01-1401 |    1 |    0 | Macbeth      | Inverness    | Justice   | Clear
-          3 | 400 |  2 | 50 | 06-01-1401 |    1 |    0 | Duncan       | Forres       | Justice   | Clear
+          1 | 800 |  4 | 40 | 06-01-1401 |    1 |    1 | Witches, Inc | Lonely Heath | Fries     | Grey
+          2 | 700 |  4 | 40 | 06-01-1401 |    1 |    1 | Witches, Inc | Lonely Heath | Hamburger | Grey
+          3 | 500 |  3 | 30 | 06-01-1401 |   12 |    5 | Lady Macbeth | Inverness    | Donuts    | Plain
           4 | 500 |  1 | 30 | 06-01-1401 |   12 |    5 | Macbeth      | Inverness    | Donuts    | Plain
-          5 | 800 |  4 | 40 | 06-01-1401 |    1 |    1 | Witches, Inc | Lonely Heath | Fries     | Grey
-          6 | 500 |  3 | 30 | 06-01-1401 |   12 |    5 | Lady Macbeth | Inverness    | Donuts    | Plain
-          7 | 700 |  4 | 40 | 06-01-1401 |    1 |    1 | Witches, Inc | Lonely Heath | Hamburger | Grey
-          8 | 100 |  1 | 20 | 05-01-1401 |    1 |    0 | Macbeth      | Inverness    | Sword     | Black
-          9 | 200 |  1 | 10 | 03-01-1401 |    1 |    0 | Macbeth      | Inverness    | Dream     | Black
-         10 | 600 |  3 | 30 | 06-01-1401 |   12 |    5 | Lady Macbeth | Inverness    | Donuts    | Chocolate
-         11 | 100 |  2 | 40 | 01-01-1401 | 1100 | 2400 | Duncan       | Forres       | Sword     | Black
-         12 | 200 |  3 | 40 | 04-01-1401 |    1 |    0 | Lady Macbeth | Inverness    | Dream     | Black
+          5 | 400 |  2 | 50 | 06-01-1401 |    1 |    0 | Duncan       | Forres       | Justice   | Clear
+          6 | 300 |  1 | 30 | 05-02-1401 |    1 |    0 | Macbeth      | Inverness    | Castle    | Grey
+          7 | 400 |  1 | 50 | 06-01-1401 |    1 |    0 | Macbeth      | Inverness    | Justice   | Clear
+          8 | 600 |  3 | 30 | 06-01-1401 |   12 |    5 | Lady Macbeth | Inverness    | Donuts    | Chocolate
+          9 | 100 |  2 | 40 | 01-01-1401 | 1100 | 2400 | Duncan       | Forres       | Sword     | Black
+         10 | 200 |  3 | 40 | 04-01-1401 |    1 |    0 | Lady Macbeth | Inverness    | Dream     | Black
+         11 | 100 |  1 | 20 | 05-01-1401 |    1 |    0 | Macbeth      | Inverness    | Sword     | Black
+         12 | 200 |  1 | 10 | 03-01-1401 |    1 |    0 | Macbeth      | Inverness    | Dream     | Black
 (12 rows)
 
 select row_number() over (), vn, count(*), sum(qty*prc) as amt
@@ -116,9 +116,9 @@ select row_number() over (), name, loc
 from (select vname, vloc from vendor union select cname, cloc from customer) r(name,loc); -- mvd 1->1
  row_number |     name     |     loc      
 ------------+--------------+--------------
-          1 | Lady Macbeth | Inverness
-          2 | Witches, Inc | Lonely Heath
-          3 | Duncan       | Forres
+          1 | Duncan       | Forres
+          2 | Lady Macbeth | Inverness
+          3 | Witches, Inc | Lonely Heath
           4 | Macduff      | Fife
           5 | Macbeth      | Inverness
 (5 rows)
@@ -146,18 +146,18 @@ select row_number() over (w), * from sale window w as () -- mvd 1->1
 order by 1 desc; -- order 1
  row_number | cn | vn | pn  |     dt     | qty  | prc  
 ------------+----+----+-----+------------+------+------
-         12 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
-         11 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
-         10 |  4 | 40 | 700 | 06-01-1401 |    1 |    1
-          9 |  1 | 30 | 500 | 06-01-1401 |   12 |    5
-          8 |  1 | 50 | 400 | 06-01-1401 |    1 |    0
-          7 |  1 | 30 | 300 | 05-02-1401 |    1 |    0
-          6 |  1 | 20 | 100 | 05-01-1401 |    1 |    0
-          5 |  3 | 40 | 200 | 04-01-1401 |    1 |    0
-          4 |  2 | 40 | 100 | 01-01-1401 | 1100 | 2400
-          3 |  4 | 40 | 800 | 06-01-1401 |    1 |    1
-          2 |  3 | 30 | 600 | 06-01-1401 |   12 |    5
-          1 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
+         12 |  4 | 40 | 800 | 06-01-1401 |    1 |    1
+         11 |  3 | 30 | 600 | 06-01-1401 |   12 |    5
+         10 |  2 | 50 | 400 | 06-01-1401 |    1 |    0
+          9 |  3 | 30 | 500 | 06-01-1401 |   12 |    5
+          8 |  1 | 10 | 200 | 03-01-1401 |    1 |    0
+          7 |  4 | 40 | 700 | 06-01-1401 |    1 |    1
+          6 |  1 | 30 | 500 | 06-01-1401 |   12 |    5
+          5 |  1 | 50 | 400 | 06-01-1401 |    1 |    0
+          4 |  1 | 30 | 300 | 05-02-1401 |    1 |    0
+          3 |  1 | 20 | 100 | 05-01-1401 |    1 |    0
+          2 |  3 | 40 | 200 | 04-01-1401 |    1 |    0
+          1 |  2 | 40 | 100 | 01-01-1401 | 1100 | 2400
 (12 rows)
 
 select row_number() over (w), * from sale
@@ -196,9 +196,6 @@ window
     wbf as (wb range between 2 preceding and 3 preceding); --mvd 3->1
  cn | vn | pn  |     dt     | qty  | prc  
 ----+----+-----+------------+------+------
-  2 | 50 | 400 | 06-01-1401 |    1 |    0
-  3 | 30 | 600 | 06-01-1401 |   12 |    5
-  4 | 40 | 800 | 06-01-1401 |    1 |    1
   2 | 40 | 100 | 01-01-1401 | 1100 | 2400
   3 | 40 | 200 | 04-01-1401 |    1 |    0
   1 | 20 | 100 | 05-01-1401 |    1 |    0
@@ -208,6 +205,9 @@ window
   4 | 40 | 700 | 06-01-1401 |    1 |    1
   1 | 10 | 200 | 03-01-1401 |    1 |    0
   3 | 30 | 500 | 06-01-1401 |   12 |    5
+  2 | 50 | 400 | 06-01-1401 |    1 |    0
+  3 | 30 | 600 | 06-01-1401 |   12 |    5
+  4 | 40 | 800 | 06-01-1401 |    1 |    1
 (12 rows)
 
     
@@ -270,18 +270,18 @@ select row_number() over (partition by pn, cn), cn, pn
 from sale; -- mvd 2,3->1
  row_number | cn | pn  
 ------------+----+-----
+          1 |  1 | 100
+          1 |  3 | 500
+          1 |  4 | 700
+          1 |  4 | 800
+          1 |  2 | 100
+          1 |  1 | 200
+          1 |  3 | 600
           1 |  3 | 200
           1 |  1 | 300
           1 |  1 | 400
           1 |  2 | 400
           1 |  1 | 500
-          1 |  2 | 100
-          1 |  1 | 200
-          1 |  3 | 600
-          1 |  1 | 100
-          1 |  3 | 500
-          1 |  4 | 700
-          1 |  4 | 800
 (12 rows)
 
 select rank() over (partition by cn), cn, pn 
@@ -325,6 +325,11 @@ from sale s, customer c, product p
 where s.cn = c.cn and s.pn = p.pn; -- mvd 2,3->1
  row_number |   pname   |    cname     
 ------------+-----------+--------------
+          1 | Donuts    | Lady Macbeth
+          2 | Donuts    | Lady Macbeth
+          1 | Dream     | Lady Macbeth
+          1 | Dream     | Macbeth
+          1 | Sword     | Duncan
           1 | Castle    | Macbeth
           1 | Donuts    | Macbeth
           1 | Fries     | Witches, Inc
@@ -332,11 +337,6 @@ where s.cn = c.cn and s.pn = p.pn; -- mvd 2,3->1
           1 | Justice   | Macbeth
           1 | Sword     | Macbeth
           1 | Justice   | Duncan
-          1 | Donuts    | Lady Macbeth
-          2 | Donuts    | Lady Macbeth
-          1 | Dream     | Lady Macbeth
-          1 | Dream     | Macbeth
-          1 | Sword     | Duncan
 (12 rows)
 
 select row_number() over (partition by vn), vn, count(*)
@@ -356,11 +356,11 @@ from sale
 group by vn; -- mvd 3->1
  row_number | vn | count 
 ------------+----+-------
+          1 | 20 |     1
+          2 | 10 |     1
           1 | 50 |     2
           1 | 40 |     4
           2 | 30 |     4
-          1 | 10 |     1
-          2 | 20 |     1
 (5 rows)
 
 -- 5 -- Ordered, non-partitioned window specifications -- OVER (ORDER BY ...) --
@@ -628,8 +628,6 @@ group by vn; -- mvd 3->1
 
 -- Test NULLS FIRST/LAST in window clauses
 create table tbl_with_nulls_seq (t text, a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tbl_with_nulls_seq values
   ( 'a', 1, 10),
   ( 'b', 1, 10),
@@ -700,10 +698,10 @@ from (
     group by cn ) r(a,b); -- mvd 1->1
  row_number | a | b 
 ------------+---+---
-          1 | 4 | 2
-          2 | 2 | 2
-          3 | 3 | 3
-          4 | 1 | 5
+          1 | 1 | 5
+          2 | 4 | 2
+          3 | 2 | 2
+          4 | 3 | 3
 (4 rows)
 
 select * 
@@ -790,6 +788,11 @@ select cn,vn,pn,
 from sale; -- mvd 1->4
  cn | vn | pn  | row_number | rank | rank 
 ----+----+-----+------------+------+------
+  1 | 10 | 200 |          1 |    1 |    1
+  1 | 20 | 100 |          2 |    2 |    2
+  1 | 30 | 300 |          3 |    3 |    3
+  1 | 30 | 500 |          4 |    3 |    4
+  1 | 50 | 400 |          5 |    5 |    5
   2 | 40 | 100 |          1 |    1 |    1
   2 | 50 | 400 |          2 |    2 |    2
   3 | 30 | 500 |          1 |    1 |    1
@@ -797,11 +800,6 @@ from sale; -- mvd 1->4
   3 | 40 | 200 |          3 |    3 |    3
   4 | 40 | 700 |          1 |    1 |    1
   4 | 40 | 800 |          2 |    1 |    2
-  1 | 10 | 200 |          1 |    1 |    1
-  1 | 20 | 100 |          2 |    2 |    2
-  1 | 30 | 300 |          3 |    3 |    3
-  1 | 30 | 500 |          4 |    3 |    4
-  1 | 50 | 400 |          5 |    5 |    5
 (12 rows)
 
 select cn,vn, row_number() over (partition by cn,vn),
@@ -810,12 +808,12 @@ select cn,vn, row_number() over (partition by cn,vn),
 from sale; -- mvd 1,2->3
  cn | vn | row_number | cn | vn | rank | cn | vn | pn  | rank 
 ----+----+------------+----+----+------+----+----+-----+------
-  2 | 40 |          1 |  2 | 40 |    1 |  2 | 40 | 100 |    1
-  3 | 40 |          1 |  3 | 40 |    1 |  3 | 40 | 200 |    1
   3 | 30 |          1 |  3 | 30 |    1 |  3 | 30 | 500 |    1
   3 | 30 |          2 |  3 | 30 |    1 |  3 | 30 | 600 |    2
   4 | 40 |          1 |  4 | 40 |    1 |  4 | 40 | 700 |    1
   4 | 40 |          2 |  4 | 40 |    1 |  4 | 40 | 800 |    2
+  2 | 40 |          1 |  2 | 40 |    1 |  2 | 40 | 100 |    1
+  3 | 40 |          1 |  3 | 40 |    1 |  3 | 40 | 200 |    1
   1 | 10 |          1 |  1 | 10 |    1 |  1 | 10 | 200 |    1
   1 | 20 |          1 |  1 | 20 |    1 |  1 | 20 | 100 |    1
   1 | 30 |          1 |  1 | 30 |    1 |  1 | 30 | 300 |    1
@@ -853,6 +851,9 @@ select pn, cn, prc*qty,
 from sale; -- mvd 1->4
  pn  | cn | ?column? | row_number |   avg   |   avg   | percent_rank | rank 
 -----+----+----------+------------+---------+---------+--------------+------
+ 300 |  1 |        0 |          1 |       0 |       0 |            0 |    1
+ 400 |  1 |        0 |          1 |       0 |       0 |            0 |    1
+ 400 |  2 |        0 |          2 |       0 |       0 |            1 |    2
  500 |  1 |       60 |          1 |      60 |      60 |            0 |    1
  500 |  3 |       60 |          2 |      60 |      60 |            1 |    2
  700 |  4 |        1 |          1 |       1 |       1 |            0 |    1
@@ -862,9 +863,6 @@ from sale; -- mvd 1->4
  200 |  1 |        0 |          1 |       0 |       0 |            0 |    1
  200 |  3 |        0 |          2 |       0 |       0 |            1 |    2
  600 |  3 |       60 |          1 |      60 |      60 |            0 |    1
- 300 |  1 |        0 |          1 |       0 |       0 |            0 |    1
- 400 |  1 |        0 |          1 |       0 |       0 |            0 |    1
- 400 |  2 |        0 |          2 |       0 |       0 |            1 |    2
 (12 rows)
 
 select pn, row_number() over (partition by pn), avg(pn) over (partition by pn) 
@@ -876,13 +874,13 @@ from sale; -- mvd 1->2
  200 |          1 | 200.0000000000000000
  200 |          2 | 200.0000000000000000
  600 |          1 | 600.0000000000000000
- 300 |          1 | 300.0000000000000000
- 400 |          1 | 400.0000000000000000
- 400 |          2 | 400.0000000000000000
  500 |          1 | 500.0000000000000000
  500 |          2 | 500.0000000000000000
  700 |          1 | 700.0000000000000000
  800 |          1 | 800.0000000000000000
+ 300 |          1 | 300.0000000000000000
+ 400 |          1 | 400.0000000000000000
+ 400 |          2 | 400.0000000000000000
 (12 rows)
 
 select pn, row_number() over (partition by pn), avg(pn) over (partition by pn) 
@@ -947,18 +945,18 @@ select cn, vn, pn,
 from sale; -- mvd 1->4; 2->5; 3->6
  cn | vn | pn  | row_number | row_number | row_number 
 ----+----+-----+------------+------------+------------
-  1 | 20 | 100 |          1 |          1 |          2
-  1 | 30 | 500 |          2 |          2 |          1
+  2 | 40 | 100 |          1 |          1 |          1
+  2 | 50 | 400 |          2 |          1 |          1
+  3 | 30 | 500 |          1 |          1 |          2
+  3 | 40 | 200 |          2 |          2 |          1
+  3 | 30 | 600 |          3 |          2 |          1
+  4 | 40 | 800 |          1 |          4 |          1
+  4 | 40 | 700 |          2 |          3 |          1
+  1 | 10 | 200 |          1 |          1 |          2
+  1 | 20 | 100 |          2 |          1 |          2
   1 | 30 | 300 |          3 |          3 |          1
-  1 | 50 | 400 |          4 |          1 |          1
-  1 | 10 | 200 |          5 |          1 |          2
-  2 | 50 | 400 |          1 |          2 |          2
-  2 | 40 | 100 |          2 |          1 |          1
-  3 | 40 | 200 |          1 |          4 |          1
-  3 | 30 | 500 |          2 |          1 |          2
-  3 | 30 | 600 |          3 |          4 |          1
-  4 | 40 | 700 |          1 |          2 |          1
-  4 | 40 | 800 |          2 |          3 |          1
+  1 | 30 | 500 |          4 |          4 |          1
+  1 | 50 | 400 |          5 |          2 |          2
 (12 rows)
 
 select cn, vn, pn, avg(qty) over (partition by cn) 
@@ -983,18 +981,18 @@ select cn, vn, pn, avg(qty) over (partition by vn)
 from sale; --mvd 2->4
  cn | vn | pn  |          avg           
 ----+----+-----+------------------------
-  1 | 10 | 200 | 1.00000000000000000000
   1 | 20 | 100 | 1.00000000000000000000
-  1 | 30 | 500 |     9.2500000000000000
+  3 | 30 | 600 |     9.2500000000000000
   3 | 30 | 500 |     9.2500000000000000
   1 | 30 | 300 |     9.2500000000000000
-  3 | 30 | 600 |     9.2500000000000000
+  1 | 30 | 500 |     9.2500000000000000
   4 | 40 | 800 |   275.7500000000000000
-  3 | 40 | 200 |   275.7500000000000000
   4 | 40 | 700 |   275.7500000000000000
   2 | 40 | 100 |   275.7500000000000000
+  3 | 40 | 200 |   275.7500000000000000
   1 | 50 | 400 | 1.00000000000000000000
   2 | 50 | 400 | 1.00000000000000000000
+  1 | 10 | 200 | 1.00000000000000000000
 (12 rows)
 
 -- !
@@ -1157,27 +1155,27 @@ group by rollup(cn,vn,pn)
 order by 2, 5; -- order 2,5
  gr | cn | vn | pn  |   sum   | rank 
 ----+----+----+-----+---------+------
-  0 |  1 | 30 | 300 |       0 |    1
-  0 |  1 | 10 | 200 |       0 |    1
+  0 |  1 | 50 | 400 |       0 |    1
+  1 |  1 | 10 |     |       0 |    1
   1 |  1 | 50 |     |       0 |    1
   0 |  1 | 20 | 100 |       0 |    1
   1 |  1 | 20 |     |       0 |    1
-  0 |  1 | 50 | 400 |       0 |    1
-  1 |  1 | 10 |     |       0 |    1
-  3 |  1 |    |     |      60 |    8
+  0 |  1 | 30 | 300 |       0 |    1
+  0 |  1 | 10 | 200 |       0 |    1
   0 |  1 | 30 | 500 |      60 |    8
+  3 |  1 |    |     |      60 |    8
   1 |  1 | 30 |     |      60 |    8
   1 |  2 | 50 |     |       0 |    1
   0 |  2 | 50 | 400 |       0 |    1
   1 |  2 | 40 |     | 2640000 |    3
-  3 |  2 |    |     | 2640000 |    3
   0 |  2 | 40 | 100 | 2640000 |    3
+  3 |  2 |    |     | 2640000 |    3
   1 |  3 | 40 |     |       0 |    1
   0 |  3 | 40 | 200 |       0 |    1
   0 |  3 | 30 | 500 |      60 |    3
   0 |  3 | 30 | 600 |      60 |    3
-  3 |  3 |    |     |     120 |    5
   1 |  3 | 30 |     |     120 |    5
+  3 |  3 |    |     |     120 |    5
   0 |  4 | 40 | 800 |       1 |    1
   0 |  4 | 40 | 700 |       1 |    1
   1 |  4 | 40 |     |       2 |    3
@@ -1189,10 +1187,9 @@ select cn, vn, pn, rank() over (partition by vn order by cn)
 from sale; --mvd 2->4
  cn | vn | pn  | rank 
 ----+----+-----+------
-  1 | 10 | 200 |    1
   1 | 20 | 100 |    1
-  1 | 30 | 500 |    1
   1 | 30 | 300 |    1
+  1 | 30 | 500 |    1
   3 | 30 | 600 |    3
   3 | 30 | 500 |    3
   2 | 40 | 100 |    1
@@ -1201,6 +1198,7 @@ from sale; --mvd 2->4
   4 | 40 | 700 |    3
   1 | 50 | 400 |    1
   2 | 50 | 400 |    2
+  1 | 10 | 200 |    1
 (12 rows)
 
 select row_number() over (partition by vn), 
@@ -1211,10 +1209,10 @@ from sale; -- mvd 3->1
 ------------+----+----+-----+------
           1 |  1 | 10 | 200 |    1
           1 |  1 | 20 | 100 |    1
-          1 |  1 | 30 | 300 |    1
-          2 |  1 | 30 | 500 |    1
-          3 |  3 | 30 | 500 |    3
-          4 |  3 | 30 | 600 |    3
+          1 |  1 | 30 | 500 |    1
+          2 |  1 | 30 | 300 |    1
+          3 |  3 | 30 | 600 |    3
+          4 |  3 | 30 | 500 |    3
           1 |  2 | 40 | 100 |    1
           2 |  3 | 40 | 200 |    2
           3 |  4 | 40 | 800 |    3
@@ -1229,11 +1227,6 @@ select row_number() over (partition by pn),
 from sale; -- mvd 4->1
  row_number | cn | vn | pn  | rank 
 ------------+----+----+-----+------
-          1 |  1 | 20 | 100 |    1
-          2 |  2 | 40 | 100 |    1
-          1 |  3 | 40 | 200 |    2
-          2 |  1 | 10 | 200 |    1
-          1 |  3 | 30 | 600 |    3
           1 |  1 | 30 | 500 |    1
           2 |  3 | 30 | 500 |    3
           1 |  4 | 40 | 700 |    3
@@ -1241,6 +1234,11 @@ from sale; -- mvd 4->1
           1 |  1 | 30 | 300 |    1
           1 |  1 | 50 | 400 |    1
           2 |  2 | 50 | 400 |    2
+          1 |  1 | 20 | 100 |    1
+          2 |  2 | 40 | 100 |    1
+          1 |  1 | 10 | 200 |    1
+          2 |  3 | 40 | 200 |    2
+          1 |  3 | 30 | 600 |    3
 (12 rows)
 
 select cname, 
@@ -1250,11 +1248,6 @@ from sale, customer
 where sale.cn = customer.cn; -- mvd 1->2,3
     cname     | rank | rank 
 --------------+------+------
- Macbeth      |    1 |    2
- Macbeth      |    2 |    1
- Macbeth      |    3 |    3
- Macbeth      |    4 |    5
- Macbeth      |    5 |    3
  Duncan       |    1 |    1
  Duncan       |    2 |    2
  Lady Macbeth |    1 |    3
@@ -1262,6 +1255,11 @@ where sale.cn = customer.cn; -- mvd 1->2,3
  Lady Macbeth |    3 |    1
  Witches, Inc |    1 |    1
  Witches, Inc |    2 |    1
+ Macbeth      |    1 |    2
+ Macbeth      |    2 |    1
+ Macbeth      |    3 |    3
+ Macbeth      |    4 |    5
+ Macbeth      |    5 |    3
 (12 rows)
 
 -- Check that we invert count() correctly. count() is a special case
@@ -1292,8 +1290,6 @@ LINE 1: SELECT count(distinct sale.pn) OVER (order by sale.pn) from ...
                ^
 -- Aggregate nesting --
 create table olap_tmp_for_window_seq(g integer, h integer, i integer, x integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'g' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into olap_tmp_for_window_seq values 
     (9,1,1,1),
     (9,1,1,0),
@@ -1382,12 +1378,12 @@ from
 order by 1,5; -- order 1,5
  g | cn | vn | pn  |    s    | rank 
 ---+----+----+-----+---------+------
- 0 |  1 | 50 | 400 |       0 |    1
  0 |  3 | 40 | 200 |       0 |    1
- 0 |  1 | 20 | 100 |       0 |    1
- 0 |  2 | 50 | 400 |       0 |    1
+ 0 |  1 | 50 | 400 |       0 |    1
  0 |  1 | 30 | 300 |       0 |    1
  0 |  1 | 10 | 200 |       0 |    1
+ 0 |  1 | 20 | 100 |       0 |    1
+ 0 |  2 | 50 | 400 |       0 |    1
  0 |  4 | 40 | 700 |       1 |    7
  0 |  4 | 40 | 800 |       1 |    7
  0 |  1 | 30 | 500 |      60 |    9
@@ -1396,9 +1392,9 @@ order by 1,5; -- order 1,5
  0 |  2 | 40 | 100 | 2640000 |   12
  1 |  2 | 50 |     |       0 |    1
  1 |  1 | 50 |     |       0 |    1
- 1 |  3 | 40 |     |       0 |    1
  1 |  1 | 20 |     |       0 |    1
  1 |  1 | 10 |     |       0 |    1
+ 1 |  3 | 40 |     |       0 |    1
  1 |  4 | 40 |     |       2 |    6
  1 |  1 | 30 |     |      60 |    7
  1 |  3 | 30 |     |     120 |    8
@@ -1420,23 +1416,23 @@ group by rollup(cn,vn,pn)
 order by 1,5; -- order 1,5
  grouping | cn | vn | pn  |   sum   | rank 
 ----------+----+----+-----+---------+------
+        0 |  1 | 30 | 300 |       0 |    1
+        0 |  1 | 20 | 100 |       0 |    1
+        0 |  3 | 40 | 200 |       0 |    1
         0 |  1 | 50 | 400 |       0 |    1
         0 |  2 | 50 | 400 |       0 |    1
-        0 |  1 | 20 | 100 |       0 |    1
         0 |  1 | 10 | 200 |       0 |    1
-        0 |  3 | 40 | 200 |       0 |    1
-        0 |  1 | 30 | 300 |       0 |    1
-        0 |  4 | 40 | 700 |       1 |    7
         0 |  4 | 40 | 800 |       1 |    7
-        0 |  3 | 30 | 600 |      60 |    9
+        0 |  4 | 40 | 700 |       1 |    7
         0 |  1 | 30 | 500 |      60 |    9
+        0 |  3 | 30 | 600 |      60 |    9
         0 |  3 | 30 | 500 |      60 |    9
         0 |  2 | 40 | 100 | 2640000 |   12
-        1 |  2 | 50 |     |       0 |    1
-        1 |  3 | 40 |     |       0 |    1
-        1 |  1 | 50 |     |       0 |    1
         1 |  1 | 20 |     |       0 |    1
+        1 |  1 | 50 |     |       0 |    1
+        1 |  2 | 50 |     |       0 |    1
         1 |  1 | 10 |     |       0 |    1
+        1 |  3 | 40 |     |       0 |    1
         1 |  4 | 40 |     |       2 |    6
         1 |  1 | 30 |     |      60 |    7
         1 |  3 | 30 |     |     120 |    8
@@ -1614,7 +1610,7 @@ sum(qty) over (order by ord,cn rows between 1 preceding and 1 following)
 from sale_ord;
                                          QUERY PLAN                                          
 ---------------------------------------------------------------------------------------------
- WindowAgg  (cost=1451.09..3123.09 rows=52800 width=24)
+ WindowAgg  (cost=1451.15..3123.09 rows=52800 width=24)
    Order By: ord, cn
    ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1451.09..2199.09 rows=52800 width=12)
          Merge Key: ord, cn
@@ -1875,7 +1871,6 @@ SELECT sale.vn,sale.cn,
 SUM(sale.cn) OVER(partition by sale.vn order by sale.cn desc range between current row and unbounded following) as sum from sale; --mvd 1->3
  vn | cn | sum 
 ----+----+-----
- 10 |  1 |   1
  20 |  1 |   1
  30 |  3 |   8
  30 |  3 |   8
@@ -1887,6 +1882,7 @@ SUM(sale.cn) OVER(partition by sale.vn order by sale.cn desc range between curre
  40 |  2 |   2
  50 |  2 |   3
  50 |  1 |   1
+ 10 |  1 |   1
 (12 rows)
 
 -- MPP-1840, grouping + windowing
@@ -1896,26 +1892,26 @@ SUM(vn) OVER (PARTITION BY GROUPING(cn,vn,pn) ORDER BY cn) as sum FROM sale
 GROUP BY ROLLUP(cn,vn,pn) order by 4; -- order 4
  cn | vn | pn  | grouping | sum 
 ----+----+-----+----------+-----
-  1 | 30 | 300 |        0 | 140
   1 | 10 | 200 |        0 | 140
+  1 | 30 | 300 |        0 | 140
+  1 | 30 | 500 |        0 | 140
   1 | 50 | 400 |        0 | 140
   1 | 20 | 100 |        0 | 140
-  1 | 30 | 500 |        0 | 140
   2 | 40 | 100 |        0 | 230
   2 | 50 | 400 |        0 | 230
+  3 | 40 | 200 |        0 | 330
   3 | 30 | 500 |        0 | 330
   3 | 30 | 600 |        0 | 330
-  3 | 40 | 200 |        0 | 330
-  4 | 40 | 700 |        0 | 410
   4 | 40 | 800 |        0 | 410
-  1 | 20 |     |        1 | 110
-  1 | 10 |     |        1 | 110
+  4 | 40 | 700 |        0 | 410
   1 | 50 |     |        1 | 110
+  1 | 10 |     |        1 | 110
+  1 | 20 |     |        1 | 110
   1 | 30 |     |        1 | 110
-  2 | 40 |     |        1 | 200
   2 | 50 |     |        1 | 200
-  3 | 30 |     |        1 | 270
+  2 | 40 |     |        1 | 200
   3 | 40 |     |        1 | 270
+  3 | 30 |     |        1 | 270
   4 | 40 |     |        1 | 310
   1 |    |     |        3 |    
   2 |    |     |        3 |    
@@ -2356,8 +2352,6 @@ unbounded following) as fv from sale; --mvd 1,2->3
 
 -- Test obscure types
 create table typetest_for_window_seq (i int[], j box, k bit, l bytea, m text[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into typetest_for_window_seq values('{1, 2, 3}', '(1, 2), (3, 4)', '1', E'\012\001', 
 '{foo, bar}');
 insert into typetest_for_window_seq values('{4, 5, 6}', '(3, 4), (6, 7)', '0', E'\002', 
@@ -3566,8 +3560,8 @@ FROM sale; --mvd 1,2->6
     0 |  1 | 30 | 300 |  1 | 199
     0 |  1 | 20 | 100 |  1 | 149
     0 |  1 | 10 | 200 |  1 | 199
-    1 |  4 | 40 | 700 |  4 | 746
     1 |  4 | 40 | 800 |  4 | 746
+    1 |  4 | 40 | 700 |  4 | 746
     5 |  1 | 30 | 500 |  1 | 499
  2400 |  2 | 40 | 100 |  2 |  98
 (12 rows)
@@ -3587,8 +3581,8 @@ FROM sale; --mvd 1,2->6
     0 |  1 | 30 | 300 |  1 | 199
     0 |  1 | 20 | 100 |  1 | 149
     0 |  1 | 10 | 200 |  1 | 199
-    1 |  4 | 40 | 800 |  4 | 746
     1 |  4 | 40 | 700 |  4 | 746
+    1 |  4 | 40 | 800 |  4 | 746
 (12 rows)
 
 -- MPP-1895
@@ -3597,18 +3591,18 @@ COUNT(vn) OVER(partition by sale.prc order by sale.vn asc range between 3 preced
 FROM sale; --mvd 1->3
  prc  | vn | count 
 ------+----+-------
-    1 | 40 |     2
-    1 | 40 |     2
-    5 | 30 |     3
-    5 | 30 |     3
-    5 | 30 |     3
- 2400 | 40 |     1
     0 | 10 |     1
     0 | 20 |     1
     0 | 30 |     1
     0 | 40 |     1
     0 | 50 |     2
     0 | 50 |     2
+    5 | 30 |     3
+    5 | 30 |     3
+    5 | 30 |     3
+ 2400 | 40 |     1
+    1 | 40 |     2
+    1 | 40 |     2
 (12 rows)
 
 -- MPP-1898
@@ -3868,6 +3862,9 @@ CUME_DIST() OVER(partition by sale.cn,sale.pn order by sale.vn desc,sale.pn desc
 FROM sale; --mvd 1,2->4
  cn | pn  | vn | cume_dist 
 ----+-----+----+-----------
+  1 | 200 | 10 |         1
+  2 | 100 | 40 |         1
+  3 | 600 | 30 |         1
   1 | 500 | 30 |         1
   1 | 400 | 50 |         1
   1 | 300 | 30 |         1
@@ -3877,9 +3874,6 @@ FROM sale; --mvd 1,2->4
   3 | 500 | 30 |         1
   4 | 800 | 40 |         1
   4 | 700 | 40 |         1
-  1 | 200 | 10 |         1
-  2 | 100 | 40 |         1
-  3 | 600 | 30 |         1
 (12 rows)
 
 SELECT sale.cn,sale.vn,sale.pn,
@@ -3949,8 +3943,6 @@ CREATE TABLE FACT_TEST
  TIME_KEY    INTEGER  NOT NULL,
  EVENT_TYPE  text  NOT NULL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'date_key' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into fact_test values
   (20070101, 'W', 100, 'c'),
   (20070101, 'W', 100, 'p'),
@@ -4002,9 +3994,6 @@ TO_CHAR(COALESCE(CUME_DIST() OVER(partition by sale.vn,sale.pn order by sale.cn 
 from sale; --mvd 1,2->4
  vn | pn  | cn |     cum_dist      |     cum_dist      
 ----+-----+----+-------------------+-------------------
- 10 | 200 |  1 |         1.0000000 |         1.0000000
- 30 | 300 |  1 |         1.0000000 |         1.0000000
- 40 | 100 |  2 |         1.0000000 |         1.0000000
  30 | 500 |  3 |          .5000000 |          .5000000
  30 | 500 |  1 |         1.0000000 |         1.0000000
  40 | 200 |  3 |         1.0000000 |         1.0000000
@@ -4014,6 +4003,9 @@ from sale; --mvd 1,2->4
  40 | 800 |  4 |         1.0000000 |         1.0000000
  50 | 400 |  2 |          .5000000 |          .5000000
  50 | 400 |  1 |         1.0000000 |         1.0000000
+ 10 | 200 |  1 |         1.0000000 |         1.0000000
+ 30 | 300 |  1 |         1.0000000 |         1.0000000
+ 40 | 100 |  2 |         1.0000000 |         1.0000000
 (12 rows)
 
 select cn,pn,lag(pn,cn) over (order by ord,pn) from sale_ord;
@@ -4095,13 +4087,13 @@ FROM sale; --mvd 1,2,3->6
  06-01-1401 | 30 |   12 | 600 |  3 |     
  06-01-1401 | 30 |   12 | 500 |  3 |     
  06-01-1401 | 30 |   12 | 500 |  1 |     
+ 03-01-1401 | 10 |    1 | 200 |  1 |     
+ 06-01-1401 | 50 |    1 | 400 |  2 |   51
+ 06-01-1401 | 50 |    1 | 400 |  1 |     
  01-01-1401 | 40 | 1100 | 100 |  2 |     
  05-01-1401 | 20 |    1 | 100 |  1 |     
  06-01-1401 | 40 |    1 | 800 |  4 |   44
  06-01-1401 | 40 |    1 | 700 |  4 |     
- 03-01-1401 | 10 |    1 | 200 |  1 |     
- 06-01-1401 | 50 |    1 | 400 |  2 |   51
- 06-01-1401 | 50 |    1 | 400 |  1 |     
 (12 rows)
 
 -- MPP-1935
@@ -4171,8 +4163,6 @@ LAG(cast(floor(sale.vn) as int),cast (floor(sale.prc) as int),NULL) OVER(partiti
 from sale; --mvd 1,2,3,4->6
  prc  | vn | cn | pn  | qty  | lag1 
 ------+----+----+-----+------+------
-    0 | 10 |  1 | 200 |    1 |   10
-    5 | 30 |  3 | 500 |   12 |     
     0 | 20 |  1 | 100 |    1 |   20
     0 | 30 |  1 | 300 |    1 |   30
     0 | 40 |  3 | 200 |    1 |   40
@@ -4183,6 +4173,8 @@ from sale; --mvd 1,2,3,4->6
     0 | 50 |  2 | 400 |    1 |   50
     1 | 40 |  4 | 800 |    1 |     
     5 | 30 |  3 | 600 |   12 |     
+    0 | 10 |  1 | 200 |    1 |   10
+    5 | 30 |  3 | 500 |   12 |     
 (12 rows)
 
 SELECT sale.prc,sale.vn,sale.cn,sale.pn,sale.qty,
@@ -4210,6 +4202,11 @@ LAG(cast(floor(sale.qty/sale.vn) as int),cast (floor(sale.pn) as int),NULL) OVER
 from sale; --mvd 1,2,3,4->6
  prc  | vn | cn | pn  | qty  | lag1 | lag2 
 ------+----+----+-----+------+------+------
+    0 | 50 |  2 | 400 |    1 |   50 |     
+    1 | 40 |  4 | 800 |    1 |      |     
+    5 | 30 |  3 | 600 |   12 |      |     
+    0 | 10 |  1 | 200 |    1 |   10 |     
+    5 | 30 |  3 | 500 |   12 |      |     
     0 | 20 |  1 | 100 |    1 |   20 |     
     0 | 30 |  1 | 300 |    1 |   30 |     
     0 | 40 |  3 | 200 |    1 |   40 |     
@@ -4217,11 +4214,6 @@ from sale; --mvd 1,2,3,4->6
     1 | 40 |  4 | 700 |    1 |      |     
     5 | 30 |  1 | 500 |   12 |      |     
  2400 | 40 |  2 | 100 | 1100 |      |     
-    0 | 50 |  2 | 400 |    1 |   50 |     
-    1 | 40 |  4 | 800 |    1 |      |     
-    5 | 30 |  3 | 600 |   12 |      |     
-    0 | 10 |  1 | 200 |    1 |   10 |     
-    5 | 30 |  3 | 500 |   12 |      |     
 (12 rows)
 
 -- MIN/MAX
@@ -5180,6 +5172,11 @@ select pn,vn,max(vn) over (order by pn desc range between unbounded preceding an
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 preceding and 1 preceding) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
+  1 | 20 | 100 |    
+  1 | 10 | 200 |  20
+  1 | 30 | 300 |  10
+  1 | 50 | 400 |  10
+  1 | 30 | 500 |  30
   2 | 40 | 100 |    
   2 | 50 | 400 |  40
   3 | 40 | 200 |    
@@ -5187,11 +5184,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 precedi
   3 | 30 | 600 |  30
   4 | 40 | 700 |    
   4 | 40 | 800 |  40
-  1 | 20 | 100 |    
-  1 | 10 | 200 |  20
-  1 | 30 | 300 |  10
-  1 | 50 | 400 |  10
-  1 | 30 | 500 |  30
 (12 rows)
 
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 preceding and 0 preceding) as min from sale; --mvd 1->4
@@ -5214,11 +5206,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 precedi
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 preceding and 1 following) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
-  1 | 20 | 100 |  10
-  1 | 10 | 200 |  10
-  1 | 30 | 300 |  10
-  1 | 50 | 400 |  10
-  1 | 30 | 500 |  30
   2 | 40 | 100 |  40
   2 | 50 | 400 |  40
   3 | 40 | 200 |  30
@@ -5226,6 +5213,11 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 precedi
   3 | 30 | 600 |  30
   4 | 40 | 700 |  40
   4 | 40 | 800 |  40
+  1 | 20 | 100 |  10
+  1 | 10 | 200 |  10
+  1 | 30 | 300 |  10
+  1 | 50 | 400 |  10
+  1 | 30 | 500 |  30
 (12 rows)
 
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 0 preceding and 1 following) as min from sale; --mvd 1->4
@@ -5248,11 +5240,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 0 precedi
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 0 following and 1 following) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
-  1 | 20 | 100 |  10
-  1 | 10 | 200 |  10
-  1 | 30 | 300 |  30
-  1 | 50 | 400 |  30
-  1 | 30 | 500 |  30
   2 | 40 | 100 |  40
   2 | 50 | 400 |  50
   3 | 40 | 200 |  30
@@ -5260,11 +5247,21 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 0 followi
   3 | 30 | 600 |  30
   4 | 40 | 700 |  40
   4 | 40 | 800 |  40
+  1 | 20 | 100 |  10
+  1 | 10 | 200 |  10
+  1 | 30 | 300 |  30
+  1 | 50 | 400 |  30
+  1 | 30 | 500 |  30
 (12 rows)
 
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 1 following and 2 following) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
+  1 | 20 | 100 |  10
+  1 | 10 | 200 |  30
+  1 | 30 | 300 |  30
+  1 | 50 | 400 |  30
+  1 | 30 | 500 |    
   2 | 40 | 100 |  50
   2 | 50 | 400 |    
   3 | 40 | 200 |  30
@@ -5272,11 +5269,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 1 followi
   3 | 30 | 600 |    
   4 | 40 | 700 |  40
   4 | 40 | 800 |    
-  1 | 20 | 100 |  10
-  1 | 10 | 200 |  30
-  1 | 30 | 300 |  30
-  1 | 50 | 400 |  30
-  1 | 30 | 500 |    
 (12 rows)
 
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded preceding and 2 preceding) as min from sale; --mvd 1->4
@@ -5299,11 +5291,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded preceding and 0 preceding) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
-  1 | 20 | 100 |  20
-  1 | 10 | 200 |  10
-  1 | 30 | 300 |  10
-  1 | 50 | 400 |  10
-  1 | 30 | 500 |  10
   2 | 40 | 100 |  40
   2 | 50 | 400 |  40
   3 | 40 | 200 |  40
@@ -5311,28 +5298,21 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded
   3 | 30 | 600 |  30
   4 | 40 | 700 |  40
   4 | 40 | 800 |  40
-(12 rows)
-
-select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded preceding and 2 following) as min from sale; --mvd 1->4
- cn | vn | pn  | min 
-----+----+-----+-----
-  2 | 40 | 100 |  40
-  2 | 50 | 400 |  40
-  3 | 40 | 200 |  30
-  3 | 30 | 500 |  30
-  3 | 30 | 600 |  30
-  4 | 40 | 700 |  40
-  4 | 40 | 800 |  40
-  1 | 20 | 100 |  10
+  1 | 20 | 100 |  20
   1 | 10 | 200 |  10
   1 | 30 | 300 |  10
   1 | 50 | 400 |  10
   1 | 30 | 500 |  10
 (12 rows)
 
-select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 preceding and unbounded following) as min from sale; --mvd 1->4
+select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded preceding and 2 following) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
+  1 | 20 | 100 |  10
+  1 | 10 | 200 |  10
+  1 | 30 | 300 |  10
+  1 | 50 | 400 |  10
+  1 | 30 | 500 |  10
   2 | 40 | 100 |  40
   2 | 50 | 400 |  40
   3 | 40 | 200 |  30
@@ -5340,11 +5320,23 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 precedi
   3 | 30 | 600 |  30
   4 | 40 | 700 |  40
   4 | 40 | 800 |  40
+(12 rows)
+
+select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 2 preceding and unbounded following) as min from sale; --mvd 1->4
+ cn | vn | pn  | min 
+----+----+-----+-----
   1 | 20 | 100 |  10
   1 | 10 | 200 |  10
   1 | 30 | 300 |  10
   1 | 50 | 400 |  10
   1 | 30 | 500 |  30
+  2 | 40 | 100 |  40
+  2 | 50 | 400 |  40
+  3 | 40 | 200 |  30
+  3 | 30 | 500 |  30
+  3 | 30 | 600 |  30
+  4 | 40 | 700 |  40
+  4 | 40 | 800 |  40
 (12 rows)
 
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 0 preceding and unbounded following) as min from sale; --mvd 1->4
@@ -5401,6 +5393,11 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between 1 followi
 select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded preceding and unbounded following) as min from sale; --mvd 1->4
  cn | vn | pn  | min 
 ----+----+-----+-----
+  1 | 20 | 100 |  10
+  1 | 10 | 200 |  10
+  1 | 30 | 300 |  10
+  1 | 50 | 400 |  10
+  1 | 30 | 500 |  10
   2 | 40 | 100 |  40
   2 | 50 | 400 |  40
   3 | 40 | 200 |  30
@@ -5408,11 +5405,6 @@ select cn,vn,pn,min(vn) over (partition by cn order by pn rows between unbounded
   3 | 30 | 600 |  30
   4 | 40 | 700 |  40
   4 | 40 | 800 |  40
-  1 | 20 | 100 |  10
-  1 | 10 | 200 |  10
-  1 | 30 | 300 |  10
-  1 | 50 | 400 |  10
-  1 | 30 | 500 |  10
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 preceding and 150 preceding) as max from sale; --mvd 1,2->4
@@ -5435,23 +5427,28 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 prec
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 preceding and 0 preceding) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
+  2 | 100 | 40 |  40
+  2 | 400 | 50 |  50
+  3 | 200 | 40 |  40
+  3 | 500 | 30 |  30
+  3 | 600 | 30 |  30
+  4 | 700 | 40 |  40
+  4 | 800 | 40 |  40
   1 | 100 | 20 |  20
   1 | 200 | 10 |  20
   1 | 300 | 30 |  30
   1 | 400 | 50 |  50
   1 | 500 | 30 |  50
-  2 | 100 | 40 |  40
-  2 | 400 | 50 |  50
-  3 | 200 | 40 |  40
-  3 | 500 | 30 |  30
-  3 | 600 | 30 |  30
-  4 | 700 | 40 |  40
-  4 | 800 | 40 |  40
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 preceding and 150 following) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
+  1 | 100 | 20 |  20
+  1 | 200 | 10 |  30
+  1 | 300 | 30 |  50
+  1 | 400 | 50 |  50
+  1 | 500 | 30 |  50
   2 | 100 | 40 |  40
   2 | 400 | 50 |  50
   3 | 200 | 40 |  40
@@ -5459,11 +5456,6 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 prec
   3 | 600 | 30 |  30
   4 | 700 | 40 |  40
   4 | 800 | 40 |  40
-  1 | 100 | 20 |  20
-  1 | 200 | 10 |  30
-  1 | 300 | 30 |  50
-  1 | 400 | 50 |  50
-  1 | 500 | 30 |  50
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 preceding and 150 following) as max from sale; --mvd 1,2->4
@@ -5486,11 +5478,6 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 preced
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 following and 150 following) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
-  1 | 100 | 20 |  20
-  1 | 200 | 10 |  30
-  1 | 300 | 30 |  50
-  1 | 400 | 50 |  50
-  1 | 500 | 30 |  30
   2 | 100 | 40 |  40
   2 | 400 | 50 |  50
   3 | 200 | 40 |  40
@@ -5498,6 +5485,11 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 follow
   3 | 600 | 30 |  30
   4 | 700 | 40 |  40
   4 | 800 | 40 |  40
+  1 | 100 | 20 |  20
+  1 | 200 | 10 |  30
+  1 | 300 | 30 |  50
+  1 | 400 | 50 |  50
+  1 | 500 | 30 |  30
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 150 following and 200 following) as max from sale; --mvd 1,2->4
@@ -5520,6 +5512,11 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 150 foll
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounded preceding and 200 preceding) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
+  1 | 100 | 20 |    
+  1 | 200 | 10 |    
+  1 | 300 | 30 |  20
+  1 | 400 | 50 |  20
+  1 | 500 | 30 |  30
   2 | 100 | 40 |    
   2 | 400 | 50 |  40
   3 | 200 | 40 |    
@@ -5527,11 +5524,6 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounde
   3 | 600 | 30 |  40
   4 | 700 | 40 |    
   4 | 800 | 40 |    
-  1 | 100 | 20 |    
-  1 | 200 | 10 |    
-  1 | 300 | 30 |  20
-  1 | 400 | 50 |  20
-  1 | 500 | 30 |  30
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounded preceding and 0 preceding) as max from sale; --mvd 1,2->4
@@ -5554,6 +5546,11 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounde
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounded preceding and 200 following) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
+  1 | 100 | 20 |  30
+  1 | 200 | 10 |  50
+  1 | 300 | 30 |  50
+  1 | 400 | 50 |  50
+  1 | 500 | 30 |  50
   2 | 100 | 40 |  40
   2 | 400 | 50 |  50
   3 | 200 | 40 |  40
@@ -5561,38 +5558,28 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between unbounde
   3 | 600 | 30 |  40
   4 | 700 | 40 |  40
   4 | 800 | 40 |  40
-  1 | 100 | 20 |  30
-  1 | 200 | 10 |  50
-  1 | 300 | 30 |  50
-  1 | 400 | 50 |  50
-  1 | 500 | 30 |  50
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 200 preceding and unbounded following) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
+  2 | 100 | 40 |  50
+  2 | 400 | 50 |  50
+  3 | 200 | 40 |  40
+  3 | 500 | 30 |  30
+  3 | 600 | 30 |  30
+  4 | 700 | 40 |  40
+  4 | 800 | 40 |  40
   1 | 100 | 20 |  50
   1 | 200 | 10 |  50
   1 | 300 | 30 |  50
   1 | 400 | 50 |  50
   1 | 500 | 30 |  50
-  2 | 100 | 40 |  50
-  2 | 400 | 50 |  50
-  3 | 200 | 40 |  40
-  3 | 500 | 30 |  30
-  3 | 600 | 30 |  30
-  4 | 700 | 40 |  40
-  4 | 800 | 40 |  40
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 preceding and unbounded following) as max from sale; --mvd 1,2->4
  cn | pn  | vn | max 
 ----+-----+----+-----
-  1 | 100 | 20 |  50
-  1 | 200 | 10 |  50
-  1 | 300 | 30 |  50
-  1 | 400 | 50 |  50
-  1 | 500 | 30 |  30
   2 | 100 | 40 |  50
   2 | 400 | 50 |  50
   3 | 200 | 40 |  40
@@ -5600,6 +5587,11 @@ select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 preced
   3 | 600 | 30 |  30
   4 | 700 | 40 |  40
   4 | 800 | 40 |  40
+  1 | 100 | 20 |  50
+  1 | 200 | 10 |  50
+  1 | 300 | 30 |  50
+  1 | 400 | 50 |  50
+  1 | 500 | 30 |  30
 (12 rows)
 
 select cn,pn,vn,max(vn) over (partition by cn order by pn range between 0 following and unbounded following) as max from sale; --mvd 1,2->4
@@ -5679,6 +5671,10 @@ MAX(floor(sale.prc+sale.prc)) OVER(partition by sale.pn,sale.cn,sale.dt,sale.pn 
 FROM sale; --mvd 1,2,3->6
  pn  | cn |     dt     | pn  | prc  | max  
 -----+----+------------+-----+------+------
+ 700 |  4 | 06-01-1401 | 700 |    1 |    2
+ 600 |  3 | 06-01-1401 | 600 |    5 |   10
+ 500 |  3 | 06-01-1401 | 500 |    5 |   10
+ 300 |  1 | 05-02-1401 | 300 |    0 |    0
  800 |  4 | 06-01-1401 | 800 |    1 |    2
  400 |  1 | 06-01-1401 | 400 |    0 |    0
  400 |  2 | 06-01-1401 | 400 |    0 |    0
@@ -5687,10 +5683,6 @@ FROM sale; --mvd 1,2,3->6
  200 |  3 | 04-01-1401 | 200 |    0 |    0
  100 |  1 | 05-01-1401 | 100 |    0 |    0
  100 |  2 | 01-01-1401 | 100 | 2400 | 4800
- 700 |  4 | 06-01-1401 | 700 |    1 |    2
- 600 |  3 | 06-01-1401 | 600 |    5 |   10
- 500 |  3 | 06-01-1401 | 500 |    5 |   10
- 300 |  1 | 05-02-1401 | 300 |    0 |    0
 (12 rows)
 
 select qty,cn,pn,dt,pn,prc,
@@ -5698,16 +5690,16 @@ MAX(floor(sale.prc+sale.prc)) OVER(partition by sale.qty,sale.cn,sale.pn,sale.dt
 from sale; --mvd 1,2,3,4->7
  qty  | cn | pn  |     dt     | pn  | prc  | max  
 ------+----+-----+------------+-----+------+------
-    1 |  1 | 300 | 05-02-1401 | 300 |    0 |    0
-    1 |  3 | 200 | 04-01-1401 | 200 |    0 |    0
-   12 |  3 | 500 | 06-01-1401 | 500 |    5 |   10
-   12 |  3 | 600 | 06-01-1401 | 600 |    5 |   10
     1 |  1 | 200 | 03-01-1401 | 200 |    0 |    0
     1 |  2 | 400 | 06-01-1401 | 400 |    0 |    0
     1 |  4 | 700 | 06-01-1401 | 700 |    1 |    2
     1 |  4 | 800 | 06-01-1401 | 800 |    1 |    2
    12 |  1 | 500 | 06-01-1401 | 500 |    5 |   10
  1100 |  2 | 100 | 01-01-1401 | 100 | 2400 | 4800
+    1 |  1 | 300 | 05-02-1401 | 300 |    0 |    0
+    1 |  3 | 200 | 04-01-1401 | 200 |    0 |    0
+   12 |  3 | 500 | 06-01-1401 | 500 |    5 |   10
+   12 |  3 | 600 | 06-01-1401 | 600 |    5 |   10
     1 |  1 | 100 | 05-01-1401 | 100 |    0 |    0
     1 |  1 | 400 | 06-01-1401 | 400 |    0 |    0
 (12 rows)
@@ -5737,18 +5729,18 @@ MAX(floor(sale.qty)) OVER(partition by sale.dt,sale.cn,sale.dt order by sale.cn 
 from sale; --mvd 1,2->5
      dt     | cn | cn | qty  | max  
 ------------+----+----+------+------
- 01-01-1401 |  2 |  2 | 1100 | 1100
- 03-01-1401 |  1 |  1 |    1 |    1
- 05-01-1401 |  1 |  1 |    1 |    1
- 05-02-1401 |  1 |  1 |    1 |    1
- 06-01-1401 |  1 |  1 |    1 |   12
- 06-01-1401 |  1 |  1 |   12 |   12
  04-01-1401 |  3 |  3 |    1 |    1
  06-01-1401 |  4 |  4 |    1 |    1
  06-01-1401 |  4 |  4 |    1 |    1
  06-01-1401 |  3 |  3 |   12 |   12
  06-01-1401 |  3 |  3 |   12 |   12
  06-01-1401 |  2 |  2 |    1 |    1
+ 01-01-1401 |  2 |  2 | 1100 | 1100
+ 03-01-1401 |  1 |  1 |    1 |    1
+ 05-01-1401 |  1 |  1 |    1 |    1
+ 05-02-1401 |  1 |  1 |    1 |    1
+ 06-01-1401 |  1 |  1 |    1 |   12
+ 06-01-1401 |  1 |  1 |   12 |   12
 (12 rows)
 
 -- FIRST_VALUE/LAST_VALUE
@@ -6248,11 +6240,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 preceding and 0 preceding) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         20
-  1 | 10 | 200 |         10
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         50
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         40
   2 | 50 | 400 |         50
   3 | 40 | 200 |         40
@@ -6260,6 +6247,11 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         20
+  1 | 10 | 200 |         10
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         50
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 preceding and 1 following) as last_value from sale; --mvd 1->4
@@ -6282,11 +6274,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 preceding and 1 following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         10
-  1 | 10 | 200 |         30
-  1 | 30 | 300 |         50
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6294,16 +6281,16 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         10
+  1 | 10 | 200 |         30
+  1 | 30 | 300 |         50
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 following and 1 following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         10
-  1 | 10 | 200 |         30
-  1 | 30 | 300 |         50
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6311,6 +6298,11 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         10
+  1 | 10 | 200 |         30
+  1 | 30 | 300 |         50
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 1 following and 2 following) as last_value from sale; --mvd 1->4
@@ -6333,11 +6325,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 1 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between unbounded preceding and 2 preceding) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |           
-  1 | 10 | 200 |           
-  1 | 30 | 300 |         20
-  1 | 50 | 400 |         10
-  1 | 30 | 500 |         30
   2 | 40 | 100 |           
   2 | 50 | 400 |           
   3 | 40 | 200 |           
@@ -6345,16 +6332,16 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between un
   3 | 30 | 600 |         40
   4 | 40 | 700 |           
   4 | 40 | 800 |           
+  1 | 20 | 100 |           
+  1 | 10 | 200 |           
+  1 | 30 | 300 |         20
+  1 | 50 | 400 |         10
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between unbounded preceding and 0 preceding) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         20
-  1 | 10 | 200 |         10
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         50
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         40
   2 | 50 | 400 |         50
   3 | 40 | 200 |         40
@@ -6362,11 +6349,21 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between un
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         20
+  1 | 10 | 200 |         10
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         50
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between unbounded preceding and 2 following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
+  1 | 20 | 100 |         30
+  1 | 10 | 200 |         50
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6374,11 +6371,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between un
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
-  1 | 20 | 100 |         30
-  1 | 10 | 200 |         50
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 preceding and unbounded following) as last_value from sale; --mvd 1->4
@@ -6401,11 +6393,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 2 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 preceding and unbounded following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         30
-  1 | 10 | 200 |         30
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6413,11 +6400,21 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         30
+  1 | 10 | 200 |         30
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 following and unbounded following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
+  1 | 20 | 100 |         30
+  1 | 10 | 200 |         30
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6425,11 +6422,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 0 
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
-  1 | 20 | 100 |         30
-  1 | 10 | 200 |         30
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 1 following and unbounded following) as last_value from sale; --mvd 1->4
@@ -6452,11 +6444,6 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between 1 
 select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between unbounded preceding and unbounded following) as last_value from sale; --mvd 1->4
  cn | vn | pn  | last_value 
 ----+----+-----+------------
-  1 | 20 | 100 |         30
-  1 | 10 | 200 |         30
-  1 | 30 | 300 |         30
-  1 | 50 | 400 |         30
-  1 | 30 | 500 |         30
   2 | 40 | 100 |         50
   2 | 50 | 400 |         50
   3 | 40 | 200 |         30
@@ -6464,11 +6451,21 @@ select cn,vn,pn,last_value(vn) over (partition by cn order by pn rows between un
   3 | 30 | 600 |         30
   4 | 40 | 700 |         40
   4 | 40 | 800 |         40
+  1 | 20 | 100 |         30
+  1 | 10 | 200 |         30
+  1 | 30 | 300 |         30
+  1 | 50 | 400 |         30
+  1 | 30 | 500 |         30
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 200 preceding and 150 preceding) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
+  1 | 100 | 20 |            
+  1 | 200 | 10 |            
+  1 | 300 | 30 |          20
+  1 | 400 | 50 |          10
+  1 | 500 | 30 |          30
   2 | 100 | 40 |            
   2 | 400 | 50 |            
   3 | 200 | 40 |            
@@ -6476,16 +6473,16 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |            
   4 | 700 | 40 |            
   4 | 800 | 40 |            
-  1 | 100 | 20 |            
-  1 | 200 | 10 |            
-  1 | 300 | 30 |          20
-  1 | 400 | 50 |          10
-  1 | 500 | 30 |          30
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 200 preceding and 0 preceding) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
+  1 | 100 | 20 |          20
+  1 | 200 | 10 |          20
+  1 | 300 | 30 |          20
+  1 | 400 | 50 |          10
+  1 | 500 | 30 |          30
   2 | 100 | 40 |          40
   2 | 400 | 50 |          50
   3 | 200 | 40 |          40
@@ -6493,21 +6490,11 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |          30
   4 | 700 | 40 |          40
   4 | 800 | 40 |          40
-  1 | 100 | 20 |          20
-  1 | 200 | 10 |          20
-  1 | 300 | 30 |          20
-  1 | 400 | 50 |          10
-  1 | 500 | 30 |          30
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 200 preceding and 150 following) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
-  1 | 100 | 20 |          20
-  1 | 200 | 10 |          20
-  1 | 300 | 30 |          20
-  1 | 400 | 50 |          10
-  1 | 500 | 30 |          30
   2 | 100 | 40 |          40
   2 | 400 | 50 |          50
   3 | 200 | 40 |          40
@@ -6515,6 +6502,11 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |          30
   4 | 700 | 40 |          40
   4 | 800 | 40 |          40
+  1 | 100 | 20 |          20
+  1 | 200 | 10 |          20
+  1 | 300 | 30 |          20
+  1 | 400 | 50 |          10
+  1 | 500 | 30 |          30
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 0 preceding and 150 following) as first_value from sale; --mvd 1->4
@@ -6554,6 +6546,11 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 150 following and 200 following) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
+  1 | 100 | 20 |          30
+  1 | 200 | 10 |          50
+  1 | 300 | 30 |          30
+  1 | 400 | 50 |            
+  1 | 500 | 30 |            
   2 | 100 | 40 |            
   2 | 400 | 50 |            
   3 | 200 | 40 |            
@@ -6561,11 +6558,6 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |            
   4 | 700 | 40 |            
   4 | 800 | 40 |            
-  1 | 100 | 20 |          30
-  1 | 200 | 10 |          50
-  1 | 300 | 30 |          30
-  1 | 400 | 50 |            
-  1 | 500 | 30 |            
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between unbounded preceding and 200 preceding) as first_value from sale; --mvd 1->4
@@ -6588,11 +6580,6 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between unbounded preceding and 0 preceding) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
-  1 | 100 | 20 |          20
-  1 | 200 | 10 |          20
-  1 | 300 | 30 |          20
-  1 | 400 | 50 |          20
-  1 | 500 | 30 |          20
   2 | 100 | 40 |          40
   2 | 400 | 50 |          40
   3 | 200 | 40 |          40
@@ -6600,11 +6587,21 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |          40
   4 | 700 | 40 |          40
   4 | 800 | 40 |          40
+  1 | 100 | 20 |          20
+  1 | 200 | 10 |          20
+  1 | 300 | 30 |          20
+  1 | 400 | 50 |          20
+  1 | 500 | 30 |          20
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between unbounded preceding and 200 following) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
+  1 | 100 | 20 |          20
+  1 | 200 | 10 |          20
+  1 | 300 | 30 |          20
+  1 | 400 | 50 |          20
+  1 | 500 | 30 |          20
   2 | 100 | 40 |          40
   2 | 400 | 50 |          40
   3 | 200 | 40 |          40
@@ -6612,11 +6609,6 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |          40
   4 | 700 | 40 |          40
   4 | 800 | 40 |          40
-  1 | 100 | 20 |          20
-  1 | 200 | 10 |          20
-  1 | 300 | 30 |          20
-  1 | 400 | 50 |          20
-  1 | 500 | 30 |          20
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 200 preceding and unbounded following) as first_value from sale; --mvd 1->4
@@ -6673,11 +6665,6 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 150 following and unbounded following) as first_value from sale; --mvd 1->4
  cn | pn  | vn | first_value 
 ----+-----+----+-------------
-  1 | 100 | 20 |          30
-  1 | 200 | 10 |          50
-  1 | 300 | 30 |          30
-  1 | 400 | 50 |            
-  1 | 500 | 30 |            
   2 | 100 | 40 |          50
   2 | 400 | 50 |            
   3 | 200 | 40 |          30
@@ -6685,6 +6672,11 @@ select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between 
   3 | 600 | 30 |            
   4 | 700 | 40 |            
   4 | 800 | 40 |            
+  1 | 100 | 20 |          30
+  1 | 200 | 10 |          50
+  1 | 300 | 30 |          30
+  1 | 400 | 50 |            
+  1 | 500 | 30 |            
 (12 rows)
 
 select cn,pn,vn,first_value(vn) over (partition by cn order by pn range between unbounded preceding and unbounded following) as first_value from sale; --mvd 1->4
@@ -6751,18 +6743,18 @@ FIRST_VALUE(floor(sale.prc)) OVER(partition by sale.prc,sale.cn order by sale.vn
 FROM sale; --mvd 1,2->4
  prc  | cn | vn | first_value 
 ------+----+----+-------------
-    5 |  1 | 30 |           5
- 2400 |  2 | 40 |        2400
+    0 |  2 | 50 |           0
+    0 |  3 | 40 |           0
+    5 |  3 | 30 |           5
+    5 |  3 | 30 |           5
     0 |  1 | 10 |           0
     0 |  1 | 20 |           0
     0 |  1 | 30 |           0
     0 |  1 | 50 |           0
     1 |  4 | 40 |           1
     1 |  4 | 40 |           1
-    0 |  2 | 50 |           0
-    0 |  3 | 40 |           0
-    5 |  3 | 30 |           5
-    5 |  3 | 30 |           5
+    5 |  1 | 30 |           5
+ 2400 |  2 | 40 |        2400
 (12 rows)
 
 SELECT cn,pn,dt,
@@ -6770,11 +6762,6 @@ FIRST_VALUE(floor(sale.pn/sale.pn)) OVER(partition by sale.cn,sale.pn,sale.dt or
 from sale; --mvd 1,2,3->4
  cn | pn  |     dt     | fv 
 ----+-----+------------+----
-  4 | 700 | 06-01-1401 |  1
-  3 | 500 | 06-01-1401 |  1
-  3 | 600 | 06-01-1401 |  1
-  1 | 300 | 05-02-1401 |  1
-  1 | 400 | 06-01-1401 |  1
   3 | 200 | 04-01-1401 |  1
   2 | 400 | 06-01-1401 |  1
   1 | 500 | 06-01-1401 |  1
@@ -6782,6 +6769,11 @@ from sale; --mvd 1,2,3->4
   2 | 100 | 01-01-1401 |  1
   1 | 100 | 05-01-1401 |  1
   1 | 200 | 03-01-1401 |  1
+  4 | 700 | 06-01-1401 |  1
+  3 | 500 | 06-01-1401 |  1
+  3 | 600 | 06-01-1401 |  1
+  1 | 300 | 05-02-1401 |  1
+  1 | 400 | 06-01-1401 |  1
 (12 rows)
 
 -- MPP-1964
@@ -6790,18 +6782,18 @@ CORR(floor(sale.cn-sale.prc),floor(sale.prc)) OVER(partition by sale.cn,sale.cn 
 FROM sale; --mvd 1->4
  cn | ?column? | prc  | corr 
 ----+----------+------+------
+  4 |        3 |    1 |     
+  4 |        3 |    1 |     
+  3 |        3 |    0 |   -1
+  3 |       -2 |    5 |   -1
+  3 |       -2 |    5 |   -1
+  2 |        2 |    0 |   -1
+  2 |    -2398 | 2400 |   -1
   1 |        1 |    0 |   -1
   1 |        1 |    0 |   -1
   1 |        1 |    0 |   -1
   1 |        1 |    0 |   -1
   1 |       -4 |    5 |   -1
-  4 |        3 |    1 |     
-  4 |        3 |    1 |     
-  3 |       -2 |    5 |   -1
-  3 |       -2 |    5 |   -1
-  3 |        3 |    0 |   -1
-  2 |        2 |    0 |   -1
-  2 |    -2398 | 2400 |   -1
 (12 rows)
 
 SELECT cn,floor(qty/pn),cn,
@@ -7074,35 +7066,35 @@ select cn,vn,ntile(qty) over(partition by cn order by vn) from sale;
 select cn,vn,ntile(cn) over(partition by cn+vn order by vn) from sale;
  cn | vn | ntile 
 ----+----+-------
+  2 | 40 |     1
+  1 | 50 |     1
+  1 | 30 |     1
+  1 | 30 |     1
+  4 | 40 |     1
+  4 | 40 |     2
   1 | 10 |     1
   1 | 20 |     1
   3 | 30 |     1
   3 | 30 |     2
   3 | 40 |     1
   2 | 50 |     1
-  1 | 30 |     1
-  1 | 30 |     1
-  4 | 40 |     1
-  4 | 40 |     2
-  2 | 40 |     1
-  1 | 50 |     1
 (12 rows)
 
 select cn,vn,ntile(cn+vn) over(partition by cn+vn order by vn) from sale; --mvd 1,2->3
  cn | vn | ntile 
 ----+----+-------
-  1 | 10 |     1
-  1 | 20 |     1
-  3 | 30 |     1
-  3 | 30 |     2
-  3 | 40 |     1
-  2 | 50 |     1
   2 | 40 |     1
   1 | 50 |     1
   1 | 30 |     1
   1 | 30 |     2
   4 | 40 |     1
   4 | 40 |     2
+  1 | 10 |     1
+  1 | 20 |     1
+  3 | 30 |     1
+  3 | 30 |     2
+  3 | 40 |     1
+  2 | 50 |     1
 (12 rows)
 
 -- MPP-2045
@@ -7337,18 +7329,18 @@ SELECT cn, pn, dt, PERCENT_RANK() OVER(partition by cn,dt order by cn desc),
 FROM sale; --mvd 1,3->4
  cn | pn  |     dt     | percent_rank | lead 
 ----+-----+------------+--------------+------
-  2 | 100 | 01-01-1401 |            0 |     
-  1 | 200 | 03-01-1401 |            0 |     
-  1 | 100 | 05-01-1401 |            0 |     
-  1 | 300 | 05-02-1401 |            0 |     
-  1 | 400 | 06-01-1401 |            0 |  500
-  1 | 500 | 06-01-1401 |            0 |     
   4 | 700 | 06-01-1401 |            0 |     
   4 | 800 | 06-01-1401 |            0 |     
   3 | 200 | 04-01-1401 |            0 |     
   3 | 500 | 06-01-1401 |            0 |     
   3 | 600 | 06-01-1401 |            0 |     
   2 | 400 | 06-01-1401 |            0 |     
+  2 | 100 | 01-01-1401 |            0 |     
+  1 | 200 | 03-01-1401 |            0 |     
+  1 | 100 | 05-01-1401 |            0 |     
+  1 | 300 | 05-02-1401 |            0 |     
+  1 | 400 | 06-01-1401 |            0 |  500
+  1 | 500 | 06-01-1401 |            0 |     
 (12 rows)
 
 -- MPP-2163
@@ -7386,8 +7378,6 @@ LINE 2: ...lect dt, sum(cn) over(order by grouping(cn) range grouping(c...
 drop table if exists win_test_for_window_seq;
 NOTICE:  table "win_test_for_window_seq" does not exist, skipping
 create table win_test_for_window_seq (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into win_test_for_window_seq values (0,0), (1,null), (2, null), (3,null);
 select i,j,sum(i) over(order by j range 1 preceding) from win_test_for_window_seq; --mvd 2->3
  i | j | sum 
@@ -7890,11 +7880,11 @@ create table redundant_sort_check (i int, j int, k int) distributed by (i);
 explain select count(*) over (order by i), count(*) over (partition by i order by j) from redundant_sort_check;
                                             QUERY PLAN                                            
 --------------------------------------------------------------------------------------------------
- WindowAgg  (cost=2197.59..4924.09 rows=77900 width=24)
+ WindowAgg  (cost=2200.34..4924.09 rows=77900 width=24)
    Order By: i
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2197.59..3755.59 rows=77900 width=16)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2197.61..3755.59 rows=77900 width=16)
          Merge Key: i
-         ->  WindowAgg  (cost=2197.59..2716.92 rows=25967 width=16)
+         ->  WindowAgg  (cost=2197.61..2716.92 rows=25967 width=16)
                Partition By: i
                Order By: j
                ->  Sort  (cost=2197.59..2262.51 rows=25967 width=8)
@@ -7906,8 +7896,6 @@ explain select count(*) over (order by i), count(*) over (partition by i order b
 -- End of MPP-13710
 -- MPP-13879
 create table num_range as select a::numeric from generate_series(1, 10)a;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select a, max(a) over (order by a range between current row and 2 following) from num_range;
  a  | max 
 ----+-----
@@ -7926,8 +7914,6 @@ select a, max(a) over (order by a range between current row and 2 following) fro
 -- End of MPP-13879
 -- MPP-13969
 create table esc176_1(id int, seq int, val float, clickdate timestamp);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into esc176_1 values(1, 1, 0.2, '2011-08-18 04:59:35.471494'),
 	(1, 2, 0.1, '2011-08-18 04:59:45.920501'),
 	(1, 3, 0.5, '2011-08-18 04:59:51.174672'),
@@ -7947,8 +7933,6 @@ select id, seq, clickdate, sum(val) over
 drop table if exists olap_window_seq_test;
 NOTICE:  table "olap_window_seq_test" does not exist, skipping
 create table olap_window_seq_test (n numeric, d date);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into olap_window_seq_test values (12, '2011-05-01'), (34, '2011-05-02'), (89, '2011-05-03');
 select stddev(n) over(order by d range interval '1 day' preceding), n from olap_window_seq_test;
        stddev        | n  
@@ -7998,8 +7982,6 @@ CREATE TABLE empsalary(
   salary char(8),
   enroll_date date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'depname' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO empsalary VALUES('develop', 8, '6000', '2006/10/01');
 INSERT INTO empsalary VALUES('develop', 11, '5200', '2007/08/15');
 INSERT INTO empsalary VALUES('develop', 9, '4500', '2008/01/01');
@@ -8037,8 +8019,6 @@ CREATE TABLE empsalary(
   salary numeric(22, 6),
   enroll_date date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'depname' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO empsalary VALUES('develop', 8, 6000, '2006/10/01');
 INSERT INTO empsalary VALUES('develop', 11, 5200, '2007/08/15');
 INSERT INTO empsalary VALUES('develop', 9, 4500, '2008/01/01');
@@ -8062,8 +8042,6 @@ CREATE TABLE empsalary(
   salary int,
   enroll_date date
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'depname' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO empsalary VALUES('develop', 8, 6000, '2006/10/01');
 INSERT INTO empsalary VALUES('develop', 11, 5200, '2007/08/15');
 INSERT INTO empsalary VALUES('develop', 9, 4500, '2008/01/01');
@@ -8127,23 +8105,21 @@ set optimizer_segments to 1;
 SELECT bar.*, count(*) OVER() AS e FROM foo, bar where foo.b = bar.d;
  c  | d  | e  
 ----+----+----
-  5 |  5 | 10
-  6 |  6 | 10
-  9 |  9 | 10
- 10 | 10 | 10
   2 |  2 | 10
   3 |  3 | 10
   4 |  4 | 10
   7 |  7 | 10
   8 |  8 | 10
+  5 |  5 | 10
+  6 |  6 | 10
+  9 |  9 | 10
+ 10 | 10 | 10
   1 |  1 | 10
 (10 rows)
 
 reset optimizer_segments;
 drop table foo, bar;
 CREATE TABLE foo (a int, b int, c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo select i,i,i,i from generate_series(1, 10) i;
 EXPLAIN SELECT count(*) over (PARTITION BY a ORDER BY b, c, d) as count1,
        count(*) over (PARTITION BY a ORDER BY b, c) as count2,
@@ -8154,26 +8130,26 @@ EXPLAIN SELECT count(*) over (PARTITION BY a ORDER BY b, c, d) as count1,
 FROM foo;
                                                    QUERY PLAN                                                   
 ----------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1995.14..6701.78 rows=71100 width=64)
-   ->  WindowAgg  (cost=1995.14..5753.78 rows=23700 width=64)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1995.69..6701.78 rows=71100 width=64)
+   ->  WindowAgg  (cost=1995.69..5753.78 rows=23700 width=64)
          Partition By: a
          Order By: b
-         ->  WindowAgg  (cost=1995.14..5339.03 rows=23700 width=56)
+         ->  WindowAgg  (cost=1995.53..5339.03 rows=23700 width=56)
                Partition By: a
                Order By: b, c
-               ->  WindowAgg  (cost=1995.14..4865.03 rows=23700 width=48)
+               ->  WindowAgg  (cost=1995.39..4865.03 rows=23700 width=48)
                      Partition By: a
                      Order By: b, c, d
-                     ->  Incremental Sort  (cost=1995.14..4331.78 rows=23700 width=40)
+                     ->  Incremental Sort  (cost=1995.27..4331.78 rows=23700 width=40)
                            Sort Key: a, b, c, d
                            Presorted Key: a
-                           ->  WindowAgg  (cost=1993.11..3474.36 rows=23700 width=40)
+                           ->  WindowAgg  (cost=1993.25..3474.36 rows=23700 width=40)
                                  Partition By: a
                                  Order By: c
-                                 ->  WindowAgg  (cost=1993.11..3059.61 rows=23700 width=32)
+                                 ->  WindowAgg  (cost=1993.18..3059.61 rows=23700 width=32)
                                        Partition By: a
                                        Order By: c, b
-                                       ->  WindowAgg  (cost=1993.11..2585.61 rows=23700 width=24)
+                                       ->  WindowAgg  (cost=1993.14..2585.61 rows=23700 width=24)
                                              Partition By: a
                                              Order By: c, b, d
                                              ->  Sort  (cost=1993.11..2052.36 rows=23700 width=16)
@@ -8188,8 +8164,6 @@ drop table foo;
 drop table if exists window_preds;
 NOTICE:  table "window_preds" does not exist, skipping
 create table window_preds(i int, j int, k int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into window_preds values(1,2,3);
 analyze window_preds;
 insert into window_preds values(2,3,4);
@@ -8405,18 +8379,18 @@ insert into window_preds with CTE as (select i, row_number() over (partition by 
 select dt, pn, count(distinct pn) over (partition by dt) from sale;
      dt     | pn  | count 
 ------------+-----+-------
- 01-01-1401 | 100 |     1
- 06-01-1401 | 600 |     5
- 06-01-1401 | 800 |     5
- 06-01-1401 | 500 |     5
- 06-01-1401 | 400 |     5
- 06-01-1401 | 500 |     5
- 06-01-1401 | 400 |     5
- 06-01-1401 | 700 |     5
  03-01-1401 | 200 |     1
  04-01-1401 | 200 |     1
  05-01-1401 | 100 |     1
  05-02-1401 | 300 |     1
+ 01-01-1401 | 100 |     1
+ 06-01-1401 | 400 |     5
+ 06-01-1401 | 600 |     5
+ 06-01-1401 | 800 |     5
+ 06-01-1401 | 400 |     5
+ 06-01-1401 | 500 |     5
+ 06-01-1401 | 500 |     5
+ 06-01-1401 | 700 |     5
 (12 rows)
 
 select dt, pn, count(distinct pn) over (partition by dt), sum(distinct pn) over (partition by dt) from sale;
@@ -8439,10 +8413,6 @@ select dt, pn, count(distinct pn) over (partition by dt), sum(distinct pn) over 
 select dt, pn, sum(distinct pn) over (partition by dt), sum(pn) over (partition by dt) from sale;
      dt     | pn  | sum  | sum  
 ------------+-----+------+------
- 03-01-1401 | 200 |  200 |  200
- 04-01-1401 | 200 |  200 |  200
- 05-01-1401 | 100 |  100 |  100
- 05-02-1401 | 300 |  300 |  300
  01-01-1401 | 100 |  100 |  100
  06-01-1401 | 600 | 3000 | 3900
  06-01-1401 | 800 | 3000 | 3900
@@ -8451,6 +8421,10 @@ select dt, pn, sum(distinct pn) over (partition by dt), sum(pn) over (partition 
  06-01-1401 | 700 | 3000 | 3900
  06-01-1401 | 400 | 3000 | 3900
  06-01-1401 | 500 | 3000 | 3900
+ 03-01-1401 | 200 |  200 |  200
+ 04-01-1401 | 200 |  200 |  200
+ 05-01-1401 | 100 |  100 |  100
+ 05-02-1401 | 300 |  300 |  300
 (12 rows)
 
 -- Also test with a pass-by-ref type, to make sure we don't get confused with memory contexts.
@@ -8460,9 +8434,9 @@ select pcolor, pname, count(distinct pname) over (partition by pcolor) from prod
  Plain     | Donuts    |     1
  Chocolate | Donuts    |     1
  Clear     | Justice   |     1
- Grey      | Castle    |     3
  Grey      | Hamburger |     3
  Grey      | Fries     |     3
+ Grey      | Castle    |     3
  Black     | Sword     |     2
  Black     | Dream     |     2
 (8 rows)
@@ -8537,42 +8511,39 @@ EXPLAIN WITH cte as (SELECT *, row_number() over () FROM window_part_sales) SELE
 
 -- If there is a PARTITION BY in the window function, we can push down ONLY the predicates that match the PARTITION BY column.
 EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY region) FROM window_part_sales) SELECT * FROM cte WHERE date > '2011-03-01' AND region = 'usa';
-                                                                      QUERY PLAN                                                                      
-------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1376.48 rows=93 width=48)
-   ->  Subquery Scan on cte  (cost=0.00..1375.24 rows=31 width=48)
-         Filter: (cte.date > '03-01-2011'::date)
-         ->  WindowAgg  (cost=0.00..1375.24 rows=93 width=48)
-               Partition By: window_part_sales.region
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1373.84 rows=93 width=40)
-                     Hash Key: window_part_sales.region
-                     ->  Append  (cost=0.00..1371.97 rows=93 width=40)
-                           ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
-                           ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_6  (cost=0.00..228.58 rows=16 width=40)
-                                 Filter: (region = 'usa'::text)
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Subquery Scan on cte  (cost=0.00..1379.21 rows=93 width=48)
+   Filter: (cte.date > '03-01-2011'::date)
+   ->  WindowAgg  (cost=0.00..1379.21 rows=280 width=48)
+         ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1375.70 rows=280 width=40)
+               ->  Append  (cost=0.00..1371.97 rows=93 width=40)
+                     ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
+                     ->  Seq Scan on window_part_sales_1_prt_3_2_prt_usa window_part_sales_2  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
+                     ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_3  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
+                     ->  Seq Scan on window_part_sales_1_prt_5_2_prt_usa window_part_sales_4  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
+                     ->  Seq Scan on window_part_sales_1_prt_6_2_prt_usa window_part_sales_5  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
+                     ->  Seq Scan on window_part_sales_1_prt_outlying_dates_2_prt_usa window_part_sales_6  (cost=0.00..228.58 rows=16 width=40)
+                           Filter: (region = 'usa'::text)
  Optimizer: Postgres query optimizer
-(21 rows)
+(18 rows)
 
 -- When both columns in the filter predicates are in the window function, it is possible to push both down.
 EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM window_part_sales) SELECT * FROM cte WHERE date > '2011-03-01' AND region = 'usa';
                                                                      QUERY PLAN                                                                      
 -----------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1071.83..1073.98 rows=108 width=48)
-   ->  WindowAgg  (cost=1071.83..1072.55 rows=36 width=48)
-         Partition By: window_part_sales.date, window_part_sales.region
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1071.83..1073.89 rows=108 width=48)
+   ->  WindowAgg  (cost=1071.83..1072.46 rows=36 width=48)
+         Partition By: window_part_sales.date
          ->  Sort  (cost=1071.83..1071.92 rows=36 width=40)
                Sort Key: window_part_sales.date
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1070.90 rows=36 width=40)
-                     Hash Key: window_part_sales.date, window_part_sales.region
+                     Hash Key: window_part_sales.date
                      ->  Append  (cost=0.00..1070.18 rows=36 width=40)
                            ->  Seq Scan on window_part_sales_1_prt_4_2_prt_usa window_part_sales_1  (cost=0.00..267.50 rows=9 width=40)
                                  Filter: ((date > '03-01-2011'::date) AND (region = 'usa'::text))
@@ -8589,13 +8560,13 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM
 EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM window_part_sales) SELECT * FROM cte WHERE region = 'usa';
                                                                       QUERY PLAN                                                                      
 ------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1376.89..1382.50 rows=280 width=48)
-   ->  WindowAgg  (cost=1376.89..1378.76 rows=93 width=48)
-         Partition By: window_part_sales.date, window_part_sales.region
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1376.89..1382.26 rows=280 width=48)
+   ->  WindowAgg  (cost=1376.89..1378.53 rows=93 width=48)
+         Partition By: window_part_sales.date
          ->  Sort  (cost=1376.89..1377.13 rows=93 width=40)
                Sort Key: window_part_sales.date
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1373.84 rows=93 width=40)
-                     Hash Key: window_part_sales.date, window_part_sales.region
+                     Hash Key: window_part_sales.date
                      ->  Append  (cost=0.00..1371.97 rows=93 width=40)
                            ->  Seq Scan on window_part_sales_1_prt_2_2_prt_usa window_part_sales_1  (cost=0.00..228.58 rows=16 width=40)
                                  Filter: (region = 'usa'::text)
@@ -8616,8 +8587,8 @@ EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM
 EXPLAIN WITH cte as (SELECT *, row_number() over (PARTITION BY date,region) FROM window_part_sales) SELECT * FROM cte WHERE date > '2011-03-01' OR region = 'usa';
                                                                             QUERY PLAN                                                                             
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=8047.41..11166.97 rows=155978 width=48)
-   ->  WindowAgg  (cost=8047.41..9087.26 rows=51993 width=48)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=8047.43..11166.97 rows=155978 width=48)
+   ->  WindowAgg  (cost=8047.43..9087.26 rows=51993 width=48)
          Partition By: window_part_sales.date, window_part_sales.region
          ->  Sort  (cost=8047.41..8177.39 rows=51993 width=40)
                Sort Key: window_part_sales.date, window_part_sales.region

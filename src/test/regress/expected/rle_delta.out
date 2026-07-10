@@ -21,8 +21,6 @@ Create table delta_all(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_all'  and c.oid=e.attrelid  order by relname, attnum;
   relname  | attnum |                       attoptions                        
 -----------+--------+---------------------------------------------------------
@@ -36,18 +34,17 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (7 rows)
 
 \d+ delta_all
-                                                                            Table "public.delta_all"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                     Table "public.delta_all"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -72,8 +69,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_all')
 (1 row)
 
 select * from delta_all order by a1,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_all
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               |             a7             
 ----+----+------------+----------+----------------------------+-------------------------------+----------------------------
   0 |  0 | 2012-02-02 | 20:02:03 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | some value for text column
@@ -84,8 +79,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 select * from delta_all order by a1 desc ,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_all
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               |                  a7                  
 ----+----+------------+----------+----------------------------+-------------------------------+--------------------------------------
  26 | 10 | 2012-02-28 | 20:02:03 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | lets try inserting a different value
@@ -97,8 +90,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
     
 Select distinct a1, a7 from delta_all order by a1,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_all
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 |                  a7                  
 ----+--------------------------------------
   0 | some value for text column
@@ -109,8 +100,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 Select distinct a2, a5 from delta_all order by a2,a5 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_all
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a2 |             a5             
 ----+----------------------------
   0 | 2012-07-30 11:00:33.778899
@@ -134,8 +123,6 @@ Create table delta_alter(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_alter'  and c.oid=e.attrelid  order by relname, attnum;
    relname   | attnum |                       attoptions                        
 -------------+--------+---------------------------------------------------------
@@ -150,19 +137,18 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (8 rows)
 
 \d+ delta_alter
-                                                                                           Table "public.delta_alter"
- Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+-----------------------------------------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |             |              | none             | 0                 | 32768      | 
- a1     | integer                     |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |                                         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |                                         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |                                         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |                                         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                                    Table "public.delta_alter"
+ Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-----------------------------------------+----------+--------------+------------------+-------------------+------------+-------------
+ id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |              | none             | 0                 | 32768      | 
+ a1     | integer                     |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |                                         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |                                         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |                                         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -181,8 +167,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_alter
 (1 row)
 
 select * from delta_alter order by id limit 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_alter
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  id | a1 | a2 |     a3     |       a4        |             a5             |              a6               |                  a7                  
 ----+----+----+------------+-----------------+----------------------------+-------------------------------+--------------------------------------
   1 |  0 |  0 | 2012-02-02 | 20:02:03        | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | some value for text column
@@ -201,19 +185,18 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 Alter table delta_alter Alter column a2 Type double precision;
 Alter table delta_alter Alter column a4 Type interval;
 \d+ delta_alter
-                                                                                           Table "public.delta_alter"
- Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+-----------------------------------------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |             |              | none             | 0                 | 32768      | 
- a1     | integer                     |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | double precision            |           |          |                                         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |                                         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | interval                    |           |          |                                         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |                                         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                                    Table "public.delta_alter"
+ Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-----------------------------------------+----------+--------------+------------------+-------------------+------------+-------------
+ id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |              | none             | 0                 | 32768      | 
+ a1     | integer                     |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | double precision            |           |          |                                         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |                                         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | interval                    |           |          |                                         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -224,8 +207,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_alter
 (1 row)
 
 select a1,a2,a3,a4,a5,a6,a7 from delta_alter order by id limit 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_alter
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |       a4        |             a5             |              a6               |                  a7                  
 ----+----+------------+-----------------+----------------------------+-------------------------------+--------------------------------------
   0 |  0 | 2012-02-02 | 20:02:03        | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | some value for text column
@@ -245,19 +226,18 @@ Alter table delta_alter Alter column a1 Type bigint;
 Alter table delta_alter Alter column a6 Type timestamp;
 Alter table delta_alter Alter column a5 Type timestamp with time zone;
 \d+ delta_alter
-                                                                                           Table "public.delta_alter"
- Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+-----------------------------------------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |             |              | none             | 0                 | 32768      | 
- a1     | bigint                      |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | double precision            |           |          |                                         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |                                         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | interval                    |           |          |                                         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp with time zone    |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp without time zone |           |          |                                         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |                                         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                                    Table "public.delta_alter"
+ Column |            Type             | Collation | Nullable |                 Default                 | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+-----------------------------------------+----------+--------------+------------------+-------------------+------------+-------------
+ id     | integer                     |           | not null | nextval('delta_alter_id_seq'::regclass) | plain    |              | none             | 0                 | 32768      | 
+ a1     | bigint                      |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | double precision            |           |          |                                         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |                                         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | interval                    |           |          |                                         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp with time zone    |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp without time zone |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -268,8 +248,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_alter
 (1 row)
 
 select a1,a2,a3,a4,a5,a6,a7 from delta_alter order by id limit 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_alter
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |       a4        |              a5               |             a6             |                  a7                  
 ----+----+------------+-----------------+-------------------------------+----------------------------+--------------------------------------
   0 |  0 | 2012-02-02 | 20:02:03        | 2012-07-30 11:00:33.778899-07 | 2014-07-22 14:00:00.333892 | some value for text column
@@ -296,8 +274,6 @@ Create table delta_bitmap_ins(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_ix_bt on  delta_bitmap_ins using bitmap(a1);
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_bitmap_ins'  and c.oid=e.attrelid  order by relname, attnum;
      relname      | attnum |                       attoptions                        
@@ -312,20 +288,19 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (7 rows)
 
 \d+ delta_bitmap_ins
-                                                                         Table "public.delta_bitmap_ins"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_bitmap_ins"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
 Indexes:
     "dl_ix_bt" bitmap (a1)
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -354,8 +329,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_bitma
 set enable_seqscan=off;
 set enable_indexscan=on;
 select a1,a2,a3,a4,a5,a6,a7 from delta_bitmap_ins where a1< 3 order by a1,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_bitmap_ins
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               |             a7             
 ----+----+------------+----------+----------------------------+-------------------------------+----------------------------
   0 |  0 | 2012-02-02 | 20:02:03 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | some value for text column
@@ -379,8 +352,6 @@ Create table delta_btree_ins(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_ix_br on  delta_btree_ins(a1);
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_btree_ins'  and c.oid=e.attrelid  order by relname, attnum;
      relname     | attnum |                       attoptions                        
@@ -395,20 +366,19 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (7 rows)
 
 \d+ delta_btree_ins
-                                                                         Table "public.delta_btree_ins"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_btree_ins"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
 Indexes:
     "dl_ix_br" btree (a1)
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -437,8 +407,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_btree
 set enable_seqscan=off;
 set enable_indexscan=on;
 select a1,a2,a3,a4,a5,a6,a7 from delta_btree_ins where a1< 3 order by a1,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_btree_ins
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               |             a7             
 ----+----+------------+----------+----------------------------+-------------------------------+----------------------------
   0 |  0 | 2012-02-02 | 20:02:03 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | some value for text column
@@ -462,8 +430,6 @@ Create table delta_ins_bitmap(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_ins_bitmap'  and c.oid=e.attrelid  order by relname, attnum;
      relname      | attnum |                       attoptions                        
 ------------------+--------+---------------------------------------------------------
@@ -477,18 +443,17 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (7 rows)
 
 \d+ delta_ins_bitmap
-                                                                         Table "public.delta_ins_bitmap"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_ins_bitmap"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -510,20 +475,19 @@ Insert into delta_ins_bitmap select
     from generate_series(100,130)i;
 Create index dl_ins_bt_ix on  delta_ins_bitmap using bitmap(a3);
 \d+ delta_ins_bitmap
-                                                                         Table "public.delta_ins_bitmap"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_ins_bitmap"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
 Indexes:
     "dl_ins_bt_ix" bitmap (a3)
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -536,8 +500,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_ins_b
 set enable_seqscan=off;
 set enable_indexscan=on;
 select * from delta_ins_bitmap where a3='2012-02-04' order by a1,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_ins_bitmap
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |       a4        |             a5             |              a6               |                  a7                  
 ----+----+------------+-----------------+----------------------------+-------------------------------+--------------------------------------
   2 |  0 | 2012-02-04 | 20:13:14.343536 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | lets try inserting a different value
@@ -561,8 +523,6 @@ Create table delta_ins_btree(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_ins_btree'  and c.oid=e.attrelid  order by relname, attnum;
      relname     | attnum |                       attoptions                        
 -----------------+--------+---------------------------------------------------------
@@ -576,18 +536,17 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (7 rows)
 
 \d+ delta_ins_btree
-                                                                         Table "public.delta_ins_btree"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_ins_btree"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -609,20 +568,19 @@ Insert into delta_ins_btree select
     from generate_series(100,130)i;
 Create index dl_br_ix on  delta_ins_btree(a3);
 \d+ delta_ins_btree
-                                                                         Table "public.delta_ins_btree"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a7     | text                        |           |          |         | extended |             |              | rle_type         | 4                 | 32768      | 
+                                                                  Table "public.delta_ins_btree"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
 Indexes:
     "dl_br_ix" btree (a3)
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -635,8 +593,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_ins_b
 set enable_seqscan=off;
 set enable_indexscan=on;
 select * from delta_ins_btree where a3='2012-02-04'  order by a1,a2,a3,a4,a5,a6,a7 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_ins_btree
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |       a4        |             a5             |              a6               |                  a7                  
 ----+----+------------+-----------------+----------------------------+-------------------------------+--------------------------------------
   2 |  0 | 2012-02-04 | 20:13:14.343536 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | lets try inserting a different value
@@ -659,8 +615,6 @@ Create table delta_blocks(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1,blocksize=8192);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_bt_ix on delta_blocks using bitmap(a1);
 Create index dl_ix on delta_blocks(a3);
 Insert into delta_blocks select
@@ -685,26 +639,23 @@ Insert into delta_blocks select
     else timestamp '2014-07-22 14:00:00.333892-07' end
     from generate_series(1,100000)i;
 \d+ delta_blocks
-                                                                          Table "public.delta_blocks"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 1                 | 8192       | 
+                                                                   Table "public.delta_blocks"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 1                 | 8192       | 
 Checksum: f
 Indexes:
     "dl_bt_ix" bitmap (a1)
     "dl_ix" btree (a3)
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192, checksum=false
 
 Select a1,a2,a6 from delta_blocks where a4 = '20:13:11.232421' order by a1 limit 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_blocks
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |              a6               
 ----+----+-------------------------------
   4 |  4 | 2014-07-22 14:12:23.776892-07
@@ -736,8 +687,6 @@ Create table delta_none(
     a8 bigint,
     a9 text ENCODING (compresstype=rle_type,compresslevel=2)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_none'  and c.oid=e.attrelid  order by relname, attnum;
   relname   | attnum |                       attoptions                        
 ------------+--------+---------------------------------------------------------
@@ -753,20 +702,19 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (9 rows)
 
 \d+ delta_none
-                                                                            Table "public.delta_none"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | none             | 0                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | rle_type         | 2                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | rle_type         | 3                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | none             | 0                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | none             | 0                 | 32768      | 
- a7     | integer                     |           |          |         | plain    |             |              | rle_type         | 4                 | 32768      | 
- a8     | bigint                      |           |          |         | plain    |             |              | none             | 0                 | 32768      | 
- a9     | text                        |           |          |         | extended |             |              | rle_type         | 2                 | 32768      | 
+                                                                     Table "public.delta_none"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | rle_type         | 2                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | rle_type         | 3                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ a7     | integer                     |           |          |         | plain    |              | rle_type         | 4                 | 32768      | 
+ a8     | bigint                      |           |          |         | plain    |              | none             | 0                 | 32768      | 
+ a9     | text                        |           |          |         | extended |              | rle_type         | 2                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -785,8 +733,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_none'
 (1 row)
 
 select a1,a2,a4,a9 from delta_none order by a1,a2,a4,a9 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_none
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |    a4    |             a9             
 ----+----+----------+----------------------------
   0 |  0 | 20:02:03 | some value for text column
@@ -797,8 +743,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 select * from delta_none order by a1 desc ,a2,a3,a4,a5,a6,a7,a8,a9 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_none
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               | a7 | a8 |                  a9                  
 ----+----+------------+----------+----------------------------+-------------------------------+----+----+--------------------------------------
  20 |  8 | 2012-02-22 | 20:02:03 | 2012-07-30 11:00:33.778899 | 2014-07-22 14:00:00.333892-07 | 13 |  2 | lets try inserting a different value
@@ -810,8 +754,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
     
 Select a2, a3, a5 from delta_none where a1 <2 order by a2, a3, a5 limit 10;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_none
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a2 |     a3     |             a5             
 ----+------------+----------------------------
   0 | 2012-02-02 | 2012-07-30 11:00:33.778899
@@ -835,14 +777,13 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 CREATE TABLE delta_one (a INT, b INT, c CHAR(100)) WITH (appendonly=true, orientation=column, compresstype=rle_type)
 DISTRIBUTED BY (b);
 \d+ delta_one
-                                                                      Table "public.delta_one"
- Column |      Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+----------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a      | integer        |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- b      | integer        |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- c      | character(100) |           |          |         | extended |             |              | rle_type         | 1                 | 32768      | 
+                                                               Table "public.delta_one"
+ Column |      Type      | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+----------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a      | integer        |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ b      | integer        |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ c      | character(100) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
 Checksum: f
-Distributed by: (b)
 Access method: ao_column
 Options: compresstype=rle_type, checksum=false
 
@@ -924,8 +865,6 @@ Create table delta_update_t1(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Insert into delta_update_t1 values
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
@@ -953,8 +892,6 @@ Create table delta_update_t2(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Insert into delta_update_t2 values
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
     (1, 2147483648, '2014-07-28', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776893-07'),
@@ -972,8 +909,6 @@ Insert into delta_update_t2 values
     (12, 2147483661, '2014-07-31', '14:22:23.776891', '2014-07-30 14:22:58.366248', '2014-07-30 14:22:23.777899-07'),
     (13, 2147483661, '2014-07-31', '14:22:23.776891', '2014-07-30 14:22:58.366249', '2014-07-30 14:22:23.777899-07');
 Select * from delta_update_t1 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -997,8 +932,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (18 rows)
 
 Select * from delta_update_t2 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 |     a2     |     a3     |       a4        |             a5             |              a6               
 ----+------------+------------+-----------------+----------------------------+-------------------------------
   1 | 2147483648 | 2014-07-28 | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776893-07
@@ -1026,8 +959,6 @@ Update delta_update_t1 set a2 = delta_update_t2.a2 from delta_update_t2 where de
 reset optimizer;
  
 Select * from delta_update_t1 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483651 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1051,8 +982,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (18 rows)
 
 Select * from delta_update_t2 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 |     a2     |     a3     |       a4        |             a5             |              a6               
 ----+------------+------------+-----------------+----------------------------+-------------------------------
   1 | 2147483648 | 2014-07-28 | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776893-07
@@ -1073,11 +1002,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (15 rows)
 
 delete from delta_update_t1 using delta_update_t2 where delta_update_t1.a1 = delta_update_t2.a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t1, delta_update_t2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 Select * from delta_update_t1 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t1
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
    800000 | 2147499999 | 2024-07-30   | 14:22:24.778899 | 2014-07-30 10:22:31        | 2014-07-30 14:22:24.776892-07
@@ -1086,8 +1011,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (3 rows)
 
 Select * from delta_update_t2 order by 1,2,3,4,5,6;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_update_t2
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 |     a2     |     a3     |       a4        |             a5             |              a6               
 ----+------------+------------+-----------------+----------------------------+-------------------------------
   1 | 2147483648 | 2014-07-28 | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776893-07
@@ -1121,8 +1044,6 @@ Create table delta_zlib(
     a8 bigint ENCODING (compresstype=zlib,compresslevel=7),
     a9 text ENCODING (compresstype=rle_type,compresslevel=2)
     ) with(appendonly=true, orientation=column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_zlib'  and c.oid=e.attrelid  order by relname, attnum;
   relname   | attnum |                       attoptions                        
 ------------+--------+---------------------------------------------------------
@@ -1138,20 +1059,19 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (9 rows)
 
 \d+ delta_zlib
-                                                                            Table "public.delta_zlib"
- Column |            Type             | Collation | Nullable | Default | Storage  | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+----------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain    |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain    |             |              | zlib             | 1                 | 32768      | 
- a3     | date                        |           |          |         | plain    |             |              | zlib             | 2                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain    |             |              | zlib             | 3                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain    |             |              | zlib             | 4                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain    |             |              | zlib             | 5                 | 32768      | 
- a7     | integer                     |           |          |         | plain    |             |              | zlib             | 6                 | 32768      | 
- a8     | bigint                      |           |          |         | plain    |             |              | zlib             | 7                 | 32768      | 
- a9     | text                        |           |          |         | extended |             |              | rle_type         | 2                 | 32768      | 
+                                                                     Table "public.delta_zlib"
+ Column |            Type             | Collation | Nullable | Default | Storage  | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+----------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain    |              | zlib             | 1                 | 32768      | 
+ a3     | date                        |           |          |         | plain    |              | zlib             | 2                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain    |              | zlib             | 3                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain    |              | zlib             | 4                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain    |              | zlib             | 5                 | 32768      | 
+ a7     | integer                     |           |          |         | plain    |              | zlib             | 6                 | 32768      | 
+ a8     | bigint                      |           |          |         | plain    |              | zlib             | 7                 | 32768      | 
+ a9     | text                        |           |          |         | extended |              | rle_type         | 2                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -1170,8 +1090,6 @@ select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('delta_zlib'
 (1 row)
 
 select * from delta_zlib order by a1,a2,a3,a4,a5,a6,a7,a8,a9 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_zlib
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |       a4        |             a5             |              a6               | a7 | a8 |             a9             
 ----+----+------------+-----------------+----------------------------+-------------------------------+----+----+----------------------------
   0 |  0 | 2012-02-04 | 12:13:11.232421 | 2012-07-30 11:13:44.351129 | 2014-07-30 14:22:23.776892-07 |  1 | 14 | some value for text column
@@ -1182,8 +1100,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 select * from delta_zlib order by a1 desc ,a2,a3,a4,a5,a6,a7,a8,a9 limit 5;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_zlib
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 |     a3     |    a4    |             a5             |              a6               | a7 | a8 |                  a9                  
 ----+----+------------+----------+----------------------------+-------------------------------+----+----+--------------------------------------
   5 |  0 | 2012-02-22 | 00:02:03 | 2015-02-05 12:00:33.778899 | 2012-06-30 04:00:00.333892-07 | 13 |  2 | lets try inserting a different value
@@ -1194,8 +1110,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (5 rows)
 
 Select a2,a3 from delta_zlib where a1 <3  order by a2,a3 limit 10 ;
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_zlib
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a2 |     a3     
 ----+------------
   0 | 2012-02-04
@@ -1211,8 +1125,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (10 rows)
 
 Select a1,a2 from delta_zlib where a7 <2 order by a1,a2 limit 5 ; 
-NOTICE:  One or more columns in the following table(s) do not have statistics: delta_zlib
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  a1 | a2 
 ----+----
   0 |  0
@@ -1233,8 +1145,6 @@ Create table rle_type_1_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_1_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1247,17 +1157,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_1_delta_null
-                                                                      Table "public.rle_type_1_delta_null"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 1                 | 32768      | 
+                                                               Table "public.rle_type_1_delta_null"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, checksum=false
 
@@ -1293,8 +1202,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_1_
 (1 row)
 
 Select * from rle_type_1_delta_null order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_1_delta_null
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1334,8 +1241,6 @@ Create table rle_type_2_delta_chkt(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2, checksum=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_chkt'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1348,17 +1253,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_2_delta_chkt
-                                                                      Table "public.rle_type_2_delta_chkt"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
+                                                               Table "public.rle_type_2_delta_chkt"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: t
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=true
 
@@ -1379,8 +1283,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_2_
 (1 row)
 
 Select * from rle_type_2_delta_chkt order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_2_delta_chkt
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1402,8 +1304,6 @@ Create table rle_type_2_delta_chkf(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2, checksum=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_chkf'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1416,17 +1316,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_2_delta_chkf
-                                                                      Table "public.rle_type_2_delta_chkf"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
+                                                               Table "public.rle_type_2_delta_chkf"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=false
 
@@ -1447,8 +1346,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_2_
 (1 row)
 
 Select * from rle_type_2_delta_chkf order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_2_delta_chkf
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1473,8 +1370,6 @@ Create table rle_type_2_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1487,17 +1382,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_2_delta_null
-                                                                      Table "public.rle_type_2_delta_null"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 2                 | 32768      | 
+                                                               Table "public.rle_type_2_delta_null"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=false
 
@@ -1533,8 +1427,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_2_
 (1 row)
 
 Select * from rle_type_2_delta_null order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_2_delta_null
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1564,8 +1456,6 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (24 rows)
 
 Select * from rle_type_2_delta_null where a5 is not null order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_2_delta_null
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1600,8 +1490,6 @@ Create table rle_type_3_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_3_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1614,17 +1502,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_3_delta_null
-                                                                      Table "public.rle_type_3_delta_null"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 3                 | 32768      | 
+                                                               Table "public.rle_type_3_delta_null"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=3, checksum=false
 
@@ -1660,8 +1547,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_3_
 (1 row)
 
 Select * from rle_type_3_delta_null order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_3_delta_null
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07
@@ -1701,8 +1586,6 @@ Create table rle_type_4_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_4_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1715,17 +1598,16 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 (6 rows)
 
 \d+ rle_type_4_delta_null
-                                                                      Table "public.rle_type_4_delta_null"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Compression Type | Compression Level | Block Size | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+------------------+-------------------+------------+-------------
- a1     | integer                     |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
- a2     | bigint                      |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
- a3     | date                        |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
- a4     | time without time zone      |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
- a5     | timestamp without time zone |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
- a6     | timestamp with time zone    |           |          |         | plain   |             |              | rle_type         | 4                 | 32768      | 
+                                                               Table "public.rle_type_4_delta_null"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Compression Type | Compression Level | Block Size | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+------------------+-------------------+------------+-------------
+ a1     | integer                     |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
+ a2     | bigint                      |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
+ a3     | date                        |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
+ a4     | time without time zone      |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
+ a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
+ a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
 Checksum: f
-Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=4, checksum=false
 
@@ -1761,8 +1643,6 @@ Select 'compression_ratio' as compr_ratio, get_ao_compression_ratio('rle_type_4_
 (1 row)
 
 Select * from rle_type_4_delta_null order by a1;
-NOTICE:  One or more columns in the following table(s) do not have statistics: rle_type_4_delta_null
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
     a1    |     a2     |      a3      |       a4        |             a5             |              a6               
 ----------+------------+--------------+-----------------+----------------------------+-------------------------------
         1 | 2147483648 | 2014-07-29   | 14:22:23.77689  | 2014-07-30 14:22:58.356229 | 2014-07-30 14:22:23.776892-07

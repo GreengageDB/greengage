@@ -1,9 +1,11 @@
 drop table if exists d;
 NOTICE:  table "d" does not exist, skipping
 drop table if exists c;
+NOTICE:  table "c" does not exist, skipping
 drop table if exists b;
 NOTICE:  table "b" does not exist, skipping
 drop table if exists a;
+NOTICE:  table "a" does not exist, skipping
 -- Check multi level partition COPY
 create table region
 (
@@ -41,18 +43,18 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'region%' and relfrozenxid=0;
  gp_segment_id |       relname        | relkind 
 ---------------+----------------------+---------
-             1 | region               | p
-             1 | region_1_prt_region1 | p
-             1 | region_1_prt_region2 | p
-             1 | region_1_prt_region3 | p
-             2 | region               | p
-             2 | region_1_prt_region1 | p
-             2 | region_1_prt_region2 | p
-             2 | region_1_prt_region3 | p
              0 | region               | p
              0 | region_1_prt_region1 | p
              0 | region_1_prt_region2 | p
              0 | region_1_prt_region3 | p
+             2 | region               | p
+             2 | region_1_prt_region1 | p
+             2 | region_1_prt_region2 | p
+             2 | region_1_prt_region3 | p
+             1 | region               | p
+             1 | region_1_prt_region1 | p
+             1 | region_1_prt_region2 | p
+             1 | region_1_prt_region3 | p
 (12 rows)
 
 create unique index region_pkey on region(r_regionkey, r_name);
@@ -107,7 +109,7 @@ select * from region where r_regionkey = '7';
 -- tables since we cannot enforce them. But since this insert maps to a
 -- single definitive partition, we can detect it.
 insert into region values(7, 'AUSTRALIA', 'def');
-ERROR:  duplicate key value violates unique constraint "region_1_prt_region3_2_prt_australia_r_regionkey_r_name_idx"  (seg0 172.17.0.2:7002 pid=41541)
+ERROR:  duplicate key value violates unique constraint "region_1_prt_region3_2_prt_australia_r_regionkey_r_name_idx"  (seg0 172.17.0.4:7002 pid=1835158)
 DETAIL:  Key (r_regionkey, r_name)=(7, AUSTRALIA                ) already exists.
 drop table region;
 -- exchange
@@ -151,8 +153,6 @@ PARTITION BY RANGE (b)
       START (11) END (12) EVERY (1))
       ( START (1) END (2) EVERY (1));
 CREATE TABLE candidate_for_leaf(a int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should fail
 ALTER TABLE two_level_pt ALTER PARTITION FOR (1)
       EXCHANGE PARTITION FOR (11) WITH TABLE candidate_for_leaf;
@@ -252,11 +252,7 @@ drop table foo_p, bar_d;
 create role part_role;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table foo_p (i int) partition by range(i) (start(1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar_p (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 grant select on foo_p to part_role;
 revoke all on bar_p from part_role;
 NOTICE:  no privileges could be revoked
@@ -323,8 +319,6 @@ select has_table_privilege('part_role2', 'foo_p_1_prt_6'::regclass, 'select');
 (1 row)
 
 create table foo_p2 (a int, b int) partition by range(a) (start(1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 grant select on foo_p, only foo_p2 to part_role2; -- multiple tables in same statement
 select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
  has_table_privilege 
@@ -383,20 +377,16 @@ drop role part_role2;
 -- validation
 create table foo_p (i int) partition by range(i)
 (start(1) end(10) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar_p (i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into bar_p values(6);
 insert into bar_p values(100);
 -- should fail
 alter table foo_p exchange partition for(6) with table bar_p;
-ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.17.0.2:7004 pid=41703)
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.17.0.4:7004 pid=1835315)
 alter table foo_p exchange partition for(6) with table bar_p without
 validation;
 NOTICE:  specifying "WITHOUT VALIDATION" acts as no operation. If the new partition is a regular table, validation is performed to make sure all the rows obey partition constraint. If the new partition is external or foreign table, no validation is performed.
-ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.17.0.2:7004 pid=41703)
+ERROR:  partition constraint of relation "bar_p" is violated by some row  (seg2 172.17.0.4:7004 pid=1835315)
 analyze foo_p;
 select * from foo_p;
  i 
@@ -467,10 +457,10 @@ analyze foo_p;
 select * from foo_p;
  i | j 
 ---+---
- 2 | 1
- 3 | 1
  1 | 1
  6 | 6
+ 2 | 1
+ 3 | 1
 (4 rows)
 
 drop table bar_p;
@@ -487,9 +477,9 @@ analyze foo_p;
 select * from foo_p;
  i | j 
 ---+---
- 1 | 1
  2 | 1
  3 | 2
+ 1 | 1
  6 | 6
 (4 rows)
 
@@ -568,10 +558,7 @@ NOTICE:  table "exh_abc" does not exist, skipping
 create table dex (i int,  j int) partition by range(j)
 (partition a start (1) end(10), partition b start(11) end(20),
 default partition abc);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table exh_abc (like dex);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table dex exchange default partition with table exh_abc;
 drop table dex;
 drop table exh_abc;
@@ -588,7 +575,6 @@ Create table sto_ao_ao
  subpartition template ( default subpartition subothers, subpartition sub1 values ('one'), subpartition sub2 values ('two'))
  (default partition others, start(date '2008-01-01') end(date '2008-04-30') every(interval '1 month'));
 create table exh_ao_ao (like sto_ao_ao) with (appendonly=true);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table sto_ao_ao alter partition for ('2008-03-01') exchange default partition with table exh_ao_ao;
 -- Exchange a non-default sub-partition of a default partition, should fail
 alter table sto_ao_ao alter default partition exchange partition for ('one') with table exh_ao_ao;
@@ -652,14 +638,13 @@ create table foo_p (i int) distributed by (i)
 partition by range(i)
 (start (1) end (3) every (0.6));
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_1 FOR VALUES FROM (1) TO (2),
             foo_p_1_prt_2 FOR VALUES FROM (2) TO (3)
-Distributed by: (i)
 
 drop table foo_p;
 -- should fail
@@ -673,28 +658,26 @@ create table foo_p (i int) distributed by (i)
 partition by range(i)
 (start (1) end (3) every (1.3));
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_1 FOR VALUES FROM (1) TO (2),
             foo_p_1_prt_2 FOR VALUES FROM (2) TO (3)
-Distributed by: (i)
 
 drop table foo_p;
 create table foo_p (i int) distributed by (i)
 partition by range(i)
 (start (1) end (20) every (10.9));
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_1 FOR VALUES FROM (1) TO (12),
             foo_p_1_prt_2 FOR VALUES FROM (12) TO (20)
-Distributed by: (i)
 
 drop table foo_p;
 -- should fail
@@ -715,17 +698,16 @@ create table foo_p (i int, j date) distributed by (i)
 partition by range(j)
 (start ('2007-01-01') end ('2007-01-05') every (interval '1.2 days'));
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
- j      | date    |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
+ j      | date    |           |          |         | plain   |              | 
 Partition key: RANGE (j)
 Partitions: foo_p_1_prt_1 FOR VALUES FROM ('01-01-2007') TO ('01-02-2007'),
             foo_p_1_prt_2 FOR VALUES FROM ('01-02-2007') TO ('01-03-2007'),
             foo_p_1_prt_3 FOR VALUES FROM ('01-03-2007') TO ('01-04-2007'),
             foo_p_1_prt_4 FOR VALUES FROM ('01-04-2007') TO ('01-05-2007')
-Distributed by: (i)
 
 drop table foo_p;
 -- should work
@@ -733,17 +715,16 @@ create table foo_p (i int, j timestamp) distributed by (i)
 partition by range(j)
 (start ('2007-01-01') end ('2007-01-05') every (interval '1.2 days'));
 \d+ foo_p
-                                              Partitioned table "public.foo_p"
- Column |            Type             | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+-----------------------------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer                     |           |          |         | plain   |             |              | 
- j      | timestamp without time zone |           |          |         | plain   |             |              | 
+                                       Partitioned table "public.foo_p"
+ Column |            Type             | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+-----------------------------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer                     |           |          |         | plain   |              | 
+ j      | timestamp without time zone |           |          |         | plain   |              | 
 Partition key: RANGE (j)
 Partitions: foo_p_1_prt_1 FOR VALUES FROM ('Mon Jan 01 00:00:00 2007') TO ('Tue Jan 02 04:48:00 2007'),
             foo_p_1_prt_2 FOR VALUES FROM ('Tue Jan 02 04:48:00 2007') TO ('Wed Jan 03 09:36:00 2007'),
             foo_p_1_prt_3 FOR VALUES FROM ('Wed Jan 03 09:36:00 2007') TO ('Thu Jan 04 14:24:00 2007'),
             foo_p_1_prt_4 FOR VALUES FROM ('Thu Jan 04 14:24:00 2007') TO ('Fri Jan 05 00:00:00 2007')
-Distributed by: (i)
 
 drop table foo_p;
 -- test inclusive/exclusive
@@ -764,26 +745,23 @@ partition p3 end(20) inclusive,
 partition p4 start(20) exclusive , 
 partition p5 start(22) end(25)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's_suppkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ supplier2
-                                            Partitioned table "public.supplier2"
-   Column    |          Type          | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
--------------+------------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- s_suppkey   | integer                |           |          |         | plain    |             |              | 
- s_name      | character(25)          |           |          |         | extended |             |              | 
- s_address   | character varying(40)  |           |          |         | extended |             |              | 
- s_nationkey | integer                |           |          |         | plain    |             |              | 
- s_phonechar | character(15)          |           |          |         | extended |             |              | 
- s_acctbal   | numeric                |           |          |         | main     |             |              | 
- s_comment   | character varying(100) |           |          |         | extended |             |              | 
+                                     Partitioned table "public.supplier2"
+   Column    |          Type          | Collation | Nullable | Default | Storage  | Stats target | Description 
+-------------+------------------------+-----------+----------+---------+----------+--------------+-------------
+ s_suppkey   | integer                |           |          |         | plain    |              | 
+ s_name      | character(25)          |           |          |         | extended |              | 
+ s_address   | character varying(40)  |           |          |         | extended |              | 
+ s_nationkey | integer                |           |          |         | plain    |              | 
+ s_phonechar | character(15)          |           |          |         | extended |              | 
+ s_acctbal   | numeric                |           |          |         | main     |              | 
+ s_comment   | character varying(100) |           |          |         | extended |              | 
 Partition key: RANGE (s_nationkey)
 Partitions: supplier2_1_prt_p1 FOR VALUES FROM (0) TO (12),
             supplier2_1_prt_p2 FOR VALUES FROM (12) TO (13),
             supplier2_1_prt_p3 FOR VALUES FROM (13) TO (21),
             supplier2_1_prt_p4 FOR VALUES FROM (21) TO (22),
             supplier2_1_prt_p5 FOR VALUES FROM (22) TO (25)
-Distributed by: (s_suppkey)
 
 insert into supplier2 (s_suppkey, s_nationkey) select i, i 
 from generate_series(1, 24) i;
@@ -846,25 +824,22 @@ create table foo_p (i int) partition by range (i)
  partition p4 start('5981976') end('5994376') inclusive,
  partition p5 end('6000001')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_p1 FOR VALUES FROM (1) TO (2639161),
             foo_p_1_prt_p2 FOR VALUES FROM (2639161) TO (5957166),
             foo_p_1_prt_p3 FOR VALUES FROM (5957166) TO (5981976),
             foo_p_1_prt_p4 FOR VALUES FROM (5981976) TO (5994377),
             foo_p_1_prt_p5 FOR VALUES FROM (5994377) TO (6000001)
-Distributed by: (i)
 
 insert into foo_p values(5994400);
 insert into foo_p values(1);
 insert into foo_p values(6000002);
-ERROR:  no partition of relation "foo_p" found for row  (seg2 172.17.0.2:7004 pid=41703)
+ERROR:  no partition of relation "foo_p" found for row  (seg2 172.17.0.4:7004 pid=1835315)
 DETAIL:  Partition key of the failing row contains (i) = (6000002).
 insert into foo_p values(5994376);
 drop table foo_p;
@@ -873,18 +848,15 @@ partition by range(i)
 (partition p1 start(1) end(5),
  partition p2 start(10),
  partition p3 end(10) exclusive);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_p1 FOR VALUES FROM (1) TO (5),
             foo_p_1_prt_p2 FOR VALUES FROM (10) TO (MAXVALUE),
             foo_p_1_prt_p3 FOR VALUES FROM (5) TO (10)
-Distributed by: (i)
 
 drop table foo_p;
 create table foo_p (i int) 
@@ -892,18 +864,15 @@ partition by range(i)
 (partition p1 start(1) end(5),
  partition p2 start(10) exclusive,
  partition p3 end(10) inclusive);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ foo_p
-                                    Partitioned table "public.foo_p"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                             Partitioned table "public.foo_p"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: foo_p_1_prt_p1 FOR VALUES FROM (1) TO (5),
             foo_p_1_prt_p2 FOR VALUES FROM (11) TO (MAXVALUE),
             foo_p_1_prt_p3 FOR VALUES FROM (5) TO (11)
-Distributed by: (i)
 
 insert into foo_p values(1), (5), (10);
 drop table foo_p;
@@ -914,8 +883,6 @@ partition by list(i)
 (partition p1 values(1, 2, 3) with (appendonly = true),
  partition p2 values(4)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy foo_p from stdin;
 select * from foo_p;
  i 
@@ -947,8 +914,6 @@ partition by list(i)
 (partition p1 values(1, 2, 3) with (appendonly = false),
  partition p2 values(4)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy foo_p from stdin;
 select * from foo_p;
  i 
@@ -988,8 +953,6 @@ copy mixed_ao_part from stdin;
 select * from mixed_ao_part;
  distkey | partkey 
 ---------+---------
-       5 |      99
-       5 |     104
        2 |      96
        3 |      97
        4 |      98
@@ -998,6 +961,8 @@ select * from mixed_ao_part;
        4 |     103
        1 |      95
        1 |     100
+       5 |      99
+       5 |     104
 (10 rows)
 
 -- Don't drop the table, so that we leave behind a mixed table in the
@@ -1019,8 +984,6 @@ partition p1 start('1') end('10001') every(5000)
 (subpartition sp1 start('1') end('200001') every(66666)
 )
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into partsupp values(1,2,3325,771.64,', even theodolites. regular, final
 theodolites eat after the carefully pending foxes. furiously regular deposits
 sleep slyly. carefully bold realms above the ironic dependencies haggle
@@ -1050,59 +1013,49 @@ partition by range (l_commitdate)
 (
 partition p1 start('1992-01-31') end('1998-11-01') every(interval '20 months')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'l_orderkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy partlineitem from stdin with delimiter '|';
 \d+ partlineitem
-                                            Partitioned table "public.partlineitem"
-     Column      |         Type          | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
------------------+-----------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- l_orderkey      | bigint                |           |          |         | plain    |             |              | 
- l_partkey       | integer               |           |          |         | plain    |             |              | 
- l_suppkey       | integer               |           |          |         | plain    |             |              | 
- l_linenumber    | integer               |           |          |         | plain    |             |              | 
- l_quantity      | numeric               |           |          |         | main     |             |              | 
- l_extendedprice | numeric               |           |          |         | main     |             |              | 
- l_discount      | numeric               |           |          |         | main     |             |              | 
- l_tax           | numeric               |           |          |         | main     |             |              | 
- l_returnflag    | character(1)          |           |          |         | extended |             |              | 
- l_linestatus    | character(1)          |           |          |         | extended |             |              | 
- l_shipdate      | date                  |           |          |         | plain    |             |              | 
- l_commitdate    | date                  |           |          |         | plain    |             |              | 
- l_receiptdate   | date                  |           |          |         | plain    |             |              | 
- l_shipinstruct  | character(25)         |           |          |         | extended |             |              | 
- l_shipmode      | character(10)         |           |          |         | extended |             |              | 
- l_comment       | character varying(44) |           |          |         | extended |             |              | 
+                                     Partitioned table "public.partlineitem"
+     Column      |         Type          | Collation | Nullable | Default | Storage  | Stats target | Description 
+-----------------+-----------------------+-----------+----------+---------+----------+--------------+-------------
+ l_orderkey      | bigint                |           |          |         | plain    |              | 
+ l_partkey       | integer               |           |          |         | plain    |              | 
+ l_suppkey       | integer               |           |          |         | plain    |              | 
+ l_linenumber    | integer               |           |          |         | plain    |              | 
+ l_quantity      | numeric               |           |          |         | main     |              | 
+ l_extendedprice | numeric               |           |          |         | main     |              | 
+ l_discount      | numeric               |           |          |         | main     |              | 
+ l_tax           | numeric               |           |          |         | main     |              | 
+ l_returnflag    | character(1)          |           |          |         | extended |              | 
+ l_linestatus    | character(1)          |           |          |         | extended |              | 
+ l_shipdate      | date                  |           |          |         | plain    |              | 
+ l_commitdate    | date                  |           |          |         | plain    |              | 
+ l_receiptdate   | date                  |           |          |         | plain    |              | 
+ l_shipinstruct  | character(25)         |           |          |         | extended |              | 
+ l_shipmode      | character(10)         |           |          |         | extended |              | 
+ l_comment       | character varying(44) |           |          |         | extended |              | 
 Partition key: RANGE (l_commitdate)
 Partitions: partlineitem_1_prt_p1_1 FOR VALUES FROM ('01-31-1992') TO ('09-30-1993'),
             partlineitem_1_prt_p1_2 FOR VALUES FROM ('09-30-1993') TO ('05-30-1995'),
             partlineitem_1_prt_p1_3 FOR VALUES FROM ('05-30-1995') TO ('01-30-1997'),
             partlineitem_1_prt_p1_4 FOR VALUES FROM ('01-30-1997') TO ('09-30-1998'),
             partlineitem_1_prt_p1_5 FOR VALUES FROM ('09-30-1998') TO ('11-01-1998')
-Distributed by: (l_orderkey)
 
 drop table partlineitem;
 -- Make sure ADD creates dependencies
 create table i (i int) partition by range(i) (start (1) end(3) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table i add partition foo2 start(40) end (50);
 drop table i;
 create table i (i int) partition by range(i) (start (1) end(3) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table i add partition foo2 start(40) end (50);
 alter table i drop partition foo2;
 -- when using the partition name to find target partition table,
 -- we shoud check whether the matched table belong to the partitioned table.
 -- raise error instead of executing on the irrelevant table.
 create table i_1_prt_3 (like i);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- create another partitioned table which contains a partition table that
 -- could be matched by partition name when targeted on an irrelevant table.
 create table i2 (i int) partition by range(i) (start (1) end(3) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table i_1_prt_4 partition of i2 for values from (4) to (5);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- the matechd table name is i_1_prt_3, but it's a normal table, raise error.
@@ -1119,8 +1072,6 @@ drop table i;
 drop table i2;
 drop table i_1_prt_3;
 create table i (i int) partition by range(i) (start(1) end(3) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should raise error since we always make sure the partitioned table at least have one partition;
 alter table i drop partition "2", drop partition "3", drop default partition;
 ERROR:  cannot drop partition "i_1_prt_extra" of "i" -- only one remains
@@ -1129,8 +1080,6 @@ drop table i;
 create table i (i int, c text) partition by range(i) subpartition by list(c)
 subpartition template (subpartition a values ('a'), subpartition b values ('b'))
 (start (1) end(3) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should raise error since we always make sure the partitioned table at least have one partition;
 alter table i alter partition "1" drop partition a, alter partition "1" drop partition b;
 ERROR:  cannot drop partition "i_1_prt_1_2_prt_b" of "i_1_prt_1" -- only one remains
@@ -1152,8 +1101,6 @@ partition p1 start('1') end('10001') every(5000)
 (subpartition sp1 start('1') end('200001') every(66666)
 )
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select relname, pg_get_expr(relpartbound, oid, false) from pg_class where relname like 'partsupp%';
                  relname                 |             pg_get_expr              
 -----------------------------------------+--------------------------------------
@@ -1434,32 +1381,22 @@ drop table ataprank2 ;
 -- **END** ALTER TABLE ALTER PARTITION tests
 -- Test casting
 create table f (i int) partition by range (i) (start(1::int) end(10::int));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table f;
 create table f (i bigint) partition by range (i) (start(1::int8)
 end(1152921504606846976::int8) every(576460752303423488));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table f;
 create table f (n numeric(20, 2)) partition by range(n) (start(1::bigint)
 end(10000::bigint));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table f;
 --should fail, there's no assignment cast from text to numeric
 create table f (n numeric(20, 2)) partition by range(n) (start(1::bigint)
 end(10000::text));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  specified value cannot be cast to type numeric for column "n"
 LINE 2: end(10000::text));
             ^
 --should fail. there's no assignment cast from bool to numeric
 create table f (n numeric(20, 2)) partition by range(n) (start(1::bigint)
 end('f'::bool));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  specified value cannot be cast to type numeric for column "n"
 LINE 2: end('f'::bool));
             ^
@@ -1469,8 +1406,6 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table granttest (i int, j int) partition by range(i) 
 subpartition by list(j) subpartition template (values(1, 2, 3))
 (start(1) end(4) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select relname, has_table_privilege('part_role', oid,'select') as tabpriv,
        has_column_privilege('part_role', oid, 'i', 'select') as i_priv,
        has_column_privilege('part_role', oid, 'j', 'select') as j_priv
@@ -1680,12 +1615,8 @@ CREATE TABLE partsupp_1 (
           );
 -- Accept negative values trivially:
 create table partition_g (i int) partition by range(i) (start((-1)) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table partition_g;
 create table partition_g (i int) partition by range(i) (start(-1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table partition_g;
 CREATE TABLE orders (
     o_orderkey bigint,
@@ -1788,21 +1719,13 @@ WITH (appendonly=true, checksum=true, blocksize=368640, compresslevel=9) PARTITI
                           )
                   )
           );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'o_orderkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- grammar bug: MPP-3361
 create table i2 (i int) partition by range(i) (start(-2::int) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table i2;
 create table i2 (i int) partition by range(i) (start((-2)::int) end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table i2;
 create table i2 (i int) partition by range(i) (start(cast ((-2)::bigint as int))
 end(20));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table i2;
 CREATE TABLE partsupp (
     ps_partkey integer,
@@ -1816,16 +1739,12 @@ CREATE TABLE partsupp (
 ,
           PARTITION p1 START (1::numeric) END (1001::numeric)
           );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  START EXCLUSIVE not supported for partition key data type: numeric
 HINT:  Specify an inclusive START value and remove the EXCLUSIVE keyword
 drop table partsupp;
 ERROR:  table "partsupp" does not exist
 -- Deletion tests
 CREATE TABLE tmp_nation_region (n_regionkey integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_regionkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table if exists tmp_nation;
 NOTICE:  table "tmp_nation" does not exist, skipping
 CREATE TABLE tmp_nation (N_NATIONKEY INTEGER, N_NAME CHAR(25), N_REGIONKEY INTEGER, N_COMMENT VARCHAR(152))  
@@ -1836,16 +1755,12 @@ partition p2 start('11') end('15') inclusive WITH (checksum=false,appendonly=tru
 partition p3 start('15') exclusive end('19'), partition p4 start('19')  WITH (compresslevel=8,appendonly=true,checksum=false,blocksize=884736), 
 partition p5 start('20')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_nationkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 delete from tmp_nation where n_regionkey in (select n_regionkey from tmp_nation_region) and n_nationkey between 1 and 5;
 drop table tmp_nation;
 -- SPLIT tests
 -- basic sanity tests. All should pass.
 create table k (i int) partition by range(i) (start(1) end(10) every(2), 
 default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into k select i from generate_series(1, 100) i;
 alter table k split partition mydef at (20) into (partition mydef, 
 partition foo);
@@ -1853,8 +1768,6 @@ ERROR:  AT clause cannot be used when splitting a default RANGE partition
 drop table k;
 create table j (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into j select i from generate_series(1, 8) i;
 alter table j split partition for(1) at (2, 3) into (partition fa, partition
 fb);
@@ -1876,12 +1789,12 @@ alter table j split partition for(5) at (6);
 select * from j;
  i 
 ---
+ 1
  4
  2
  3
  7
  8
- 1
  5
  6
 (8 rows)
@@ -1892,8 +1805,6 @@ ERROR:  AT clause parameter is not a member of the target partition specificatio
 drop table j;
 create table k (i int) partition by range(i) (start(1) end(10) every(2), 
 default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should fail
 alter table k split default partition start(30) end (300) into (partition mydef, partition mydef);
 ERROR:  both INTO partitions already exist
@@ -1903,8 +1814,6 @@ drop table k;
 -- should work
 create table k (i int) partition by range(i) (start(1) end(10) every(2), 
 default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into k select i from generate_series(1, 30) i;
 alter table k split default partition start(15) end(20) into
 (partition mydef, partition foo);
@@ -1923,9 +1832,9 @@ into (partition bar, partition mydef);
 select * from k_1_prt_bar;
  i  
 ----
- 25
  24
  23
+ 25
 (3 rows)
 
 -- This fails, because it would create a partition with an empty range. Before
@@ -1935,10 +1844,10 @@ alter table k split partition bar at (23) into (partition baz, partition foz);
 ERROR:  empty range bound specified for partition "k_1_prt_baz"
 DETAIL:  Specified lower bound (23) is greater than or equal to upper bound (23).
 \d+ k
-                                      Partitioned table "public.k"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                               Partitioned table "public.k"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: k_1_prt_2 FOR VALUES FROM (1) TO (3),
             k_1_prt_3 FOR VALUES FROM (3) TO (5),
@@ -1948,7 +1857,6 @@ Partitions: k_1_prt_2 FOR VALUES FROM (1) TO (3),
             k_1_prt_bar FOR VALUES FROM (23) TO (26),
             k_1_prt_foo FOR VALUES FROM (15) TO (20),
             k_1_prt_mydef DEFAULT
-Distributed by: (i)
 
 drop table k;
 -- Add CO partition and split, reported in MPP-17761
@@ -1966,16 +1874,12 @@ drop table k;
 -- Test errors for default handling
 create table k (i int) partition by range(i) (start(1) end(2), 
 default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table k split partition mydef at (25) into (partition foo, partition
 mydef);
 ERROR:  AT clause cannot be used when splitting a default RANGE partition
 drop table k;
 create table k (i int) partition by list(i) (values(1), values(2),
 default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table k split default partition start(10) end(20);
 ERROR:  cannot SPLIT LIST PARTITION with START
 HINT:  Use SPLIT with the AT clause instead.
@@ -1984,16 +1888,12 @@ drop table k;
 CREATE TABLE myINT2_TBL(q1 int2)
  partition by range (q1)
  (start (1) end (3) every (1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'q1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into myint2_tbl values(1), (2);
 drop table myint2_tbl;
 -- try SREH on a partitioned table.
 create table ao_p (i int) with (appendonly = true)
  partition by range(i)
  (start(1) end(5) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy ao_p from stdin log errors segment reject limit 100;
 NOTICE:  found 2 data formatting errors (2 or more input rows), rejected related input data
 select * from ao_p;
@@ -2007,19 +1907,16 @@ drop table ao_p;
 -- MPP-3591: make sure we get inclusive/exclusive right with every().
 create table k (i int) partition by range(i)
 (start(0) exclusive end(100) inclusive every(25));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ k
-                                      Partitioned table "public.k"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- i      | integer |           |          |         | plain   |             |              | 
+                               Partitioned table "public.k"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (i)
 Partitions: k_1_prt_1 FOR VALUES FROM (1) TO (26),
             k_1_prt_2 FOR VALUES FROM (26) TO (51),
             k_1_prt_3 FOR VALUES FROM (51) TO (76),
             k_1_prt_4 FOR VALUES FROM (76) TO (101)
-Distributed by: (i)
 
 insert into k select i from generate_series(1, 100) i;
 drop table k;
@@ -2032,8 +1929,6 @@ range(b) subpartition template (subpartition h start(1) end(10))
 subpartition by range(c)
 subpartition template(subpartition i start(1) end(10)) 
 (partition g start(1) end(2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 revoke all on a from public;
 NOTICE:  no privileges could be revoked
 grant insert on a to part_role;
@@ -2092,8 +1987,6 @@ drop table a;
 create table a (i date) partition by range(i) 
 (partition f start(date '2005-01-01') end (date '2009-01-01')
 	every(interval '2 years'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 revoke all on a from public;
 NOTICE:  no privileges could be revoked
 grant insert on a to part_role;
@@ -2136,8 +2029,6 @@ drop role part_role;
 -- Check that when we split a default, the INTO clause must named the default
 create table k (i date) partition by range(i) (start('2008-01-01')
 end('2009-01-01') every(interval '1 month'), default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table k split default partition start ('2009-01-01') end ('2009-02-01')
 into (partition aa, partition nodate);
 ERROR:  default partition name missing from INTO clause
@@ -2149,8 +2040,6 @@ drop table k;
 -- List too
 create table k (i int) partition by list(i) (partition a values(1, 2),
 partition b values(3, 4), default partition mydef);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table k split partition mydef at (5) into (partition foo, partition bar);
 ERROR:  default partition name missing from INTO clause
 alter table k split partition mydef at (5) into (partition foo, partition mydef);
@@ -2159,8 +2048,6 @@ drop table k;
 -- For LIST, make sure that we reject AT() clauses which match all parameters
 create table j (i int) partition by list(i) (partition a values(1, 2, 3, 4),
  partition b values(5, 6, 7, 8));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table j split partition for(1) at (1,2) into (partition fa, partition fb);
 alter table j split partition for(1) at (1,2) 
 into (partition f1a, partition f1b); -- This has partition rules that overlaps
@@ -2169,23 +2056,17 @@ drop table j;
 -- Check that we can split LIST partitions that have a default partition
 create table j (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table j split partition for(1) at (1,2) into (partition f1a, partition
 f1b);
 drop table j;
 -- Make sure range can too
 create table j (i int) partition by range(i) (partition a start(1) end(10),
 default partition default_part);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table j split partition for(1) at (5) into (partition f1a, partition f1b);
 drop table j;
 -- MPP-3667 ADD PARTITION overlaps
 create table mpp3621 (aa date, bb date) partition by range (bb)
 (partition foo start('2008-01-01'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- these are ok
 alter table mpp3621 add partition a1 start ('2007-01-01') end ('2007-02-01');
 alter table mpp3621 add partition a2 start ('2007-02-01') end ('2007-03-01');
@@ -2204,8 +2085,6 @@ create table list_test (a text, b text) partition by list (a) (
   partition foo values ('foo'),
   partition bar values ('bar'),
   default partition baz);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into list_test values ('foo', 'blah');
 insert into list_test values ('bar', 'blah');
 insert into list_test values ('baz', 'blah');
@@ -2277,7 +2156,6 @@ select * from rank_exc;
 
 --exchange test
 create table r (like rank_exc);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 insert into rank_exc values(3, 3, 2004, 'F', 100);
 insert into r values(3, 3, 2004, 'F', 100000);
 alter table rank_exc alter partition girls exchange partition year4 with table r;
@@ -2317,13 +2195,11 @@ drop table r;
 create table bar_p (i int, j int) partition by range(i) subpartition by range(j)
 subpartition template(start(1) end(10) every(1)) subpartition by range(i)
 subpartition template(start(1) end(10) every(5)) (start(1) end(10));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table bar_p alter partition for ('5') alter partition for ('5')
   drop partition for ('5');
 insert into bar_p values(1, 1);
 insert into bar_p values(5, 5);
-ERROR:  no partition of relation "bar_p_1_prt_1_2_prt_5" found for row  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  no partition of relation "bar_p_1_prt_1_2_prt_5" found for row  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Partition key of the failing row contains (i) = (5).
 drop table bar_p;
 -- Drop should not leave anything lingering for bar_p or its
@@ -2352,8 +2228,6 @@ subpartition template (
 (
 start (1) end (10) every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- works
 alter table mpp4892 add partition p1 end (11);
 -- complain about existing template
@@ -2381,8 +2255,6 @@ partition a start (1) end(10) inclusive,
 partition c start(11) end(14),
 partition b start(5) end(15)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "ttt_1_prt_b" would overlap partition "ttt_1_prt_a"
 -- should fail, this time it's ordered
 create table ttt (t int) partition by range(t) (
@@ -2390,8 +2262,6 @@ partition a start (1) end(10) inclusive,
 partition b start(5) end(15),
 partition c start(11) end(14)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "ttt_1_prt_b" would overlap partition "ttt_1_prt_a"
 -- should fail
 create table ttt (t date) partition by range(t) (
@@ -2399,16 +2269,12 @@ partition a start ('2005-01-01') end('2006-01-01') inclusive,
 partition b start('2005-05-01') end('2005-06-11'),
 partition c start('2006-01-01') exclusive end('2006-01-10')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "ttt_1_prt_b" would overlap partition "ttt_1_prt_a"
 -- should fail
 create table ttt (t char) partition by range(t) (
 partition a start('a') end('f'),
 partition b start('e') end('g')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "ttt_1_prt_b" would overlap partition "ttt_1_prt_a"
 -- MPP-5159 MPP-26829
 -- Should fail -- missing partition spec and subpartition template follows the
@@ -2496,13 +2362,10 @@ drop table mpp_5397;
 -- this works
 create table rank_damage (i int, j int)
 partition by range(j) (start(1) end(5) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should all fail
 alter table rank_damage_1_prt_1 no inherit rank_damage;
 ERROR:  cannot change inheritance of a partition
 create table rank2_damage(like rank_damage);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table rank_damage_1_prt_1 inherit rank2_damage;
 ERROR:  cannot change inheritance of a partition
 alter table rank_damage_1_prt_1 alter column i type bigint;
@@ -2535,38 +2398,36 @@ START ('2009-04-29 07:00:00'::timestamp) INCLUSIVE END ('2009-04-29
 08:00:00'::timestamp) EXCLUSIVE INTO ( PARTITION P2009042907 ,
 PARTITION st_default );
 \d+ sg_cal_event_silvertail_hour
-                                         Partitioned table "public.sg_cal_event_silvertail_hour"
-     Column      |              Type              | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
------------------+--------------------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- caldt           | date                           |           | not null |         | plain    |             |              | 
- calhr           | smallint                       |           | not null |         | plain    |             |              | 
- ip              | character varying(128)         |           |          |         | extended |             |              | 
- transactionid   | character varying(32)          |           |          |         | extended |             |              | 
- transactiontime | timestamp(2) without time zone |           |          |         | plain    |             |              | 
+                                  Partitioned table "public.sg_cal_event_silvertail_hour"
+     Column      |              Type              | Collation | Nullable | Default | Storage  | Stats target | Description 
+-----------------+--------------------------------+-----------+----------+---------+----------+--------------+-------------
+ caldt           | date                           |           | not null |         | plain    |              | 
+ calhr           | smallint                       |           | not null |         | plain    |              | 
+ ip              | character varying(128)         |           |          |         | extended |              | 
+ transactionid   | character varying(32)          |           |          |         | extended |              | 
+ transactiontime | timestamp(2) without time zone |           |          |         | plain    |              | 
 Partition key: RANGE (transactiontime)
 Partitions: "sg_cal_event_silvertail_hour_1_prt_P2009041607" FOR VALUES FROM ('Thu Apr 16 07:00:00 2009') TO ('Thu Apr 16 08:00:00 2009'),
             "sg_cal_event_silvertail_hour_1_prt_P2009041608" FOR VALUES FROM ('Thu Apr 16 08:00:00 2009') TO ('Thu Apr 16 09:00:00 2009'),
             sg_cal_event_silvertail_hour_1_prt_p2009042907 FOR VALUES FROM ('Wed Apr 29 07:00:00 2009') TO ('Wed Apr 29 08:00:00 2009'),
             sg_cal_event_silvertail_hour_1_prt_st_default DEFAULT
-Distributed by: (ip)
 Options: compresslevel=5
 
 \d+ sg_cal_event_silvertail_hour_1_prt_P2009042907
-                                      Table "public.sg_cal_event_silvertail_hour_1_prt_p2009042907"
-     Column      |              Type              | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
------------------+--------------------------------+-----------+----------+---------+----------+-------------+--------------+-------------
- caldt           | date                           |           | not null |         | plain    |             |              | 
- calhr           | smallint                       |           | not null |         | plain    |             |              | 
- ip              | character varying(128)         |           |          |         | extended |             |              | 
- transactionid   | character varying(32)          |           |          |         | extended |             |              | 
- transactiontime | timestamp(2) without time zone |           |          |         | plain    |             |              | 
+                               Table "public.sg_cal_event_silvertail_hour_1_prt_p2009042907"
+     Column      |              Type              | Collation | Nullable | Default | Storage  | Stats target | Description 
+-----------------+--------------------------------+-----------+----------+---------+----------+--------------+-------------
+ caldt           | date                           |           | not null |         | plain    |              | 
+ calhr           | smallint                       |           | not null |         | plain    |              | 
+ ip              | character varying(128)         |           |          |         | extended |              | 
+ transactionid   | character varying(32)          |           |          |         | extended |              | 
+ transactiontime | timestamp(2) without time zone |           |          |         | plain    |              | 
 Partition of: sg_cal_event_silvertail_hour FOR VALUES FROM ('Wed Apr 29 07:00:00 2009') TO ('Wed Apr 29 08:00:00 2009')
 Partition constraint: ((transactiontime IS NOT NULL) AND (transactiontime >= 'Wed Apr 29 07:00:00 2009'::timestamp(2) without time zone) AND (transactiontime < 'Wed Apr 29 08:00:00 2009'::timestamp(2) without time zone))
 Compression Type: zlib
 Compression Level: 5
 Block Size: 32768
 Checksum: t
-Distributed by: (ip)
 Options: compresslevel=5
 
 drop table sg_cal_event_silvertail_hour;
@@ -2574,8 +2435,6 @@ drop table sg_cal_event_silvertail_hour;
 create table foo_p (i int, j int, k text)
 with (appendonly = true, compresslevel = 5)
 partition by range(j) (start(1) end(10) every(1), default partition def);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_p select i, i+1, repeat('fooo', 9000) from generate_series(1, 100) i;
 alter table foo_p split default partition start (10) end(20) 
 into (partition p10_20, default partition);
@@ -2596,8 +2455,6 @@ drop table foo_p;
 create table foo_p (i int, j int, k text)
 partition by range(j) (start(1) end(10) every(1), default partition def
 with(appendonly = true));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo_p select i, i+1, repeat('fooo', 9000) from generate_series(1, 100) i;
 alter table foo_p split default partition start (10) end(20) 
 into (partition p10_20, default partition);
@@ -2635,8 +2492,6 @@ subpartition lll2 values ('F') )
   start (date '2007-01-01')
   end (date '2010-01-01') every (interval '1 year')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- just truncate for fun to see that everything is there
 alter table mpp5941 alter partition for ('2008-01-01') 
 alter partition for (1) alter partition for ('QA')
@@ -2734,8 +2589,8 @@ subpartition ll2 values ('QA') );
 select relid::regclass, level from gp_partition_template where relid = 'mpp5941'::regclass;
   relid  | level 
 ---------+-------
- mpp5941 |     3
  mpp5941 |     2
+ mpp5941 |     3
 (2 rows)
 
 -- set level 1
@@ -2745,9 +2600,9 @@ subpartition l2 values (6,7,8,9,10) );
 select relid::regclass, level from gp_partition_template where relid = 'mpp5941'::regclass;
   relid  | level 
 ---------+-------
+ mpp5941 |     2
  mpp5941 |     1
  mpp5941 |     3
- mpp5941 |     2
 (3 rows)
 
 drop table mpp5941;
@@ -2759,8 +2614,6 @@ PARTITION BY RANGE(ps_partkey)
 (
 partition nnull start (NULL) end (300)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use NULL with range partition specification
 LINE 6: partition nnull start (NULL) end (300)
                                ^
@@ -2771,8 +2624,6 @@ PARTITION BY RANGE(ps_partkey)
 (
 partition nnull start (300) end (NULL)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use NULL with range partition specification
 LINE 6: partition nnull start (300) end (NULL)
                                          ^
@@ -2783,8 +2634,6 @@ PARTITION BY RANGE(ps_partkey)
 (
 partition nnull start (300) end (NULL::int)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use NULL with range partition specification
 LINE 6: partition nnull start (300) end (NULL::int)
                                          ^
@@ -2797,8 +2646,6 @@ partition p1 start(1) end(10),
 partition p2 start(10) end(20),
 default partition def
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partsupp split partition p2 at (NULL);
 ERROR:  cannot use NULL with range partition specification
 LINE 1: alter table partsupp split partition p2 at (NULL);
@@ -2815,8 +2662,6 @@ PARTITION BY RANGE(ps_partkey)
 (
 partition nnull start (300) end (400)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partsupp add partition foo start(500) end(NULL);
 ERROR:  cannot use NULL with range partition specification
 LINE 1: alter table partsupp add partition foo start(500) end(NULL);
@@ -2863,8 +2708,6 @@ subpartition by list (s_nationkey) subpartition template (
 (               
 partition p1 start('1') end('10001') every(10000)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's_suppkey' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- MPP-3544
 -- Domain
 create domain domainvarchar varchar(5);
@@ -2885,8 +2728,6 @@ partition aa values ('aaaaa'),
 partition bb values ('bbbbb'),
 partition cc values ('ccccc')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testint4' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table basictest1 add partition dd values('ddddd');
 insert into basictest1 values(1, 1, 'ddddd', 1);
 insert into basictest1 values(1, 1, 'ccccc', 1);
@@ -2897,8 +2738,6 @@ drop table basictest1;
 create table basictest1 (testnumeric domainint4)
 partition by range(testnumeric)
  (start(1) end(10) every(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'testnumeric' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into basictest1 values(1);
 insert into basictest1 values(2);
 alter table basictest1 add partition ff start(10) end(20);
@@ -2935,14 +2774,14 @@ alter table ti add partition p3 start(3) end(10);
 select * from pg_indexes where schemaname = 'public' and tablename like 'ti%';
  schemaname |  tablename  |      indexname      | tablespace |                                     indexdef                                     
 ------------+-------------+---------------------+------------+----------------------------------------------------------------------------------
+ public     | ti_1_prt_p3 | ti_1_prt_p3_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_p3_i_j_idx ON public.ti_1_prt_p3 USING btree (i, j)
+ public     | ti_1_prt_p3 | ti_1_prt_p3_j_idx   |            | CREATE INDEX ti_1_prt_p3_j_idx ON public.ti_1_prt_p3 USING bitmap (j)
  public     | ti_1_prt_1  | ti_1_prt_1_i_j_idx  |            | CREATE UNIQUE INDEX ti_1_prt_1_i_j_idx ON public.ti_1_prt_1 USING btree (i, j)
  public     | ti          | ti_pkey             |            | CREATE UNIQUE INDEX ti_pkey ON ONLY public.ti USING btree (i, j)
  public     | ti_1_prt_2  | ti_1_prt_2_i_j_idx  |            | CREATE UNIQUE INDEX ti_1_prt_2_i_j_idx ON public.ti_1_prt_2 USING btree (i, j)
  public     | ti_1_prt_1  | ti_1_prt_1_j_idx    |            | CREATE INDEX ti_1_prt_1_j_idx ON public.ti_1_prt_1 USING bitmap (j)
  public     | ti          | ti_j_idx            |            | CREATE INDEX ti_j_idx ON ONLY public.ti USING bitmap (j)
  public     | ti_1_prt_2  | ti_1_prt_2_j_idx    |            | CREATE INDEX ti_1_prt_2_j_idx ON public.ti_1_prt_2 USING bitmap (j)
- public     | ti_1_prt_p3 | ti_1_prt_p3_i_j_idx |            | CREATE UNIQUE INDEX ti_1_prt_p3_i_j_idx ON public.ti_1_prt_p3 USING btree (i, j)
- public     | ti_1_prt_p3 | ti_1_prt_p3_j_idx   |            | CREATE INDEX ti_1_prt_p3_j_idx ON public.ti_1_prt_p3 USING bitmap (j)
 (8 rows)
 
 -- Should not be able to drop child indexes added implicitly via ADD PARTITION
@@ -3022,8 +2861,6 @@ reset optimizer_segments;
 create table it (i int, j int) partition by range(i) 
 subpartition by range(j) subpartition template(start(1) end(10) every(5))
 (start(1) end(3) every(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table it rename to newit;
 select schemaname, tablename from pg_tables where schemaname = 'public' and tablename like 'newit%';
  schemaname |       tablename       
@@ -3148,9 +2985,6 @@ distributed by (i) partition by list (i) (
   partition b values (2),
   partition c values (3)
 );
-ERROR:  exclusion constraints are not supported on partitioned tables
-LINE 4:   CONSTRAINT part_excl EXCLUDE (i WITH =) )
-          ^
 create table parttab_with_excl_constraint (
   i int,
   j int)
@@ -3159,10 +2993,9 @@ distributed by (i) partition by list (i) (
   partition b values (2),
   partition c values (3)
 );
+ERROR:  relation "parttab_with_excl_constraint" already exists
 alter table parttab_with_excl_constraint ADD CONSTRAINT part_excl EXCLUDE (i WITH =);
-ERROR:  exclusion constraints are not supported on partitioned tables
-LINE 1: alter table parttab_with_excl_constraint ADD CONSTRAINT part...
-                                                     ^
+ERROR:  relation "part_excl" already exists
 drop table parttab_with_excl_constraint;
 -- MPP-6297: test special WITH(tablename=...) syntax for dump/restore
 -- original table was:
@@ -3190,17 +3023,16 @@ PARTITION p1_3 START ('1994-03-31'::date) END ('1995-04-30'::date)
 EVERY ('1 year 1 mon'::interval)
 );
 \d+ mpp6297
-                                     Partitioned table "public.mpp6297"
-    Column    |  Type  | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------------+--------+-----------+----------+---------+---------+-------------+--------------+-------------
- l_orderkey   | bigint |           |          |         | plain   |             |              | 
- l_commitdate | date   |           |          |         | plain   |             |              | 
+                              Partitioned table "public.mpp6297"
+    Column    |  Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------------+--------+-----------+----------+---------+---------+--------------+-------------
+ l_orderkey   | bigint |           |          |         | plain   |              | 
+ l_commitdate | date   |           |          |         | plain   |              | 
 Partition key: RANGE (l_commitdate)
 Partitions: mpp6297_1_prt_p1_1_1 FOR VALUES FROM ('01-31-1992') TO ('02-28-1993'),
             mpp6297_1_prt_p1_2_1 FOR VALUES FROM ('02-28-1993') TO ('03-28-1994'),
             mpp6297_1_prt_p1_2_2 FOR VALUES FROM ('03-28-1994') TO ('03-31-1994'),
             mpp6297_1_prt_p1_3_1 FOR VALUES FROM ('03-31-1994') TO ('04-30-1995')
-Distributed by: (l_orderkey)
 
 drop table mpp6297;
 -- when WITH(tablename=...) is specified, the EVERY is stored as an
@@ -3221,16 +3053,15 @@ EVERY ('1 year 1 mon'::interval)
 WITH (tablename='mpp6297_1_prt_p1_3')
 );
 \d+ mpp6297
-                                     Partitioned table "public.mpp6297"
-    Column    |  Type  | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------------+--------+-----------+----------+---------+---------+-------------+--------------+-------------
- l_orderkey   | bigint |           |          |         | plain   |             |              | 
- l_commitdate | date   |           |          |         | plain   |             |              | 
+                              Partitioned table "public.mpp6297"
+    Column    |  Type  | Collation | Nullable | Default | Storage | Stats target | Description 
+--------------+--------+-----------+----------+---------+---------+--------------+-------------
+ l_orderkey   | bigint |           |          |         | plain   |              | 
+ l_commitdate | date   |           |          |         | plain   |              | 
 Partition key: RANGE (l_commitdate)
 Partitions: mpp6297_1_prt_p1_1 FOR VALUES FROM ('01-31-1992') TO ('02-28-1993'),
             mpp6297_1_prt_p1_2 FOR VALUES FROM ('02-28-1993') TO ('03-31-1994'),
             mpp6297_1_prt_p1_3 FOR VALUES FROM ('03-31-1994') TO ('04-30-1995')
-Distributed by: (l_orderkey)
 
 drop table mpp6297;
 -- more with basic cases
@@ -3242,14 +3073,12 @@ partition by range (b)
 start (1) end (10) every (1),
 end (11)		
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_10 FOR VALUES FROM (10) TO (11),
@@ -3261,15 +3090,14 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 alter table mpp6297 drop partition for (3);
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_10 FOR VALUES FROM (10) TO (11),
@@ -3280,7 +3108,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 -- this isn't legal (but it would be nice)
 alter table mpp6297 add partition start (3) end (4) every (1);
@@ -3290,11 +3117,11 @@ LINE 1: ...ter table mpp6297 add partition start (3) end (4) every (1);
 -- this is legal but it doesn't fix the EVERY clause
 alter table mpp6297 add partition start (3) end (4) ;
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_10 FOR VALUES FROM (10) TO (11),
@@ -3306,7 +3133,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 drop table mpp6297;
 -- similarly, we can merge adjacent EVERY clauses if they match
@@ -3318,14 +3144,12 @@ partition by range (b)
 start (1) end (5) every (1),
 start (5) end (10) every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_2 FOR VALUES FROM (2) TO (3),
@@ -3336,7 +3160,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 drop table mpp6297;
 -- we cannot merge adjacent EVERY clauses if inclusivity/exclusivity is wrong
@@ -3348,14 +3171,12 @@ partition by range (b)
 start (1) end (5) every (1),
 start (5) exclusive end (10) every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_2 FOR VALUES FROM (2) TO (3),
@@ -3365,7 +3186,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_6 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_7 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_8 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 drop table mpp6297;
 -- more fun with inclusivity/exclusivity (normal case)
@@ -3376,14 +3196,12 @@ partition by range (b)
 (
 start (1) inclusive end (10) exclusive every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_2 FOR VALUES FROM (2) TO (3),
@@ -3394,7 +3212,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 drop table mpp6297;
 -- more fun with inclusivity/exclusivity (abnormal case)
@@ -3405,14 +3222,12 @@ partition by range (b)
 (
 start (1) exclusive end (10) inclusive every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (2) TO (3),
             mpp6297_1_prt_2 FOR VALUES FROM (3) TO (4),
@@ -3423,15 +3238,14 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (2) TO (3),
             mpp6297_1_prt_7 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_8 FOR VALUES FROM (9) TO (10),
             mpp6297_1_prt_9 FOR VALUES FROM (10) TO (11)
-Distributed by: (a)
 
 alter table mpp6297 drop partition for (3);
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (2) TO (3),
             mpp6297_1_prt_3 FOR VALUES FROM (4) TO (5),
@@ -3441,7 +3255,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (2) TO (3),
             mpp6297_1_prt_7 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_8 FOR VALUES FROM (9) TO (10),
             mpp6297_1_prt_9 FOR VALUES FROM (10) TO (11)
-Distributed by: (a)
 
 drop table mpp6297;
 -- we cannot merge adjacent EVERY clauses, even though the
@@ -3455,14 +3268,12 @@ partition by range (b)
 start (1) end (5) inclusive every (1),
 start (5) exclusive end (10) every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \d+ mpp6297
-                                   Partitioned table "public.mpp6297"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                            Partitioned table "public.mpp6297"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_2 FOR VALUES FROM (2) TO (3),
@@ -3473,7 +3284,6 @@ Partitions: mpp6297_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp6297_1_prt_7 FOR VALUES FROM (7) TO (8),
             mpp6297_1_prt_8 FOR VALUES FROM (8) TO (9),
             mpp6297_1_prt_9 FOR VALUES FROM (9) TO (10)
-Distributed by: (a)
 
 drop table mpp6297;
 -- MPP-6589: SPLITting an "open" ended partition (ie, no start or end)
@@ -3508,8 +3318,6 @@ select relname, pg_get_expr(relpartbound, oid, false) from pg_class where relnam
 
 CREATE TABLE mpp6589i(a int, b int) 
 partition by range (b) (start (1) end (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select relname, pg_get_expr(relpartbound, oid, false) from pg_class where relname like 'mpp6589i%';
      relname      |        pg_get_expr         
 ------------------+----------------------------
@@ -3582,8 +3390,6 @@ subpartition lll2 values ('F') )
   start (date '2007-01-01')
   end (date '2010-01-01') every (interval '1 year')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Delete subpartition template
 alter table mpp5992 alter partition for ('2008-01-01')
 set subpartition template ();
@@ -3610,9 +3416,9 @@ subpartition l2 values (4,5,6), subpartition l3 values (7,8,9,10));
 select relid::regclass, level, pg_get_expr(template, relid) from gp_partition_template where relid = 'mpp5992'::regclass;
   relid  | level |                                                           pg_get_expr                                                           
 ---------+-------+---------------------------------------------------------------------------------------------------------------------------------
- mpp5992 |     1 | SUBPARTITION TEMPLATE(SUBPARTITION l1 VALUES (1, 2, 3), SUBPARTITION l2 VALUES (4, 5, 6), SUBPARTITION l3 VALUES (7, 8, 9, 10))
  mpp5992 |     3 | SUBPARTITION TEMPLATE(SUBPARTITION lll1 VALUES ('M'), SUBPARTITION lll2 VALUES ('F'))
  mpp5992 |     2 | SUBPARTITION TEMPLATE(SUBPARTITION ll1 VALUES ('Engineering'), SUBPARTITION ll2 VALUES ('QA'))
+ mpp5992 |     1 | SUBPARTITION TEMPLATE(SUBPARTITION l1 VALUES (1, 2, 3), SUBPARTITION l2 VALUES (4, 5, 6), SUBPARTITION l3 VALUES (7, 8, 9, 10))
 (3 rows)
 
 -- Now we can add a new partition
@@ -3864,9 +3670,9 @@ select relname, amname, pg_get_expr(relpartbound, c.oid) from pg_class c join pg
 select relid::regclass, level, pg_get_expr(template, relid) from gp_partition_template where relid = 'mpp5992'::regclass;
   relid  | level |                                                           pg_get_expr                                                           
 ---------+-------+---------------------------------------------------------------------------------------------------------------------------------
- mpp5992 |     1 | SUBPARTITION TEMPLATE(SUBPARTITION l1 VALUES (1, 2, 3), SUBPARTITION l2 VALUES (4, 5, 6), SUBPARTITION l3 VALUES (7, 8, 9, 10))
  mpp5992 |     3 | SUBPARTITION TEMPLATE(SUBPARTITION lll1 VALUES ('M'), SUBPARTITION lll2 VALUES ('F'))
  mpp5992 |     2 | SUBPARTITION TEMPLATE(SUBPARTITION ll1 VALUES ('Engineering'), SUBPARTITION ll2 VALUES ('QA'))
+ mpp5992 |     1 | SUBPARTITION TEMPLATE(SUBPARTITION l1 VALUES (1, 2, 3), SUBPARTITION l2 VALUES (4, 5, 6), SUBPARTITION l3 VALUES (7, 8, 9, 10))
 (3 rows)
 
 -- MPP-10223: split subpartitions
@@ -4042,8 +3848,6 @@ partition by range (b)
 subpartition by range (d)
 (partition p1 start (1) end (10)
 (subpartition sp2 start (20) end (30)));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- MPP-10421: allow re-use sp2 for non-DEFAULT partition
 alter table mpp10223b alter partition p1 
 split partition for (20) at (25)
@@ -4063,8 +3867,6 @@ partition by range (b)
 subpartition by range(d)
 subpartition template (start (1) end (10) every (1))
 (start (20) end (30) every (1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select relid::regclass, level, pg_get_expr(template, relid) from gp_partition_template where relid = 'MPP10480'::regclass;
   relid   | level |                              pg_get_expr                               
 ----------+-------+------------------------------------------------------------------------
@@ -4301,16 +4103,14 @@ partition by range(b)
 (
 start (1) end (10) every (1)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- append-only table in new schema 
 create table mpp6979dummy.mpp6979tab(like mpp6979part) with (appendonly=true);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- check that table and all parts in public schema
 select relname, nspname, relispartition from pg_class c, pg_namespace n
 where c.relnamespace = n.oid and relname like ('mpp6979%');
        relname       |   nspname    | relispartition 
 ---------------------+--------------+----------------
+ mpp6979tab          | mpp6979dummy | f
  mpp6979part_1_prt_9 | public       | t
  mpp6979part_1_prt_8 | public       | t
  mpp6979part_1_prt_7 | public       | t
@@ -4321,7 +4121,6 @@ where c.relnamespace = n.oid and relname like ('mpp6979%');
  mpp6979part_1_prt_2 | public       | t
  mpp6979part_1_prt_1 | public       | t
  mpp6979part         | public       | f
- mpp6979tab          | mpp6979dummy | f
 (11 rows)
 
 -- note that we have heap partitions in public, and ao table in mpp6979dummy
@@ -4332,6 +4131,7 @@ left join pg_am am on am.oid = pc.relam
 where relname like ('mpp6979%');
    nspname    |       relname       | amname 
 --------------+---------------------+--------
+ mpp6979dummy | mpp6979tab          | ao_row
  public       | mpp6979part         | heap
  public       | mpp6979part_1_prt_1 | heap
  public       | mpp6979part_1_prt_2 | heap
@@ -4342,7 +4142,6 @@ where relname like ('mpp6979%');
  public       | mpp6979part_1_prt_7 | heap
  public       | mpp6979part_1_prt_8 | heap
  public       | mpp6979part_1_prt_9 | heap
- mpp6979dummy | mpp6979tab          | ao_row
 (11 rows)
 
 -- exchange the partition with the ao table.  
@@ -4354,6 +4153,7 @@ select relname, nspname, relispartition from pg_class c, pg_namespace n
 where c.relnamespace = n.oid and relname like ('mpp6979%');
        relname       |   nspname    | relispartition 
 ---------------------+--------------+----------------
+ mpp6979tab          | mpp6979dummy | f
  mpp6979part_1_prt_9 | public       | t
  mpp6979part_1_prt_8 | public       | t
  mpp6979part_1_prt_7 | public       | t
@@ -4364,7 +4164,6 @@ where c.relnamespace = n.oid and relname like ('mpp6979%');
  mpp6979part_1_prt_2 | public       | t
  mpp6979part_1_prt_1 | public       | t
  mpp6979part         | public       | f
- mpp6979tab          | mpp6979dummy | f
 (11 rows)
 
 -- the rank 1 partition is ao, but still in public, and 
@@ -4375,6 +4174,7 @@ left join pg_am am on am.oid = c.relam
 where relname like ('mpp6979%');
        relname       |   nspname    | relispartition | amname 
 ---------------------+--------------+----------------+--------
+ mpp6979tab          | mpp6979dummy | f              | heap
  mpp6979part_1_prt_1 | public       | t              | ao_row
  mpp6979part         | public       | f              | heap
  mpp6979part_1_prt_2 | public       | t              | heap
@@ -4385,7 +4185,6 @@ where relname like ('mpp6979%');
  mpp6979part_1_prt_7 | public       | t              | heap
  mpp6979part_1_prt_8 | public       | t              | heap
  mpp6979part_1_prt_9 | public       | t              | heap
- mpp6979tab          | mpp6979dummy | f              | heap
 (11 rows)
 
 drop table mpp6979part;
@@ -4486,15 +4285,15 @@ where relname ~ '^s_'
 group by relname; 
           relname          | missing | oid_count 
 ---------------------------+---------+-----------
+ s_1_prt_1_units_idx       |       0 |         1
+ s_1_prt_s_test_units_idx1 |       0 |         1
+ s_i_expr                  |       0 |         1
+ s_j                       |       0 |         1
  s_1_prt_s_test            |       0 |         1
  s_1_prt_s_test2_log_idx   |       0 |         1
  s_1_prt_s_test_amt_idx1   |       0 |         1
  s_1_prt_s_test_log_idx1   |       0 |         1
  s_i                       |       0 |         1
- s_1_prt_1_units_idx       |       0 |         1
- s_1_prt_s_test_units_idx1 |       0 |         1
- s_i_expr                  |       0 |         1
- s_j                       |       0 |         1
  s_1_prt_1                 |       0 |         1
  s_1_prt_1_amt_idx         |       0 |         1
  s_1_prt_1_log_idx         |       0 |         1
@@ -4607,16 +4406,15 @@ create table plst2
         partition p3 values ( CAST('(2,1)' as plst2_partkey) )
     );
 \d+ plst2
-                                       Partitioned table "public.plst2"
- Column |     Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------------+-----------+----------+---------+----------+-------------+--------------+-------------
- b      | integer       |           | not null |         | plain    |             |              | 
- d      | plst2_partkey |           |          |         | extended |             |              | 
+                                Partitioned table "public.plst2"
+ Column |     Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------------+-----------+----------+---------+----------+--------------+-------------
+ b      | integer       |           | not null |         | plain    |              | 
+ d      | plst2_partkey |           |          |         | extended |              | 
 Partition key: LIST (d)
 Partitions: plst2_1_prt_p1 FOR VALUES IN ('(1,2)', '(3,4)'),
             plst2_1_prt_p2 FOR VALUES IN ('(5,6)'),
             plst2_1_prt_p3 FOR VALUES IN ('(2,1)')
-Distributed by: (b)
 
 drop table if exists plst2 cascade;
 --negative; test legitimate failure
@@ -4654,11 +4452,11 @@ create table plst2
 alter table plst2 add partition p4 values (CAST('(5,4)' as plst2_partkey), CAST('(6,5)' as plst2_partkey));
 alter table plst2 add partition p5 values (CAST('(7,8)' as plst2_partkey), CAST('(7,8)' as plst2_partkey));
 \d+ plst2
-                                       Partitioned table "public.plst2"
- Column |     Type      | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
---------+---------------+-----------+----------+---------+----------+-------------+--------------+-------------
- d      | integer       |           |          |         | plain    |             |              | 
- c      | plst2_partkey |           |          |         | extended |             |              | 
+                                Partitioned table "public.plst2"
+ Column |     Type      | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------------+-----------+----------+---------+----------+--------------+-------------
+ d      | integer       |           |          |         | plain    |              | 
+ c      | plst2_partkey |           |          |         | extended |              | 
 Partition key: LIST (c)
 Partitions: plst2_1_prt_p0 FOR VALUES IN ('(1,2)', '(3,4)'),
             plst2_1_prt_p1 FOR VALUES IN ('(4,3)', '(2,1)'),
@@ -4666,7 +4464,6 @@ Partitions: plst2_1_prt_p0 FOR VALUES IN ('(1,2)', '(3,4)'),
             plst2_1_prt_p3 FOR VALUES IN ('(4,5)', '(5,6)'),
             plst2_1_prt_p4 FOR VALUES IN ('(5,4)', '(6,5)'),
             plst2_1_prt_p5 FOR VALUES IN ('(7,8)')
-Distributed by: (d)
 
 -- negative; make sure conflicting alters fail.
 alter table plst2 add partition p6 values (CAST('(7,8)' as plst2_partkey), CAST('(2,1)' as plst2_partkey));
@@ -4679,8 +4476,6 @@ drop table if exists plst2;
 create table s_heap (i1 int, t1 text, t2 text, i2 int, i3 int, n1 numeric, b1 bool)
 partition by list (t1)
      (partition abc values('abc0', 'abc1', 'abc2'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into s_heap (t1, i1, i2, i3, n1, b1) select 'abc0', 1, 1, 1, 2.3, true
     from generate_series(1, 5);
 alter table s_heap drop column t2;
@@ -4688,8 +4483,6 @@ alter table s_heap drop column i3;
 -- create co table for exchange
 create table s_heap_ex_abc (i1 int, t1 text, f1 float, i2 int, n1 numeric, b1 bool)
     WITH (appendonly=true, orientation=column, compresstype=zlib);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table s_heap_ex_abc drop column f1;
 insert into s_heap_ex_abc select 1, 'abc1', 2, 2, true from generate_series(1, 5);
 -- exchange partition
@@ -4701,8 +4494,6 @@ drop table s_heap, s_heap_ex_abc;
 create table s_heap (i1 int, t1 text, i2 int , i3 int, n1 numeric,b1 bool)
 partition by list (t1)
     (partition def values('def0', 'def1', 'def2', 'def3', 'def4', 'def5', 'def6', 'def7', 'def8', 'def9'));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into s_heap(t1, i1, i2, i3, n1, b1)
     select 'def0', 1, 1, 1, 2.3 , true from generate_series(1, 5);
 alter table s_heap drop column i3;
@@ -4726,8 +4517,6 @@ create table s_heap_ao ( i1 int, t1 text, i2 int , i3 int, n1 numeric,b1 bool)
 partition by list (t1)
     (partition def values('def0', 'def1', 'def2', 'def3', 'def4', 'def5', 'def6', 'def7', 'def8', 'def9')
         with (appendonly=true, orientation=row));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into s_heap_ao(t1, i1, i2, i3, n1, b1)
     select 'def4', 1, 1, 1, 2.3, true from generate_series(1, 2);
 insert into s_heap_ao(t1, i1, i2, i3, n1, b1)
@@ -4750,8 +4539,6 @@ create table s_heap_co (i1 int, t1 text, i2 int, i3 int, n1 numeric, b1 bool)
 partition by list (t1)
     (partition def values('def0', 'def1', 'def2', 'def3', 'def4', 'def5', 'def6', 'def7', 'def8', 'def9')
         with (appendonly=true, orientation=column));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into s_heap_co(t1, i1, i2, i3, n1, b1)
     select 'def4', 1,1, 1, 2.3, true from generate_series(1, 2);
 insert into s_heap_co(t1, i1, i2, i3, n1, b1)
@@ -4957,9 +4744,9 @@ from pnx;
   tableoid   | x | y  
 -------------+---+----
  pnx_1_prt_a | 1 | x1
+ pnx_1_prt_c | 4 | x4
  pnx_1_prt_a | 2 | x2
  pnx_1_prt_c | 3 | x3
- pnx_1_prt_c | 4 | x4
 (4 rows)
 
 alter table pnx
@@ -4971,9 +4758,9 @@ from pnx;
   tableoid   | x | y  
 -------------+---+----
  pnx_1_prt_a | 1 | x1
+ pnx_1_prt_c | 4 | x4
  pnx_1_prt_a | 2 | x2
  pnx_1_prt_c | 3 | x3
- pnx_1_prt_c | 4 | x4
 (4 rows)
 
 select tableoid::regclass, *
@@ -5013,8 +4800,8 @@ from pxn;
 -------------+---+----
  pxn_1_prt_a | 1 | x1
  pxn_1_prt_a | 2 | x2
- pxn_1_prt_c | 3 | x3
  pxn_1_prt_c | 4 | x4
+ pxn_1_prt_c | 3 | x3
 (4 rows)
 
 alter table pxn
@@ -5025,9 +4812,9 @@ select tableoid::regclass, *
 from pxn;
   tableoid   | x | y  
 -------------+---+----
+ pxn_1_prt_c | 3 | x3
  pxn_1_prt_a | 1 | x1
  pxn_1_prt_a | 2 | x2
- pxn_1_prt_c | 3 | x3
  pxn_1_prt_c | 4 | x4
 (4 rows)
 
@@ -5066,9 +4853,9 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
- pxn_1_prt_c | 19 | 19
  pxn_1_prt_a |  9 |  9
+ pxn_1_prt_c | 19 | 19
+ pxn_1_prt_c | 14 | 14
 (4 rows)
 
 alter table pxn
@@ -5080,9 +4867,9 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
- pxn_1_prt_c | 19 | 19
  pxn_1_prt_a |  9 |  9
+ pxn_1_prt_c | 19 | 19
+ pxn_1_prt_c | 14 | 14
 (4 rows)
 
 select tableoid::regclass, *
@@ -5120,8 +4907,8 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
  pxn_1_prt_a |  9 |  9
+ pxn_1_prt_c | 14 | 14
  pxn_1_prt_c | 19 | 19
 (4 rows)
 
@@ -5134,8 +4921,8 @@ from pxn;
   tableoid   | x  | y  
 -------------+----+----
  pxn_1_prt_a |  4 |  4
- pxn_1_prt_c | 14 | 14
  pxn_1_prt_a |  9 |  9
+ pxn_1_prt_c | 14 | 14
  pxn_1_prt_c | 19 | 19
 (4 rows)
 
@@ -5186,7 +4973,7 @@ reset optimizer_nestloop_factor;
 create table part_tab ( i int, j int) distributed by (i) partition by range(j) (start(0) end(10) every(2));
 -- Wrong part
 insert into part_tab_1_prt_1 values(5,5);
-ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
  i | j 
@@ -5199,7 +4986,7 @@ select * from part_tab_1_prt_1;
 (0 rows)
 
 insert into part_tab_1_prt_2 values(5,5);
-ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
  i | j 
@@ -5238,18 +5025,14 @@ select * from part_tab;
 drop table if exists input1;
 NOTICE:  table "input1" does not exist, skipping
 create table input1 (x int, y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into input1 select i, i from (select generate_series(1,10) as i) as t;
 drop table if exists input2;
 NOTICE:  table "input2" does not exist, skipping
 create table input2 (x int, y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into input2 select i, i from (select generate_series(1,10) as i) as t;
 -- Multiple range table entries in the plan
 insert into part_tab_1_prt_1 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
-ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  new row for relation "part_tab_1_prt_1" violates partition constraint  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Failing row contains (5, 5).
 analyze part_tab;
 select * from part_tab;
@@ -5265,7 +5048,7 @@ select * from part_tab_1_prt_1;
 (0 rows)
 
 insert into part_tab_1_prt_2 select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x where i2.y = 5;
-ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  new row for relation "part_tab_1_prt_2" violates partition constraint  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Failing row contains (5, 5).
 select * from part_tab;
  i | j 
@@ -5284,10 +5067,10 @@ insert into part_tab_1_prt_3 select i1.x, i2.y from input1 as i1 join input2 as 
 select * from part_tab;
  i | j 
 ---+---
- 5 | 5
- 5 | 5
- 5 | 5
  4 | 4
+ 5 | 5
+ 5 | 5
+ 5 | 5
 (4 rows)
 
 select * from part_tab_1_prt_3;
@@ -5301,15 +5084,15 @@ select * from part_tab_1_prt_3;
 
 -- Root part but no matching part for i2.y == 10
 insert into part_tab select i1.x, i2.y from input1 as i1 join input2 as i2 on i1.x = i2.x;
-ERROR:  no partition of relation "part_tab" found for row  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  no partition of relation "part_tab" found for row  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Partition key of the failing row contains (j) = (10).
 select * from part_tab;
  i | j 
 ---+---
+ 5 | 5
+ 5 | 5
+ 5 | 5
  4 | 4
- 5 | 5
- 5 | 5
- 5 | 5
 (4 rows)
 
 -- Root part
@@ -5344,11 +5127,11 @@ subpartition by range (k) subpartition template (start(1)  end(10) every(2))
 insert into deep_part_1_prt_male_2_prt_2 values(1,3,1,'M');
 -- but only if it's the right partition.
 insert into deep_part_1_prt_male_2_prt_2 values(1,1,1,'M');
-ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2" violates partition constraint  (seg1 172.17.0.2:7003 pid=42613)
+ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2" violates partition constraint  (seg1 172.17.0.4:7003 pid=1836174)
 DETAIL:  Failing row contains (1, 1, 1, M    ).
 -- Wrong sub-partition (inserting a female value in male partition)
 insert into deep_part_1_prt_male_2_prt_2_3_prt_2 values (1, 1, 1, 'F');
-ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2_3_prt_2" violates partition constraint  (seg1 172.17.0.2:7003 pid=42613)
+ERROR:  new row for relation "deep_part_1_prt_male_2_prt_2_3_prt_2" violates partition constraint  (seg1 172.17.0.4:7003 pid=1836174)
 DETAIL:  Failing row contains (1, 1, 1, F    ).
 select * from deep_part;
  i | j | k |   s   
@@ -5426,12 +5209,12 @@ insert into deep_part values (9, 9, 9, 'F');
 select * from deep_part;
  i | j | k |   s   
 ---+---+---+-------
- 9 | 9 | 9 | F    
- 5 | 5 | 5 | M    
  1 | 1 | 1 | F    
  1 | 1 | 1 | M    
  1 | 1 | 1 | M    
  1 | 3 | 1 | M    
+ 9 | 9 | 9 | F    
+ 5 | 5 | 5 | M    
 (6 rows)
 
 select * from deep_part_1_prt_female_2_prt_5_3_prt_5;
@@ -5442,7 +5225,7 @@ select * from deep_part_1_prt_female_2_prt_5_3_prt_5;
 
 -- Out of range partition
 insert into deep_part values (9, 9, 10, 'F');
-ERROR:  no partition of relation "deep_part_1_prt_female_2_prt_5" found for row  (seg2 172.17.0.2:7004 pid=42614)
+ERROR:  no partition of relation "deep_part_1_prt_female_2_prt_5" found for row  (seg2 172.17.0.4:7004 pid=1836175)
 DETAIL:  Partition key of the failing row contains (k) = (10).
 select * from deep_part;
  i | j | k |   s   
@@ -5620,41 +5403,38 @@ select array_agg(test_split_part_1_prt_other_log_ids) from test_split_part_1_prt
 -- Originally reported in MPP-7232
 create table mpp7232a (a int, b int) distributed by (a) partition by range (b) (start (1) end (3) every (1));
 \d+ mpp7232a
-                                  Partitioned table "public.mpp7232a"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                           Partitioned table "public.mpp7232a"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp7232a_1_prt_1 FOR VALUES FROM (1) TO (2),
             mpp7232a_1_prt_2 FOR VALUES FROM (2) TO (3)
-Distributed by: (a)
 
 alter table mpp7232a rename partition for (1) to alpha;
 alter table mpp7232a rename partition for (2) to bravo;
 \d+ mpp7232a
-                                  Partitioned table "public.mpp7232a"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                           Partitioned table "public.mpp7232a"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp7232a_1_prt_alpha FOR VALUES FROM (1) TO (2),
             mpp7232a_1_prt_bravo FOR VALUES FROM (2) TO (3)
-Distributed by: (a)
 
 create table mpp7232b (a int, b int) distributed by (a) partition by range (b) (partition alpha start (1) end (3) every (1));
 alter table mpp7232b rename partition for (1) to foo;
 \d+ mpp7232b
-                                  Partitioned table "public.mpp7232b"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- a      | integer |           |          |         | plain   |             |              | 
- b      | integer |           |          |         | plain   |             |              | 
+                           Partitioned table "public.mpp7232b"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+ b      | integer |           |          |         | plain   |              | 
 Partition key: RANGE (b)
 Partitions: mpp7232b_1_prt_alpha_2 FOR VALUES FROM (2) TO (3),
             mpp7232b_1_prt_foo FOR VALUES FROM (1) TO (2)
-Distributed by: (a)
 
 -- Test .. WITH (tablename = <foo> ..) syntax.
 create table mpp17740 (a integer, b integer, e date) with (appendonly = true, orientation = column)
@@ -5723,14 +5503,13 @@ select relname, relkind from pg_class where relkind in ('r', 'p') and relname li
 select gp_segment_id, relname, relkind from gp_dist_random('pg_class') where relkind in ('r', 'p') and relname like 'sales%' and relfrozenxid=0;
  gp_segment_id | relname | relkind 
 ---------------+---------+---------
-             2 | sales   | p
              0 | sales   | p
+             2 | sales   | p
              1 | sales   | p
 (3 rows)
 
 alter table sales drop column tax;
 create table newpart(like sales);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table newpart add constraint newpart_pkey primary key(pkid, option3);
 alter table sales split partition for(1) at (50) into (partition aa1, partition aa2);
 select table_schema, table_name, constraint_name, constraint_type
@@ -5752,7 +5531,6 @@ select * from sales order by pkid;
 
 -- Create exchange table before drop column, make sure the consistency check still exist
 create table newpart2(like sales);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table sales drop column option2;
 alter table sales exchange partition for (101) with table newpart2;
 ERROR:  table "newpart2" contains column "option2" not found in parent "sales"
@@ -5766,17 +5544,22 @@ drop table sales cascade;
 NOTICE:  drop cascades to default value for column pkid of table newpart
 -- Exchage partition table with a table having dropped column
 create table exchange_part(a int, b int) partition by range(b) (start (0) end (10) every (5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table exchange1(a int, c int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table exchange1 drop column c;
 alter table exchange_part exchange partition for (1) with table exchange1;
 copy exchange_part from STDIN DELIMITER as '|';
 select * from exchange_part;
   a   | b 
 ------+---
+ 9810 | 2
+ 9827 | 1
+ 9828 | 2
+ 9831 | 3
+ 9817 | 5
+ 9818 | 6
+ 9825 | 9
+ 9843 | 7
+ 9844 | 8
  9794 | 1
  9797 | 3
  9799 | 4
@@ -5794,15 +5577,6 @@ select * from exchange_part;
  9814 | 3
  9815 | 4
  9832 | 4
- 9810 | 2
- 9827 | 1
- 9828 | 2
- 9831 | 3
- 9817 | 5
- 9818 | 6
- 9825 | 9
- 9843 | 7
- 9844 | 8
 (26 rows)
 
 drop table exchange_part;
@@ -5816,9 +5590,9 @@ alter table pt_tab_encode add partition "s_xyz" values ('xyz') WITH (appendonly=
 select relname, pg_get_expr(relpartbound, oid) from pg_class where relname like 'pt_tab_encode%';
           relname          |      pg_get_expr      
 ---------------------------+-----------------------
- pt_tab_encode_1_prt_s_xyz | FOR VALUES IN ('xyz')
  pt_tab_encode             | 
  pt_tab_encode_1_prt_s_abc | FOR VALUES IN ('abc')
+ pt_tab_encode_1_prt_s_xyz | FOR VALUES IN ('xyz')
 (3 rows)
 
 select gp_segment_id, attrelid::regclass, attnum, attoptions from pg_attribute_encoding where attrelid = 'pt_tab_encode_1_prt_s_abc'::regclass;
@@ -5869,11 +5643,7 @@ select c.oid::regclass, relkind, amname, reloptions from pg_class c left join pg
 
 -- Ensure that only the correct type of partitions can be added
 create table at_range (a int) partition by range (a) (start(1) end(5));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table at_list (i int) partition by list(i) (partition p1 values(1));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table at_list add partition foo2 start(6) end (10);
 ERROR:  invalid boundary specification for LIST partition
 LINE 1: alter table at_list add partition foo2 start(6) end (10);
@@ -5884,15 +5654,9 @@ LINE 1: alter table at_range add partition test values(5);
                                                 ^
 -- Ensure array type for the non-partition table is there after partition exchange.
 CREATE TABLE pt_xchg(a int) PARTITION BY RANGE(a) (START(1) END(4) EVERY (2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table xchg_tab1(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE SCHEMA xchg_schema;
 create table xchg_schema.xchg_tab2(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table pt_xchg exchange partition for (1) with table xchg_tab1;
 alter table pt_xchg exchange partition for (3) with table xchg_schema.xchg_tab2;
 select a.typowner=b.typowner from pg_type a join pg_type b on true where a.typname = 'xchg_tab1' and b.typname = '_xchg_tab1';
@@ -6008,8 +5772,6 @@ PARTITION BY RANGE (dt)
     END (date '2020-02-01') EXCLUSIVE
     EVERY (INTERVAL '1 month')
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dt' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO public.t_part_acl VALUES (date '2019-12-01'), (date '2020-01-31');
 -- check if parent and child table have same relacl
 SELECT relname FROM pg_class
@@ -6027,8 +5789,8 @@ SET ROLE user_prt_acl;
 SELECT * FROM public.t_part_acl;
      dt     
 ------------
- 01-31-2020
  12-01-2019
+ 01-31-2020
 (2 rows)
 
 RESET ROLE;
@@ -6039,8 +5801,6 @@ DROP ROLE user_prt_acl;
 -- test on commit delete rows
 begin;
 create temp table temp_parent (a int) partition by range(a) (start(1) end(10) every(10)) on commit delete rows;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into temp_parent select i from generate_series(1, 5) i;
 select count(*) from temp_parent;
  count 
@@ -6060,8 +5820,6 @@ drop table temp_parent;
 -- test on commit drop
 begin;
 create temp table temp_parent (a int) partition by range(a) (start(1) end(10) every(1)) on commit drop;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into temp_parent select i from generate_series(1, 5) i;
 select count(*) from pg_class where relname like 'temp_parent_%';
  count 
@@ -6087,26 +5845,12 @@ SELECT gp_debug_set_create_table_default_numsegments(1);
 (1 row)
 
 CREATE TABLE expanded_parent(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE expanded_parent2(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE unexpanded_parent(a int, b int) PARTITION BY RANGE(b) (START (0) END (6) EVERY (3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE unexpanded_attach(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE unexpanded_attach2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE expanded_attach(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE expanded_attach2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT gp_debug_reset_create_table_default_numsegments();
  gp_debug_reset_create_table_default_numsegments 
 -------------------------------------------------
@@ -6166,8 +5910,6 @@ SUBPARTITION TEMPLATE
        PARTITION l1_to_exchange START (200) END (300))
 --AM and reloption should be inherited except for ATTACH, EXCHANGE
 WITH (appendonly = TRUE, compresslevel = 7);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Set more properties for the root.
 -- index are inherited 
 CREATE INDEX part_inherit_i on part_inherit(a);
@@ -6241,15 +5983,11 @@ WHERE c.relname = 'part_inherit_partof';
 -- ATTACH PARTITION
 -- error if the partition-to-be doesn't have the same constraint as the parent.
 CREATE TABLE part_inherit_attach(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE part_inherit ATTACH PARTITION part_inherit_attach FOR VALUES FROM (400) TO (500);
 ERROR:  child table is missing constraint "con1"
 DROP TABLE part_inherit_attach;
 -- good case: have the same constraint as parent. Can have other constraint too.
 CREATE TABLE part_inherit_attach(a int, b int, CONSTRAINT con1 CHECK (a>=0), CONSTRAINT con2 CHECK (b>=0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- reloptions and AM ('heap' which is different than the future parent) will be kept
 ALTER TABLE part_inherit_attach SET (fillfactor=30);
 -- privilege will be kept
@@ -6299,15 +6037,11 @@ WHERE c.relname LIKE 'part_inherit_1_prt_added%' AND
 -- EXCHANGE PARTITION - same behavior as ATTACH PARTITION
 -- error if the partition-to-be doesn't have the same constraint as the parent.
 CREATE TABLE part_inherit_exchange_out(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE part_inherit_1_prt_l1_to_exchange EXCHANGE PARTITION l2_child WITH TABLE part_inherit_exchange_out;
 ERROR:  child table is missing constraint "con1"
 DROP TABLE part_inherit_exchange_out;
 -- good case: have the same constraint as parent. Can have other constraint too.
 CREATE TABLE part_inherit_exchange_out(a int, b int, CONSTRAINT con1 CHECK (a>=0), CONSTRAINT con2 CHECK (b>=0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- reloptions and AM ('heap' which is different than the future parent) will be kept
 ALTER TABLE part_inherit_exchange_out SET (fillfactor=30);
 -- privilege will be kept
@@ -6330,9 +6064,9 @@ WHERE (c.relname LIKE 'part_inherit_1_prt_l1_to_exchange%' OR c.relname = 'part_
 	AND c.relkind NOT IN ('i', 'I');
                      relname                      |    reloptions     |   am   | hasindex |          owner          |                                                           acl                                                            | numchecks | hasrules | hastriggers | rowsecurity 
 --------------------------------------------------+-------------------+--------+----------+-------------------------+--------------------------------------------------------------------------------------------------------------------------+-----------+----------+-------------+-------------
- part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxtm/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
- part_inherit_1_prt_l1_to_exchange                | {compresslevel=7} | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxtm/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
  part_inherit_exchange_out                        | {compresslevel=7} | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxtm/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange                | {compresslevel=7} | ao_row | t        | part_inherit_role       | {part_inherit_role=arwdDxtm/part_inherit_role,part_inherit_priv_role=w/part_inherit_role}                                |         1 | f        | t           | f
+ part_inherit_1_prt_l1_to_exchange_2_prt_l2_child | {fillfactor=30}   | heap   | t        | part_inherit_other_role | {part_inherit_other_role=arwdDxtm/part_inherit_other_role,part_inherit_exchange_out_priv_role=w/part_inherit_other_role} |         2 | f        | t           | f
 (3 rows)
 
 -- SPLIT PARTITION

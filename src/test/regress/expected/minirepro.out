@@ -5,40 +5,40 @@
 -- end_matchsubs
 -- Ensure that our expectation of pg_statistic's schema is up-to-date
 \d+ pg_statistic
-                                        Table "pg_catalog.pg_statistic"
-   Column    |   Type   | Collation | Nullable | Default | Storage  | Compression | Stats target | Description 
--------------+----------+-----------+----------+---------+----------+-------------+--------------+-------------
- starelid    | oid      |           | not null |         | plain    |             |              | 
- staattnum   | smallint |           | not null |         | plain    |             |              | 
- stainherit  | boolean  |           | not null |         | plain    |             |              | 
- stanullfrac | real     |           | not null |         | plain    |             |              | 
- stawidth    | integer  |           | not null |         | plain    |             |              | 
- stadistinct | real     |           | not null |         | plain    |             |              | 
- stakind1    | smallint |           | not null |         | plain    |             |              | 
- stakind2    | smallint |           | not null |         | plain    |             |              | 
- stakind3    | smallint |           | not null |         | plain    |             |              | 
- stakind4    | smallint |           | not null |         | plain    |             |              | 
- stakind5    | smallint |           | not null |         | plain    |             |              | 
- staop1      | oid      |           | not null |         | plain    |             |              | 
- staop2      | oid      |           | not null |         | plain    |             |              | 
- staop3      | oid      |           | not null |         | plain    |             |              | 
- staop4      | oid      |           | not null |         | plain    |             |              | 
- staop5      | oid      |           | not null |         | plain    |             |              | 
- stacoll1    | oid      |           | not null |         | plain    |             |              | 
- stacoll2    | oid      |           | not null |         | plain    |             |              | 
- stacoll3    | oid      |           | not null |         | plain    |             |              | 
- stacoll4    | oid      |           | not null |         | plain    |             |              | 
- stacoll5    | oid      |           | not null |         | plain    |             |              | 
- stanumbers1 | real[]   |           |          |         | extended |             |              | 
- stanumbers2 | real[]   |           |          |         | extended |             |              | 
- stanumbers3 | real[]   |           |          |         | extended |             |              | 
- stanumbers4 | real[]   |           |          |         | extended |             |              | 
- stanumbers5 | real[]   |           |          |         | extended |             |              | 
- stavalues1  | anyarray |           |          |         | extended |             |              | 
- stavalues2  | anyarray |           |          |         | extended |             |              | 
- stavalues3  | anyarray |           |          |         | extended |             |              | 
- stavalues4  | anyarray |           |          |         | extended |             |              | 
- stavalues5  | anyarray |           |          |         | extended |             |              | 
+                                 Table "pg_catalog.pg_statistic"
+   Column    |   Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+-------------+----------+-----------+----------+---------+----------+--------------+-------------
+ starelid    | oid      |           | not null |         | plain    |              | 
+ staattnum   | smallint |           | not null |         | plain    |              | 
+ stainherit  | boolean  |           | not null |         | plain    |              | 
+ stanullfrac | real     |           | not null |         | plain    |              | 
+ stawidth    | integer  |           | not null |         | plain    |              | 
+ stadistinct | real     |           | not null |         | plain    |              | 
+ stakind1    | smallint |           | not null |         | plain    |              | 
+ stakind2    | smallint |           | not null |         | plain    |              | 
+ stakind3    | smallint |           | not null |         | plain    |              | 
+ stakind4    | smallint |           | not null |         | plain    |              | 
+ stakind5    | smallint |           | not null |         | plain    |              | 
+ staop1      | oid      |           | not null |         | plain    |              | 
+ staop2      | oid      |           | not null |         | plain    |              | 
+ staop3      | oid      |           | not null |         | plain    |              | 
+ staop4      | oid      |           | not null |         | plain    |              | 
+ staop5      | oid      |           | not null |         | plain    |              | 
+ stacoll1    | oid      |           | not null |         | plain    |              | 
+ stacoll2    | oid      |           | not null |         | plain    |              | 
+ stacoll3    | oid      |           | not null |         | plain    |              | 
+ stacoll4    | oid      |           | not null |         | plain    |              | 
+ stacoll5    | oid      |           | not null |         | plain    |              | 
+ stanumbers1 | real[]   |           |          |         | extended |              | 
+ stanumbers2 | real[]   |           |          |         | extended |              | 
+ stanumbers3 | real[]   |           |          |         | extended |              | 
+ stanumbers4 | real[]   |           |          |         | extended |              | 
+ stanumbers5 | real[]   |           |          |         | extended |              | 
+ stavalues1  | anyarray |           |          |         | extended |              | 
+ stavalues2  | anyarray |           |          |         | extended |              | 
+ stavalues3  | anyarray |           |          |         | extended |              | 
+ stavalues4  | anyarray |           |          |         | extended |              | 
+ stavalues5  | anyarray |           |          |         | extended |              | 
 Indexes:
     "pg_statistic_relid_att_inh_index" UNIQUE, btree (starelid, staattnum, stainherit)
 
@@ -46,8 +46,6 @@ Indexes:
 -- Scenario: User table without hll flag
 --------------------------------------------------------------------------------
 create table minirepro_foo(a int) partition by range(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table minirepro_foo_1 partition of minirepro_foo for values from (1) to (5);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into minirepro_foo values(1);
@@ -56,11 +54,11 @@ analyze minirepro_foo;
 -- start_ignore
 \! echo "select * from minirepro_foo;" > ./data/minirepro_q.sql
 \! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
-Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Connecting to database: host=gpdb_pg16, port=7000, user=gpadmin, db=regression ...
 Extracting metadata from query file data/minirepro_q.sql ...
-psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224909/toolkit.sql
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h gpdb_pg16 -p 7000 -U gpadmin -f /tmp/20260710185618/toolkit.sql
 Invoking pg_dump to dump DDL ...
-pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118658,118661 --function-oids 0 -f /tmp/20260610224909/pg_dump_out.sql
+pg_dump -h gpdb_pg16 -p 7000 -U gpadmin -sxO regression --relation-oids 130785,130788 --function-oids 0 -f /tmp/20260710185618/pg_dump_out.sql
 Writing schema DDLs ...
 Writing relation and function DDLs ...
 Writing table statistics ...
@@ -81,6 +79,7 @@ SET
 SET
 SET
 SET
+SET
  set_config 
 ------------
  
@@ -92,6 +91,7 @@ SET
 SET
 SET
 CREATE TABLE
+ALTER TABLE
 SET
 CREATE TABLE
 ALTER TABLE
@@ -144,8 +144,6 @@ drop table minirepro_foo;
 -- Scenario: User table with hll flag
 --------------------------------------------------------------------------------
 create table minirepro_foo(a int) partition by range(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table minirepro_foo_1 partition of minirepro_foo for values from (1) to (5);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into minirepro_foo values(1);
@@ -154,11 +152,11 @@ analyze minirepro_foo;
 -- start_ignore
 \! echo "select * from minirepro_foo;" > data/minirepro_q.sql
 \! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql --hll
-Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Connecting to database: host=gpdb_pg16, port=7000, user=gpadmin, db=regression ...
 Extracting metadata from query file data/minirepro_q.sql ...
-psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224909/toolkit.sql
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h gpdb_pg16 -p 7000 -U gpadmin -f /tmp/20260710185619/toolkit.sql
 Invoking pg_dump to dump DDL ...
-pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118670,118673 --function-oids 0 -f /tmp/20260610224909/pg_dump_out.sql
+pg_dump -h gpdb_pg16 -p 7000 -U gpadmin -sxO regression --relation-oids 130797,130800 --function-oids 0 -f /tmp/20260710185619/pg_dump_out.sql
 Writing schema DDLs ...
 Writing relation and function DDLs ...
 Writing table statistics ...
@@ -179,6 +177,7 @@ SET
 SET
 SET
 SET
+SET
  set_config 
 ------------
  
@@ -190,6 +189,7 @@ SET
 SET
 SET
 CREATE TABLE
+ALTER TABLE
 SET
 CREATE TABLE
 ALTER TABLE
@@ -242,8 +242,6 @@ drop table minirepro_foo;
 -- Scenario: User table with escape-worthy characters in stavaluesN
 --------------------------------------------------------------------------------
 create table minirepro_foo(a text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into minirepro_foo values('1');
 analyze minirepro_foo;
 -- arbitrarily populate stats data values having text (with quotes) in a slot
@@ -254,11 +252,11 @@ update pg_statistic set stavalues3='{"hello", "''world''"}'::text[] where starel
 -- start_ignore
 \! echo "select * from minirepro_foo;" > data/minirepro_q.sql
 \! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
-Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Connecting to database: host=gpdb_pg16, port=7000, user=gpadmin, db=regression ...
 Extracting metadata from query file data/minirepro_q.sql ...
-psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224910/toolkit.sql
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h gpdb_pg16 -p 7000 -U gpadmin -f /tmp/20260710185620/toolkit.sql
 Invoking pg_dump to dump DDL ...
-pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 118682 --function-oids 0 -f /tmp/20260610224910/pg_dump_out.sql
+pg_dump -h gpdb_pg16 -p 7000 -U gpadmin -sxO regression --relation-oids 130809 --function-oids 0 -f /tmp/20260710185620/pg_dump_out.sql
 Writing schema DDLs ...
 Writing relation and function DDLs ...
 Writing table statistics ...
@@ -272,6 +270,7 @@ Please review output file to ensure it is within corporate policy to transport t
 drop table minirepro_foo; -- this should also delete the pg_statistic tuple for minirepro_foo
 \! psql -f data/minirepro.sql regression
 You are now connected to database "regression" as user "gpadmin".
+SET
 SET
 SET
 SET
@@ -309,11 +308,11 @@ drop table minirepro_foo;
 -- start_ignore
 \! echo "select oid from pg_tablespace;" > data/minirepro_q.sql
 \! minirepro regression -q data/minirepro_q.sql -f data/minirepro.sql
-Connecting to database: host=3a76691f25e1, port=7000, user=gpadmin, db=regression ...
+Connecting to database: host=gpdb_pg16, port=7000, user=gpadmin, db=regression ...
 Extracting metadata from query file data/minirepro_q.sql ...
-psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h 3a76691f25e1 -p 7000 -U gpadmin -f /tmp/20260610224910/toolkit.sql
+psql regression --pset footer --no-psqlrc -v ON_ERROR_STOP=1 -Atq -h gpdb_pg16 -p 7000 -U gpadmin -f /tmp/20260710185621/toolkit.sql
 Invoking pg_dump to dump DDL ...
-pg_dump -h 3a76691f25e1 -p 7000 -U gpadmin -sxO regression --relation-oids 1213 --function-oids 0 -f /tmp/20260610224910/pg_dump_out.sql
+pg_dump -h gpdb_pg16 -p 7000 -U gpadmin -sxO regression --relation-oids 1213 --function-oids 0 -f /tmp/20260710185621/pg_dump_out.sql
 Writing schema DDLs ...
 Writing relation and function DDLs ...
 Writing table statistics ...
@@ -336,6 +335,7 @@ SET
 SET
 SET
 SET
+SET
  set_config 
 ------------
  
@@ -347,10 +347,10 @@ SET
 SET
 SET
 SET
-psql:data/minirepro.sql:46: ERROR:  only shared relations can be placed in pg_global tablespace
-psql:data/minirepro.sql:48: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:55: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:62: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:47: ERROR:  only shared relations can be placed in pg_global tablespace
+psql:data/minirepro.sql:49: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:56: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:63: ERROR:  permission denied: "pg_tablespace" is a system catalog
 SET
 UPDATE 1
 DELETE 1

@@ -9,8 +9,6 @@
 CREATE EXTERNAL WEB TABLE echotable (c1 int, c2 int, c3 int) EXECUTE
 'echo "1,2,3"; echo "4,5,6";' FORMAT 'TEXT' (DELIMITER ',');
 create table test_ext_foo (c1 int, c2 int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test_ext_foo select g, g from generate_series(1, 20) g;
 -- This should return 2 and 5, as the two rows are duplicated in
 -- every segment (assuming you have at least two segments in your
@@ -26,20 +24,20 @@ select * from test_ext_foo as o
 where (select count(*) from echotable as i where i.c2 = o.c2) >= 2;
  c1 | c2 
 ----+----
-  5 |  5
   2 |  2
+  5 |  5
 (2 rows)
 
 -- Planner test to make sure the initplan is not removed for function scan
 explain select * from generate_series(1,2) s1 join pg_class on true where s1=(select pg_backend_pid());
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Nested Loop  (cost=10000000000.01..10000000027.63 rows=456 width=206)
-   InitPlan 1 (returns $0)
-     ->  Result  (cost=0.00..0.01 rows=1 width=0)
-   ->  Function Scan on generate_series s1  (cost=0.00..12.50 rows=1 width=4)
-         Filter: (s1 = $0)
-   ->  Seq Scan on pg_class  (cost=0.00..10.56 rows=456 width=202)
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Nested Loop  (cost=10000000000.01..10000000097.40 rows=2468 width=752)
+   InitPlan 1
+     ->  Result  (cost=0.00..0.01 rows=1 width=4)
+   ->  Function Scan on generate_series s1  (cost=0.00..0.03 rows=1 width=4)
+         Filter: (s1 = (InitPlan 1).col1)
+   ->  Seq Scan on pg_class  (cost=0.00..72.68 rows=2468 width=748)
  Optimizer: Postgres query optimizer
 (7 rows)
 
@@ -72,8 +70,6 @@ select * from subselect_t2 where false and exists (select generate_series(1,2));
 -- in QEs.
 --
 create temp table datetab (start timestamp, stop timestamp);
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'start' as the Greenplum Database data distribution key for this table.
 insert into datetab values ('2019-01-01', '2019-01-10');
 -- A function, that contains a query with a subquery that can be turned into
 -- an Init Plan.

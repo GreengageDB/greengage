@@ -162,15 +162,15 @@ SELECT 1 "one_%^" FROM test_having WHERE 1/a = 1 HAVING 1 < 2;
 SELECT c AS "C+1", max(a) AS MAX FROM test_having GROUP BY c HAVING count(*) > 2 OR min(a) = max(a)  ORDER BY c;
    C+1    | max 
 ----------+-----
- bbbb     |   5
  XXXX     |   0
+ bbbb     |   5
 (2 rows)
 
 SELECT c "C+1", max(a) AS MAX FROM test_having GROUP BY c HAVING count(*) > 2 OR min(a) = max(a)  ORDER BY c;
    C+1    | max 
 ----------+-----
- bbbb     |   5
  XXXX     |   0
+ bbbb     |   5
 (2 rows)
 
 SELECT 1 AS one WHERE 1 IN (SELECT 1);
@@ -418,33 +418,33 @@ select "B B" "## B B ##","C" "##_C_##", "D+1" "## D+1 ##" from xyz2;
 select "B B" AS "!@ B @!","C" AS "&* C *&", "D+1" AS "^~ D ~^" from xyz2;
  !@ B @! | &* C *& | ^~ D ~^ 
 ---------+---------+---------
-       2 |       5 |       8
        1 |       4 |       7
        3 |       6 |       9
+       2 |       5 |       8
 (3 rows)
 
 select "B B" "!@ B @!","C" "&* C *&", "D+1" "^~ D ~^" from xyz2;
  !@ B @! | &* C *& | ^~ D ~^ 
 ---------+---------+---------
-       2 |       5 |       8
        1 |       4 |       7
        3 |       6 |       9
+       2 |       5 |       8
 (3 rows)
 
 select "B B"+1 "(B B)","C" "[C]", "D+1" "{D+1}" from xyz2;
  (B B) | [C] | {D+1} 
 -------+-----+-------
-     3 |   5 |     8
      2 |   4 |     7
      4 |   6 |     9
+     3 |   5 |     8
 (3 rows)
 
 select "B B"+1 "(B B)","C" "[C]", "D+1" "{D+1}" from xyz2;
  (B B) | [C] | {D+1} 
 -------+-----+-------
-     3 |   5 |     8
      2 |   4 |     7
      4 |   6 |     9
+     3 |   5 |     8
 (3 rows)
 
 CREATE TABLE TIMESTAMP_TBL_AS_TEST (d1 timestamp(2) without time zone) DISTRIBUTED RANDOMLY;
@@ -514,17 +514,17 @@ INSERT INTO TIMESTAMP_TBL_AS_TEST VALUES
 SELECT '' AS "day", date_trunc('day',d1) AS date_trunc  FROM TIMESTAMP_TBL_AS_TEST WHERE d1 > timestamp without time zone '2009-03-27';
  day |        date_trunc        
 -----+--------------------------
-     | Fri Mar 27 00:00:00 2009
-     | Sat Mar 28 00:00:00 2009
-     | Wed Sep 09 00:00:00 2009
      | Sat May 15 00:00:00 2010
+     | Sat Mar 28 00:00:00 2009
+     | Fri Mar 27 00:00:00 2009
+     | Wed Sep 09 00:00:00 2009
 (4 rows)
 
 SELECT '' "day", date_trunc('day',d1) date_trunc  FROM TIMESTAMP_TBL_AS_TEST WHERE d1 > timestamp without time zone '2009-03-27';
  day |        date_trunc        
 -----+--------------------------
-     | Fri Mar 27 00:00:00 2009
      | Sat Mar 28 00:00:00 2009
+     | Fri Mar 27 00:00:00 2009
      | Wed Sep 09 00:00:00 2009
      | Sat May 15 00:00:00 2010
 (4 rows)
@@ -532,21 +532,21 @@ SELECT '' "day", date_trunc('day',d1) date_trunc  FROM TIMESTAMP_TBL_AS_TEST WHE
 SELECT '' AS "5", d1 FROM TIMESTAMP_TBL_AS_TEST  WHERE d1 <= timestamp without time zone '2010-05-15';
  5 |             d1              
 ---+-----------------------------
-   | Wed Sep 09 00:16:07 2009
    | Sat May 15 00:00:00 2010
-   | Fri Mar 27 15:31:50.06 2009
-   | Sat Mar 28 01:09:00 2009
+   | Wed Sep 09 00:16:07 2009
    | Mon Feb 10 17:32:01 1997
+   | Sat Mar 28 01:09:00 2009
+   | Fri Mar 27 15:31:50.06 2009
 (5 rows)
 
 SELECT '' "5", d1 FROM TIMESTAMP_TBL_AS_TEST  WHERE d1 <= timestamp without time zone '2010-05-15';
  5 |             d1              
 ---+-----------------------------
-   | Fri Mar 27 15:31:50.06 2009
    | Wed Sep 09 00:16:07 2009
+   | Mon Feb 10 17:32:01 1997
    | Sat May 15 00:00:00 2010
    | Sat Mar 28 01:09:00 2009
-   | Mon Feb 10 17:32:01 1997
+   | Fri Mar 27 15:31:50.06 2009
 (5 rows)
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71393' ) AS week_trunc;
@@ -564,21 +564,21 @@ SELECT '' date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71
 SELECT '' AS to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM MON Mon mon')  FROM TIMESTAMP_TBL_AS_TEST;
  to_char_1 |                                         to_char                                          
 -----------+------------------------------------------------------------------------------------------
-           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
            | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
+           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
            | SATURDAY  Saturday  saturday  SAT Sat sat MAY       May       may       V    MAY May may
+           | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
 (5 rows)
 
 SELECT '' to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM MON Mon mon')  FROM TIMESTAMP_TBL_AS_TEST;
  to_char_1 |                                         to_char                                          
 -----------+------------------------------------------------------------------------------------------
-           | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
-           | SATURDAY  Saturday  saturday  SAT Sat sat MAY       May       may       V    MAY May may
-           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
            | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
+           | FRIDAY    Friday    friday    FRI Fri fri MARCH     March     march     III  MAR Mar mar
+           | WEDNESDAY Wednesday wednesday WED Wed wed SEPTEMBER September september IX   SEP Sep sep
            | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | SATURDAY  Saturday  saturday  SAT Sat sat MAY       May       may       V    MAY May may
 (5 rows)
 
 create table xyz1 ("B B" text, "C" text, "D+1" text) DISTRIBUTED RANDOMLY;
@@ -589,16 +589,16 @@ insert into xyz1 values
 select upper("B B") AS "B_B", upper ("C") AS C, substr("D+1",1,1) AS "D" from xyz1;
    B_B   |    c    | D 
 ---------+---------+---
- 0_ZERO  | 1_ONE   | 2
- 6_SIX   | 7_SEVEN | 8
  3_THREE | 4_FOUR  | 5
+ 6_SIX   | 7_SEVEN | 8
+ 0_ZERO  | 1_ONE   | 2
 (3 rows)
 
 select upper("B B") "B_B", upper ("C") C, substr("D+1",1,1) "D" from xyz1;
    B_B   |    c    | D 
 ---------+---------+---
- 3_THREE | 4_FOUR  | 5
  0_ZERO  | 1_ONE   | 2
+ 3_THREE | 4_FOUR  | 5
  6_SIX   | 7_SEVEN | 8
 (3 rows)
 
@@ -606,15 +606,15 @@ select lower("B B") AS "B_B", lower ("C") AS C, substr("D+1",1,1) AS "D+1" from 
    B_B   |    c    | D+1 
 ---------+---------+-----
  3_three | 4_four  | 5
- 0_zero  | 1_one   | 2
  6_six   | 7_seven | 8
+ 0_zero  | 1_one   | 2
 (3 rows)
 
 select lower("B B") "B_B", lower ("C") C, substr("D+1",1,1) "D+1" from xyz1;
    B_B   |    c    | D+1 
 ---------+---------+-----
- 3_three | 4_four  | 5
  0_zero  | 1_one   | 2
+ 3_three | 4_four  | 5
  6_six   | 7_seven | 8
 (3 rows)
 
@@ -622,79 +622,79 @@ select upper("B B") AS "B_B", lower ("C") AS C, substr("D+1",1,1) AS "D+1%" from
    B_B   |    c    | D+1% 
 ---------+---------+------
  3_THREE | 4_four  | 5
- 0_ZERO  | 1_one   | 2
  6_SIX   | 7_seven | 8
+ 0_ZERO  | 1_one   | 2
 (3 rows)
 
 select upper("B B") "B_B", lower ("C") C, substr("D+1",1,1) "D+1%" from xyz1;
    B_B   |    c    | D+1% 
 ---------+---------+------
  0_ZERO  | 1_one   | 2
- 6_SIX   | 7_seven | 8
  3_THREE | 4_four  | 5
+ 6_SIX   | 7_seven | 8
 (3 rows)
 
 select lower("B B") AS "B_B", upper ("C") AS C, ("D+1") AS "D+1" from xyz1;
    B_B   |    c    |   D+1   
 ---------+---------+---------
  3_three | 4_FOUR  | 5_five
- 0_zero  | 1_ONE   | 2_two
  6_six   | 7_SEVEN | 8_eight
+ 0_zero  | 1_ONE   | 2_two
 (3 rows)
 
 select lower("B B") "B_B", upper ("C") C, ("D+1") "D+1" from xyz1;
    B_B   |    c    |   D+1   
 ---------+---------+---------
  3_three | 4_FOUR  | 5_five
- 0_zero  | 1_ONE   | 2_two
  6_six   | 7_SEVEN | 8_eight
+ 0_zero  | 1_ONE   | 2_two
 (3 rows)
 
 select upper("C") AS "C", lower ("B B") AS "%B_B%", "D+1" AS "D+1" from xyz1;
     C    |  %B_B%  |   D+1   
 ---------+---------+---------
- 1_ONE   | 0_zero  | 2_two
- 7_SEVEN | 6_six   | 8_eight
  4_FOUR  | 3_three | 5_five
+ 7_SEVEN | 6_six   | 8_eight
+ 1_ONE   | 0_zero  | 2_two
 (3 rows)
 
 select upper("C") "C", lower ("B B") "%B_B%", "D+1" "D+1" from xyz1;
     C    |  %B_B%  |   D+1   
 ---------+---------+---------
- 1_ONE   | 0_zero  | 2_two
- 7_SEVEN | 6_six   | 8_eight
  4_FOUR  | 3_three | 5_five
+ 7_SEVEN | 6_six   | 8_eight
+ 1_ONE   | 0_zero  | 2_two
 (3 rows)
 
 select lower("C") AS "%C%", upper ("B B") AS "BB", "D+1"||'9_nine' AS "D+1" from xyz1;
    %C%   |   BB    |      D+1      
 ---------+---------+---------------
  1_one   | 0_ZERO  | 2_two9_nine
- 7_seven | 6_SIX   | 8_eight9_nine
  4_four  | 3_THREE | 5_five9_nine
+ 7_seven | 6_SIX   | 8_eight9_nine
 (3 rows)
 
 select lower("C") "%C%", upper ("B B") "BB", "D+1"||'9_nine' "D+1" from xyz1;
    %C%   |   BB    |      D+1      
 ---------+---------+---------------
- 1_one   | 0_ZERO  | 2_two9_nine
- 7_seven | 6_SIX   | 8_eight9_nine
  4_four  | 3_THREE | 5_five9_nine
+ 7_seven | 6_SIX   | 8_eight9_nine
+ 1_one   | 0_ZERO  | 2_two9_nine
 (3 rows)
 
 select upper("B B") AS "B_B", lower ("C") AS C, ("D+1"||'9_nine') AS "D+1" from xyz1;
    B_B   |    c    |      D+1      
 ---------+---------+---------------
- 0_ZERO  | 1_one   | 2_two9_nine
- 6_SIX   | 7_seven | 8_eight9_nine
  3_THREE | 4_four  | 5_five9_nine
+ 6_SIX   | 7_seven | 8_eight9_nine
+ 0_ZERO  | 1_one   | 2_two9_nine
 (3 rows)
 
 select upper("B B") "B_B", lower ("C") C, ("D+1"||'9_nine') "D+1" from xyz1;
    B_B   |    c    |      D+1      
 ---------+---------+---------------
- 3_THREE | 4_four  | 5_five9_nine
  0_ZERO  | 1_one   | 2_two9_nine
+ 3_THREE | 4_four  | 5_five9_nine
  6_SIX   | 7_seven | 8_eight9_nine
 (3 rows)
 

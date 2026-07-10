@@ -4,6 +4,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_async_append            | on
  enable_bitmapscan              | on
  enable_gathermerge             | on
+ enable_group_by_reordering     | on
  enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
@@ -23,7 +24,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(22 rows)
+(23 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;
@@ -99,12 +100,12 @@ select foost(fooid), * from foost(3);
 select foost(fooid), * from foo2;
  foost  | fooid | f2  
 --------+-------+-----
+ (2,11) |     2 |  22
+ (2,33) |     2 |  22
  (1,11) |     1 |  11
  (1,33) |     1 |  11
  (1,11) |     1 | 111
  (1,33) |     1 | 111
- (2,11) |     2 |  22
- (2,33) |     2 |  22
 (6 rows)
 
 -- Joining with a table
@@ -766,11 +767,11 @@ AS $$select $1-1, $1::text || 'z'$$ LANGUAGE sql;
 SELECT f1, foor(f1) FROM int4_tbl;
      f1      |            foor            
 -------------+----------------------------
+      123456 | (123455,123456z)
+     -123456 | (-123457,-123456z)
            0 | (-1,0z)
   2147483647 | (2147483646,2147483647z)
  -2147483647 | (-2147483648,-2147483647z)
-      123456 | (123455,123456z)
-     -123456 | (-123457,-123456z)
 (5 rows)
 
 SELECT * FROM foor(42);
@@ -884,5 +885,5 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- end_matchsubs
 CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
 INSERT INTO srfdest select * FROM notice_srf();
-NOTICE:  notice_srf called in segment 0  (seg0 slice1 172.17.0.2:7002 pid=39038)
+NOTICE:  notice_srf called in segment 1  (seg1 slice1 172.17.0.4:7003 pid=1832539)
 reset optimizer_segments;

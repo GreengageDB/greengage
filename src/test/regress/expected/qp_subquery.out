@@ -2,8 +2,6 @@ create schema qp_subquery;
 set search_path to qp_subquery;
 begin;
 CREATE TABLE SUBSELECT_TBL1 (f1 integer, f2 integer, f3 float);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO SUBSELECT_TBL1 VALUES (1, 2, 3); 
 INSERT INTO SUBSELECT_TBL1 VALUES (2, 3, 4); 
 INSERT INTO SUBSELECT_TBL1 VALUES (3, 4, 5); 
@@ -102,12 +100,12 @@ SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
                                 WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL1 WHERE f1 = upper.f1);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                3 |            4
-     |                3 |            3
      |                1 |            2
-     |                2 |            3
      |                1 |            1
+     |                2 |            3
+     |                3 |            4
      |                2 |            2
+     |                3 |            3
 (6 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -116,11 +114,11 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 (SELECT f2 FROM SUBSELECT_TBL1 WHERE CAST(upper.f2 AS float) = f3);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                3 |            5
-     |                3 |            3
      |                2 |            4
-     |                1 |            1
+     |                3 |            5
      |                2 |            2
+     |                3 |            3
+     |                1 |            1
 (5 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -129,10 +127,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 WHERE f2 = CAST(f3 AS integer));
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                1 |            3
      |                2 |            4
      |                3 |            5
      |                6 |            8
+     |                1 |            3
 (4 rows)
 
 SELECT '' AS five, f1 AS "Correlated Field"
@@ -141,17 +139,15 @@ SELECT '' AS five, f1 AS "Correlated Field"
                                 WHERE f3 IS NOT NULL);
  five | Correlated Field 
 ------+------------------
-      |                3
-      |                3
-      |                2
       |                1
       |                2
+      |                3
+      |                2
+      |                3
 (5 rows)
 
 begin;
 create table join_tab1 ( i integer, j integer, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO join_tab1 VALUES (1, 4, 'one');
 ANALYZE join_tab1;
 INSERT INTO join_tab1 VALUES (2, 3, 'two');
@@ -165,8 +161,6 @@ INSERT INTO join_tab1 VALUES (0, NULL, 'zero');
 INSERT INTO join_tab1 VALUES (NULL, NULL, 'null');
 INSERT INTO join_tab1 VALUES (NULL, 0, 'zero');
 create table join_tab2 ( i integer, k integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO join_tab2 VALUES (1, -1);
 ANALYZE join_tab2;
 INSERT INTO join_tab2 VALUES (2, 2);
@@ -181,50 +175,50 @@ commit;
 select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx)A;
  col | i | j |   t   
 -----+---+---+-------
-     | 8 | 8 | eight
-     | 3 | 2 | three
-     | 4 | 1 | four
+     | 1 | 4 | one
+     | 0 |   | zero
      | 5 | 0 | five
      | 6 | 6 | six
+     | 2 | 3 | two
+     | 3 | 2 | three
+     | 4 | 1 | four
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 1 | 4 | one
-     | 2 | 3 | two
-     | 0 |   | zero
 (11 rows)
 
                          
 select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
  col | i | j |   t   
 -----+---+---+-------
+     | 2 | 3 | two
      | 3 | 2 | three
      | 4 | 1 | four
-     | 5 | 0 | five
-     | 6 | 6 | six
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 8 | 8 | eight
      | 1 | 4 | one
-     | 2 | 3 | two
      | 0 |   | zero
+     | 5 | 0 | five
+     | 6 | 6 | six
 (11 rows)
 
                          
 select * from(SELECT '' AS "col", * FROM join_tab1 AS tx) as A(a,b,c);
  a | b | c |   t   
 ---+---+---+-------
-   | 3 | 2 | three
-   | 4 | 1 | four
    | 5 | 0 | five
    | 6 | 6 | six
+   | 2 | 3 | two
+   | 3 | 2 | three
+   | 4 | 1 | four
    | 7 | 7 | seven
+   | 8 | 8 | eight
    |   |   | null
    |   | 0 | zero
-   | 8 | 8 | eight
    | 1 | 4 | one
-   | 2 | 3 | two
    | 0 |   | zero
 (11 rows)
 
@@ -233,11 +227,11 @@ select * from(SELECT '' AS "col", t1.a, t2.e FROM join_tab1 t1 (a, b, c), join_t
 				WHERE t1.a = t2.d)as A;
  col | a | e  
 -----+---+----
-     | 1 | -1
      | 2 |  4
      | 2 |  2
-     | 0 |   
      | 3 | -3
+     | 1 | -1
+     | 0 |   
      | 5 | -5
      | 5 | -5
 (7 rows)
@@ -246,10 +240,10 @@ select * from(SELECT '' AS "col", t1.a, t2.e FROM join_tab1 t1 (a, b, c), join_t
 select * from join_tab1 where exists(select * from join_tab2 where join_tab1.i=join_tab2.i);
  i | j |   t   
 ---+---+-------
+ 2 | 3 | two
  3 | 2 | three
  5 | 0 | five
  1 | 4 | one
- 2 | 3 | two
  0 |   | zero
 (5 rows)
 
@@ -288,8 +282,6 @@ select 'abc' = any('{abc,d,e}');
 
                          
 create table subq_abc(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into subq_abc values(1);
 insert into subq_abc values(9);
 insert into subq_abc values(3);
@@ -379,8 +371,6 @@ select 33.4 > all (array[1,2,3]);
 (1 row)
 
 create table emp_list(empid int,name char(20),sal float); 
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'empid' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into emp_list values(1,'empone',1000); 
 insert into emp_list values(2,'emptwo',2000); 
 insert into emp_list values(3,'empthree',3000); 
@@ -389,8 +379,8 @@ insert into emp_list values(5,'empfive',4000);
 select name from emp_list where sal=(select max(sal) from emp_list);
          name         
 ----------------------
- empfour             
  empfive             
+ empfour             
 (2 rows)
 
                         
@@ -413,14 +403,12 @@ select name from emp_list where sal>(select avg(sal) from emp_list);
 select name from emp_list where sal<(select avg(sal) from emp_list);
          name         
 ----------------------
- empone              
  emptwo              
+ empone              
 (2 rows)
 
                       
 CREATE TABLE subq_test1 (s1 INT, s2 CHAR(5), s3 FLOAT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO subq_test1 VALUES (1,'1',1.0); 
 INSERT INTO subq_test1 VALUES (2,'2',2.0);
 INSERT INTO subq_test1 VALUES (3,'3',3.0);
@@ -428,9 +416,9 @@ INSERT INTO subq_test1 VALUES (4,'4',4.0);
 SELECT sb1,sb2,sb3 FROM (SELECT s1 AS sb1, s2 AS sb2, s3*2 AS sb3 FROM subq_test1) AS sb WHERE sb1 > 1;
  sb1 |  sb2  | sb3 
 -----+-------+-----
+   2 | 2     |   4
    3 | 3     |   6
    4 | 4     |   8
-   2 | 2     |   4
 (3 rows)
 
                       
@@ -444,14 +432,12 @@ select to_char(Avg(sum_col1),'9999999.9999999') from (select sum(s1) as sum_col1
 select g2,count(*) from (select I, count(*) as g2 from join_tab1 group by I) as vtable group by g2;
  g2 | count 
 ----+-------
-  2 |     1
   1 |     9
+  2 |     1
 (2 rows)
 
 begin;
 create table join_tab4 ( i integer, j integer, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into join_tab4 values (1,7,'sunday'); 
 insert into join_tab4 values (2,6,'monday');
 insert into join_tab4 values (3,5,'tueday');
@@ -464,24 +450,24 @@ select i,j,t from (select * from (select i,j,t from join_tab1)as dtab1
 				UNION select * from(select i,j,t from join_tab4) as dtab2 )as mtab; 	
  i | j |   t    
 ---+---+--------
- 1 | 4 | one
- 2 | 6 | monday
- 5 | 0 | five
- 5 | 3 | thuday
- 6 | 6 | six
- 7 | 7 | seven
- 8 | 8 | eight
-   | 0 | zero
- 0 |   | zero
- 2 | 3 | two
- 3 | 2 | three
  4 | 4 | wedday
- 7 | 1 | satday
+   | 0 | zero
+ 6 | 2 | friday
+ 5 | 0 | five
+ 8 | 8 | eight
+ 7 | 7 | seven
+ 2 | 3 | two
+ 2 | 6 | monday
+ 1 | 4 | one
+ 6 | 6 | six
+ 5 | 3 | thuday
+   |   | null
+ 0 |   | zero
+ 4 | 1 | four
  1 | 7 | sunday
  3 | 5 | tueday
- 4 | 1 | four
- 6 | 2 | friday
-   |   | null
+ 7 | 1 | satday
+ 3 | 2 | three
 (18 rows)
 
                       
@@ -577,24 +563,6 @@ FROM join_tab1 out1, join_tab2 out2;
 ---
   
   
- 0
- 0
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
   
   
   
@@ -609,10 +577,6 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
  0
-  
-  
-  
-  
   
   
  0
@@ -665,6 +629,28 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 0
+ 0
   
   
   
@@ -894,17 +880,9 @@ select (3,null::int) not in (select 1,1);
 
 begin;
 create table t1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t3(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t4(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t1 values(1,2);
 analyze t1;
 insert into t1 values(3,4);
@@ -917,11 +895,7 @@ insert into t3 values(1,2);
 insert into t3 values(3,4);
 insert into t4 values(1,2);
 create table i1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table i2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i1 values(1,2);
 analyze i1;
 commit;
@@ -948,11 +922,11 @@ select t1.a, t2.b from t1 inner join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) not i
 
 -- unsupported case
 explain select t1.a, t2.b from t1, t2 where t1.a=t2.a or ((t1.a,t2.b) not in (select i1.a,i1.b from i1));
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000002.10 rows=3 width=8)
    ->  Nested Loop  (cost=10000000000.00..10000000002.05 rows=1 width=8)
-         Join Filter: ((t1.a = t2.a) OR (NOT (hashed SubPlan 1)))
+         Join Filter: ((t1.a = t2.a) OR (NOT (ANY ((t1.a = (hashed SubPlan 1).col1) AND (t2.b = (hashed SubPlan 1).col2)))))
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                ->  Seq Scan on t1  (cost=0.00..1.01 rows=1 width=4)
          ->  Seq Scan on t2  (cost=0.00..1.01 rows=1 width=8)
@@ -975,9 +949,9 @@ select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) not in
 select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1)));
  a | b 
 ---+---
+ 5 |  
  1 |  
  3 | 4
- 5 |  
 (3 rows)
 
 --
@@ -986,8 +960,8 @@ select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (s
 select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) not in (select i1.a,i1.b from i1));
  a | b 
 ---+---
- 3 | 4
  5 |  
+ 3 | 4
    | 8
 (3 rows)
 
@@ -995,8 +969,8 @@ select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) 
 select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1))); 
  a | b 
 ---+---
- 3 | 4
  5 |  
+ 3 | 4
    | 8
  1 |  
    | 2
@@ -1008,22 +982,18 @@ select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not
 select t1.a,t2.b from t1 left join (t2 inner join t3 on (t3.a not in (select t4.a from t4))) on (t1.a=t2.a);
  a | b 
 ---+---
+ 5 |  
  1 | 2
  3 | 4
- 5 |  
 (3 rows)
 
 begin;
 create table Tbl01(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl01 values(1,2,3);
 insert into Tbl01 values(4,5,6);
 insert into Tbl01 values(7,8,9);
 insert into Tbl01 values(null,11,12);
 create table Tbl03(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl03 values(1),(4);
 create or replace function foo(int) returns int as $$
 	select case when $1 is null then 13::int
@@ -1034,10 +1004,10 @@ commit;
 select Tbl01.*,foo(Tbl01.a) as foo from Tbl01; -- showing foo values
  a | b  | c  | foo 
 ---+----+----+-----
- 1 |  2 |  3 |    
  4 |  5 |  6 |    
  7 |  8 |  9 |    
    | 11 | 12 |  13
+ 1 |  2 |  3 |    
 (4 rows)
 
 select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
@@ -1047,8 +1017,6 @@ select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
 (1 row)
 
 create table Tbl02 as select Tbl01.*,foo(Tbl01.a) as foo from Tbl01;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select Tbl02.* from Tbl02 where foo not in (select a from Tbl03);
  a | b  | c  | foo 
 ---+----+----+-----
@@ -1100,8 +1068,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05 where Tbl05.a < 2 and Tbl05.b < 10); -- expected: (3,4), (5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b from Tbl07 left join Tbl08 on (Tbl07.a=Tbl08.a) where Tbl07.a = 1 and Tbl07.b = 2); -- expected: (3,4),(5,6)
@@ -1128,8 +1096,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05 where (Tbl05.a < 2 or Tbl05.a > 100) AND (Tbl05.b < 4 or Tbl05.b > 100)); -- expected: (3,4), (5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- base-table constraints
@@ -1143,16 +1111,16 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,i3.b from 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where	Tbl05.a = i3.a and	Tbl05.b = i3.b);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where Tbl05.a < i3.a and Tbl05.b > i3.b);
  a | b 
 ---+---
  3 | 4
- 5 | 6
  1 | 2
+ 5 | 6
 (3 rows)
 
 -- non-null constant values
@@ -1213,8 +1181,8 @@ select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl09.a from Tbl09 where 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select i3.a from i3);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl05.a from	Tbl05 left	join i3	on (Tbl05.a=i3.a));
@@ -1269,17 +1237,17 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (values(1,2),(3,4)); --
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a+2,i3.b+2 from i3); -- expected: (5,6)
  a | b 
 ---+---
- 1 | 2
  5 | 6
+ 1 | 2
 (2 rows)
 
 -- group by does not guarantee removal of nulls. 
 select Tbl09.a, Tbl09.b from Tbl09;
  a | b 
 ---+---
- 1 | 2
  5 |  
    | 8
+ 1 | 2
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b from Tbl09); -- expected: (3,4)
@@ -1291,9 +1259,9 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b
 select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b;
  a | b 
 ---+---
- 5 |  
-   | 8
  1 | 2
+   | 8
+ 5 |  
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b); -- expected: (3,4)
@@ -1305,8 +1273,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a, Tbl09.
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select sum(i3.b),i3.a from i3 group by i3.a); -- (1,2),(3,4),(5,6)
  a | b 
 ---+---
- 1 | 2
  3 | 4
+ 1 | 2
  5 | 6
 (3 rows)
 
@@ -1314,16 +1282,16 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select sum(i3.b),i3.a 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,Tbl05.b from i3,Tbl05 where	i3.a=Tbl05.a); -- (3,4),(5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) NOT IN (select i3.a,i3.b from Tbl07 left join i3 on (i3.a=Tbl07.a and i3.b=Tbl07.b) where i3.a > 2);
  a | b 
 ---+---
  3 | 4
- 5 | 6
  1 | 2
+ 5 | 6
 (3 rows)
 
 --
@@ -1349,8 +1317,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select 1,2 union selec
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,i3.b from i3) or (Tbl04.a,Tbl04.b) not in (select Tbl07.a, Tbl07.b from Tbl07);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- Cases where the planner "should have" determined not-nullabitlity
@@ -1402,14 +1370,8 @@ select * from Tbl04 where (x,y) not in (select x,y from Tbl10);
 
 begin;
 create table TblText1(a text, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table TblText2(a text, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table TblText3(a text, b text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TblText1 values('rob', 'klopp');
 insert into TblText1 values('florian','waas');
 insert into TblText1 values('oak','barrett');
@@ -1421,15 +1383,15 @@ commit;
 SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblText2.a WHERE ((NOT (TblText1.a, TblText2.b) IN (SELECT TblText3.a, TblText3.b FROM TblText3)));
    a    |    b     
 --------+----------
- tushar | pednekar
  rob    | klopp
+ tushar | pednekar
 (2 rows)
 
 SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblText2.a WHERE (( (TblText1.a, TblText2.b) IN (SELECT TblText3.a, TblText3.b FROM TblText3)));
     a    |    b    
 ---------+---------
- florian | waas
  oak     | barrett
+ florian | waas
 (2 rows)
 
 --
@@ -1445,28 +1407,28 @@ create table TabDel4(a int not null, b int not null);
 insert into TabDel4 values(1,2);
 commit;
 explain delete from TabDel1 where TabDel1.a not in (select a from TabDel3); -- do not support this because we produce NLASJ
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Delete on tabdel1  (cost=1.09..4.16 rows=2 width=16)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=1.09..4.16 rows=2 width=16)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Delete on tabdel1  (cost=2545.25..311821.80 rows=0 width=0)
+   ->  Hash Left Anti Semi (Not-In) Join  (cost=2545.25..311821.80 rows=5 width=16)
          Hash Cond: (tabdel1.a = tabdel3.a)
-         ->  Seq Scan on tabdel1  (cost=0.00..3.03 rows=1 width=14)
-         ->  Hash  (cost=1.05..1.05 rows=1 width=10)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.05 rows=1 width=10)
-                     ->  Seq Scan on tabdel3  (cost=0.00..1.01 rows=1 width=10)
+         ->  Seq Scan on tabdel1  (cost=0.00..321.00 rows=28700 width=14)
+         ->  Hash  (cost=1469.00..1469.00 rows=86100 width=10)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..1469.00 rows=86100 width=10)
+                     ->  Seq Scan on tabdel3  (cost=0.00..321.00 rows=28700 width=10)
  Optimizer: Postgres query optimizer
 (8 rows)
 
 explain delete from TabDel2 where TabDel2.a not in (select a from TabDel4); -- support this
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
- Delete on tabdel2  (cost=1.09..2.11 rows=1 width=16)
-   ->  Hash Left Anti Semi (Not-In) Join  (cost=1.09..2.11 rows=1 width=16)
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
+ Delete on tabdel2  (cost=2545.25..311821.80 rows=0 width=0)
+   ->  Hash Left Anti Semi (Not-In) Join  (cost=2545.25..311821.80 rows=5 width=16)
          Hash Cond: (tabdel2.a = tabdel4.a)
-         ->  Seq Scan on tabdel2  (cost=0.00..1.01 rows=1 width=14)
-         ->  Hash  (cost=1.05..1.05 rows=3 width=10)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..1.05 rows=3 width=10)
-                     ->  Seq Scan on tabdel4  (cost=0.00..1.01 rows=1 width=10)
+         ->  Seq Scan on tabdel2  (cost=0.00..321.00 rows=28700 width=14)
+         ->  Hash  (cost=1469.00..1469.00 rows=86100 width=10)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..1469.00 rows=86100 width=10)
+                     ->  Seq Scan on tabdel4  (cost=0.00..321.00 rows=28700 width=10)
  Optimizer: Postgres query optimizer
 (8 rows)
 
@@ -1482,19 +1444,11 @@ select * from TabDel2;
 --
 begin;
 create table TblUp1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TblUp1 values(1,2),(3,4),(5,6);
 create table TblUp2 as select * from TblUp1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table TblUp3(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TblUp3 values(1,2);
 create table TblUp4(a int not null, b int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TblUp4 values(1,2);
 commit;
 -- planner does not support updates on distribution keys
@@ -1521,14 +1475,8 @@ select * from TblUp2;
 --
 begin;
 create table subselect_tab1 (a int, b text, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table subselect_tab2 (a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table subselect_tab3 (a int, b text, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into subselect_tab1 VALUES (100, 'false', 1);
 insert into subselect_tab1 VALUES (200, 'true', 2);
 insert into subselect_tab2 VALUES (2,2,2);
@@ -1592,8 +1540,6 @@ SELECT * FROM subselect_tab3 WHERE (NOT EXISTS(SELECT c FROM subselect_tab2)) IN
 -- Test to verify that planner for subqueries, generates different copy of SubPlans referring to the same initplan
 -- and does not Assert on the subplan's being same
 create table append_rel(att1 int, att2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'att1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table append_rel1(att3 int) INHERITS (append_rel);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table append_rel2(att4 int) INHERITS(append_rel);
@@ -1603,15 +1549,15 @@ analyze append_rel;
 explain with test as (select * from (select * from append_rel) p where att1 in (select att1 from append_rel where att2 >= 19) ) select att2 from append_rel where att1 in (select att1 from test where att2 <= 21);
                                                           QUERY PLAN                                                          
 ------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2296.15..4165.55 rows=51935 width=4)
-   ->  Hash Join  (cost=2296.15..3473.08 rows=17312 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=2123.03..3992.43 rows=51935 width=4)
+   ->  Hash Join  (cost=2123.03..3299.97 rows=17312 width=4)
          Hash Cond: (append_rel.att1 = test.att1)
          ->  Append  (cost=0.00..848.02 rows=51934 width=8)
                ->  Seq Scan on append_rel append_rel_1  (cost=0.00..1.01 rows=1 width=8)
                ->  Seq Scan on append_rel1 append_rel_2  (cost=0.00..293.67 rows=25967 width=8)
                ->  Seq Scan on append_rel2 append_rel_3  (cost=0.00..293.67 rows=25967 width=8)
-         ->  Hash  (cost=2283.65..2283.65 rows=1000 width=4)
-               ->  HashAggregate  (cost=2280.31..2283.65 rows=1000 width=4)
+         ->  Hash  (cost=2110.53..2110.53 rows=1000 width=4)
+               ->  HashAggregate  (cost=2107.20..2110.53 rows=1000 width=4)
                      Group Key: test.att1
                      ->  Subquery Scan on test  (cost=1021.14..2063.92 rows=17312 width=4)
                            ->  Hash Semi Join  (cost=1021.14..2063.92 rows=17312 width=8)
@@ -1647,14 +1593,8 @@ NOTICE:  table "temp_a" does not exist, skipping
 NOTICE:  table "temp_b" does not exist, skipping
 NOTICE:  table "temp_c" does not exist, skipping
 create table temp_a (a int ,b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table temp_b (b int ,c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table temp_c (c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into temp_a values (1,2), (2,3), (3,4), (4,7), (5,19), (6,13), (7,23), (7,17);
 insert into temp_b values (1,2), (2,2), (3,2), (4,2), (5,3), (6,3), (7,3), (8,3), (10,4);
 insert into temp_c values (NULL, 2), (2, 2), (4, NULL), (NULL, 3), (1, 3), (8, NULL), (7, 2), (NULL, NULL);
@@ -1679,8 +1619,6 @@ select sum(case when b in (select b from temp_b where EXISTS (select sum(d) from
 
 -- Check that predicate with set-returning function is not pushed down
 create table table_with_array_column (an_array_column double precision[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'an_array_column' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into table_with_array_column values (array[1.1, 2.2]);
 explain (costs off)
 select *
@@ -1715,11 +1653,7 @@ where unnested_array_column is not null;
 
 -- check that predicate is not pushed through a projected non-correlated subquery
 create table subquery_nonpush_through_1(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table subquery_nonpush_through_2(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze subquery_nonpush_through_1, subquery_nonpush_through_2;
 explain (costs off)
 select *
@@ -1732,7 +1666,7 @@ where xx='dd';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
          ->  Seq Scan on subquery_nonpush_through_1
-               Filter: (((hashed SubPlan 2))::text = 'dd'::text)
+               Filter: (((ANY (a = (hashed SubPlan 2).col1)))::text = 'dd'::text)
                SubPlan 2
                  ->  Broadcast Motion 3:3  (slice3; segments: 3)
                        ->  Seq Scan on subquery_nonpush_through_2 subquery_nonpush_through_2_2

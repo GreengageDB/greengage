@@ -85,8 +85,6 @@ LINE 1: select * from generate_series(1,10) g limit count(*);
                                                     ^
 -- Check volatile limit should not pushdown.
 create table t_volatile_limit (i int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t_volatile_limit_1 (a int, b int) distributed randomly;
 -- Greenplum may generate two-stage limit plan to improve performance.
 -- But for limit clause contains volatile functions, if we push them down
@@ -99,27 +97,27 @@ create table t_volatile_limit_1 (a int, b int) distributed randomly;
 -- and QD and this cannot guarantee correct results. Suppose seg 0 contains the
 -- top 3 minimum values, but random() returns 1, then you lose 2 values.
 explain select * from t_volatile_limit order by i limit (random() * 10);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.01 rows=34 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Limit  (cost=2757.73..2894.16 rows=9630 width=4)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2757.73..4121.98 rows=96300 width=4)
          Merge Key: i
-         ->  Sort  (cost=0.00..431.00 rows=34 width=4)
+         ->  Sort  (cost=2757.73..2837.98 rows=32100 width=4)
                Sort Key: i
-               ->  Seq Scan on t_volatile_limit  (cost=0.00..431.00 rows=34 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+               ->  Seq Scan on t_volatile_limit  (cost=0.00..355.00 rows=32100 width=4)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 explain select * from t_volatile_limit order by i limit 2 offset (random()*5);
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Limit  (cost=0.00..431.01 rows=1 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
+ Limit  (cost=2894.16..2894.18 rows=2 width=4)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2757.73..4121.98 rows=96300 width=4)
          Merge Key: i
-         ->  Sort  (cost=0.00..431.00 rows=34 width=4)
+         ->  Sort  (cost=2757.73..2837.98 rows=32100 width=4)
                Sort Key: i
-               ->  Seq Scan on t_volatile_limit  (cost=0.00..431.00 rows=34 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.80.0
+               ->  Seq Scan on t_volatile_limit  (cost=0.00..355.00 rows=32100 width=4)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 explain select distinct(a), sum(b) from t_volatile_limit_1 group by a order by a, sum(b) limit (random()+3);
@@ -172,7 +170,7 @@ select array(select b from t_limit_all order by b asc limit all) t;
                     QUERY PLAN                    
 --------------------------------------------------
  Result
-   InitPlan 1 (returns $0)  (slice1)
+   InitPlan 1  (slice1)
      ->  Gather Motion 3:1  (slice2; segments: 3)
            Merge Key: t_limit_all.b
            ->  Sort

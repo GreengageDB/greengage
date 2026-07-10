@@ -3,7 +3,6 @@
 -- s/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(\d+, \d+, \'t\'\);/Executing SQL: select pg_catalog.gp_acquire_sample_rows\(XXX, XXX, \'t\'\)/;
 -- end_matchsubs
 DROP DATABASE IF EXISTS testanalyze;
-NOTICE:  database "testanalyze" does not exist, skipping
 CREATE DATABASE testanalyze;
 \c testanalyze
 set client_min_messages='WARNING';
@@ -49,13 +48,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 2: Analyzing a midlevel partition directly should give a WARNING message and should not update any stats for the table.
@@ -101,8 +100,8 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
 (0 rows)
 
 -- Case 3: Analyzing leaf table directly should update the stats only for itself
@@ -147,13 +146,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 4: Analyzing the database with the GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to OFF should only update stats for leaf partition tables
@@ -198,13 +197,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 5: Vacuum analyzing the database should vacuum all the tables for p3_sales and should only update the stats for all leaf partitions of p3_sales
@@ -249,13 +248,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 select count(*) from pg_stat_last_operation pgl, pg_class pgc where pgl.objid=pgc.oid and pgc.relname like 'p3_sales%';
@@ -306,13 +305,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 7: Analyzing a midlevel partition should give a warning if using ROOTPARTITION keyword and should not update any stats.
@@ -358,8 +357,8 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
 (0 rows)
 
 -- Case 8: Analyzing a leaf partition should give a warning if using ROOTPARTITION keyword and should not update any stats.
@@ -405,8 +404,8 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
 (0 rows)
 
 -- Case 9: Analyzing root table with GUC optimizer_analyze_root_partition set to ON and GUC optimizer_analyze_midlevel_partition set to off should update the leaf table and the root table stats.
@@ -451,18 +450,18 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (10 rows)
 
 -- Case 10: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition set to ON and GUC optimizer_analyze_midlevel_partition set to off should update the root table stats only.
@@ -507,13 +506,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 11: Analyzing root table with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to ON should update the stats for root, midlevel and leaf partitions.
@@ -558,28 +557,28 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        | 
- public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        | 
- public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales                           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales                           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |             |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (20 rows)
 
 -- Case 12: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to ON should only update the stats for root partition.
@@ -624,13 +623,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 13: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition and optimizer_analyze_midlevel_partition set to OFF should update the stats for root partition only.
@@ -675,13 +674,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- Case 14: Analyzing root table with GUC optimizer_analyze_root_partition set to OFF and optimizer_analyze_midlevel_partition set to On should update the stats for midlevel and leaf partition only.
@@ -726,23 +725,23 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname |             tablename              | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------------------------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales_1_prt_2                   | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2                   | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2           | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | day     | f         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | id      | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | month   | f         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | region  | f         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales_1_prt_2_2_prt_2_3_prt_usa | year    | f         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (15 rows)
 
 -- Case 15: Analyzing root table using ROOTPARTITION keyword with GUC optimizer_analyze_root_partition set to OFF and optimizer_analyze_midlevel_partition set to ON should only update the stats for root only.
@@ -787,13 +786,13 @@ select relname, reltuples, relpages from pg_class where relname like 'p3_sales%'
 (15 rows)
 
 select * from pg_stats where tablename like 'p3_sales%' order by tablename, attname;
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        | 
- public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | p3_sales  | day     | t         |         0 |         4 |       -0.5 | {20}             | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | id      | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | month   | t         |         0 |         4 |       -0.5 | {1}              | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | region  | t         |         0 |         4 |       -0.5 | {usa}            | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
+ public     | p3_sales  | year    | t         |         0 |         4 |       -0.5 | {2002}           | {1}               |                  |           1 |                   |                        |                      |                        |                  | 
 (5 rows)
 
 -- start_ignore
@@ -992,26 +991,26 @@ SELECT relpages, reltuples FROM pg_class WHERE relname = 'ana_c2';
 
 -- Check pg_stats entries
 SELECT * FROM pg_stats WHERE tablename = 'ana_parent';
- schemaname | tablename  | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+------------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------
- public     | ana_parent | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |  0.38961038 |                   |                        | 
+ schemaname | tablename  | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+------------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | ana_parent | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |  0.38961038 |                   |                        |                      |                        |                  | 
 (1 row)
 
 SELECT * FROM pg_stats WHERE tablename = 'ana_c1';
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------
- public     | ana_c1    | aa      | f         |         0 |         4 |          -1 |                  |                   | {1,2,3,4,5,6,7,8,9,10}                            |   0.6727273 |                   |                        | 
- public     | ana_c1    | bb      | f         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        | 
- public     | ana_c1    | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |  0.38961038 |                   |                        | 
- public     | ana_c1    | bb      | t         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct  | most_common_vals | most_common_freqs |                 histogram_bounds                  | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+-------------+------------------+-------------------+---------------------------------------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | ana_c1    | aa      | f         |         0 |         4 |          -1 |                  |                   | {1,2,3,4,5,6,7,8,9,10}                            |   0.6727273 |                   |                        |                      |                        |                  | 
+ public     | ana_c1    | bb      | f         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        |                      |                        |                  | 
+ public     | ana_c1    | aa      | t         |         0 |         4 | -0.95238096 | {10}             | {0.0952381}       | {1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20} |  0.38961038 |                   |                        |                      |                        |                  | 
+ public     | ana_c1    | bb      | t         |         0 |         3 |           1 | {bb}             | {1}               |                                                   |           1 |                   |                        |                      |                        |                  | 
 (4 rows)
 
 SELECT * FROM pg_stats WHERE tablename = 'ana_c2';
- schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs |          histogram_bounds          | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------------------------+-------------+-------------------+------------------------+----------------------
- public     | ana_c2    | aa      | f         |         0 |         4 |         -1 |                  |                   | {10,11,12,13,14,15,16,17,18,19,20} |  -0.3272727 |                   |                        | 
- public     | ana_c2    | bb      | f         |         0 |         3 |          1 | {bb}             | {1}               |                                    |           1 |                   |                        | 
- public     | ana_c2    | cc      | f         |         0 |         3 |          1 | {cc}             | {1}               |                                    |           1 |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs |          histogram_bounds          | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | ana_c2    | aa      | f         |         0 |         4 |         -1 |                  |                   | {10,11,12,13,14,15,16,17,18,19,20} |  -0.3272727 |                   |                        |                      |                        |                  | 
+ public     | ana_c2    | bb      | f         |         0 |         3 |          1 | {bb}             | {1}               |                                    |           1 |                   |                        |                      |                        |                  | 
+ public     | ana_c2    | cc      | f         |         0 |         3 |          1 | {cc}             | {1}               |                                    |           1 |                   |                        |                      |                        |                  | 
 (3 rows)
 
 -- Analyzing root table using ROOTPARTITION keyword on a column data type with no equality operator.
@@ -1021,11 +1020,11 @@ insert into no_eqop select i, i % 5 + 1, NULL from generate_series(1, 1000)i;
 insert into no_eqop select NULL, i % 5 + 1, '<foo>bar</foo>'::xml from generate_series(1, 1000)i;
 analyze verbose rootpartition no_eqop(c);
 INFO:  analyzing "public.no_eqop" inheritance tree
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(22385, 10000, 't');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(83806, 10000, 't');
 select * from pg_stats where tablename = 'no_eqop';
- schemaname | tablename | attname | inherited | null_frac  | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+------------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | no_eqop   | c       | t         | 0.33333334 |        15 |          0 |                  |                   |                  |             |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac  | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+------------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | no_eqop   | c       | t         | 0.33333334 |        15 |          0 |                  |                   |                  |             |                   |                        |                      |                        |                  | 
 (1 row)
 
 analyze no_eqop(c);
@@ -1033,9 +1032,9 @@ analyze no_eqop(c);
 analyze verbose rootpartition no_eqop(c);
 INFO:  analyzing "public.no_eqop" inheritance tree
 select * from pg_stats where tablename = 'no_eqop';
- schemaname | tablename | attname | inherited | null_frac  | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-----------+---------+-----------+------------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | no_eqop   | c       | t         | 0.33333334 |        15 |          0 |                  |                   |                  |             |                   |                        | 
+ schemaname | tablename | attname | inherited | null_frac  | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-----------+---------+-----------+------------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | no_eqop   | c       | t         | 0.33333334 |        15 |          0 |                  |                   |                  |             |                   |                        |                      |                        |                  | 
 (1 row)
 
 -- Issue 14644 keep catalog inconsistency of relhassubclass after analyze

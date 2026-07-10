@@ -17,8 +17,8 @@ select * FROM ( SELECT 'COL1' TBLNM FROM cte1) A LEFT JOIN cte2 C ON A.TBLNM=C.T
  Hash Left Join  (cost=10447.13..11048.44 rows=48100 width=72)
    Hash Cond: (('COL1'::text) = ('COL1'::text))
    ->  Gather Motion 1:1  (slice1; segments: 1)  (cost=5163.43..5163.43 rows=48100 width=32)
-         ->  Subquery Scan on cte1  (cost=4321.68..5163.43 rows=48100 width=32)
-               ->  WindowAgg  (cost=4321.68..5163.43 rows=48100 width=46)
+         ->  Subquery Scan on cte1  (cost=4321.69..5163.43 rows=48100 width=32)
+               ->  WindowAgg  (cost=4321.69..5163.43 rows=48100 width=46)
                      Partition By: with_test1.i
                      ->  Sort  (cost=4321.68..4441.93 rows=48100 width=38)
                            Sort Key: with_test1.i
@@ -26,8 +26,8 @@ select * FROM ( SELECT 'COL1' TBLNM FROM cte1) A LEFT JOIN cte2 C ON A.TBLNM=C.T
    ->  Hash  (cost=5283.69..5283.69 rows=1 width=40)
          ->  Aggregate  (cost=5283.68..5283.69 rows=1 width=40)
                ->  Gather Motion 1:1  (slice2; segments: 1)  (cost=5163.43..5163.43 rows=48100 width=0)
-                     ->  Subquery Scan on cte1_1  (cost=4321.68..5163.43 rows=48100 width=0)
-                           ->  WindowAgg  (cost=4321.68..5163.43 rows=48100 width=46)
+                     ->  Subquery Scan on cte1_1  (cost=4321.69..5163.43 rows=48100 width=0)
+                           ->  WindowAgg  (cost=4321.69..5163.43 rows=48100 width=46)
                                  Partition By: with_test1_1.i
                                  ->  Sort  (cost=4321.68..4441.93 rows=48100 width=38)
                                        Sort Key: with_test1_1.i
@@ -205,10 +205,10 @@ insert into foo values (1,'aaa');
 insert into foo values (2,'bbb');
 -- fail
 insert into foo values (1,'ccc');
-ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg0 172.17.0.2:7002 pid=65932)
+ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg1 172.17.0.4:7003 pid=1859523)
 DETAIL:  Key (id)=(1) already exists.
 insert into foo values (3,'aaa');
-ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg0 172.17.0.2:7002 pid=65932)
+ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg2 172.17.0.4:7004 pid=1859525)
 DETAIL:  Key (name)=(aaa) already exists.
 drop table if exists foo;
 --
@@ -224,7 +224,6 @@ CREATE TABLE parent (
 CREATE TABLE child (like parent) distributed replicated;
 CREATE TABLE child1 (like parent) DISTRIBUTED BY (name);
 CREATE TABLE child2 (like parent);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- should be replicated table
 \d child
                   Table "rpt.child"
@@ -243,7 +242,6 @@ Distributed Replicated
  name     | text    |           |          | 
  age      | integer |           |          | 
  location | point   |           |          | 
-Distributed by: (name)
 
 -- should be replicated table
 \d child2
@@ -308,15 +306,13 @@ drop table if exists bar;
 -- CTAS from partition table table
 create table foo as select i as c1, i as c2
 from generate_series(1,3) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar as select * from foo distributed replicated;
 select * from bar;
  c1 | c2 
 ----+----
+  1 |  1
   2 |  2
   3 |  3
-  1 |  1
 (3 rows)
 
 drop table if exists foo;
@@ -324,8 +320,6 @@ drop table if exists bar;
 -- CTAS from singleQE 
 create table foo as select i as c1, i as c2
 from generate_series(1,3) i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from foo;
  c1 | c2 
 ----+----
@@ -396,7 +390,6 @@ alter table bar1 set distributed replicated;
 --------+---------+-----------+----------+---------
  x      | integer |           |          | 
  y      | integer |           |          | 
-Distributed by: (x)
 
 \d foo1
                  Table "rpt.foo1"
@@ -426,31 +419,31 @@ Distributed Replicated
 select * from foo;
  x  | y  
 ----+----
+  5 |  5
+  6 |  6
+  9 |  9
+ 10 | 10
   2 |  2
   3 |  3
   4 |  4
   7 |  7
   8 |  8
   1 |  1
-  5 |  5
-  6 |  6
-  9 |  9
- 10 | 10
 (10 rows)
 
 select * from foo1;
  x  | y  
 ----+----
-  3 |  3
-  4 |  4
   5 |  5
-  8 |  8
   7 |  7
-  9 |  9
- 10 | 10
   1 |  1
   2 |  2
+  4 |  4
   6 |  6
+  3 |  3
+  8 |  8
+  9 |  9
+ 10 | 10
 (10 rows)
 
 select * from bar;
@@ -471,16 +464,16 @@ select * from bar;
 select * from bar1;
  x  | y  
 ----+----
-  4 |  4
+  3 |  3
+  6 |  6
   7 |  7
+  1 |  1
+  4 |  4
+  9 |  9
   2 |  2
   5 |  5
   8 |  8
  10 | 10
-  1 |  1
-  3 |  3
-  6 |  6
-  9 |  9
 (10 rows)
 
 -- alter back
@@ -511,7 +504,6 @@ Distributed Replicated
 --------+---------+-----------+----------+---------
  x      | integer |           |          | 
  y      | integer |           |          | 
-Distributed by: (x)
 
 \d bar1
                  Table "rpt.bar1"
@@ -540,27 +532,27 @@ select * from foo;
 select * from foo1;
  x  | y  
 ----+----
-  3 |  3
-  4 |  4
   5 |  5
-  8 |  8
-  1 |  1
-  2 |  2
-  6 |  6
   7 |  7
+  3 |  3
+  8 |  8
   9 |  9
  10 | 10
+  1 |  1
+  2 |  2
+  4 |  4
+  6 |  6
 (10 rows)
 
 select * from bar;
  x  | y  
 ----+----
+  1 |  1
   2 |  2
   3 |  3
   4 |  4
   7 |  7
   8 |  8
-  1 |  1
   5 |  5
   6 |  6
   9 |  9
@@ -570,16 +562,16 @@ select * from bar;
 select * from bar1;
  x  | y  
 ----+----
-  2 |  2
-  4 |  4
-  7 |  7
+  1 |  1
   5 |  5
+  3 |  3
+  4 |  4
+  2 |  2
+  6 |  6
+  7 |  7
+  9 |  9
   8 |  8
  10 | 10
-  1 |  1
-  6 |  6
-  9 |  9
-  3 |  3
 (10 rows)
 
 drop table if exists foo;
@@ -591,8 +583,6 @@ drop table if exists bar1;
 ---------
 create table foo(x int, y int) distributed replicated;
 create table bar(x int, y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo values (1, 1), (2, 1);
 insert into bar values (1, 2), (2, 2);
 update foo set y = 2 where y = 1;
@@ -690,8 +680,6 @@ select * from gp_dist_random('foo');
 -- gp_segment_id is ambiguous for replicated table, it's been disabled now.
 create table baz (c1 int, c2 int) distributed replicated;
 create table qux (c1 int, c2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select gp_segment_id from baz;
 ERROR:  column "gp_segment_id" does not exist
 LINE 1: select gp_segment_id from baz;
@@ -766,8 +754,6 @@ select min(x) from minmaxtest;
 CREATE TABLE foopart (a int4, b int4) DISTRIBUTED REPLICATED PARTITION BY RANGE (a) (START (1) END (10));
 ERROR:  PARTITION BY clause cannot be used with DISTRIBUTED REPLICATED clause
 CREATE TABLE foopart (a int4, b int4) PARTITION BY RANGE (a) (START (1) END (10)) ;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should fail
 ALTER TABLE foopart SET DISTRIBUTED REPLICATED;
 ERROR:  can't set the distribution policy of a partition table to REPLICATED
@@ -888,9 +874,9 @@ explain (costs off, verbose) select * from t_hashdist left join t_replicate_vola
    Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
    ->  Nested Loop Left Join
          Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
-         Join Filter: ((SubPlan 1))
+         Join Filter: ((ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1)))
          ->  Seq Scan on rpt.t_hashdist
-               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, (SubPlan 1)
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, (ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1))
                SubPlan 1
                  ->  Materialize
                        Output: (random())
@@ -903,7 +889,7 @@ explain (costs off, verbose) select * from t_hashdist left join t_replicate_vola
                ->  Seq Scan on rpt.t_replicate_volatile
                      Output: t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', enable_seqscan = 'off'
+ Settings: enable_seqscan = 'off'
 (20 rows)
 
 -- targetlist
@@ -1037,17 +1023,17 @@ explain (costs off) create table rpt_ctas as select a from generate_series(1, 10
 
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
-ERROR:  could not devise a plan (cdbpath.c:2657)
+ERROR:  could not devise a plan (cdbpath.c:2776)
 explain (costs off) update t_replicate_volatile set a = 1 from t_replicate_volatile x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2657)
+ERROR:  could not devise a plan (cdbpath.c:2776)
 explain (costs off) update t_replicate_volatile set a = 1 from t_hashdist x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2657)
+ERROR:  could not devise a plan (cdbpath.c:2776)
 explain (costs off) delete from t_replicate_volatile where a < random();
-ERROR:  could not devise a plan (cdbpath.c:2657)
+ERROR:  could not devise a plan (cdbpath.c:2776)
 explain (costs off) delete from t_replicate_volatile using t_replicate_volatile x where t_replicate_volatile.a + x.b < random();
-ERROR:  could not devise a plan (cdbpath.c:2657)
+ERROR:  could not devise a plan (cdbpath.c:2776)
 explain (costs off) update t_replicate_volatile set a = random();
-ERROR:  could not devise a plan. (cdbpath.c:2454)
+ERROR:  could not devise a plan. (cdbpath.c:2573)
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
                                    QUERY PLAN                                    
@@ -1213,8 +1199,8 @@ explain select c from rep_tab where c in (select distinct a from dist_tab);
 select c from rep_tab where c in (select distinct a from dist_tab);
  c 
 ---
- 2
  1
+ 2
 (2 rows)
 
 -- Table	Side		Derives

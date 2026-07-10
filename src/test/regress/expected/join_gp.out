@@ -15,27 +15,25 @@ create table nhtest (i numeric(10, 2)) distributed by (i);
 insert into nhtest values(100000.22);
 insert into nhtest values(300000.19);
 explain select * from nhtest a join nhtest b using (i);
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.02..2.07 rows=2 width=11)
-   ->  Hash Join  (cost=1.02..2.07 rows=2 width=11)
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=567.25..155362.25 rows=5055210 width=16)
+   ->  Hash Join  (cost=567.25..87959.45 rows=1685070 width=16)
          Hash Cond: (a.i = b.i)
-         ->  Seq Scan on nhtest a  (cost=0.00..1.01 rows=1 width=11)
-         ->  Hash  (cost=1.01..1.01 rows=1 width=11)
-               ->  Seq Scan on nhtest b  (cost=0.00..1.01 rows=1 width=11)
- Settings:  enable_hashjoin=on; enable_mergejoin=off; enable_nestloop=off
+         ->  Seq Scan on nhtest a  (cost=0.00..271.00 rows=23700 width=16)
+         ->  Hash  (cost=271.00..271.00 rows=23700 width=16)
+               ->  Seq Scan on nhtest b  (cost=0.00..271.00 rows=23700 width=16)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 select * from nhtest a join nhtest b using (i);
      i     
 -----------
- 300000.19
  100000.22
+ 300000.19
 (2 rows)
 
 create temp table l(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into l values (1), (1), (2);
 select * from l l1 join l l2 on l1.a = l2.a left join l l3 on l1.a = l3.a and l1.a = 2 order by 1,2,3;
  a | a | a 
@@ -70,6 +68,7 @@ set enable_mergejoin to on;
 set enable_nestloop to off;
 DROP TABLE IF EXISTS alpha;
 DROP TABLE IF EXISTS theta;
+NOTICE:  table "theta" does not exist, skipping
 CREATE TABLE alpha (i int, j int) distributed by (i);
 CREATE TABLE theta (i int, j char(10000000)) distributed by (i);
 INSERT INTO alpha values (1, 1), (2, 2);
@@ -104,14 +103,14 @@ analyze t2;
 explain select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000008.60..10000000008.61 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000008.60 rows=4 width=0)
-         ->  Nested Loop  (cost=10000000000.00..10000000008.53 rows=2 width=0)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..4.27 rows=1 width=4)
+ Aggregate  (cost=10000000002.92..10000000002.93 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000002.91 rows=3 width=0)
+         ->  Nested Loop  (cost=10000000000.00..10000000002.86 rows=1 width=0)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.44 rows=1 width=4)
                      Hash Key: t1.x
-                     ->  Seq Scan on t1  (cost=0.00..4.25 rows=1 width=4)
+                     ->  Seq Scan on t1  (cost=0.00..1.42 rows=1 width=4)
                            Filter: (x = 100)
-               ->  Seq Scan on t2  (cost=0.00..4.25 rows=1 width=4)
+               ->  Seq Scan on t2  (cost=0.00..1.42 rows=1 width=4)
                      Filter: (x = 100)
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -128,13 +127,13 @@ select count(*) from t1,t2 where t1.x = 100 and t1.x = t2.x;
 explain select * from t1,t2 where t1.x = 100 and t2.x >= t1.x;
                                             QUERY PLAN                                            
 --------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000002.97 rows=3 width=24)
-   ->  Nested Loop  (cost=10000000000.00..10000000002.93 rows=1 width=24)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000002.91 rows=3 width=24)
+   ->  Nested Loop  (cost=10000000000.00..10000000002.87 rows=1 width=24)
          Join Filter: (t2.x >= t1.x)
          ->  Seq Scan on t1  (cost=0.00..1.42 rows=1 width=12)
                Filter: (x = 100)
-         ->  Materialize  (cost=0.00..1.47 rows=3 width=12)
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.46 rows=3 width=12)
+         ->  Materialize  (cost=0.00..1.44 rows=1 width=12)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.44 rows=1 width=12)
                      ->  Seq Scan on t2  (cost=0.00..1.42 rows=1 width=12)
                            Filter: (x >= 100)
  Optimizer: Postgres query optimizer
@@ -153,18 +152,17 @@ set optimizer_segments=2;
 explain select * from t1,t2 where t1.x = 100 and t1.x = t2.y and t1.x <= t2.x;
                                             QUERY PLAN                                            
 --------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..9.14 rows=4 width=24)
-   ->  Nested Loop  (cost=0.00..9.14 rows=2 width=24)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000003.08 rows=3 width=24)
+   ->  Nested Loop  (cost=10000000000.00..10000000003.03 rows=1 width=24)
          Join Filter: (t1.x <= t2.x)
-         ->  Seq Scan on t1  (cost=0.00..4.25 rows=1 width=12)
-               Filter: x = 100
-         ->  Materialize  (cost=0.00..4.85 rows=1 width=12)
-               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..4.79 rows=1 width=12)
-                     ->  Seq Scan on t2  (cost=0.00..4.75 rows=1 width=12)
+         ->  Seq Scan on t1  (cost=0.00..1.42 rows=1 width=12)
+               Filter: (x = 100)
+         ->  Materialize  (cost=0.00..1.61 rows=1 width=12)
+               ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.60 rows=1 width=12)
+                     ->  Seq Scan on t2  (cost=0.00..1.58 rows=1 width=12)
                            Filter: ((100 <= x) AND (y <= x) AND (y = 100))
- Settings:  optimizer=off; optimizer_segments=2
- Optimizer status: Postgres query optimizer
-(11 rows)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 reset optimizer_segments;
 select * from t1,t2 where t1.x = 100 and t1.x = t2.y and t1.x <= t2.x;
@@ -208,18 +206,16 @@ select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c w
      f1      |     f1      
 -------------+-------------
  -2147483647 | -2147483647
-      123456 |      123456
-     -123456 |     -123456
            0 |           0
   2147483647 |  2147483647
+      123456 |      123456
+     -123456 |     -123456
 (5 rows)
 
 -- Same as the last query, but with a partitioned table (which requires a
 -- Result node to do projection of the hash expression, as Append is not
 -- projection-capable)
 create table part4_tbl (f1 int4) partition by range (f1) (start(-1000000) end (1000000) every (1000000));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part4_tbl values
        (-123457), (-123456), (-123455),
        (-1), (0), (1),
@@ -227,8 +223,8 @@ insert into part4_tbl values
 select * from part4_tbl a join part4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
    f1    |   f1    
 ---------+---------
-  123456 |  123456
  -123456 | -123456
+  123456 |  123456
        0 |       0
 (3 rows)
 
@@ -250,18 +246,18 @@ from tjoin1
 left outer join (tjoin2 left outer join tjoin3 on tjoin2.id=tjoin3.id) on tjoin1.id=tjoin3.id;
  id |  t  |  t  
 ----+-----+-----
-  1 | 2-1 | 2-1
-  1 | 2-1 | 1-1
-  1 | 1-1 | 2-1
-  1 | 1-1 | 1-1
-  3 |     | 
-  1 | 2-1 | 2-1
-  1 | 2-1 | 1-1
-  1 | 1-1 | 2-1
-  1 | 1-1 | 1-1
-  3 |     | 
   2 |     | 
   2 |     | 
+  3 |     | 
+  3 |     | 
+  1 | 2-1 | 1-1
+  1 | 2-1 | 1-1
+  1 | 2-1 | 2-1
+  1 | 2-1 | 2-1
+  1 | 1-1 | 1-1
+  1 | 1-1 | 1-1
+  1 | 1-1 | 2-1
+  1 | 1-1 | 2-1
 (12 rows)
 
 set enable_hashjoin to off;
@@ -293,9 +289,9 @@ select count(*) from hjn_test, (select 3 as bar) foo where hjn_test.i = least (f
 select * from int4_tbl a join int4_tbl b on (a.f1 = (select f1 from int4_tbl c where c.f1=b.f1));
      f1      |     f1      
 -------------+-------------
- -2147483647 | -2147483647
-      123456 |      123456
      -123456 |     -123456
+      123456 |      123456
+ -2147483647 | -2147483647
            0 |           0
   2147483647 |  2147483647
 (5 rows)
@@ -313,11 +309,11 @@ create table bar (c int, d int) distributed randomly;
 insert into foo select generate_series(1,10);
 insert into bar select generate_series(1,10);
 explain select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
-                QUERY PLAN
+                QUERY PLAN                
 ------------------------------------------
- Result  (cost=0.00..0.01 rows=1 width=0)
+ Result  (cost=0.00..0.00 rows=0 width=4)
    One-Time Filter: false
- Optimizer status: Postgres query optimizer
+ Optimizer: Postgres query optimizer
 (3 rows)
 
 select a from foo where a<1 and a>1 and not exists (select c from bar where c=a);
@@ -336,10 +332,10 @@ select * from foo where a not in (select c from bar where c <= 5);
  a  | b 
 ----+---
   6 |  
-  7 |  
-  8 |  
   9 |  
  10 |  
+  8 |  
+  7 |  
 (5 rows)
 
 set enable_nestloop to off;
@@ -351,8 +347,6 @@ create table dept
 	pid int,
 	name char(40)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into dept values(3, 0, 'root');
 insert into dept values(4, 3, '2<-1');
 insert into dept values(5, 4, '3<-2<-1');
@@ -471,8 +465,8 @@ insert into test_float2 values(3, 10), (4, 20);
 select t1.id, t1.data, t2.id, t2.data from test_float1 t1, test_float2 t2 where t1.data = t2.data;
  id | data | id | data 
 ----+------+----+------
-  2 |   20 |  4 |   20
   1 |   10 |  3 |   10
+  2 |   20 |  4 |   20
 (2 rows)
 
 -- test int type
@@ -512,9 +506,7 @@ drop schema pred cascade;
 reset search_path;
 -- github issue 5370 cases
 drop table if exists t5370;
-NOTICE:  table "t5370" does not exist, skipping
 drop table if exists t5370_2;
-NOTICE:  table "t5370_2" does not exist, skipping
 create table t5370(id int,name text) distributed by(id);
 insert into t5370 select i,i from  generate_series(1,1000) i;
 create table t5370_2 as select * from t5370 distributed by (id);
@@ -523,16 +515,16 @@ analyze t5370;
 explain select * from t5370 a , t5370_2 b where a.name=b.name;
                                               QUERY PLAN                                               
 -------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=45.50..92.25 rows=1000 width=14)
-   ->  Hash Join  (cost=45.50..92.25 rows=334 width=14)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=15.17..44.08 rows=1000 width=14)
+   ->  Hash Join  (cost=15.17..30.75 rows=333 width=14)
          Hash Cond: (a.name = b.name)
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..33.00 rows=334 width=7)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..11.00 rows=333 width=7)
                Hash Key: a.name
-               ->  Seq Scan on t5370 a  (cost=0.00..13.00 rows=334 width=7)
-         ->  Hash  (cost=33.00..33.00 rows=334 width=7)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..33.00 rows=334 width=7)
+               ->  Seq Scan on t5370 a  (cost=0.00..4.33 rows=333 width=7)
+         ->  Hash  (cost=11.00..11.00 rows=333 width=7)
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..11.00 rows=333 width=7)
                      Hash Key: b.name
-                     ->  Seq Scan on t5370_2 b  (cost=0.00..13.00 rows=334 width=7)
+                     ->  Seq Scan on t5370_2 b  (cost=0.00..4.33 rows=333 width=7)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -686,17 +678,17 @@ select * from t1 left join t2 on (t1.a = t2.a) join t3 on (t1.b = t3.b) where (t
 explain select * from t3 join (select t1.a t1a, t1.b t1b, t1.c t1c, t2.a t2a, t2.b t2b, t2.c t2c from t1 left join t2 on (t1.a = t2.a)) t on (t1a = t3.a) WHERE (t2a IS NULL OR (t1c = t3.a));
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=20.27..37.13 rows=10 width=36)
-   ->  Hash Right Join  (cost=20.27..37.13 rows=4 width=36)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=6.26..12.01 rows=10 width=36)
+   ->  Hash Right Join  (cost=6.26..11.88 rows=3 width=36)
          Hash Cond: (t2.a = t1.a)
          Filter: ((t2.a IS NULL) OR (t1.c = t3.a))
-         ->  Seq Scan on t2  (cost=0.00..12.99 rows=333 width=12)
-         ->  Hash  (cost=20.14..20.14 rows=4 width=24)
-               ->  Hash Join  (cost=2.04..20.14 rows=4 width=24)
+         ->  Seq Scan on t2  (cost=0.00..4.33 rows=333 width=12)
+         ->  Hash  (cost=6.22..6.22 rows=3 width=24)
+               ->  Hash Join  (cost=1.02..6.22 rows=3 width=24)
                      Hash Cond: (t1.a = t3.a)
-                     ->  Seq Scan on t1  (cost=0.00..13.00 rows=334 width=12)
-                     ->  Hash  (cost=2.02..2.02 rows=1 width=12)
-                           ->  Seq Scan on t3  (cost=0.00..2.02 rows=1 width=12)
+                     ->  Seq Scan on t1  (cost=0.00..4.33 rows=333 width=12)
+                     ->  Hash  (cost=1.01..1.01 rows=1 width=12)
+                           ->  Seq Scan on t3  (cost=0.00..1.01 rows=1 width=12)
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -713,38 +705,38 @@ explain select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 lef
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
                                                                        QUERY PLAN                                                                       
 --------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=18.43..24.07 rows=3 width=56)
-   ->  Hash Right Join  (cost=18.43..24.03 rows=1 width=56)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=18.39..24.02 rows=3 width=56)
+   ->  Hash Right Join  (cost=18.39..23.98 rows=1 width=56)
          Hash Cond: (t2_1.a = t1_1.a)
          Filter: ((t2_1.a IS NULL) OR (t1_1.b = t3.b))
          ->  Seq Scan on t2 t2_1  (cost=0.00..4.33 rows=333 width=8)
-         ->  Hash  (cost=18.42..18.42 rows=1 width=48)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=12.81..18.42 rows=1 width=48)
+         ->  Hash  (cost=18.37..18.37 rows=1 width=48)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=12.76..18.37 rows=1 width=48)
                      Hash Key: t1_1.a
-                     ->  Hash Right Join  (cost=12.81..18.40 rows=1 width=48)
+                     ->  Hash Right Join  (cost=12.76..18.35 rows=1 width=48)
                            Hash Cond: (t2.a = t1.a)
                            ->  Seq Scan on t2  (cost=0.00..4.33 rows=333 width=8)
-                           ->  Hash  (cost=12.79..12.79 rows=1 width=40)
-                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=7.48..12.79 rows=1 width=40)
+                           ->  Hash  (cost=12.75..12.75 rows=1 width=40)
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=7.44..12.75 rows=1 width=40)
                                        Hash Key: t1.a
-                                       ->  Hash Join  (cost=7.48..12.77 rows=1 width=40)
+                                       ->  Hash Join  (cost=7.44..12.73 rows=1 width=40)
                                              Hash Cond: (t1.b = t3.b)
-                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=1.09..6.36 rows=3 width=20)
+                                             ->  Redistribute Motion 3:3  (slice4; segments: 3)  (cost=1.06..6.33 rows=3 width=20)
                                                    Hash Key: t1.b
-                                                   ->  Hash Join  (cost=1.09..6.29 rows=3 width=20)
+                                                   ->  Hash Join  (cost=1.06..6.27 rows=3 width=20)
                                                          Hash Cond: (t1.b = t3_1.b)
                                                          ->  Seq Scan on t1  (cost=0.00..4.33 rows=333 width=8)
-                                                         ->  Hash  (cost=1.05..1.05 rows=3 width=12)
-                                                               ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.05 rows=3 width=12)
+                                                         ->  Hash  (cost=1.04..1.04 rows=2 width=12)
+                                                               ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..1.04 rows=2 width=12)
                                                                      ->  Seq Scan on t3 t3_1  (cost=0.00..1.01 rows=1 width=12)
-                                             ->  Hash  (cost=6.36..6.36 rows=3 width=20)
-                                                   ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=1.09..6.36 rows=3 width=20)
+                                             ->  Hash  (cost=6.33..6.33 rows=3 width=20)
+                                                   ->  Redistribute Motion 3:3  (slice6; segments: 3)  (cost=1.06..6.33 rows=3 width=20)
                                                          Hash Key: t3.b
-                                                         ->  Hash Join  (cost=1.09..6.29 rows=3 width=20)
+                                                         ->  Hash Join  (cost=1.06..6.27 rows=3 width=20)
                                                                Hash Cond: (t1_1.b = t3.b)
                                                                ->  Seq Scan on t1 t1_1  (cost=0.00..4.33 rows=333 width=8)
-                                                               ->  Hash  (cost=1.05..1.05 rows=3 width=12)
-                                                                     ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.05 rows=3 width=12)
+                                                               ->  Hash  (cost=1.04..1.04 rows=2 width=12)
+                                                                     ->  Broadcast Motion 3:3  (slice7; segments: 3)  (cost=0.00..1.04 rows=2 width=12)
                                                                            ->  Seq Scan on t3  (cost=0.00..1.01 rows=1 width=12)
  Optimizer: Postgres query optimizer
 (34 rows)
@@ -755,10 +747,10 @@ select * from (select t1.a t1a, t1.b t1b, t2.a t2a, t2.b t2b from t1 left join t
   join t3 t3_1 on tt1.t1b = t3_1.b and (tt1.t2a is NULL OR tt1.t1b = t3.b);
  t1a | t1b | t2a | t2b | a | b | c | t1a | t1b | t2a | t2b | a | b | c 
 -----+-----+-----+-----+---+---+---+-----+-----+-----+-----+---+---+---
-   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
    2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 | 1 | 2 | 3
-   2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 |   | 2 | 2
    2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 | 1 | 2 | 3
+   2 |   2 |   2 |   2 |   | 2 | 2 |   2 |   2 |   2 |   2 |   | 2 | 2
+   2 |   2 |   2 |   2 | 1 | 2 | 3 |   2 |   2 |   2 |   2 |   | 2 | 2
 (4 rows)
 
 -- test different join order enumeration methods
@@ -766,8 +758,8 @@ set optimizer_join_order = query;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
  2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
+ 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
 (2 rows)
 
 set optimizer_join_order = greedy;
@@ -782,24 +774,24 @@ set optimizer_join_order = exhaustive;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
  2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
+ 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
 (2 rows)
 
 set optimizer_join_order = exhaustive2;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
  2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
+ 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
 (2 rows)
 
 reset optimizer_join_order;
 select * from t1 join t2 on t1.a = t2.a join t3 on t1.b = t3.b;
  a | b | c | a | b | c | a | b | c 
 ---+---+---+---+---+---+---+---+---
- 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
  2 | 2 | 2 | 2 | 2 | 2 |   | 2 | 2
+ 2 | 2 | 2 | 2 | 2 | 2 | 1 | 2 | 3
 (2 rows)
 
 drop table t1, t2, t3;
@@ -820,15 +812,15 @@ set enable_seqscan = 0;
 set enable_bitmapscan = 0;
 analyze tenk2;
 explain select tenk1.unique2 >= 0 from tenk1 left join tenk2 on true limit 1;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.32..0.38 rows=1 width=4)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.32..0.38 rows=1 width=4)
-         ->  Limit  (cost=0.32..0.36 rows=1 width=4)
-               ->  Nested Loop Left Join  (cost=0.32..3520104.27 rows=33333334 width=4)
-                     ->  Index Only Scan using tenk1_unique2 on tenk1  (cost=0.16..1650.16 rows=3334 width=4)
-                     ->  Materialize  (cost=0.16..18479.11 rows=10000 width=0)
-                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.16..18329.11 rows=10000 width=0)
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=160661.14..160661.17 rows=1 width=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=160661.14..160661.23 rows=3 width=1)
+         ->  Limit  (cost=160661.14..160661.19 rows=1 width=1)
+               ->  Nested Loop Left Join  (cost=0.32..1606608.56 rows=33333333 width=1)
+                     ->  Index Only Scan using tenk1_unique2 on tenk1  (cost=0.16..590.86 rows=3333 width=4)
+                     ->  Materialize  (cost=0.16..406.81 rows=10000 width=0)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.16..356.81 rows=10000 width=0)
                                  ->  Index Only Scan using tenk2_hundred on tenk2  (cost=0.16..223.47 rows=3333 width=0)
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -891,16 +883,16 @@ explain select * from generate_series(1, 5) g left join trep_join_gp on g = trep
 select * from generate_series(1, 5) g left join trep_join_gp on g = trep_join_gp.c1 join thash_join_gp on true;
  g | c1 | c2 | c1 | c2 
 ---+----+----+----+----
- 1 |  1 |  1 |  1 |  1
- 2 |  2 |  2 |  1 |  1
- 3 |    |    |  1 |  1
- 4 |    |    |  1 |  1
- 5 |    |    |  1 |  1
  1 |  1 |  1 |  2 |  2
  2 |  2 |  2 |  2 |  2
  3 |    |    |  2 |  2
  4 |    |    |  2 |  2
  5 |    |    |  2 |  2
+ 1 |  1 |  1 |  1 |  1
+ 2 |  2 |  2 |  1 |  1
+ 3 |    |    |  1 |  1
+ 4 |    |    |  1 |  1
+ 5 |    |    |  1 |  1
 (10 rows)
 
 -- The following 4 tests are to check that general left join partition, we could redistribute the
@@ -923,11 +915,11 @@ explain select * from generate_series(1, 5) g left join thash_join_gp on g = tha
 select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c1;
  g | c1 | c2 
 ---+----+----
- 2 |  2 |  2
- 3 |    |   
- 4 |    |   
- 1 |  1 |  1
  5 |    |   
+ 1 |  1 |  1
+ 2 |  2 |  2
+ 4 |    |   
+ 3 |    |   
 (5 rows)
 
 explain select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_gp.c2;
@@ -951,8 +943,8 @@ select * from generate_series(1, 5) g left join thash_join_gp on g = thash_join_
 ---+----+----
  5 |    |   
  2 |  2 |  2
- 3 |    |   
  4 |    |   
+ 3 |    |   
  1 |  1 |  1
 (5 rows)
 
@@ -975,11 +967,11 @@ explain select * from generate_series(1, 5) g left join trand_join_gp on g = tra
 select * from generate_series(1, 5) g left join trand_join_gp on g = trand_join_gp.c1;
  g | c1 | c2 
 ---+----+----
+ 5 |    |   
+ 4 |    |   
  2 |    |   
  3 |    |   
- 4 |    |   
  1 |    |   
- 5 |    |   
 (5 rows)
 
 explain select * from generate_series(1, 5) g full join trand_join_gp on g = trand_join_gp.c1;
@@ -1001,11 +993,11 @@ explain select * from generate_series(1, 5) g full join trand_join_gp on g = tra
 select * from generate_series(1, 5) g full join trand_join_gp on g = trand_join_gp.c1;
  g | c1 | c2 
 ---+----+----
+ 5 |    |   
+ 4 |    |   
  2 |    |   
  3 |    |   
- 4 |    |   
  1 |    |   
- 5 |    |   
 (5 rows)
 
 -- The following 3 tests are to check that segmentGeneral left join partition
@@ -1029,23 +1021,23 @@ explain select * from trep_join_gp left join thash_join_gp using (c1);
 select * from trep_join_gp left join thash_join_gp using (c1);
  c1 | c2 | c2 
 ----+----+----
-  1 |  1 |  1
   2 |  2 |  2
+  1 |  1 |  1
 (2 rows)
 
 explain select * from trep_join_gp left join trand_join_gp using (c1);
                                              QUERY PLAN                                             
 ----------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.03..2.20 rows=4 width=12)
-   ->  Hash Left Join  (cost=1.03..2.13 rows=2 width=12)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.04..2.15 rows=3 width=12)
+   ->  Hash Left Join  (cost=1.04..2.11 rows=1 width=12)
          Hash Cond: (trep_join_gp.c1 = trand_join_gp.c1)
-         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.06 rows=2 width=8)
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.05 rows=1 width=8)
                Hash Key: trep_join_gp.c1
                ->  Seq Scan on trep_join_gp  (cost=0.00..1.02 rows=2 width=8)
-         ->  Hash  (cost=1.02..1.02 rows=1 width=8)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.02 rows=1 width=8)
+         ->  Hash  (cost=1.03..1.03 rows=1 width=8)
+               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
                      Hash Key: trand_join_gp.c1
-                     ->  Seq Scan on trand_join_gp  (cost=0.00..1.00 rows=1 width=8)
+                     ->  Seq Scan on trand_join_gp  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1073,8 +1065,8 @@ explain select * from trep1_join_gp join thash_join_gp using (c1);
 select * from trep1_join_gp join thash_join_gp using (c1);
  c1 | c2 | c2 
 ----+----+----
-  1 |  1 |  1
   2 |  2 |  2
+  1 |  1 |  1
 (2 rows)
 
 drop table trep_join_gp;
@@ -1188,19 +1180,19 @@ insert into t2_lateral_limit values (2, 2);
 insert into t2_lateral_limit values (3, 3);
 explain select * from t1_lateral_limit as t1 cross join lateral
 (select ((c).x+t2.b) as n  from t2_lateral_limit as t2 order by n limit 1)s;
-                                                   QUERY PLAN                                                   
-----------------------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000001.06..10000000002.12 rows=4 width=41)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=37)
-         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..1.01 rows=1 width=37)
-   ->  Materialize  (cost=1.06..1.08 rows=1 width=4)
-         ->  Limit  (cost=1.06..1.06 rows=1 width=4)
-               ->  Sort  (cost=1.06..1.06 rows=1 width=4)
+                                                      QUERY PLAN                                                       
+-----------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=10000003406.25..10159073271.08 rows=46700 width=44)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..812.33 rows=46700 width=40)
+         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..189.67 rows=15567 width=40)
+   ->  Materialize  (cost=3406.25..3406.26 rows=1 width=4)
+         ->  Limit  (cost=3406.25..3406.25 rows=1 width=4)
+               ->  Sort  (cost=3406.25..3621.50 rows=86100 width=4)
                      Sort Key: (((t1.c).x + t2.b))
-                     ->  Result  (cost=0.00..1.05 rows=1 width=4)
-                           ->  Materialize  (cost=0.00..1.03 rows=1 width=4)
-                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
-                                       ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..1.01 rows=1 width=4)
+                     ->  Result  (cost=0.00..2975.75 rows=86100 width=4)
+                           ->  Materialize  (cost=0.00..1899.50 rows=86100 width=4)
+                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=4)
+                                       ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..321.00 rows=28700 width=4)
  Optimizer: Postgres query optimizer
 (12 rows)
 
@@ -1253,18 +1245,18 @@ select * from t1_lateral_limit as t1 cross join lateral
 -- may add motions in the subquery's plan).
 explain select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000001.06..10000000002.12 rows=4 width=49)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.03 rows=1 width=37)
-         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..1.01 rows=1 width=37)
-   ->  Materialize  (cost=1.05..1.08 rows=1 width=12)
-         ->  HashAggregate  (cost=1.05..1.07 rows=1 width=12)
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=10000003621.50..10170175612.33 rows=46700000 width=52)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..812.33 rows=46700 width=40)
+         ->  Seq Scan on t1_lateral_limit t1  (cost=0.00..189.67 rows=15567 width=40)
+   ->  Materialize  (cost=3621.50..3639.00 rows=1000 width=12)
+         ->  HashAggregate  (cost=3621.50..3634.00 rows=1000 width=12)
                Group Key: ((t1.c).x + t2.a)
-               ->  Result  (cost=0.00..1.05 rows=1 width=12)
-                     ->  Materialize  (cost=0.00..1.03 rows=1 width=8)
-                           ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=8)
-                                 ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..1.01 rows=1 width=8)
+               ->  Result  (cost=0.00..2975.75 rows=86100 width=12)
+                     ->  Materialize  (cost=0.00..1899.50 rows=86100 width=8)
+                           ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1469.00 rows=86100 width=8)
+                                 ->  Seq Scan on t2_lateral_limit t2  (cost=0.00..321.00 rows=28700 width=8)
  Optimizer: Postgres query optimizer
 (11 rows)
 
@@ -1272,8 +1264,8 @@ select * from t1_lateral_limit t1 cross join lateral
 (select (c).x+t2.a, sum(t2.a+t2.b) from t2_lateral_limit t2 group by (c).x+t2.a)x;
  a | b |   c   | ?column? | sum 
 ---+---+-------+----------+-----
- 1 | 1 | (1,1) |        4 |   6
  1 | 1 | (1,1) |        3 |   4
+ 1 | 1 | (1,1) |        4 |   6
  1 | 2 | (2,2) |        5 |   6
  1 | 2 | (2,2) |        4 |   4
 (4 rows)
@@ -1291,18 +1283,18 @@ inner join lateral
 on true;
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
- Nested Loop  (cost=10000000001.08..10000000003.25 rows=3 width=20)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.04 rows=2 width=12)
-         ->  Seq Scan on t_mylog_issue_8860 ml1  (cost=0.00..1.01 rows=1 width=12)
-   ->  Materialize  (cost=1.08..1.10 rows=1 width=8)
-         ->  Limit  (cost=1.08..1.08 rows=1 width=12)
-               ->  Sort  (cost=1.08..1.08 rows=2 width=12)
+ Nested Loop  (cost=10000002890.33..10225160051.75 rows=77900 width=20)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
+         ->  Seq Scan on t_mylog_issue_8860 ml1  (cost=0.00..293.67 rows=25967 width=12)
+   ->  Materialize  (cost=2890.33..2890.35 rows=1 width=8)
+         ->  Limit  (cost=2890.33..2890.34 rows=1 width=12)
+               ->  Sort  (cost=2890.33..3085.08 rows=77900 width=12)
                      Sort Key: t_mylog_issue_8860.log_date
-                     ->  Result  (cost=0.00..1.07 rows=2 width=12)
+                     ->  Result  (cost=0.00..2500.83 rows=77900 width=12)
                            Filter: ((t_mylog_issue_8860.log_date > ml1.log_date) AND (t_mylog_issue_8860.myid = ml1.myid))
-                           ->  Materialize  (cost=0.00..1.05 rows=2 width=12)
-                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1.04 rows=2 width=12)
-                                       ->  Seq Scan on t_mylog_issue_8860  (cost=0.00..1.01 rows=1 width=12)
+                           ->  Materialize  (cost=0.00..1721.83 rows=77900 width=12)
+                                 ->  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1332.33 rows=77900 width=12)
+                                       ->  Seq Scan on t_mylog_issue_8860  (cost=0.00..293.67 rows=25967 width=12)
  Optimizer: Postgres query optimizer
 (13 rows)
 
@@ -1313,8 +1305,8 @@ inner join lateral
 on true;
  myid |          first_date          |          next_date           
 ------+------------------------------+------------------------------
-    2 | Sun Jan 02 01:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
     1 | Sun Jan 02 02:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
+    2 | Sun Jan 02 01:04:00 2000 PST | Sun Jan 02 03:04:00 2000 PST
 (2 rows)
 
 -- test prefetch join qual
@@ -1327,11 +1319,7 @@ set Test_print_prefetch_joinqual = true;
 -- prefetch join qual is only set correct for planner
 set optimizer = off;
 create table t1_test_pretch_join_qual(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table t2_test_pretch_join_qual(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- the following plan contains redistribute motion in both inner and outer plan
 -- the join qual is t1.c > t2.c, it contains no motion, should not prefetch
 explain (costs off) select * from t1_test_pretch_join_qual t1 join t2_test_pretch_join_qual t2
@@ -1353,8 +1341,6 @@ on t1.b = t2.b and t1.c > t2.c;
 (12 rows)
 
 create table t3_test_pretch_join_qual(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- the following plan contains motion in both outer plan and join qual,
 -- so we should prefetch join qual
 explain (costs off) select * from t1_test_pretch_join_qual t1 join t2_test_pretch_join_qual t2
@@ -1365,7 +1351,7 @@ NOTICE:  prefetch join qual in slice 0 of plannode 1
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
          Hash Cond: (t1.b = t2.b)
-         Join Filter: (SubPlan 1)
+         Join Filter: (ANY (t1.a > (SubPlan 1).col1))
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: t1.b
                ->  Seq Scan on t1_test_pretch_join_qual t1
@@ -1392,7 +1378,6 @@ reset optimizer;
 -- enought. The following case would SegFault before because
 -- the indexpath's orderby clause contains outerParams.
 create table gist_tbl_github9733 (b box, p point, c circle);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 insert into gist_tbl_github9733
 select box(point(0.05*i, 0.05*i), point(0.05*i, 0.05*i)),
        point(0.05*i, 0.05*i),
@@ -1409,7 +1394,7 @@ select p from
           (box(point(0.8,0.8), point(1.0,1.0)))) as v(bb)
 cross join lateral
   (select p from gist_tbl_github9733 where p <@ bb order by p <-> bb[0] limit 2) ss;
-ERROR:  could not devise a query plan for the given query (pathnode.c:265)
+ERROR:  could not devise a query plan for the given query (pathnode.c:275)
 reset enable_seqscan;
 explain (costs off)
 select p from
@@ -1455,7 +1440,9 @@ reset enable_bitmapscan;
 --- Test that GUC enable_hashagg takes effect for SEMI join
 ---
 drop table if exists foo;
+NOTICE:  table "foo" does not exist, skipping
 drop table if exists bar;
+NOTICE:  table "bar" does not exist, skipping
 create table foo(a int) distributed by (a);
 create table bar(b int) distributed by (b);
 insert into foo select i from generate_series(1,10)i;
@@ -1484,15 +1471,15 @@ select * from foo where exists (select 1 from bar where foo.a = bar.b);
  a  
 ----
  10
+  6
+  8
+  5
+  7
+  1
   9
   3
-  7
-  4
-  5
-  8
-  1
   2
-  6
+  4
 (10 rows)
 
 set enable_hashagg to off;
@@ -1519,16 +1506,16 @@ select * from foo where exists (select 1 from bar where foo.a = bar.b);
 select * from foo where exists (select 1 from bar where foo.a = bar.b);
  a  
 ----
+  8
+  6
+ 10
+  7
   1
+  5
   2
   3
   4
-  5
-  6
-  7
-  8
   9
- 10
 (10 rows)
 
 reset enable_hashagg;
@@ -1536,12 +1523,8 @@ drop table foo;
 drop table bar;
 -- Fix github issue 10012
 create table fix_param_a (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table fix_param_b (i int UNIQUE, j int);
 create table fix_param_c (i int, j int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into fix_param_a select i, i from generate_series(1,20)i;
 insert into fix_param_b select i, i from generate_series(1,2000)i;
 insert into fix_param_c select i, i from generate_series(1,2000)i;
@@ -1609,8 +1592,6 @@ select * from fix_param_a left join fix_param_b on
 -- correct.
 -- See github issue: https://github.com/greenplum-db/gpdb/issues/10315
 create table t_issue_10315 ( id1 int, id2 int );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t_issue_10315 select i,i from generate_series(1, 2)i;
 insert into t_issue_10315 select i,null from generate_series(1, 2)i;
 insert into t_issue_10315 select null,i from generate_series(1, 2)i;
@@ -1623,10 +1604,10 @@ full join ( select r.id1, r.id2 from t_issue_10315 r group by r.id1, r.id2 ) tq_
 on (coalesce(t.id1) = tq_all.id1  and t.id2 = tq_all.id2) ;
  id1 | id2 | id1 | id2 | id1 | id2 
 -----+-----+-----+-----+-----+-----
-   2 |   2 |   2 |   2 |   2 |   2
-   2 |     |     |     |     |    
-     |   1 |     |     |     |    
      |   2 |     |     |     |    
+   2 |     |     |     |     |    
+   2 |   2 |   2 |   2 |   2 |   2
+     |   1 |     |     |     |    
      |     |     |   2 |     |    
      |     |     |   1 |     |    
      |     |   2 |     |     |    
