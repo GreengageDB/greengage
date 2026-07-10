@@ -48,6 +48,7 @@
 #include "utils/resource_manager.h"
 #include "funcapi.h"
 #include "access/xact.h"
+#include "access/xlog.h"		/* RecoveryInProgress */
 #include "port/atomics.h"
 #include "postmaster/backoff.h"
 #include "pg_trace.h"
@@ -615,6 +616,11 @@ BackoffBackendTickExpired(void)
 		|| !IsResQueueEnabled()
 		|| !gp_enable_resqueue_priority
 		|| !IsUnderPostmaster
+		|| RecoveryInProgress()	/* mirror/standby WAL replay has no backoff
+								 * entry (its startup process runs as a segment
+								 * backend but MyProcNumber is outside the backoff
+								 * array); never do resource-queue backoff while
+								 * replaying WAL */
 		|| (MyProcNumber == INVALID_PROC_NUMBER)
 		|| proc_exit_inprogress
 		|| ProcDiePending		/* Proc is dying */
