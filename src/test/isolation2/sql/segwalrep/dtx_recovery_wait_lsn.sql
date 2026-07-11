@@ -26,6 +26,12 @@
 
 -- stop mirror
 3: SELECT pg_ctl(datadir, 'stop', 'immediate') FROM gp_segment_configuration WHERE content=0 AND role = 'm';
+-- Keep a background session connected so we can wait for the coordinator to
+-- finish terminating its backends before the validation sessions connect
+-- (otherwise a fresh session may connect during the panic-reap window and get
+-- killed by "terminating any other active server processes").  This is started
+-- before arming the panic so its own query does not trip the one-shot fault.
+5&: select wait_till_master_shutsdown();
 -- trigger master reset
 3: select gp_inject_fault('exec_simple_query_start', 'panic', current_setting('gp_dbid')::smallint);
 -- verify master panic happens. The PANIC message does not emit sometimes so
@@ -35,6 +41,9 @@
 -- s/PANIC:  fault triggered, fault name:'exec_simple_query_start' fault type:'panic'\n//
 -- end_matchsubs
 3: select 1;
+-- Join the barrier: the coordinator has now begun its reset, so the sessions
+-- below connect into the refuse-and-retry window rather than racing the reap.
+5<:
 
 -- wait for master finish crash recovery
 -1U: select wait_until_standby_in_state('streaming');

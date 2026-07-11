@@ -417,7 +417,12 @@ class SQLIsolationExecutor(object):
                         break
                     elif (("the database system is starting up" in str(e) or
                          "the database system is resetting" in str(e) or
-                         "the database system is in recovery mode" in str(e)) and
+                         "the database system is in recovery mode" in str(e) or
+                         # A standby being promoted (hot_standby off) briefly returns
+                         # CAC_NOTCONSISTENT between the end-of-recovery mirror-ready
+                         # reset and PM_RUN; retry until it finishes promoting.  Note
+                         # this does NOT match "not yet accepting connections".
+                         "the database system is not accepting connections" in str(e)) and
                         retry > 1):
                         retry -= 1
                         time.sleep(0.1)
