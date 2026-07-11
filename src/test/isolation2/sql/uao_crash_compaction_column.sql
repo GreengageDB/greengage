@@ -92,9 +92,18 @@
 2:INSERT INTO crash_master_before_cleanup_phase SELECT i AS a, 1 AS b, 'hello world' AS c FROM generate_series(1, 10) AS i;
 2:DELETE FROM crash_master_before_cleanup_phase WHERE a < 4;
 
--- inject panic fault 
+-- inject panic fault
 2:SELECT gp_inject_fault('compaction_before_cleanup_phase', 'panic', '', '', 'crash_master_before_cleanup_phase', 1, -1, 0, 1);
+-- Keep a background session connected to the coordinator until it shuts down, so
+-- we can deterministically wait for the panic to be reaped and crash recovery to
+-- begin.  Without this barrier, the fresh validation session below can connect
+-- during the panic-reap window (which is wide when the panicking backend writes
+-- a large core dump) and then get killed by the postmaster's "terminating any
+-- other active server processes", making the test flaky.
+7&:SELECT wait_till_master_shutsdown();
 2:VACUUM crash_master_before_cleanup_phase;
+-- Join back to know the coordinator has begun postmaster reset before validating.
+7<:
 
 -- reset faults as protection incase tests failed and panic didn't happen
 4:SELECT gp_inject_fault('compaction_before_cleanup_phase', 'reset', 1);
