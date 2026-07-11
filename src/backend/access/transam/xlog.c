@@ -5525,6 +5525,16 @@ UpdateCatalogForStandbyPromotion(void)
 	 */
 	InitBufferPoolAccess();
 
+	/*
+	 * This process came up through InitAuxiliaryProcess (not InitProcess), so
+	 * unlike a normal backend its MyProc->vxid.procNumber was never set to
+	 * MyProcNumber (see InitProcess() in proc.c).  StartTransactionCommand()
+	 * below reaches VirtualXactLockTableInsert(), which asserts
+	 * MyProc->vxid.procNumber == MyProcNumber, so initialize it here before
+	 * starting a transaction.
+	 */
+	MyProc->vxid.procNumber = MyProcNumber;
+
 	/* Start transaction locally */
 	old_role = Gp_role;
 	Gp_role = GP_ROLE_UTILITY;
