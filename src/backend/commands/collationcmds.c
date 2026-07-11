@@ -661,7 +661,8 @@ cmpaliases(const void *a, const void *b)
 #endif							/* READ_LOCALE_A_OUTPUT */
 
 static void
-DispatchCollationCreate(char *alias, char *locale, Oid nspid, int encoding)
+DispatchCollationCreate(char *alias, char *locale, Oid nspid, int encoding,
+						const char *provider)
 {
 	Assert(Gp_role == GP_ROLE_DISPATCH);
 
@@ -680,6 +681,23 @@ DispatchCollationCreate(char *alias, char *locale, Oid nspid, int encoding)
 	defstring->arg = (Node*) makeString(locale);
 
 	parameters = lappend(parameters, defstring);
+
+	/*
+	 * GPDB: for a non-default provider (e.g. ICU), the segments must be told
+	 * to use the same provider as the coordinator.  Otherwise "locale" would
+	 * be interpreted with the database's default provider (libc) and the
+	 * dispatched collation would diverge from the one created here.
+	 */
+	if (provider != NULL)
+	{
+		DefElem *provstring = makeNode(DefElem);
+
+		provstring->defname = "provider";
+		provstring->defaction = DEFELEM_UNSPEC;
+		provstring->arg = (Node *) makeString(pstrdup(provider));
+
+		parameters = lappend(parameters, provstring);
+	}
 
 	DefineStmt * stmt = makeNode(DefineStmt);
 	stmt->kind = OBJECT_COLLATION;
@@ -817,7 +835,7 @@ create_collation_from_locale(const char *locale, int nspid,
 	if (OidIsValid(collid))
 	{
 		/* GPDB: dispatch the newly created collation to the segments */
-		DispatchCollationCreate((char *) locale, (char *) locale, nspid, enc);
+		DispatchCollationCreate((char *) locale, (char *) locale, nspid, enc, NULL);
 
 		(*ncreatedp)++;
 
@@ -1031,7 +1049,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 									 true, true);
 			if (OidIsValid(collid))
 			{
-				DispatchCollationCreate(alias, locale, nspid, enc);
+				DispatchCollationCreate(alias, locale, nspid, enc, NULL);
 				ncreated++;
 
 				CommandCounterIncrement();
@@ -1067,6 +1085,7 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 		{
 			const char *name;
 			char	   *langtag;
+			char	   *collname;
 			char	   *icucomment;
 			Oid			collid;
 
@@ -1084,7 +1103,9 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 			if (!pg_is_ascii(langtag))
 				continue;
 
-			collid = CollationCreate(psprintf("%s-x-icu", langtag),
+			collname = psprintf("%s-x-icu", langtag);
+
+			collid = CollationCreate(collname,
 									 nspid, GetUserId(),
 									 COLLPROVIDER_ICU, true, -1,
 									 NULL, NULL, langtag, NULL,
@@ -1092,6 +1113,9 @@ pg_import_system_collations(PG_FUNCTION_ARGS)
 									 true, true);
 			if (OidIsValid(collid))
 			{
+				/* GPDB: dispatch the newly created ICU collation to the segments */
+				DispatchCollationCreate(collname, langtag, nspid, -1, "icu");
+
 				ncreated++;
 
 				CommandCounterIncrement();
