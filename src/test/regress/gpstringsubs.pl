@@ -141,7 +141,10 @@ if (1)
 	$psql_str .= $glob_connect
 		if (defined($glob_connect));
 
-	$psql_str .= " -X -t -A -c 'show LC_CTYPE'";
+	# PG17 removed the lc_ctype GUC, so "show LC_CTYPE" now errors.  Read the
+	# per-database ctype instead -- for the connected database this is exactly
+	# what "show LC_CTYPE" used to return.
+	$psql_str .= " -X -t -A -c 'select datctype from pg_database where datname = current_database()'";
 
 	my $syslocale = `$psql_str`;
 	my $syslocaleexp = '\\@gp_syslocale\\@';
