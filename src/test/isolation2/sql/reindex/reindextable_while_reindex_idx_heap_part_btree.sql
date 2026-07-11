@@ -19,12 +19,12 @@ DELETE FROM reindex_crtab_part_heap_btree  WHERE id < 128;
 1: select distinct count(distinct relfilenode), relname from old_relfilenodes group by dbid, relname;
 
 select gp_inject_fault('reindex_relation', 'suspend', '' /* DDL */, '' /* database name */,
-    '' /* table name */, 1 /* start occurrence */, 1 /* end_occurrence */, 0 /* extra_arg */,
+    '' /* table name */, 2 /* start occurrence */, 2 /* end_occurrence */, 0 /* extra_arg */,
     dbid, -1 /* any gp_session_id */)
     from gp_segment_configuration where role='p' and content = -1;
 
--- The fault injector should suspend during reindexing of the default partition.
--- Lock of this partition should be held.
+-- Suspend while the default partition's own index lock is held (occurrence 2:
+-- since PG17, reindex_relation() reindexes the TOAST table before the indexes).
 1&: reindex table reindex_crtab_part_heap_btree;
 
 2: select gp_wait_until_triggered_fault('reindex_relation', 1,
