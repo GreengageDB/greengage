@@ -69,10 +69,10 @@ begin a := f1, f1 from onecol; raise notice 'a = %', a; end$$;
 insert into onecol values(array[11]);
 
 do $$ declare a int[];
-begin a := f1 from onecol; raise notice 'a = %', a; end$$;
+begin a := f1 from onecol order by f1; raise notice 'a = %', a; end$$;
 
 do $$ declare a int[];
-begin a := f1 from onecol limit 1; raise notice 'a = %', a; end$$;
+begin a := f1 from onecol order by f1 limit 1; raise notice 'a = %', a; end$$;
 
 do $$ declare a real;
 begin a[1] := 2; raise notice 'a = %', a; end$$;
@@ -144,9 +144,9 @@ insert into array_test_table values(1, 'first'), (2, 'second');
 do $$
 declare tg array_test_table%rowtype[];
 begin
-  tg := array(select array_test_table from array_test_table);
+  tg := array(select array_test_table from array_test_table order by a);
   raise notice '%', tg;
-  tg := array(select row(a,b) from array_test_table);
+  tg := array(select row(a,b) from array_test_table order by a);
   raise notice '%', tg;
 end;
 $$;

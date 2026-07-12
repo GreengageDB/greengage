@@ -40,10 +40,10 @@ CREATE TRIGGER users_delete_trig BEFORE DELETE ON users FOR EACH ROW
 SELECT * FROM users;
  fname  | lname | username | userid 
 --------+-------+----------+--------
- jane   | doe   | j_doe    |      1
  john   | doe   | johnd    |      2
  willem | doe   | w_doe    |      3
  rick   | smith | slash    |      4
+ jane   | doe   | j_doe    |      1
 (4 rows)
 
 -- should fail
@@ -57,20 +57,24 @@ SELECT * FROM users;
   fname  | lname  | username | userid 
 ---------+--------+----------+--------
  jane    | doe    | j_doe    |      1
+ willem  | smith  | w_smith  |      5
+ charles | darwin | beagle   |      6
  john    | doe    | johnd    |      2
  willem  | doe    | w_doe    |      3
  rick    | smith  | slash    |      4
- willem  | smith  | w_smith  |      5
- charles | darwin | beagle   |      6
 (6 rows)
 
 -- dump trigger data
 CREATE TABLE trigger_test
 	(i int, v text );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE trigger_test_generated (
 	i int,
         j int GENERATED ALWAYS AS (i * 2) STORED
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION trigger_data() RETURNS trigger LANGUAGE plpython3u AS $$
 
 if 'relid' in TD:
@@ -102,68 +106,68 @@ BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON trigger_test
 FOR EACH STATEMENT EXECUTE PROCEDURE trigger_data(23,'skidoo');
 ERROR:  Triggers for statements are not yet supported
 insert into trigger_test values(1,'insert');
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => INSERT
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[old] => None
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => INSERT
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[old] => None
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => INSERT  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'v': 'insert'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => INSERT  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'v': 'insert'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 update trigger_test set v = 'update' where i = 1;
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => UPDATE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => {'i': 1, 'v': 'update'}
-NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => UPDATE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => {'i': 1, 'v': 'update'}
-NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => UPDATE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'v': 'update'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => UPDATE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'v': 'update'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 delete from trigger_test;
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => DELETE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => None
-NOTICE:  TD[old] => {'i': 1, 'v': 'update'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => ['23', 'skidoo']
-NOTICE:  TD[event] => DELETE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => None
-NOTICE:  TD[old] => {'i': 1, 'v': 'update'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => DELETE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'v': 'update'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => ['23', 'skidoo']  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => DELETE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'v': 'update'}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 truncate table trigger_test;
 DROP TRIGGER show_trigger_data_trig_stmt on trigger_test;
 ERROR:  trigger "show_trigger_data_trig_stmt" for table "trigger_test" does not exist
@@ -176,72 +180,72 @@ CREATE TRIGGER show_trigger_data_trig_after
 AFTER INSERT OR UPDATE OR DELETE ON trigger_test_generated
 FOR EACH ROW EXECUTE PROCEDURE trigger_data();
 insert into trigger_test_generated (i) values (1);
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => INSERT
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => {'i': 1}
-NOTICE:  TD[old] => None
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => INSERT
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => {'i': 1, 'j': 2}
-NOTICE:  TD[old] => None
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => INSERT  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => INSERT  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 -- GPDB: Fails, updating the distribution key with triggers is not allowed.
 update trigger_test_generated set i = 11 where i = 1;
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 -- try this instead:
 update trigger_test_generated set j = default where i = 1;
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => UPDATE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => {'i': 1}
-NOTICE:  TD[old] => {'i': 1, 'j': 2}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => UPDATE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => {'i': 1, 'j': 2}
-NOTICE:  TD[old] => {'i': 1, 'j': 2}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => UPDATE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => UPDATE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 delete from trigger_test_generated;
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => DELETE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_before
-NOTICE:  TD[new] => None
-NOTICE:  TD[old] => {'i': 1, 'j': 2}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => BEFORE
-NOTICE:  TD[args] => None
-NOTICE:  TD[event] => DELETE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig_after
-NOTICE:  TD[new] => None
-NOTICE:  TD[old] => {'i': 1, 'j': 2}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_generated
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => AFTER
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => DELETE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_before  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => BEFORE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[args] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[event] => DELETE  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[level] => ROW  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[name] => show_trigger_data_trig_after  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[new] => None  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[old] => {'i': 1, 'j': 2}  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[relid] => bogus:12345  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_name] => trigger_test_generated  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[table_schema] => public  (seg1 172.17.0.2:7003 pid=644241)
+NOTICE:  TD[when] => AFTER  (seg1 172.17.0.2:7003 pid=644241)
 DROP TRIGGER show_trigger_data_trig_before ON trigger_test_generated;
 DROP TRIGGER show_trigger_data_trig_after ON trigger_test_generated;
 insert into trigger_test values(1,'insert');
@@ -251,41 +255,11 @@ CREATE VIEW trigger_test_view AS SELECT * FROM trigger_test;
 CREATE TRIGGER show_trigger_data_trig
 INSTEAD OF INSERT OR UPDATE OR DELETE ON trigger_test_view
 FOR EACH ROW EXECUTE PROCEDURE trigger_data(24,'skidoo view');
+ERROR:  INSTEAD OF triggers are not supported in Greenplum
 insert into trigger_test_view values(2,'insert');
-NOTICE:  TD[args] => ['24', 'skidoo view']
-NOTICE:  TD[event] => INSERT
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig
-NOTICE:  TD[new] => {'i': 2, 'v': 'insert'}
-NOTICE:  TD[old] => None
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_view
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => INSTEAD OF
 update trigger_test_view set v = 'update' where i = 1;
-NOTICE:  TD[args] => ['24', 'skidoo view']
-NOTICE:  TD[event] => UPDATE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig
-NOTICE:  TD[new] => {'i': 1, 'v': 'update'}
-NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_view
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => INSTEAD OF
 delete from trigger_test_view;
-NOTICE:  TD[args] => ['24', 'skidoo view']
-NOTICE:  TD[event] => DELETE
-NOTICE:  TD[level] => ROW
-NOTICE:  TD[name] => show_trigger_data_trig
-NOTICE:  TD[new] => None
-NOTICE:  TD[old] => {'i': 1, 'v': 'insert'}
-NOTICE:  TD[relid] => bogus:12345
-NOTICE:  TD[table_name] => trigger_test_view
-NOTICE:  TD[table_schema] => public
-NOTICE:  TD[when] => INSTEAD OF
 DROP FUNCTION trigger_data() CASCADE;
-NOTICE:  drop cascades to trigger show_trigger_data_trig on view trigger_test_view
 --end_ignore
 DROP VIEW trigger_test_view;
 delete from trigger_test;
@@ -302,7 +276,7 @@ CREATE TRIGGER stupid_trigger1
 BEFORE INSERT ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid1();
 INSERT INTO trigger_test VALUES (1, 'one');
-ERROR:  unexpected return value from trigger procedure
+ERROR:  unexpected return value from trigger procedure  (seg1 172.17.0.2:7003 pid=644241)
 DETAIL:  Expected None or a string.
 CONTEXT:  PL/Python function "stupid1"
 DROP TRIGGER stupid_trigger1 ON trigger_test;
@@ -315,7 +289,7 @@ CREATE TRIGGER stupid_trigger2
 BEFORE DELETE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid2();
 DELETE FROM trigger_test WHERE i = 0;
-WARNING:  PL/Python trigger function returned "MODIFY" in a DELETE trigger -- ignored
+WARNING:  PL/Python trigger function returned "MODIFY" in a DELETE trigger -- ignored  (seg1 172.17.0.2:7003 pid=644241)
 DROP TRIGGER stupid_trigger2 ON trigger_test;
 INSERT INTO trigger_test VALUES (0, 'zero');
 -- returning unrecognized string from trigger function
@@ -327,7 +301,7 @@ CREATE TRIGGER stupid_trigger3
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid3();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  unexpected return value from trigger procedure
+ERROR:  unexpected return value from trigger procedure  (seg1 172.17.0.2:7003 pid=644241)
 DETAIL:  Expected None, "OK", "SKIP", or "MODIFY".
 CONTEXT:  PL/Python function "stupid3"
 DROP TRIGGER stupid_trigger3 ON trigger_test;
@@ -340,7 +314,7 @@ CREATE TRIGGER stupid_trigger3
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid3u();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  unexpected return value from trigger procedure
+ERROR:  unexpected return value from trigger procedure  (seg1 172.17.0.2:7003 pid=644241)
 DETAIL:  Expected None, "OK", "SKIP", or "MODIFY".
 CONTEXT:  PL/Python function "stupid3u"
 DROP TRIGGER stupid_trigger3 ON trigger_test;
@@ -354,7 +328,7 @@ CREATE TRIGGER stupid_trigger4
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid4();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  TD["new"] deleted, cannot modify row
+ERROR:  TD["new"] deleted, cannot modify row  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "stupid4"
 DROP TRIGGER stupid_trigger4 ON trigger_test;
@@ -368,7 +342,7 @@ CREATE TRIGGER stupid_trigger5
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid5();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  TD["new"] is not a dictionary
+ERROR:  TD["new"] is not a dictionary  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "stupid5"
 DROP TRIGGER stupid_trigger5 ON trigger_test;
@@ -382,7 +356,7 @@ CREATE TRIGGER stupid_trigger6
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid6();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  TD["new"] dictionary key at ordinal position 0 is not a string
+ERROR:  TD["new"] dictionary key at ordinal position 0 is not a string  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "stupid6"
 DROP TRIGGER stupid_trigger6 ON trigger_test;
@@ -396,7 +370,7 @@ CREATE TRIGGER stupid_trigger7
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid7();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  key "a" found in TD["new"] does not exist as a column in the triggering row
+ERROR:  key "a" found in TD["new"] does not exist as a column in the triggering row  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "stupid7"
 DROP TRIGGER stupid_trigger7 ON trigger_test;
@@ -410,7 +384,7 @@ CREATE TRIGGER stupid_trigger7
 BEFORE UPDATE ON trigger_test
 FOR EACH ROW EXECUTE PROCEDURE stupid7u();
 UPDATE trigger_test SET v = 'null' WHERE i = 0;
-ERROR:  key "a" found in TD["new"] does not exist as a column in the triggering row
+ERROR:  key "a" found in TD["new"] does not exist as a column in the triggering row  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "stupid7u"
 DROP TRIGGER stupid_trigger7 ON trigger_test;
@@ -451,7 +425,8 @@ CREATE FUNCTION set_modif_time() RETURNS trigger AS $$
     TD['new']['modif_time'] = '2010-10-13 21:57:28.930486'
     return 'MODIFY'
 $$ LANGUAGE plpython3u;
-CREATE TABLE pb (a TEXT, modif_time TIMESTAMP(0) WITHOUT TIME ZONE);
+-- Add 'DISTRIBUTED RANDOMLY' to avoid "ERROR:  Cannot parallelize an UPDATE statement that updates the distribution columns"
+CREATE TABLE pb (a TEXT, modif_time TIMESTAMP(0) WITHOUT TIME ZONE) DISTRIBUTED RANDOMLY;
 CREATE TRIGGER set_modif_time BEFORE UPDATE ON pb
   FOR EACH ROW EXECUTE PROCEDURE set_modif_time();
 INSERT INTO pb VALUES ('a', '2010-10-09 21:57:33.930486');
@@ -470,8 +445,12 @@ SELECT * FROM pb;
 
 -- triggers for tables with composite types
 CREATE TABLE comp1 (i integer, j boolean);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TYPE comp2 AS (k integer, l boolean);
 CREATE TABLE composite_trigger_test (f1 comp1, f2 comp2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION composite_trigger_f() RETURNS trigger AS $$
     TD['new']['f1'] = (3, False)
     TD['new']['f2'] = {'k': 7, 'l': 'yes', 'ignored': 10}
@@ -488,6 +467,8 @@ SELECT * FROM composite_trigger_test;
 
 -- triggers with composite type columns (bug #6559)
 CREATE TABLE composite_trigger_noop_test (f1 comp1, f2 comp2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION composite_trigger_noop_f() RETURNS trigger AS $$
     return 'MODIFY'
 $$ LANGUAGE plpython3u;
@@ -499,14 +480,16 @@ INSERT INTO composite_trigger_noop_test VALUES (ROW(NULL, 't'), ROW(1, 'f'));
 SELECT * FROM composite_trigger_noop_test;
   f1   |  f2   
 -------+-------
+ (,t)  | (1,f)
        | 
  (1,f) | 
- (,t)  | (1,f)
 (3 rows)
 
 -- nested composite types
 CREATE TYPE comp3 AS (c1 comp1, c2 comp2, m integer);
 CREATE TABLE composite_trigger_nested_test(c comp3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION composite_trigger_nested_f() RETURNS trigger AS $$
     return 'MODIFY'
 $$ LANGUAGE plpython3u;
@@ -518,8 +501,8 @@ INSERT INTO composite_trigger_nested_test VALUES (ROW(ROW(NULL, 't'), ROW(1, 'f'
 SELECT * FROM composite_trigger_nested_test;
          c         
 -------------------
- 
  ("(1,f)",,3)
+ 
  ("(,t)","(1,f)",)
 (3 rows)
 
@@ -529,7 +512,11 @@ CREATE FUNCTION trig1234() RETURNS trigger LANGUAGE plpython3u AS $$
     return 'MODIFY'
 $$;
 CREATE TABLE a(data text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE b(data int); -- different type conversion
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'data' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TRIGGER a_t BEFORE INSERT ON a FOR EACH ROW EXECUTE PROCEDURE trig1234();
 CREATE TRIGGER b_t BEFORE INSERT ON b FOR EACH ROW EXECUTE PROCEDURE trig1234();
 INSERT INTO a DEFAULT VALUES;
@@ -549,6 +536,8 @@ SELECT * FROM b;
 
 -- check that SQL run in trigger code can see transition tables
 CREATE TABLE transition_table_test (id int, name text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO transition_table_test VALUES (1, 'a');
 CREATE FUNCTION transition_table_test_f() RETURNS trigger LANGUAGE plpython3u AS
 $$
@@ -580,7 +569,7 @@ CREATE TRIGGER generated_test_trigger1 BEFORE INSERT ON trigger_test_generated
 FOR EACH ROW EXECUTE PROCEDURE generated_test_func1();
 TRUNCATE trigger_test_generated;
 INSERT INTO trigger_test_generated (i) VALUES (1);
-ERROR:  cannot set generated column "j"
+ERROR:  cannot set generated column "j"  (seg1 172.17.0.2:7003 pid=644241)
 CONTEXT:  while modifying trigger row
 PL/Python function "generated_test_func1"
 SELECT * FROM trigger_test_generated;
@@ -590,6 +579,8 @@ SELECT * FROM trigger_test_generated;
 
 -- recursive call of a trigger mustn't corrupt TD (bug #18456)
 CREATE TABLE recursive_trigger_test (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION recursive_trigger_func() RETURNS trigger
 LANGUAGE plpython3u
 AS $$
@@ -604,14 +595,12 @@ CREATE TRIGGER recursive_trigger_trig
   AFTER INSERT OR UPDATE ON recursive_trigger_test
   FOR EACH ROW EXECUTE PROCEDURE recursive_trigger_func();
 INSERT INTO recursive_trigger_test VALUES (0, 0);
-NOTICE:  TD[event] => INSERT, expecting INSERT
+NOTICE:  TD[event] => INSERT, expecting INSERT  (seg1 172.17.0.2:7003 pid=644241)
 UPDATE recursive_trigger_test SET a = 11 WHERE b = 0;
-NOTICE:  TD[event] => INSERT, expecting INSERT
-NOTICE:  TD[event] => UPDATE, expecting UPDATE
+ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
 SELECT * FROM recursive_trigger_test;
- a  | b 
-----+---
- 11 | 0
-  1 | 2
-(2 rows)
+ a | b 
+---+---
+ 0 | 0
+(1 row)
 

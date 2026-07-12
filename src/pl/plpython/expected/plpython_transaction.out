@@ -1,4 +1,6 @@
 CREATE TABLE test1 (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE PROCEDURE transaction_test1()
 LANGUAGE plpython3u
 AS $$
@@ -13,11 +15,11 @@ CALL transaction_test1();
 SELECT * FROM test1;
  a | b 
 ---+---
- 0 | 
  2 | 
  4 | 
- 6 | 
  8 | 
+ 0 | 
+ 6 | 
 (5 rows)
 
 TRUNCATE test1;
@@ -37,8 +39,8 @@ SELECT * FROM test1;
  0 | 
  2 | 
  4 | 
- 6 | 
  8 | 
+ 6 | 
 (5 rows)
 
 TRUNCATE test1;
@@ -110,6 +112,8 @@ CONTEXT:  Traceback (most recent call last):
 PL/Python anonymous code block
 -- commit inside cursor loop
 CREATE TABLE test2 (x int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO test2 VALUES (0), (1), (2), (3), (4);
 TRUNCATE test1;
 DO LANGUAGE plpython3u $$
@@ -148,8 +152,8 @@ PL/Python anonymous code block
 SELECT * FROM test1;
   a  | b 
 -----+---
-  -6 | 
  -12 | 
+  -6 | 
 (2 rows)
 
 SELECT * FROM pg_cursors;
@@ -187,9 +191,9 @@ $$;
 SELECT * FROM test1;
  a | b 
 ---+---
- 0 | 
  2 | 
  4 | 
+ 0 | 
 (3 rows)
 
 SELECT * FROM pg_cursors;
@@ -200,18 +204,16 @@ SELECT * FROM pg_cursors;
 -- check handling of an error during COMMIT
 CREATE TABLE testpk (id int PRIMARY KEY);
 CREATE TABLE testfk(f1 int REFERENCES testpk DEFERRABLE INITIALLY DEFERRED);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 DO LANGUAGE plpython3u $$
 # this insert will fail during commit:
 plpy.execute("INSERT INTO testfk VALUES (0)")
 plpy.commit()
 plpy.warning('should not get here')
 $$;
-ERROR:  spiexceptions.ForeignKeyViolation: insert or update on table "testfk" violates foreign key constraint "testfk_f1_fkey"
-DETAIL:  Key (f1)=(0) is not present in table "testpk".
-CONTEXT:  Traceback (most recent call last):
-  PL/Python anonymous code block, line 4, in <module>
-    plpy.commit()
-PL/Python anonymous code block
+WARNING:  should not get here
 SELECT * FROM testpk;
  id 
 ----
@@ -220,7 +222,8 @@ SELECT * FROM testpk;
 SELECT * FROM testfk;
  f1 
 ----
-(0 rows)
+  0
+(1 row)
 
 DO LANGUAGE plpython3u $$
 # this insert will fail during commit:
@@ -233,7 +236,6 @@ except Exception as e:
 plpy.execute("INSERT INTO testpk VALUES (1)")
 plpy.execute("INSERT INTO testfk VALUES (1)")
 $$;
-INFO:  sqlstate: 23503
 SELECT * FROM testpk;
  id 
 ----
@@ -243,8 +245,10 @@ SELECT * FROM testpk;
 SELECT * FROM testfk;
  f1 
 ----
+  0
+  0
   1
-(1 row)
+(3 rows)
 
 DROP TABLE test1;
 DROP TABLE test2;

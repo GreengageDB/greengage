@@ -18,12 +18,16 @@ PL/Perl anonymous code block
 --
 \c -
 CREATE ROLE regress_plperl_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_plperl_user;
 -- this succeeds, since the GUC isn't known yet
 SET SESSION plperl.on_plperl_init = 'test';
 RESET ROLE;
 LOAD 'plperl';
 WARNING:  permission denied to set parameter "plperl.on_plperl_init"
+WARNING:  permission denied to set parameter "plperl.on_plperl_init"  (seg0 172.17.0.2:7002 pid=634274)
+WARNING:  permission denied to set parameter "plperl.on_plperl_init"  (seg2 172.17.0.2:7004 pid=634276)
+WARNING:  permission denied to set parameter "plperl.on_plperl_init"  (seg1 172.17.0.2:7003 pid=634275)
 SHOW plperl.on_plperl_init;
  plperl.on_plperl_init 
 -----------------------

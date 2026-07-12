@@ -131,7 +131,7 @@ return None
 '
 	LANGUAGE plpython3u;
 SELECT invalid_type_reraised('rick');
-ERROR:  plpy.Error: type "test" does not exist
+ERROR:  plpy.Error: type "test" does not exist (plpy_elog.c:128)
 CONTEXT:  Traceback (most recent call last):
   PL/Python function "invalid_type_reraised", line 6, in <module>
     plpy.error(str(ex))
@@ -172,7 +172,7 @@ return "not reached"
 '
 	LANGUAGE plpython3u;
 SELECT nested_error();
-ERROR:  plpy.Error: boom
+ERROR:  plpy.Error: boom (plpy_elog.c:128)
 CONTEXT:  Traceback (most recent call last):
   PL/Python function "nested_error", line 10, in <module>
     fun3()
@@ -454,7 +454,7 @@ CREATE FUNCTION python_error_detail() RETURNS SETOF text AS $$
     yield row['d']
 $$ LANGUAGE plpython3u;
 SELECT python_error_detail();
-ERROR:  error fetching next item from iterator
+ERROR:  function "python_error_detail" error fetching next item from iterator
 DETAIL:  spiexceptions.InvalidDatetimeFormat: invalid value "xy" for "DD"
 CONTEXT:  Traceback (most recent call last):
 PL/Python function "python_error_detail"
