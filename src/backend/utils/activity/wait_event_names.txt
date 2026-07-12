@@ -161,7 +161,7 @@ REPLICATION_ORIGIN_DROP	"Waiting for a replication origin to become inactive so 
 REPLICATION_SLOT_DROP	"Waiting for a replication slot to become inactive so it can be dropped."
 RESTORE_COMMAND	"Waiting for <xref linkend="guc-restore-command"/> to complete."
 SAFE_SNAPSHOT	"Waiting to obtain a valid snapshot for a <literal>READ ONLY DEFERRABLE</literal> transaction."
-SHAREINPUT_SCAN	"Waiting to coordinate a shared input scan between slices."
+SHARE_INPUT_SCAN	"Waiting to coordinate a shared input scan between slices."
 SYNC_REP	"Waiting for confirmation from a remote server during synchronous replication."
 WAL_RECEIVER_EXIT	"Waiting for the WAL receiver to exit."
 WAL_RECEIVER_WAIT_START	"Waiting for startup process to send initial data for streaming replication."

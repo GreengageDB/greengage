@@ -931,7 +931,7 @@ shareinput_reader_waitready(shareinput_Xslice_reference *ref)
 		if (ready)
 			break;
 
-		ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+		ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHARE_INPUT_SCAN);
 	}
 	ConditionVariableCancelSleep();
 
@@ -1017,7 +1017,7 @@ shareinput_writer_waitdone(shareinput_Xslice_reference *ref, int nconsumers)
 			elog(DEBUG1, "SISC WRITER (shareid=%d, slice=%d): waiting for DONE message from %d / %d readers",
 				 ref->share_id, currentSliceId, nconsumers - ndone, nconsumers);
 
-			ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHAREINPUT_SCAN);
+			ConditionVariableSleep(&state->ready_done_cv, WAIT_EVENT_SHARE_INPUT_SCAN);
 
 			continue;
 		}
