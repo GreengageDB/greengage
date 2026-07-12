@@ -6,7 +6,10 @@ EXTENSION = file_fdw
 DATA = file_fdw--1.0.sql
 PGFILEDESC = "file_fdw - foreign data wrapper for files"
 
-REGRESS = file_fdw gp_file_fdw
+# GPDB: the upstream "file_fdw" regress test (sql/file_fdw.sql +
+# expected/file_fdw.out) is not carried in Greengage -- only the Greengage
+# gp_file_fdw variant (from input/output/gp_file_fdw.source) is maintained.
+REGRESS = gp_file_fdw
 
 EXTRA_CLEAN = sql/file_fdw.sql expected/file_fdw.out sql/gp_file_fdw.sql expected/gp_file_fdw.out
 

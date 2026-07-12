@@ -1,6 +1,8 @@
 -- Install a helper function to inject faults, using the fault injection
 -- mechanism built into the server.
-CREATE EXTENSION gp_inject_fault;
+-- IF NOT EXISTS: in a fault-injector-enabled build the regress harness
+-- pre-loads gp_inject_fault via FAULTINJECTOR_OPTS (--load-extension).
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 
 begin;
 -- inject fault of type sleep on all primaries
