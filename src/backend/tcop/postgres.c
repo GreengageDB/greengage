@@ -6026,7 +6026,26 @@ PostgresMain(const char *dbname, const char *username)
 					 * setting it to false on segments is fine.
 					 */
 					if (suid > 0)
+					{
 						SetSessionUserId(suid, false); /* Set the session UserId */
+
+						/*
+						 * PG18's SetSessionUserId() no longer forces the
+						 * effective user IDs to match the session user (it used
+						 * to also set OuterUserId = CurrentUserId = suid and
+						 * clear SetRoleIsActive).  Without that, a stale
+						 * OuterUserId / CurrentUserId left over from a previous
+						 * dispatched statement on this QE (e.g. an earlier SET
+						 * SESSION AUTHORIZATION or SET ROLE) leaks into this
+						 * one -- so e.g. DROP ROLE of that now-reset role fails
+						 * on the segment with "current user cannot be dropped".
+						 * Re-establish the baseline here; the explicit ouid /
+						 * cuid handling below then re-applies any active SET
+						 * ROLE / SET SESSION AUTHORIZATION.
+						 */
+						SetCurrentRoleId(InvalidOid, false); /* OuterUserId = suid, clears SetRoleIsActive */
+						SetUserIdAndContext(suid, false);    /* CurrentUserId = suid */
+					}
 
 					if (ouid > 0 && ouid != GetSessionUserId())
 						SetCurrentRoleId(ouid, false); /* Set the outer UserId */
