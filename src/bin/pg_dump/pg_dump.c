@@ -12769,7 +12769,8 @@ make_array_type_name(const char *typeName, Oid typeNamespace, Archive *fout)
 		arr[i - 1] = '_';
 		if (i + namelen < NAMEDATALEN)
 			strcpy(arr + i, typeName);
-		else {
+		else 
+		{
 			memcpy(arr + i, typeName, NAMEDATALEN - i);
 			/*
 			 * Be aware, that if archive's encoding is passed with --encoding
