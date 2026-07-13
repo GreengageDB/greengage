@@ -1852,6 +1852,11 @@ DefineIndex(Oid tableId,
 
 			stmt->tableSpace = get_tablespace_name(tablespaceId);
 
+			/* GPDB: schema-qualify for the QE (see the non-partitioned path). */
+			if (stmt->relation->schemaname == NULL)
+				stmt->relation->schemaname =
+					get_namespace_name(get_rel_namespace(tableId));
+
 			CdbDispatchUtilityStatement((Node *) stmt,
 										DF_CANCEL_ON_ERROR |
 										DF_WITH_SNAPSHOT |
@@ -1887,6 +1892,18 @@ DefineIndex(Oid tableId,
 		/* make sure the QE uses the same index name that we chose */
 		stmt->oldNumber = InvalidRelFileNumber;
 		Assert(stmt->relation != NULL);
+
+		/*
+		 * GPDB: schema-qualify the target relation before dispatch.  PG18's
+		 * RestrictSearchPath() has already narrowed search_path to a safe
+		 * value, and search_path is synced to the QEs, so an unqualified name
+		 * would fail to resolve on the segment ("relation does not exist").
+		 * Qualifying it makes the QE lookup independent of search_path.
+		 */
+		if (stmt->relation->schemaname == NULL)
+			stmt->relation->schemaname =
+				get_namespace_name(get_rel_namespace(tableId));
+
 		CdbDispatchUtilityStatement((Node *) stmt,
 									DF_CANCEL_ON_ERROR |
 									DF_WITH_SNAPSHOT |
