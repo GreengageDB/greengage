@@ -694,6 +694,9 @@ select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
 select (select grouping(v1)) from (values ((select 1))) v(v1) group by v1;
 
 -- test handling of subqueries in grouping sets
+-- GPDB: an earlier GPDB-specific test above already used the name gstest5 for
+-- an unsortable-column table; drop it so this upstream test can reuse the name.
+drop table gstest5;
 create temp table gstest5(id integer primary key, v integer);
 insert into gstest5 select i, i from generate_series(1,5)i;
 
