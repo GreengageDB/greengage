@@ -1497,6 +1497,7 @@ cdbpath_motion_for_join(PlannerInfo *root,
 			outer.ok_to_replicate = false;
 			break;
 		case JOIN_RIGHT:
+		case JOIN_RIGHT_SEMI:
 		case JOIN_RIGHT_ANTI:
 			inner.ok_to_replicate = false;
 			break;
