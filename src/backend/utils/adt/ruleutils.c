@@ -8507,10 +8507,15 @@ get_name_for_var_field(Var *var, int fieldno,
 					 * GPDB: a CTE reference is executed via a ShareInputScan
 					 * (the MPP materialized-CTE node); set_deparse_plan() points
 					 * dpns->inner_plan at its shared subplan just like CteScan.
+					 * A nested CTE that reads another CTE shows up as a
+					 * SubqueryScan over that ShareInputScan, so allow that too.
+					 * (The code below only relies on dpns->inner_plan, which
+					 * set_deparse_plan already resolved for all of these.)
 					 */
 					Assert(dpns->plan && (IsA(dpns->plan, CteScan) ||
 										  IsA(dpns->plan, WorkTableScan) ||
-										  IsA(dpns->plan, ShareInputScan)));
+										  IsA(dpns->plan, ShareInputScan) ||
+										  IsA(dpns->plan, SubqueryScan)));
 
 					tle = get_tle_by_resno(dpns->inner_tlist, attnum);
 					if (!tle)
