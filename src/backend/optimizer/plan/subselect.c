@@ -2461,8 +2461,23 @@ replace_correlation_vars_mutator(Node *node, PlannerInfo *root)
 	if (IsA(node, ReturningExpr))
 	{
 		if (((ReturningExpr *) node)->retlevelsup > 0)
+		{
+			/*
+			 * GPDB: a ReturningExpr with retlevelsup > 0 is a view's OLD/NEW
+			 * RETURNING expansion referenced from inside a sub-select, which
+			 * replace_outer_returning() would turn into a Param that must be
+			 * filled by the dispatched ModifyTable's per-row OLD/NEW value.
+			 * The MPP executor cannot pass that across the slice boundary
+			 * (it crashes in the resulting InitPlan projection), so reject it
+			 * with a clear error until proper MPP support is added.
+			 */
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("RETURNING list with a sub-select that references OLD/NEW columns of a view is not supported in Greenplum")));
+
 			return (Node *) replace_outer_returning(root,
 													(ReturningExpr *) node);
+		}
 	}
 	return expression_tree_mutator(node, replace_correlation_vars_mutator, root);
 }
