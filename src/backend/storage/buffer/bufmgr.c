@@ -1885,7 +1885,17 @@ AsyncReadBuffers(ReadBuffersOperation *operation, int *nblocks_progress)
 	{
 		io_context = IOCONTEXT_NORMAL;
 		io_object = IOOBJECT_TEMP_RELATION;
-		ioh_flags |= PGAIO_HF_REFERENCES_LOCAL;
+
+		/*
+		 * GPDB: temporary relations live in shared buffers
+		 * (RelationUsesLocalBuffers is always false), so their IO references
+		 * shared, not backend-local, buffers.  Only flag it as local when the
+		 * buffers really are local; otherwise the AIO subsystem and the readv
+		 * callback selected below would treat a positive (shared) buffer as a
+		 * local one and dereference a bogus local buffer descriptor.
+		 */
+		if (BufferIsLocal(io_buffers[0]))
+			ioh_flags |= PGAIO_HF_REFERENCES_LOCAL;
 	}
 	else
 	{
@@ -2028,8 +2038,14 @@ AsyncReadBuffers(ReadBuffersOperation *operation, int *nblocks_progress)
 		/* provide the list of buffers to the completion callbacks */
 		pgaio_io_set_handle_data_32(ioh, (uint32 *) io_buffers, io_buffers_len);
 
+		/*
+		 * GPDB: select the readv callback by the actual buffer kind, not by
+		 * relation persistence -- temporary relations use shared buffers here
+		 * (see above), so a persistence-based choice would wrongly pick the
+		 * local-buffer callback and crash in buffer_stage_common().
+		 */
 		pgaio_io_register_callbacks(ioh,
-									persistence == RELPERSISTENCE_TEMP ?
+									BufferIsLocal(io_buffers[0]) ?
 									PGAIO_HCB_LOCAL_BUFFER_READV :
 									PGAIO_HCB_SHARED_BUFFER_READV,
 									flags);
@@ -7419,8 +7435,14 @@ buffer_readv_complete(PgAioHandle *ioh, PgAioResult prior_result,
 		Assert(td->smgr.is_temp);
 		Assert(pgaio_io_get_owner(ioh) == MyProcNumber);
 	}
-	else
-		Assert(!td->smgr.is_temp);
+	/*
+	 * GPDB: unlike upstream, temporary relations are served out of shared
+	 * buffers (RelationUsesLocalBuffers is always false; see AsyncReadBuffers),
+	 * so a shared-buffer completion (is_temp == false) can legitimately target
+	 * a temp relation whose smgr target is backend-qualified
+	 * (td->smgr.is_temp is true and is still needed to rebuild the temp
+	 * rlocator below).  We therefore cannot assert !td->smgr.is_temp here.
+	 */
 
 	/*
 	 * Iterate over all the buffers affected by this IO and call the

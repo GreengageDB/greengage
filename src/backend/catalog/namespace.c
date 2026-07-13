@@ -4710,7 +4710,17 @@ DropTempTableNamespaceForResetSession(Oid namespaceOid)
 	
 	StartTransactionCommand();
 
+	/*
+	 * GPDB: dropping the temp relations deletes catalog rows (e.g. pg_type via
+	 * RemoveTypeById); PG18 asserts a registered/active snapshot in heap_delete
+	 * when the target catalog has a TOAST table, so push one for the duration of
+	 * the cleanup.
+	 */
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	RemoveTempRelations(namespaceOid);
+
+	PopActiveSnapshot();
 
 	CommitTransactionCommand();
 }
