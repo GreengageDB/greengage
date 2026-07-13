@@ -1218,7 +1218,14 @@ tbm_private_iterate(TBMPrivateIterator *iterator, TBMIterateResult *tbmres)
 	{
 		tbmres->blockno = e->blockno;
 		tbmres->lossy = e->ischunk;
-		tbmres->recheck = e->recheck;
+		/*
+		 * A lossy chunk carries no per-tuple bitmap, so every tuple on the
+		 * page must be rechecked against the scan qual.  tbm_next_page()
+		 * fabricates a bare PagetableEntry for a lossy chunk (see below), so
+		 * force recheck here rather than trusting e->recheck -- matching
+		 * tbm_iterate_page() and tbm_shared_iterate().
+		 */
+		tbmres->recheck = e->ischunk ? true : e->recheck;
 		/* lossy chunks have no per-page bitmap to extract offsets from */
 		tbmres->internal_page = e->ischunk ? NULL : e;
 		return true;
@@ -1280,6 +1287,7 @@ tbm_next_page(TBMPrivateIterator *iterator, bool *more)
 			/* Return a lossy page indicator from the chunk */
 			nextpage = (PagetableEntry *) palloc(sizeof(PagetableEntry));
 			nextpage->ischunk = true;
+			nextpage->recheck = true;	/* lossy chunks must always be rechecked */
 			nextpage->blockno = chunk_blockno;
 			iterator->schunkbit++;
 			return nextpage;
