@@ -1005,8 +1005,6 @@ DefineDomain(ParseState *pstate, CreateDomainStmt *stmt)
 											   NIL, false, false);
 						defaultValueBin = nodeToString(defaultExpr);
 					}
-
-					free_parsestate(pstate);
 				}
 				else
 				{
