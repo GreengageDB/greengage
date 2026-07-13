@@ -5721,7 +5721,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_ADD_COL;
 			break;
 		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_PARTITIONED_TABLE);
 			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
 			pass = AT_PASS_MISC;
 			break;
@@ -5966,7 +5966,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_SetDistributedBy:	/* SET DISTRIBUTED BY */
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_FOREIGN_TABLE);
 
 			if ( !recursing ) /* MPP-5772, MPP-5784 */
 			{
@@ -6036,7 +6036,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_ExpandTable:
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
 
 			if (!recursing)
 			{
@@ -6064,7 +6064,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			break;
 
 		case AT_ExpandPartitionTablePrepare:
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_PARTITIONED_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
 
 			if (!recursing)
 			{
