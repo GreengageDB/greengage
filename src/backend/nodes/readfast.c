@@ -3759,6 +3759,7 @@ _readPartitionedRelPruneInfo(void)
 	READ_INT_FIELD(nparts);
 	READ_INT_ARRAY(subplan_map, local_node->nparts);
 	READ_INT_ARRAY(subpart_map, local_node->nparts);
+	READ_INT_ARRAY(leafpart_rti_map, local_node->nparts);
 	READ_OID_ARRAY(relid_map, local_node->nparts);
 	READ_NODE_FIELD(initial_pruning_steps);
 	READ_NODE_FIELD(exec_pruning_steps);

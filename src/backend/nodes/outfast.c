@@ -1343,6 +1343,7 @@ _outPartitionedRelPruneInfo(StringInfo str, const PartitionedRelPruneInfo *node)
 	WRITE_INT_FIELD(nparts);
 	WRITE_INT_ARRAY(subplan_map, node->nparts);
 	WRITE_INT_ARRAY(subpart_map, node->nparts);
+	WRITE_INT_ARRAY(leafpart_rti_map, node->nparts);
 	WRITE_OID_ARRAY(relid_map, node->nparts);
 	WRITE_NODE_FIELD(initial_pruning_steps);
 	WRITE_NODE_FIELD(exec_pruning_steps);
