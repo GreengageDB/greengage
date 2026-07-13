@@ -1766,13 +1766,23 @@ vac_update_relstats(Relation relation,
 		 */
 		if (num_tuples >= 1.0)
 		{
-			Assert(Gp_role == GP_ROLE_UTILITY);
-			Assert(!IsSystemRelation(relation));
-			Assert(RelationIsAppendOptimized(relation));
+			/*
+			 * The classic case here is an AO table analyzed in utility mode on
+			 * the QD (Gp_role == GP_ROLE_UTILITY, non-system, AppendOptimized):
+			 * we obtained a tuple count from pg_aoseg but no file size, so
+			 * num_pages stayed 0.  We used to Assert() exactly that scenario,
+			 * but an autovacuum worker (Gp_role != UTILITY) can also
+			 * legitimately land here for a small system catalog (e.g.
+			 * pg_shdepend) whose block count captured early by analyze_rel
+			 * differs from the sample-time RelationGetNumberOfBlocks() count
+			 * because the relation grew concurrently -- a harmless race that
+			 * the asserts turned into a PANIC (and that a non-assert build
+			 * never noticed, since it simply zeroes num_tuples here).  Drop the
+			 * tuple count unconditionally, matching the production build.
+			 */
 			num_tuples = 0;
 		}
 
-		Assert(num_tuples < 1.0);
 		num_pages = 1.0;
 	}
 
