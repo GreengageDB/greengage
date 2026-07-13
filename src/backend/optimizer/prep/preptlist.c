@@ -722,7 +722,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 											  true, /* isnull */
 											  true /* byval */ );
 			}
-			else if (command_type == CMD_UPDATE)
+			else if (command_type == CMD_UPDATE && !att_tup->attgenerated)
 			{
 				/*
 				 * GPDB: For a Split Update we expand the UPDATE targetlist to
@@ -731,6 +731,11 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 				 * corresponding attribute of the target relation.  (Substituting
 				 * NULL, as we do for INSERT below, would wrongly blank out the
 				 * unmodified columns of the re-inserted tuple.)
+				 *
+				 * A generated column is excluded here: it is recomputed from
+				 * the new row when the tuple is re-inserted, so it must be a
+				 * NULL of the base type (handled below), not the old value --
+				 * ExecCheckPlanOutput() rejects a non-NULL entry for it.
 				 */
 				new_expr = (Node *) makeVar(result_relation,
 											attrno,
