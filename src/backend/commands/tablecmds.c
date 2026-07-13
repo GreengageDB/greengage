@@ -1646,6 +1646,45 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	}
 
 	/*
+	 * GPDB: On a QE, MergeAttributes() did not run (the merged schema arrives
+	 * pre-computed in tableElts), so old_notnulls is empty even for a relation
+	 * that inherits not-null constraints from its parents.  Since PG18 stores
+	 * NOT NULL as pg_constraint rows, those inherited constraints would be
+	 * created only on the coordinator, leaving the QD and QE catalogs out of
+	 * sync (later ALTER ... NOT NULL then fails on the segments with
+	 * "cache lookup failed for not-null constraint").  Re-derive them from the
+	 * parents here, remapping each constraint's attnum into this relation's
+	 * column order by name, exactly as MergeAttributes() does on the QD.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE && inheritOids != NIL)
+	{
+		ListCell   *lc;
+
+		foreach(lc, inheritOids)
+		{
+			Oid			parentOid = lfirst_oid(lc);
+			Relation	parentRel = table_open(parentOid, AccessShareLock);
+			AttrMap    *attmap;
+			List	   *parent_nns;
+			ListCell   *lc2;
+
+			attmap = build_attrmap_by_name(RelationGetDescr(rel),
+										   RelationGetDescr(parentRel),
+										   false);
+			parent_nns = RelationGetNotNullConstraints(parentOid, true, false);
+			foreach(lc2, parent_nns)
+			{
+				CookedConstraint *cc = (CookedConstraint *) lfirst(lc2);
+
+				cc->attnum = attmap->attnums[cc->attnum - 1];
+				old_notnulls = lappend(old_notnulls, cc);
+			}
+			free_attrmap(attmap);
+			table_close(parentRel, AccessShareLock);
+		}
+	}
+
+	/*
 	 * Finally, merge the not-null constraints that are declared directly with
 	 * those that come from parent relations (making sure to count inheritance
 	 * appropriately for each), create them, and set the attnotnull flag on
