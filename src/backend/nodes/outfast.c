@@ -1328,6 +1328,7 @@ _outPartitionPruneInfo(StringInfo str, const PartitionPruneInfo *node)
 {
 	WRITE_NODE_TYPE("PARTITIONPRUNEINFO");
 
+	WRITE_BITMAPSET_FIELD(relids);
 	WRITE_NODE_FIELD(prune_infos);
 	WRITE_BITMAPSET_FIELD(other_subplans);
 }

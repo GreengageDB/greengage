@@ -3742,6 +3742,7 @@ _readPartitionPruneInfo(void)
 {
 	READ_LOCALS(PartitionPruneInfo);
 
+	READ_BITMAPSET_FIELD(relids);
 	READ_NODE_FIELD(prune_infos);
 	READ_BITMAPSET_FIELD(other_subplans);
 
