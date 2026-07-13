@@ -1289,6 +1289,7 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 	 * the table; the PG14 deferred-LIKE rework had dropped it.
 	 */
 	if (stmt != NULL &&
+		!cxt->isforeign &&
 		(table_like_clause->options & CREATE_TABLE_LIKE_STORAGE) &&
 		relation->rd_rel->relkind == RELKIND_RELATION)
 	{
