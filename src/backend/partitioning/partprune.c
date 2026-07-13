@@ -232,9 +232,23 @@ make_partition_pruneinfo(PlannerInfo *root, RelOptInfo *parentrel,
 						 List *subpaths,
 						 List *prunequal)
 {
-	return make_partition_pruneinfo_ext(root, parentrel,
-										subpaths,
-										prunequal, NULL);
+	PartitionPruneInfo *pruneinfo;
+
+	/*
+	 * GPDB: make_partition_pruneinfo_ext() returns the PartitionPruneInfo by
+	 * pointer, because for join-based partition pruning it is embedded directly
+	 * in a PartitionSelector node.  For the upstream Append/MergeAppend
+	 * centralized model, register it in root->partPruneInfos and return its
+	 * index (or -1 when there is nothing to prune).
+	 */
+	pruneinfo = make_partition_pruneinfo_ext(root, parentrel,
+											 subpaths,
+											 prunequal, NULL);
+	if (pruneinfo == NULL)
+		return -1;
+
+	root->partPruneInfos = lappend(root->partPruneInfos, pruneinfo);
+	return list_length(root->partPruneInfos) - 1;
 }
 
 /*
@@ -356,7 +370,7 @@ make_partition_pruneinfo_ext(PlannerInfo *root, RelOptInfo *parentrel,
 	 * quals, then we can just not bother with run-time pruning.
 	 */
 	if (prunerelinfos == NIL)
-		return -1;
+		return NULL;
 
 	/* Else build the result data structure */
 	pruneinfo = makeNode(PartitionPruneInfo);
@@ -383,9 +397,13 @@ make_partition_pruneinfo_ext(PlannerInfo *root, RelOptInfo *parentrel,
 	else
 		pruneinfo->other_subplans = NULL;
 
-	root->partPruneInfos = lappend(root->partPruneInfos, pruneinfo);
-
-	return list_length(root->partPruneInfos) - 1;
+	/*
+	 * GPDB: return the PartitionPruneInfo itself.  make_partition_pruneinfo()
+	 * (the caller for the upstream Append/MergeAppend path) registers it in
+	 * root->partPruneInfos and hands back the index; the join-pruning caller
+	 * embeds the pointer directly in a PartitionSelector.
+	 */
+	return pruneinfo;
 }
 
 /*
