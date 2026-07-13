@@ -107,16 +107,31 @@ BitmapTableScanSetup(BitmapHeapScanState *node)
 
 	if (!pstate)
 	{
-		node->tbm = (TIDBitmap *) MultiExecProcNode(outerPlanState(node));
+		Node	   *bm = (Node *) MultiExecProcNode(outerPlanState(node));
 
-		if (!node->tbm || !IsA(node->tbm, TIDBitmap))
+		/*
+		 * GGDB: the subplan may hand back a StreamBitmap (on-disk bitmap index
+		 * AM, AO/AOCO bitmap scans) rather than a TIDBitmap.  The PG18
+		 * read-stream flow and the table AM handlers only iterate a TIDBitmap
+		 * (via scan->st.rs_tbmiterator), so drain a StreamBitmap into one here.
+		 */
+		if (!bm || !(IsA(bm, TIDBitmap) || IsA(bm, StreamBitmap)))
 			elog(ERROR, "unrecognized result from subplan");
+
+		node->tbm = tbm_materialize(bm, (Size) work_mem * 1024L);
+
+		/* the original StreamBitmap has been copied into node->tbm; free it */
+		if ((Node *) node->tbm != bm)
+			tbm_generic_free(bm);
 	}
 	else if (BitmapShouldInitializeSharedState(pstate))
 	{
 		/*
 		 * The leader will immediately come out of the function, but others
 		 * will be blocked until leader populates the TBM and wakes them up.
+		 *
+		 * GGDB: parallel bitmap heap scan is only supported for TIDBitmaps; a
+		 * StreamBitmap cannot be shared across workers.
 		 */
 		node->tbm = (TIDBitmap *) MultiExecProcNode(outerPlanState(node));
 		if (!node->tbm || !IsA(node->tbm, TIDBitmap))

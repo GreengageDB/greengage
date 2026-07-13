@@ -898,6 +898,64 @@ tbm_generic_iterate(GenericBMIterator *iterator)
 }
 
 /*
+ * tbm_materialize - drain a StreamBitmap into a fresh TIDBitmap.
+ *
+ * GGDB's on-disk bitmap index AM and AO/AOCO bitmap scans hand back a
+ * StreamBitmap, but the PG18 bitmap-heap-scan rework only understands the
+ * unified TBMIterator (which iterates a TIDBitmap) -- the executor stores it in
+ * scan->st.rs_tbmiterator and every table AM handler (heap read-stream,
+ * appendonly, aocs) consumes it with tbm_iterate().  So when a StreamBitmap
+ * shows up we materialize it here into a TIDBitmap and let the rest of the flow
+ * proceed unchanged.  A TIDBitmap is returned as-is.
+ *
+ * The per-page block/offset encoding is copied verbatim, so heap TIDs and AO
+ * pseudo-TIDs (which the AO handlers convert back to row numbers) both survive
+ * the round trip.  maxbytes bounds the materialized bitmap the same way the
+ * source index scan's own TIDBitmap would be bounded; if it goes lossy the
+ * affected pages are simply rechecked, which is always correct.
+ */
+TIDBitmap *
+tbm_materialize(Node *bm, Size maxbytes)
+{
+	GenericBMIterator *iterator;
+	TBMIterateResult *res;
+	TIDBitmap  *tbm;
+	OffsetNumber *offsets;
+
+	if (IsA(bm, TIDBitmap))
+		return (TIDBitmap *) bm;
+
+	Assert(IsA(bm, StreamBitmap));
+
+	tbm = tbm_create(maxbytes, NULL);
+	offsets = (OffsetNumber *) palloc(TBM_MAX_TUPLES_PER_PAGE * sizeof(OffsetNumber));
+
+	iterator = tbm_generic_begin_iterate(bm);
+	while ((res = tbm_generic_iterate(iterator)) != NULL)
+	{
+		if (res->lossy)
+			tbm_add_page(tbm, res->blockno);
+		else
+		{
+			ItemPointerData *tids;
+			int			ntids;
+			int			i;
+
+			ntids = tbm_extract_page_tuple(res, offsets, TBM_MAX_TUPLES_PER_PAGE);
+			tids = (ItemPointerData *) palloc(ntids * sizeof(ItemPointerData));
+			for (i = 0; i < ntids; i++)
+				ItemPointerSet(&tids[i], res->blockno, offsets[i]);
+			tbm_add_tuples(tbm, tids, ntids, res->recheck);
+			pfree(tids);
+		}
+	}
+	tbm_generic_end_iterate(iterator);
+	pfree(offsets);
+
+	return tbm;
+}
+
+/*
  * tbm_prepare_shared_iterate - prepare shared iteration state for a TIDBitmap.
  *
  * The necessary shared state will be allocated from the DSA passed to

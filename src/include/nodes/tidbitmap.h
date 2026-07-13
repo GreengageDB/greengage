@@ -265,6 +265,9 @@ extern void stream_move_node(StreamBitmap *strm, StreamBitmap *other, StreamType
 extern void stream_add_node(StreamBitmap *strm, StreamNode *node, StreamType kind);
 extern StreamNode *tbm_create_stream_node(TIDBitmap *tbm);
 
+/* Drain a StreamBitmap into a TIDBitmap (a TIDBitmap is returned unchanged). */
+extern TIDBitmap *tbm_materialize(Node *bm, Size maxbytes);
+
 /* These functions accept either a TIDBitmap or a StreamBitmap... */
 extern GenericBMIterator *tbm_generic_begin_iterate(Node *bm);
 extern TBMIterateResult *tbm_generic_iterate(GenericBMIterator *iterator);
