@@ -5308,6 +5308,9 @@ _outNode(StringInfo str, void *obj)
 			case T_DynamicBitmapHeapScan:
 				_outDynamicBitmapHeapScan(str, obj);
 				break;
+			case T_TidRangeScan:
+				_outTidRangeScan(str, obj);
+				break;
 			case T_TidScan:
 				_outTidScan(str, obj);
 				break;

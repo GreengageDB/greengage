@@ -6266,6 +6266,9 @@ readNodeBinary(void)
 			case T_WorkTableScan:
 				return_value = _readWorkTableScan();
 				break;
+			case T_TidRangeScan:
+				return_value = _readTidRangeScan();
+				break;
 			case T_TidScan:
 				return_value = _readTidScan();
 				break;

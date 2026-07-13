@@ -1380,6 +1380,12 @@ create_tidrangescan_path(PlannerInfo *root, RelOptInfo *rel,
 
 	pathnode->tidrangequals = tidrangequals;
 
+	/* Distribution is same as the base table. */
+	pathnode->path.locus = cdbpathlocus_from_baserel(root, rel);
+	pathnode->path.motionHazard = false;
+	pathnode->path.rescannable = true;
+	pathnode->path.sameslice_relids = rel->relids;
+
 	cost_tidrangescan(&pathnode->path, root, rel, tidrangequals,
 					  pathnode->path.param_info);
 

@@ -472,6 +472,18 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
+		case T_TidRangeScan:
+			{
+				TidRangeScan *tidrangescan = (TidRangeScan *) node;
+				TidRangeScan *newtidrangescan;
+
+				FLATCOPY(newtidrangescan, tidrangescan, TidRangeScan);
+				SCANMUTATE(newtidrangescan, tidrangescan);
+				MUTATE(newtidrangescan->tidrangequals, tidrangescan->tidrangequals, List *);
+				return (Node *) newtidrangescan;
+			}
+			break;
+
 		case T_SubqueryScan:
 			{
 				SubqueryScan *sqscan = (SubqueryScan *) node;
