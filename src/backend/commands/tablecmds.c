@@ -1142,7 +1142,13 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 
 			Assert(colDef->cooked_default == NULL);
 
-			rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
+			/*
+			 * GPDB: palloc0 so the fast-default missing-value fields
+			 * (missingMode/hasCookedMissingVal/missingVal/missingIsNull) are
+			 * zeroed; the CREATE TABLE path never sets them and stale garbage
+			 * would make the executor think the column has a missing value.
+			 */
+			rawEnt = (RawColumnDefault *) palloc0(sizeof(RawColumnDefault));
 			rawEnt->attnum = attnum;
 			rawEnt->raw_default = colDef->raw_default;
 			rawEnt->generated = colDef->generated;
@@ -9070,7 +9076,14 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 * each tuple or for each varblock, so that this optimization can be
 		 * applied on similar lines as heap_getattr.
 		 */
-		if (!rawEnt->missingMode || RelationIsAoRows(rel))
+		/*
+		 * A VIRTUAL generated column is computed on read and stores nothing,
+		 * so it never needs a table rewrite (matches upstream PG18); only
+		 * force a rewrite for stored columns that can't use missing mode (or
+		 * on AO row tables, where the missing-value optimization can't apply).
+		 */
+		if (colDef->generated != ATTRIBUTE_GENERATED_VIRTUAL &&
+			(!rawEnt->missingMode || RelationIsAoRows(rel)))
 			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 	}
 
@@ -9122,6 +9135,15 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			nve->typeId = attribute->atttypid;
 
 			defval = (Expr *) nve;
+
+			/*
+			 * GPDB: unlike upstream, our ATRewriteTable path keys the rewrite
+			 * off tab->rewrite, so an added identity column must force the
+			 * table rewrite explicitly; otherwise existing rows keep NULL in
+			 * the (NOT NULL) identity column and validation fails on the
+			 * segments ("column ... contains null values").
+			 */
+			tab->rewrite |= AT_REWRITE_DEFAULT_VAL;
 		}
 		else
 			defval = (Expr *) build_column_default(rel, attribute->attnum);
