@@ -2648,9 +2648,6 @@ select_mergejoin_clauses(PlannerInfo *root,
 			continue;			/* not mergejoinable */
 		}
 
-		if (!OidIsValid(get_commutator(((OpExpr *)(restrictinfo->clause))->opno)))
-			continue;
-
 		/*
 		 * Check if clause has the form "outer op inner" or "inner op outer".
 		 */
