@@ -3,8 +3,6 @@
 --
 -- create needed tables
 CREATE TABLE INTERVAL_HOROLOGY_TBL (f1 interval);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INTERVAL_HOROLOGY_TBL (f1) VALUES ('@ 1 minute'),
 ('@ 5 hour'),
 ('@ 10 day'),
@@ -16,8 +14,6 @@ INSERT INTO INTERVAL_HOROLOGY_TBL (f1) VALUES ('@ 1 minute'),
 ('5 months'),
 ('5 months 12 hours');
 CREATE TABLE TIME_HOROLOGY_TBL (f1 time(2));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIME_HOROLOGY_TBL VALUES ('00:00'),
 ('01:00'),
 ('02:03 PST'),
@@ -29,8 +25,6 @@ INSERT INTO TIME_HOROLOGY_TBL VALUES ('00:00'),
 ('2003-03-07 15:36:39 America/New_York'),
 ('2003-07-07 15:36:39 America/New_York');
 CREATE TABLE TIMETZ_HOROLOGY_TBL (f1 time(2) with time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMETZ_HOROLOGY_TBL VALUES ('00:01 PDT'),
 ('01:00 PDT'),
 ('02:03 PDT'),
@@ -44,8 +38,6 @@ INSERT INTO TIMETZ_HOROLOGY_TBL VALUES ('00:01 PDT'),
 ('2003-03-07 15:36:39 America/New_York'),
 ('2003-07-07 15:36:39 America/New_York');
 CREATE TABLE TIMESTAMP_HOROLOGY_TBL (d1 timestamp(2) without time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMESTAMP_HOROLOGY_TBL VALUES ('-infinity'),
 ('infinity'),
 ('epoch'),
@@ -114,8 +106,6 @@ INSERT INTO TIMESTAMP_HOROLOGY_TBL VALUES ('97FEB10 5:32:01PM UTC'),
 ('97/02/10 17:32:01 UTC');
 reset datestyle;
 CREATE TABLE TIMESTAMPTZ_HOROLOGY_TBL (d1 timestamp(2) with time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TIMESTAMPTZ_HOROLOGY_TBL VALUES ('-infinity'),
 ('infinity'),
 ('epoch'),
@@ -189,13 +179,13 @@ reset datestyle;
 --
 SET DateStyle = 'Postgres, MDY';
 SHOW TimeZone;  -- Many of these tests depend on the prevailing settings
-      TimeZone
+      TimeZone       
 ---------------------
  America/Los_Angeles
 (1 row)
 
 SHOW DateStyle;
-   DateStyle
+   DateStyle   
 ---------------
  Postgres, MDY
 (1 row)
@@ -1193,12 +1183,12 @@ SELECT '' AS "64", d1 + interval '1 year' AS one_year FROM TIMESTAMPTZ_HOROLOGY_
  64 |            one_year             
 ----+---------------------------------
     | -infinity
-    | Thu Feb 16 17:32:01 0096 PST BC
-    | Sun Feb 16 17:32:01 0098 PST
-    | Fri Feb 16 17:32:01 0598 PST
-    | Wed Feb 16 17:32:01 1098 PST
-    | Sun Feb 16 17:32:01 1698 PST
-    | Fri Feb 16 17:32:01 1798 PST
+    | Thu Feb 16 17:32:01 0096 LMT BC
+    | Sun Feb 16 17:32:01 0098 LMT
+    | Fri Feb 16 17:32:01 0598 LMT
+    | Wed Feb 16 17:32:01 1098 LMT
+    | Sun Feb 16 17:32:01 1698 LMT
+    | Fri Feb 16 17:32:01 1798 LMT
     | Wed Feb 16 17:32:01 1898 PST
     | Thu Dec 31 16:00:00 1970 PST
     | Fri Feb 28 17:32:01 1997 PST
@@ -1264,12 +1254,12 @@ SELECT '' AS "64", d1 - interval '1 year' AS one_year FROM TIMESTAMPTZ_HOROLOGY_
  64 |            one_year             
 ----+---------------------------------
     | -infinity
-    | Mon Feb 16 17:32:01 0098 PST BC
-    | Thu Feb 16 17:32:01 0096 PST
-    | Tue Feb 16 17:32:01 0596 PST
-    | Sun Feb 16 17:32:01 1096 PST
-    | Thu Feb 16 17:32:01 1696 PST
-    | Tue Feb 16 17:32:01 1796 PST
+    | Mon Feb 16 17:32:01 0098 LMT BC
+    | Thu Feb 16 17:32:01 0096 LMT
+    | Tue Feb 16 17:32:01 0596 LMT
+    | Sun Feb 16 17:32:01 1096 LMT
+    | Thu Feb 16 17:32:01 1696 LMT
+    | Tue Feb 16 17:32:01 1796 LMT
     | Sun Feb 16 17:32:01 1896 PST
     | Tue Dec 31 16:00:00 1968 PST
     | Tue Feb 28 17:32:01 1995 PST
@@ -1890,8 +1880,6 @@ SELECT (time '00:00', interval '1 hour')
 (1 row)
 
 CREATE TABLE TEMP_TIMESTAMP (f1 timestamp with time zone);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- get some candidate input values
 INSERT INTO TEMP_TIMESTAMP (f1)
   SELECT d1 FROM TIMESTAMP_HOROLOGY_TBL
@@ -3917,7 +3905,7 @@ SELECT to_date('2016 366', 'YYYY DDD');  -- ok
 SELECT to_date('2016 367', 'YYYY DDD');
 ERROR:  date/time field value out of range: "2016 367"
 SELECT to_date('0000-02-01','YYYY-MM-DD');  -- allowed, though it shouldn't be
-    to_date
+    to_date    
 ---------------
  02-01-0001 BC
 (1 row)

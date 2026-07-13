@@ -13,6 +13,8 @@ create type unhashable_bit;
 create function unhashable_bit_out (unhashable_bit) returns cstring immutable
 language internal as 'bit_out';
 NOTICE:  argument type unhashable_bit is only a shell
+LINE 1: create function unhashable_bit_out (unhashable_bit) returns ...
+                                            ^
 create function unhashable_bit_in (cstring) returns unhashable_bit immutable
 language internal as 'bit_in';
 NOTICE:  return type unhashable_bit is only a shell
@@ -71,19 +73,13 @@ create temp view gstest1(a,b,v)
             (4,1,18),(4,1,19);
 create temp table gstest2 (a integer, b integer, c integer, d integer,
                            e integer, f integer, g integer, h integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy gstest2 from stdin;
 ANALYZE gstest2;
 create temp table gstest3 (a integer, b integer, c integer, d integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 copy gstest3 from stdin;
 alter table gstest3 add primary key (a);
 create temp table gstest4(id integer, v integer,
                           unhashable_col unhashable_bit(4), unsortable_col xid);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into gstest4
 values (1,1,b'0000','1'), (2,2,b'0001','1'),
        (3,4,b'0010','2'), (4,8,b'0011','2'),
@@ -91,16 +87,12 @@ values (1,1,b'0000','1'), (2,2,b'0001','1'),
        (7,64,b'0010','1'), (8,128,b'0011','1');
 create temp table gstest5(id integer, v integer,
                           unsortable_col1 xid, unsortable_col2 xid);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into gstest5
 values (1,1,'3','1'), (2,2,'3','1'),
        (3,4,'4','2'), (4,8,'4','2'),
        (5,16,'4','2'), (6,32,'4','2'),
        (7,64,'3','1'), (8,128,'3','1');
 create temp table gstest_empty (a integer, b integer, v integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function gstest_data(v integer, out a integer, out b integer)
   returns setof record
   as $f$
@@ -396,15 +388,15 @@ select t1.a, t2.b, grouping(t1.a, t2.b), sum(t1.v), max(t2.a)
  group by grouping sets ((t1.a, t2.b), ());
  a | b | grouping | sum  | max 
 ---+---+----------+------+-----
- 1 | 1 |        0 |  420 |   1
- 1 | 2 |        0 |  120 |   2
- 2 | 1 |        0 |  105 |   1
- 2 | 2 |        0 |   30 |   2
  3 | 1 |        0 |  231 |   1
  3 | 2 |        0 |   66 |   2
  4 | 1 |        0 |  259 |   1
+ 2 | 2 |        0 |   30 |   2
  4 | 2 |        0 |   74 |   2
+ 1 | 1 |        0 |  420 |   1
    |   |        3 | 1305 |   2
+ 1 | 2 |        0 |  120 |   2
+ 2 | 1 |        0 |  105 |   1
 (9 rows)
 
 select t1.a, t2.b, grouping(t1.a, t2.b), sum(t1.v), max(t2.a)
@@ -412,10 +404,10 @@ select t1.a, t2.b, grouping(t1.a, t2.b), sum(t1.v), max(t2.a)
  group by grouping sets ((t1.a, t2.b), ());
  a | b | grouping | sum | max 
 ---+---+----------+-----+-----
- 1 | 1 |        0 | 420 |   1
  1 | 2 |        0 |  60 |   1
- 2 | 2 |        0 |  15 |   2
+ 1 | 1 |        0 | 420 |   1
    |   |        3 | 495 |   2
+ 2 | 2 |        0 |  15 |   2
 (4 rows)
 
 select a, b, grouping(a, b), sum(t1.v), max(t2.c)
@@ -423,9 +415,9 @@ select a, b, grouping(a, b), sum(t1.v), max(t2.c)
  group by grouping sets ((a, b), ());
  a | b | grouping | sum | max 
 ---+---+----------+-----+-----
- 1 | 1 |        0 | 147 |   2
- 1 | 2 |        0 |  25 |   2
    |   |        3 | 172 |   2
+ 1 | 2 |        0 |  25 |   2
+ 1 | 1 |        0 | 147 |   2
 (3 rows)
 
 -- check that functionally dependent cols are not nulled
@@ -554,30 +546,34 @@ select * from (
 where x = 1 and q1 = 123;
                                         QUERY PLAN                                        
 ------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Subquery Scan on ss
    Output: ss.x, ss.q1, ss.sum
-   ->  Subquery Scan on ss
-         Output: ss.x, ss.q1, ss.sum
-         Filter: ((ss.x = 1) AND (ss.q1 = 123))
+   Filter: ((ss.x = 1) AND (ss.q1 = 123))
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (1), i1.q1, (sum(i1.q2))
+         Merge Key: (1)
          ->  Finalize GroupAggregate
                Output: (1), i1.q1, sum(i1.q2)
-               Group Key: 1, i1.q1, (GROUPINGSET_ID())
+               Group Key: (1), i1.q1, (GROUPINGSET_ID())
                ->  Sort
-                     Output: 1, i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
-                     Sort Key: i1.q1, (GROUPINGSET_ID())
+                     Output: (1), i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
+                     Sort Key: (1), i1.q1, (GROUPINGSET_ID())
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Output: 1, i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
-                           Hash Key: 1, i1.q1, (GROUPINGSET_ID())
+                           Output: (1), i1.q1, (PARTIAL sum(i1.q2)), (GROUPINGSET_ID())
+                           Hash Key: (1), i1.q1, (GROUPINGSET_ID())
                            ->  Partial GroupAggregate
                                  Output: (1), i1.q1, PARTIAL sum(i1.q2), GROUPINGSET_ID()
-                                 Group Key: 1
+                                 Group Key: (1)
                                  Sort Key: i1.q1
                                    Group Key: i1.q1
-                                 ->  Seq Scan on public.int8_tbl i1
-                                       Output: 1, i1.q1, i1.q2
+                                 ->  Sort
+                                       Output: (1), i1.q1, i1.q2
+                                       Sort Key: (1)
+                                       ->  Seq Scan on public.int8_tbl i1
+                                             Output: 1, i1.q1, i1.q2
  Optimizer: Postgres query optimizer
  Settings: enable_hashagg = 'off'
-(23 rows)
+(27 rows)
 
 select * from (
   select 1 as x, q1, sum(q2)
@@ -693,17 +689,19 @@ LINE 3:        lateral (select a, b, sum(v.x) from gstest_data(v.x) ...
 -- min max optimization should still work with GROUP BY ()
 explain (costs off)
   select min(unique1) from tenk1 GROUP BY ();
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Result
-   InitPlan 1  (slice1)
-     ->  Limit
-           ->  Gather Motion 3:1  (slice2; segments: 3)
-                 Merge Key: tenk1.unique1
-                 ->  Index Only Scan using tenk1_unique1 on tenk1
-                       Index Cond: (unique1 IS NOT NULL)
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize GroupAggregate
+   Group Key: (GROUPINGSET_ID())
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: (GROUPINGSET_ID())
+         ->  Sort
+               Sort Key: (GROUPINGSET_ID())
+               ->  Partial Aggregate
+                     Group Key: ()
+                     ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 -- Views with GROUPING SET queries
 CREATE VIEW gstest_view AS select a, b, grouping(a,b), sum(c), count(*), max(c)
@@ -876,16 +874,19 @@ select a, b, sum(v.x)
 -- Test reordering of grouping sets
 explain (costs off)
 select * from gstest1 group by grouping sets((a,b,v),(v)) order by v,b,a;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- GroupAggregate
-   Group Key: "*VALUES*".column3, "*VALUES*".column2, "*VALUES*".column1
-   Group Key: "*VALUES*".column3
-   ->  Sort
-         Sort Key: "*VALUES*".column3, "*VALUES*".column2, "*VALUES*".column1
-         ->  Values Scan on "*VALUES*"
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Incremental Sort
+   Sort Key: "*VALUES*".column3, "*VALUES*".column2, "*VALUES*".column1
+   Presorted Key: "*VALUES*".column3
+   ->  GroupAggregate
+         Group Key: "*VALUES*".column3, "*VALUES*".column2, "*VALUES*".column1
+         Group Key: "*VALUES*".column3
+         ->  Sort
+               Sort Key: "*VALUES*".column3, "*VALUES*".column2, "*VALUES*".column1
+               ->  Values Scan on "*VALUES*"
  Optimizer: Postgres query optimizer
-(7 rows)
+(10 rows)
 
 -- Agg level check. This query should error out.
 select (select grouping(a,b) from gstest2) from gstest2 group by a,b;
@@ -912,11 +913,6 @@ group by grouping sets((ten,four),(ten))
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
-   0 |   0
-   0 |   2
-   0 |   2
-   1 |   1
-   1 |   3
    2 |   0
    2 |   2
    2 |   2
@@ -930,6 +926,11 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
    8 |   0
    8 |   2
    8 |   2
+   0 |   0
+   0 |   2
+   0 |   2
+   1 |   1
+   1 |   3
    5 |   1
    5 |   3
    6 |   0
@@ -957,19 +958,25 @@ select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 or
 
 explain (costs off)
   select a,count(*) from gstest2 group by rollup(a) having a is distinct from 1 order by a;
-                   QUERY PLAN                   
-------------------------------------------------
- GroupAggregate
-   Group Key: a
-   Group Key: ()
-   Filter: (a IS DISTINCT FROM 1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: a
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: gstest2.a
+   ->  Finalize GroupAggregate
+         Group Key: a, (GROUPINGSET_ID())
+         Filter: (a IS DISTINCT FROM 1)
          ->  Sort
-               Sort Key: a
-               ->  Seq Scan on gstest2
+               Sort Key: a, (GROUPINGSET_ID())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: gstest2.a, (GROUPINGSET_ID())
+                     ->  Partial GroupAggregate
+                           Group Key: a
+                           Group Key: ()
+                           ->  Sort
+                                 Sort Key: a
+                                 ->  Seq Scan on gstest2
  Optimizer: Postgres query optimizer
-(10 rows)
+(16 rows)
 
 select v.c, (select count(*) from gstest2 group by () having v.c)
   from (values (false),(true)) v(c) order by v.c;
@@ -1002,17 +1009,19 @@ explain (costs off)
 -- test pushdown of HAVING clause that does not reference any columns that are nullable by grouping sets
 explain (costs off)
 select a, b, count(*) from gstest2 group by grouping sets ((a, b), (a)) having a > 1 and b > 1;
-           QUERY PLAN            
----------------------------------
- GroupAggregate
-   Group Key: a, b
-   Group Key: a
-   Filter: (b > 1)
-   ->  Sort
-         Sort Key: a, b
-         ->  Seq Scan on gstest2
-               Filter: (a > 1)
-(8 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: a, b
+         Group Key: a
+         Filter: (b > 1)
+         ->  Sort
+               Sort Key: a, b
+               ->  Seq Scan on gstest2
+                     Filter: (a > 1)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 select a, b, count(*) from gstest2 group by grouping sets ((a, b), (a)) having a > 1 and b > 1;
  a | b | count 
@@ -1343,7 +1352,7 @@ explain (costs off)
          Hash Key: unsortable_col
          Group Key: unhashable_col
          ->  Gather Motion 3:1  (slice1; segments: 3)
-               Merge Key: unhashable_col
+               Merge Key: gstest4.unhashable_col
                ->  Sort
                      Sort Key: unhashable_col
                      ->  Seq Scan on gstest4
@@ -1381,10 +1390,10 @@ explain (costs off)
          count(*), sum(v)
     from gstest4 group by grouping sets ((v,unhashable_col),(v,unsortable_col))
    order by 3,5;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+                                        QUERY PLAN                                         
+-------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (GROUPING(unhashable_col, unsortable_col)), (sum(v))
+   Merge Key: (GROUPING(gstest4.unhashable_col, gstest4.unsortable_col)), (sum(gstest4.v))
    ->  Sort
          Sort Key: (GROUPING(unhashable_col, unsortable_col)), (sum(v))
          ->  MixedAggregate
@@ -1393,7 +1402,7 @@ explain (costs off)
                ->  Sort
                      Sort Key: v, unhashable_col
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: v
+                           Hash Key: gstest4.v
                            ->  Seq Scan on gstest4
  Optimizer: Postgres query optimizer
 (13 rows)
@@ -1417,10 +1426,10 @@ explain (costs off)
        count(*), sum(v)
   from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2))
  order by 3,5;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+   Merge Key: (GROUPING(gstest5.unsortable_col1, gstest5.unsortable_col2)), (sum(gstest5.v))
    ->  Sort
          Sort Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
          ->  Finalize HashAggregate
@@ -1454,10 +1463,10 @@ explain (costs off)
        count(*), sum(v)
   from gstest5 group by grouping sets ((unsortable_col1),(unsortable_col2),())
  order by 3,5;
-                                  QUERY PLAN                                   
--------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
+   Merge Key: (GROUPING(gstest5.unsortable_col1, gstest5.unsortable_col2)), (sum(gstest5.v))
    ->  Sort
          Sort Key: (GROUPING(unsortable_col1, unsortable_col2)), (sum(v))
          ->  Finalize HashAggregate
@@ -1506,13 +1515,13 @@ select a, b, sum(v), count(*) from gstest_empty group by grouping sets ((a,b),()
 
 explain (costs off)
   select a, b, sum(v), count(*) from gstest_empty group by grouping sets ((a,b),(),(),());
-                         QUERY PLAN                         
-------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Finalize HashAggregate
          Group Key: a, b, (GROUPINGSET_ID())
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: a, b, (GROUPINGSET_ID())
+               Hash Key: gstest_empty.a, gstest_empty.b, (GROUPINGSET_ID())
                ->  Partial MixedAggregate
                      Hash Key: a, b
                      Group Key: ()
@@ -1601,10 +1610,11 @@ explain (costs off)
          Hash Key: gstest_data.a
          Hash Key: gstest_data.b
          ->  Nested Loop
+               Disabled: true
                ->  Values Scan on "*VALUES*"
                ->  Function Scan on gstest_data
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 select *
   from (values (1),(2)) v(x),
@@ -1684,7 +1694,7 @@ explain (costs off)
  Sort
    Sort Key: (sum((sum(c))) OVER w1), a, b
    ->  WindowAgg
-         Window: w1 AS (ORDER BY a, b)
+         Order By: a, b
          ->  Sort
                Sort Key: a, b
                ->  MixedAggregate
@@ -1693,7 +1703,7 @@ explain (costs off)
                      Group Key: a
                      Group Key: ()
                      ->  Gather Motion 3:1  (slice1; segments: 3)
-                           Merge Key: a, b
+                           Merge Key: gstest2.a, gstest2.b
                            ->  Sort
                                  Sort Key: a, b
                                  ->  Seq Scan on gstest2
@@ -1733,10 +1743,11 @@ explain (costs off)
          Hash Key: gstest_data.b
          Group Key: ()
          ->  Nested Loop
+               Disabled: true
                ->  Values Scan on "*VALUES*"
                ->  Function Scan on gstest_data
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 -- Verify that we correctly handle the child node returning a
 -- non-minimal slot, which happens if the input is pre-sorted,
@@ -1752,7 +1763,7 @@ EXPLAIN (COSTS OFF) SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY 
    ->  Finalize GroupAggregate
          Group Key: a, b, (GROUPINGSET_ID())
          ->  Gather Motion 3:1  (slice1; segments: 3)
-               Merge Key: a, b, (GROUPINGSET_ID())
+               Merge Key: gstest3.a, gstest3.b, (GROUPINGSET_ID())
                ->  Sort
                      Sort Key: a, b, (GROUPINGSET_ID())
                      ->  Partial GroupAggregate
@@ -1784,7 +1795,7 @@ EXPLAIN (COSTS OFF) SELECT a, b, count(*), max(a), max(b) FROM gstest3 GROUP BY 
    ->  Finalize GroupAggregate
          Group Key: a, b, (GROUPINGSET_ID())
          ->  Gather Motion 3:1  (slice1; segments: 3)
-               Merge Key: a, b, (GROUPINGSET_ID())
+               Merge Key: gstest3.a, gstest3.b, (GROUPINGSET_ID())
                ->  Sort
                      Sort Key: a, b, (GROUPINGSET_ID())
                      ->  Partial GroupAggregate
@@ -1947,13 +1958,13 @@ explain (costs off)
          count(hundred), count(thousand), count(twothousand),
          count(*)
     from tenk1 group by grouping sets (unique1,twothousand,thousand,hundred,ten,four,two);
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Finalize HashAggregate
          Group Key: unique1, twothousand, thousand, hundred, ten, four, two, (GROUPINGSET_ID())
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: unique1, twothousand, thousand, hundred, ten, four, two, (GROUPINGSET_ID())
+               Hash Key: tenk1.unique1, tenk1.twothousand, tenk1.thousand, tenk1.hundred, tenk1.ten, tenk1.four, tenk1.two, (GROUPINGSET_ID())
                ->  Partial HashAggregate
                      Hash Key: unique1
                      Hash Key: twothousand
@@ -1972,13 +1983,13 @@ explain (costs off)
          count(hundred), count(thousand), count(twothousand),
          count(*)
     from tenk1 group by grouping sets (unique1,hundred,ten,four,two);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Finalize HashAggregate
          Group Key: unique1, hundred, ten, four, two, (GROUPINGSET_ID())
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: unique1, hundred, ten, four, two, (GROUPINGSET_ID())
+               Hash Key: tenk1.unique1, tenk1.hundred, tenk1.ten, tenk1.four, tenk1.two, (GROUPINGSET_ID())
                ->  Partial HashAggregate
                      Hash Key: unique1
                      Hash Key: hundred
@@ -1998,13 +2009,13 @@ explain (costs off)
          count(hundred), count(thousand), count(twothousand),
          count(*)
     from tenk1 group by grouping sets (unique1,twothousand,thousand,hundred,ten,four,two);
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Finalize HashAggregate
          Group Key: unique1, twothousand, thousand, hundred, ten, four, two, (GROUPINGSET_ID())
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: unique1, twothousand, thousand, hundred, ten, four, two, (GROUPINGSET_ID())
+               Hash Key: tenk1.unique1, tenk1.twothousand, tenk1.thousand, tenk1.hundred, tenk1.ten, tenk1.four, tenk1.two, (GROUPINGSET_ID())
                ->  Partial HashAggregate
                      Hash Key: unique1
                      Hash Key: twothousand
@@ -2050,8 +2061,6 @@ select v||'a', case when grouping(v||'a') = 1 then 1 else 0 end, count(*)
 create table gs_data_1 as
 select g%1000 as g1000, g%100 as g100, g%10 as g10, g
    from generate_series(0,1999) g;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'g1000' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze gs_data_1;
 alter table gs_data_1 set (autovacuum_enabled = 'false');
 WARNING:  autovacuum is not supported in Greenplum
@@ -2066,8 +2075,8 @@ set jit_above_cost = 0;
 explain (costs off)
 select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
-                   QUERY PLAN                   
-------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  GroupAggregate
    Group Key: g1000, g100, g10
    Group Key: g1000, g100
@@ -2080,7 +2089,7 @@ from gs_data_1 group by cube (g1000, g100,g10);
      Group Key: g10, g1000
      Group Key: g10
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: g1000, g100, g10
+         Merge Key: gs_data_1.g1000, gs_data_1.g100, gs_data_1.g10
          ->  Sort
                Sort Key: g1000, g100, g10
                ->  Seq Scan on gs_data_1
@@ -2090,35 +2099,35 @@ from gs_data_1 group by cube (g1000, g100,g10);
 create table gs_group_1 as
 select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'g100' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Produce results with hash aggregation.
 set enable_hashagg = true;
 set enable_sort = false;
 explain (costs off)
 select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
-                   QUERY PLAN                   
-------------------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
  MixedAggregate
-   Hash Key: g1000, g100, g10
-   Hash Key: g1000, g100
-   Hash Key: g1000
-   Hash Key: g100, g10
-   Hash Key: g100
-   Hash Key: g10, g1000
    Hash Key: g10
+   Hash Key: g10, g1000
+   Hash Key: g100
+   Hash Key: g100, g10
+   Group Key: g1000, g100, g10
+   Group Key: g1000, g100
+   Group Key: g1000
    Group Key: ()
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on gs_data_1
+         Merge Key: gs_data_1.g1000, gs_data_1.g100, gs_data_1.g10
+         ->  Sort
+               Disabled: true
+               Sort Key: g1000, g100, g10
+               ->  Seq Scan on gs_data_1
  Optimizer: Postgres query optimizer
-(12 rows)
+(16 rows)
 
 create table gs_hash_1 as
 select g100, g10, sum(g::numeric), count(*), max(g::text)
 from gs_data_1 group by cube (g1000, g100,g10);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'g100' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set enable_sort = true;
 set work_mem to default;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
@@ -2242,24 +2251,39 @@ order by case when grouping((select t1.v from gstest5 t2 where id = t1.id)) = 0
               then (select t1.v from gstest5 t2 where id = t1.id)
               else null end
          nulls first;
-                                                                 QUERY PLAN                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------
- Sort
-   Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
-   Sort Key: (CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END) NULLS FIRST
-   ->  HashAggregate
-         Output: GROUPING((SubPlan 1)), ((SubPlan 3)), CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END, t1.v
-         Hash Key: t1.v
-         Hash Key: (SubPlan 3)
-         ->  Seq Scan on pg_temp.gstest5 t1
-               Output: (SubPlan 3), t1.v, t1.id
-               SubPlan 3
-                 ->  Bitmap Heap Scan on pg_temp.gstest5 t2
-                       Output: t1.v
-                       Recheck Cond: (t2.id = t1.id)
-                       ->  Bitmap Index Scan on gstest5_pkey
-                             Index Cond: (t2.id = t1.id)
-(15 rows)
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
+   Merge Key: (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END)
+   ->  Sort
+         Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
+         Sort Key: (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END) NULLS FIRST
+         ->  Finalize HashAggregate
+               Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END, t1.v
+               Group Key: t1.v, ((SubPlan 3)), (GROUPINGSET_ID())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: ((SubPlan 3)), t1.v, (GROUPING((SubPlan 1))), (GROUPING((SubPlan 2))), t1.id, (GROUPINGSET_ID())
+                     Hash Key: t1.v, ((SubPlan 3)), (GROUPINGSET_ID())
+                     ->  Partial HashAggregate
+                           Output: ((SubPlan 3)), t1.v, GROUPING((SubPlan 1)), GROUPING((SubPlan 2)), t1.id, GROUPINGSET_ID()
+                           Hash Key: t1.v
+                           Hash Key: (SubPlan 3)
+                           ->  Seq Scan on pg_temp.gstest5 t1
+                                 Output: (SubPlan 3), t1.v, t1.id
+                                 SubPlan 3
+                                   ->  Result
+                                         Output: t1.v
+                                         Filter: (t2.id = t1.id)
+                                         ->  Materialize
+                                               Output: t2.id
+                                               ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                                     Output: t2.id
+                                                     ->  Seq Scan on pg_temp.gstest5 t2
+                                                           Output: t2.id
+ Optimizer: Postgres query optimizer
+ Settings: enable_indexscan = 'off', jit_above_cost = '0'
+(30 rows)
 
 select grouping((select t1.v from gstest5 t2 where id = t1.id)),
        (select t1.v from gstest5 t2 where id = t1.id) as s
@@ -2292,24 +2316,39 @@ select grouping((select t1.v from gstest5 t2 where id = t1.id)),
 from gstest5 t1
 group by grouping sets(v, s)
 order by o nulls first;
-                                                                 QUERY PLAN                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------
- Sort
-   Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
-   Sort Key: (CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END) NULLS FIRST
-   ->  HashAggregate
-         Output: GROUPING((SubPlan 1)), ((SubPlan 3)), CASE WHEN (GROUPING((SubPlan 2)) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END, t1.v
-         Hash Key: t1.v
-         Hash Key: (SubPlan 3)
-         ->  Seq Scan on pg_temp.gstest5 t1
-               Output: (SubPlan 3), t1.v, t1.id
-               SubPlan 3
-                 ->  Bitmap Heap Scan on pg_temp.gstest5 t2
-                       Output: t1.v
-                       Recheck Cond: (t2.id = t1.id)
-                       ->  Bitmap Index Scan on gstest5_pkey
-                             Index Cond: (t2.id = t1.id)
-(15 rows)
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
+   Merge Key: (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END)
+   ->  Sort
+         Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END), t1.v
+         Sort Key: (CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END) NULLS FIRST
+         ->  Finalize HashAggregate
+               Output: (GROUPING((SubPlan 1))), ((SubPlan 3)), CASE WHEN ((GROUPING((SubPlan 2))) = 0) THEN ((SubPlan 3)) ELSE NULL::integer END, t1.v
+               Group Key: t1.v, ((SubPlan 3)), (GROUPINGSET_ID())
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: ((SubPlan 3)), t1.v, (GROUPING((SubPlan 1))), (GROUPING((SubPlan 2))), t1.id, (GROUPINGSET_ID())
+                     Hash Key: t1.v, ((SubPlan 3)), (GROUPINGSET_ID())
+                     ->  Partial HashAggregate
+                           Output: ((SubPlan 3)), t1.v, GROUPING((SubPlan 1)), GROUPING((SubPlan 2)), t1.id, GROUPINGSET_ID()
+                           Hash Key: t1.v
+                           Hash Key: (SubPlan 3)
+                           ->  Seq Scan on pg_temp.gstest5 t1
+                                 Output: (SubPlan 3), t1.v, t1.id
+                                 SubPlan 3
+                                   ->  Result
+                                         Output: t1.v
+                                         Filter: (t2.id = t1.id)
+                                         ->  Materialize
+                                               Output: t2.id
+                                               ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                                     Output: t2.id
+                                                     ->  Seq Scan on pg_temp.gstest5 t2
+                                                           Output: t2.id
+ Optimizer: Postgres query optimizer
+ Settings: enable_indexscan = 'off', jit_above_cost = '0'
+(30 rows)
 
 select grouping((select t1.v from gstest5 t2 where id = t1.id)),
        (select t1.v from gstest5 t2 where id = t1.id) as s,
@@ -2336,14 +2375,15 @@ order by o nulls first;
 -- test handling of expressions that should match lower target items
 explain (costs off)
 select a < b and b < 3 from (values (1, 2)) t(a, b) group by rollup(a < b and b < 3) having a < b and b < 3;
-            QUERY PLAN             
------------------------------------
+             QUERY PLAN              
+-------------------------------------
  MixedAggregate
    Hash Key: ((1 < 2) AND (2 < 3))
    Group Key: ()
    Filter: (((1 < 2) AND (2 < 3)))
    ->  Result
-(5 rows)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select a < b and b < 3 from (values (1, 2)) t(a, b) group by rollup(a < b and b < 3) having a < b and b < 3;
  ?column? 
@@ -2353,14 +2393,15 @@ select a < b and b < 3 from (values (1, 2)) t(a, b) group by rollup(a < b and b 
 
 explain (costs off)
 select not a from (values(true)) t(a) group by rollup(not a) having not not a;
-          QUERY PLAN          
-------------------------------
+             QUERY PLAN              
+-------------------------------------
  MixedAggregate
    Hash Key: (NOT true)
    Group Key: ()
    Filter: (NOT ((NOT true)))
    ->  Result
-(5 rows)
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 select not a from (values(true)) t(a) group by rollup(not a) having not not a;
  ?column? 
@@ -2377,6 +2418,7 @@ order by a, b;
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1, "*VALUES*".column2
    ->  Sort
          Sort Key: "*VALUES*".column1, "*VALUES*".column2
          ->  HashAggregate
@@ -2384,7 +2426,8 @@ order by a, b;
                Hash Key: "*VALUES*".column1
                ->  Values Scan on "*VALUES*"
                      Filter: (column1 = column2)
-(8 rows)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 select distinct on (a, b) a, b
 from (values (1, 1), (2, 2)) as t (a, b) where a = b
@@ -2406,6 +2449,7 @@ order by a, b+1;
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1, (("*VALUES*".column2 + 1))
    ->  Sort
          Sort Key: "*VALUES*".column1, (("*VALUES*".column2 + 1))
          ->  HashAggregate
@@ -2413,7 +2457,8 @@ order by a, b+1;
                Hash Key: "*VALUES*".column1
                ->  Values Scan on "*VALUES*"
                      Filter: (column1 = (column2 + 1))
-(8 rows)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 select distinct on (a, b+1) a, b+1
 from (values (1, 0), (2, 1)) as t (a, b) where a = b+1
@@ -2441,7 +2486,8 @@ order by a, b nulls first;
          Hash Key: "*VALUES*".column1
          ->  Values Scan on "*VALUES*"
                Filter: (column1 = column2)
-(7 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select a, b
 from (values (1, 1), (2, 2)) as t (a, b) where a = b
@@ -2457,15 +2503,16 @@ order by a, b nulls first;
 
 explain (costs off)
 select 1 as one group by rollup(one) order by one nulls first;
-         QUERY PLAN          
------------------------------
+             QUERY PLAN              
+-------------------------------------
  Sort
    Sort Key: (1) NULLS FIRST
    ->  MixedAggregate
          Hash Key: 1
          Group Key: ()
          ->  Result
-(6 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 select 1 as one group by rollup(one) order by one nulls first;
  one 
@@ -2478,10 +2525,10 @@ explain (costs off)
 select a, b, row_number() over (order by a, b nulls first)
 from (values (1, 1), (2, 2)) as t (a, b) where a = b
 group by grouping sets((a, b), (a));
-                                         QUERY PLAN                                         
---------------------------------------------------------------------------------------------
+                              QUERY PLAN                              
+----------------------------------------------------------------------
  WindowAgg
-   Window: w1 AS (ORDER BY "*VALUES*".column1, "*VALUES*".column2 ROWS UNBOUNDED PRECEDING)
+   Order By: "*VALUES*".column1, "*VALUES*".column2
    ->  Sort
          Sort Key: "*VALUES*".column1, "*VALUES*".column2 NULLS FIRST
          ->  HashAggregate
@@ -2489,7 +2536,8 @@ group by grouping sets((a, b), (a));
                Hash Key: "*VALUES*".column1
                ->  Values Scan on "*VALUES*"
                      Filter: (column1 = column2)
-(9 rows)
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 select a, b, row_number() over (order by a, b nulls first)
 from (values (1, 1), (2, 2)) as t (a, b) where a = b

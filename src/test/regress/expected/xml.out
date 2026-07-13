@@ -2,8 +2,6 @@ CREATE TABLE xmltest (
     id int,
     data xml
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO xmltest VALUES (1, '<value>one</value>');
 INSERT INTO xmltest VALUES (2, '<value>two</value>');
 INSERT INTO xmltest VALUES (3, '<wrong');
@@ -16,8 +14,8 @@ DETAIL:  line 1: Couldn't find end of Start Tag wrong line 1
 SELECT * FROM xmltest;
  id |        data        
 ----+--------------------
-  1 | <value>one</value>
   2 | <value>two</value>
+  1 | <value>one</value>
 (2 rows)
 
 -- test non-throwing API, too
@@ -848,8 +846,8 @@ SELECT table_name, view_definition FROM information_schema.views
 SELECT xpath('/value', data) FROM xmltest;
         xpath         
 ----------------------
- {<value>one</value>}
  {<value>two</value>}
+ {<value>one</value>}
 (2 rows)
 
 SELECT xpath(NULL, NULL) IS NULL FROM xmltest;
@@ -1083,8 +1081,6 @@ SELECT COUNT(id) FROM xmltest WHERE xpath_exists('/myns:menu/myns:beers/myns:nam
 (1 row)
 
 CREATE TABLE query ( expr TEXT );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'expr' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO query VALUES ('/menu/beers/cost[text() = ''lots'']');
 SELECT COUNT(id) FROM xmltest, query WHERE xmlexists(expr PASSING BY REF data);
  count 
@@ -1263,7 +1259,6 @@ SELECT XMLPARSE(DOCUMENT '<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4
 
 -- XMLPATH tests
 CREATE TABLE xmldata(data xml);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 INSERT INTO xmldata VALUES('<ROWS>
 <ROW id="1">
   <COUNTRY_ID>AU</COUNTRY_ID>
@@ -1360,11 +1355,12 @@ EXPLAIN (COSTS OFF) SELECT * FROM xmltableview1;
 -----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Disabled: true
          ->  Seq Scan on xmldata
          ->  Materialize
                ->  Table Function Scan on "xmltable"
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM xmltableview1;
                                                                                                                                                                                                                                   QUERY PLAN                                                                                                                                                                                                                                  
@@ -1372,6 +1368,7 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM xmltableview1;
  Gather Motion 3:1  (slice1; segments: 3)
    Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
    ->  Nested Loop
+         Disabled: true
          Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
          ->  Seq Scan on public.xmldata
                Output: xmldata.data
@@ -1381,7 +1378,7 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM xmltableview1;
                      Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME/text()'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 -- errors
 SELECT * FROM XMLTABLE (ROW () PASSING null COLUMNS v1 timestamp) AS f (v1, v2);
@@ -1564,6 +1561,7 @@ SELECT  xmltable.*
  Gather Motion 3:1  (slice1; segments: 3)
    Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
    ->  Nested Loop
+         Disabled: true
          Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
          ->  Seq Scan on public.xmldata
                Output: xmldata.data
@@ -1573,7 +1571,7 @@ SELECT  xmltable.*
                      Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 -- test qual
 SELECT xmltable.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) WHERE "COUNTRY_NAME" = 'Japan';
@@ -1589,6 +1587,7 @@ SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COU
  Gather Motion 3:1  (slice1; segments: 3)
    Output: f."COUNTRY_NAME", f."REGION_ID"
    ->  Nested Loop
+         Disabled: true
          Output: f."COUNTRY_NAME", f."REGION_ID"
          ->  Seq Scan on public.xmldata
                Output: xmldata.data
@@ -1599,7 +1598,7 @@ SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COU
                      Table Function Call: XMLTABLE(('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]'::text) PASSING (xmldata.data) COLUMNS "COUNTRY_NAME" text, "REGION_ID" integer)
                      Filter: (f."COUNTRY_NAME" = 'Japan'::text)
  Optimizer: Postgres query optimizer
-(13 rows)
+(14 rows)
 
 EXPLAIN (VERBOSE, FORMAT JSON, COSTS OFF)
 SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COUNTRY_NAME="India"]' PASSING data COLUMNS "COUNTRY_NAME" text, "REGION_ID" int) AS f WHERE "COUNTRY_NAME" = 'Japan';
@@ -1628,7 +1627,7 @@ SELECT f.* FROM xmldata, LATERAL xmltable('/ROWS/ROW[COUNTRY_NAME="Japan" or COU
            "Parallel Aware": false,                                                                                                                                                                     +
            "Async Capable": false,                                                                                                                                                                      +
            "Join Type": "Inner",                                                                                                                                                                        +
-           "Disabled": false,                                                                                                                                                                           +
+           "Disabled": true,                                                                                                                                                                            +
            "Output": ["f.\"COUNTRY_NAME\"", "f.\"REGION_ID\""],                                                                                                                                         +
            "Inner Unique": false,                                                                                                                                                                       +
            "Plans": [                                                                                                                                                                                   +
@@ -1729,17 +1728,17 @@ SELECT  xmltable.*
                                   premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified');
  id | _id |  country_name  | country_id | region_id | size | unit | premier_name  
 ----+-----+----------------+------------+-----------+------+------+---------------
- 20 |   1 | Egypt          | EG         |         1 |      |      | not specified
- 21 |   2 | Sudan          | SD         |         1 |      |      | not specified
+ 10 |   1 | Czech Republic | CZ         |         2 |      |      | Milos Zeman
+ 11 |   2 | Germany        | DE         |         2 |      |      | not specified
+ 12 |   3 | France         | FR         |         2 |      |      | not specified
   1 |   1 | Australia      | AU         |         3 |      |      | not specified
   2 |   2 | China          | CN         |         3 |      |      | not specified
   3 |   3 | HongKong       | HK         |         3 |      |      | not specified
   4 |   4 | India          | IN         |         3 |      |      | not specified
   5 |   5 | Japan          | JP         |         3 |      |      | Sinzo Abe
   6 |   6 | Singapore      | SG         |         3 |  791 | km   | not specified
- 10 |   1 | Czech Republic | CZ         |         2 |      |      | Milos Zeman
- 11 |   2 | Germany        | DE         |         2 |      |      | not specified
- 12 |   3 | France         | FR         |         2 |      |      | not specified
+ 20 |   1 | Egypt          | EG         |         1 |      |      | not specified
+ 21 |   2 | Sudan          | SD         |         1 |      |      | not specified
 (11 rows)
 
 SELECT  xmltable.*
@@ -1781,6 +1780,7 @@ SELECT  xmltable.*
  Gather Motion 3:1  (slice1; segments: 3)
    Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
    ->  Nested Loop
+         Disabled: true
          Output: "xmltable".id, "xmltable"._id, "xmltable".country_name, "xmltable".country_id, "xmltable".region_id, "xmltable".size, "xmltable".unit, "xmltable".premier_name
          ->  Seq Scan on public.xmldata
                Output: xmldata.data
@@ -1791,7 +1791,7 @@ SELECT  xmltable.*
                      Table Function Call: XMLTABLE(('/ROWS/ROW'::text) PASSING (xmldata.data) COLUMNS id integer PATH ('@id'::text), _id FOR ORDINALITY, country_name text PATH ('COUNTRY_NAME'::text) NOT NULL, country_id text PATH ('COUNTRY_ID'::text), region_id integer PATH ('REGION_ID'::text), size double precision PATH ('SIZE'::text), unit text PATH ('SIZE/@unit'::text), premier_name text DEFAULT ('not specified'::text) PATH ('PREMIER_NAME'::text))
                      Filter: ("xmltable".region_id = 2)
  Optimizer: Postgres query optimizer
-(13 rows)
+(14 rows)
 
 -- should fail, NULL value
 SELECT  xmltable.*
@@ -1806,7 +1806,7 @@ SELECT  xmltable.*
                                   size float PATH 'SIZE' NOT NULL,
                                   unit text PATH 'SIZE/@unit',
                                   premier_name text PATH 'PREMIER_NAME' DEFAULT 'not specified');
-ERROR:  null is not allowed in column "size"  (seg1 slice1 172.17.0.4:7003 pid=1166274)
+ERROR:  null is not allowed in column "size"  (seg0 slice1 172.17.0.2:7002 pid=2101630)
 -- if all is ok, then result is empty
 -- one line xml test
 WITH
@@ -1861,8 +1861,6 @@ WITH
 (0 rows)
 
 CREATE TABLE xmltest2(x xml, _path text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '_path' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO xmltest2 VALUES('<d><r><ac>1</ac></r></d>', 'A');
 INSERT INTO xmltest2 VALUES('<d><r><bc>2</bc></r></d>', 'B');
 INSERT INTO xmltest2 VALUES('<d><r><cc>3</cc></r></d>', 'C');
@@ -1888,10 +1886,10 @@ SELECT xmltable.* FROM xmltest2, LATERAL xmltable(('/d/r/' || lower(_path) || 'c
 SELECT xmltable.* FROM xmltest2, LATERAL xmltable(('/d/r/' || lower(_path) || 'c') PASSING x COLUMNS a int PATH 'x' DEFAULT ascii(_path) - 54);
  a  
 ----
+ 11
  12
  13
  14
- 11
 (4 rows)
 
 -- XPath result can be boolean or number too

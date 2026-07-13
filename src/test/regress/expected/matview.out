@@ -25,7 +25,7 @@ EXPLAIN (costs off)
  HashAggregate
    Group Key: type
    ->  Redistribute Motion 3:3  (slice1; segments: 3)
-         Hash Key: type
+         Hash Key: mvtest_t.type
          ->  Seq Scan on mvtest_t
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -75,9 +75,9 @@ CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
 SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
- z    |     11
  x    |      5
  y    |     12
+ z    |     11
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
@@ -417,7 +417,7 @@ CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a)
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.4:7003 pid=1666368)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.2:7003 pid=2096493)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -564,11 +564,11 @@ SELECT * FROM mvtest_v;
 SELECT * FROM mvtest_mv_v;
  a 
 ---
- 5
  2
  3
  4
  1
+ 5
 (5 rows)
 
 DROP TABLE mvtest_v CASCADE;
@@ -610,9 +610,9 @@ END;
 $$ LANGUAGE plpgsql;
 CREATE MATERIALIZED VIEW drop_idx_matview AS
   SELECT 1 as i WHERE mvtest_drop_the_index();
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 slice1 172.17.0.4:7002 pid=1666601)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 slice1 172.17.0.2:7003 pid=2096806)
 CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_mvschema.mvtest_drop_idx"
-PL/pgSQL function mvtest_drop_the_index() line 3 at EXECUTE
+PL/pgSQL function mvtest_mvschema.mvtest_drop_the_index() line 3 at EXECUTE
 CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
 ERROR:  relation "drop_idx_matview" does not exist
 REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
@@ -670,6 +670,7 @@ drop table t_github_issue_11956;
 -- INSERT privileges if relation owner is not allowed to insert.
 CREATE SCHEMA matview_schema;
 CREATE USER regress_matview_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER DEFAULT PRIVILEGES FOR ROLE regress_matview_user
   REVOKE INSERT ON TABLES FROM regress_matview_user;
 GRANT ALL ON SCHEMA matview_schema TO public;
@@ -679,11 +680,14 @@ CREATE MATERIALIZED VIEW matview_schema.mv_withdata1 (a) AS
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
   CREATE MATERIALIZED VIEW matview_schema.mv_withdata2 (a) AS
   SELECT generate_series(1, 10) WITH DATA;
-               QUERY PLAN                
------------------------------------------
- ProjectSet (actual rows=10.00 loops=1)
-   ->  Result (actual rows=1.00 loops=1)
-(2 rows)
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1) (actual rows=5.00 loops=1)
+   Hash Key: (generate_series(1, 10))
+   ->  ProjectSet (actual rows=10.00 loops=1)
+         ->  Result (actual rows=1.00 loops=1)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 REFRESH MATERIALIZED VIEW matview_schema.mv_withdata2;
 CREATE MATERIALIZED VIEW matview_schema.mv_nodata1 (a) AS
@@ -691,11 +695,14 @@ CREATE MATERIALIZED VIEW matview_schema.mv_nodata1 (a) AS
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
   CREATE MATERIALIZED VIEW matview_schema.mv_nodata2 (a) AS
   SELECT generate_series(1, 10) WITH NO DATA;
-          QUERY PLAN           
--------------------------------
- ProjectSet (never executed)
-   ->  Result (never executed)
-(2 rows)
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1) (never executed)
+   Hash Key: (generate_series(1, 10))
+   ->  ProjectSet (never executed)
+         ->  Result (never executed)
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 REFRESH MATERIALIZED VIEW matview_schema.mv_nodata2;
 RESET SESSION AUTHORIZATION;

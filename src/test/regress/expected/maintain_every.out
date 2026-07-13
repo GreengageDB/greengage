@@ -1,6 +1,7 @@
 -- Test maintenance commands that visit every eligible relation.  Run as a
 -- non-superuser, to skip other users' tables.
 CREATE ROLE regress_maintain;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_maintain;
 -- Test database-wide ANALYZE ("use_own_xacts" mode) setting relhassubclass=f
 -- for non-partitioning inheritance, w/ ON COMMIT DELETE ROWS building an
@@ -8,6 +9,7 @@ SET ROLE regress_maintain;
 CREATE TEMP TABLE past_inh_db_other (); -- need 2 tables for "use_own_xacts"
 CREATE TEMP TABLE past_inh_db_parent () ON COMMIT DELETE ROWS;
 CREATE TEMP TABLE past_inh_db_child () INHERITS (past_inh_db_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX ON past_inh_db_parent ((1));
 ANALYZE past_inh_db_parent;
 SELECT reltuples, relhassubclass
@@ -25,7 +27,7 @@ SELECT reltuples, relhassubclass
   FROM pg_class WHERE oid = 'past_inh_db_parent'::regclass;
  reltuples | relhassubclass 
 -----------+----------------
-         0 | f
+         0 | t
 (1 row)
 
 DROP TABLE past_inh_db_parent, past_inh_db_other;

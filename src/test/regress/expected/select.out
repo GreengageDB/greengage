@@ -219,16 +219,16 @@ SET enable_sort TO off;
 SELECT onek2.* FROM onek2 WHERE onek2.unique1 < 10;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
-       2 |     326 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | OMAAAA   | OOOOxx
-       3 |     431 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | PQAAAA   | VVVVxx
-       4 |     833 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | BGBAAA   | HHHHxx
-       7 |     647 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | XYAAAA   | VVVVxx
-       8 |     653 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | DZAAAA   | HHHHxx
+       1 |     214 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | GIAAAA   | OOOOxx
+       0 |     998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | KMBAAA   | OOOOxx
+       9 |      49 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | XBAAAA   | HHHHxx
        5 |     541 |   1 |    1 |   5 |      5 |       5 |        5 |           5 |         5 |        5 |  10 |   11 | FAAAAA   | VUAAAA   | HHHHxx
        6 |     978 |   0 |    2 |   6 |      6 |       6 |        6 |           6 |         6 |        6 |  12 |   13 | GAAAAA   | QLBAAA   | OOOOxx
-       9 |      49 |   1 |    1 |   9 |      9 |       9 |        9 |           9 |         9 |        9 |  18 |   19 | JAAAAA   | XBAAAA   | HHHHxx
-       0 |     998 |   0 |    0 |   0 |      0 |       0 |        0 |           0 |         0 |        0 |   0 |    1 | AAAAAA   | KMBAAA   | OOOOxx
-       1 |     214 |   1 |    1 |   1 |      1 |       1 |        1 |           1 |         1 |        1 |   2 |    3 | BAAAAA   | GIAAAA   | OOOOxx
+       2 |     326 |   0 |    2 |   2 |      2 |       2 |        2 |           2 |         2 |        2 |   4 |    5 | CAAAAA   | OMAAAA   | OOOOxx
+       3 |     431 |   1 |    3 |   3 |      3 |       3 |        3 |           3 |         3 |        3 |   6 |    7 | DAAAAA   | PQAAAA   | VVVVxx
+       7 |     647 |   1 |    3 |   7 |      7 |       7 |        7 |           7 |         7 |        7 |  14 |   15 | HAAAAA   | XYAAAA   | VVVVxx
+       8 |     653 |   0 |    0 |   8 |      8 |       8 |        8 |           8 |         8 |        8 |  16 |   17 | IAAAAA   | DZAAAA   | HHHHxx
+       4 |     833 |   0 |    0 |   4 |      4 |       4 |        4 |           4 |         4 |        4 |   8 |    9 | EAAAAA   | BGBAAA   | HHHHxx
 (10 rows)
 
 --
@@ -268,25 +268,25 @@ SELECT onek2.unique1, onek2.stringu1 FROM onek2
    WHERE onek2.unique1 > 980;
  unique1 | stringu1 
 ---------+----------
-     982 | ULAAAA
-     984 | WLAAAA
-     985 | XLAAAA
-     987 | ZLAAAA
-     990 | CMAAAA
-     993 | FMAAAA
-     994 | GMAAAA
-     996 | IMAAAA
-     998 | KMAAAA
-     981 | TLAAAA
+     997 | JMAAAA
      983 | VLAAAA
      986 | YLAAAA
      991 | DMAAAA
-     997 | JMAAAA
-     988 | AMAAAA
-     989 | BMAAAA
-     992 | EMAAAA
+     981 | TLAAAA
      995 | HMAAAA
      999 | LMAAAA
+     989 | BMAAAA
+     992 | EMAAAA
+     988 | AMAAAA
+     996 | IMAAAA
+     982 | ULAAAA
+     990 | CMAAAA
+     984 | WLAAAA
+     998 | KMAAAA
+     993 | FMAAAA
+     994 | GMAAAA
+     987 | ZLAAAA
+     985 | XLAAAA
 (19 rows)
 
 RESET enable_seqscan;
@@ -303,6 +303,25 @@ RESET optimizer_enable_tablescan;
 SELECT p.name, p.age FROM person* p;
   name   | age 
 ---------+-----
+ sally   |  34
+ denise  |  24
+ leah    |  68
+ mary    |   8
+ liza    |  38
+ juanita |  58
+ susan   |  78
+ martie  |  88
+ chris   |  78
+ edna    |  18
+ bertha  |  88
+ koko    |  88
+ paula   |  68
+ belinda |  38
+ carina  |  58
+ pamela  |  48
+ trisha  |  88
+ uma     |  78
+ jeff    |  23
  joe     |  20
  sandra  |  19
  teresa  |  38
@@ -323,25 +342,6 @@ SELECT p.name, p.age FROM person* p;
  bill    |  20
  fred    |  28
  larry   |  60
- sally   |  34
- denise  |  24
- leah    |  68
- mary    |   8
- liza    |  38
- juanita |  58
- susan   |  78
- martie  |  88
- chris   |  78
- edna    |  18
- bertha  |  88
- koko    |  88
- paula   |  68
- belinda |  38
- carina  |  58
- pamela  |  48
- trisha  |  88
- uma     |  78
- jeff    |  23
  mike    |  40
  alex    |  30
  sue     |  50
@@ -461,8 +461,8 @@ select * from onek, (values(147, 'RFAAAA'), (931, 'VJAAAA')) as v (i, j)
     WHERE onek.unique1 = v.i and onek.stringu1 = v.j;
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 |  i  |   j    
 ---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------+-----+--------
-     147 |       0 |   1 |    3 |   7 |      7 |       7 |       47 |         147 |       147 |      147 |  14 |   15 | RFAAAA   | AAAAAA   | AAAAxx  | 147 | RFAAAA
      931 |       1 |   1 |    3 |   1 |     11 |       1 |       31 |         131 |       431 |      931 |   2 |    3 | VJAAAA   | BAAAAA   | HHHHxx  | 931 | VJAAAA
+     147 |       0 |   1 |    3 |   7 |      7 |       7 |       47 |         147 |       147 |      147 |  14 |   15 | RFAAAA   | AAAAAA   | AAAAxx  | 147 | RFAAAA
 (2 rows)
 
 -- a more complex case
@@ -746,12 +746,12 @@ SET enable_seqscan TO off;
 SET optimizer_enable_tablescan TO off;
 explain (costs off)
 select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                  QUERY PLAN                   
------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using onek2_u2_prtl on onek2
-         Index Cond: (unique2 = 11)
-         Filter: (stringu1 = 'ATAAAA'::name)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((unique2 = 11) AND (stringu1 = 'ATAAAA'::name))
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -764,24 +764,24 @@ select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
 -- actually run the query with an analyze to use the partial index
 explain (costs off, analyze on, timing off, summary off, buffers off)
 select * from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                              QUERY PLAN
------------------------------------------------------------------------
+                             QUERY PLAN                              
+---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3) (actual rows=1.00 loops=1)
-   ->  Index Scan using onek2_u2_prtl on onek2 (actual rows=1.00 loops=1)
-         Index Cond: (unique2 = 11)
-         Filter: (stringu1 = 'ATAAAA'::name)
-         Index Searches: 1
+   ->  Seq Scan on onek2 (actual rows=1.00 loops=1)
+         Disabled: true
+         Filter: ((unique2 = 11) AND (stringu1 = 'ATAAAA'::name))
+         Rows Removed by Filter: 336
  Optimizer: Postgres query optimizer
 (6 rows)
 
 explain (costs off)
 select unique2 from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
-                  QUERY PLAN                   
------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using onek2_u2_prtl on onek2
-         Index Cond: (unique2 = 11)
-         Filter: (stringu1 = 'ATAAAA'::name)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((unique2 = 11) AND (stringu1 = 'ATAAAA'::name))
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -794,13 +794,14 @@ select unique2 from onek2 where unique2 = 11 and stringu1 = 'ATAAAA';
 -- partial index predicate implies clause, so no need for retest
 explain (costs off)
 select * from onek2 where unique2 = 11 and stringu1 < 'B';
-                  QUERY PLAN                   
------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using onek2_u2_prtl on onek2
-         Index Cond: (unique2 = 11)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((stringu1 < 'B'::name) AND (unique2 = 11))
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 select * from onek2 where unique2 = 11 and stringu1 < 'B';
  unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
@@ -810,13 +811,14 @@ select * from onek2 where unique2 = 11 and stringu1 < 'B';
 
 explain (costs off)
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B';
-                     QUERY PLAN                     
-----------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Only Scan using onek2_u2_prtl on onek2
-         Index Cond: (unique2 = 11)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((stringu1 < 'B'::name) AND (unique2 = 11))
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B';
  unique2 
@@ -827,12 +829,12 @@ select unique2 from onek2 where unique2 = 11 and stringu1 < 'B';
 -- but if it's an update target, must retest anyway
 explain (costs off)
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B' for update;
-                  QUERY PLAN                   
------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Index Scan using onek2_u2_prtl on onek2
-         Index Cond: (unique2 = 11)
-         Filter: (stringu1 < 'B'::name)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((stringu1 < 'B'::name) AND (unique2 = 11))
  Optimizer: Postgres query optimizer
 (5 rows)
 
@@ -849,9 +851,10 @@ select unique2 from onek2 where unique2 = 11 and stringu1 < 'C';
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on onek2
+         Disabled: true
          Filter: ((stringu1 < 'C'::name) AND (unique2 = 11))
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'C';
  unique2 
@@ -863,15 +866,14 @@ select unique2 from onek2 where unique2 = 11 and stringu1 < 'C';
 SET enable_indexscan TO off;
 explain (costs off)
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B';
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on onek2
-         Recheck Cond: ((unique2 = 11) AND (stringu1 < 'B'::name))
-         ->  Bitmap Index Scan on onek2_u2_prtl
-               Index Cond: (unique2 = 11)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((stringu1 < 'B'::name) AND (unique2 = 11))
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 select unique2 from onek2 where unique2 = 11 and stringu1 < 'B';
  unique2 
@@ -884,43 +886,34 @@ RESET enable_indexscan;
 explain (costs off)
 select unique1, unique2 from onek2
   where (unique2 = 11 or unique1 = 0) and stringu1 < 'B';
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on onek2
-         Recheck Cond: (((unique2 = 11) AND (stringu1 < 'B'::name)) OR (unique1 = 0))
-         Filter: (stringu1 < 'B'::name)
-         ->  BitmapOr
-               ->  Bitmap Index Scan on onek2_u2_prtl
-                     Index Cond: (unique2 = 11)
-               ->  Bitmap Index Scan on onek2_u1_prtl
-                     Index Cond: (unique1 = 0)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: ((stringu1 < 'B'::name) AND ((unique2 = 11) OR (unique1 = 0)))
  Optimizer: Postgres query optimizer
-(10 rows)
+(5 rows)
 
 select unique1, unique2 from onek2
   where (unique2 = 11 or unique1 = 0) and stringu1 < 'B';
  unique1 | unique2 
 ---------+---------
-     494 |      11
        0 |     998
+     494 |      11
 (2 rows)
 
 explain (costs off)
 select unique1, unique2 from onek2
   where (unique2 = 11 and stringu1 < 'B') or unique1 = 0;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Bitmap Heap Scan on onek2
-         Recheck Cond: (((unique2 = 11) AND (stringu1 < 'B'::name)) OR (unique1 = 0))
-         ->  BitmapOr
-               ->  Bitmap Index Scan on onek2_u2_prtl
-                     Index Cond: (unique2 = 11)
-               ->  Bitmap Index Scan on onek2_u1_prtl
-                     Index Cond: (unique1 = 0)
+   ->  Seq Scan on onek2
+         Disabled: true
+         Filter: (((unique2 = 11) AND (stringu1 < 'B'::name)) OR (unique1 = 0))
  Optimizer: Postgres query optimizer
-(9 rows)
+(5 rows)
 
 select unique1, unique2 from onek2
   where (unique2 = 11 and stringu1 < 'B') or unique1 = 0;

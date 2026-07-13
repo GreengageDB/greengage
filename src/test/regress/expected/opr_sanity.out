@@ -1925,9 +1925,13 @@ WHERE c1.oid != c2.oid AND
 -- Ask access methods to validate opclasses
 -- (this replaces a lot of SQL-level checks that used to be done in this file)
 SELECT oid, opcname FROM pg_opclass WHERE NOT amvalidate(oid);
- oid | opcname 
------+---------
-(0 rows)
+INFO:  operator family "cdbhash_varbit_ops" of access method hash contains function cdblegacyhash_bit(bit) with wrong signature for support number 1
+INFO:  operator family "cdbhash_varbit_ops" of access method hash lacks support function for operator =(bit varying,bit varying)
+INFO:  operator family "cdbhash_varbit_ops" of access method hash is missing cross-type operator(s)
+  oid  |      opcname       
+-------+--------------------
+ 10190 | cdbhash_varbit_ops
+(1 row)
 
 -- **************** pg_am ****************
 -- Look for illegal values in pg_am fields

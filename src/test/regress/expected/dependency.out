@@ -2,8 +2,11 @@
 -- DEPENDENCIES
 --
 CREATE USER regress_dep_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user2;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user3;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE GROUP regress_dep_group;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE deptest (f1 serial primary key, f2 text) DISTRIBUTED BY (f1);
@@ -43,8 +46,11 @@ DROP TABLE deptest;
 DROP USER regress_dep_user3;
 -- Test DROP OWNED
 CREATE USER regress_dep_user0;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user2;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_dep_user0;
 -- permission denied
 DROP OWNED BY regress_dep_user1;
@@ -117,7 +123,7 @@ FROM pg_type JOIN pg_class c ON typrelid = c.oid WHERE typname = 'deptest_t';
 RESET SESSION AUTHORIZATION;
 REASSIGN OWNED BY regress_dep_user1 TO regress_dep_user2;
 \dt deptest
-                   List of relations
+                     List of tables
  Schema |  Name   | Type  |       Owner       | Storage 
 --------+---------+-------+-------------------+---------
  public | deptest | table | regress_dep_user2 | heap

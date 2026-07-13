@@ -81,7 +81,7 @@ select distinct on (1) floor(random()) as r, f1 from int4_tbl order by 1,2;
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (four) four,two
    FROM tenk1 WHERE four = 0 ORDER BY 1;
-                   QUERY PLAN
+                   QUERY PLAN                   
 ------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -119,15 +119,17 @@ SELECT DISTINCT ON (four) four,two
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (four) four,hundred
    FROM tenk1 WHERE four = 0 ORDER BY 1,2;
-                     QUERY PLAN
------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred
-         ->  Index Scan using tenk1_hundred on tenk1
-               Filter: (four = 0)
+         ->  Sort
+               Sort Key: hundred
+               ->  Seq Scan on tenk1
+                     Filter: (four = 0)
  Optimizer: Postgres query optimizer
-(6 rows)
+(8 rows)
 
 --
 -- Test the planner's ability to reorder the distinctClause Pathkeys to match
@@ -143,11 +145,17 @@ SET enable_hashagg TO OFF;
 -- Pathkeys to match the ordering of the input path
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- Unique
-   ->  Index Only Scan using distinct_on_tbl_x_y_idx on distinct_on_tbl
-(2 rows)
+                  QUERY PLAN                   
+-----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: y, x
+   ->  Unique
+         Group Key: y, x
+         ->  Sort
+               Sort Key: y, x
+               ->  Seq Scan on distinct_on_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl;
  x | y 
@@ -168,15 +176,21 @@ SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl;
 -- Pathkeys to partially match the ordering of the input path
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Unique
-   ->  Incremental Sort
-         Sort Key: s.x, s.y
-         Presorted Key: s.x
-         ->  Subquery Scan on s
-               ->  Index Only Scan using distinct_on_tbl_x_y_idx on distinct_on_tbl
-(6 rows)
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: s.x, s.y
+   ->  Unique
+         Group Key: s.x, s.y
+         ->  Incremental Sort
+               Sort Key: s.x, s.y
+               Presorted Key: s.x
+               ->  Subquery Scan on s
+                     ->  Sort
+                           Sort Key: distinct_on_tbl.x
+                           ->  Seq Scan on distinct_on_tbl
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s;
  x | y 
@@ -197,13 +211,17 @@ SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s
 -- input path even if there is ORDER BY clause
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl ORDER BY y;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Sort
-   Sort Key: y
+                  QUERY PLAN                   
+-----------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: y, x
    ->  Unique
-         ->  Index Only Scan using distinct_on_tbl_x_y_idx on distinct_on_tbl
-(4 rows)
+         Group Key: y, x
+         ->  Sort
+               Sort Key: y, x
+               ->  Seq Scan on distinct_on_tbl
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl ORDER BY y;
  x | y 
@@ -223,19 +241,23 @@ SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl ORDER BY y;
 -- Ensure the resulting pathkey list matches the initial distinctClause Pathkeys
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (y, x) x, y FROM (select * from distinct_on_tbl order by x, z, y) s ORDER BY y, x, z;
-                                         QUERY PLAN                                          
----------------------------------------------------------------------------------------------
- Sort
-   Sort Key: s.y, s.x, s.z
-   ->  Unique
-         ->  Incremental Sort
-               Sort Key: s.x, s.y, s.z
-               Presorted Key: s.x
-               ->  Subquery Scan on s
-                     ->  Sort
-                           Sort Key: distinct_on_tbl.x, distinct_on_tbl.z, distinct_on_tbl.y
-                           ->  Seq Scan on distinct_on_tbl
-(10 rows)
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: s.y, s.x, s.z
+   ->  Sort
+         Sort Key: s.y, s.x, s.z
+         ->  Unique
+               Group Key: s.x, s.y
+               ->  Incremental Sort
+                     Sort Key: s.x, s.y, s.z
+                     Presorted Key: s.x
+                     ->  Subquery Scan on s
+                           ->  Sort
+                                 Sort Key: distinct_on_tbl.x, distinct_on_tbl.z, distinct_on_tbl.y
+                                 ->  Seq Scan on distinct_on_tbl
+ Optimizer: Postgres query optimizer
+(14 rows)
 
 SELECT DISTINCT ON (y, x) x, y FROM (select * from distinct_on_tbl order by x, z, y) s ORDER BY y, x, z;
  x | y 
