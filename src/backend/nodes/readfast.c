@@ -637,6 +637,7 @@ _readVar(void)
 	READ_INT_FIELD(vartypmod);
 	READ_OID_FIELD(varcollid);
 	READ_UINT_FIELD(varlevelsup);
+	READ_ENUM_FIELD(varreturningtype, VarReturningType);	/* PG18: OLD/NEW ref */
 	READ_UINT_FIELD(varnosyn);
 	READ_INT_FIELD(varattnosyn);
 	READ_LOCATION_FIELD(location);
@@ -2109,6 +2110,18 @@ _readMergeSupportFunc(void)
 	READ_OID_FIELD(msftype);
 	READ_OID_FIELD(msfcollid);
 	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+static ReturningExpr *
+_readReturningExpr(void)
+{
+	READ_LOCALS(ReturningExpr);
+
+	READ_INT_FIELD(retlevelsup);
+	READ_BOOL_FIELD(retold);
+	READ_NODE_FIELD(retexpr);
 
 	READ_DONE();
 }
@@ -6585,6 +6598,9 @@ readNodeBinary(void)
 				break;
 			case T_MergeSupportFunc:
 				return_value = _readMergeSupportFunc();
+				break;
+			case T_ReturningExpr:
+				return_value = _readReturningExpr();
 				break;
 			case T_JsonBehavior:
 				return_value = _readJsonBehavior();

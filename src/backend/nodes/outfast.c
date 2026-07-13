@@ -1550,6 +1550,7 @@ _outVar(StringInfo str, const Var *node)
 	WRITE_INT_FIELD(vartypmod);
 	WRITE_OID_FIELD(varcollid);
 	WRITE_UINT_FIELD(varlevelsup);
+	WRITE_ENUM_FIELD(varreturningtype, VarReturningType);	/* PG18: OLD/NEW ref */
 	WRITE_UINT_FIELD(varnosyn);
 	WRITE_INT_FIELD(varattnosyn);
 	WRITE_LOCATION_FIELD(location);
@@ -2255,6 +2256,16 @@ _outMergeSupportFunc(StringInfo str, const MergeSupportFunc *node)
 	WRITE_OID_FIELD(msftype);
 	WRITE_OID_FIELD(msfcollid);
 	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outReturningExpr(StringInfo str, const ReturningExpr *node)
+{
+	WRITE_NODE_TYPE("RETURNINGEXPR");
+
+	WRITE_INT_FIELD(retlevelsup);
+	WRITE_BOOL_FIELD(retold);
+	WRITE_NODE_FIELD(retexpr);
 }
 
 static void
@@ -6153,6 +6164,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_MergeSupportFunc:
 				_outMergeSupportFunc(str, obj);
+				break;
+			case T_ReturningExpr:
+				_outReturningExpr(str, obj);
 				break;
 			case T_JsonBehavior:
 				_outJsonBehavior(str, obj);
