@@ -1851,6 +1851,44 @@ AllocSetSetPeakUsage(MemoryContext context, Size nbytes)
 	return oldpeak;
 }
 
+/*
+ * GPDB: helper for AllocSetTransferAccounting.  When a context becomes its own
+ * memory account (its accountingParent changes to itself), any descendant
+ * AllocSet that shared the former accounting parent must follow it into the new
+ * account.  Otherwise the descendant's accountingParent still points at the old
+ * account; once that account is reset/freed the pointer dangles and
+ * currentAllocated underflows on the descendant's next free (see the SQL
+ * function hcontext/pcontext pair reparented to CacheMemoryContext in
+ * functions.c, which crashed MEMORY_ACCOUNT_DEC_ALLOCATED on transaction abort).
+ */
+static void
+AllocSetTransferAccountingSubtree(AllocSet newroot, MemoryContext context,
+								  AllocSet oldroot)
+{
+	MemoryContext child;
+
+	for (child = context->firstchild; child != NULL; child = child->nextchild)
+	{
+		AllocSet	childset;
+
+		/* non-AllocSet contexts don't carry the AllocSet accounting fields */
+		if (!IsA(child, AllocSetContext))
+			continue;
+
+		childset = (AllocSet) child;
+
+		/* only move contexts that were accounted to the account we're leaving */
+		if (childset->accountingParent != oldroot)
+			continue;			/* its own account, or already elsewhere */
+
+		oldroot->currentAllocated -= childset->localAllocated;
+		newroot->currentAllocated += childset->localAllocated;
+		childset->accountingParent = newroot;
+
+		AllocSetTransferAccountingSubtree(newroot, child, oldroot);
+	}
+}
+
 void
 AllocSetTransferAccounting(MemoryContext context, MemoryContext new_parent)
 {
@@ -1880,10 +1918,20 @@ AllocSetTransferAccounting(MemoryContext context, MemoryContext new_parent)
 	else
 	{
 		/* new_parent is NULL or new_parent is not the ancestor of context */
-		set->accountingParent->currentAllocated -= set->localAllocated;
+		AllocSet	oldroot = set->accountingParent;
+
+		oldroot->currentAllocated -= set->localAllocated;
 		set->accountingParent = set;
 		set->currentAllocated = set->localAllocated;
-		set->peakAllocated = set->localAllocated;
+
+		/*
+		 * GPDB: descendants that were accounted to oldroot must move with us
+		 * into the new account, else their accountingParent dangles once
+		 * oldroot is freed.
+		 */
+		AllocSetTransferAccountingSubtree(set, (MemoryContext) set, oldroot);
+
+		set->peakAllocated = set->currentAllocated;
 	}
 
 }
