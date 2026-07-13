@@ -20916,6 +20916,7 @@ unreserved_keyword:
 			| SKIP
 			| SNAPSHOT
 			| SOURCE
+			| SPLIT
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
@@ -21906,6 +21907,7 @@ bare_label_keyword:
 			| SNAPSHOT
 			| SOME
 			| SOURCE
+			| SPLIT
 			| SQL_P
 			| STABLE
 			| STANDALONE_P
