@@ -274,90 +274,131 @@ cdb_exprs_equal_ignore_aggno(Node *a, Node *b)
 				 reset_aggref_numbers_mutator(b, NULL));
 }
 
+/*
+ * Try to locate a single EquivalenceMember's expression in the target list.
+ * Returns the matching expr (or the member's own expr for a const / all-Vars-
+ * present member), else NULL.  Factored out so both the parent members
+ * (ec_members) and the per-child-relid child members (ec_childmembers) can be
+ * searched with identical, lenient matching semantics.
+ */
+static Expr *
+find_em_expr_in_targetlist(EquivalenceMember *em, List *targetlist,
+						   Oid hashOpFamily)
+{
+	Expr	   *key = (Expr *) em->em_expr;
+	ListCell   *lc_tle;
+
+	if (OidIsValid(hashOpFamily) &&
+		!get_opfamily_member(hashOpFamily, em->em_datatype, em->em_datatype,
+							 HTEqualStrategyNumber))
+		return NULL;
+
+	/* A constant is OK regardless of the target list */
+	if (em->em_is_const)
+		return key;
+
+	/*-------
+	 * Try to find this EC member in the target list.
+	 *
+	 * We do the search in a very lenient way:
+	 *
+	 * 1. Ignore RelabelType nodes on top of both sides, like
+	 *    tlist_member_ignore_relabel() does.
+	 * 2. Ignore varnosyn/varattnosyn fields in Var nodes, like
+	 *    tlist_member_match_var() does.
+	 * 3. Also Accept "naked" targetlists, without TargetEntry nodes
+	 *
+	 * Unfortunately, neither tlist_member_ignore_relabel() nor
+	 * tlist_member_match_var() does exactly what we need.
+	 *-------
+	 */
+	while (IsA(key, RelabelType))
+		key = (Expr *) ((RelabelType *) key)->arg;
+
+	foreach(lc_tle, targetlist)
+	{
+		Node	   *tlexpr = lfirst(lc_tle);
+		Node	   *naked_tlexpr;
+
+		/*
+		 * Check if targetlist is a List of TargetEntry. (Planner's
+		 * RelOptInfo targetlists don't have TargetEntry nodes.)
+		 */
+		if (IsA(tlexpr, TargetEntry))
+			tlexpr = (Node *) ((TargetEntry *) tlexpr)->expr;
+
+		/* ignore RelabelType nodes on both sides */
+		naked_tlexpr = tlexpr;
+		while (naked_tlexpr && IsA(naked_tlexpr, RelabelType))
+			naked_tlexpr = (Node *) ((RelabelType *) naked_tlexpr)->arg;
+
+		if (IsA(key, Var))
+		{
+			if (IsA(naked_tlexpr, Var))
+			{
+				Var		   *keyvar = (Var *) key;
+				Var		   *tlvar = (Var *) naked_tlexpr;
+
+				if (keyvar->varno == tlvar->varno &&
+					keyvar->varattno == tlvar->varattno &&
+					keyvar->varlevelsup == tlvar->varlevelsup)
+					return (Expr *) tlexpr;
+			}
+		}
+		else
+		{
+			if (equal(naked_tlexpr, key))
+				return (Expr *) tlexpr;
+			/* Retry ignoring PG14 Aggref aggno/aggtransno (see above). */
+			if (cdb_exprs_equal_ignore_aggno(naked_tlexpr, (Node *) key))
+				return (Expr *) tlexpr;
+		}
+	}
+
+	/* Return this item if all referenced Vars are in targetlist. */
+	if (!IsA(key, Var) &&
+		!cdbpullup_missingVarWalker(key, targetlist))
+		return key;
+
+	return NULL;
+}
+
 Expr *
 cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 								 Oid hashOpFamily)
 {
 	ListCell   *lc;
+	Expr	   *result;
+	int			i;
 
+	/* Search the parent (non-child) members. */
 	foreach(lc, eclass->ec_members)
 	{
-		EquivalenceMember *em = (EquivalenceMember *) lfirst(lc);
-		Expr	   *key = (Expr *) em->em_expr;
-		ListCell *lc_tle;
+		result = find_em_expr_in_targetlist((EquivalenceMember *) lfirst(lc),
+											targetlist, hashOpFamily);
+		if (result)
+			return result;
+	}
 
-		if (OidIsValid(hashOpFamily) &&
-			!get_opfamily_member(hashOpFamily, em->em_datatype, em->em_datatype,
-								 HTEqualStrategyNumber))
-			continue;
-
-		/* A constant is OK regardless of the target list */
-		if (em->em_is_const)
-			return key;
-
-		/*-------
-		 * Try to find this EC member in the target list.
-		 *
-		 * We do the search in a very lenient way:
-		 *
-		 * 1. Ignore RelabelType nodes on top of both sides, like
-		 *    tlist_member_ignore_relabel() does.
-		 * 2. Ignore varnosyn/varattnosyn fields in Var nodes, like
-		 *    tlist_member_match_var() does.
-		 * 3. Also Accept "naked" targetlists, without TargetEntry nodes
-		 *
-		 * Unfortunately, neither tlist_member_ignore_relabel() nor
-		 * tlist_member_match_var() does exactly what we need.
-		 *-------
-		 */
-		while (IsA(key, RelabelType))
-			key = (Expr *) ((RelabelType *) key)->arg;
-
-		foreach(lc_tle, targetlist)
+	/*
+	 * PG18 moved child EquivalenceMembers out of ec_members into the
+	 * per-child-relid ec_childmembers array.  A redistribution Motion built for
+	 * an appendrel/setop child (e.g. INTERSECT/EXCEPT redistributing each input
+	 * on all of its columns) carries the child member -- the setop subquery's
+	 * Var -- in its distribution key, while the parent member has varno 0.  If
+	 * we only look at ec_members the distkey Var is never found in the child's
+	 * target list ("could not find hash distribution key expressions in target
+	 * list"), so search the child members too.  Matching is by exact varno, so
+	 * only the member belonging to this subplan can match.
+	 */
+	for (i = 0; i < eclass->ec_childmembers_size; i++)
+	{
+		foreach(lc, eclass->ec_childmembers[i])
 		{
-			Node	   *tlexpr = lfirst(lc_tle);
-			Node	   *naked_tlexpr;
-
-			/*
-			 * Check if targetlist is a List of TargetEntry. (Planner's
-			 * RelOptInfo targetlists don't have TargetEntry nodes.)
-			 */
-			if (IsA(tlexpr, TargetEntry))
-				tlexpr = (Node *) ((TargetEntry *) tlexpr)->expr;
-
-			/* ignore RelabelType nodes on both sides */
-			naked_tlexpr = tlexpr;
-			while (naked_tlexpr && IsA(naked_tlexpr, RelabelType))
-				naked_tlexpr = (Node *) ((RelabelType *) naked_tlexpr)->arg;
-
-			if (IsA(key, Var))
-			{
-				if (IsA(naked_tlexpr, Var))
-				{
-					Var		   *keyvar = (Var *) key;
-					Var		   *tlvar = (Var *) naked_tlexpr;
-
-					if (keyvar->varno == tlvar->varno &&
-						keyvar->varattno == tlvar->varattno &&
-						keyvar->varlevelsup == tlvar->varlevelsup)
-						return (Expr *) tlexpr;
-				}
-			}
-			else
-			{
-				if (equal(naked_tlexpr, key))
-					return (Expr *) tlexpr;
-				/* Retry ignoring PG14 Aggref aggno/aggtransno (see above). */
-				if (cdb_exprs_equal_ignore_aggno(naked_tlexpr, (Node *) key))
-					return (Expr *) tlexpr;
-			}
-		}
-
-		/* Return this item if all referenced Vars are in targetlist. */
-		if (!IsA(key, Var) &&
-			!cdbpullup_missingVarWalker(key, targetlist))
-		{
-			return key;
+			result = find_em_expr_in_targetlist((EquivalenceMember *) lfirst(lc),
+												targetlist, hashOpFamily);
+			if (result)
+				return result;
 		}
 	}
 
