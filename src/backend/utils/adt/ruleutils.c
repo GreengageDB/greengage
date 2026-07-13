@@ -8503,8 +8503,14 @@ get_name_for_var_field(Var *var, int fieldno,
 						snprintf(dummy_name, 32, "f%d", fieldno);
 						return dummy_name;
 					}
+					/*
+					 * GPDB: a CTE reference is executed via a ShareInputScan
+					 * (the MPP materialized-CTE node); set_deparse_plan() points
+					 * dpns->inner_plan at its shared subplan just like CteScan.
+					 */
 					Assert(dpns->plan && (IsA(dpns->plan, CteScan) ||
-										  IsA(dpns->plan, WorkTableScan)));
+										  IsA(dpns->plan, WorkTableScan) ||
+										  IsA(dpns->plan, ShareInputScan)));
 
 					tle = get_tle_by_resno(dpns->inner_tlist, attnum);
 					if (!tle)
