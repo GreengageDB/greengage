@@ -423,7 +423,9 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 	WRITE_BOOL_FIELD(parallelModeNeeded);
 	WRITE_INT_FIELD(jitFlags);
 	WRITE_NODE_FIELD(planTree);
+	WRITE_NODE_FIELD(partPruneInfos);
 	WRITE_NODE_FIELD(rtable);
+	WRITE_BITMAPSET_FIELD(unprunableRelids);
 	WRITE_NODE_FIELD(permInfos);
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(appendRelations);

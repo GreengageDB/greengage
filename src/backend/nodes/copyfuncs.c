@@ -145,7 +145,9 @@ _copyPlannedStmt(const PlannedStmt *from)
 		COPY_NODE_FIELD(slices[i].directDispatch.contentIds);
 	}
 
+	COPY_NODE_FIELD(partPruneInfos);
 	COPY_NODE_FIELD(rtable);
+	COPY_BITMAPSET_FIELD(unprunableRelids);
 	COPY_NODE_FIELD(permInfos);
 	COPY_NODE_FIELD(resultRelations);
 	COPY_NODE_FIELD(appendRelations);

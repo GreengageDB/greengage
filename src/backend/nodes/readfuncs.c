@@ -289,7 +289,9 @@ _readPlannedStmt(void)
 	READ_BOOL_FIELD(parallelModeNeeded);
 	READ_INT_FIELD(jitFlags);
 	READ_NODE_FIELD(planTree);
+	READ_NODE_FIELD(partPruneInfos);
 	READ_NODE_FIELD(rtable);
+	READ_BITMAPSET_FIELD(unprunableRelids);
 	READ_NODE_FIELD(permInfos);
 	READ_NODE_FIELD(resultRelations);
 	READ_NODE_FIELD(appendRelations);
