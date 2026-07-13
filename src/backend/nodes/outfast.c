@@ -2814,6 +2814,21 @@ _outAlterTableCmd(StringInfo str, const AlterTableCmd *node)
 }
 
 static void
+_outATAlterConstraint(StringInfo str, const ATAlterConstraint *node)
+{
+	WRITE_NODE_TYPE("ATALTERCONSTRAINT");
+
+	WRITE_STRING_FIELD(conname);
+	WRITE_BOOL_FIELD(alterEnforceability);
+	WRITE_BOOL_FIELD(is_enforced);
+	WRITE_BOOL_FIELD(alterDeferrability);
+	WRITE_BOOL_FIELD(deferrable);
+	WRITE_BOOL_FIELD(initdeferred);
+	WRITE_BOOL_FIELD(alterInheritability);
+	WRITE_BOOL_FIELD(noinherit);
+}
+
+static void
 wrapStringList(List *list)
 {
 	ListCell *lc;
@@ -5697,6 +5712,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_AlterTableCmd:
 				_outAlterTableCmd(str, obj);
+				break;
+			case T_ATAlterConstraint:
+				_outATAlterConstraint(str, obj);
 				break;
 			case T_AlteredTableInfo:
 				_outAlteredTableInfo(str, obj);

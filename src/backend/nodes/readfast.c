@@ -952,6 +952,23 @@ _readAlterTableCmd(void)
 	READ_DONE();
 }
 
+static ATAlterConstraint *
+_readATAlterConstraint(void)
+{
+	READ_LOCALS(ATAlterConstraint);
+
+	READ_STRING_FIELD(conname);
+	READ_BOOL_FIELD(alterEnforceability);
+	READ_BOOL_FIELD(is_enforced);
+	READ_BOOL_FIELD(alterDeferrability);
+	READ_BOOL_FIELD(deferrable);
+	READ_BOOL_FIELD(initdeferred);
+	READ_BOOL_FIELD(alterInheritability);
+	READ_BOOL_FIELD(noinherit);
+
+	READ_DONE();
+}
+
 static void
 unwrapStringList(List *list)
 {
@@ -6768,6 +6785,9 @@ readNodeBinary(void)
 				break;
 			case T_AlterTableCmd:
 				return_value = _readAlterTableCmd();
+				break;
+			case T_ATAlterConstraint:
+				return_value = _readATAlterConstraint();
 				break;
 			case T_AlteredTableInfo:
 				return_value = _readAlteredTableInfo();
