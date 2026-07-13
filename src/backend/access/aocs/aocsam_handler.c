@@ -77,7 +77,13 @@ typedef struct AOCSBitmapScanData
 		bool					   *proj;
 	} bitmapScanDesc[2];
 
-	int	rs_cindex;	/* current tuple's index tbmres->offset or -1 */
+	int	rs_cindex;	/* current tuple's index in rs_offsets */
+	int	rs_ntuples;	/* # of tuples on the current bitmap page
+					 * (INT16_MAX+1 for a lossy page) */
+	BlockNumber	rs_blockno;	/* block number of the current bitmap page */
+	bool		rs_lossy;	/* is the current bitmap page lossy? */
+	bool		rs_recheck;	/* does the current page require recheck? */
+	OffsetNumber *rs_offsets;	/* extracted offsets for an exact bitmap page */
 } *AOCSBitmapScan;
 
 /*
@@ -363,7 +369,7 @@ get_or_create_aoco_insert_descriptor(const Relation relation, int64 num_rows)
 
 			for(int i = 0; i < relation->rd_att->natts; i++)
 			{
-				if (!relation->rd_att->attrs[i].attisdropped) {
+				if (!TupleDescAttr(relation->rd_att, i)->attisdropped) {
 					firstNonDroppedColumn = i;
 					break;
 				}
@@ -568,6 +574,8 @@ aoco_beginscan_extractcolumns_bm(Relation rel, Snapshot snapshot,
 
 	aocsBitmapScan = palloc0(sizeof(*aocsBitmapScan));
 	aocsBitmapScan->descIdentifier = AOCSBITMAPSCANDATA;
+	aocsBitmapScan->rs_offsets = (OffsetNumber *)
+		palloc(TBM_MAX_TUPLES_PER_PAGE * sizeof(OffsetNumber));
 
 	aocsBitmapScan->rs_base.rs_rd = rel;
 	aocsBitmapScan->rs_base.rs_snapshot = snapshot;
@@ -1997,110 +2005,129 @@ aoco_estimate_rel_size(Relation rel, int32 *attr_widths,
  * Executor related callbacks for the heap AM
  * ------------------------------------------------------------------------
  */
-static bool
-aoco_scan_bitmap_next_block(TableScanDesc scan,
-                                  TBMIterateResult *tbmres)
-{
-	AOCSBitmapScan	aocsBitmapScan = (AOCSBitmapScan)scan;
-
-	/* Make sure we never cross 15-bit offset number [MPP-24326] */
-	Assert(tbmres->ntuples <= INT16_MAX + 1);
-
-	/*
-	 * Start scanning from the beginning of the offsets array (or
-	 * at first "offset number" if it's a lossy page).
-	 * In nodeBitmapHeapscan.c's BitmapHeapNext. After call
-	 * `table_scan_bitmap_next_block` and return false, it doesn't
-	 * clean the tbmres. Then it'll call aoco_scan_bitmap_next_tuple
-	 * to try to get tuples from the skipped page, and it'll return false.
-	 * Althouth aoco_scan_bitmap_next_tuple works fine.
-	 * But it still be better to set these init value before return in case
-	 * of wrong init value.
-	 */
-	aocsBitmapScan->rs_cindex = 0;
-
-	/* If tbmres contains no tuples, continue. */
-	if (tbmres->ntuples == 0)
-		return false;
-
-	/*
-	 * which descriptor to be used for fetching the data
-	 */
-	aocsBitmapScan->whichDesc = (tbmres->recheck) ? RECHECK : NO_RECHECK;
-
-	return true;
-}
-
+/*
+ * aoco_scan_bitmap_next_tuple
+ *
+ * PG18 removed the separate scan_bitmap_next_block table-AM callback, so the
+ * AM must now drive per-block iteration internally.  We pull the next bitmap
+ * page from the executor-provided iterator (scan->st.rs_tbmiterator) via
+ * tbm_iterate(), extract its offsets with tbm_extract_page_tuple() (the new
+ * TBMIterateResult no longer carries ntuples/offsets[]), and fetch tuples one
+ * per call, advancing to the next page when the current one is exhausted.
+ */
 static bool
 aoco_scan_bitmap_next_tuple(TableScanDesc scan,
-							TBMIterateResult *tbmres,
-							TupleTableSlot *slot)
+							TupleTableSlot *slot,
+							bool *recheck,
+							uint64 *lossy_pages,
+							uint64 *exact_pages)
 {
 	AOCSBitmapScan	aocsBitmapScan = (AOCSBitmapScan)scan;
 	AOCSFetchDesc	aocoFetchDesc;
 	OffsetNumber	pseudoOffset;
 	ItemPointerData	pseudoTid;
 	AOTupleId		aoTid;
-	int				numTuples;
-
-	aocoFetchDesc = aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].bitmapFetch;
-	if (aocoFetchDesc == NULL)
-	{
-		aocoFetchDesc = aocs_fetch_init(aocsBitmapScan->rs_base.rs_rd,
-										aocsBitmapScan->rs_base.rs_snapshot,
-										aocsBitmapScan->appendOnlyMetaDataSnapshot,
-										aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].proj);
-		aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].bitmapFetch = aocoFetchDesc;
-	}
 
 	ExecClearTuple(slot);
 
-	/* ntuples == -1 indicates a lossy page */
-	numTuples = (tbmres->ntuples == -1) ? INT16_MAX + 1 : tbmres->ntuples;
-	while (aocsBitmapScan->rs_cindex < numTuples)
+	for (;;)
 	{
 		/*
-		 * If it's a lossy page, iterate through all possible "offset numbers".
-		 * Otherwise iterate through the array of "offset numbers".
+		 * Advance to the next bitmap page if the current one is exhausted (or
+		 * we have not fetched a page yet: rs_cindex == rs_ntuples == 0).
 		 */
-		if (tbmres->ntuples == -1)
+		while (aocsBitmapScan->rs_cindex >= aocsBitmapScan->rs_ntuples)
+		{
+			TBMIterateResult tbmres;
+
+			if (!tbm_iterate(&scan->st.rs_tbmiterator, &tbmres))
+				return false;	/* bitmap exhausted */
+
+			aocsBitmapScan->rs_blockno = tbmres.blockno;
+			aocsBitmapScan->rs_lossy = tbmres.lossy;
+			aocsBitmapScan->rs_recheck = tbmres.recheck;
+
+			/*
+			 * which descriptor to be used for fetching the data
+			 */
+			aocsBitmapScan->whichDesc = (tbmres.recheck) ? RECHECK : NO_RECHECK;
+
+			if (tbmres.lossy)
+			{
+				/* A lossy page: iterate over every possible offset number. */
+				aocsBitmapScan->rs_ntuples = INT16_MAX + 1;
+				(*lossy_pages)++;
+			}
+			else
+			{
+				aocsBitmapScan->rs_ntuples =
+					tbm_extract_page_tuple(&tbmres, aocsBitmapScan->rs_offsets,
+										   TBM_MAX_TUPLES_PER_PAGE);
+				(*exact_pages)++;
+			}
+
+			/* Make sure we never cross 15-bit offset number [MPP-24326] */
+			Assert(aocsBitmapScan->rs_ntuples <= INT16_MAX + 1);
+
+			aocsBitmapScan->rs_cindex = 0;
+		}
+
+		aocoFetchDesc = aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].bitmapFetch;
+		if (aocoFetchDesc == NULL)
+		{
+			aocoFetchDesc = aocs_fetch_init(aocsBitmapScan->rs_base.rs_rd,
+											aocsBitmapScan->rs_base.rs_snapshot,
+											aocsBitmapScan->appendOnlyMetaDataSnapshot,
+											aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].proj);
+			aocsBitmapScan->bitmapScanDesc[aocsBitmapScan->whichDesc].bitmapFetch = aocoFetchDesc;
+		}
+
+		while (aocsBitmapScan->rs_cindex < aocsBitmapScan->rs_ntuples)
 		{
 			/*
-			 * +1 to convert index to offset, since TID offsets are not zero
-			 * based.
+			 * If it's a lossy page, iterate through all possible "offset
+			 * numbers". Otherwise iterate through the array of extracted
+			 * "offset numbers".
 			 */
-			pseudoOffset = aocsBitmapScan->rs_cindex + 1;
-		}
-		else
-			pseudoOffset = tbmres->offsets[aocsBitmapScan->rs_cindex];
+			if (aocsBitmapScan->rs_lossy)
+			{
+				/*
+				 * +1 to convert index to offset, since TID offsets are not
+				 * zero based.
+				 */
+				pseudoOffset = aocsBitmapScan->rs_cindex + 1;
+			}
+			else
+				pseudoOffset = aocsBitmapScan->rs_offsets[aocsBitmapScan->rs_cindex];
 
-		aocsBitmapScan->rs_cindex++;
+			aocsBitmapScan->rs_cindex++;
 
-		/*
-		 * Okay to fetch the tuple
-		 */
-		ItemPointerSet(&pseudoTid, tbmres->blockno, pseudoOffset);
-		tbm_convert_appendonly_tid_out(&pseudoTid, &aoTid);
-
-		if (aocs_fetch(aocoFetchDesc, &aoTid, slot))
-		{
-			/* OK to return this tuple */
-			ExecStoreVirtualTuple(slot);
 			/*
-			 * GPDB: the fetch fills the data columns but not tableOid; the
-			 * tableoid junk column of multi-relation UPDATE/DELETE reads it,
-			 * and a zero there made the per-row result-relation lookup fall
-			 * through to the wrong table (heap_delete with an AO TID).
+			 * Okay to fetch the tuple
 			 */
-			slot->tts_tableOid = RelationGetRelid(aocsBitmapScan->rs_base.rs_rd);
-			pgstat_count_heap_fetch(aocsBitmapScan->rs_base.rs_rd);
+			ItemPointerSet(&pseudoTid, aocsBitmapScan->rs_blockno, pseudoOffset);
+			tbm_convert_appendonly_tid_out(&pseudoTid, &aoTid);
 
-			return true;
+			if (aocs_fetch(aocoFetchDesc, &aoTid, slot))
+			{
+				/* OK to return this tuple */
+				ExecStoreVirtualTuple(slot);
+				/*
+				 * GPDB: the fetch fills the data columns but not tableOid; the
+				 * tableoid junk column of multi-relation UPDATE/DELETE reads it,
+				 * and a zero there made the per-row result-relation lookup fall
+				 * through to the wrong table (heap_delete with an AO TID).
+				 */
+				slot->tts_tableOid = RelationGetRelid(aocsBitmapScan->rs_base.rs_rd);
+				pgstat_count_heap_fetch(aocsBitmapScan->rs_base.rs_rd);
+				*recheck = aocsBitmapScan->rs_recheck;
+
+				return true;
+			}
 		}
+
+		/* Current page exhausted; loop back to advance to the next one. */
 	}
-
-	/* Done with this block */
-	return false;
 }
 
 static bool
@@ -2204,7 +2231,6 @@ static const TableAmRoutine ao_column_methods = {
 
 	.relation_estimate_size = aoco_estimate_rel_size,
 
-	.scan_bitmap_next_block = aoco_scan_bitmap_next_block,
 	.scan_bitmap_next_tuple = aoco_scan_bitmap_next_tuple,
 	.scan_sample_next_block = aoco_scan_sample_next_block,
 	.scan_sample_next_tuple = aoco_scan_sample_next_tuple

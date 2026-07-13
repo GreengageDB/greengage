@@ -2,7 +2,7 @@
  * wait_event.h
  *	  Definitions related to wait event reporting
  *
- * Copyright (c) 2001-2024, PostgreSQL Global Development Group
+ * Copyright (c) 2001-2025, PostgreSQL Global Development Group
  *
  * src/include/utils/wait_event.h
  * ----------
@@ -10,23 +10,12 @@
 #ifndef WAIT_EVENT_H
 #define WAIT_EVENT_H
 
-
-/* ----------
- * Wait Classes
- * ----------
+/*
+ * GPDB additions: Greengage-specific wait classes.  The standard upstream
+ * PG_WAIT_* class macros now live in utils/wait_classes.h, which is pulled in
+ * by the generated utils/wait_event_types.h below; only the GPDB-specific
+ * high-bit classes are defined here to avoid redefining the upstream ones.
  */
-#define PG_WAIT_LWLOCK				0x01000000U
-#define PG_WAIT_LOCK				0x03000000U
-#define PG_WAIT_BUFFERPIN			0x04000000U
-#define PG_WAIT_ACTIVITY			0x05000000U
-#define PG_WAIT_CLIENT				0x06000000U
-#define PG_WAIT_EXTENSION			0x07000000U
-#define PG_WAIT_IPC					0x08000000U
-#define PG_WAIT_TIMEOUT				0x09000000U
-#define PG_WAIT_IO					0x0A000000U
-#define PG_WAIT_INJECTIONPOINT		0x0B000000U
-
-/* GPDB additions */
 #define PG_WAIT_RESOURCE_GROUP		0xA0000000U
 #define PG_WAIT_RESOURCE_QUEUE		0xA1000000U
 #define PG_WAIT_REPLICATION			0xA2000000U

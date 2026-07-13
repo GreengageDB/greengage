@@ -3,7 +3,7 @@
  * ipci.c
  *	  POSTGRES inter-process communication initialization code.
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -45,6 +45,7 @@
 #include "replication/slotsync.h"
 #include "replication/walreceiver.h"
 #include "replication/walsender.h"
+#include "storage/aio_subsys.h"
 #include "storage/bufmgr.h"
 #include "storage/dsm.h"
 #include "storage/dsm_registry.h"
@@ -119,7 +120,6 @@ CalculateShmemSize(int *num_semaphores)
 
 	/* Compute number of semaphores we'll need */
 	numSemas = ProcGlobalSemas();
-	numSemas += SpinlockSemas();
 
 	/* Return the number of semaphores if requested by the caller */
 	if (num_semaphores)
@@ -136,13 +136,12 @@ CalculateShmemSize(int *num_semaphores)
 	 */
 	size = 100000;
 	size = add_size(size, PGSemaphoreShmemSize(numSemas));
-	size = add_size(size, SpinlockSemaSize());
 	size = add_size(size, hash_estimate_size(SHMEM_INDEX_SIZE,
 											 sizeof(ShmemIndexEnt)));
 	size = add_size(size, dsm_estimate_size());
 	size = add_size(size, DSMRegistryShmemSize());
-	size = add_size(size, BufferShmemSize());
-	size = add_size(size, LockShmemSize());
+	size = add_size(size, BufferManagerShmemSize());
+	size = add_size(size, LockManagerShmemSize());
 	size = add_size(size, PredicateLockShmemSize());
 	size = add_size(size, ProcGlobalShmemSize());
 	size = add_size(size, XLogPrefetchShmemSize());
@@ -158,7 +157,7 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, LWLockShmemSize());
 	size = add_size(size, ProcArrayShmemSize());
 	size = add_size(size, BackendStatusShmemSize());
-	size = add_size(size, SInvalShmemSize());
+	size = add_size(size, SharedInvalShmemSize());
 	size = add_size(size, PMSignalShmemSize());
 	size = add_size(size, ProcSignalShmemSize());
 	size = add_size(size, CheckpointerShmemSize());
@@ -177,6 +176,7 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, WaitEventCustomShmemSize());
 	size = add_size(size, InjectionPointShmemSize());
 	size = add_size(size, SlotSyncShmemSize());
+	size = add_size(size, AioShmemSize());
 
 	/* GPDB-specific shared memory regions */
 	if (IsResQueueEnabled() && Gp_role == GP_ROLE_DISPATCH)
@@ -203,9 +203,6 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, GpExpandVersionShmemSize());
 	size = add_size(size, EndpointShmemSize());
 	size = add_size(size, ParallelCursorCountSize());
-#ifdef EXEC_BACKEND
-	size = add_size(size, ShmemBackendArraySize());
-#endif
 
 	/* include additional requested shmem from preload libraries */
 	size = add_size(size, total_addin_request);
@@ -231,6 +228,12 @@ AttachSharedMemoryStructs(void)
 	/* InitProcess must've been called already */
 	Assert(MyProc != NULL);
 	Assert(IsUnderPostmaster);
+
+	/*
+	 * In EXEC_BACKEND mode, backends don't inherit the number of fast-path
+	 * groups we calculated before setting the shmem up, so recalculate it.
+	 */
+	InitializeFastPathLocks();
 
 	CreateOrAttachShmemStructs();
 
@@ -291,28 +294,12 @@ CreateSharedMemoryAndSemaphores(void)
 	PGReserveSemaphores(numSemas);
 
 	/*
-	 * If spinlocks are disabled, initialize emulation layer (which depends on
-	 * semaphores, so the order is important here).
-	 */
-#ifndef HAVE_SPINLOCKS
-	SpinlockSemaInit();
-#endif
-
-	/*
 	 * Set up shared memory allocation mechanism
 	 */
 	InitShmemAllocation();
 
 	/* Initialize subsystems */
 	CreateOrAttachShmemStructs();
-
-#ifdef EXEC_BACKEND
-
-	/*
-	 * Alloc the win32 shared backend array
-	 */
-	ShmemBackendArrayAllocation();
-#endif
 
 	/* Initialize dynamic shared memory facilities. */
 	dsm_postmaster_startup(shim);
@@ -371,17 +358,17 @@ CreateOrAttachShmemStructs(void)
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 		FtsShmemInit();
 	tmShmemInit();
-	InitBufferPool();
+	BufferManagerShmemInit();
 
 	/*
 	 * Set up lock manager
 	 */
-	InitLocks();
+	LockManagerShmemInit();
 
 	/*
 	 * Set up predicate lock manager
 	 */
-	InitPredicateLocks();
+	PredicateLockShmemInit();
 
 	/*
 	 * Set up resource manager 
@@ -399,16 +386,16 @@ CreateOrAttachShmemStructs(void)
 	/* Initialize vmem protection */
 	GPMemoryProtect_ShmemInit();
 
-	CreateSharedProcArray();
-	CreateSharedBackendStatus();
-	
+	ProcArrayShmemInit();
+	BackendStatusShmemInit();
+
 	/*
 	 * Set up Shared snapshot slots
 	 *
-	 * TODO: only need to do this if we aren't the QD. for now we are just 
-	 *		 doing it all the time and wasting shemem on the QD.  This is 
+	 * TODO: only need to do this if we aren't the QD. for now we are just
+	 *		 doing it all the time and wasting shemem on the QD.  This is
 	 *		 because this happens at postmaster startup time when we don't
-	 *		 know who we are.  
+	 *		 know who we are.
 	 */
 	CreateSharedSnapshotArray();
 	TwoPhaseShmemInit();
@@ -417,7 +404,7 @@ CreateOrAttachShmemStructs(void)
 	/*
 	 * Set up shared-inval messaging
 	 */
-	CreateSharedInvalidationState();
+	SharedInvalShmemInit();
 
 	/*
 	 * Set up interprocess signaling mechanisms
@@ -449,6 +436,7 @@ CreateOrAttachShmemStructs(void)
 	StatsShmemInit();
 	WaitEventCustomShmemInit();
 	InjectionPointShmemInit();
+	AioShmemInit();
 
 	BackendCancelShmemInit();
 	WorkFileShmemInit();
@@ -486,11 +474,12 @@ InitializeShmemGUCs(void)
 	Size		size_b;
 	Size		size_mb;
 	Size		hp_size;
+	int			num_semas;
 
 	/*
 	 * Calculate the shared memory size and round up to the nearest megabyte.
 	 */
-	size_b = CalculateShmemSize(NULL);
+	size_b = CalculateShmemSize(&num_semas);
 	size_mb = add_size(size_b, (1024 * 1024) - 1) / (1024 * 1024);
 	sprintf(buf, "%zu", size_mb);
 	SetConfigOption("shared_memory_size", buf,
@@ -509,4 +498,7 @@ InitializeShmemGUCs(void)
 		SetConfigOption("shared_memory_size_in_huge_pages", buf,
 						PGC_INTERNAL, PGC_S_DYNAMIC_DEFAULT);
 	}
+
+	sprintf(buf, "%d", num_semas);
+	SetConfigOption("num_os_semaphores", buf, PGC_INTERNAL, PGC_S_DYNAMIC_DEFAULT);
 }

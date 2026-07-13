@@ -2,6 +2,9 @@
 -- we can't rely on any specific default value of vacuum_cost_delay
 SHOW datestyle;
 
+-- Check output style of CamelCase enum options
+SET intervalstyle to 'asd';
+
 -- SET to some nondefault value
 SET vacuum_cost_delay TO 40;
 SET datestyle = 'ISO, YMD';
@@ -348,6 +351,19 @@ drop table public.t1;
 drop type public.ty1;
 drop function n1.drop_table(v_schema character varying, v_table character varying);
 drop schema n1;
+
+-- Test that disabling track_activities disables query ID reporting in
+-- pg_stat_activity.
+SET compute_query_id = on;
+SET track_activities = on;
+SELECT query_id IS NOT NULL AS qid_set FROM pg_stat_activity
+  WHERE pid = pg_backend_pid();
+SET track_activities = off;
+SELECT query_id IS NOT NULL AS qid_set FROM pg_stat_activity
+  WHERE pid = pg_backend_pid();
+RESET track_activities;
+RESET compute_query_id;
+
 -- Test GUC categories and flag patterns
 SELECT pg_settings_get_flags(NULL);
 SELECT pg_settings_get_flags('does_not_exist');

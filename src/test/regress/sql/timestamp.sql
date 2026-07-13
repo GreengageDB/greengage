@@ -175,6 +175,8 @@ SELECT '' AS "54", d1 - timestamp without time zone '1997-01-02' AS diff
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp '2004-02-29 15:44:17.71393' ) AS week_trunc;
 
+SELECT date_trunc( 'ago', timestamp 'infinity' ) AS invalid_trunc;
+
 -- verify date_bin behaves the same as date_trunc for relevant intervals
 
 -- case 1: AD dates, origin < input
@@ -451,3 +453,7 @@ select age(timestamp 'infinity', timestamp 'infinity');
 select age(timestamp 'infinity', timestamp '-infinity');
 select age(timestamp '-infinity', timestamp 'infinity');
 select age(timestamp '-infinity', timestamp '-infinity');
+
+-- test timestamp near POSTGRES_EPOCH_JDATE
+select timestamp '1999-12-31 24:00:00';
+select make_timestamp(1999, 12, 31, 24, 0, 0);

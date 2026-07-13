@@ -66,7 +66,7 @@ AlterTableCreateAoVisimapTable(Oid relOid)
 					   BYTEAOID,
 					   -1, 0);
 	/* don't toast 'visibmap' */
-	tupdesc->attrs[2].attstorage = 'p';
+	TupleDescAttr(tupdesc, 2)->attstorage = 'p';
 
 	/*
 	 * Create index on segno, first_row_no.

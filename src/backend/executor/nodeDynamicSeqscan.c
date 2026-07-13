@@ -194,7 +194,8 @@ ExecDynamicSeqScan(PlanState *pstate)
 									 node->ss.ps.state,
 									 list_length(plan->partOids),
 									 plan->join_prune_paramids,
-									 false);
+									 false,
+									 NULL);
 
 		int i = 0;
 		int partOidIdx = -1;

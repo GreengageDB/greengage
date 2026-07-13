@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/nodes.h
@@ -56,6 +56,7 @@ typedef enum NodeTag
  *   readfuncs.c.
  *
  * - custom_query_jumble: Has custom implementation in queryjumblefuncs.c.
+ *   Also available as a node field attribute.
  *
  * - no_copy: Does not support copyObject() at all.
  *
@@ -103,9 +104,14 @@ typedef enum NodeTag
  * - equal_ignore_if_zero: Ignore the field for equality if it is zero.
  *   (Otherwise, compare normally.)
  *
+ * - custom_query_jumble: Has custom implementation in queryjumblefuncs.c
+ *   for the field of a node.  Also available as a node attribute.
+ *
  * - query_jumble_ignore: Ignore the field for the query jumbling.  Note
  *   that typmod and collation information are usually irrelevant for the
  *   query jumbling.
+ *
+ * - query_jumble_squash: Squash multiple values during query jumbling.
  *
  * - query_jumble_location: Mark the field as a location to track.  This is
  *   only allowed for integer fields that include "location" in their name.
@@ -214,7 +220,7 @@ extern Node *readNodeFromBinaryString(const char *str, int len);
 extern void save_strtok_states(const char ** save_ptr, const char ** save_begin);
 extern void set_strtok_states(const char *ptr, const char *begin);
 extern void *stringToNode(const char *str);
-#ifdef WRITE_READ_PARSE_PLAN_TREES
+#ifdef DEBUG_NODE_TESTS_ENABLED
 extern void *stringToNodeWithLocations(const char *str);
 #endif
 extern struct Bitmapset *readBitmapset(void);
@@ -318,6 +324,7 @@ typedef enum JoinType
 	 */
 	JOIN_SEMI,					/* 1 copy of each LHS row that has match(es) */
 	JOIN_ANTI,					/* 1 copy of each LHS row that has no match */
+	JOIN_RIGHT_SEMI,			/* 1 copy of each RHS row that has match(es) */
 	JOIN_RIGHT_ANTI,			/* 1 copy of each RHS row that has no match */
 	JOIN_LASJ_NOTIN,			/* Left Anti Semi Join with Not-In semantics:
 									If any NULL values are produced by inner side,
@@ -349,10 +356,10 @@ typedef enum JoinType
 
 /*
  * OUTER joins are those for which pushed-down quals must behave differently
- * from the join's own quals.  This is in fact everything except INNER and
- * SEMI joins.  However, this macro must also exclude the JOIN_UNIQUE symbols
- * since those are temporary proxies for what will eventually be an INNER
- * join.
+ * from the join's own quals.  This is in fact everything except INNER, SEMI
+ * and RIGHT_SEMI joins.  However, this macro must also exclude the
+ * JOIN_UNIQUE symbols since those are temporary proxies for what will
+ * eventually be an INNER join.
  *
  * Note: semijoins are a hybrid case, but we choose to treat them as not
  * being outer joins.  This is okay principally because the SQL syntax makes

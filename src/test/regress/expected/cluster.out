@@ -248,11 +248,12 @@ SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
 INSERT INTO clstr_tst (b, c) VALUES (1111, 'this should fail');
 SELECT conname FROM pg_constraint WHERE conrelid = 'clstr_tst'::regclass
 ORDER BY 1;
-    conname     
-----------------
+       conname        
+----------------------
+ clstr_tst_a_not_null
  clstr_tst_con
  clstr_tst_pkey
-(2 rows)
+(3 rows)
 
 SELECT relname, relkind,
     EXISTS(SELECT 1 FROM pg_class WHERE oid = c.reltoastrelid) AS hastoast

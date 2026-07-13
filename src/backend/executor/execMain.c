@@ -28,7 +28,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -49,12 +49,15 @@
 #include "commands/tablespace.h"
 #include "commands/trigger.h"
 #include "executor/executor.h"
+#include "executor/execPartition.h"
 #include "executor/nodeSubplan.h"
 #include "foreign/fdwapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/print.h"
+#include "nodes/queryjumble.h"
 #include "parser/parse_relation.h"
+#include "pgstat.h"
 #include "rewrite/rewriteHandler.h"
 #include "tcop/utility.h"
 #include "utils/acl.h"
@@ -123,25 +126,23 @@ static void InitPlan(QueryDesc *queryDesc, int eflags);
 static void CheckValidRowMarkRel(Relation rel, RowMarkType markType);
 static void ExecPostprocessPlan(EState *estate);
 static void ExecEndPlan(PlanState *planstate, EState *estate);
-static void ExecutePlan(EState *estate, PlanState *planstate,
+static void ExecutePlan(EState *estate,
+						PlanState *planstate,
 						bool use_parallel_mode,
 						CmdType operation,
 						bool sendTuples,
 						uint64 numberTuples,
 						ScanDirection direction,
-						DestReceiver *dest,
-						bool execute_once);
+						DestReceiver *dest);
 static bool ExecCheckOneRelPerms(RTEPermissionInfo *perminfo);
 static bool ExecCheckPermissionsModified(Oid relOid, Oid userid,
 										 Bitmapset *modifiedCols,
 										 AclMode requiredPerms);
 static void ExecCheckXactReadOnly(PlannedStmt *plannedstmt);
-static char *ExecBuildSlotValueDescription(Oid reloid,
-										   TupleTableSlot *slot,
-										   TupleDesc tupdesc,
-										   Bitmapset *modifiedCols,
-										   int maxfieldlen);
 static void EvalPlanQualStart(EPQState *epqstate, Plan *planTree);
+static void ReportNotNullViolationError(ResultRelInfo *resultRelInfo,
+										TupleTableSlot *slot,
+										EState *estate, int attnum);
 
 static void AdjustReplicatedTableCounts(EState *estate);
 
@@ -179,10 +180,12 @@ void
 ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	/*
-	 * In some cases (e.g. an EXECUTE statement) a query execution will skip
-	 * parse analysis, which means that the query_id won't be reported.  Note
-	 * that it's harmless to report the query_id multiple times, as the call
-	 * will be ignored if the top level query_id has already been reported.
+	 * In some cases (e.g. an EXECUTE statement or an execute message with the
+	 * extended query protocol) the query_id won't be reported, so do it now.
+	 *
+	 * Note that it's harmless to report the query_id multiple times, as the
+	 * call will be ignored if the top level query_id has already been
+	 * reported.
 	 */
 	pgstat_report_query_id(queryDesc->plannedstmt->queryId, false);
 
@@ -830,18 +833,17 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
  */
 void
 ExecutorRun(QueryDesc *queryDesc,
-			ScanDirection direction, uint64 count,
-			bool execute_once)
+			ScanDirection direction, uint64 count)
 {
 	if (ExecutorRun_hook)
-		(*ExecutorRun_hook) (queryDesc, direction, count, execute_once);
+		(*ExecutorRun_hook) (queryDesc, direction, count);
 	else
-		standard_ExecutorRun(queryDesc, direction, count, execute_once);
+		standard_ExecutorRun(queryDesc, direction, count);
 }
 
 void
 standard_ExecutorRun(QueryDesc *queryDesc,
-					 ScanDirection direction, uint64 count, bool execute_once)
+					 ScanDirection direction, uint64 count)
 {
 	EState	   *estate;
 	CmdType		operation;
@@ -906,12 +908,6 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 	if (sendTuples)
 		dest->rStartup(dest, operation, queryDesc->tupDesc);
 
-	if (!ScanDirectionIsNoMovement(direction))
-	{
-		if (execute_once && queryDesc->already_executed)
-			elog(ERROR, "can't re-execute query flagged for single execution");
-		queryDesc->already_executed = true;
-	}
 
 	/*
 	 * Need a try/catch block here so that if an ereport is called from
@@ -967,8 +963,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 						sendTuples,
 						0,
 						ForwardScanDirection,
-						dest,
-						execute_once);
+						dest);
 		}
 		else if (exec_identity == GP_ROOT_SLICE)
 		{
@@ -1004,8 +999,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 							true,
 							count,
 							direction,
-							endpointDest,
-							execute_once);
+							endpointDest);
 			}
 			else
 			{
@@ -1023,8 +1017,7 @@ standard_ExecutorRun(QueryDesc *queryDesc,
 							sendTuples,
 							count,
 							direction,
-							dest,
-							execute_once);
+							dest);
 			}
 		}
 		else
@@ -1202,6 +1195,10 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 				break;
 		}
 	}
+
+	if (estate->es_parallel_workers_to_launch > 0)
+		pgstat_update_parallel_workers_stats((PgStat_Counter) estate->es_parallel_workers_to_launch,
+											 (PgStat_Counter) estate->es_parallel_workers_launched);
 
 	/*
 	 * Check that ExecutorFinish was called, unless in EXPLAIN-only mode. This
@@ -1771,9 +1768,22 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	/*
 	 * initialize the node's execution state
 	 */
-	ExecInitRangeTable(estate, rangeTable, plannedstmt->permInfos);
+	ExecInitRangeTable(estate, rangeTable, plannedstmt->permInfos,
+					   bms_copy(plannedstmt->unprunableRelids));
 
 	estate->es_plannedstmt = plannedstmt;
+	estate->es_part_prune_infos = plannedstmt->partPruneInfos;
+
+	/*
+	 * Perform runtime "initial" pruning to identify which child subplans,
+	 * corresponding to the children of plan nodes that contain
+	 * PartitionPruneInfo such as Append, will not be executed. The results,
+	 * which are bitmapsets of indexes of the child subplans that will be
+	 * executed, are saved in es_part_prune_results.  These results correspond
+	 * to each PartitionPruneInfo entry, and the es_part_prune_results list is
+	 * parallel to es_part_prune_infos.
+	 */
+	ExecDoInitialPruning(estate);
 
 	/*
 	 * Initialize ResultRelInfo data structures, and open the result rels.
@@ -1801,8 +1811,13 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			Relation	relation;
 			ExecRowMark *erm;
 
-			/* ignore "parent" rowmarks; they are irrelevant at runtime */
-			if (rc->isParent)
+			/*
+			 * Ignore "parent" rowmarks, because they are irrelevant at
+			 * runtime.  Also ignore the rowmarks belonging to child tables
+			 * that have been pruned in ExecDoInitialPruning().
+			 */
+			if (rc->isParent ||
+				!bms_is_member(rc->rti, estate->es_unpruned_relids))
 				continue;
 
 			/* get relation's OID (will produce InvalidOid if subquery) */
@@ -1830,7 +1845,7 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 				case ROW_MARK_SHARE:
 				case ROW_MARK_KEYSHARE:
 				case ROW_MARK_REFERENCE:
-					relation = ExecGetRangeTableRelation(estate, rc->rti);
+					relation = ExecGetRangeTableRelation(estate, rc->rti, false);
 					break;
 				case ROW_MARK_COPY:
 					/* no physical table access is required */
@@ -2065,6 +2080,10 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation,
 	Relation	resultRel = resultRelInfo->ri_RelationDesc;
 	FdwRoutine *fdwroutine;
 
+	/* Expect a fully-formed ResultRelInfo from InitResultRelInfo(). */
+	Assert(resultRelInfo->ri_needLockTagTuple ==
+		   IsInplaceUpdateRelation(resultRel));
+
 	switch (resultRel->rd_rel->relkind)
 	{
 		case RELKIND_RELATION:
@@ -2288,6 +2307,8 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_NumIndices = 0;
 	resultRelInfo->ri_IndexRelationDescs = NULL;
 	resultRelInfo->ri_IndexRelationInfo = NULL;
+	resultRelInfo->ri_needLockTagTuple =
+		IsInplaceUpdateRelation(resultRelationDesc);
 	/* make a copy so as not to depend on relcache info not changing... */
 	resultRelInfo->ri_TrigDesc = CopyTriggerDesc(resultRelationDesc->trigdesc);
 	if (resultRelInfo->ri_TrigDesc)
@@ -2321,7 +2342,8 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_projectNewInfoValid = false;
 	resultRelInfo->ri_FdwState = NULL;
 	resultRelInfo->ri_usesFdwDirectModify = false;
-	resultRelInfo->ri_ConstraintExprs = NULL;
+	resultRelInfo->ri_CheckConstraintExprs = NULL;
+	resultRelInfo->ri_GenVirtualNotNullConstraintExprs = NULL;
 	resultRelInfo->ri_GeneratedExprsI = NULL;
 	resultRelInfo->ri_GeneratedExprsU = NULL;
 	resultRelInfo->ri_junkFilter = NULL;
@@ -2336,6 +2358,7 @@ InitResultRelInfo(ResultRelInfo *resultRelInfo,
 	resultRelInfo->ri_ReturningSlot = NULL;
 	resultRelInfo->ri_TrigOldSlot = NULL;
 	resultRelInfo->ri_TrigNewSlot = NULL;
+	resultRelInfo->ri_AllNullSlot = NULL;
 	resultRelInfo->ri_MergeActions[MERGE_WHEN_MATCHED] = NIL;
 	resultRelInfo->ri_MergeActions[MERGE_WHEN_NOT_MATCHED_BY_SOURCE] = NIL;
 	resultRelInfo->ri_MergeActions[MERGE_WHEN_NOT_MATCHED_BY_TARGET] = NIL;
@@ -2683,9 +2706,6 @@ ExecCloseRangeTableRelations(EState *estate)
  *		moving in the specified direction.
  *
  *		Runs to completion if numberTuples is 0
- *
- * Note: the ctid attribute is a 'junk' attribute that is removed before the
- * user can see it
  * ----------------------------------------------------------------
  */
 static void
@@ -2696,8 +2716,7 @@ ExecutePlan(EState *estate,
 			bool sendTuples,
 			uint64 numberTuples,
 			ScanDirection direction,
-			DestReceiver *dest,
-			bool execute_once)
+			DestReceiver *dest)
 {
 	TupleTableSlot *slot;
 	uint64		current_tuple_count;
@@ -2720,10 +2739,11 @@ ExecutePlan(EState *estate,
 	estate->es_direction = direction;
 
 	/*
-	 * If the plan might potentially be executed multiple times, we must force
-	 * it to run without parallelism, because we might exit early.
+	 * Parallel mode only supports complete execution of a plan.  If the
+	 * caller asks us to exit early (numberTuples != 0), we must force the
+	 * plan to run without parallelism.
 	 */
-	if (!execute_once)
+	if (numberTuples != 0)
 		use_parallel_mode = false;
 
 	estate->es_use_parallel_mode = use_parallel_mode;
@@ -2849,7 +2869,7 @@ ExecutePlan(EState *estate,
 
 
 /*
- * ExecRelCheck --- check that tuple meets constraints for result relation
+ * ExecRelCheck --- check that tuple meets check constraints for result relation
  *
  * Returns NULL if OK, else name of failed check constraint
  */
@@ -2862,10 +2882,9 @@ ExecRelCheck(ResultRelInfo *resultRelInfo,
 	ConstrCheck *check = rel->rd_att->constr->check;
 	ExprContext *econtext;
 	MemoryContext oldContext;
-	int			i;
 
 	/*
-	 * CheckConstraintFetch let this pass with only a warning, but now we
+	 * CheckNNConstraintFetch let this pass with only a warning, but now we
 	 * should fail rather than possibly failing to enforce an important
 	 * constraint.
 	 */
@@ -2878,17 +2897,21 @@ ExecRelCheck(ResultRelInfo *resultRelInfo,
 	 * nodetrees for rel's constraint expressions.  Keep them in the per-query
 	 * memory context so they'll survive throughout the query.
 	 */
-	if (resultRelInfo->ri_ConstraintExprs == NULL)
+	if (resultRelInfo->ri_CheckConstraintExprs == NULL)
 	{
 		oldContext = MemoryContextSwitchTo(estate->es_query_cxt);
-		resultRelInfo->ri_ConstraintExprs =
-			(ExprState **) palloc(ncheck * sizeof(ExprState *));
-		for (i = 0; i < ncheck; i++)
+		resultRelInfo->ri_CheckConstraintExprs = palloc0_array(ExprState *, ncheck);
+		for (int i = 0; i < ncheck; i++)
 		{
 			Expr	   *checkconstr;
 
+			/* Skip not enforced constraint */
+			if (!check[i].ccenforced)
+				continue;
+
 			checkconstr = stringToNode(check[i].ccbin);
-			resultRelInfo->ri_ConstraintExprs[i] =
+			checkconstr = (Expr *) expand_generated_columns_in_expr((Node *) checkconstr, rel, 1);
+			resultRelInfo->ri_CheckConstraintExprs[i] =
 				ExecPrepareExpr(checkconstr, estate);
 		}
 		MemoryContextSwitchTo(oldContext);
@@ -2904,16 +2927,16 @@ ExecRelCheck(ResultRelInfo *resultRelInfo,
 	econtext->ecxt_scantuple = slot;
 
 	/* And evaluate the constraints */
-	for (i = 0; i < ncheck; i++)
+	for (int i = 0; i < ncheck; i++)
 	{
-		ExprState  *checkconstr = resultRelInfo->ri_ConstraintExprs[i];
+		ExprState  *checkconstr = resultRelInfo->ri_CheckConstraintExprs[i];
 
 		/*
 		 * NOTE: SQL specifies that a NULL result from a constraint expression
 		 * is not to be treated as a failure.  Therefore, use ExecCheck not
 		 * ExecQual.
 		 */
-		if (!ExecCheck(checkconstr, econtext))
+		if (checkconstr && !ExecCheck(checkconstr, econtext))
 			return check[i].ccname;
 	}
 
@@ -3060,73 +3083,45 @@ ExecConstraints(ResultRelInfo *resultRelInfo,
 	TupleDesc	tupdesc = RelationGetDescr(rel);
 	TupleConstr *constr = tupdesc->constr;
 	Bitmapset  *modifiedCols;
+	List	   *notnull_virtual_attrs = NIL;
 
 	Assert(constr);				/* we should not be called otherwise */
 
+	/*
+	 * Verify not-null constraints.
+	 *
+	 * Not-null constraints on virtual generated columns are collected and
+	 * checked separately below.
+	 */
 	if (constr->has_not_null)
 	{
-		int			natts = tupdesc->natts;
-		int			attrChk;
-
-		for (attrChk = 1; attrChk <= natts; attrChk++)
+		for (AttrNumber attnum = 1; attnum <= tupdesc->natts; attnum++)
 		{
-			Form_pg_attribute att = TupleDescAttr(tupdesc, attrChk - 1);
+			Form_pg_attribute att = TupleDescAttr(tupdesc, attnum - 1);
 
-			if (att->attnotnull && slot_attisnull(slot, attrChk))
-			{
-				char	   *val_desc;
-				Relation	orig_rel = rel;
-				TupleDesc	orig_tupdesc = RelationGetDescr(rel);
-
-				/*
-				 * If the tuple has been routed, it's been converted to the
-				 * partition's rowtype, which might differ from the root
-				 * table's.  We must convert it back to the root table's
-				 * rowtype so that val_desc shown error message matches the
-				 * input tuple.
-				 */
-				if (resultRelInfo->ri_RootResultRelInfo)
-				{
-					ResultRelInfo *rootrel = resultRelInfo->ri_RootResultRelInfo;
-					AttrMap    *map;
-
-					tupdesc = RelationGetDescr(rootrel->ri_RelationDesc);
-					/* a reverse map */
-					map = build_attrmap_by_name_if_req(orig_tupdesc,
-													   tupdesc,
-													   false);
-
-					/*
-					 * Partition-specific slot's tupdesc can't be changed, so
-					 * allocate a new one.
-					 */
-					if (map != NULL)
-						slot = execute_attr_map_slot(map, slot,
-													 MakeTupleTableSlot(tupdesc, &TTSOpsVirtual));
-					modifiedCols = bms_union(ExecGetInsertedCols(rootrel, estate),
-											 ExecGetUpdatedCols(rootrel, estate));
-					rel = rootrel->ri_RelationDesc;
-				}
-				else
-					modifiedCols = bms_union(ExecGetInsertedCols(resultRelInfo, estate),
-											 ExecGetUpdatedCols(resultRelInfo, estate));
-				val_desc = ExecBuildSlotValueDescription(RelationGetRelid(rel),
-														 slot,
-														 tupdesc,
-														 modifiedCols,
-														 64);
-
-				ereport(ERROR,
-						(errcode(ERRCODE_NOT_NULL_VIOLATION),
-						 errmsg("null value in column \"%s\" of relation \"%s\" violates not-null constraint",
-								NameStr(att->attname),
-								RelationGetRelationName(orig_rel)),
-						 val_desc ? errdetail("Failing row contains %s.", val_desc) : 0,
-						 errtablecol(orig_rel, attrChk)));
-			}
+			if (att->attnotnull && att->attgenerated == ATTRIBUTE_GENERATED_VIRTUAL)
+				notnull_virtual_attrs = lappend_int(notnull_virtual_attrs, attnum);
+			else if (att->attnotnull && slot_attisnull(slot, attnum))
+				ReportNotNullViolationError(resultRelInfo, slot, estate, attnum);
 		}
 	}
 
+	/*
+	 * Verify not-null constraints on virtual generated column, if any.
+	 */
+	if (notnull_virtual_attrs)
+	{
+		AttrNumber	attnum;
+
+		attnum = ExecRelGenVirtualNotNull(resultRelInfo, slot, estate,
+										  notnull_virtual_attrs);
+		if (attnum != InvalidAttrNumber)
+			ReportNotNullViolationError(resultRelInfo, slot, estate, attnum);
+	}
+
+	/*
+	 * Verify check constraints.
+	 */
 	if (rel->rd_rel->relchecks > 0)
 	{
 		const char *failed;
@@ -3136,7 +3131,12 @@ ExecConstraints(ResultRelInfo *resultRelInfo,
 			char	   *val_desc;
 			Relation	orig_rel = rel;
 
-			/* See the comment above. */
+			/*
+			 * If the tuple has been routed, it's been converted to the
+			 * partition's rowtype, which might differ from the root table's.
+			 * We must convert it back to the root table's rowtype so that
+			 * val_desc shown error message matches the input tuple.
+			 */
 			if (resultRelInfo->ri_RootResultRelInfo)
 			{
 				ResultRelInfo *rootrel = resultRelInfo->ri_RootResultRelInfo;
@@ -3176,6 +3176,142 @@ ExecConstraints(ResultRelInfo *resultRelInfo,
 					 errtableconstraint(orig_rel, failed)));
 		}
 	}
+}
+
+/*
+ * Verify not-null constraints on virtual generated columns of the given
+ * tuple slot.
+ *
+ * Return value of InvalidAttrNumber means all not-null constraints on virtual
+ * generated columns are satisfied.  A return value > 0 means a not-null
+ * violation happened for that attribute.
+ *
+ * notnull_virtual_attrs is the list of the attnums of virtual generated column with
+ * not-null constraints.
+ */
+AttrNumber
+ExecRelGenVirtualNotNull(ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
+						 EState *estate, List *notnull_virtual_attrs)
+{
+	Relation	rel = resultRelInfo->ri_RelationDesc;
+	ExprContext *econtext;
+	MemoryContext oldContext;
+
+	/*
+	 * We implement this by building a NullTest node for each virtual
+	 * generated column, which we cache in resultRelInfo, and running those
+	 * through ExecCheck().
+	 */
+	if (resultRelInfo->ri_GenVirtualNotNullConstraintExprs == NULL)
+	{
+		oldContext = MemoryContextSwitchTo(estate->es_query_cxt);
+		resultRelInfo->ri_GenVirtualNotNullConstraintExprs =
+			palloc0_array(ExprState *, list_length(notnull_virtual_attrs));
+
+		foreach_int(attnum, notnull_virtual_attrs)
+		{
+			int			i = foreach_current_index(attnum);
+			NullTest   *nnulltest;
+
+			/* "generated_expression IS NOT NULL" check. */
+			nnulltest = makeNode(NullTest);
+			nnulltest->arg = (Expr *) build_generation_expression(rel, attnum);
+			nnulltest->nulltesttype = IS_NOT_NULL;
+			nnulltest->argisrow = false;
+			nnulltest->location = -1;
+
+			resultRelInfo->ri_GenVirtualNotNullConstraintExprs[i] =
+				ExecPrepareExpr((Expr *) nnulltest, estate);
+		}
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	/*
+	 * We will use the EState's per-tuple context for evaluating virtual
+	 * generated column not null constraint expressions (creating it if it's
+	 * not already there).
+	 */
+	econtext = GetPerTupleExprContext(estate);
+
+	/* Arrange for econtext's scan tuple to be the tuple under test */
+	econtext->ecxt_scantuple = slot;
+
+	/* And evaluate the check constraints for virtual generated column */
+	foreach_int(attnum, notnull_virtual_attrs)
+	{
+		int			i = foreach_current_index(attnum);
+		ExprState  *exprstate = resultRelInfo->ri_GenVirtualNotNullConstraintExprs[i];
+
+		Assert(exprstate != NULL);
+		if (!ExecCheck(exprstate, econtext))
+			return attnum;
+	}
+
+	/* InvalidAttrNumber result means no error */
+	return InvalidAttrNumber;
+}
+
+/*
+ * Report a violation of a not-null constraint that was already detected.
+ */
+static void
+ReportNotNullViolationError(ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
+							EState *estate, int attnum)
+{
+	Bitmapset  *modifiedCols;
+	char	   *val_desc;
+	Relation	rel = resultRelInfo->ri_RelationDesc;
+	Relation	orig_rel = rel;
+	TupleDesc	tupdesc = RelationGetDescr(rel);
+	TupleDesc	orig_tupdesc = RelationGetDescr(rel);
+	Form_pg_attribute att = TupleDescAttr(tupdesc, attnum - 1);
+
+	Assert(attnum > 0);
+
+	/*
+	 * If the tuple has been routed, it's been converted to the partition's
+	 * rowtype, which might differ from the root table's.  We must convert it
+	 * back to the root table's rowtype so that val_desc shown error message
+	 * matches the input tuple.
+	 */
+	if (resultRelInfo->ri_RootResultRelInfo)
+	{
+		ResultRelInfo *rootrel = resultRelInfo->ri_RootResultRelInfo;
+		AttrMap    *map;
+
+		tupdesc = RelationGetDescr(rootrel->ri_RelationDesc);
+		/* a reverse map */
+		map = build_attrmap_by_name_if_req(orig_tupdesc,
+										   tupdesc,
+										   false);
+
+		/*
+		 * Partition-specific slot's tupdesc can't be changed, so allocate a
+		 * new one.
+		 */
+		if (map != NULL)
+			slot = execute_attr_map_slot(map, slot,
+										 MakeTupleTableSlot(tupdesc, &TTSOpsVirtual));
+		modifiedCols = bms_union(ExecGetInsertedCols(rootrel, estate),
+								 ExecGetUpdatedCols(rootrel, estate));
+		rel = rootrel->ri_RelationDesc;
+	}
+	else
+		modifiedCols = bms_union(ExecGetInsertedCols(resultRelInfo, estate),
+								 ExecGetUpdatedCols(resultRelInfo, estate));
+
+	val_desc = ExecBuildSlotValueDescription(RelationGetRelid(rel),
+											 slot,
+											 tupdesc,
+											 modifiedCols,
+											 64);
+	ereport(ERROR,
+			errcode(ERRCODE_NOT_NULL_VIOLATION),
+			errmsg("null value in column \"%s\" of relation \"%s\" violates not-null constraint",
+				   NameStr(att->attname),
+				   RelationGetRelationName(orig_rel)),
+			val_desc ? errdetail("Failing row contains %s.", val_desc) : 0,
+			errtablecol(orig_rel, attnum));
 }
 
 /*
@@ -3350,7 +3486,7 @@ ExecWithCheckOptions(WCOKind kind, ResultRelInfo *resultRelInfo,
  * column involved, that subset will be returned with a key identifying which
  * columns they are.
  */
-static char *
+char *
 ExecBuildSlotValueDescription(Oid reloid,
 							  TupleTableSlot *slot,
 							  TupleDesc tupdesc,
@@ -3435,7 +3571,9 @@ ExecBuildSlotValueDescription(Oid reloid,
 
 		if (table_perm || column_perm)
 		{
-			if (slot->tts_isnull[i])
+			if (att->attgenerated == ATTRIBUTE_GENERATED_VIRTUAL)
+				val = "virtual";
+			else if (slot->tts_isnull[i])
 				val = "null";
 			else
 			{
@@ -3766,12 +3904,14 @@ bool
 EvalPlanQualFetchRowMark(EPQState *epqstate, Index rti, TupleTableSlot *slot)
 {
 	ExecAuxRowMark *earm = epqstate->relsubs_rowmark[rti - 1];
-	ExecRowMark *erm = earm->rowmark;
+	ExecRowMark *erm;
 	Datum		datum;
 	bool		isNull;
 
 	Assert(earm != NULL);
 	Assert(epqstate->origslot != NULL);
+
+	erm = earm->rowmark;
 
 	if (RowMarkRequiresRowShareLock(erm->markType))
 		elog(ERROR, "EvalPlanQual doesn't support locking rowmarks");
@@ -4045,6 +4185,13 @@ EvalPlanQualStart(EPQState *epqstate, Plan *planTree)
 				parentestate->es_param_exec_vals[i].isnull;
 		}
 	}
+
+	/*
+	 * Copy es_unpruned_relids so that pruned relations are ignored by
+	 * ExecInitLockRows() and ExecInitModifyTable() when initializing the plan
+	 * trees below.
+	 */
+	rcestate->es_unpruned_relids = parentestate->es_unpruned_relids;
 
 	/*
 	 * Initialize private state information for each SubPlan.  We must do this

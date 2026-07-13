@@ -83,7 +83,7 @@ AlterTableCreateAoBlkdirTable(Oid relOid)
 					   BYTEAOID,
 					   -1, 0);
 	/* don't toast 'minipage' */
-	tupdesc->attrs[3].attstorage = 'p';
+	TupleDescAttr(tupdesc, 3)->attstorage = 'p';
 
 	/*
 	 * Create index on segno, columngroup_no and first_row_no.

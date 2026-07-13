@@ -3,7 +3,7 @@
  * xlogreader.c
  *		Generic XLog reading facility
  *
- * Portions Copyright (c) 2013-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2013-2025, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *		src/backend/access/transam/xlogreader.c
@@ -40,6 +40,7 @@
 
 #ifndef FRONTEND
 #include "pgstat.h"
+#include "storage/bufmgr.h"
 #else
 #include "common/logging.h"
 #endif
@@ -802,7 +803,7 @@ restart:
 				readOff = ReadPageInternal(state, targetPagePtr,
 										   pageHeaderSize + len);
 
-			memcpy(buffer, (char *) contdata, len);
+			memcpy(buffer, contdata, len);
 			buffer += len;
 			gotlen += len;
 
@@ -955,9 +956,9 @@ err:
 	XLogReaderInvalReadState(state);
 
 	/*
-	 * If an error was written to errmsg_buf, it'll be returned to the caller
-	 * of XLogReadRecord() after all successfully decoded records from the
-	 * read queue.
+	 * If an error was written to errormsg_buf, it'll be returned to the
+	 * caller of XLogReadRecord() after all successfully decoded records from
+	 * the read queue.
 	 */
 
 	return XLREAD_FAIL;
@@ -1280,9 +1281,9 @@ XLogReaderValidatePageHeader(XLogReaderState *state, XLogRecPtr recptr,
 			longhdr->xlp_sysid != state->system_identifier)
 		{
 			report_invalid_record(state,
-								  "WAL file is from different database system: WAL file database system identifier is %llu, pg_control database system identifier is %llu",
-								  (unsigned long long) longhdr->xlp_sysid,
-								  (unsigned long long) state->system_identifier);
+								  "WAL file is from different database system: WAL file database system identifier is %" PRIu64 ", pg_control database system identifier is %" PRIu64,
+								  longhdr->xlp_sysid,
+								  state->system_identifier);
 			return false;
 		}
 		else if (longhdr->xlp_seg_size != state->segcxt.ws_segsize)
@@ -1516,6 +1517,9 @@ WALRead(XLogReaderState *state,
 	char	   *p;
 	XLogRecPtr	recptr;
 	Size		nbytes;
+#ifndef FRONTEND
+	instr_time	io_start;
+#endif
 
 	p = buf;
 	recptr = startptr;
@@ -1561,6 +1565,9 @@ WALRead(XLogReaderState *state,
 			segbytes = nbytes;
 
 #ifndef FRONTEND
+		/* Measure I/O timing when reading segment */
+		io_start = pgstat_prepare_io_time(track_wal_io_timing);
+
 		pgstat_report_wait_start(WAIT_EVENT_WAL_READ);
 #endif
 
@@ -1570,6 +1577,9 @@ WALRead(XLogReaderState *state,
 
 #ifndef FRONTEND
 		pgstat_report_wait_end();
+
+		pgstat_count_io_op_time(IOOBJECT_WAL, IOCONTEXT_NORMAL, IOOP_READ,
+								io_start, 1, readbytes);
 #endif
 
 		if (readbytes <= 0)
@@ -2237,28 +2247,14 @@ zstd_decompress_backupblock(const char *source, int32 slen, char *dest,
 FullTransactionId
 XLogRecGetFullXid(XLogReaderState *record)
 {
-	TransactionId xid,
-				next_xid;
-	uint32		epoch;
-
 	/*
 	 * This function is only safe during replay, because it depends on the
 	 * replay state.  See AdvanceNextFullTransactionIdPastXid() for more.
 	 */
 	Assert(AmStartupProcess() || !IsUnderPostmaster);
 
-	xid = XLogRecGetXid(record);
-	next_xid = XidFromFullTransactionId(TransamVariables->nextXid);
-	epoch = EpochFromFullTransactionId(TransamVariables->nextXid);
-
-	/*
-	 * If xid is numerically greater than next_xid, it has to be from the last
-	 * epoch.
-	 */
-	if (unlikely(xid > next_xid))
-		--epoch;
-
-	return FullTransactionIdFromEpochAndXid(epoch, xid);
+	return FullTransactionIdFromAllowableAt(TransamVariables->nextXid,
+											XLogRecGetXid(record));
 }
 
 #endif

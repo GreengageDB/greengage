@@ -542,7 +542,7 @@ _bitmap_findbitmaps(IndexScanDesc scan, ScanDirection dir  pg_attribute_unused()
 			scanPos->nvec++;
 		}
 
-		scanDesc = index_beginscan(lovHeap, lovIndex, GetActiveSnapshot(),
+		scanDesc = index_beginscan(lovHeap, lovIndex, GetActiveSnapshot(), NULL,
 								   scan->numberOfKeys, 0);
 		index_rescan(scanDesc, scanKeys, scan->numberOfKeys, NULL, 0);
 

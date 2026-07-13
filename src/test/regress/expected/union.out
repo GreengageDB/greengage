@@ -402,6 +402,8 @@ select count(*) from
   5000
 (1 row)
 
+-- this query will prefer a sorted setop unless we force it.
+set enable_indexscan to off;
 explain (costs off)
 select unique1 from tenk1 except select unique2 from tenk1 where unique2 != 10;
                             QUERY PLAN                            
@@ -426,6 +428,35 @@ select unique1 from tenk1 except select unique2 from tenk1 where unique2 != 10;
 ---------
       10
 (1 row)
+
+reset enable_indexscan;
+-- the hashed implementation is sensitive to child plans' tuple slot types
+explain (costs off)
+select * from int8_tbl intersect select q2, q1 from int8_tbl order by 1, 2;
+                 QUERY PLAN                  
+---------------------------------------------
+ Sort
+   Sort Key: int8_tbl.q1, int8_tbl.q2
+   ->  HashSetOp Intersect
+         ->  Seq Scan on int8_tbl
+         ->  Seq Scan on int8_tbl int8_tbl_1
+(5 rows)
+
+select * from int8_tbl intersect select q2, q1 from int8_tbl order by 1, 2;
+        q1        |        q2        
+------------------+------------------
+              123 | 4567890123456789
+ 4567890123456789 |              123
+ 4567890123456789 | 4567890123456789
+(3 rows)
+
+select q2, q1 from int8_tbl intersect select * from int8_tbl order by 1, 2;
+        q2        |        q1        
+------------------+------------------
+              123 | 4567890123456789
+ 4567890123456789 |              123
+ 4567890123456789 | 4567890123456789
+(3 rows)
 
 set enable_hashagg to off;
 explain (costs off)
@@ -513,6 +544,20 @@ select unique1 from tenk1 except select unique2 from tenk1 where unique2 != 10;
       10
 (1 row)
 
+explain (costs off)
+select f1 from int4_tbl union all
+  (select unique1 from tenk1 union select unique2 from tenk1);
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Append
+   ->  Seq Scan on int4_tbl
+   ->  Unique
+         ->  Merge Append
+               Sort Key: tenk1.unique1
+               ->  Index Only Scan using tenk1_unique1 on tenk1
+               ->  Index Only Scan using tenk1_unique2 on tenk1 tenk1_1
+(7 rows)
+
 reset enable_hashagg;
 -- non-hashable type
 set enable_hashagg to on;
@@ -568,8 +613,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (va
 
 explain (costs off)
 select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
-                  QUERY PLAN                   
------------------------------------------------
+            QUERY PLAN             
+-----------------------------------
  HashSetOp Intersect
    ->  Append
          ->  Subquery Scan on "*SELECT* 1"
@@ -587,8 +632,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from
 
 explain (costs off)
 select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
-                  QUERY PLAN                   
------------------------------------------------
+            QUERY PLAN             
+-----------------------------------
  HashSetOp Except
    ->  Append
          ->  Subquery Scan on "*SELECT* 1"
@@ -650,8 +695,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (va
 
 explain (costs off)
 select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Intersect
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -671,8 +716,8 @@ select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from
 
 explain (costs off)
 select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Except
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -717,8 +762,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Intersect
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -738,8 +783,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Except
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -831,8 +876,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Intersect
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -852,8 +897,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
 
 explain (costs off)
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
-                     QUERY PLAN                      
------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  SetOp Except
    ->  Sort
          Sort Key: "*SELECT* 1".x
@@ -878,6 +923,7 @@ explain (costs off) select '123'::xid union select '123'::xid;
              QUERY PLAN              
 -------------------------------------
  HashAggregate
+   Disabled: true
    Group Key: ('123'::xid)
    ->  Append
          ->  Result
@@ -1073,8 +1119,8 @@ select from generate_series(1,5) union select from generate_series(1,3);
 
 explain (costs off)
 select from generate_series(1,5) intersect select from generate_series(1,3);
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  SetOp Intersect
    ->  Append
          ->  Subquery Scan on "*SELECT* 1"

@@ -2,7 +2,7 @@
 #
 # Makefile for the postgres backend
 #
-# Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/backend/Makefile
@@ -52,9 +52,10 @@ ifeq ($(PORTNAME), darwin)
 LDOPTS = -Z
 endif
 
-# We put libpgport and libpgcommon into OBJS, so remove it from LIBS; also add
-# libldap and ICU
-LIBS := $(filter-out -lpgport -lpgcommon, $(LIBS)) $(LDAP_LIBS_BE) $(ICU_LIBS)
+# We put libpgport and libpgcommon into OBJS, so remove it from LIBS.
+LIBS := $(filter-out -lpgport -lpgcommon, $(LIBS))
+# The backend conditionally needs libraries that most executables don't need.
+LIBS += $(LDAP_LIBS_BE) $(ICU_LIBS) $(LIBURING_LIBS)
 
 # The backend doesn't need everything that's in LIBS, however
 LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))

@@ -4,7 +4,7 @@
  *	main source file
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2023, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2025, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.c
  */
 
@@ -33,6 +33,9 @@
  *	We control all assignments of pg_authid.oid for historical reasons (the
  *	oids used to be stored in pg_largeobject_metadata, which is now copied via
  *	SQL commands), that might change at some point in the future.
+ *
+ *	We control all assignments of pg_database.oid because we want the directory
+ *	names to match between the old and new cluster.
  */
 
 
@@ -40,10 +43,6 @@
 #include "postgres_fe.h"
 
 #include <time.h>
-
-#ifdef HAVE_LANGINFO_H
-#include <langinfo.h>
-#endif
 
 #include "catalog/pg_class_d.h"
 #include "common/file_perm.h"
@@ -61,6 +60,7 @@
  */
 #define RESTORE_TRANSACTION_SIZE 1000
 
+static void set_new_cluster_char_signedness(void);
 static void set_locale_and_encoding(void);
 static void prepare_new_cluster(void);
 static void prepare_new_globals(void);
@@ -68,7 +68,7 @@ static void create_new_objects(void);
 static void copy_xact_xlog_xid(void);
 static void set_frozenxids(bool minmxid_only);
 static void make_outputdirs(char *pgdata);
-static void setup(char *argv0, bool *live_check);
+static void setup(char *argv0);
 static void create_logical_replication_slots(void);
 
 static void copy_subdir_files(const char *old_subdir, const char *new_subdir);
@@ -109,7 +109,6 @@ main(int argc, char **argv)
 	char       *sequence_script_file_name = NULL;
 	char	   *analyze_script_file_name = NULL;
 	char	   *deletion_script_file_name = NULL;
-	bool		live_check = false;
 
 	/*
 	 * pg_upgrade doesn't currently use common/logging.c, but initialize it
@@ -146,22 +145,22 @@ main(int argc, char **argv)
 	 */
 	make_outputdirs(new_cluster.pgdata);
 
-	setup(argv[0], &live_check);
+	setup(argv[0]);
 
 	report_progress(NULL, CHECK, "Checking cluster compatibility");
-	output_check_banner(live_check);
+	output_check_banner();
 
 	check_cluster_versions();
 
-	get_sock_dir(&old_cluster, live_check);
+	get_sock_dir(&old_cluster);
 
 	if(!is_skip_target_check())
-		get_sock_dir(&new_cluster, false);
+		get_sock_dir(&new_cluster);
 
 	/* not skipped for is_skip_target_check because of some checks on
 	 * old_cluster are done independently of new_cluster
 	 */
-	check_cluster_compatibility(live_check);
+	check_cluster_compatibility();
 
 	/* Set mask based on PGDATA permissions */
 	if (!is_skip_target_check())
@@ -173,7 +172,7 @@ main(int argc, char **argv)
 
 	umask(pg_mode_mask);
 
-	check_and_dump_old_cluster(live_check, &sequence_script_file_name);
+	check_and_dump_old_cluster(&sequence_script_file_name);
 
 
 	/* -- NEW -- */
@@ -202,6 +201,7 @@ main(int argc, char **argv)
 	 */
 
 	copy_xact_xlog_xid();
+	set_new_cluster_char_signedness();
 
 	/*
 	 * In upgrading from GPDB4, copy the pg_distributedlog over in vanilla.
@@ -241,12 +241,14 @@ main(int argc, char **argv)
 
 	/*
 	 * Most failures happen in create_new_objects(), which has completed at
-	 * this point.  We do this here because it is just before linking, which
-	 * will link the old and new cluster data files, preventing the old
-	 * cluster from being safely started once the new cluster is started.
+	 * this point.  We do this here because it is just before file transfer,
+	 * which for --link will make it unsafe to start the old cluster once the
+	 * new cluster is started, and for --swap will make it unsafe to start the
+	 * old cluster at all.
 	 */
-	if (user_opts.transfer_mode == TRANSFER_MODE_LINK)
-		disable_old_cluster();
+	if (user_opts.transfer_mode == TRANSFER_MODE_LINK ||
+		user_opts.transfer_mode == TRANSFER_MODE_SWAP)
+		disable_old_cluster(user_opts.transfer_mode);
 
 	transfer_all_new_tablespaces(&old_cluster.dbarr, &new_cluster.dbarr,
 								 old_cluster.pgdata, new_cluster.pgdata);
@@ -293,8 +295,10 @@ main(int argc, char **argv)
 	{
 		prep_status("Sync data directory to disk");
 		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-				  "\"%s/initdb\" --sync-only \"%s\" --sync-method %s",
+				  "\"%s/initdb\" --sync-only %s \"%s\" --sync-method %s",
 				  new_cluster.bindir,
+				  (user_opts.transfer_mode == TRANSFER_MODE_SWAP) ?
+				  "--no-sync-data-files" : "",
 				  new_cluster.pgdata,
 				  user_opts.sync_method);
 		check_ok();
@@ -520,7 +524,7 @@ make_outputdirs(char *pgdata)
 
 
 static void
-setup(char *argv0, bool *live_check)
+setup(char *argv0)
 {
 	/*
 	 * make sure the user has a clean environment, otherwise, we may confuse
@@ -567,7 +571,7 @@ setup(char *argv0, bool *live_check)
 				pg_fatal("There seems to be a postmaster servicing the old cluster.\n"
 						 "Please shutdown that postmaster and try again.");
 			else
-				*live_check = true;
+				user_opts.live_check = true;
 		}
 	}
 
@@ -585,6 +589,38 @@ setup(char *argv0, bool *live_check)
 	}
 }
 
+/*
+ * Set the new cluster's default char signedness using the old cluster's
+ * value.
+ */
+static void
+set_new_cluster_char_signedness(void)
+{
+	bool		new_char_signedness;
+
+	/*
+	 * Use the specified char signedness if specified. Otherwise we inherit
+	 * the source database's signedness.
+	 */
+	if (user_opts.char_signedness != -1)
+		new_char_signedness = (user_opts.char_signedness == 1);
+	else
+		new_char_signedness = old_cluster.controldata.default_char_signedness;
+
+	/* Change the char signedness of the new cluster, if necessary */
+	if (new_cluster.controldata.default_char_signedness != new_char_signedness)
+	{
+		prep_status("Setting the default char signedness for new cluster");
+
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
+				  "\"%s/pg_resetwal\" --char-signedness %s \"%s\"",
+				  new_cluster.bindir,
+				  new_char_signedness ? "signed" : "unsigned",
+				  new_cluster.pgdata);
+
+		check_ok();
+	}
+}
 
 /*
  * Copy locale and encoding information into the new cluster's template0.
@@ -613,12 +649,13 @@ set_locale_and_encoding(void)
 	datctype_literal = PQescapeLiteral(conn_new_template1,
 									   locale->db_ctype,
 									   strlen(locale->db_ctype));
+
 	if (locale->db_locale)
 		datlocale_literal = PQescapeLiteral(conn_new_template1,
 											locale->db_locale,
 											strlen(locale->db_locale));
 	else
-		datlocale_literal = pg_strdup("NULL");
+		datlocale_literal = "NULL";
 
 	/* update template0 in new cluster */
 	if (GET_MAJOR_VERSION(new_cluster.major_version) >= 1700)
@@ -662,7 +699,8 @@ set_locale_and_encoding(void)
 
 	PQfreemem(datcollate_literal);
 	PQfreemem(datctype_literal);
-	PQfreemem(datlocale_literal);
+	if (locale->db_locale)
+		PQfreemem(datlocale_literal);
 
 	PQfinish(conn_new_template1);
 
@@ -737,8 +775,20 @@ static void
 create_new_objects(void)
 {
 	int			dbnum;
+	PGconn	   *conn_new_template1;
 
 	prep_status_progress("Restoring database schemas in the new cluster");
+
+	/*
+	 * Ensure that any changes to template0 are fully written out to disk
+	 * prior to restoring the databases.  This is necessary because we use the
+	 * FILE_COPY strategy to create the databases (which testing has shown to
+	 * be faster), and when the server is in binary upgrade mode, it skips the
+	 * checkpoints this strategy ordinarily performs.
+	 */
+	conn_new_template1 = connectToServer(&new_cluster, "template1");
+	PQclear(executeQueryOrDie(conn_new_template1, "CHECKPOINT"));
+	PQfinish(conn_new_template1);
 
 	/*
 	 * We cannot process the template1 database concurrently with others,
@@ -853,7 +903,7 @@ create_new_objects(void)
 		set_frozenxids(true);
 
 	/* update new_cluster info now that we have objects in the databases */
-	get_db_rel_and_slot_infos(&new_cluster, false);
+	get_db_rel_and_slot_infos(&new_cluster);
 
 	/* TODO: Bitmap indexes are not supported, so mark them as invalid. */
 	new_gpdb_invalidate_bitmap_indexes();
@@ -1242,11 +1292,11 @@ create_logical_replication_slots(void)
 			LogicalSlotInfo *slot_info = &slot_arr->slots[slotnum];
 
 			/* Constructs a query for creating logical replication slots */
-			appendPQExpBuffer(query,
-							  "SELECT * FROM "
-							  "pg_catalog.pg_create_logical_replication_slot(");
+			appendPQExpBufferStr(query,
+								 "SELECT * FROM "
+								 "pg_catalog.pg_create_logical_replication_slot(");
 			appendStringLiteralConn(query, slot_info->slotname, conn);
-			appendPQExpBuffer(query, ", ");
+			appendPQExpBufferStr(query, ", ");
 			appendStringLiteralConn(query, slot_info->plugin, conn);
 
 			appendPQExpBuffer(query, ", false, %s, %s);",

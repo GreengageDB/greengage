@@ -3,7 +3,7 @@
  * appendinfo.c
  *	  Routines for mapping between append parent(s) and children
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -164,11 +164,15 @@ make_inh_translation_list(Relation oldrelation, Relation newrelation,
 
 		/* Found it, check type and collation match */
 		if (atttypid != att->atttypid || atttypmod != att->atttypmod)
-			elog(ERROR, "attribute \"%s\" of relation \"%s\" does not match parent's type",
-				 attname, RelationGetRelationName(newrelation));
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+					 errmsg("attribute \"%s\" of relation \"%s\" does not match parent's type",
+							attname, RelationGetRelationName(newrelation))));
 		if (attcollation != att->attcollation)
-			elog(ERROR, "attribute \"%s\" of relation \"%s\" does not match parent's collation",
-				 attname, RelationGetRelationName(newrelation));
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
+					 errmsg("attribute \"%s\" of relation \"%s\" does not match parent's collation",
+							attname, RelationGetRelationName(newrelation))));
 
 		vars = lappend(vars, makeVar(newvarno,
 									 (AttrNumber) (new_attno + 1),
@@ -253,6 +257,13 @@ adjust_appendrel_attrs_mutator(Node *node,
 		 * all non-Var outputs of such subqueries, and then we could look up
 		 * the pre-existing PHV here.  Or perhaps just wrap the translations
 		 * that way to begin with?
+		 *
+		 * If var->varreturningtype is not VAR_RETURNING_DEFAULT, then that
+		 * also needs to be copied to the translated Var.  That too would fail
+		 * if the translation wasn't a Var, but that should never happen since
+		 * a non-default var->varreturningtype is only used for Vars referring
+		 * to the result relation, which should never be a flattened UNION ALL
+		 * subquery.
 		 */
 
 		for (cnt = 0; cnt < nappinfos; cnt++)
@@ -283,9 +294,17 @@ adjust_appendrel_attrs_mutator(Node *node,
 					elog(ERROR, "attribute %d of relation \"%s\" does not exist",
 						 var->varattno, get_rel_name(appinfo->parent_reloid));
 				if (IsA(newnode, Var))
+				{
+					((Var *) newnode)->varreturningtype = var->varreturningtype;
 					((Var *) newnode)->varnullingrels = var->varnullingrels;
-				else if (var->varnullingrels != NULL)
-					elog(ERROR, "failed to apply nullingrels to a non-Var");
+				}
+				else
+				{
+					if (var->varreturningtype != VAR_RETURNING_DEFAULT)
+						elog(ERROR, "failed to apply returningtype to a non-Var");
+					if (var->varnullingrels != NULL)
+						elog(ERROR, "failed to apply nullingrels to a non-Var");
+				}
 				return newnode;
 			}
 			else if (var->varattno == 0)
@@ -339,6 +358,8 @@ adjust_appendrel_attrs_mutator(Node *node,
 					rowexpr->colnames = copyObject(rte->eref->colnames);
 					rowexpr->location = -1;
 
+					if (var->varreturningtype != VAR_RETURNING_DEFAULT)
+						elog(ERROR, "failed to apply returningtype to a non-Var");
 					if (var->varnullingrels != NULL)
 						elog(ERROR, "failed to apply nullingrels to a non-Var");
 
@@ -425,7 +446,7 @@ adjust_appendrel_attrs_mutator(Node *node,
 
 		phv = (PlaceHolderVar *) expression_tree_mutator(node,
 														 adjust_appendrel_attrs_mutator,
-														 (void *) context);
+														 context);
 		/* now fix PlaceHolderVar's relid sets */
 		if (phv->phlevelsup == 0)
 		{
@@ -509,8 +530,7 @@ adjust_appendrel_attrs_mutator(Node *node,
 	Assert(!IsA(node, RangeTblRef));
 	Assert(!IsA(node, JoinExpr));
 
-	node = expression_tree_mutator(node, adjust_appendrel_attrs_mutator,
-								   (void *) context);
+	node = expression_tree_mutator(node, adjust_appendrel_attrs_mutator, context);
 
 	/*
 	 * In GPDB, if you have two SubPlans referring to the same initplan, we

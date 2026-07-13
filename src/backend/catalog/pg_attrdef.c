@@ -3,7 +3,7 @@
  * pg_attrdef.c
  *	  routines to support manipulation of the pg_attrdef relation
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -14,17 +14,12 @@
  */
 #include "postgres.h"
 
-#include "access/genam.h"
 #include "access/relation.h"
 #include "access/table.h"
-#include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_attrdef.h"
-#include "executor/executor.h"
-#include "optimizer/optimizer.h"
-#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"

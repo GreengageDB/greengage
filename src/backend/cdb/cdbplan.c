@@ -746,7 +746,7 @@ plan_tree_mutator(Node *node,
 
 				FLATCOPY(newsetop, setop, SetOp);
 				PLANMUTATE(newsetop, setop);
-				COPYARRAY(newsetop, setop, numCols, dupColIdx);
+				COPYARRAY(newsetop, setop, numCols, cmpColIdx);
 				return (Node *) newsetop;
 			}
 			break;
@@ -901,6 +901,10 @@ plan_tree_mutator(Node *node,
 
 					case RTE_VALUES:
 						MUTATE(newrte->values_lists, rte->values_lists, List *);
+						break;
+
+					case RTE_GROUP:
+						MUTATE(newrte->groupexprs, rte->groupexprs, List *);
 						break;
 				}
 				return (Node *) newrte;
@@ -1113,5 +1117,5 @@ get_tle_name(TargetEntry *tle, List *rtable, const char *default_name)
 		name = pstrdup(default_name);
 	}
 	
-	return makeString(name);
+	return (Node *) makeString(name);
 }

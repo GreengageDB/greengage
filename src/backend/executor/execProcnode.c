@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -526,6 +526,10 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	/*
 	 * Initialize any initPlans present in this node.  The planner put them in
 	 * a separate list for us.
+	 *
+	 * The defining characteristic of initplans is that they don't have
+	 * arguments, so we don't need to evaluate them (in contrast to
+	 * ExecInitSubPlanExpr()).
 	 */
 	subps = NIL;
 	foreach(l, node->initPlan)
@@ -535,6 +539,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 		int			origSliceId = estate->currentSliceId;
 
 		Assert(IsA(subplan, SubPlan));
+		Assert(subplan->args == NIL);
 
 		estate->currentSliceId = estate->es_plannedstmt->subplan_sliceIds[subplan->plan_id - 1];
 

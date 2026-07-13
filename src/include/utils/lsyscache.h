@@ -3,7 +3,7 @@
  * lsyscache.h
  *	  Convenience routines for common queries in the system catalog cache.
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/lsyscache.h
@@ -14,6 +14,7 @@
 #define LSYSCACHE_H
 
 #include "access/attnum.h"
+#include "access/cmptype.h"
 #include "access/htup.h"
 #include "catalog/gp_distribution_policy.h"
 #include "nodes/pg_list.h"
@@ -23,14 +24,14 @@
 /* avoid including subscripting.h here */
 struct SubscriptRoutines;
 
-/* Result list element for get_op_btree_interpretation */
-typedef struct OpBtreeInterpretation
+/* Result list element for get_op_index_interpretation */
+typedef struct OpIndexInterpretation
 {
-	Oid			opfamily_id;	/* btree opfamily containing operator */
-	int			strategy;		/* its strategy number */
+	Oid			opfamily_id;	/* opfamily containing operator */
+	CompareType cmptype;		/* its generic comparison type */
 	Oid			oplefttype;		/* declared left input datatype */
 	Oid			oprighttype;	/* declared right input datatype */
-} OpBtreeInterpretation;
+} OpIndexInterpretation;
 
 /* I/O function selector for get_type_io_data */
 typedef enum IOFuncSelector
@@ -89,8 +90,10 @@ extern void get_op_opfamily_properties(Oid opno, Oid opfamily, bool ordering_op,
 									   Oid *righttype);
 extern Oid	get_opfamily_member(Oid opfamily, Oid lefttype, Oid righttype,
 								int16 strategy);
+extern Oid	get_opfamily_member_for_cmptype(Oid opfamily, Oid lefttype, Oid righttype,
+											CompareType cmptype);
 extern bool get_ordering_op_properties(Oid opno,
-									   Oid *opfamily, Oid *opcintype, int16 *strategy);
+									   Oid *opfamily, Oid *opcintype, CompareType *cmptype);
 extern bool get_compare_function_for_ordering_op(Oid opno,
 												 Oid *cmpfunc, bool *reverse);
 extern Oid	get_equality_op_for_ordering_op(Oid opno, bool *reverse);
@@ -105,7 +108,7 @@ extern Oid get_compatible_hash_opfamily(Oid opno);
 extern Oid get_compatible_legacy_hash_opfamily(Oid opno);
 extern bool get_op_hash_functions(Oid opno,
 								  RegProcedure *lhs_procno, RegProcedure *rhs_procno);
-extern List *get_op_btree_interpretation(Oid opno);
+extern List *get_op_index_interpretation(Oid opno);
 extern bool equality_ops_are_compatible(Oid opno1, Oid opno2);
 extern bool comparison_ops_are_compatible(Oid opno1, Oid opno2);
 extern Oid	get_opfamily_proc(Oid opfamily, Oid lefttype, Oid righttype,
@@ -130,6 +133,8 @@ extern Oid	get_opclass_input_type(Oid opclass);
 extern bool get_opclass_opfamily_and_input_type(Oid opclass,
 												Oid *opfamily, Oid *opcintype);
 extern Oid	get_opclass_method(Oid opclass);
+extern Oid	get_opfamily_method(Oid opfid);
+extern char *get_opfamily_name(Oid opfid, bool missing_ok);
 extern RegProcedure get_opcode(Oid opno);
 extern char *get_opname(Oid opno);
 extern Oid	get_op_rettype(Oid opno);

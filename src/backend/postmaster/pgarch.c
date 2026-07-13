@@ -14,7 +14,7 @@
  *
  *	Initial author: Simon Riggs		simon@2ndquadrant.com
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -40,6 +40,7 @@
 #include "postmaster/interrupt.h"
 #include "postmaster/pgarch.h"
 #include "storage/condition_variable.h"
+#include "storage/aio_subsys.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
@@ -152,7 +153,7 @@ static bool pgarch_archiveXlog(char *xlog);
 static bool pgarch_readyXlog(char *xlog);
 static void pgarch_archiveDone(char *xlog);
 static void pgarch_die(int code, Datum arg);
-static void HandlePgArchInterrupts(void);
+static void ProcessPgArchInterrupts(void);
 static int	ready_file_comparator(Datum a, Datum b, void *arg);
 static void LoadArchiveLibrary(void);
 static void pgarch_call_module_shutdown_cb(int code, Datum arg);
@@ -219,7 +220,7 @@ PgArchCanRestart(void)
 
 /* Main entry point for archiver process */
 void
-PgArchiverMain(char *startup_data, size_t startup_data_len)
+PgArchiverMain(const void *startup_data, size_t startup_data_len)
 {
 	Assert(startup_data_len == 0);
 
@@ -329,7 +330,7 @@ pgarch_MainLoop(void)
 		time_to_stop = ready_to_stop;
 
 		/* Check for barrier events and config update */
-		HandlePgArchInterrupts();
+		ProcessPgArchInterrupts();
 
 		/*
 		 * If we've gotten SIGTERM, we normally just sit and do nothing until
@@ -420,7 +421,7 @@ pgarch_ArchiverCopyLoop(void)
 			 * we'll adopt a new setting for archive_command as soon as
 			 * possible, even if there is a backlog of files to be archived.
 			 */
-			HandlePgArchInterrupts();
+			ProcessPgArchInterrupts();
 
 			/* Reset variables that might be set by the callback */
 			arch_module_check_errdetail_string = NULL;
@@ -638,6 +639,7 @@ pgarch_archiveXlog(char *xlog)
 		LWLockReleaseAll();
 		ConditionVariableCancelSleep();
 		pgstat_report_wait_end();
+		pgaio_error_cleanup();
 		ReleaseAuxProcessResources(false);
 		AtEOXact_Files(false);
 		AtEOXact_HashTables(false);
@@ -926,7 +928,7 @@ pgarch_die(int code, Datum arg)
  * shutdown request is different between those loops.
  */
 static void
-HandlePgArchInterrupts(void)
+ProcessPgArchInterrupts(void)
 {
 	if (ProcSignalBarrierPending)
 		ProcessProcSignalBarrier();

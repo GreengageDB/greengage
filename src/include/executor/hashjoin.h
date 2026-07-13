@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/executor/hashjoin.h
@@ -154,7 +154,7 @@ typedef struct HashMemoryChunkData
 
 typedef struct HashMemoryChunkData *HashMemoryChunk;
 
-#define HASH_CHUNK_SIZE			(32 * 1024L)
+#define HASH_CHUNK_SIZE			((Size) (32 * 1024))
 #define HASH_CHUNK_HEADER_SIZE	MAXALIGN(sizeof(HashMemoryChunkData))
 #define HASH_CHUNK_DATA(hc)		(((char *) (hc)) + HASH_CHUNK_HEADER_SIZE)
 /* tuples exceeding HASH_CHUNK_THRESHOLD bytes are put in their own chunk */
@@ -349,8 +349,6 @@ typedef struct HashJoinTableData
 		dsa_pointer_atomic *shared;
 	}			buckets;
 
-	bool		keepNulls;		/* true to store unmatchable NULL tuples */
-
 	bool		skewEnabled;	/* are we using skew optimization? */
 	HashSkewBucket **skewBucket;	/* hashtable of skew buckets */
 	int			skewBucketLen;	/* size of skewBucket array (a power of 2!) */
@@ -388,6 +386,10 @@ typedef struct HashJoinTableData
 	 * Info about the datatype-specific hash functions for the datatypes being
 	 * hashed. These are arrays of the same length as the number of hash join
 	 * clauses (hash keys).
+	 *
+	 * GPDB keeps the pre-PG18 FmgrInfo-array hash model here; upstream PG18
+	 * moved to compiled ExprState hash_expr in HashState.  nodeHash.c /
+	 * nodeHashjoin.c still use these arrays (see cross_notes).
 	 */
 	FmgrInfo   *outer_hashfunctions;	/* lookup data for hash functions */
 	FmgrInfo   *inner_hashfunctions;	/* lookup data for hash functions */

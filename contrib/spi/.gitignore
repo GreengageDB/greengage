@@ -5,3 +5,7 @@ timetravel.so
 /moddatetime.sql
 /refint.sql
 /timetravel.sql
+# Generated subdirectories
+/log/
+/results/
+/tmp_check/

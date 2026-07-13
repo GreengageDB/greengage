@@ -157,7 +157,34 @@ insert_or_update_fastsequence(Relation gp_fastsequence_rel,
 		newTuple = heap_form_tuple(tupleDesc, values, nulls);
 		newTuple->t_data->t_ctid = oldTuple->t_data->t_ctid;
 		newTuple->t_self = oldTuple->t_self;
-		heap_inplace_update(gp_fastsequence_rel, newTuple);
+
+		/*
+		 * PG18 removed heap_inplace_update(); the in-place overwrite must now
+		 * go through systable_inplace_update_begin()/_finish(), which re-locate
+		 * and buffer-lock the current tuple version by index key.
+		 */
+		{
+			void	   *inplace_state;
+			HeapTuple	inplace_oldtup;
+			ScanKeyData inplace_key[2];
+
+			ScanKeyInit(&inplace_key[0],
+						Anum_gp_fastsequence_objid,
+						BTEqualStrategyNumber, F_OIDEQ,
+						ObjectIdGetDatum(objid));
+			ScanKeyInit(&inplace_key[1],
+						Anum_gp_fastsequence_objmod,
+						BTEqualStrategyNumber, F_INT8EQ,
+						Int64GetDatum(objmod));
+			systable_inplace_update_begin(gp_fastsequence_rel,
+										  FastSequenceObjidObjmodIndexId, true,
+										  NULL, 2, inplace_key,
+										  &inplace_oldtup, &inplace_state);
+			if (!HeapTupleIsValid(inplace_oldtup))
+				elog(ERROR, "gp_fastsequence entry for (%u, " INT64_FORMAT ") vanished during update",
+					 objid, objmod);
+			systable_inplace_update_finish(inplace_state, newTuple);
+		}
 
 		elogif(Debug_appendonly_print_insert_tuple, LOG,
 			   "In-place update to gp_fastsequence (ctid, rel, segno, last_sequence): ((%u, %u), %u, %ld, %ld)",

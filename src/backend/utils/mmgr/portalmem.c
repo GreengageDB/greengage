@@ -10,7 +10,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1290,6 +1290,9 @@ pg_cursor(PG_FUNCTION_ARGS)
 
 		/* report only "visible" entries */
 		if (!portal->visible)
+			continue;
+		/* also ignore it if PortalDefineQuery hasn't been called yet */
+		if (!portal->sourceText)
 			continue;
 
 		values[0] = CStringGetTextDatum(portal->name);

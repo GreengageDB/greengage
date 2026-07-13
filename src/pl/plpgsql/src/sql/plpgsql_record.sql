@@ -347,6 +347,7 @@ begin
   return next h;
   return next row(5,6);
   return next row(7,8)::has_hole;
+  return query select 9, 10;
 end$$;
 select returnssetofholes();
 
@@ -362,6 +363,13 @@ create or replace function returnssetofholes() returns setof has_hole language p
 $$
 begin
   return next row(1,2,3);  -- fails
+end$$;
+select returnssetofholes();
+
+create or replace function returnssetofholes() returns setof has_hole language plpgsql as
+$$
+begin
+  return query select 1, 2.0;  -- fails
 end$$;
 select returnssetofholes();
 

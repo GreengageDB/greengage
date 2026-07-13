@@ -3,7 +3,7 @@
  *
  *	information support functions
  *
- *	Copyright (c) 2010-2024, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2025, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/info.c
  */
 
@@ -13,6 +13,7 @@
 #include "catalog/pg_class_d.h"
 #include "greenplum/pg_upgrade_greenplum.h"
 #include "pg_upgrade.h"
+#include "pqexpbuffer.h"
 
 static void create_rel_filename_map(const char *old_data, const char *new_data,
 									const DbInfo *old_db, const DbInfo *new_db,
@@ -23,13 +24,14 @@ static void report_unmatched_relation(const RelInfo *rel, const DbInfo *db,
 static void free_db_and_rel_infos(DbInfoArr *db_arr);
 static void get_template0_info(ClusterInfo *cluster);
 static void get_db_infos(ClusterInfo *cluster);
-static void get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo);
+static char *get_rel_infos_query(ClusterInfo *cluster);
+static void process_rel_infos(DbInfo *dbinfo, PGresult *res, void *arg);
 static void free_rel_infos(RelInfoArr *rel_arr);
 static void print_db_infos(DbInfoArr *db_arr);
 static void print_rel_infos(RelInfoArr *rel_arr);
 static void print_slot_infos(LogicalSlotInfoArr *slot_arr);
-static void get_old_cluster_logical_slot_infos(DbInfo *dbinfo, bool live_check);
-static void get_db_subscription_count(DbInfo *dbinfo);
+static char *get_old_cluster_logical_slot_infos_query(void);
+static void process_old_cluster_logical_slot_infos(DbInfo *dbinfo, PGresult *res, void *arg);
 
 
 /*
@@ -312,13 +314,13 @@ report_unmatched_relation(const RelInfo *rel, const DbInfo *db, bool is_new_db)
  *
  * higher level routine to generate dbinfos for the database running
  * on the given "port". Assumes that server is already running.
- *
- * live_check would be used only when the target is the old cluster.
  */
 void
-get_db_rel_and_slot_infos(ClusterInfo *cluster, bool live_check)
+get_db_rel_and_slot_infos(ClusterInfo *cluster)
 {
-	int			dbnum;
+	UpgradeTask *task = upgrade_task_create();
+	char	   *rel_infos_query = NULL;
+	char	   *logical_slot_infos_query = NULL;
 
 	if (cluster->dbarr.dbs != NULL)
 		free_db_and_rel_infos(&cluster->dbarr);
@@ -326,22 +328,37 @@ get_db_rel_and_slot_infos(ClusterInfo *cluster, bool live_check)
 	get_template0_info(cluster);
 	get_db_infos(cluster);
 
-	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	rel_infos_query = get_rel_infos_query(cluster);
+	upgrade_task_add_step(task,
+						  rel_infos_query,
+						  process_rel_infos,
+						  true, cluster);
+
+	/*
+	 * Logical slots are only carried over to the new cluster when the old
+	 * cluster is on PG17 or newer.  This is because before that the logical
+	 * slots are not saved at shutdown, so there is no guarantee that the
+	 * latest confirmed_flush_lsn is saved to disk which can lead to data
+	 * loss. It is still not guaranteed for manually created slots in PG17, so
+	 * subsequent checks done in check_old_cluster_for_valid_slots() would
+	 * raise a FATAL error if such slots are included.
+	 */
+	if (cluster == &old_cluster &&
+		GET_MAJOR_VERSION(cluster->major_version) > 1600)
 	{
-		DbInfo	   *pDbInfo = &cluster->dbarr.dbs[dbnum];
-
-		get_rel_infos(cluster, pDbInfo);
-
-		/*
-		 * Retrieve the logical replication slots infos and the subscriptions
-		 * count for the old cluster.
-		 */
-		if (cluster == &old_cluster)
-		{
-			get_old_cluster_logical_slot_infos(pDbInfo, live_check);
-			get_db_subscription_count(pDbInfo);
-		}
+		logical_slot_infos_query = get_old_cluster_logical_slot_infos_query();
+		upgrade_task_add_step(task,
+							  logical_slot_infos_query,
+							  process_old_cluster_logical_slot_infos,
+							  true, NULL);
 	}
+
+	upgrade_task_run(task, cluster);
+	upgrade_task_free(task);
+
+	pg_free(rel_infos_query);
+	if (logical_slot_infos_query)
+		pg_free(logical_slot_infos_query);
 
 	if (cluster == &old_cluster)
 		pg_log(PG_VERBOSE, "\nsource databases:");
@@ -503,45 +520,21 @@ get_db_infos(ClusterInfo *cluster)
 
 
 /*
- * get_rel_infos()
+ * get_rel_infos_query()
  *
- * gets the relinfos for all the user tables and indexes of the database
- * referred to by "dbinfo".
+ * Returns the query for retrieving the relation information for all the user
+ * tables and indexes in the database, for use by get_db_rel_and_slot_infos()'s
+ * UpgradeTask.
  *
- * Note: the resulting RelInfo array is assumed to be sorted by OID.
- * This allows later processing to match up old and new databases efficiently.
+ * Note: the result is assumed to be sorted by OID.  This allows later
+ * processing to match up old and new databases efficiently.
  */
-static void
-get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
+static char *
+get_rel_infos_query(ClusterInfo *cluster)
 {
-	PGconn	   *conn = connectToServer(cluster,
-									   dbinfo->db_name);
-	PGresult   *res;
-	RelInfo    *relinfos;
-	int			ntups;
-	int			relnum;
-	int			num_rels = 0;
-	char	   *nspname = NULL;
-	char	   *relname = NULL;
-	char	   *tablespace = NULL;
-	int			i_spclocation,
-				i_nspname,
-				i_relname,
-				i_reloid,
-				i_indtable,
-				i_toastheap,
-				i_relfilenumber,
-				i_reltablespace;
-	char		query[QUERY_ALLOC];
-	char	   *last_namespace = NULL,
-			   *last_tablespace = NULL;
+	PQExpBufferData query;
 
-	char		relstorage;
-	char		relkind;
-	int			i_relstorage = -1;
-	int			i_relkind = -1;
-
-	query[0] = '\0';			/* initialize query string to empty */
+	initPQExpBuffer(&query);
 
 	/*
 	 * Create a CTE that collects OIDs of regular user tables and matviews,
@@ -553,27 +546,27 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * output, so we have to copy that system table.  It's easiest to do that
 	 * by treating it as a user table.
 	 */
-	snprintf(query + strlen(query), sizeof(query) - strlen(query),
-			 "WITH regular_heap (reloid, indtable, toastheap) AS ( "
-			 "  SELECT c.oid, 0::oid, 0::oid "
-			 "  FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
-			 "         ON c.relnamespace = n.oid "
-			 "  WHERE relkind IN (" CppAsString2(RELKIND_RELATION) ", "
-			 CppAsString2(RELKIND_AOSEGMENTS) ", "
-			 CppAsString2(RELKIND_AOBLOCKDIR) ", "
-			 CppAsString2(RELKIND_MATVIEW) " %s) AND "
+	appendPQExpBuffer(&query,
+					  "WITH regular_heap (reloid, indtable, toastheap) AS ( "
+					  "  SELECT c.oid, 0::oid, 0::oid "
+					  "  FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n "
+					  "         ON c.relnamespace = n.oid "
+					  "  WHERE relkind IN (" CppAsString2(RELKIND_RELATION) ", "
+					  CppAsString2(RELKIND_AOSEGMENTS) ", "
+					  CppAsString2(RELKIND_AOBLOCKDIR) ", "
+					  CppAsString2(RELKIND_MATVIEW) "%s) AND "
 	/* exclude possible orphaned temp tables */
-			 "    ((n.nspname !~ '^pg_temp_' AND "
-			 "      n.nspname !~ '^pg_toast_temp_' AND "
-			 "      n.nspname NOT IN ('pg_catalog', 'information_schema', "
-			 "                        'gp_toolkit', 'pg_bitmapindex', 'pg_aoseg', "
-			 "                        'binary_upgrade', 'pg_toast') AND "
-			 "      c.oid >= %u::pg_catalog.oid) OR "
-			 "     (n.nspname = 'pg_catalog' AND "
-			 "      relname IN ('pg_largeobject') ))), ",
-	/* see the comment at the top of old_8_3_create_sequence_script() */
-			 (GET_MAJOR_VERSION(old_cluster.major_version) == 803) ?
-			 "" : ", " CppAsString2(RELKIND_SEQUENCE), FirstNormalObjectId);
+					  "    ((n.nspname !~ '^pg_temp_' AND "
+					  "      n.nspname !~ '^pg_toast_temp_' AND "
+					  "      n.nspname NOT IN ('pg_catalog', 'information_schema', "
+					  "                        'gp_toolkit', 'pg_bitmapindex', 'pg_aoseg', "
+					  "                        'binary_upgrade', 'pg_toast') AND "
+					  "      c.oid >= %u::pg_catalog.oid) OR "
+					  "     (n.nspname = 'pg_catalog' AND "
+					  "      relname IN ('pg_largeobject') ))), ",
+					  (user_opts.transfer_mode == TRANSFER_MODE_SWAP) ?
+					  ", " CppAsString2(RELKIND_SEQUENCE) : "",
+					  FirstNormalObjectId);
 
 	/*
 	 * Add a CTE that collects OIDs of toast tables belonging to the tables
@@ -583,14 +576,14 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * GPDB: Starting GPDB7 CO tables no longer have TOAST tables. Hence,
 	 * ignore toast OIDs for CO tables to avoid upgrade failures.
 	 */
-	snprintf(query + strlen(query), sizeof(query) - strlen(query),
-			 "  toast_heap (reloid, indtable, toastheap) AS ( "
-			 "  SELECT c.reltoastrelid, 0::oid, c.oid "
-			 "  FROM regular_heap JOIN pg_catalog.pg_class c "
-			 "      ON regular_heap.reloid = c.oid "
-			 "  WHERE c.reltoastrelid != 0%s), ",
-			 (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
-			 " AND c.relstorage <> 'c'" : "");
+	appendPQExpBuffer(&query,
+					  "  toast_heap (reloid, indtable, toastheap) AS ( "
+					  "  SELECT c.reltoastrelid, 0::oid, c.oid "
+					  "  FROM regular_heap JOIN pg_catalog.pg_class c "
+					  "      ON regular_heap.reloid = c.oid "
+					  "  WHERE c.reltoastrelid != 0%s), ",
+					  (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
+					  " AND c.relstorage <> 'c'" : "");
 
 	/*
 	 * Add a CTE that collects OIDs of all valid indexes on the previously
@@ -598,77 +591,101 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 	 * Testing indisready is necessary in 9.2, and harmless in earlier/later
 	 * versions.
 	 */
-	snprintf(query + strlen(query), sizeof(query) - strlen(query),
-			 "  all_index (reloid, indtable, toastheap) AS ( "
-			 "  SELECT indexrelid, indrelid, 0::oid "
-			 "  FROM pg_catalog.pg_index "
-			 "  WHERE indisvalid AND indisready "
-			 "    AND indrelid IN "
-			 "        (SELECT reloid FROM regular_heap "
-			 "         UNION ALL "
-			 "         SELECT reloid FROM toast_heap)) ");
+	appendPQExpBufferStr(&query,
+						 "  all_index (reloid, indtable, toastheap) AS ( "
+						 "  SELECT indexrelid, indrelid, 0::oid "
+						 "  FROM pg_catalog.pg_index "
+						 "  WHERE indisvalid AND indisready "
+						 "    AND indrelid IN "
+						 "        (SELECT reloid FROM regular_heap "
+						 "         UNION ALL "
+						 "         SELECT reloid FROM toast_heap)) ");
 
 	/*
 	 * And now we can write the query that retrieves the data we want for each
 	 * heap and index relation.  Make sure result is sorted by OID.
 	 */
-	snprintf(query + strlen(query), sizeof(query) - strlen(query),
-			 "SELECT all_rels.*, n.nspname, c.relname, "
-			 "  %s as relstorage, c.relkind, "
-			 "  c.relfilenode, c.reltablespace, %s "
-			 "FROM (SELECT * FROM regular_heap "
-			 "      UNION ALL "
-			 "      SELECT * FROM toast_heap "
-			 "      UNION ALL "
-			 "      SELECT * FROM all_index) all_rels "
-			 "  JOIN pg_catalog.pg_class c "
-			 "      ON all_rels.reloid = c.oid "
-			 "  JOIN pg_catalog.pg_namespace n "
-			 "     ON c.relnamespace = n.oid "
-			 "  %s"
-			 "  LEFT OUTER JOIN pg_catalog.pg_tablespace t "
-			 "     ON c.reltablespace = t.oid "
-			 "ORDER BY 1;",
+	appendPQExpBuffer(&query,
+					  "SELECT all_rels.*, n.nspname, c.relname, "
+					  "  %s as relstorage, c.relkind, "
+					  "  c.relfilenode, c.reltablespace, %s "
+					  "FROM (SELECT * FROM regular_heap "
+					  "      UNION ALL "
+					  "      SELECT * FROM toast_heap "
+					  "      UNION ALL "
+					  "      SELECT * FROM all_index) all_rels "
+					  "  JOIN pg_catalog.pg_class c "
+					  "      ON all_rels.reloid = c.oid "
+					  "  JOIN pg_catalog.pg_namespace n "
+					  "     ON c.relnamespace = n.oid "
+					  "  %s"
+					  "  LEFT OUTER JOIN pg_catalog.pg_tablespace t "
+					  "     ON c.reltablespace = t.oid "
+					  "ORDER BY 1;",
 	/*
 	 * GPDB 7 with PostgreSQL v12 merge removed the relstorage column.
 	 * It was replaced with the upstream 'relam'.
 	 */
-			 (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
-			 "c.relstorage" :
-			 "(CASE WHEN am.amname = 'ao_row' THEN 'a'"
-			 " WHEN am.amname = 'ao_column' THEN 'c'"
-			 " WHEN am.amname = 'heap' THEN 'h'"
-			 " WHEN c.relkind = 'f' THEN 'x'"
-			 " ELSE '' END)",
+					  (GET_MAJOR_VERSION(cluster->major_version) <= 904) ?
+					  "c.relstorage" :
+					  "(CASE WHEN am.amname = 'ao_row' THEN 'a'"
+					  " WHEN am.amname = 'ao_column' THEN 'c'"
+					  " WHEN am.amname = 'heap' THEN 'h'"
+					  " WHEN c.relkind = 'f' THEN 'x'"
+					  " ELSE '' END)",
 
 	/*
 	 * 9.2 removed the spclocation column in upstream postgres, in GPDB it was
 	 * removed in 6.0.0 during the 8.4 merge
 	 */
-			(GET_MAJOR_VERSION(cluster->major_version) == 803) ?
-			 "t.spclocation" : "pg_catalog.pg_tablespace_location(t.oid) AS spclocation",
+					  (GET_MAJOR_VERSION(cluster->major_version) == 803) ?
+					  "t.spclocation" : "pg_catalog.pg_tablespace_location(t.oid) AS spclocation",
 
-			(GET_MAJOR_VERSION(cluster->major_version) <= 1000) ?
-			 "" : "LEFT OUTER JOIN pg_catalog.pg_am am ON c.relam = am.oid");
+					  (GET_MAJOR_VERSION(cluster->major_version) <= 1000) ?
+					  "" : "LEFT OUTER JOIN pg_catalog.pg_am am ON c.relam = am.oid");
 
-	res = executeQueryOrDie(conn, "%s", query);
+	return query.data;
+}
 
-	ntups = PQntuples(res);
+/*
+ * Callback function for processing results of the query returned by
+ * get_rel_infos_query(), which is used for get_db_rel_and_slot_infos()'s
+ * UpgradeTask.  This function stores the relation information for later use.
+ */
+static void
+process_rel_infos(DbInfo *dbinfo, PGresult *res, void *arg)
+{
+	int			ntups = PQntuples(res);
+	RelInfo    *relinfos = (RelInfo *) pg_malloc(sizeof(RelInfo) * ntups);
+	int			i_reloid = PQfnumber(res, "reloid");
+	int			i_indtable = PQfnumber(res, "indtable");
+	int			i_toastheap = PQfnumber(res, "toastheap");
+	int			i_nspname = PQfnumber(res, "nspname");
+	int			i_relname = PQfnumber(res, "relname");
+	int			i_relfilenumber = PQfnumber(res, "relfilenode");
+	int			i_reltablespace = PQfnumber(res, "reltablespace");
+	int			i_spclocation = PQfnumber(res, "spclocation");
+	int			i_relstorage = PQfnumber(res, "relstorage");
+	int			i_relkind = PQfnumber(res, "relkind");
+	int			num_rels = 0;
+	char	   *nspname = NULL;
+	char	   *relname = NULL;
+	char	   *tablespace = NULL;
+	char	   *last_namespace = NULL;
+	char	   *last_tablespace = NULL;
+	char		relstorage;
+	char		relkind;
+	/*
+	 * GPDB: gathering the append-only auxiliary catalog contents below requires
+	 * a live connection to the database being processed, so open one for the
+	 * cluster passed in as the task's callback argument.
+	 */
+	ClusterInfo *cluster = (ClusterInfo *) arg;
+	PGconn	   *conn = connectToServer(cluster, dbinfo->db_name);
 
-	relinfos = (RelInfo *) pg_malloc(sizeof(RelInfo) * ntups);
+	AssertVariableIsOfType(&process_rel_infos, UpgradeTaskProcessCB);
 
-	i_reloid = PQfnumber(res, "reloid");
-	i_indtable = PQfnumber(res, "indtable");
-	i_toastheap = PQfnumber(res, "toastheap");
-	i_nspname = PQfnumber(res, "nspname");
-	i_relname = PQfnumber(res, "relname");
-	i_relstorage = PQfnumber(res, "relstorage");
-	i_relkind = PQfnumber(res, "relkind");
-	i_relfilenumber = PQfnumber(res, "relfilenode");
-	i_reltablespace = PQfnumber(res, "reltablespace");
-	i_spclocation = PQfnumber(res, "spclocation");
-
-	for (relnum = 0; relnum < ntups; relnum++)
+	for (int relnum = 0; relnum < ntups; relnum++)
 	{
 		RelInfo    *curr = &relinfos[num_rels++];
 
@@ -906,7 +923,6 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			curr->aoblkdirs = NULL;
 		}
 	}
-	PQclear(res);
 
 	PQfinish(conn);
 
@@ -915,35 +931,16 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 }
 
 /*
- * get_old_cluster_logical_slot_infos()
+ * get_old_cluster_logical_slot_infos_query()
  *
- * Gets the LogicalSlotInfos for all the logical replication slots of the
- * database referred to by "dbinfo". The status of each logical slot is gotten
- * here, but they are used at the checking phase. See
- * check_old_cluster_for_valid_slots().
- *
- * Note: This function will not do anything if the old cluster is pre-PG17.
- * This is because before that the logical slots are not saved at shutdown, so
- * there is no guarantee that the latest confirmed_flush_lsn is saved to disk
- * which can lead to data loss. It is still not guaranteed for manually created
- * slots in PG17, so subsequent checks done in
- * check_old_cluster_for_valid_slots() would raise a FATAL error if such slots
- * are included.
+ * Returns the query for retrieving the logical slot information for all the
+ * logical replication slots in the database, for use by
+ * get_db_rel_and_slot_infos()'s UpgradeTask.  The status of each logical slot
+ * is checked in check_old_cluster_for_valid_slots().
  */
-static void
-get_old_cluster_logical_slot_infos(DbInfo *dbinfo, bool live_check)
+static char *
+get_old_cluster_logical_slot_infos_query(void)
 {
-	PGconn	   *conn;
-	PGresult   *res;
-	LogicalSlotInfo *slotinfos = NULL;
-	int			num_slots;
-
-	/* Logical slots can be migrated since PG17. */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1600)
-		return;
-
-	conn = connectToServer(&old_cluster, dbinfo->db_name);
-
 	/*
 	 * Fetch the logical replication slot information. The check whether the
 	 * slot is considered caught up is done by an upgrade function. This
@@ -961,18 +958,32 @@ get_old_cluster_logical_slot_infos(DbInfo *dbinfo, bool live_check)
 	 * started and stopped several times causing any temporary slots to be
 	 * removed.
 	 */
-	res = executeQueryOrDie(conn, "SELECT slot_name, plugin, two_phase, failover, "
-							"%s as caught_up, invalidation_reason IS NOT NULL as invalid "
-							"FROM pg_catalog.pg_replication_slots "
-							"WHERE slot_type = 'logical' AND "
-							"database = current_database() AND "
-							"temporary IS FALSE;",
-							live_check ? "FALSE" :
-							"(CASE WHEN invalidation_reason IS NOT NULL THEN FALSE "
-							"ELSE (SELECT pg_catalog.binary_upgrade_logical_slot_has_caught_up(slot_name)) "
-							"END)");
+	return psprintf("SELECT slot_name, plugin, two_phase, failover, "
+					"%s as caught_up, invalidation_reason IS NOT NULL as invalid "
+					"FROM pg_catalog.pg_replication_slots "
+					"WHERE slot_type = 'logical' AND "
+					"database = current_database() AND "
+					"temporary IS FALSE;",
+					user_opts.live_check ? "FALSE" :
+					"(CASE WHEN invalidation_reason IS NOT NULL THEN FALSE "
+					"ELSE (SELECT pg_catalog.binary_upgrade_logical_slot_has_caught_up(slot_name)) "
+					"END)");
+}
 
-	num_slots = PQntuples(res);
+/*
+ * Callback function for processing results of the query returned by
+ * get_old_cluster_logical_slot_infos_query(), which is used for
+ * get_db_rel_and_slot_infos()'s UpgradeTask.  This function stores the logical
+ * slot information for later use.
+ */
+static void
+process_old_cluster_logical_slot_infos(DbInfo *dbinfo, PGresult *res, void *arg)
+{
+	LogicalSlotInfo *slotinfos = NULL;
+	int			num_slots = PQntuples(res);
+
+	AssertVariableIsOfType(&process_old_cluster_logical_slot_infos,
+						   UpgradeTaskProcessCB);
 
 	if (num_slots)
 	{
@@ -1005,9 +1016,6 @@ get_old_cluster_logical_slot_infos(DbInfo *dbinfo, bool live_check)
 		}
 	}
 
-	PQclear(res);
-	PQfinish(conn);
-
 	dbinfo->slot_arr.slots = slotinfos;
 	dbinfo->slot_arr.nslots = num_slots;
 }
@@ -1034,52 +1042,23 @@ count_old_cluster_logical_slots(void)
 }
 
 /*
- * get_db_subscription_count()
+ * get_subscription_count()
  *
- * Gets the number of subscriptions in the database referred to by "dbinfo".
- *
- * Note: This function will not do anything if the old cluster is pre-PG17.
- * This is because before that the logical slots are not upgraded, so we will
- * not be able to upgrade the logical replication clusters completely.
+ * Gets the number of subscriptions in the cluster.
  */
-static void
-get_db_subscription_count(DbInfo *dbinfo)
+void
+get_subscription_count(ClusterInfo *cluster)
 {
 	PGconn	   *conn;
 	PGresult   *res;
 
-	/* Subscriptions can be migrated since PG17. */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) < 1700)
-		return;
-
-	conn = connectToServer(&old_cluster, dbinfo->db_name);
+	conn = connectToServer(cluster, "template1");
 	res = executeQueryOrDie(conn, "SELECT count(*) "
-							"FROM pg_catalog.pg_subscription WHERE subdbid = %u",
-							dbinfo->db_oid);
-	dbinfo->nsubs = atoi(PQgetvalue(res, 0, 0));
+							"FROM pg_catalog.pg_subscription");
+	cluster->nsubs = atoi(PQgetvalue(res, 0, 0));
 
 	PQclear(res);
 	PQfinish(conn);
-}
-
-/*
- * count_old_cluster_subscriptions()
- *
- * Returns the number of subscriptions for all databases.
- *
- * Note: this function always returns 0 if the old_cluster is PG16 and prior
- * because we gather subscriptions only for cluster versions greater than or
- * equal to PG17. See get_db_subscription_count().
- */
-int
-count_old_cluster_subscriptions(void)
-{
-	int			nsubs = 0;
-
-	for (int dbnum = 0; dbnum < old_cluster.dbarr.ndbs; dbnum++)
-		nsubs += old_cluster.dbarr.dbs[dbnum].nsubs;
-
-	return nsubs;
 }
 
 static void
@@ -1152,13 +1131,13 @@ print_slot_infos(LogicalSlotInfoArr *slot_arr)
 	if (slot_arr->nslots == 0)
 		return;
 
-	pg_log(PG_VERBOSE, "Logical replication slots within the database:");
+	pg_log(PG_VERBOSE, "Logical replication slots in the database:");
 
 	for (int slotnum = 0; slotnum < slot_arr->nslots; slotnum++)
 	{
 		LogicalSlotInfo *slot_info = &slot_arr->slots[slotnum];
 
-		pg_log(PG_VERBOSE, "slot_name: \"%s\", plugin: \"%s\", two_phase: %s",
+		pg_log(PG_VERBOSE, "slot name: \"%s\", output plugin: \"%s\", two_phase: %s",
 			   slot_info->slotname,
 			   slot_info->plugin,
 			   slot_info->two_phase ? "true" : "false");

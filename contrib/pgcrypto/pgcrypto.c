@@ -44,7 +44,10 @@
 
 #include "pgp.h"
 
-PG_MODULE_MAGIC;
+PG_MODULE_MAGIC_EXT(
+					.name = "pgcrypto",
+					.version = PG_VERSION
+);
 
 static void pgcrypto_fips_assign(bool newval, void *extra);
 static bool pgcrypto_fips_check(bool *newval, void **extra, GucSource source);
@@ -69,21 +72,6 @@ bool pgcrypto_fips = false;
 				(errmsg("requested functionality not allowed in FIPS mode")));
 
 void _PG_init(void);
-
-void
-_PG_init(void)
-{
-	DefineCustomBoolVariable("pgcrypto.fips",
-							 "Enable FIPS mode in pgcrypto",
-							 NULL,
-							 &pgcrypto_fips,
-							 false,
-							 PGC_SUSET,
-							 0,
-							 pgcrypto_fips_check,
-							 pgcrypto_fips_assign,
-							 NULL);
-}
 
 static void
 pgcrypto_fips_assign(bool newval, void *extra)
@@ -119,9 +107,50 @@ pgcrypto_fips_check(bool *newval, void **extra, GucSource source)
 
 /* private stuff */
 
+static const struct config_enum_entry builtin_crypto_options[] = {
+	{"on", BC_ON, false},
+	{"off", BC_OFF, false},
+	{"fips", BC_FIPS, false},
+	{NULL, 0, false}
+};
+
 typedef int (*PFN) (const char *name, void **res);
 static void *find_provider(text *name, PFN provider_lookup, const char *desc,
 						   int silent);
+
+int			builtin_crypto_enabled = BC_ON;
+
+/*
+ * Entrypoint of this module.
+ */
+void
+_PG_init(void)
+{
+	DefineCustomBoolVariable("pgcrypto.fips",
+							 "Enable FIPS mode in pgcrypto",
+							 NULL,
+							 &pgcrypto_fips,
+							 false,
+							 PGC_SUSET,
+							 0,
+							 pgcrypto_fips_check,
+							 pgcrypto_fips_assign,
+							 NULL);
+
+	DefineCustomEnumVariable("pgcrypto.builtin_crypto_enabled",
+							 "Sets if builtin crypto functions are enabled.",
+							 "\"on\" enables builtin crypto, \"off\" unconditionally disables and \"fips\" "
+							 "will disable builtin crypto if OpenSSL is in FIPS mode",
+							 &builtin_crypto_enabled,
+							 BC_ON,
+							 builtin_crypto_options,
+							 PGC_SUSET,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+	MarkGUCPrefixReserved("pgcrypto");
+}
 
 /* SQL function: hash(bytea, text) returns bytea */
 PG_FUNCTION_INFO_V1(pg_digest);
@@ -529,6 +558,14 @@ pg_random_uuid(PG_FUNCTION_ARGS)
 {
 	/* redirect to built-in function */
 	return gen_random_uuid(fcinfo);
+}
+
+PG_FUNCTION_INFO_V1(pg_check_fipsmode);
+
+Datum
+pg_check_fipsmode(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_BOOL(CheckFIPSMode());
 }
 
 static void *

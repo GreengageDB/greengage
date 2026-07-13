@@ -380,17 +380,17 @@ TryProcessOpExprForPossibleValues(OpExpr *expr, Node *variable, PossibleValueSet
 		return false;
 	}
 
-	clause_op_infos = get_op_btree_interpretation(expr->opno);
+	clause_op_infos = get_op_index_interpretation(expr->opno);
 
 	/* check if it's equality operation */
 	bool		is_equality = false;
-	OpBtreeInterpretation *clause_op_info = NULL;
+	OpIndexInterpretation *clause_op_info = NULL;
 
 	foreach (lc, clause_op_infos)
 	{
 		clause_op_info = lfirst(lc);
 
-		if (clause_op_info->strategy == BTEqualStrategyNumber)
+		if (clause_op_info->cmptype == COMPARE_EQ)
 		{
 			is_equality = true;
 			break;

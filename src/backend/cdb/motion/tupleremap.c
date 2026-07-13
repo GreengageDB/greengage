@@ -365,7 +365,7 @@ TRRemapMinimalTuple(TupleRemapper *remapper,
 
 	/* Reconstruct the modified tuple, if anything was modified. */
 	if (changed)
-		return heap_form_minimal_tuple(tupledesc, values, isnull);
+		return heap_form_minimal_tuple(tupledesc, values, isnull, 0);
 	else
 		return tuple;
 }

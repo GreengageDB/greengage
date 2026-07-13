@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -90,6 +90,15 @@ adjust_modifytable_subpaths(PlannerInfo *root, CmdType operation,
 int
 compare_path_costs(Path *path1, Path *path2, CostSelector criterion)
 {
+	/* Number of disabled nodes, if different, trumps all else. */
+	if (unlikely(path1->disabled_nodes != path2->disabled_nodes))
+	{
+		if (path1->disabled_nodes < path2->disabled_nodes)
+			return -1;
+		else
+			return +1;
+	}
+
 	if (criterion == STARTUP_COST)
 	{
 		if (path1->startup_cost < path2->startup_cost)
@@ -140,6 +149,15 @@ compare_fractional_path_costs(Path *path1, Path *path2,
 	Cost		cost1,
 				cost2;
 
+	/* Number of disabled nodes, if different, trumps all else. */
+	if (unlikely(path1->disabled_nodes != path2->disabled_nodes))
+	{
+		if (path1->disabled_nodes < path2->disabled_nodes)
+			return -1;
+		else
+			return +1;
+	}
+
 	if (fraction <= 0.0 || fraction >= 1.0)
 		return compare_path_costs(path1, path2, TOTAL_COST);
 	cost1 = path1->startup_cost +
@@ -187,6 +205,15 @@ compare_path_costs_fuzzily(Path *path1, Path *path2, double fuzz_factor)
 {
 #define CONSIDER_PATH_STARTUP_COST(p)  \
 	((p)->param_info == NULL ? (p)->parent->consider_startup : (p)->parent->consider_param_startup)
+
+	/* Number of disabled nodes, if different, trumps all else. */
+	if (unlikely(path1->disabled_nodes != path2->disabled_nodes))
+	{
+		if (path1->disabled_nodes < path2->disabled_nodes)
+			return COSTS_BETTER1;
+		else
+			return COSTS_BETTER2;
+	}
 
 	/*
 	 * Check total cost first since it's more likely to be different; many
@@ -384,15 +411,29 @@ set_cheapest(RelOptInfo *parent_rel)
  * add_path
  *	  Consider a potential implementation path for the specified parent rel,
  *	  and add it to the rel's pathlist if it is worthy of consideration.
- *	  A path is worthy if it has a better sort order (better pathkeys) or
- *	  cheaper cost (on either dimension), or generates fewer rows, than any
- *	  existing path that has the same or superset parameterization rels.
- *	  We also consider parallel-safe paths more worthy than others.
  *
- *	  We also remove from the rel's pathlist any old paths that are dominated
- *	  by new_path --- that is, new_path is cheaper, at least as well ordered,
- *	  generates no more rows, requires no outer rels not required by the old
- *	  path, and is no less parallel-safe.
+ *	  A path is worthy if it has a better sort order (better pathkeys) or
+ *	  cheaper cost (as defined below), or generates fewer rows, than any
+ *    existing path that has the same or superset parameterization rels.  We
+ *    also consider parallel-safe paths more worthy than others.
+ *
+ *    Cheaper cost can mean either a cheaper total cost or a cheaper startup
+ *    cost; if one path is cheaper in one of these aspects and another is
+ *    cheaper in the other, we keep both. However, when some path type is
+ *    disabled (e.g. due to enable_seqscan=false), the number of times that
+ *    a disabled path type is used is considered to be a higher-order
+ *    component of the cost. Hence, if path A uses no disabled path type,
+ *    and path B uses 1 or more disabled path types, A is cheaper, no matter
+ *    what we estimate for the startup and total costs. The startup and total
+ *    cost essentially act as a tiebreak when comparing paths that use equal
+ *    numbers of disabled path nodes; but in practice this tiebreak is almost
+ *    always used, since normally no path types are disabled.
+ *
+ *	  In addition to possibly adding new_path, we also remove from the rel's
+ *    pathlist any old paths that are dominated by new_path --- that is,
+ *    new_path is cheaper, at least as well ordered, generates no more rows,
+ *    requires no outer rels not required by the old path, and is no less
+ *    parallel-safe.
  *
  *	  In most cases, a path with a superset parameterization will generate
  *	  fewer rows (since it has more join clauses to apply), so that those two
@@ -411,10 +452,10 @@ set_cheapest(RelOptInfo *parent_rel)
  *	  parent_rel->consider_param_startup is true for a parameterized one.
  *	  Again, this allows discarding useless paths sooner.
  *
- *	  The pathlist is kept sorted by total_cost, with cheaper paths
- *	  at the front.  Within this routine, that's simply a speed hack:
- *	  doing it that way makes it more likely that we will reject an inferior
- *	  path after a few comparisons, rather than many comparisons.
+ *	  The pathlist is kept sorted by disabled_nodes and then by total_cost,
+ *    with cheaper paths at the front.  Within this routine, that's simply a
+ *    speed hack: doing it that way makes it more likely that we will reject
+ *    an inferior path after a few comparisons, rather than many comparisons.
  *	  However, add_path_precheck relies on this ordering to exit early
  *	  when possible.
  *
@@ -663,8 +704,13 @@ add_path(RelOptInfo *parent_rel, Path *new_path)
 		}
 		else
 		{
-			/* new belongs after this old path if it has cost >= old's */
-			if (new_path->total_cost >= old_path->total_cost)
+			/*
+			 * new belongs after this old path if it has more disabled nodes
+			 * or if it has the same number of nodes but a greater total cost
+			 */
+			if (new_path->disabled_nodes > old_path->disabled_nodes ||
+				(new_path->disabled_nodes == old_path->disabled_nodes &&
+				 new_path->total_cost >= old_path->total_cost))
 				insert_at = foreach_current_index(p1) + 1;
 		}
 
@@ -709,7 +755,7 @@ add_path(RelOptInfo *parent_rel, Path *new_path)
  * so the required information has to be passed piecemeal.
  */
 bool
-add_path_precheck(RelOptInfo *parent_rel,
+add_path_precheck(RelOptInfo *parent_rel, int disabled_nodes,
 				  Cost startup_cost, Cost total_cost,
 				  List *pathkeys, Relids required_outer)
 {
@@ -729,6 +775,20 @@ add_path_precheck(RelOptInfo *parent_rel,
 		PathKeysComparison keyscmp;
 
 		/*
+		 * Since the pathlist is sorted by disabled_nodes and then by
+		 * total_cost, we can stop looking once we reach a path with more
+		 * disabled nodes, or the same number of disabled nodes plus a
+		 * total_cost larger than the new path's.
+		 */
+		if (unlikely(old_path->disabled_nodes != disabled_nodes))
+		{
+			if (disabled_nodes < old_path->disabled_nodes)
+				break;
+		}
+		else if (total_cost <= old_path->total_cost * STD_FUZZ_FACTOR)
+			break;
+
+		/*
 		 * We are looking for an old_path with the same parameterization (and
 		 * by assumption the same rowcount) that dominates the new path on
 		 * pathkeys as well as both cost metrics.  If we find one, we can
@@ -736,38 +796,26 @@ add_path_precheck(RelOptInfo *parent_rel,
 		 *
 		 * Cost comparisons here should match compare_path_costs_fuzzily.
 		 */
-		if (total_cost > old_path->total_cost * STD_FUZZ_FACTOR)
+		/* new path can win on startup cost only if consider_startup */
+		if (startup_cost > old_path->startup_cost * STD_FUZZ_FACTOR ||
+			!consider_startup)
 		{
-			/* new path can win on startup cost only if consider_startup */
-			if (startup_cost > old_path->startup_cost * STD_FUZZ_FACTOR ||
-				!consider_startup)
-			{
-				/* new path loses on cost, so check pathkeys... */
-				List	   *old_path_pathkeys;
+			/* new path loses on cost, so check pathkeys... */
+			List	   *old_path_pathkeys;
 
-				old_path_pathkeys = old_path->param_info ? NIL : old_path->pathkeys;
-				keyscmp = compare_pathkeys(new_path_pathkeys,
-										   old_path_pathkeys);
-				if (keyscmp == PATHKEYS_EQUAL ||
-					keyscmp == PATHKEYS_BETTER2)
+			old_path_pathkeys = old_path->param_info ? NIL : old_path->pathkeys;
+			keyscmp = compare_pathkeys(new_path_pathkeys,
+									   old_path_pathkeys);
+			if (keyscmp == PATHKEYS_EQUAL ||
+				keyscmp == PATHKEYS_BETTER2)
+			{
+				/* new path does not win on pathkeys... */
+				if (bms_equal(required_outer, PATH_REQ_OUTER(old_path)))
 				{
-					/* new path does not win on pathkeys... */
-					if (bms_equal(required_outer, PATH_REQ_OUTER(old_path)))
-					{
-						/* Found an old path that dominates the new one */
-						return false;
-					}
+					/* Found an old path that dominates the new one */
+					return false;
 				}
 			}
-		}
-		else
-		{
-			/*
-			 * Since the pathlist is sorted by total_cost, we can stop looking
-			 * once we reach a path with a total_cost larger than the new
-			 * path's.
-			 */
-			break;
 		}
 	}
 
@@ -804,7 +852,7 @@ add_path_precheck(RelOptInfo *parent_rel,
  *	  produce the same number of rows.  Neither do we need to consider startup
  *	  costs: parallelism is only used for plans that will be run to completion.
  *	  Therefore, this routine is much simpler than add_path: it needs to
- *	  consider only pathkeys and total cost.
+ *	  consider only disabled nodes, pathkeys and total cost.
  *
  *	  As with add_path, we pfree paths that are found to be dominated by
  *	  another partial path; this requires that there be no other references to
@@ -845,7 +893,15 @@ add_partial_path(RelOptInfo *parent_rel, Path *new_path)
 		/* Unless pathkeys are incompatible, keep just one of the two paths. */
 		if (keyscmp != PATHKEYS_DIFFERENT)
 		{
-			if (new_path->total_cost > old_path->total_cost * STD_FUZZ_FACTOR)
+			if (unlikely(new_path->disabled_nodes != old_path->disabled_nodes))
+			{
+				if (new_path->disabled_nodes > old_path->disabled_nodes)
+					accept_new = false;
+				else
+					remove_old = true;
+			}
+			else if (new_path->total_cost > old_path->total_cost
+					 * STD_FUZZ_FACTOR)
 			{
 				/* New path costs more; keep it only if pathkeys are better. */
 				if (keyscmp != PATHKEYS_BETTER1)
@@ -932,8 +988,8 @@ add_partial_path(RelOptInfo *parent_rel, Path *new_path)
  * is surely a loser.
  */
 bool
-add_partial_path_precheck(RelOptInfo *parent_rel, Cost total_cost,
-						  List *pathkeys)
+add_partial_path_precheck(RelOptInfo *parent_rel, int disabled_nodes,
+						  Cost total_cost, List *pathkeys)
 {
 	ListCell   *p1;
 
@@ -976,8 +1032,8 @@ add_partial_path_precheck(RelOptInfo *parent_rel, Cost total_cost,
 	 * partial path; the resulting plans, if run in parallel, will be run to
 	 * completion.
 	 */
-	if (!add_path_precheck(parent_rel, total_cost, total_cost, pathkeys,
-						   NULL))
+	if (!add_path_precheck(parent_rel, disabled_nodes, total_cost, total_cost,
+						   pathkeys, NULL))
 		return false;
 
 	return true;
@@ -1527,15 +1583,21 @@ create_merge_append_path(PlannerInfo *root,
 						 Relids required_outer)
 {
 	MergeAppendPath *pathnode = makeNode(MergeAppendPath);
+	int			input_disabled_nodes;
 	Cost		input_startup_cost;
 	Cost		input_total_cost;
 	ListCell   *l;
 
+	/*
+	 * We don't currently support parameterized MergeAppend paths, as
+	 * explained in the comments for generate_orderedappend_paths.
+	 */
+	Assert(bms_is_empty(rel->lateral_relids) && bms_is_empty(required_outer));
+
 	pathnode->path.pathtype = T_MergeAppend;
 	pathnode->path.parent = rel;
 	pathnode->path.pathtarget = rel->reltarget;
-	pathnode->path.param_info = get_appendrel_parampathinfo(rel,
-															required_outer);
+	pathnode->path.param_info = NULL;
 	pathnode->path.parallel_aware = false;
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = 0;
@@ -1562,11 +1624,15 @@ create_merge_append_path(PlannerInfo *root,
 	 * Add up the sizes and costs of the input paths.
 	 */
 	pathnode->path.rows = 0;
+	input_disabled_nodes = 0;
 	input_startup_cost = 0;
 	input_total_cost = 0;
 	foreach(l, subpaths)
 	{
 		Path	   *subpath = (Path *) lfirst(l);
+
+		/* All child paths should be unparameterized */
+		Assert(bms_is_empty(PATH_REQ_OUTER(subpath)));
 
 		pathnode->path.rows += subpath->rows;
 		pathnode->path.parallel_safe = pathnode->path.parallel_safe &&
@@ -1575,6 +1641,7 @@ create_merge_append_path(PlannerInfo *root,
 		if (pathkeys_contained_in(pathkeys, subpath->pathkeys))
 		{
 			/* Subpath is adequately ordered, we won't need to sort it */
+			input_disabled_nodes += subpath->disabled_nodes;
 			input_startup_cost += subpath->startup_cost;
 			input_total_cost += subpath->total_cost;
 		}
@@ -1586,6 +1653,7 @@ create_merge_append_path(PlannerInfo *root,
 			cost_sort(&sort_path,
 					  root,
 					  pathkeys,
+					  subpath->disabled_nodes,
 					  subpath->total_cost,
 					  /* GPDB: pass subpath->rows because it's been adjusted for # of segments */
 					  subpath->rows,
@@ -1593,12 +1661,10 @@ create_merge_append_path(PlannerInfo *root,
 					  0.0,
 					  work_mem,
 					  pathnode->limit_tuples);
+			input_disabled_nodes += sort_path.disabled_nodes;
 			input_startup_cost += sort_path.startup_cost;
 			input_total_cost += sort_path.total_cost;
 		}
-
-		/* All child paths must have same parameterization */
-		Assert(bms_equal(PATH_REQ_OUTER(subpath), required_outer));
 	}
 
 	/*
@@ -1611,12 +1677,14 @@ create_merge_append_path(PlannerInfo *root,
 		((Path *) linitial(subpaths))->parallel_aware ==
 		pathnode->path.parallel_aware)
 	{
+		pathnode->path.disabled_nodes = input_disabled_nodes;
 		pathnode->path.startup_cost = input_startup_cost;
 		pathnode->path.total_cost = input_total_cost;
 	}
 	else
 		cost_merge_append(&pathnode->path, root,
 						  pathkeys, list_length(subpaths),
+						  input_disabled_nodes,
 						  input_startup_cost, input_total_cost,
 						  pathnode->path.rows);
 
@@ -2080,6 +2148,7 @@ create_material_path(RelOptInfo *rel, Path *subpath)
 	pathnode->subpath = subpath;
 
 	cost_material(&pathnode->path,
+				  subpath->disabled_nodes,
 				  subpath->startup_cost,
 				  subpath->total_cost,
 				  subpath->rows,
@@ -2133,6 +2202,10 @@ create_memoize_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	 * If left at 0, the executor will make a guess at a good value.
 	 */
 	pathnode->est_entries = 0;
+
+	/* we should not generate this path type when enable_memoize=false */
+	Assert(enable_memoize);
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 
 	/*
 	 * Add a small additional charge for caching the first entry.  All the
@@ -2290,6 +2363,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 			return NULL;
 		pathnode->umethod = UNIQUE_PATH_NOOP;
 		pathnode->path.rows = clamp_row_est(rel->rows / numsegments);
+		pathnode->path.disabled_nodes = subpath->disabled_nodes;
 		pathnode->path.startup_cost = subpath->startup_cost;
 		pathnode->path.total_cost = subpath->total_cost;
 		pathnode->path.pathkeys = subpath->pathkeys;
@@ -2331,6 +2405,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 					return NULL;
 				pathnode->umethod = UNIQUE_PATH_NOOP;
 				pathnode->path.rows = clamp_row_est(rel->rows / numsegments);
+				pathnode->path.disabled_nodes = subpath->disabled_nodes;
 				pathnode->path.startup_cost = subpath->startup_cost;
 				pathnode->path.total_cost = subpath->total_cost;
 				pathnode->path.pathkeys = subpath->pathkeys;
@@ -2358,6 +2433,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 		 * Estimate cost for sort+unique implementation
 		 */
 		cost_sort(&sort_path, root, NIL,
+				  subpath->disabled_nodes,
 				  subpath->total_cost,
 				  rel->rows / numsegments,
 				  subpath->pathtarget->width,
@@ -2395,6 +2471,7 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 					 AGG_HASHED, NULL,
 					 numCols, pathnode->path.rows / planner_segment_count(NULL),
 					 NIL,
+					 subpath->disabled_nodes,
 					 subpath->startup_cost,
 					 subpath->total_cost,
 					 (rel->rows / numsegments),
@@ -2403,7 +2480,9 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 
 	if (sjinfo->semi_can_btree && sjinfo->semi_can_hash)
 	{
-		if (agg_path.total_cost < sort_path.total_cost)
+		if (agg_path.disabled_nodes < sort_path.disabled_nodes ||
+			(agg_path.disabled_nodes == sort_path.disabled_nodes &&
+			 agg_path.total_cost < sort_path.total_cost))
 			pathnode->umethod = UNIQUE_PATH_HASH;
 		else
 			pathnode->umethod = UNIQUE_PATH_SORT;
@@ -2421,11 +2500,13 @@ create_unique_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 
 	if (pathnode->umethod == UNIQUE_PATH_HASH)
 	{
+		pathnode->path.disabled_nodes = agg_path.disabled_nodes;
 		pathnode->path.startup_cost = agg_path.startup_cost;
 		pathnode->path.total_cost = agg_path.total_cost;
 	}
 	else
 	{
+		pathnode->path.disabled_nodes = sort_path.disabled_nodes;
 		pathnode->path.startup_cost = sort_path.startup_cost;
 		pathnode->path.total_cost = sort_path.total_cost;
 	}
@@ -2638,6 +2719,7 @@ create_unique_rowid_path(PlannerInfo *root,
 		 * Estimate cost for sort+unique implementation
 		 */
 		cost_sort(&sort_path, root, NIL,
+				  subpath->disabled_nodes,
 				  subpath->total_cost,
 				  (rel->rows / numsegments),
 				  rel->reltarget->width,
@@ -2668,6 +2750,7 @@ create_unique_rowid_path(PlannerInfo *root,
 					 AGG_HASHED, 0,
 					 numCols, ((Path *)pathnode)->rows,
 					 NIL, /* no quals */
+					 subpath->disabled_nodes,
 					 subpath->startup_cost,
 					 subpath->total_cost,
 					 (rel->rows / numsegments),
@@ -2739,11 +2822,22 @@ create_gather_merge_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 						 Relids required_outer, double *rows)
 {
 	GatherMergePath *pathnode = makeNode(GatherMergePath);
+	int			input_disabled_nodes = 0;
 	Cost		input_startup_cost = 0;
 	Cost		input_total_cost = 0;
 
 	Assert(subpath->parallel_safe);
 	Assert(pathkeys);
+
+	/*
+	 * The subpath should guarantee that it is adequately ordered either by
+	 * adding an explicit sort node or by using presorted input.  We cannot
+	 * add an explicit Sort node for the subpath in createplan.c on additional
+	 * pathkeys, because we can't guarantee the sort would be safe.  For
+	 * example, expressions may be volatile or otherwise parallel unsafe.
+	 */
+	if (!pathkeys_contained_in(pathkeys, subpath->pathkeys))
+		elog(ERROR, "gather merge input not sufficiently sorted");
 
 	pathnode->path.pathtype = T_GatherMerge;
 	pathnode->path.parent = rel;
@@ -2755,34 +2849,14 @@ create_gather_merge_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath,
 	pathnode->num_workers = subpath->parallel_workers;
 	pathnode->path.pathkeys = pathkeys;
 	pathnode->path.pathtarget = target ? target : rel->reltarget;
-	pathnode->path.rows += subpath->rows;
 
-	if (pathkeys_contained_in(pathkeys, subpath->pathkeys))
-	{
-		/* Subpath is adequately ordered, we won't need to sort it */
-		input_startup_cost += subpath->startup_cost;
-		input_total_cost += subpath->total_cost;
-	}
-	else
-	{
-		/* We'll need to insert a Sort node, so include cost for that */
-		Path		sort_path;	/* dummy for result of cost_sort */
-
-		cost_sort(&sort_path,
-				  root,
-				  pathkeys,
-				  subpath->total_cost,
-				  subpath->rows,
-				  subpath->pathtarget->width,
-				  0.0,
-				  work_mem,
-				  -1);
-		input_startup_cost += sort_path.startup_cost;
-		input_total_cost += sort_path.total_cost;
-	}
+	input_disabled_nodes += subpath->disabled_nodes;
+	input_startup_cost += subpath->startup_cost;
+	input_total_cost += subpath->total_cost;
 
 	cost_gather_merge(pathnode, root, rel, pathnode->path.param_info,
-					  input_startup_cost, input_total_cost, rows);
+					  input_disabled_nodes, input_startup_cost,
+					  input_total_cost, rows);
 
 	return pathnode;
 }
@@ -3424,7 +3498,8 @@ path_contains_inner_index(Path *path)
 ForeignPath *
 create_foreignscan_path(PlannerInfo *root, RelOptInfo *rel,
 						PathTarget *target,
-						double rows, Cost startup_cost, Cost total_cost,
+						double rows, int disabled_nodes,
+						Cost startup_cost, Cost total_cost,
 						List *pathkeys,
 						Relids required_outer,
 						Path *fdw_outerpath,
@@ -3445,6 +3520,7 @@ create_foreignscan_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = 0;
 	pathnode->path.rows = rows;
+	pathnode->path.disabled_nodes = disabled_nodes;
 	pathnode->path.startup_cost = startup_cost;
 	pathnode->path.total_cost = total_cost;
 	pathnode->path.pathkeys = pathkeys;
@@ -3499,7 +3575,8 @@ create_foreignscan_path(PlannerInfo *root, RelOptInfo *rel,
 ForeignPath *
 create_foreign_join_path(PlannerInfo *root, RelOptInfo *rel,
 						 PathTarget *target,
-						 double rows, Cost startup_cost, Cost total_cost,
+						 double rows, int disabled_nodes,
+						 Cost startup_cost, Cost total_cost,
 						 List *pathkeys,
 						 Relids required_outer,
 						 Path *fdw_outerpath,
@@ -3526,6 +3603,7 @@ create_foreign_join_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = 0;
 	pathnode->path.rows = rows;
+	pathnode->path.disabled_nodes = disabled_nodes;
 	pathnode->path.startup_cost = startup_cost;
 	pathnode->path.total_cost = total_cost;
 	pathnode->path.pathkeys = pathkeys;
@@ -3571,7 +3649,8 @@ create_foreign_join_path(PlannerInfo *root, RelOptInfo *rel,
 ForeignPath *
 create_foreign_upper_path(PlannerInfo *root, RelOptInfo *rel,
 						  PathTarget *target,
-						  double rows, Cost startup_cost, Cost total_cost,
+						  double rows, int disabled_nodes,
+						  Cost startup_cost, Cost total_cost,
 						  List *pathkeys,
 						  Path *fdw_outerpath,
 						  List *fdw_restrictinfo,
@@ -3593,6 +3672,7 @@ create_foreign_upper_path(PlannerInfo *root, RelOptInfo *rel,
 	pathnode->path.parallel_safe = rel->consider_parallel;
 	pathnode->path.parallel_workers = 0;
 	pathnode->path.rows = rows;
+	pathnode->path.disabled_nodes = disabled_nodes;
 	pathnode->path.startup_cost = startup_cost;
 	pathnode->path.total_cost = total_cost;
 	pathnode->path.pathkeys = pathkeys;
@@ -3926,6 +4006,7 @@ create_nestloop_path(PlannerInfo *root,
  *      or NIL to use existing ordering
  * 'innersortkeys' are the sort varkeys for the inner relation
  *      or NIL to use existing ordering
+ * 'outer_presorted_keys' is the number of presorted keys of the outer path
  */
 Path *
 create_mergejoin_path(PlannerInfo *root,
@@ -3942,7 +4023,8 @@ create_mergejoin_path(PlannerInfo *root,
 					  List *mergeclauses,
 					  List *redistribution_clauses,	/* CDB */
 					  List *outersortkeys,
-					  List *innersortkeys)
+					  List *innersortkeys,
+					  int outer_presorted_keys)
 {
 	MergePath  *pathnode = makeNode(MergePath);
 	CdbPathLocus join_locus;
@@ -4048,6 +4130,7 @@ create_mergejoin_path(PlannerInfo *root,
 	pathnode->path_mergeclauses = mergeclauses;
 	pathnode->outersortkeys = outersortkeys;
 	pathnode->innersortkeys = innersortkeys;
+	pathnode->outer_presorted_keys = outer_presorted_keys;
 	/* pathnode->skip_mark_restore will be set by final_cost_mergejoin */
 	/* pathnode->materialize_inner will be set by final_cost_mergejoin */
 
@@ -4058,6 +4141,7 @@ create_mergejoin_path(PlannerInfo *root,
 	initial_cost_mergejoin(root, workspace, jointype, mergeclauses,
 						   outer_path, inner_path,
 						   outersortkeys, innersortkeys,
+						   outer_presorted_keys,
 						   extra);
 
 	final_cost_mergejoin(root, pathnode, workspace, extra);
@@ -4341,6 +4425,7 @@ create_projection_path_with_quals(PlannerInfo *root,
 		 * Set cost of plan as subpath's cost, adjusted for tlist replacement.
 		 */
 		pathnode->path.rows = subpath->rows;
+		pathnode->path.disabled_nodes = subpath->disabled_nodes;
 		pathnode->path.startup_cost = subpath->startup_cost +
 			(target->cost.startup - oldtarget->cost.startup);
 		pathnode->path.total_cost = subpath->total_cost +
@@ -4357,6 +4442,7 @@ create_projection_path_with_quals(PlannerInfo *root,
 		 * evaluating the tlist.  There is no qual to worry about.
 		 */
 		pathnode->path.rows = subpath->rows;
+		pathnode->path.disabled_nodes = subpath->disabled_nodes;
 		pathnode->path.startup_cost = subpath->startup_cost +
 			target->cost.startup;
 		pathnode->path.total_cost = subpath->total_cost +
@@ -4527,6 +4613,7 @@ create_set_projection_path(PlannerInfo *root,
 	 * This is slightly bizarre maybe, but it's what 9.6 did; we may revisit
 	 * this estimate later.
 	 */
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 	pathnode->path.rows = subpath->rows * tlist_rows;
 	pathnode->path.startup_cost = subpath->startup_cost +
 		target->cost.startup;
@@ -4578,6 +4665,7 @@ create_incremental_sort_path(PlannerInfo *root,
 
 	cost_incremental_sort(&pathnode->path,
 						  root, pathkeys, presorted_keys,
+						  subpath->disabled_nodes,
 						  subpath->startup_cost,
 						  subpath->total_cost,
 						  subpath->rows,
@@ -4627,6 +4715,7 @@ create_sort_path(PlannerInfo *root,
 	pathnode->subpath = subpath;
 
 	cost_sort(&pathnode->path, root, pathkeys,
+			  subpath->disabled_nodes,
 			  subpath->total_cost,
 			  subpath->rows,
 			  subpath->pathtarget->width,
@@ -4680,6 +4769,7 @@ create_group_path(PlannerInfo *root,
 			   list_length(groupClause),
 			   numGroups,
 			   qual,
+			   subpath->disabled_nodes,
 			   subpath->startup_cost, subpath->total_cost,
 			   subpath->rows);
 
@@ -4739,6 +4829,7 @@ create_upper_unique_path(PlannerInfo *root,
 	 * all columns get compared at most of the tuples.  (XXX probably this is
 	 * an overestimate.)
 	 */
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 	pathnode->path.startup_cost = subpath->startup_cost;
 	pathnode->path.total_cost = subpath->total_cost +
 		cpu_operator_cost * subpath->rows * numCols;
@@ -4819,6 +4910,7 @@ create_agg_path(PlannerInfo *root,
 			 aggstrategy, aggcosts,
 			 list_length(groupClause), numGroups,
 			 qual,
+			 subpath->disabled_nodes,
 			 subpath->startup_cost, subpath->total_cost,
 			 subpath->rows, subpath->pathtarget->width);
 
@@ -4982,6 +5074,7 @@ create_groupingsets_path(PlannerInfo *root,
 													subpath->rows,
 													subpath->locus),
 					 having_qual,
+					 subpath->disabled_nodes,
 					 subpath->startup_cost,
 					 subpath->total_cost,
 					 subpath->rows,
@@ -5009,7 +5102,7 @@ create_groupingsets_path(PlannerInfo *root,
 														subpath->rows,
 														subpath->locus),
 						 having_qual,
-						 0.0, 0.0,
+						 0, 0.0, 0.0,
 						 subpath->rows,
 						 subpath->pathtarget->width);
 				if (!rollup->is_hashed)
@@ -5018,7 +5111,7 @@ create_groupingsets_path(PlannerInfo *root,
 			else
 			{
 				/* Account for cost of sort, but don't charge input cost again */
-				cost_sort(&sort_path, root, NIL,
+				cost_sort(&sort_path, root, NIL, 0,
 						  0.0,
 						  subpath->rows,
 						  subpath->pathtarget->width,
@@ -5036,12 +5129,14 @@ create_groupingsets_path(PlannerInfo *root,
 														subpath->rows,
 														subpath->locus),
 						 having_qual,
+						 sort_path.disabled_nodes,
 						 sort_path.startup_cost,
 						 sort_path.total_cost,
 						 sort_path.rows,
 						 subpath->pathtarget->width);
 			}
 
+			pathnode->path.disabled_nodes += agg_path.disabled_nodes;
 			pathnode->path.total_cost += agg_path.total_cost;
 			pathnode->path.rows += agg_path.rows;
 		}
@@ -5087,6 +5182,7 @@ create_minmaxagg_path(PlannerInfo *root,
 {
 	MinMaxAggPath *pathnode = makeNode(MinMaxAggPath);
 	Cost		initplan_cost;
+	int			initplan_disabled_nodes = 0;
 	ListCell   *lc;
 	CdbLocusType locustype = CdbLocusType_Null;
 	int			numsegments = -1;
@@ -5113,6 +5209,7 @@ create_minmaxagg_path(PlannerInfo *root,
 	{
 		MinMaxAggInfo *mminfo = (MinMaxAggInfo *) lfirst(lc);
 
+		initplan_disabled_nodes += mminfo->path->disabled_nodes;
 		initplan_cost += mminfo->pathcost;
 
 		if (!mminfo->path->parallel_safe)
@@ -5156,6 +5253,7 @@ create_minmaxagg_path(PlannerInfo *root,
 		CdbPathLocus_MakeEntry(&pathnode->path.locus);
 
 	/* add tlist eval cost for each output row, plus cpu_tuple_cost */
+	pathnode->path.disabled_nodes = initplan_disabled_nodes;
 	pathnode->path.startup_cost = initplan_cost + target->cost.startup;
 	pathnode->path.total_cost = initplan_cost + target->cost.startup +
 		target->cost.per_tuple + cpu_tuple_cost;
@@ -5249,6 +5347,7 @@ create_windowagg_path(PlannerInfo *root,
 	cost_windowagg(&pathnode->path, root,
 				   windowFuncs,
 				   winclause,
+				   subpath->disabled_nodes,
 				   subpath->startup_cost,
 				   subpath->total_cost,
 				   subpath->rows);
@@ -5266,25 +5365,26 @@ create_windowagg_path(PlannerInfo *root,
  *	  Creates a pathnode that represents computation of INTERSECT or EXCEPT
  *
  * 'rel' is the parent relation associated with the result
- * 'subpath' is the path representing the source of data
+ * 'leftpath' is the path representing the left-hand source of data
+ * 'rightpath' is the path representing the right-hand source of data
  * 'cmd' is the specific semantics (INTERSECT or EXCEPT, with/without ALL)
  * 'strategy' is the implementation strategy (sorted or hashed)
- * 'distinctList' is a list of SortGroupClause's representing the grouping
- * 'flagColIdx' is the column number where the flag column will be, if any
- * 'firstFlag' is the flag value for the first input relation when hashing;
- *		or -1 when sorting
- * 'numGroups' is the estimated number of distinct groups
+ * 'groupList' is a list of SortGroupClause's representing the grouping
+ * 'numGroups' is the estimated number of distinct groups in left-hand input
  * 'outputRows' is the estimated number of output rows
+ *
+ * leftpath and rightpath must produce the same columns.  Moreover, if
+ * strategy is SETOP_SORTED, leftpath and rightpath must both be sorted
+ * by all the grouping columns.
  */
 SetOpPath *
 create_setop_path(PlannerInfo *root,
 				  RelOptInfo *rel,
-				  Path *subpath,
+				  Path *leftpath,
+				  Path *rightpath,
 				  SetOpCmd cmd,
 				  SetOpStrategy strategy,
-				  List *distinctList,
-				  AttrNumber flagColIdx,
-				  int firstFlag,
+				  List *groupList,
 				  double numGroups,
 				  double outputRows)
 {
@@ -5292,34 +5392,96 @@ create_setop_path(PlannerInfo *root,
 
 	pathnode->path.pathtype = T_SetOp;
 	pathnode->path.parent = rel;
-	/* SetOp doesn't project, so use source path's pathtarget */
-	pathnode->path.pathtarget = subpath->pathtarget;
+	pathnode->path.pathtarget = rel->reltarget;
 	/* For now, assume we are above any joins, so no parameterization */
 	pathnode->path.param_info = NULL;
 	pathnode->path.parallel_aware = false;
 	pathnode->path.parallel_safe = rel->consider_parallel &&
-		subpath->parallel_safe;
-	pathnode->path.parallel_workers = subpath->parallel_workers;
+		leftpath->parallel_safe && rightpath->parallel_safe;
+	pathnode->path.parallel_workers =
+		leftpath->parallel_workers + rightpath->parallel_workers;
 	/* SetOp preserves the input sort order if in sort mode */
 	pathnode->path.pathkeys =
-		(strategy == SETOP_SORTED) ? subpath->pathkeys : NIL;
-	pathnode->path.locus = subpath->locus;
+		(strategy == SETOP_SORTED) ? leftpath->pathkeys : NIL;
+	/*
+	 * GPDB: the new two-input SetOp requires both inputs to share a
+	 * compatible locus (ensured by the caller when building the setop
+	 * paths); take the resulting locus from the left input.
+	 */
+	pathnode->path.locus = leftpath->locus;
 
-	pathnode->subpath = subpath;
+	pathnode->leftpath = leftpath;
+	pathnode->rightpath = rightpath;
 	pathnode->cmd = cmd;
 	pathnode->strategy = strategy;
-	pathnode->distinctList = distinctList;
-	pathnode->flagColIdx = flagColIdx;
-	pathnode->firstFlag = firstFlag;
+	pathnode->groupList = groupList;
 	pathnode->numGroups = numGroups;
 
 	/*
-	 * Charge one cpu_operator_cost per comparison per input tuple. We assume
-	 * all columns get compared at most of the tuples.
+	 * Compute cost estimates.  As things stand, we end up with the same total
+	 * cost in this node for sort and hash methods, but different startup
+	 * costs.  This could be refined perhaps, but it'll do for now.
 	 */
-	pathnode->path.startup_cost = subpath->startup_cost;
-	pathnode->path.total_cost = subpath->total_cost +
-		cpu_operator_cost * subpath->rows * list_length(distinctList);
+	pathnode->path.disabled_nodes =
+		leftpath->disabled_nodes + rightpath->disabled_nodes;
+	if (strategy == SETOP_SORTED)
+	{
+		/*
+		 * In sorted mode, we can emit output incrementally.  Charge one
+		 * cpu_operator_cost per comparison per input tuple.  Like cost_group,
+		 * we assume all columns get compared at most of the tuples.
+		 */
+		pathnode->path.startup_cost =
+			leftpath->startup_cost + rightpath->startup_cost;
+		pathnode->path.total_cost =
+			leftpath->total_cost + rightpath->total_cost +
+			cpu_operator_cost * (leftpath->rows + rightpath->rows) * list_length(groupList);
+
+		/*
+		 * Also charge a small amount per extracted tuple.  Like cost_sort,
+		 * charge only operator cost not cpu_tuple_cost, since SetOp does no
+		 * qual-checking or projection.
+		 */
+		pathnode->path.total_cost += cpu_operator_cost * outputRows;
+	}
+	else
+	{
+		Size		hashentrysize;
+
+		/*
+		 * In hashed mode, we must read all the input before we can emit
+		 * anything.  Also charge comparison costs to represent the cost of
+		 * hash table lookups.
+		 */
+		pathnode->path.startup_cost =
+			leftpath->total_cost + rightpath->total_cost +
+			cpu_operator_cost * (leftpath->rows + rightpath->rows) * list_length(groupList);
+		pathnode->path.total_cost = pathnode->path.startup_cost;
+
+		/*
+		 * Also charge a small amount per extracted tuple.  Like cost_sort,
+		 * charge only operator cost not cpu_tuple_cost, since SetOp does no
+		 * qual-checking or projection.
+		 */
+		pathnode->path.total_cost += cpu_operator_cost * outputRows;
+
+		/*
+		 * Mark the path as disabled if enable_hashagg is off.  While this
+		 * isn't exactly a HashAgg node, it seems close enough to justify
+		 * letting that switch control it.
+		 */
+		if (!enable_hashagg)
+			pathnode->path.disabled_nodes++;
+
+		/*
+		 * Also disable if it doesn't look like the hashtable will fit into
+		 * hash_mem.
+		 */
+		hashentrysize = MAXALIGN(leftpath->pathtarget->width) +
+			MAXALIGN(SizeofMinimalTupleHeader);
+		if (hashentrysize * numGroups > get_hash_memory_limit())
+			pathnode->path.disabled_nodes++;
+	}
 	pathnode->path.rows = outputRows;
 
 	return pathnode;
@@ -5418,6 +5580,7 @@ create_lockrows_path(PlannerInfo *root, RelOptInfo *rel,
 	 * possible refetches, but it's hard to say how much.  For now, use
 	 * cpu_tuple_cost per row.
 	 */
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 	pathnode->path.startup_cost = subpath->startup_cost;
 	pathnode->path.total_cost = subpath->total_cost +
 		cpu_tuple_cost * subpath->rows;
@@ -5532,6 +5695,7 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	 * costs to change any higher-level planning choices.  But we might want
 	 * to make it look better sometime.
 	 */
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 	pathnode->path.startup_cost = subpath->startup_cost;
 	pathnode->path.total_cost = subpath->total_cost;
 	if (returningLists != NIL)
@@ -5759,6 +5923,7 @@ create_limit_path(PlannerInfo *root, RelOptInfo *rel,
 		subpath->parallel_safe;
 	pathnode->path.parallel_workers = subpath->parallel_workers;
 	pathnode->path.rows = subpath->rows;
+	pathnode->path.disabled_nodes = subpath->disabled_nodes;
 	pathnode->path.startup_cost = subpath->startup_cost;
 	pathnode->path.total_cost = subpath->total_cost;
 	pathnode->path.pathkeys = subpath->pathkeys;

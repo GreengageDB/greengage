@@ -4,7 +4,7 @@
  *	Routines for type coercion.
  *
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/parser/parse_coerce.h
@@ -67,7 +67,10 @@ extern Node *coerce_to_specific_type_typmod(ParseState *pstate, Node *node,
 											Oid targetTypeId, int32 targetTypmod,
 											const char *constructName);
 
-extern void parser_coercion_errposition(ParseState *pstate,
+extern Node *coerce_null_to_domain(Oid typid, int32 typmod, Oid collation,
+								   int typlen, bool typbyval);
+
+extern int	parser_coercion_errposition(ParseState *pstate,
 										int coerce_location,
 										Node *input_expr);
 

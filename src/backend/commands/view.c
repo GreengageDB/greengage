@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -56,11 +56,8 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 {
 	Oid			viewOid;
 	LOCKMODE	lockmode;
-	CreateStmt *createStmt = makeNode(CreateStmt);
 	List	   *attrList;
 	ListCell   *t;
-
-	createStmt->ownerid = GetUserId();
 
 	/*
 	 * create a list of ColumnDef nodes based on the names and types of the
@@ -234,6 +231,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	}
 	else
 	{
+		CreateStmt *createStmt = makeNode(CreateStmt);
 		ObjectAddress address;
 
 		/*
@@ -250,6 +248,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		createStmt->relKind = RELKIND_VIEW;
 		createStmt->if_not_exists = false;
 		createStmt->gp_style_alter_part = false;
+		createStmt->ownerid = GetUserId();
 
 		/*
 		 * Create the relation (this will error out if there's an existing

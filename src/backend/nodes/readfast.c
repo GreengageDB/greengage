@@ -663,6 +663,11 @@ _readConstraint(void)
 	READ_NODE_FIELD(raw_expr);
 	READ_STRING_FIELD(cooked_expr);
 	READ_CHAR_FIELD(generated_when);
+	/* keep in lockstep with _outConstraint (PG18 generated_kind + PG17 temporal flags) */
+	READ_CHAR_FIELD(generated_kind);
+	READ_BOOL_FIELD(without_overlaps);
+	READ_BOOL_FIELD(fk_with_period);
+	READ_BOOL_FIELD(pk_with_period);
 
 	READ_NODE_FIELD(keys);
 	READ_NODE_FIELD(including);
@@ -689,6 +694,8 @@ _readConstraint(void)
 	READ_BOOL_FIELD(nulls_not_distinct);
 	READ_NODE_FIELD(fk_del_set_cols);
 
+	/* PG18 ENFORCED flag; see _outConstraint for why the QE needs it */
+	READ_BOOL_FIELD(is_enforced);
 	READ_BOOL_FIELD(skip_validation);
 	READ_BOOL_FIELD(initially_valid);
 
@@ -1657,7 +1664,7 @@ _readRowCompareExpr(void)
 {
 	READ_LOCALS(RowCompareExpr);
 
-	READ_ENUM_FIELD(rctype, RowCompareType);
+	READ_ENUM_FIELD(cmptype, CompareType);
 	READ_NODE_FIELD(opnos);
 	READ_NODE_FIELD(opfamilies);
 	READ_NODE_FIELD(inputcollids);
@@ -2514,6 +2521,9 @@ _readRangeTblEntry(void)
 		case RTE_RESULT:
 			/* no extra fields */
 			break;
+		case RTE_GROUP:				/* PG18: the grouping-step RTE */
+			READ_NODE_FIELD(groupexprs);
+			break;
         case RTE_VOID:                                                  /*CDB*/
 			/* GPDB: read the relid/relkind kept for the pulled-up RTE (see outfast.c) */
 			READ_OID_FIELD(relid);
@@ -2642,6 +2652,9 @@ _readPlannedStmt(void)
 	READ_NODE_FIELD(planTree);
 	READ_NODE_FIELD(rtable);
 	READ_NODE_FIELD(permInfos);
+	/* PG18 partition-pruning fields; see _outPlannedStmt for why the QE needs them */
+	READ_NODE_FIELD(partPruneInfos);
+	READ_BITMAPSET_FIELD(unprunableRelids);
 	READ_NODE_FIELD(resultRelations);
 	READ_NODE_FIELD(appendRelations);
 	READ_NODE_FIELD(subplans);
@@ -2813,7 +2826,7 @@ _readAppend(void)
 	READ_NODE_FIELD(appendplans);
 	READ_INT_FIELD(nasyncplans);
 	READ_INT_FIELD(first_partial_plan);
-	READ_NODE_FIELD(part_prune_info);
+	READ_INT_FIELD(part_prune_index);
 	READ_NODE_FIELD(join_prune_paramids);
 
 	READ_DONE();
@@ -2836,7 +2849,7 @@ _readMergeAppend(void)
 	READ_OID_ARRAY(sortOperators, local_node->numCols);
 	READ_OID_ARRAY(collations, local_node->numCols);
 	READ_BOOL_ARRAY(nullsFirst, local_node->numCols);
-	READ_NODE_FIELD(part_prune_info);
+	READ_INT_FIELD(part_prune_index);
 	READ_NODE_FIELD(join_prune_paramids);
 
 	READ_DONE();
@@ -3337,7 +3350,7 @@ _readMergeJoin(void)
 
 	READ_OID_ARRAY(mergeFamilies, numCols);
 	READ_OID_ARRAY(mergeCollations, numCols);
-	READ_INT_ARRAY(mergeStrategies, numCols);
+	READ_BOOL_ARRAY(mergeReversals, numCols);
 	READ_BOOL_ARRAY(mergeNullsFirst, numCols);
 	READ_BOOL_FIELD(unique_outer);
 
@@ -3630,11 +3643,10 @@ _readSetOp(void)
 	READ_ENUM_FIELD(cmd, SetOpCmd);
 	READ_ENUM_FIELD(strategy, SetOpStrategy);
 	READ_INT_FIELD(numCols);
-	READ_ATTRNUMBER_ARRAY(dupColIdx, local_node->numCols);
-	READ_OID_ARRAY(dupOperators, local_node->numCols);
-	READ_OID_ARRAY(dupCollations, local_node->numCols);
-	READ_INT_FIELD(flagColIdx);
-	READ_INT_FIELD(firstFlag);
+	READ_ATTRNUMBER_ARRAY(cmpColIdx, local_node->numCols);
+	READ_OID_ARRAY(cmpOperators, local_node->numCols);
+	READ_OID_ARRAY(cmpCollations, local_node->numCols);
+	READ_BOOL_ARRAY(cmpNullsFirst, local_node->numCols);
 	READ_LONG_FIELD(numGroups);
 
 	READ_DONE();
@@ -4558,19 +4570,7 @@ _readPartitionCmd(void)
 
 	READ_NODE_FIELD(name);
 	READ_NODE_FIELD(bound);
-	READ_NODE_FIELD(partlist);
 	READ_BOOL_FIELD(concurrent);
-
-	READ_DONE();
-}
-
-static SinglePartitionSpec *
-_readSinglePartitionSpec(void)
-{
-	READ_LOCALS(SinglePartitionSpec);
-
-	READ_NODE_FIELD(name);
-	READ_NODE_FIELD(bound);
 
 	READ_DONE();
 }
@@ -4777,7 +4777,7 @@ _readInsertStmt(void)
 	READ_NODE_FIELD(cols);
 	READ_NODE_FIELD(selectStmt);
 	READ_NODE_FIELD(onConflictClause);
-	READ_NODE_FIELD(returningList);
+	READ_NODE_FIELD(returningClause);
 	READ_NODE_FIELD(withClause);
 	READ_ENUM_FIELD(override, OverridingKind);
 	READ_DONE();
@@ -4791,7 +4791,7 @@ _readDeleteStmt(void)
 	READ_NODE_FIELD(relation);
 	READ_NODE_FIELD(usingClause);
 	READ_NODE_FIELD(whereClause);
-	READ_NODE_FIELD(returningList);
+	READ_NODE_FIELD(returningClause);
 	READ_NODE_FIELD(withClause);
 	READ_DONE();
 }
@@ -4805,7 +4805,7 @@ _readUpdateStmt(void)
 	READ_NODE_FIELD(targetList);
 	READ_NODE_FIELD(whereClause);
 	READ_NODE_FIELD(fromClause);
-	READ_NODE_FIELD(returningList);
+	READ_NODE_FIELD(returningClause);
 	READ_NODE_FIELD(withClause);
 	READ_DONE();
 }
@@ -5340,7 +5340,7 @@ _readDynamicSeqScan(void)
 {
 	READ_LOCALS(DynamicSeqScan);
 
-	ReadCommonScan(&local_node->seqscan);
+	ReadCommonScan(&local_node->seqscan.scan);
 	READ_NODE_FIELD(partOids);
 	READ_NODE_FIELD(part_prune_info);
 	READ_NODE_FIELD(join_prune_paramids);
@@ -5712,8 +5712,10 @@ _readTupleDescNode(void)
 		int i = 0;
 		for (; i < local_node->tuple->natts; i++)
 		{
-			memcpy(&local_node->tuple->attrs[i], read_str_ptr, ATTRIBUTE_FIXED_PART_SIZE);
+			memcpy(TupleDescAttr(local_node->tuple, i), read_str_ptr, ATTRIBUTE_FIXED_PART_SIZE);
 			read_str_ptr+=ATTRIBUTE_FIXED_PART_SIZE;
+			/* Rebuild the compact attribute metadata from the copied Form. */
+			populate_compact_attribute(local_node->tuple, i);
 		}
 	}
 
@@ -5787,6 +5789,9 @@ _readCookedConstraint(void)
 	READ_STRING_FIELD(name);
 	READ_INT_FIELD(attnum);
 	READ_NODE_FIELD(expr);
+	/* keep in lockstep with _outCookedConstraint (PG18 is_enforced + skip_validation) */
+	READ_BOOL_FIELD(is_enforced);
+	READ_BOOL_FIELD(skip_validation);
 	READ_BOOL_FIELD(is_local);
 	READ_INT_FIELD(inhcount);
 	READ_BOOL_FIELD(is_no_inherit);
@@ -6534,9 +6539,6 @@ readNodeBinary(void)
 				break;
 			case T_PartitionRangeDatum:
 				return_value = _readPartitionRangeDatum();
-				break;
-			case T_SinglePartitionSpec:
-				return_value = _readSinglePartitionSpec();
 				break;
 			case T_PartitionCmd:
 				return_value = _readPartitionCmd();

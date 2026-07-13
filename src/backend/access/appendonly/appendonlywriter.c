@@ -181,7 +181,14 @@ LockSegnoForWrite(Relation rel, int segno)
 	 * distributed snapshot for non-serializable transaction isolation level,
 	 * and it may be too late.
 	 */
-	snapshot = GetOldestSnapshot();
+	/*
+	 * PG18 removed GetOldestSnapshot() (together with snapshot LSN tracking).
+	 * The currently active snapshot is an already-established snapshot (its
+	 * bottommost stack entry has the oldest xmin) and, crucially, reusing it
+	 * avoids creating a fresh distributed snapshot the way GetTransactionSnapshot()
+	 * would for non-serializable isolation levels.
+	 */
+	snapshot = ActiveSnapshotSet() ? GetActiveSnapshot() : NULL;
 	if (snapshot == NULL)
 		snapshot = GetTransactionSnapshot();
 
@@ -434,7 +441,14 @@ choose_segno_internal(Relation rel, List *avoid_segnos, choose_segno_mode mode)
 	 * distributed snapshot for non-serializable transaction isolation level,
 	 * and it may be too late.
 	 */
-	snapshot = GetOldestSnapshot();
+	/*
+	 * PG18 removed GetOldestSnapshot() (together with snapshot LSN tracking).
+	 * The currently active snapshot is an already-established snapshot (its
+	 * bottommost stack entry has the oldest xmin) and, crucially, reusing it
+	 * avoids creating a fresh distributed snapshot the way GetTransactionSnapshot()
+	 * would for non-serializable isolation levels.
+	 */
+	snapshot = ActiveSnapshotSet() ? GetActiveSnapshot() : NULL;
 	if (snapshot == NULL)
 		snapshot = GetTransactionSnapshot();
 

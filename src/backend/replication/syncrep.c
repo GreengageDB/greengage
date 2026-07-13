@@ -63,7 +63,7 @@
  * the standbys which are considered as synchronous at that moment
  * will release waiters from the queue.
  *
- * Portions Copyright (c) 2010-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 2010-2025, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/replication/syncrep.c
@@ -169,25 +169,32 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * sync replication standby names defined.
 	 *
 	 * Since this routine gets called every commit time, it's important to
-	 * exit quickly if sync replication is not requested. So we check
-	 * WalSndCtl->sync_standbys_defined flag without the lock and exit
-	 * immediately if it's false. If it's true, we need to check it again
-	 * later while holding the lock, to check the flag and operate the sync
-	 * rep queue atomically. This is necessary to avoid the race condition
-	 * described in SyncRepUpdateSyncStandbysDefined(). On the other hand, if
-	 * it's false, the lock is not necessary because we don't touch the queue.
+	 * exit quickly if sync replication is not requested.
+	 *
+	 * We check WalSndCtl->sync_standbys_status flag without the lock and exit
+	 * immediately if SYNC_STANDBY_INIT is set (the checkpointer has
+	 * initialized this data) but SYNC_STANDBY_DEFINED is missing (no sync
+	 * replication requested).
+	 *
+	 * If SYNC_STANDBY_DEFINED is set, we need to check the status again later
+	 * while holding the lock, to check the flag and operate the sync rep
+	 * queue atomically.  This is necessary to avoid the race condition
+	 * described in SyncRepUpdateSyncStandbysDefined().  On the other hand, if
+	 * SYNC_STANDBY_DEFINED is not set, the lock is not necessary because we
+	 * don't touch the queue.
 	 *
 	 * GPDB: the coordinator's synchronous standby is not configured through
-	 * synchronous_standby_names (so sync_standbys_defined is false for it);
+	 * synchronous_standby_names (so SYNC_STANDBY_DEFINED is not set for it);
 	 * instead the QD decides synchronously below by looking for an active
 	 * gp_walreceiver (see the IS_QUERY_DISPATCHER block).  Therefore the QD
-	 * must not take this sync_standbys_defined fast path -- doing so made
+	 * must not take this sync_standbys_status fast path -- doing so made
 	 * coordinator commits never block on the standby.  Segments keep the
 	 * upstream behavior.  (Mirrors the IS_QUERY_DISPATCHER guard further down.)
 	 */
 	if (!SyncRepRequested() ||
 		(!IS_QUERY_DISPATCHER() &&
-		 !((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_defined))
+		 ((((volatile WalSndCtlData *) WalSndCtl)->sync_standbys_status) &
+		  (SYNC_STANDBY_INIT | SYNC_STANDBY_DEFINED)) == SYNC_STANDBY_INIT))
 		return;
 
 	/* Cap the level for anything other than commit to remote flush only. */
@@ -254,23 +261,68 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	}
 
 	/*
-	 * We don't wait for sync rep if WalSndCtl->sync_standbys_defined is not
-	 * set.  See SyncRepUpdateSyncStandbysDefined.
+	 * We don't wait for sync rep if SYNC_STANDBY_DEFINED is not set.  See
+	 * SyncRepUpdateSyncStandbysDefined().
 	 *
 	 * Also check that the standby hasn't already replied. Unlikely race
 	 * condition but we'll be fetching that cache line anyway so it's likely
 	 * to be a low cost check.
+	 *
+	 * If the sync standby data has not been initialized yet
+	 * (SYNC_STANDBY_INIT is not set), fall back to a check based on the LSN,
+	 * then do a direct GUC check.
 	 */
-	if (((!IS_QUERY_DISPATCHER()) && !WalSndCtl->sync_standbys_defined) ||
-		lsn <= WalSndCtl->lsn[mode])
+	if (WalSndCtl->sync_standbys_status & SYNC_STANDBY_INIT)
 	{
-		elogif(debug_walrepl_syncrep, LOG,
-				"syncrep wait -- Not waiting for syncrep because xlog up to LSN (%X/%X) which is "
-				"greater than this backend's commit LSN (%X/%X) has already "
-				"been replicated.",
-			   (uint32) (WalSndCtl->lsn[mode] >> 32), (uint32) WalSndCtl->lsn[mode],
-			   (uint32) (lsn >> 32), (uint32) lsn);
+		/*
+		 * GPDB: the QD does not rely on SYNC_STANDBY_DEFINED (its standby is
+		 * decided above via the active gp_walreceiver check), so only let the
+		 * LSN-already-replicated condition short-circuit the wait for the QD.
+		 */
+		if ((!IS_QUERY_DISPATCHER() &&
+			 (WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) == 0) ||
+			lsn <= WalSndCtl->lsn[mode])
+		{
+			elogif(debug_walrepl_syncrep, LOG,
+					"syncrep wait -- Not waiting for syncrep because xlog up to LSN (%X/%X) which is "
+					"greater than this backend's commit LSN (%X/%X) has already "
+					"been replicated.",
+				   (uint32) (WalSndCtl->lsn[mode] >> 32), (uint32) WalSndCtl->lsn[mode],
+				   (uint32) (lsn >> 32), (uint32) lsn);
 
+			LWLockRelease(SyncRepLock);
+			return;
+		}
+	}
+	else if (lsn <= WalSndCtl->lsn[mode])
+	{
+		/*
+		 * The LSN is older than what we need to wait for.  The sync standby
+		 * data has not been initialized yet, but we are OK to not wait
+		 * because we know that there is no point in doing so based on the
+		 * LSN.
+		 */
+		LWLockRelease(SyncRepLock);
+		return;
+	}
+	else if (!IS_QUERY_DISPATCHER() && !SyncStandbysDefined())
+	{
+		/*
+		 * If we are here, the sync standby data has not been initialized yet,
+		 * and the LSN is newer than what need to wait for, so we have fallen
+		 * back to the best thing we could do in this case: a check on
+		 * SyncStandbysDefined() to see if the GUC is set or not.
+		 *
+		 * When the GUC has a value, we wait until the checkpointer updates
+		 * the status data because we cannot be sure yet if we should wait or
+		 * not. Here, the GUC has *no* value, we are sure that there is no
+		 * point to wait; this matters for example when initializing a
+		 * cluster, where we should never wait, and no sync standbys is the
+		 * default behavior.
+		 *
+		 * GPDB: the QD is excluded here as well, since it decides the standby
+		 * synchronously above rather than through synchronous_standby_names.
+		 */
 		LWLockRelease(SyncRepLock);
 		return;
 	}
@@ -1076,7 +1128,7 @@ SyncRepWakeQueue(bool all, int mode)
 
 /*
  * The checkpointer calls this as needed to update the shared
- * sync_standbys_defined flag, so that backends don't remain permanently wedged
+ * sync_standbys_status flag, so that backends don't remain permanently wedged
  * if synchronous_standby_names is unset.  It's safe to check the current value
  * without the lock, because it's only ever updated by one process.  But we
  * must take the lock to change it.
@@ -1086,7 +1138,8 @@ SyncRepUpdateSyncStandbysDefined(void)
 {
 	bool		sync_standbys_defined = SyncStandbysDefined();
 
-	if (sync_standbys_defined != WalSndCtl->sync_standbys_defined)
+	if (sync_standbys_defined !=
+		((WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) != 0))
 	{
 		LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
 
@@ -1110,7 +1163,30 @@ SyncRepUpdateSyncStandbysDefined(void)
 		 * backend that hasn't yet reloaded its config might go to sleep on
 		 * the queue (and never wake up).  This prevents that.
 		 */
-		WalSndCtl->sync_standbys_defined = sync_standbys_defined;
+		WalSndCtl->sync_standbys_status = SYNC_STANDBY_INIT |
+			(sync_standbys_defined ? SYNC_STANDBY_DEFINED : 0);
+
+		LWLockRelease(SyncRepLock);
+	}
+	else if ((WalSndCtl->sync_standbys_status & SYNC_STANDBY_INIT) == 0)
+	{
+		LWLockAcquire(SyncRepLock, LW_EXCLUSIVE);
+
+		/*
+		 * Note that there is no need to wake up the queues here.  We would
+		 * reach this path only if SyncStandbysDefined() returns false, or it
+		 * would mean that some backends are waiting with the GUC set.  See
+		 * SyncRepWaitForLSN().
+		 */
+		Assert(!SyncStandbysDefined());
+
+		/*
+		 * Even if there is no sync standby defined, let the readers of this
+		 * information know that the sync standby data has been initialized.
+		 * This can just be done once, hence the previous check on
+		 * SYNC_STANDBY_INIT to avoid useless work.
+		 */
+		WalSndCtl->sync_standbys_status |= SYNC_STANDBY_INIT;
 
 		LWLockRelease(SyncRepLock);
 	}
@@ -1167,17 +1243,18 @@ check_synchronous_standby_names(char **newval, void **extra, GucSource source)
 {
 	if (*newval != NULL && (*newval)[0] != '\0')
 	{
+		yyscan_t	scanner;
 		int			parse_rc;
 		SyncRepConfigData *pconf;
 
-		/* Reset communication variables to ensure a fresh start */
-		syncrep_parse_result = NULL;
-		syncrep_parse_error_msg = NULL;
+		/* Result of parsing is returned in one of these two variables */
+		SyncRepConfigData *syncrep_parse_result = NULL;
+		char	   *syncrep_parse_error_msg = NULL;
 
 		/* Parse the synchronous_standby_names string */
-		syncrep_scanner_init(*newval);
-		parse_rc = syncrep_yyparse();
-		syncrep_scanner_finish();
+		syncrep_scanner_init(*newval, &scanner);
+		parse_rc = syncrep_yyparse(&syncrep_parse_result, &syncrep_parse_error_msg, scanner);
+		syncrep_scanner_finish(scanner);
 
 		if (parse_rc != 0 || syncrep_parse_result == NULL)
 		{
@@ -1185,7 +1262,8 @@ check_synchronous_standby_names(char **newval, void **extra, GucSource source)
 			if (syncrep_parse_error_msg)
 				GUC_check_errdetail("%s", syncrep_parse_error_msg);
 			else
-				GUC_check_errdetail("\"synchronous_standby_names\" parser failed");
+				GUC_check_errdetail("\"%s\" parser failed.",
+									"synchronous_standby_names");
 			return false;
 		}
 
@@ -1203,7 +1281,7 @@ check_synchronous_standby_names(char **newval, void **extra, GucSource source)
 			return false;
 		memcpy(pconf, syncrep_parse_result, syncrep_parse_result->config_size);
 
-		*extra = (void *) pconf;
+		*extra = pconf;
 
 		/*
 		 * We need not explicitly clean up syncrep_parse_result.  It, and any

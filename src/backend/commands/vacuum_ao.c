@@ -247,6 +247,7 @@ ao_vacuum_rel_post_cleanup(Relation onerel, VacuumParams *params, BufferAccessSt
 						reltuples,
 						0, /* AO does not currently have an equivalent to
 							  Heap's 'all visible pages' */
+						0, /* nor 'all frozen pages' */
 						relhasindex,
 						cutoffs.FreezeLimit,
 						cutoffs.MultiXactCutoff,
@@ -549,6 +550,7 @@ vacuum_appendonly_index(Relation indexRelation,
 		vac_update_relstats(indexRelation,
 							stats->num_pages, stats->num_index_tuples,
 							0, /* relallvisible */
+							0, /* relallfrozen */
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,
@@ -704,6 +706,7 @@ scan_index(Relation indrel, Relation aorel, int elevel, BufferAccessStrategy vac
 		vac_update_relstats(indrel,
 							stats->num_pages, stats->num_index_tuples,
 							0, /* relallvisible, don't bother for indexes */
+						0, /* relallfrozen, don't bother for indexes */
 							false,
 							InvalidTransactionId,
 							InvalidMultiXactId,

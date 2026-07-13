@@ -16,7 +16,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -38,7 +38,6 @@
 #include "access/tableam.h"
 #include "access/transam.h"
 #include "access/xact.h"
-#include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/partition.h"
 #include "catalog/pg_database.h"
@@ -46,6 +45,7 @@
 #include "catalog/pg_namespace_d.h"
 #include "commands/cluster.h"
 #include "commands/defrem.h"
+#include "commands/progress.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -62,6 +62,7 @@
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/guc_hooks.h"
+#include "utils/injection_point.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
@@ -96,6 +97,13 @@ typedef struct VacuumStatsContext
 } VacuumStatsContext;
 
 /*
+ * Minimum interval for cost-based vacuum delay reports from a parallel worker.
+ * This aims to avoid sending too many messages and waking up the leader too
+ * frequently.
+ */
+#define PARALLEL_VACUUM_DELAY_REPORT_INTERVAL_NS	(NS_PER_S)
+
+/*
  * GUC parameters
  */
 int			vacuum_freeze_min_age;
@@ -104,6 +112,9 @@ int			vacuum_multixact_freeze_min_age;
 int			vacuum_multixact_freeze_table_age;
 int			vacuum_failsafe_age;
 int			vacuum_multixact_failsafe_age;
+double		vacuum_max_eager_freeze_failure_rate;
+bool		track_cost_delay_timing;
+bool		vacuum_truncate;
 
 /*
  * Variables for cost-based vacuum delay. The defaults differ between
@@ -113,6 +124,9 @@ int			vacuum_multixact_failsafe_age;
  */
 double		vacuum_cost_delay = 0;
 int			vacuum_cost_limit = 200;
+
+/* Variable for reporting cost-based vacuum delay from parallel workers. */
+int64		parallel_vacuum_worker_delay_ns = 0;
 
 /*
  * VacuumFailsafeActive is a defined as a global so that we can determine
@@ -174,7 +188,8 @@ check_vacuum_buffer_usage_limit(int *newval, void **extra,
 		return true;
 
 	/* Value does not fall within any allowable range */
-	GUC_check_errdetail("\"vacuum_buffer_usage_limit\" must be 0 or between %d kB and %d kB",
+	GUC_check_errdetail("\"%s\" must be 0 or between %d kB and %d kB.",
+						"vacuum_buffer_usage_limit",
 						MIN_BAS_VAC_RING_SIZE_KB, MAX_BAS_VAC_RING_SIZE_KB);
 
 	return false;
@@ -481,6 +496,11 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	params.auto_stats = auto_stats;
 
 	/*
+	 * Later, in vacuum_rel(), we check if a reloption override was specified.
+	 */
+	params.max_eager_freeze_failure_rate = vacuum_max_eager_freeze_failure_rate;
+
+	/*
 	 * Create special memory context for cross-transaction storage.
 	 *
 	 * Since it is a child of PortalContext, it will go away eventually even
@@ -692,9 +712,6 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 		VacuumFailsafeActive = false;
 		VacuumUpdateCosts();
 		VacuumCostBalance = 0;
-		VacuumPageHit = 0;
-		VacuumPageMiss = 0;
-		VacuumPageDirty = 0;
 		VacuumCostBalanceLocal = 0;
 		VacuumSharedCostBalance = NULL;
 		VacuumActiveNWorkers = NULL;
@@ -708,7 +725,15 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 
 			if (params->options & VACOPT_VACUUM)
 			{
-				if (!vacuum_rel(vrel->oid, vrel->relation, params, bstrategy,
+				VacuumParams params_copy;
+
+				/*
+				 * vacuum_rel() scribbles on the parameters, so give it a copy
+				 * to avoid affecting other relations.
+				 */
+				memcpy(&params_copy, params, sizeof(VacuumParams));
+
+				if (!vacuum_rel(vrel->oid, vrel->relation, &params_copy, bstrategy,
 								vac_context, false))
 					continue;
 			}
@@ -732,6 +757,8 @@ vacuum(List *relations, VacuumParams *params, BufferAccessStrategy bstrategy,
 				if (use_own_xacts)
 				{
 					PopActiveSnapshot();
+					/* standard_ProcessUtility() does CCI if !use_own_xacts */
+					CommandCounterIncrement();
 					CommitTransactionCommand();
 				}
 				else
@@ -968,7 +995,7 @@ vacuum_open_relation(Oid relid, RangeVar *relation, bits32 options,
 
 /*
  * Given a VacuumRelation, fill in the table OID if it wasn't specified,
- * and optionally add VacuumRelations for partitions of the table.
+ * and optionally add VacuumRelations for partitions or inheritance children.
  *
  * If a VacuumRelation does not have an OID supplied and is a partitioned
  * table, an extra entry will be added to the output for each partition.
@@ -996,12 +1023,16 @@ expand_vacuum_rel(VacuumRelation *vrel, MemoryContext vac_context,
 	}
 	else
 	{
-		/* Process a specific relation, and possibly partitions thereof */
+		/*
+		 * Process a specific relation, and possibly partitions or child
+		 * tables thereof.
+		 */
 		Oid			relid;
 		HeapTuple	tuple;
 		Form_pg_class classForm;
 		bool		ispartition;
 		bool		include_parts;
+		bool		include_children;
 		int			rvr_opts;
 		bool		skip_this = false;
 		bool		skip_children = false;
@@ -1121,18 +1152,31 @@ expand_vacuum_rel(VacuumRelation *vrel, MemoryContext vac_context,
 		}
 
 		include_parts = (classForm->relkind == RELKIND_PARTITIONED_TABLE);
+
+		/*
+		 * Vacuuming a partitioned table with ONLY will not do anything since
+		 * the partitioned table itself is empty.  Issue a warning if the user
+		 * requests this.
+		 */
+		include_children = vrel->relation->inh;
+		if ((options & VACOPT_VACUUM) && include_parts && !include_children)
+			ereport(WARNING,
+					(errmsg("VACUUM ONLY of partitioned table \"%s\" has no effect",
+							vrel->relation->relname)));
+
 		ReleaseSysCache(tuple);
 
 		/*
-		 * If it is, make relation list entries for its partitions.  Note that
-		 * the list returned by find_all_inheritors() includes the passed-in
-		 * OID, so we have to skip that.  There's no point in taking locks on
-		 * the individual partitions yet, and doing so would just add
-		 * unnecessary deadlock risk.  For this last reason we do not check
-		 * yet the ownership of the partitions, which get added to the list to
-		 * process.  Ownership will be checked later on anyway.
+		 * Unless the user has specified ONLY, make relation list entries for
+		 * its partitions or inheritance child tables.  Note that the list
+		 * returned by find_all_inheritors() includes the passed-in OID, so we
+		 * have to skip that.  There's no point in taking locks on the
+		 * individual partitions or child tables yet, and doing so would just
+		 * add unnecessary deadlock risk.  For this last reason, we do not yet
+		 * check the ownership of the partitions/tables, which get added to
+		 * the list to process.  Ownership will be checked later on anyway.
 		 */
-		if (include_parts && !skip_children)
+		if (include_parts && include_children && !skip_children)
 		{
 			List	   *part_oids = find_all_inheritors(relid, NoLock, NULL);
 			ListCell   *part_lc;
@@ -1651,6 +1695,7 @@ void
 vac_update_relstats(Relation relation,
 					BlockNumber num_pages, double num_tuples,
 					BlockNumber num_all_visible_pages,
+					BlockNumber num_all_frozen_pages,
 					bool hasindex, TransactionId frozenxid,
 					MultiXactId minmulti,
 					bool *frozenxid_updated, bool *minmulti_updated,
@@ -1659,7 +1704,9 @@ vac_update_relstats(Relation relation,
 {
 	Oid			relid = RelationGetRelid(relation);
 	Relation	rd;
+	ScanKeyData key[1];
 	HeapTuple	ctup;
+	void	   *inplace_state;
 	Form_pg_class pgcform;
 	bool		dirty,
 				futurexid,
@@ -1732,7 +1779,12 @@ vac_update_relstats(Relation relation,
 	rd = table_open(RelationRelationId, RowExclusiveLock);
 
 	/* Fetch a copy of the tuple to scribble on */
-	ctup = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(relid));
+	ScanKeyInit(&key[0],
+				Anum_pg_class_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relid));
+	systable_inplace_update_begin(rd, ClassOidIndexId, true,
+								  NULL, 1, key, &ctup, &inplace_state);
 	if (!HeapTupleIsValid(ctup))
 		elog(ERROR, "pg_class entry for relid %u vanished during vacuuming",
 			 relid);
@@ -1760,6 +1812,11 @@ vac_update_relstats(Relation relation,
 	if (pgcform->relallvisible != (int32) num_all_visible_pages)
 	{
 		pgcform->relallvisible = (int32) num_all_visible_pages;
+		dirty = true;
+	}
+	if (pgcform->relallfrozen != (int32) num_all_frozen_pages)
+	{
+		pgcform->relallfrozen = (int32) num_all_frozen_pages;
 		dirty = true;
 	}
 
@@ -1858,7 +1915,9 @@ vac_update_relstats(Relation relation,
 
 	/* If anything changed, write out the tuple. */
 	if (dirty)
-		heap_inplace_update(rd, ctup);
+		systable_inplace_update_finish(inplace_state, ctup);
+	else
+		systable_inplace_update_cancel(inplace_state);
 
 	table_close(rd, RowExclusiveLock);
 
@@ -1874,36 +1933,6 @@ vac_update_relstats(Relation relation,
 				 errmsg_internal("overwrote invalid relminmxid value %u with new value %u for table \"%s\"",
 								 oldminmulti, minmulti,
 								 RelationGetRelationName(relation))));
-}
-
-/*
- * fetch_database_tuple - Fetch a copy of database tuple from pg_database.
- *
- * This using disk heap table instead of system cache.
- * relation: opened pg_database relation in vac_update_datfrozenxid().
- */
-static HeapTuple
-fetch_database_tuple(Relation relation, Oid dbOid)
-{
-	ScanKeyData skey[1];
-	SysScanDesc sscan;
-	HeapTuple	tuple = NULL;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_database_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(dbOid));
-
-	sscan = systable_beginscan(relation, DatabaseOidIndexId, true,
-							   NULL, 1, skey);
-
-	tuple = systable_getnext(sscan);
-	if (HeapTupleIsValid(tuple))
-		tuple = heap_copytuple(tuple);
-
-	systable_endscan(sscan);
-
-	return tuple;
 }
 
 /*
@@ -1928,9 +1957,7 @@ void
 vac_update_datfrozenxid(void)
 {
 	HeapTuple	tuple;
-	HeapTuple	cached_tuple;
 	Form_pg_database	dbform;
-	Form_pg_database	cached_dbform;
 	Relation	relation;
 	SysScanDesc scan;
 	HeapTuple	classTup;
@@ -1941,6 +1968,7 @@ vac_update_datfrozenxid(void)
 	bool		bogus = false;
 	bool		dirty = false;
 	ScanKeyData key[1];
+	void	   *inplace_state;
 
 	/*
 	 * Restrict this task to one backend per database.  This avoids race
@@ -2073,76 +2101,63 @@ vac_update_datfrozenxid(void)
 	relation = table_open(DatabaseRelationId, RowExclusiveLock);
 
 	/*
-	 * Get the pg_database tuple to scribble on.  Note that this does not
-	 * directly rely on the syscache to avoid issues with flattened toast
-	 * values for the in-place update.
+	 * Fetch a copy of the tuple to scribble on.  We could check the syscache
+	 * tuple first.  If that concluded !dirty, we'd avoid waiting on
+	 * concurrent heap_update() and would avoid exclusive-locking the buffer.
+	 * For now, don't optimize that.
 	 */
 	ScanKeyInit(&key[0],
 				Anum_pg_database_oid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(MyDatabaseId));
 
-	scan = systable_beginscan(relation, DatabaseOidIndexId, true,
-							  NULL, 1, key);
-	tuple = systable_getnext(scan);
-	tuple = heap_copytuple(tuple);
-	systable_endscan(scan);
+	systable_inplace_update_begin(relation, DatabaseOidIndexId, true,
+								  NULL, 1, key, &tuple, &inplace_state);
 
 	if (!HeapTupleIsValid(tuple))
 		elog(ERROR, "could not find tuple for database %u", MyDatabaseId);
 
 	dbform = (Form_pg_database) GETSTRUCT(tuple);
-	cached_tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(MyDatabaseId));
-	cached_dbform = (Form_pg_database) GETSTRUCT(cached_tuple);
 
 	/*
 	 * As in vac_update_relstats(), we ordinarily don't want to let
 	 * datfrozenxid go backward; but if it's "in the future" then it must be
 	 * corrupt and it seems best to overwrite it.
 	 */
-	if (cached_dbform->datfrozenxid != newFrozenXid &&
-		(TransactionIdPrecedes(cached_dbform->datfrozenxid, newFrozenXid) ||
-		 TransactionIdPrecedes(lastSaneFrozenXid, cached_dbform->datfrozenxid)))
+	if (dbform->datfrozenxid != newFrozenXid &&
+		(TransactionIdPrecedes(dbform->datfrozenxid, newFrozenXid) ||
+		 TransactionIdPrecedes(lastSaneFrozenXid, dbform->datfrozenxid)))
+	{
+		dbform->datfrozenxid = newFrozenXid;
 		dirty = true;
+	}
 	else
-		newFrozenXid = cached_dbform->datfrozenxid;
+		newFrozenXid = dbform->datfrozenxid;
 
 	/* Ditto for datminmxid */
-	if (cached_dbform->datminmxid != newMinMulti &&
-		(MultiXactIdPrecedes(cached_dbform->datminmxid, newMinMulti) ||
-		 MultiXactIdPrecedes(lastSaneMinMulti, cached_dbform->datminmxid)))
+	if (dbform->datminmxid != newMinMulti &&
+		(MultiXactIdPrecedes(dbform->datminmxid, newMinMulti) ||
+		 MultiXactIdPrecedes(lastSaneMinMulti, dbform->datminmxid)))
+	{
+		dbform->datminmxid = newMinMulti;
 		dirty = true;
+	}
 	else
-		newMinMulti = cached_dbform->datminmxid;
+		newMinMulti = dbform->datminmxid;
 
 	if (dirty)
-	{
-		HeapTuple			tuple;
-		Form_pg_database	tmp_dbform;
-		/*
-		 * Fetch a copy of the tuple to scribble on from pg_database disk
-		 * heap table instead of system cache
-		 * "SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(MyDatabaseId))".
-		 * Since the cache already flatten toast tuple, so the
-		 * heap_inplace_update will fail with "wrong tuple length".
-		 */
-		tuple = fetch_database_tuple(relation, MyDatabaseId);
-		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "could not find tuple for database %u", MyDatabaseId);
-		tmp_dbform = (Form_pg_database) GETSTRUCT(tuple);
-		tmp_dbform->datfrozenxid = newFrozenXid;
-		tmp_dbform->datminmxid = newMinMulti;
+		systable_inplace_update_finish(inplace_state, tuple);
+	else
+		systable_inplace_update_cancel(inplace_state);
 
-		heap_inplace_update(relation, tuple);
-		heap_freetuple(tuple);
 #ifdef FAULT_INJECTOR
+	if (dirty)
 		FaultInjector_InjectFaultIfSet(
 			"vacuum_update_dat_frozen_xid", DDLNotSpecified,
-			NameStr(cached_dbform->datname), "");
+			NameStr(dbform->datname), "");
 #endif
-	}
 
-	ReleaseSysCache(cached_tuple);
+	heap_freetuple(tuple);
 	table_close(relation, RowExclusiveLock);
 
 	/*
@@ -2572,18 +2587,53 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		}
 	}
 
+#ifdef USE_INJECTION_POINTS
+	if (params->index_cleanup == VACOPTVALUE_AUTO)
+		INJECTION_POINT("vacuum-index-cleanup-auto", NULL);
+	else if (params->index_cleanup == VACOPTVALUE_DISABLED)
+		INJECTION_POINT("vacuum-index-cleanup-disabled", NULL);
+	else if (params->index_cleanup == VACOPTVALUE_ENABLED)
+		INJECTION_POINT("vacuum-index-cleanup-enabled", NULL);
+#endif
+
 	/*
-	 * Set truncate option based on truncate reloption if it wasn't specified
-	 * in VACUUM command, or when running in an autovacuum worker
+	 * Check if the vacuum_max_eager_freeze_failure_rate table storage
+	 * parameter was specified. This overrides the GUC value.
+	 */
+	if (rel->rd_options != NULL &&
+		((StdRdOptions *) rel->rd_options)->vacuum_max_eager_freeze_failure_rate >= 0)
+		params->max_eager_freeze_failure_rate =
+			((StdRdOptions *) rel->rd_options)->vacuum_max_eager_freeze_failure_rate;
+
+	/*
+	 * Set truncate option based on truncate reloption or GUC if it wasn't
+	 * specified in VACUUM command, or when running in an autovacuum worker
 	 */
 	if (params->truncate == VACOPTVALUE_UNSPECIFIED)
 	{
-		if (rel->rd_options == NULL ||
-			((StdRdOptions *) rel->rd_options)->vacuum_truncate)
+		StdRdOptions *opts = (StdRdOptions *) rel->rd_options;
+
+		if (opts && opts->vacuum_truncate_set)
+		{
+			if (opts->vacuum_truncate)
+				params->truncate = VACOPTVALUE_ENABLED;
+			else
+				params->truncate = VACOPTVALUE_DISABLED;
+		}
+		else if (vacuum_truncate)
 			params->truncate = VACOPTVALUE_ENABLED;
 		else
 			params->truncate = VACOPTVALUE_DISABLED;
 	}
+
+#ifdef USE_INJECTION_POINTS
+	if (params->truncate == VACOPTVALUE_AUTO)
+		INJECTION_POINT("vacuum-truncate-auto", NULL);
+	else if (params->truncate == VACOPTVALUE_DISABLED)
+		INJECTION_POINT("vacuum-truncate-disabled", NULL);
+	else if (params->truncate == VACOPTVALUE_ENABLED)
+		INJECTION_POINT("vacuum-truncate-enabled", NULL);
+#endif
 
 	/*
 	 * Remember the relation's TOAST relation for later, if the caller asked
@@ -2750,15 +2800,14 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 		{
 			ClusterParams cluster_params = {0};
 
-			/* close relation before vacuuming, but hold lock until commit */
-			relation_close(rel, NoLock);
-			rel = NULL;
-
 			if ((params->options & VACOPT_VERBOSE) != 0)
 				cluster_params.options |= CLUOPT_VERBOSE;
 
 			/* VACUUM FULL is now a variant of CLUSTER; see cluster.c */
-			cluster_rel(relid, InvalidOid, &cluster_params);
+			cluster_rel(rel, InvalidOid, &cluster_params);
+			/* cluster_rel closes the relation, but keeps lock */
+
+			rel = NULL;
 		}
 		else
 			table_relation_vacuum(rel, params, bstrategy);
@@ -3005,7 +3054,7 @@ vac_close_indexes(int nindexes, Relation *Irel, LOCKMODE lockmode)
  * typically once per page processed.
  */
 void
-vacuum_delay_point(void)
+vacuum_delay_point(bool is_analyze)
 {
 	double		msec = 0;
 
@@ -3048,12 +3097,65 @@ vacuum_delay_point(void)
 	/* Nap if appropriate */
 	if (msec > 0)
 	{
+		instr_time	delay_start;
+
 		if (msec > vacuum_cost_delay * 4)
 			msec = vacuum_cost_delay * 4;
+
+		if (track_cost_delay_timing)
+			INSTR_TIME_SET_CURRENT(delay_start);
 
 		pgstat_report_wait_start(WAIT_EVENT_VACUUM_DELAY);
 		pg_usleep(msec * 1000);
 		pgstat_report_wait_end();
+
+		if (track_cost_delay_timing)
+		{
+			instr_time	delay_end;
+			instr_time	delay;
+
+			INSTR_TIME_SET_CURRENT(delay_end);
+			INSTR_TIME_SET_ZERO(delay);
+			INSTR_TIME_ACCUM_DIFF(delay, delay_end, delay_start);
+
+			/*
+			 * For parallel workers, we only report the delay time every once
+			 * in a while to avoid overloading the leader with messages and
+			 * interrupts.
+			 */
+			if (IsParallelWorker())
+			{
+				static instr_time last_report_time;
+				instr_time	time_since_last_report;
+
+				Assert(!is_analyze);
+
+				/* Accumulate the delay time */
+				parallel_vacuum_worker_delay_ns += INSTR_TIME_GET_NANOSEC(delay);
+
+				/* Calculate interval since last report */
+				INSTR_TIME_SET_ZERO(time_since_last_report);
+				INSTR_TIME_ACCUM_DIFF(time_since_last_report, delay_end, last_report_time);
+
+				/* If we haven't reported in a while, do so now */
+				if (INSTR_TIME_GET_NANOSEC(time_since_last_report) >=
+					PARALLEL_VACUUM_DELAY_REPORT_INTERVAL_NS)
+				{
+					pgstat_progress_parallel_incr_param(PROGRESS_VACUUM_DELAY_TIME,
+														parallel_vacuum_worker_delay_ns);
+
+					/* Reset variables */
+					last_report_time = delay_end;
+					parallel_vacuum_worker_delay_ns = 0;
+				}
+			}
+			else if (is_analyze)
+				pgstat_progress_incr_param(PROGRESS_ANALYZE_DELAY_TIME,
+										   INSTR_TIME_GET_NANOSEC(delay));
+			else
+				pgstat_progress_incr_param(PROGRESS_VACUUM_DELAY_TIME,
+										   INSTR_TIME_GET_NANOSEC(delay));
+		}
 
 		/*
 		 * We don't want to ignore postmaster death during very long vacuums
@@ -3466,6 +3568,11 @@ vac_update_relstats_from_list(VacuumStatsContext *stats_context)
 			vac_update_relstats(rel,
 								stats->rel_pages, stats->rel_tuples,
 								stats->relallvisible,
+								/*
+								 * GPDB does not dispatch relallfrozen back from
+								 * the QEs, so preserve the current on-disk value.
+								 */
+								rel->rd_rel->relallfrozen,
 								rel->rd_rel->relhasindex,
 								InvalidTransactionId,
 								InvalidMultiXactId,
@@ -3595,12 +3702,12 @@ vac_bulkdel_one_index(IndexVacuumInfo *ivinfo, IndexBulkDeleteResult *istat,
 {
 	/* Do bulk deletion */
 	istat = index_bulk_delete(ivinfo, istat, vac_tid_reaped,
-							  (void *) dead_items);
+							  dead_items);
 
 	ereport(ivinfo->message_level,
-			(errmsg("scanned index \"%s\" to remove %lld row versions",
+			(errmsg("scanned index \"%s\" to remove %" PRId64 " row versions",
 					RelationGetRelationName(ivinfo->index),
-					(long long) dead_items_info->num_items)));
+					dead_items_info->num_items)));
 
 	return istat;
 }

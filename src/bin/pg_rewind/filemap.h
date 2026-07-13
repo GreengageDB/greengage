@@ -2,7 +2,7 @@
  *
  * filemap.h
  *
- * Copyright (c) 2013-2024, PostgreSQL Global Development Group
+ * Copyright (c) 2013-2025, PostgreSQL Global Development Group
  *-------------------------------------------------------------------------
  */
 #ifndef FILEMAP_H
@@ -117,5 +117,8 @@ extern void print_filemap(filemap_t *filemap);
 /* GPDB: AO file WAL tracking */
 extern void process_target_wal_aofile_change(RelFileNode rnode,
 											 int segno, int64 offset);
+
+extern void keepwal_init(void);
+extern void keepwal_add_entry(const char *path);
 
 #endif							/* FILEMAP_H */

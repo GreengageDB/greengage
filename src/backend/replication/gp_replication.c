@@ -572,7 +572,7 @@ GetMirrorStatus(FtsResponse *response, bool *ready_for_syncrep)
 		break;
 	}
 
-	response->IsSyncRepEnabled = WalSndCtl->sync_standbys_defined;
+	response->IsSyncRepEnabled = (WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) != 0;
 
 	LWLockRelease(SyncRepLock);
 
@@ -588,7 +588,7 @@ GetMirrorStatus(FtsResponse *response, bool *ready_for_syncrep)
 void
 SetSyncStandbysDefined(void)
 {
-	if (!WalSndCtl->sync_standbys_defined)
+	if ((WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) == 0)
 	{
 		set_gp_replication_config("synchronous_standby_names", "*");
 
@@ -601,7 +601,7 @@ SetSyncStandbysDefined(void)
 void
 UnsetSyncStandbysDefined(void)
 {
-	if (WalSndCtl->sync_standbys_defined)
+	if ((WalSndCtl->sync_standbys_status & SYNC_STANDBY_DEFINED) != 0)
 	{
 		set_gp_replication_config("synchronous_standby_names", "");
 

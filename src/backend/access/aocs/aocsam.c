@@ -99,7 +99,7 @@ open_all_datumstreamread_segfiles(Relation rel,
 								  AttrNumber num_proj_atts,
 								  AppendOnlyBlockDirectory *blockDirectory)
 {
-	char	   *basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
+	RelPathStr	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 	RelFileNode relnode;
 
 	relnode.spcNode = rel->rd_locator.spcOid;
@@ -111,11 +111,9 @@ open_all_datumstreamread_segfiles(Relation rel,
 	{
 		AttrNumber	attno = proj_atts[i];
 
-		open_datumstreamread_segfile(basepath, relnode, segInfo, ds[attno], attno);
+		open_datumstreamread_segfile(basepath.str, relnode, segInfo, ds[attno], attno);
 		datumstreamread_block(ds[attno], blockDirectory, attno);
 	}
-
-	pfree(basepath);
 }
 
 /*
@@ -837,7 +835,7 @@ static void
 OpenAOCSDatumStreams(AOCSInsertDesc desc)
 {
 	RelFileNodeBackend rnode;
-	char	   *basepath;
+	RelPathStr	basepath;
 	char		fn[MAXPGPATH];
 	int32		fileSegNo;
 
@@ -878,15 +876,13 @@ OpenAOCSDatumStreams(AOCSInsertDesc desc)
 	{
 		AOCSVPInfoEntry *e = getAOCSVPEntry(seginfo, i);
 
-		FormatAOSegmentFileName(basepath, seginfo->segno, i, &fileSegNo, fn);
+		FormatAOSegmentFileName(basepath.str, seginfo->segno, i, &fileSegNo, fn);
 		Assert(strlen(fn) + 1 <= MAXPGPATH);
 
 		datumstreamwrite_open_file(desc->ds[i], fn, e->eof, e->eof_uncompressed,
 								   &rnode,
 								   fileSegNo, seginfo->formatversion);
 	}
-
-	pfree(basepath);
 }
 
 static inline void
@@ -1334,7 +1330,7 @@ aocs_fetch_init(Relation relation,
 {
 	AOCSFetchDesc aocsFetchDesc;
 	int			colno;
-	char	   *basePath = relpathbackend(relation->rd_locator, relation->rd_backend, MAIN_FORKNUM);
+	char	   *basePath = pstrdup(relpathbackend(relation->rd_locator, relation->rd_backend, MAIN_FORKNUM).str);
 	TupleDesc	tupleDesc = RelationGetDescr(relation);
 	StdRdOptions **opts = RelationGetAttributeOptions(relation);
 	int			segno;

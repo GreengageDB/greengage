@@ -9,7 +9,7 @@
  *
  * Also, generate-lwlocknames.pl processes this file to create lwlocknames.h.
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -37,7 +37,7 @@ PG_LWLOCK(3, XidGen)
 PG_LWLOCK(4, ProcArray)
 PG_LWLOCK(5, SInvalRead)
 PG_LWLOCK(6, SInvalWrite)
-PG_LWLOCK(7, WALBufMapping)
+/* 7 was WALBufMapping */
 PG_LWLOCK(8, WALWrite)
 PG_LWLOCK(9, ControlFile)
 /* 10 was CheckpointLock */
@@ -83,19 +83,20 @@ PG_LWLOCK(49, WALSummarizer)
 PG_LWLOCK(50, DSMRegistry)
 PG_LWLOCK(51, InjectionPoint)
 PG_LWLOCK(52, SerialControl)
+PG_LWLOCK(53, AioWorkerSubmissionQueue)
 
 /* Additional individual locks in GPDB */
-PG_LWLOCK(53, SharedSnapshot)
-PG_LWLOCK(54, DistributedLogControl)
-PG_LWLOCK(55, ResQueue)
-PG_LWLOCK(56, ResGroup)
-PG_LWLOCK(57, ErrorLog)
-PG_LWLOCK(58, SessionState)
-PG_LWLOCK(59, RelfilenodeGen)
-PG_LWLOCK(60, WorkFileManager)
-PG_LWLOCK(61, DistributedLogTruncate)
-PG_LWLOCK(62, TwophaseCommit)
-PG_LWLOCK(63, ShareInputScan)
-PG_LWLOCK(64, FTSReplicationStatus)
-PG_LWLOCK(65, GxidBump)
-PG_LWLOCK(66, ParallelCursorEndpoint)
+PG_LWLOCK(54, SharedSnapshot)
+PG_LWLOCK(55, DistributedLogControl)
+PG_LWLOCK(56, ResQueue)
+PG_LWLOCK(57, ResGroup)
+PG_LWLOCK(58, ErrorLog)
+PG_LWLOCK(59, SessionState)
+PG_LWLOCK(60, RelfilenodeGen)
+PG_LWLOCK(61, WorkFileManager)
+PG_LWLOCK(62, DistributedLogTruncate)
+PG_LWLOCK(63, TwophaseCommit)
+PG_LWLOCK(64, ShareInputScan)
+PG_LWLOCK(65, FTSReplicationStatus)
+PG_LWLOCK(66, GxidBump)
+PG_LWLOCK(67, ParallelCursorEndpoint)

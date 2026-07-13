@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/rel.h
@@ -291,6 +291,9 @@ typedef struct ForeignKeyCacheInfo
 	/* number of columns in the foreign key */
 	int			nkeys;
 
+	/* Is enforced ? */
+	bool		conenforced;
+
 	/*
 	 * these arrays each have nkeys valid entries:
 	 */
@@ -316,6 +319,7 @@ typedef struct AutoVacOpts
 {
 	bool		enabled;
 	int			vacuum_threshold;
+	int			vacuum_max_threshold;
 	int			vacuum_ins_threshold;
 	int			analyze_threshold;
 	int			vacuum_cost_limit;
@@ -356,6 +360,14 @@ typedef struct StdRdOptions
 	int			compresslevel;  /* compression level (AO rels only) */
 	char		compresstype[NAMEDATALEN]; /* compression type (AO rels only) */
 	bool		checksum;		/* checksum (AO rels only) */
+
+	bool		vacuum_truncate_set;	/* whether vacuum_truncate is set */
+
+	/*
+	 * Fraction of pages in a relation that vacuum can eagerly scan and fail
+	 * to freeze. 0 if disabled, -1 if unspecified.
+	 */
+	double		vacuum_max_eager_freeze_failure_rate;
 } StdRdOptions;
 
 #define HEAP_MIN_FILLFACTOR			10

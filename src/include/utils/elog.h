@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/elog.h
@@ -231,7 +231,8 @@ extern void errdetail_log_plural(const char *fmt_singular,
 extern void errdetail_plural(const char *fmt_singular, const char *fmt_plural,
 							 unsigned long n,...) pg_attribute_printf(1, 4) pg_attribute_printf(2, 4);
 
-extern void errhint(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errhint(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errhint_internal(const char *fmt,...) pg_attribute_printf(1, 2);
 
 extern int	errhint_plural(const char *fmt_singular, const char *fmt_plural,
 						   unsigned long n,...) pg_attribute_printf(1, 4) pg_attribute_printf(2, 4);
@@ -465,17 +466,8 @@ extern PGDLLIMPORT ErrorContextCallback *error_context_stack;
 		error_context_stack = _save_context_stack##__VA_ARGS__; \
 	} while (0)
 
-/*
- * Some compilers understand pg_attribute_noreturn(); for other compilers,
- * insert pg_unreachable() so that the compiler gets the point.
- */
-#ifdef HAVE_PG_ATTRIBUTE_NORETURN
 #define PG_RE_THROW()  \
 	pg_re_throw()
-#else
-#define PG_RE_THROW()  \
-	(pg_re_throw(), pg_unreachable())
-#endif
 
 extern PGDLLIMPORT sigjmp_buf *PG_exception_stack;
 
@@ -533,9 +525,9 @@ extern void EmitErrorReport(void);
 extern ErrorData *CopyErrorData(void);
 extern void FreeErrorData(ErrorData *edata);
 extern void FlushErrorState(void);
-extern void ReThrowError(ErrorData *edata) pg_attribute_noreturn();
+pg_noreturn extern void ReThrowError(ErrorData *edata);
 extern void ThrowErrorData(ErrorData *edata);
-extern void pg_re_throw(void) pg_attribute_noreturn();
+pg_noreturn extern void pg_re_throw(void);
 
 extern char *GetErrorContextStack(void);
 

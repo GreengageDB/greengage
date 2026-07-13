@@ -15,7 +15,7 @@
  *
  * Portions Copyright (c) 2007-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 2003-2023, PostgreSQL Global Development Group
+ * Copyright (c) 2003-2025, PostgreSQL Global Development Group
  *
  * src/include/nodes/tidbitmap.h
  *
@@ -27,6 +27,7 @@
 #include "c.h"
 #include "access/appendonlytid.h"
 #include "access/htup.h"
+#include "access/htup_details.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "storage/itemptr.h"
@@ -40,11 +41,13 @@ struct Instrumentation;                 /* #include "executor/instrument.h" */
  * 8K pages, or 1024 with 32K pages).  So there's not much point in making
  * the per-page bitmaps variable size.	We just legislate that the size
  * is this:
+ *
+ * GPDB: upstream defines TBM_MAX_TUPLES_PER_PAGE as MaxHeapTuplesPerPage, but
+ * until we convert TidBitmap to handle AO TIDs we raise this to 64k.
  */
 
-// UNDONE: Until we convert TidBitmap to handle AO TIDS, lets raise this the 64k
-// #define MAX_TUPLES_PER_PAGE  MaxHeapTuplesPerPage
-#define MAX_TUPLES_PER_PAGE  65536
+// #define TBM_MAX_TUPLES_PER_PAGE  MaxHeapTuplesPerPage
+#define TBM_MAX_TUPLES_PER_PAGE  65536
 
 /*
  * When we have to switch over to lossy storage, we use a data structure
@@ -57,7 +60,7 @@ struct Instrumentation;                 /* #include "executor/instrument.h" */
  * table, using identical data structures.  (This is because the memory
  * management for hashtables doesn't easily/efficiently allow space to be
  * transferred easily from one hashtable to another.)  Therefore it's best
- * if PAGES_PER_CHUNK is the same as MAX_TUPLES_PER_PAGE, or at least not
+ * if PAGES_PER_CHUNK is the same as TBM_MAX_TUPLES_PER_PAGE, or at least not
  * too different.  But we also want PAGES_PER_CHUNK to be a power of 2 to
  * avoid expensive integer remainder operations.  So, define it like this:
  */
@@ -71,7 +74,7 @@ struct Instrumentation;                 /* #include "executor/instrument.h" */
 typedef uint64 tbm_bitmapword;		/* must be an unsigned type */
 
 /* number of active words for an exact page: */
-#define WORDS_PER_PAGE	((MAX_TUPLES_PER_PAGE - 1) / TBM_BITS_PER_BITMAPWORD + 1)
+#define WORDS_PER_PAGE	((TBM_MAX_TUPLES_PER_PAGE - 1) / TBM_BITS_PER_BITMAPWORD + 1)
 /* number of active words for a lossy chunk: */
 #define WORDS_PER_CHUNK  ((PAGES_PER_CHUNK - 1) / TBM_BITS_PER_BITMAPWORD + 1)
 
@@ -112,9 +115,23 @@ typedef struct PagetableEntry
  */
 typedef struct TIDBitmap TIDBitmap;
 
-/* Likewise, TBMIterator is private */
-typedef struct TBMIterator TBMIterator;
+/* Likewise, TBMPrivateIterator is private */
+typedef struct TBMPrivateIterator TBMPrivateIterator;
 typedef struct TBMSharedIterator TBMSharedIterator;
+
+/*
+ * Callers with both private and shared implementations can use this unified
+ * API.
+ */
+typedef struct TBMIterator
+{
+	bool		shared;
+	union
+	{
+		TBMPrivateIterator *private_iterator;
+		TBMSharedIterator *shared_iterator;
+	}			i;
+} TBMIterator;
 
 /*
  * Stream bitmap representation.
@@ -160,11 +177,22 @@ typedef struct StreamNode   OpStream;
 /* Result structure for tbm_iterate */
 typedef struct TBMIterateResult
 {
-	BlockNumber blockno;		/* page number containing tuples */
-	int			ntuples;		/* -1 indicates lossy result */
-	bool		recheck;		/* should the tuples be rechecked? */
-	/* Note: recheck is always true if ntuples < 0 */
-	OffsetNumber offsets[FLEXIBLE_ARRAY_MEMBER];
+	BlockNumber blockno;		/* block number containing tuples */
+
+	bool		lossy;
+
+	/*
+	 * Whether or not the tuples should be rechecked. This is always true if
+	 * the page is lossy but may also be true if the query requires recheck.
+	 */
+	bool		recheck;
+
+	/*
+	 * Pointer to the page containing the bitmap for this block. It is a void *
+	 * to avoid exposing the details of the tidbitmap PagetableEntry to API
+	 * users.
+	 */
+	void	   *internal_page;
 } TBMIterateResult;
 
 /* Make this visible for bitmap.c */
@@ -173,7 +201,7 @@ struct StreamBMIterator
 	const struct StreamNode *node;	/* the root node to iterate out of */
 	union
 	{
-		TBMIterator	   *hash;		/* for IndexStream */
+		TBMIterator		hash;		/* for IndexStream */
 		List		   *stream;		/* for OpStream */
 	} input;						/* input iterator(s) */
 	void			   *opaque;		/* for the implementation in bitmap.c */
@@ -190,7 +218,7 @@ struct StreamBMIterator
 
 /* function prototypes in nodes/tidbitmap.c */
 
-extern TIDBitmap *tbm_create(long maxbytes, dsa_area *dsa);
+extern TIDBitmap *tbm_create(Size maxbytes, dsa_area *dsa);
 extern void tbm_free(TIDBitmap *tbm);
 extern void tbm_free_shared_area(dsa_area *dsa, dsa_pointer dp);
 
@@ -200,17 +228,38 @@ extern void tbm_add_tuples(TIDBitmap *tbm,
 extern void tbm_add_page(TIDBitmap *tbm, BlockNumber pageno);
 extern void tbm_union(TIDBitmap *a, const TIDBitmap *b);
 extern void tbm_intersect(TIDBitmap *a, const TIDBitmap *b);
+
+extern int	tbm_extract_page_tuple(TBMIterateResult *iteritem,
+								   OffsetNumber *offsets,
+								   uint32 max_offsets);
+
 extern bool tbm_is_empty(const TIDBitmap *tbm);
 
-extern TBMIterator *tbm_begin_iterate(TIDBitmap *tbm);
+extern TBMPrivateIterator *tbm_begin_private_iterate(TIDBitmap *tbm);
 extern dsa_pointer tbm_prepare_shared_iterate(TIDBitmap *tbm);
-extern TBMIterateResult *tbm_iterate(TBMIterator *iterator);
-extern TBMIterateResult *tbm_shared_iterate(TBMSharedIterator *iterator);
-extern void tbm_end_iterate(TBMIterator *iterator);
+extern bool tbm_private_iterate(TBMPrivateIterator *iterator, TBMIterateResult *tbmres);
+extern bool tbm_shared_iterate(TBMSharedIterator *iterator, TBMIterateResult *tbmres);
+extern void tbm_end_private_iterate(TBMPrivateIterator *iterator);
 extern void tbm_end_shared_iterate(TBMSharedIterator *iterator);
 extern TBMSharedIterator *tbm_attach_shared_iterate(dsa_area *dsa,
 													dsa_pointer dp);
-extern long tbm_calculate_entries(double maxbytes);
+extern int	tbm_calculate_entries(Size maxbytes);
+
+extern TBMIterator tbm_begin_iterate(TIDBitmap *tbm,
+									 dsa_area *dsa, dsa_pointer dsp);
+extern void tbm_end_iterate(TBMIterator *iterator);
+
+extern bool tbm_iterate(TBMIterator *iterator, TBMIterateResult *tbmres);
+
+static inline bool
+tbm_exhausted(TBMIterator *iterator)
+{
+	/*
+	 * It doesn't matter if we check the private or shared iterator here. If
+	 * tbm_end_iterate() was called, they will be NULL
+	 */
+	return !iterator->i.private_iterator;
+}
 
 extern void stream_move_node(StreamBitmap *strm, StreamBitmap *other, StreamType kind);
 extern void stream_add_node(StreamBitmap *strm, StreamNode *node, StreamType kind);

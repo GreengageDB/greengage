@@ -228,7 +228,7 @@ select count(*) from bmscantest where a>1;
 -- test accumulation of stats for parallel nodes
 reset enable_seqscan;
 alter table tenk2 set (parallel_workers = 0);
-explain (analyze, timing off, summary off, costs off)
+explain (analyze, timing off, summary off, costs off, buffers off)
    select count(*) from tenk1, tenk2 where tenk1.hundred > 1
         and tenk2.thousand=0;
 alter table tenk2 reset (parallel_workers);
@@ -240,7 +240,7 @@ $$
 declare ln text;
 begin
     for ln in
-        explain (analyze, timing off, summary off, costs off)
+        explain (analyze, timing off, summary off, costs off, buffers off)
           select * from
           (select ten from tenk1 where ten < 100 order by ten) ss
           right join (values (1),(2),(3)) v(x) on true
@@ -275,6 +275,21 @@ select  count(*) from tenk1, tenk2 where tenk1.unique1 = tenk2.unique1;
 reset enable_seqscan;
 reset enable_hashjoin;
 reset enable_nestloop;
+
+-- test parallel nestloop join path with materialization of the inner path
+alter table tenk2 set (parallel_workers = 0);
+explain (costs off)
+select * from tenk1 t1, tenk2 t2 where t1.two > t2.two;
+
+-- test that parallel nestloop join is not generated if the inner path is
+-- not parallel-safe
+explain (costs off)
+select * from tenk1 t1
+    left join lateral
+      (select t1.unique1 as x, * from tenk2 t2 order by 1) t2
+    on true
+where t1.two > t2.two;
+alter table tenk2 reset (parallel_workers);
 
 -- test gather merge
 set enable_hashagg = false;
@@ -438,7 +453,7 @@ explain (costs off)
 -- to increase the parallel query test coverage
 SAVEPOINT settings;
 SET LOCAL debug_parallel_query = 1;
-EXPLAIN (analyze, timing off, summary off, costs off) SELECT * FROM tenk1;
+EXPLAIN (analyze, timing off, summary off, costs off, buffers off) SELECT * FROM tenk1;
 ROLLBACK TO SAVEPOINT settings;
 
 -- provoke error in worker
@@ -506,4 +521,3 @@ SELECT 1 FROM tenk1_vw_sec
   WHERE (SELECT sum(f1) FROM int4_tbl WHERE f1 < unique1) < 100;
 
 rollback;
-

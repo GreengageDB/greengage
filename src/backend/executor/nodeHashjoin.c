@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -172,6 +172,7 @@
 #include "executor/nodeHash.h"
 #include "executor/nodeHashjoin.h"
 #include "miscadmin.h"
+#include "utils/lsyscache.h"
 #include "utils/sharedtuplestore.h"
 #include "utils/wait_event.h"
 
@@ -652,6 +653,14 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				}
 
 				/*
+				 * In a right-semijoin, we only need the first match for each
+				 * inner tuple.
+				 */
+				if (node->js.jointype == JOIN_RIGHT_SEMI &&
+					HeapTupleHeaderHasMatch(HJTUPLE_MINTUPLE(node->hj_CurTuple)))
+					continue;
+
+				/*
 				 * We've got a match, but still need to test non-hashed quals.
 				 * ExecScanHashBucket already set up all the state needed to
 				 * call ExecQual.
@@ -667,10 +676,10 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 				{
 					node->hj_MatchedOuter = true;
 
-
 					/*
-					 * This is really only needed if HJ_FILL_INNER(node), but
-					 * we'll avoid the branch and just set it always.
+					 * This is really only needed if HJ_FILL_INNER(node) or if
+					 * we are in a right-semijoin, but we'll avoid the branch
+					 * and just set it always.
 					 */
 					if (!HeapTupleHeaderHasMatch(HJTUPLE_MINTUPLE(node->hj_CurTuple)))
 						HeapTupleHeaderSetMatch(HJTUPLE_MINTUPLE(node->hj_CurTuple));
@@ -684,20 +693,21 @@ ExecHashJoinImpl(PlanState *pstate, bool parallel)
 					}
 
 					/*
-					 * In a right-antijoin, we never return a matched tuple.
-					 * And we need to stay on the current outer tuple to
-					 * continue scanning the inner side for matches.
-					 */
-					if (node->js.jointype == JOIN_RIGHT_ANTI)
-						continue;
-
-					/*
-					 * If we only need to join to the first matching inner
-					 * tuple, then consider returning this one, but after that
-					 * continue with next outer tuple.
+					 * If we only need to consider the first matching inner
+					 * tuple, then advance to next outer tuple after we've
+					 * processed this one.
 					 */
 					if (node->js.single_match)
 						node->hj_JoinState = HJ_NEED_NEW_OUTER;
+
+					/*
+					 * In a right-antijoin, we never return a matched tuple.
+					 * If it's not an inner_unique join, we need to stay on
+					 * the current outer tuple to continue scanning the inner
+					 * side for matches.
+					 */
+					if (node->js.jointype == JOIN_RIGHT_ANTI)
+						continue;
 
 					if (otherqual == NULL || ExecQual(otherqual, econtext))
 						return ExecProject(node->js.ps.ps_ProjInfo);
@@ -970,6 +980,7 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 	{
 		case JOIN_INNER:
 		case JOIN_SEMI:
+		case JOIN_RIGHT_SEMI:
 			break;
 		case JOIN_LEFT:
 		case JOIN_ANTI:
@@ -1005,6 +1016,13 @@ ExecInitHashJoin(HashJoin *node, EState *estate, int eflags)
 		TupleTableSlot *slot = hashstate->ps.ps_ResultTupleSlot;
 
 		hjstate->hj_HashTupleSlot = slot;
+
+		/*
+		 * Greengage computes hash values from hj_OuterHashKeys /
+		 * Hash node hashkeys via ExecHashGetHashValue() (see nodeHash.c),
+		 * so upstream's single-expression hj_OuterHash / hash_expr ExprStates
+		 * are left unset (NULL) here and remain unused.
+		 */
 	}
 
 	/*
@@ -1710,10 +1728,11 @@ ExecReScanHashJoin(HashJoinState *node)
 			/*
 			 * Okay to reuse the hash table; needn't rescan inner, either.
 			 *
-			 * However, if it's a right/right-anti/full join, we'd better
-			 * reset the inner-tuple match flags contained in the table.
+			 * However, if it's a right/right-anti/right-semi/full join, we'd
+			 * better reset the inner-tuple match flags contained in the
+			 * table.
 			 */
-			if (HJ_FILL_INNER(node))
+			if (HJ_FILL_INNER(node) || node->js.jointype == JOIN_RIGHT_SEMI)
 				ExecHashTableResetMatchFlags(node->hj_HashTable);
 
 			/*
@@ -2140,8 +2159,13 @@ void
 ExecHashJoinReInitializeDSM(HashJoinState *state, ParallelContext *pcxt)
 {
 	int			plan_node_id = state->js.ps.plan->plan_node_id;
-	ParallelHashJoinState *pstate =
-		shm_toc_lookup(pcxt->toc, plan_node_id, false);
+	ParallelHashJoinState *pstate;
+
+	/* Nothing to do if we failed to create a DSM segment. */
+	if (pcxt->seg == NULL)
+		return;
+
+	pstate = shm_toc_lookup(pcxt->toc, plan_node_id, false);
 
 	/*
 	 * It would be possible to reuse the shared hash table in single-batch

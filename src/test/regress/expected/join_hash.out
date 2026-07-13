@@ -549,7 +549,7 @@ set local statement_mem = '1000kB'; -- GPDB uses statement_mem instead of work_m
 set local enable_parallel_hash = on;
 explain (costs off)
   select count(*) from simple r join extremely_skewed s using (id);
-                          QUERY PLAN                          
+                          QUERY PLAN
 --------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)

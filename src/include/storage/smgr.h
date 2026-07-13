@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/storage/smgr.h
@@ -17,6 +17,7 @@
 #define SMGR_H
 
 #include "lib/ilist.h"
+#include "storage/aio_types.h"
 #include "storage/block.h"
 #include "storage/dbdirnode.h"
 #include "storage/relfilelocator.h"
@@ -41,7 +42,7 @@ typedef enum SMgrImplementation
  * descriptors.)
  *
  * An SMgrRelation may be "pinned", to prevent it from being destroyed while
- * it's in use.  We use this to prevent pointers relcache to smgr from being
+ * it's in use.  We use this to prevent pointers in relcache to smgr from being
  * invalidated.  SMgrRelations that are not pinned are deleted at end of
  * transaction.
  */
@@ -108,9 +109,15 @@ typedef struct f_smgr
 									BlockNumber blocknum, int nblocks, bool skipFsync);
 	bool		(*smgr_prefetch) (SMgrRelation reln, ForkNumber forknum,
 								  BlockNumber blocknum, int nblocks);
+	uint32		(*smgr_maxcombine) (SMgrRelation reln, ForkNumber forknum,
+									BlockNumber blocknum);
 	void		(*smgr_readv) (SMgrRelation reln, ForkNumber forknum,
 							   BlockNumber blocknum,
 							   void **buffers, BlockNumber nblocks);
+	void		(*smgr_startreadv) (PgAioHandle *ioh,
+									SMgrRelation reln, ForkNumber forknum,
+									BlockNumber blocknum,
+									void **buffers, BlockNumber nblocks);
 	void		(*smgr_writev) (SMgrRelation reln, ForkNumber forknum,
 								BlockNumber blocknum,
 								const void **buffers, BlockNumber nblocks,
@@ -119,9 +126,11 @@ typedef struct f_smgr
 								   BlockNumber blocknum, BlockNumber nblocks);
 	BlockNumber (*smgr_nblocks) (SMgrRelation reln, ForkNumber forknum);
 	void		(*smgr_truncate) (SMgrRelation reln, ForkNumber forknum,
-								  BlockNumber nblocks);
+								  BlockNumber curnblk, BlockNumber nblocks);
 	void		(*smgr_immedsync) (SMgrRelation reln, ForkNumber forknum);
 	void		(*smgr_registersync) (SMgrRelation reln, ForkNumber forknum);
+	int			(*smgr_fd) (SMgrRelation reln, ForkNumber forknum,
+							BlockNumber blocknum, uint32 *off);
 } f_smgr;
 
 #define SmgrIsTemp(smgr) \
@@ -140,6 +149,8 @@ extern PGDLLIMPORT smgr_hook_type smgr_hook;
 extern const f_smgr *smgr_standard(ProcNumber backend, RelFileLocator rlocator, SMgrImpl which);
 
 extern const f_smgr *smgr(ProcNumber backend, RelFileLocator rlocator, SMgrImpl which);
+
+extern PGDLLIMPORT const PgAioTargetInfo aio_smgr_target_info;
 
 extern void smgrinit(void);
 extern SMgrRelation smgropen(RelFileLocator rlocator, ProcNumber backend,
@@ -162,9 +173,15 @@ extern void smgrzeroextend(SMgrRelation reln, ForkNumber forknum,
 						   BlockNumber blocknum, int nblocks, bool skipFsync);
 extern bool smgrprefetch(SMgrRelation reln, ForkNumber forknum,
 						 BlockNumber blocknum, int nblocks);
+extern uint32 smgrmaxcombine(SMgrRelation reln, ForkNumber forknum,
+							 BlockNumber blocknum);
 extern void smgrreadv(SMgrRelation reln, ForkNumber forknum,
 					  BlockNumber blocknum,
 					  void **buffers, BlockNumber nblocks);
+extern void smgrstartreadv(PgAioHandle *ioh,
+						   SMgrRelation reln, ForkNumber forknum,
+						   BlockNumber blocknum,
+						   void **buffers, BlockNumber nblocks);
 extern void smgrwritev(SMgrRelation reln, ForkNumber forknum,
 					   BlockNumber blocknum,
 					   const void **buffers, BlockNumber nblocks,
@@ -173,8 +190,9 @@ extern void smgrwriteback(SMgrRelation reln, ForkNumber forknum,
 						  BlockNumber blocknum, BlockNumber nblocks);
 extern BlockNumber smgrnblocks(SMgrRelation reln, ForkNumber forknum);
 extern BlockNumber smgrnblocks_cached(SMgrRelation reln, ForkNumber forknum);
-extern void smgrtruncate(SMgrRelation reln, ForkNumber *forknum,
-						 int nforks, BlockNumber *nblocks);
+extern void smgrtruncate(SMgrRelation reln, ForkNumber *forknum, int nforks,
+						 BlockNumber *old_nblocks,
+						 BlockNumber *nblocks);
 extern void smgrimmedsync(SMgrRelation reln, ForkNumber forknum);
 extern void smgrregistersync(SMgrRelation reln, ForkNumber forknum);
 extern void AtEOXact_SMgr(void);
@@ -210,5 +228,12 @@ extern PGDLLIMPORT file_truncate_hook_type file_truncate_hook;
 
 typedef void (*file_unlink_hook_type)(RelFileLocatorBackend rlocator);
 extern PGDLLIMPORT file_unlink_hook_type file_unlink_hook;
+
+extern void pgaio_io_set_target_smgr(PgAioHandle *ioh,
+									 SMgrRelationData *smgr,
+									 ForkNumber forknum,
+									 BlockNumber blocknum,
+									 int nblocks,
+									 bool skip_fsync);
 
 #endif							/* SMGR_H */

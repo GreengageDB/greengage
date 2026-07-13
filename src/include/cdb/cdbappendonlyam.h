@@ -234,7 +234,13 @@ typedef struct AppendOnlyScanDescData
 	int64		targetTupleId;
 
 	/* For Bitmap scan */
-	int			rs_cindex;		/* current tuple's index in tbmres->offsets */
+	int			rs_cindex;		/* current tuple's index in rs_offsets */
+	int			rs_ntuples;		/* # of tuples on the current bitmap page
+								 * (INT16_MAX+1 for a lossy page) */
+	BlockNumber	rs_blockno;		/* block number of the current bitmap page */
+	bool		rs_lossy;		/* is the current bitmap page lossy? */
+	bool		rs_recheck;		/* does the current page require recheck? */
+	OffsetNumber *rs_offsets;	/* extracted offsets for an exact bitmap page */
 	struct AppendOnlyFetchDescData *aofetch;
 
 }	AppendOnlyScanDescData;

@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -146,8 +146,8 @@ ValuesNext(ValuesScanState *node)
 		foreach(lc, exprstatelist)
 		{
 			ExprState  *estate = (ExprState *) lfirst(lc);
-			Form_pg_attribute attr = TupleDescAttr(slot->tts_tupleDescriptor,
-												   resind);
+			CompactAttribute *attr = TupleDescCompactAttr(slot->tts_tupleDescriptor,
+														  resind);
 
 			values[resind] = ExecEvalExpr(estate,
 										  econtext,

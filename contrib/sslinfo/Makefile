@@ -22,4 +22,4 @@ include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
 endif
 
-SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
+SHLIB_LINK += $(filter -lssl -lcrypto, $(LIBS))

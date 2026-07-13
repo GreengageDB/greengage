@@ -34,7 +34,7 @@
  * or reassigning locks from a resource owner to its parent.
  *
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -47,6 +47,8 @@
 
 #include "common/hashfn.h"
 #include "common/int.h"
+#include "lib/ilist.h"
+#include "storage/aio.h"
 #include "storage/ipc.h"
 #include "storage/predicate.h"
 #include "storage/proc.h"
@@ -159,6 +161,12 @@ struct ResourceOwnerData
 
 	/* The local locks cache. */
 	LOCALLOCK  *locks[MAX_RESOWNER_LOCKS];	/* list of owned locks */
+
+	/*
+	 * AIO handles need be registered in critical sections and therefore
+	 * cannot use the normal ResourceElem mechanism.
+	 */
+	dlist_head	aio_handles;
 };
 
 
@@ -428,6 +436,8 @@ ResourceOwnerCreate(ResourceOwner parent, const char *name)
 		owner->nextchild = parent->firstchild;
 		parent->firstchild = owner;
 	}
+
+	dlist_init(&owner->aio_handles);
 
 	return owner;
 }
@@ -738,6 +748,13 @@ ResourceOwnerReleaseInternal(ResourceOwner owner,
 		 * so issue warnings.  In the abort case, just clean up quietly.
 		 */
 		ResourceOwnerReleaseAll(owner, phase, isCommit);
+
+		while (!dlist_is_empty(&owner->aio_handles))
+		{
+			dlist_node *node = dlist_head_node(&owner->aio_handles);
+
+			pgaio_io_release_resowner(node, !isCommit);
+		}
 	}
 	else if (phase == RESOURCE_RELEASE_LOCKS)
 	{
@@ -1115,4 +1132,16 @@ CdbResourceOwnerWalker(ResourceOwner owner, ResourceWalkerCallback callback)
 	/* Recurse to handle descendants */
 	for (child = owner->firstchild; child != NULL; child = child->nextchild)
 		CdbResourceOwnerWalker(child, callback);
+}
+
+void
+ResourceOwnerRememberAioHandle(ResourceOwner owner, struct dlist_node *ioh_node)
+{
+	dlist_push_tail(&owner->aio_handles, ioh_node);
+}
+
+void
+ResourceOwnerForgetAioHandle(ResourceOwner owner, struct dlist_node *ioh_node)
+{
+	dlist_delete_from(&owner->aio_handles, ioh_node);
 }

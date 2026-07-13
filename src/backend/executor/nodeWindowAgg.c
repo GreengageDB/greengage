@@ -23,7 +23,7 @@
  * aggregate function over all rows in the current row's window frame.
  *
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -436,7 +436,7 @@ call_transfunc(WindowAggState *winstate,
 	InitFunctionCallInfoData(*fcinfo, &(peraggstate->transfn),
 							 numArguments + 1,
 							 perfuncstate->winCollation,
-							 (void *) winstate, NULL);
+							 (Node *) winstate, NULL);
 	fcinfo->args[0].value = peraggstate->transValue;
 	fcinfo->args[0].isnull = peraggstate->transValueIsNull;
 	winstate->curaggcontext = peraggstate->aggcontext;
@@ -607,7 +607,7 @@ advance_windowaggregate_base(WindowAggState *winstate,
 	InitFunctionCallInfoData(*fcinfo, &(peraggstate->invtransfn),
 							 numArguments + 1,
 							 perfuncstate->winCollation,
-							 (void *) winstate, NULL);
+							 (Node *) winstate, NULL);
 	fcinfo->args[0].value = peraggstate->transValue;
 	fcinfo->args[0].isnull = peraggstate->transValueIsNull;
 	winstate->curaggcontext = peraggstate->aggcontext;
@@ -796,7 +796,7 @@ finalize_windowaggregate(WindowAggState *winstate,
 		InitFunctionCallInfoData(fcinfodata.fcinfo, &(peraggstate->finalfn),
 								 numFinalArgs,
 								 perfuncstate->winCollation,
-								 (void *) winstate, NULL);
+								 (Node *) winstate, NULL);
 		fcinfo->args[0].value =
 			MakeExpandedObjectReadOnly(peraggstate->transValue,
 									   peraggstate->transValueIsNull,
@@ -1303,7 +1303,7 @@ eval_windowfunction(WindowAggState *winstate, WindowStatePerFunc perfuncstate,
 	InitFunctionCallInfoData(*fcinfo, &(perfuncstate->flinfo),
 							 perfuncstate->numArguments,
 							 perfuncstate->winCollation,
-							 (void *) perfuncstate->winobj, NULL);
+							 (Node *) perfuncstate->winobj, NULL);
 	/* Just in case, make all the regular argument slots be null */
 	for (int argno = 0; argno < perfuncstate->numArguments; argno++)
 		fcinfo->args[argno].isnull = true;
@@ -1330,17 +1330,134 @@ eval_windowfunction(WindowAggState *winstate, WindowStatePerFunc perfuncstate,
 }
 
 /*
+ * prepare_tuplestore
+ *		Prepare the tuplestore and all of the required read pointers for the
+ *		WindowAggState's frameOptions.
+ *
+ * Note: We use pg_noinline to avoid bloating the calling function with code
+ * which is only called once.
+ */
+static pg_noinline void
+prepare_tuplestore(WindowAggState *winstate)
+{
+	WindowAgg  *node = (WindowAgg *) winstate->ss.ps.plan;
+	int			frameOptions = winstate->frameOptions;
+	int			numfuncs = winstate->numfuncs;
+
+	/* we shouldn't be called if this was done already */
+	Assert(winstate->buffer == NULL);
+
+	/*
+	 * Create new tuplestore.  GPDB: statement_mem (PlanStateOperatorMemKB)
+	 * decides the operator memory instead of work_mem.
+	 */
+	winstate->buffer =
+		tuplestore_begin_heap(false, false,
+							  PlanStateOperatorMemKB((PlanState *) winstate));
+
+	/*
+	 * Set up read pointers for the tuplestore.  The current pointer doesn't
+	 * need BACKWARD capability, but the per-window-function read pointers do,
+	 * and the aggregate pointer does if we might need to restart aggregation.
+	 */
+	winstate->current_ptr = 0;	/* read pointer 0 is pre-allocated */
+
+	/* reset default REWIND capability bit for current ptr */
+	tuplestore_set_eflags(winstate->buffer, 0);
+
+	/* create read pointers for aggregates, if needed */
+	if (winstate->numaggs > 0)
+	{
+		WindowObject agg_winobj = winstate->agg_winobj;
+		int			readptr_flags = 0;
+
+		/*
+		 * If the frame head is potentially movable, or we have an EXCLUSION
+		 * clause, we might need to restart aggregation ...
+		 */
+		if (!(frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) ||
+			(frameOptions & FRAMEOPTION_EXCLUSION) ||
+			!winstate->end_offset_var_free)
+		{
+			/* ... so create a mark pointer to track the frame head */
+			agg_winobj->markptr = tuplestore_alloc_read_pointer(winstate->buffer, 0);
+			/* and the read pointer will need BACKWARD capability */
+			readptr_flags |= EXEC_FLAG_BACKWARD;
+		}
+
+		agg_winobj->readptr = tuplestore_alloc_read_pointer(winstate->buffer,
+															readptr_flags);
+	}
+
+	/* create mark and read pointers for each real window function */
+	for (int i = 0; i < numfuncs; i++)
+	{
+		WindowStatePerFunc perfuncstate = &(winstate->perfunc[i]);
+
+		if (!perfuncstate->plain_agg)
+		{
+			WindowObject winobj = perfuncstate->winobj;
+
+			winobj->markptr = tuplestore_alloc_read_pointer(winstate->buffer,
+															0);
+			winobj->readptr = tuplestore_alloc_read_pointer(winstate->buffer,
+															EXEC_FLAG_BACKWARD);
+		}
+	}
+
+	/*
+	 * If we are in RANGE or GROUPS mode, then determining frame boundaries
+	 * requires physical access to the frame endpoint rows, except in certain
+	 * degenerate cases.  We create read pointers to point to those rows, to
+	 * simplify access and ensure that the tuplestore doesn't discard the
+	 * endpoint rows prematurely.  (Must create pointers in exactly the same
+	 * cases that update_frameheadpos and update_frametailpos need them.)
+	 */
+	winstate->framehead_ptr = winstate->frametail_ptr = -1; /* if not used */
+
+	if (frameOptions & (FRAMEOPTION_RANGE | FRAMEOPTION_GROUPS))
+	{
+		if (((frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
+			 node->ordNumCols != 0) ||
+			(frameOptions & FRAMEOPTION_START_OFFSET))
+			winstate->framehead_ptr =
+				tuplestore_alloc_read_pointer(winstate->buffer,
+											  winstate->start_offset_var_free ? 0 : EXEC_FLAG_REWIND);
+		if (((frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
+			 node->ordNumCols != 0) ||
+			(frameOptions & FRAMEOPTION_END_OFFSET))
+			winstate->frametail_ptr =
+				tuplestore_alloc_read_pointer(winstate->buffer,
+											  winstate->end_offset_var_free ? 0 : EXEC_FLAG_REWIND);
+	}
+
+	/*
+	 * If we have an exclusion clause that requires knowing the boundaries of
+	 * the current row's peer group, we create a read pointer to track the
+	 * tail position of the peer group (i.e., first row of the next peer
+	 * group).  The head position does not require its own pointer because we
+	 * maintain that as a side effect of advancing the current row.
+	 */
+	winstate->grouptail_ptr = -1;
+
+	if ((frameOptions & (FRAMEOPTION_EXCLUDE_GROUP |
+						 FRAMEOPTION_EXCLUDE_TIES)) &&
+		node->ordNumCols != 0)
+	{
+		winstate->grouptail_ptr =
+			tuplestore_alloc_read_pointer(winstate->buffer, 0);
+	}
+}
+
+/*
  * begin_partition
  * Start buffering rows of the next partition.
  */
 static void
 begin_partition(WindowAggState *winstate)
 {
-	WindowAgg  *node = (WindowAgg *) winstate->ss.ps.plan;
 	PlanState  *outerPlan = outerPlanState(winstate);
-	int			frameOptions = winstate->frameOptions;
 	int			numfuncs = winstate->numfuncs;
-	int			i;
 
 	winstate->partition_spooled = false;
 	winstate->framehead_valid = false;
@@ -1386,43 +1503,17 @@ begin_partition(WindowAggState *winstate)
 		}
 	}
 
-	/* Create new tuplestore for this partition */
-	winstate->buffer =
-		tuplestore_begin_heap(false, false,
-							  PlanStateOperatorMemKB((PlanState *) winstate));
+	/* Create new tuplestore if not done already. */
+	if (unlikely(winstate->buffer == NULL))
+		prepare_tuplestore(winstate);
 
-	/*
-	 * Set up read pointers for the tuplestore.  The current pointer doesn't
-	 * need BACKWARD capability, but the per-window-function read pointers do,
-	 * and the aggregate pointer does if we might need to restart aggregation.
-	 */
-	winstate->current_ptr = 0;	/* read pointer 0 is pre-allocated */
+	winstate->next_partition = false;
 
-	/* reset default REWIND capability bit for current ptr */
-	tuplestore_set_eflags(winstate->buffer, 0);
-
-	/* create read pointers for aggregates, if needed */
 	if (winstate->numaggs > 0)
 	{
 		WindowObject agg_winobj = winstate->agg_winobj;
-		int			readptr_flags = 0;
 
-		/*
-		 * If the frame head is potentially movable, or we have an EXCLUSION
-		 * clause, we might need to restart aggregation ...
-		 */
-		if (!(frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) ||
-			(frameOptions & FRAMEOPTION_EXCLUSION) ||
-			!winstate->end_offset_var_free)
-		{
-			/* ... so create a mark pointer to track the frame head */
-			agg_winobj->markptr = tuplestore_alloc_read_pointer(winstate->buffer, 0);
-			/* and the read pointer will need BACKWARD capability */
-			readptr_flags |= EXEC_FLAG_BACKWARD;
-		}
-
-		agg_winobj->readptr = tuplestore_alloc_read_pointer(winstate->buffer,
-															readptr_flags);
+		/* reset mark and see positions for aggregate functions */
 		agg_winobj->markpos = -1;
 		agg_winobj->seekpos = -1;
 
@@ -1431,8 +1522,8 @@ begin_partition(WindowAggState *winstate)
 		winstate->aggregatedupto = 0;
 	}
 
-	/* create mark and read pointers for each real window function */
-	for (i = 0; i < numfuncs; i++)
+	/* reset mark and seek positions for each real window function */
+	for (int i = 0; i < numfuncs; i++)
 	{
 		WindowStatePerFunc perfuncstate = &(winstate->perfunc[i]);
 
@@ -1440,56 +1531,9 @@ begin_partition(WindowAggState *winstate)
 		{
 			WindowObject winobj = perfuncstate->winobj;
 
-			winobj->markptr = tuplestore_alloc_read_pointer(winstate->buffer,
-															0);
-			winobj->readptr = tuplestore_alloc_read_pointer(winstate->buffer,
-															EXEC_FLAG_BACKWARD);
 			winobj->markpos = -1;
 			winobj->seekpos = -1;
 		}
-	}
-
-	/*
-	 * If we are in RANGE or GROUPS mode, then determining frame boundaries
-	 * requires physical access to the frame endpoint rows, except in certain
-	 * degenerate cases.  We create read pointers to point to those rows, to
-	 * simplify access and ensure that the tuplestore doesn't discard the
-	 * endpoint rows prematurely.  (Must create pointers in exactly the same
-	 * cases that update_frameheadpos and update_frametailpos need them.)
-	 */
-	winstate->framehead_ptr = winstate->frametail_ptr = -1; /* if not used */
-
-	if (frameOptions & (FRAMEOPTION_RANGE | FRAMEOPTION_GROUPS))
-	{
-		if (((frameOptions & FRAMEOPTION_START_CURRENT_ROW) &&
-			 node->ordNumCols != 0) ||
-			(frameOptions & FRAMEOPTION_START_OFFSET))
-			winstate->framehead_ptr =
-				tuplestore_alloc_read_pointer(winstate->buffer,
-											  winstate->start_offset_var_free ? 0 : EXEC_FLAG_REWIND);
-		if (((frameOptions & FRAMEOPTION_END_CURRENT_ROW) &&
-			 node->ordNumCols != 0) ||
-			(frameOptions & FRAMEOPTION_END_OFFSET))
-			winstate->frametail_ptr =
-				tuplestore_alloc_read_pointer(winstate->buffer,
-											  winstate->end_offset_var_free ? 0 : EXEC_FLAG_REWIND);
-	}
-
-	/*
-	 * If we have an exclusion clause that requires knowing the boundaries of
-	 * the current row's peer group, we create a read pointer to track the
-	 * tail position of the peer group (i.e., first row of the next peer
-	 * group).  The head position does not require its own pointer because we
-	 * maintain that as a side effect of advancing the current row.
-	 */
-	winstate->grouptail_ptr = -1;
-
-	if ((frameOptions & (FRAMEOPTION_EXCLUDE_GROUP |
-						 FRAMEOPTION_EXCLUDE_TIES)) &&
-		node->ordNumCols != 0)
-	{
-		winstate->grouptail_ptr =
-			tuplestore_alloc_read_pointer(winstate->buffer, 0);
 	}
 
 	/*
@@ -1627,9 +1671,9 @@ release_partition(WindowAggState *winstate)
 	}
 
 	if (winstate->buffer)
-		tuplestore_end(winstate->buffer);
-	winstate->buffer = NULL;
+		tuplestore_clear(winstate->buffer);
 	winstate->partition_spooled = false;
+	winstate->next_partition = true;
 }
 
 /*
@@ -2453,7 +2497,7 @@ ExecWindowAgg(PlanState *pstate)
 	/* We need to loop as the runCondition or qual may filter out tuples */
 	for (;;)
 	{
-		if (winstate->buffer == NULL)
+		if (winstate->next_partition)
 		{
 			/* Initialize for first partition and set current row = 0 */
 			begin_partition(winstate);
@@ -2672,6 +2716,23 @@ ExecWindowAgg(PlanState *pstate)
 				if (winstate->use_pass_through)
 				{
 					/*
+					 * When switching into a pass-through mode, we'd better
+					 * NULLify the aggregate results as these are no longer
+					 * updated and NULLifying them avoids the old stale
+					 * results lingering.  Some of these might be byref types
+					 * so we can't have them pointing to free'd memory.  The
+					 * planner insisted that quals used in the runcondition
+					 * are strict, so the top-level WindowAgg will always
+					 * filter these NULLs out in the filter clause.
+					 */
+					numfuncs = winstate->numfuncs;
+					for (i = 0; i < numfuncs; i++)
+					{
+						econtext->ecxt_aggvalues[i] = (Datum) 0;
+						econtext->ecxt_aggnulls[i] = true;
+					}
+
+					/*
 					 * STRICT pass-through mode is required for the top window
 					 * when there is a PARTITION BY clause.  Otherwise we must
 					 * ensure we store tuples that don't match the
@@ -2685,24 +2746,6 @@ ExecWindowAgg(PlanState *pstate)
 					else
 					{
 						winstate->status = WINDOWAGG_PASSTHROUGH;
-
-						/*
-						 * If we're not the top-window, we'd better NULLify
-						 * the aggregate results.  In pass-through mode we no
-						 * longer update these and this avoids the old stale
-						 * results lingering.  Some of these might be byref
-						 * types so we can't have them pointing to free'd
-						 * memory.  The planner insisted that quals used in
-						 * the runcondition are strict, so the top-level
-						 * WindowAgg will filter these NULLs out in the filter
-						 * clause.
-						 */
-						numfuncs = winstate->numfuncs;
-						for (i = 0; i < numfuncs; i++)
-						{
-							econtext->ecxt_aggvalues[i] = (Datum) 0;
-							econtext->ecxt_aggnulls[i] = true;
-						}
 					}
 				}
 				else
@@ -3052,6 +3095,7 @@ ExecInitWindowAgg(WindowAgg *node, EState *estate, int eflags)
 	winstate->all_first = true;
 	winstate->partition_spooled = false;
 	winstate->more_partitions = false;
+	winstate->next_partition = true;
 
 	return winstate;
 }
@@ -3065,6 +3109,14 @@ ExecEndWindowAgg(WindowAggState *node)
 {
 	PlanState  *outerPlan;
 	int			i;
+
+	if (node->buffer != NULL)
+	{
+		tuplestore_end(node->buffer);
+
+		/* nullify so that release_partition skips the tuplestore_clear() */
+		node->buffer = NULL;
+	}
 
 	release_partition(node);
 

@@ -3,12 +3,12 @@
  * pg_authid.h
  *	  definition of the "authorization identifier" system catalog (pg_authid)
  *
- *	  pg_shadow and pg_group are now publicly accessible views on pg_authid.
+ *	  pg_shadow and pg_group are now views on pg_authid.
  *
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_authid.h
@@ -23,7 +23,7 @@
 #define PG_AUTHID_H
 
 #include "catalog/genbki.h"
-#include "catalog/pg_authid_d.h"
+#include "catalog/pg_authid_d.h"	/* IWYU pragma: export */
 
 /* ----------------
  *		pg_authid definition.  cpp turns this into
@@ -79,8 +79,6 @@ FOREIGN_KEY(rolresgroup REFERENCES pg_resgroup(oid));
  * ----------------
  */
 typedef FormData_pg_authid *Form_pg_authid;
-
-DECLARE_TOAST_WITH_MACRO(pg_authid, 4175, 4176, PgAuthidToastTable, PgAuthidToastIndex);
 
 DECLARE_UNIQUE_INDEX(pg_authid_rolname_index, 2676, AuthIdRolnameIndexId, pg_authid, btree(rolname name_ops));
 DECLARE_UNIQUE_INDEX_PKEY(pg_authid_oid_index, 2677, AuthIdOidIndexId, pg_authid, btree(oid oid_ops));

@@ -3,7 +3,7 @@
  * lockcmds.c
  *	  LOCK command support code
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -56,7 +56,7 @@ LockTableCommand(LockStmt *lockstmt)
 		reloid = RangeVarGetRelidExtended(rv, lockstmt->mode,
 										  lockstmt->nowait ? RVR_NOWAIT : 0,
 										  RangeVarCallbackForLockTable,
-										  (void *) &lockstmt->mode);
+										  &lockstmt->mode);
 
 		/*
 		 * CDB: LOCK TABLE will not release the lock until end of transaction,

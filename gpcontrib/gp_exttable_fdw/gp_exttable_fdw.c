@@ -550,6 +550,7 @@ exttable_GetForeignPaths(PlannerInfo *root,
 									   baserel,
 									   NULL, /* default pathtarget */
 									   0, /* rows, filled in later */
+									   0, /* disabled_nodes, filled in later */
 									   0, /* startup_cost, later */
 									   0, /* total_cost, later */
 									   NIL, /* external scan has unordered result */

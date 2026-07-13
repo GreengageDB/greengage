@@ -779,7 +779,7 @@ AppendOnlyBlockDirectory_CoversTuple(
 	{
 		for(int i = 0; i < aoRel->rd_att->natts; i++)
 		{
-			if (!aoRel->rd_att->attrs[i].attisdropped) {
+			if (!TupleDescAttr(aoRel->rd_att, i)->attisdropped) {
 				firstNonDroppedColumn = i;
 				break;
 			}

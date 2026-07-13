@@ -387,6 +387,15 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 	WRITE_NODE_FIELD(planTree);
 	WRITE_NODE_FIELD(rtable);
 	WRITE_NODE_FIELD(permInfos);
+	/*
+	 * PG18 centralized runtime partition pruning onto PlannedStmt: the QE
+	 * needs partPruneInfos (indexed by Append/MergeAppend.part_prune_index in
+	 * ExecDoInitialPruning) and unprunableRelids, which seeds
+	 * EState.es_unpruned_relids.  Without the latter every scanned relation
+	 * looks pruned ("trying to open a pruned relation") on the segment.
+	 */
+	WRITE_NODE_FIELD(partPruneInfos);
+	WRITE_BITMAPSET_FIELD(unprunableRelids);
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(appendRelations);
 	WRITE_NODE_FIELD(subplans);
@@ -634,7 +643,7 @@ _outAppend(StringInfo str, const Append *node)
 	WRITE_NODE_FIELD(appendplans);
 	WRITE_INT_FIELD(nasyncplans);
 	WRITE_INT_FIELD(first_partial_plan);
-	WRITE_NODE_FIELD(part_prune_info);
+	WRITE_INT_FIELD(part_prune_index);
 	WRITE_NODE_FIELD(join_prune_paramids);
 }
 
@@ -660,7 +669,7 @@ _outMergeAppend(StringInfo str, const MergeAppend *node)
 	WRITE_OID_ARRAY(sortOperators, node->numCols);
 	WRITE_OID_ARRAY(collations, node->numCols);
 	WRITE_BOOL_ARRAY(nullsFirst, node->numCols);
-	WRITE_NODE_FIELD(part_prune_info);
+	WRITE_INT_FIELD(part_prune_index);
 	WRITE_NODE_FIELD(join_prune_paramids);
 }
 
@@ -1038,7 +1047,7 @@ _outMergeJoin(StringInfo str, const MergeJoin *node)
 
 	WRITE_OID_ARRAY(mergeFamilies, numCols);
 	WRITE_OID_ARRAY(mergeCollations, numCols);
-	WRITE_INT_ARRAY(mergeStrategies, numCols);
+	WRITE_BOOL_ARRAY(mergeReversals, numCols);
 	WRITE_BOOL_ARRAY(mergeNullsFirst, numCols);
     WRITE_BOOL_FIELD(unique_outer);
 }
@@ -1255,11 +1264,10 @@ _outSetOp(StringInfo str, const SetOp *node)
 	WRITE_ENUM_FIELD(cmd, SetOpCmd);
 	WRITE_ENUM_FIELD(strategy, SetOpStrategy);
 	WRITE_INT_FIELD(numCols);
-	WRITE_ATTRNUMBER_ARRAY(dupColIdx, node->numCols);
-	WRITE_OID_ARRAY(dupOperators, node->numCols);
-	WRITE_OID_ARRAY(dupCollations, node->numCols);
-	WRITE_INT_FIELD(flagColIdx);
-	WRITE_INT_FIELD(firstFlag);
+	WRITE_ATTRNUMBER_ARRAY(cmpColIdx, node->numCols);
+	WRITE_OID_ARRAY(cmpOperators, node->numCols);
+	WRITE_OID_ARRAY(cmpCollations, node->numCols);
+	WRITE_BOOL_ARRAY(cmpNullsFirst, node->numCols);
 	WRITE_LONG_FIELD(numGroups);
 }
 
@@ -1935,7 +1943,7 @@ _outRowCompareExpr(StringInfo str, const RowCompareExpr *node)
 {
 	WRITE_NODE_TYPE("ROWCOMPAREEXPR");
 
-	WRITE_ENUM_FIELD(rctype, RowCompareType);
+	WRITE_ENUM_FIELD(cmptype, CompareType);
 	WRITE_NODE_FIELD(opnos);
 	WRITE_NODE_FIELD(opfamilies);
 	WRITE_NODE_FIELD(inputcollids);
@@ -3403,7 +3411,7 @@ _outInsertStmt(StringInfo str, const InsertStmt *node)
 	WRITE_NODE_FIELD(cols);
 	WRITE_NODE_FIELD(selectStmt);
 	WRITE_NODE_FIELD(onConflictClause);
-	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(returningClause);
 	WRITE_NODE_FIELD(withClause);
 	WRITE_ENUM_FIELD(override, OverridingKind);
 }
@@ -3416,7 +3424,7 @@ _outDeleteStmt(StringInfo str, const DeleteStmt *node)
 	WRITE_NODE_FIELD(relation);
 	WRITE_NODE_FIELD(usingClause);
 	WRITE_NODE_FIELD(whereClause);
-	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(returningClause);
 	WRITE_NODE_FIELD(withClause);
 }
 
@@ -3429,7 +3437,7 @@ _outUpdateStmt(StringInfo str, const UpdateStmt *node)
 	WRITE_NODE_FIELD(targetList);
 	WRITE_NODE_FIELD(whereClause);
 	WRITE_NODE_FIELD(fromClause);
-	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(returningClause);
 	WRITE_NODE_FIELD(withClause);
 }
 
@@ -3881,6 +3889,9 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 		case RTE_RESULT:
 			/* no extra fields */
 			break;
+		case RTE_GROUP:				/* PG18: the grouping-step RTE */
+			WRITE_NODE_FIELD(groupexprs);
+			break;
         case RTE_VOID:                                                  /*CDB*/
 			/*
 			 * GPDB: an RTE the planner pulled up is marked RTE_VOID but keeps
@@ -4115,6 +4126,17 @@ _outConstraint(StringInfo str, const Constraint *node)
 	WRITE_NODE_FIELD(raw_expr);
 	WRITE_STRING_FIELD(cooked_expr);
 	WRITE_CHAR_FIELD(generated_when);
+	/*
+	 * Other Constraint fields that must round-trip to the QE:
+	 * generated_kind is PG18 (STORED vs VIRTUAL generated columns);
+	 * without_overlaps/fk_with_period/pk_with_period are the PG17 temporal
+	 * (PERIOD / WITHOUT OVERLAPS) flags.  Kept adjacent so _outConstraint and
+	 * _readConstraint stay in lockstep.
+	 */
+	WRITE_CHAR_FIELD(generated_kind);
+	WRITE_BOOL_FIELD(without_overlaps);
+	WRITE_BOOL_FIELD(fk_with_period);
+	WRITE_BOOL_FIELD(pk_with_period);
 
 	WRITE_NODE_FIELD(keys);
 	WRITE_NODE_FIELD(including);
@@ -4141,6 +4163,13 @@ _outConstraint(StringInfo str, const Constraint *node)
 	WRITE_BOOL_FIELD(nulls_not_distinct);
 	WRITE_NODE_FIELD(fk_del_set_cols);
 
+	/*
+	 * PG18: ENFORCED/NOT ENFORCED flag.  Must reach the QE, else the
+	 * dispatched CHECK/FK constraint deserializes as is_enforced=false while
+	 * initially_valid stays true, tripping CreateConstraintEntry's
+	 * "isEnforced || !isValidated" assertion (pg_constraint.c).
+	 */
+	WRITE_BOOL_FIELD(is_enforced);
 	WRITE_BOOL_FIELD(skip_validation);
 	WRITE_BOOL_FIELD(initially_valid);
 }
@@ -4200,17 +4229,7 @@ _outPartitionCmd(StringInfo str, const PartitionCmd *node)
 
 	WRITE_NODE_FIELD(name);
 	WRITE_NODE_FIELD(bound);
-	WRITE_NODE_FIELD(partlist);
 	WRITE_BOOL_FIELD(concurrent);
-}
-
-static void
-_outSinglePartitionSpec(StringInfo str, const SinglePartitionSpec *node)
-{
-	WRITE_NODE_TYPE("SINGLEPARTITIONSPEC");
-
-	WRITE_NODE_FIELD(name);
-	WRITE_NODE_FIELD(bound);
 }
 
 static void
@@ -4926,7 +4945,7 @@ _outTupleDescNode(StringInfo str, TupleDescNode *node)
 	WRITE_INT_FIELD(tuple->natts);
 
 	for (i = 0; i < node->tuple->natts; i++)
-		appendBinaryStringInfo(str, (char *) &node->tuple->attrs[i], ATTRIBUTE_FIXED_PART_SIZE);
+		appendBinaryStringInfo(str, (char *) TupleDescAttr(node->tuple, i), ATTRIBUTE_FIXED_PART_SIZE);
 
 	Assert(node->tuple->constr == NULL);
 
@@ -4944,6 +4963,17 @@ _outCookedConstraint(StringInfo str, CookedConstraint *node)
 	WRITE_STRING_FIELD(name);
 	WRITE_INT_FIELD(attnum);
 	WRITE_NODE_FIELD(expr);
+	/*
+	 * GPDB dispatches pre-cooked CookedConstraints to the QEs.  is_enforced is
+	 * new in PG18 (unset it deserializes as false, tripping
+	 * CreateConstraintEntry's "isEnforced || !isValidated" assert for a normal
+	 * validated CHECK).  skip_validation must also round-trip so the QE records
+	 * the same convalidated as the coordinator (the QD sets it to
+	 * !initially_valid; see AddRelationNewConstraints); without it a NOT
+	 * ENFORCED / NOT VALID constraint deserializes as validated and asserts.
+	 */
+	WRITE_BOOL_FIELD(is_enforced);
+	WRITE_BOOL_FIELD(skip_validation);
 	WRITE_BOOL_FIELD(is_local);
 	WRITE_INT_FIELD(inhcount);
 	WRITE_BOOL_FIELD(is_no_inherit);
@@ -5893,9 +5923,6 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_PartitionRangeDatum:
 				_outPartitionRangeDatum(str, obj);
-				break;
-			case T_SinglePartitionSpec:
-				_outSinglePartitionSpec(str, obj);
 				break;
 			case T_PartitionCmd:
 				_outPartitionCmd(str, obj);

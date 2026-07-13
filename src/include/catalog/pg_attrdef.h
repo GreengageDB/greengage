@@ -4,7 +4,7 @@
  *	  definition of the "attribute defaults" system catalog (pg_attrdef)
  *
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_attrdef.h
@@ -20,7 +20,7 @@
 
 #include "catalog/genbki.h"
 #include "catalog/objectaddress.h"
-#include "catalog/pg_attrdef_d.h"
+#include "catalog/pg_attrdef_d.h"	/* IWYU pragma: export */
 
 /* ----------------
  *		pg_attrdef definition.  cpp turns this into

@@ -3,7 +3,7 @@
  * buf_init.c
  *	  buffer manager initialization routines
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -17,13 +17,12 @@
 #include <sys/mman.h>
 
 #ifdef MPROTECT_BUFFERS
-#include <sys/mman.h>
 #include "miscadmin.h"
 #endif
 
+#include "storage/aio.h"
 #include "storage/buf_internals.h"
 #include "storage/bufmgr.h"
-#include "storage/proc.h"
 
 BufferDescPadded *BufferDescriptors;
 char	   *BufferBlocks;
@@ -94,7 +93,7 @@ ProtectMemoryPoolBuffers()
  * postmaster, or in a standalone backend).
  */
 void
-InitBufferPool(void)
+BufferManagerShmemInit(void)
 {
 	bool		foundBufs,
 				foundDescs,
@@ -155,6 +154,8 @@ InitBufferPool(void)
 
 			buf->buf_id = i;
 
+			pgaio_wref_clear(&buf->io_wref);
+
 			/*
 			 * Initially link all the buffers together as unused. Subsequent
 			 * management of this list is done by freelist.c.
@@ -184,13 +185,13 @@ InitBufferPool(void)
 }
 
 /*
- * BufferShmemSize
+ * BufferManagerShmemSize
  *
  * compute the size of shared memory for the buffer pool including
  * data pages, buffer descriptors, hash tables, etc.
  */
 Size
-BufferShmemSize(void)
+BufferManagerShmemSize(void)
 {
 	Size		size = 0;
 

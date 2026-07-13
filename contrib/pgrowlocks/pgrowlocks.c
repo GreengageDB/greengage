@@ -37,12 +37,15 @@
 #include "storage/bufmgr.h"
 #include "storage/procarray.h"
 #include "utils/acl.h"
-#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/varlena.h"
 
-PG_MODULE_MAGIC;
+PG_MODULE_MAGIC_EXT(
+					.name = "pgrowlocks",
+					.version = PG_VERSION
+);
 
 PG_FUNCTION_INFO_V1(pgrowlocks);
 
@@ -127,7 +130,7 @@ pgrowlocks(PG_FUNCTION_ARGS)
 		/* must hold a buffer lock to call HeapTupleSatisfiesUpdate */
 		LockBuffer(hscan->rs_cbuf, BUFFER_LOCK_SHARE);
 
-		htsu = HeapTupleSatisfiesUpdate(mydata->rel, tuple,
+		htsu = HeapTupleSatisfiesUpdate(rel, tuple,
 										GetCurrentCommandId(false),
 										hscan->rs_cbuf);
 		xmax = HeapTupleHeaderGetRawXmax(tuple->t_data);

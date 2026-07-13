@@ -49,19 +49,17 @@ static bool truncate_ao_perFile(const int segno, void *ctx);
 int
 AOSegmentFilePathNameLen(Relation rel)
 {
-	char		*basepath;
+	RelPathStr	basepath;
 	int 		len;
-		
+
 	/* Get base path for this relation file */
 	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
 	/*
-	 * The basepath will be the RelFileNode number.  Optional part is dot "." plus 
+	 * The basepath will be the RelFileNode number.  Optional part is dot "." plus
 	 * 6 digit segment file number.
 	 */
-	len = strlen(basepath) + 8;	// Generous.
-	
-	pfree(basepath);
+	len = strlen(basepath.str) + 8;	// Generous.
 
 	return len;
 }
@@ -120,17 +118,15 @@ MakeAOSegmentFileName(Relation rel,
 					  int32 *fileSegNo,
 					  char *filepathname)
 {
-	char	*basepath;
+	RelPathStr	basepath;
 	int32   fileSegNoLocal;
-	
+
 	/* Get base path for this relation file */
 	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
-	FormatAOSegmentFileName(basepath, segno, col, &fileSegNoLocal, filepathname);
-	
+	FormatAOSegmentFileName(basepath.str, segno, col, &fileSegNoLocal, filepathname);
+
 	*fileSegNo = fileSegNoLocal;
-	
-	pfree(basepath);
 }
 
 /*
@@ -228,6 +224,7 @@ void
 mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 {
 	RelFileLocatorBackend rlocator;
+	RelPathStr	pathstr;
 	const char *path;
 
 	rlocator.locator.spcOid = rnode.node.spcNode;
@@ -235,7 +232,8 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	rlocator.locator.relNumber = rnode.node.relNode;
 	rlocator.backend = rnode.backend;
 
-	path = relpath(rlocator, forkNumber);
+	pathstr = relpath(rlocator, forkNumber);
+	path = pathstr.str;
 
 	/*
 	 * Unlogged AO tables have INIT_FORK, in addition to MAIN_FORK.  It is
@@ -245,7 +243,6 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
-		path = relpath(rlocator, forkNumber);
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
@@ -272,8 +269,6 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 
 		pfree(segPath);
 	}
-
-	pfree((void *) path);
 }
 
 /*
@@ -464,8 +459,8 @@ void
 copy_append_only_data(RelFileNode src, RelFileNode dst,
         ProcNumber backendid, char relpersistence)
 {
-	char *srcPath;
-	char *dstPath;
+	RelPathStr srcPath;
+	RelPathStr dstPath;
 	bool useWal;
 	RelFileLocator srcloc;
 	RelFileLocator dstloc;
@@ -486,10 +481,10 @@ copy_append_only_data(RelFileNode src, RelFileNode dst,
 	srcPath = relpathbackend(srcloc, backendid, MAIN_FORKNUM);
 	dstPath = relpathbackend(dstloc, backendid, MAIN_FORKNUM);
 
-	copy_file(srcPath, dstPath, dst, 0, useWal);
+	copy_file(srcPath.str, dstPath.str, dst, 0, useWal);
 
-	copyFiles.srcPath = srcPath;
-	copyFiles.dstPath = dstPath;
+	copyFiles.srcPath = srcPath.str;
+	copyFiles.dstPath = dstPath.str;
 	copyFiles.dst = dst;
 	copyFiles.useWal = useWal;
 
@@ -536,7 +531,7 @@ copy_append_only_data_perFile(const int segno, void *ctx)
 void
 ao_truncate_one_rel(Relation rel)
 {
-	char *basepath;
+	RelPathStr basepath;
 	char *segPath;
 	char *segPathSuffixPosition;
 	struct truncate_ao_callback_ctx truncateFiles = { 0 };
@@ -545,10 +540,10 @@ ao_truncate_one_rel(Relation rel)
 	/* Get base path for this relation file */
 	basepath = relpathbackend(rel->rd_locator, rel->rd_backend, MAIN_FORKNUM);
 
-	pathSize = strlen(basepath);
+	pathSize = strlen(basepath.str);
 	segPath = (char *) palloc(pathSize + SEGNO_SUFFIX_LENGTH);
 	segPathSuffixPosition = segPath + pathSize;
-	strncpy(segPath, basepath, pathSize);
+	strncpy(segPath, basepath.str, pathSize);
 
 	truncateFiles.segPath = segPath;
 	truncateFiles.segpathSuffixPosition = segPathSuffixPosition;
@@ -564,7 +559,6 @@ ao_truncate_one_rel(Relation rel)
 	ao_foreach_extent_file(truncate_ao_perFile, &truncateFiles);
 
 	pfree(segPath);
-	pfree(basepath);
 }
 
 /*

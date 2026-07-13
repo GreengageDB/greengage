@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_statistic.h
@@ -21,7 +21,7 @@
 #define PG_STATISTIC_H
 
 #include "catalog/genbki.h"
-#include "catalog/pg_statistic_d.h"
+#include "catalog/pg_statistic_d.h" /* IWYU pragma: export */
 
 /* ----------------
  *		pg_statistic definition.  cpp turns this into
@@ -190,9 +190,9 @@ MAKE_SYSCACHE(STATRELATTINH, pg_statistic_relid_att_inh_index, 128);
  * the K most common non-null values appearing in the column, and stanumbers
  * contains their frequencies (fractions of total row count).  The values
  * shall be ordered in decreasing frequency.  Note that since the arrays are
- * variable-size, K may be chosen may be chosen at ANALYZE time.  Values should
- * not appear in MCV unless they have been observed to occur more than once;
- * a unique column will have no MCV slot.
+ * variable-size, K may be chosen at ANALYZE time.  Values should not appear
+ * in MCV unless they have been observed to occur more than once; a unique
+ * column will have no MCV slot.
  */
 #define STATISTIC_KIND_MCV	1
 

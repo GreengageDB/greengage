@@ -2592,7 +2592,7 @@ _bitmap_doinsert(Relation rel, ItemPointerData ht_ctid, Datum *attdata,
 							   attdata[attno]);
 	}
 
-	scanDesc = index_beginscan(lovHeap, lovIndex, GetActiveSnapshot(),
+	scanDesc = index_beginscan(lovHeap, lovIndex, GetActiveSnapshot(), NULL,
 							   tupDesc->natts, 0);
 	index_rescan(scanDesc, scanKeys, tupDesc->natts, NULL, 0);
 

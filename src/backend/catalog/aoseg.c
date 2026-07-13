@@ -19,9 +19,13 @@
  */
 #include "postgres.h"
 
+#include "access/genam.h"
 #include "access/table.h"
 #include "access/heapam.h"
 #include "catalog/aoseg.h"
+#include "catalog/indexing.h"
+#include "catalog/pg_class.h"
+#include "utils/fmgroids.h"
 #include "catalog/pg_opclass.h"
 #include "catalog/aocatalog.h"
 #include "miscadmin.h"
@@ -177,8 +181,26 @@ AlterTableCreateAoSegTable(Oid relOid)
 	}
 	else
 	{
-		/* While bootstrapping, we cannot UPDATE, so overwrite in-place */
-		heap_inplace_update(class_rel, reltup);
+		/*
+		 * While bootstrapping, we cannot UPDATE, so overwrite in-place.
+		 * PG18 removed heap_inplace_update(); use the systable in-place
+		 * update wrappers, re-locating the pg_class row by its OID key.
+		 */
+		void	   *inplace_state;
+		HeapTuple	inplace_oldtup;
+		ScanKeyData inplace_key[1];
+
+		ScanKeyInit(&inplace_key[0],
+					Anum_pg_class_oid,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(relOid));
+		systable_inplace_update_begin(class_rel, ClassOidIndexId, true,
+									  NULL, 1, inplace_key,
+									  &inplace_oldtup, &inplace_state);
+		if (!HeapTupleIsValid(inplace_oldtup))
+			elog(ERROR, "pg_class entry for relid %u vanished during bootstrap",
+				 relOid);
+		systable_inplace_update_finish(inplace_state, reltup);
 	}
 
 	heap_freetuple(reltup);

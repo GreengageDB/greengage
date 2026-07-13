@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_proc.h
@@ -21,7 +21,7 @@
 
 #include "catalog/genbki.h"
 #include "catalog/objectaddress.h"
-#include "catalog/pg_proc_d.h"
+#include "catalog/pg_proc_d.h"	/* IWYU pragma: export */
 #include "nodes/pg_list.h"
 
 /* ----------------
@@ -63,7 +63,7 @@ CATALOG(pg_proc,1255,ProcedureRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81,Proce
 	/* security definer */
 	bool		prosecdef BKI_DEFAULT(f);
 
-	/* is it a leak-proof function? */
+	/* is it a leakproof function? */
 	bool		proleakproof BKI_DEFAULT(f);
 
 	/* strict with respect to NULLs? */
@@ -247,6 +247,7 @@ extern ObjectAddress ProcedureCreate(const char *procedureName,
 									 Datum parameterNames,
 									 List *parameterDefaults,
 									 Datum trftypes,
+									 List *trfoids,
 									 Datum proconfig,
 									 Oid prosupport,
 									 float4 procost,

@@ -244,7 +244,8 @@ url_execute_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	URL_EXECUTE_FILE *file;
 	int			save_errno;
 	struct itimers savetimers;
-	pqsigfunc	save_SIGPIPE;
+	struct sigaction save_SIGPIPE;
+	struct sigaction dfl_SIGPIPE;
 	char	   *cmd;
 
 	/* Execute command */
@@ -271,8 +272,16 @@ url_execute_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	 * Preserve the SIGPIPE handler and set to default handling.  This
 	 * allows "normal" SIGPIPE handling in the command pipeline.  Normal
 	 * for PG is to *ignore* SIGPIPE.
+	 *
+	 * PG18 made the backend pqsignal() return void, so we can no longer capture
+	 * the previous handler through it.  Use sigaction() directly to save and
+	 * later restore whatever SIGPIPE disposition was in effect.
 	 */
-	save_SIGPIPE = pqsignal(SIGPIPE, SIG_DFL);
+	memset(&dfl_SIGPIPE, 0, sizeof(dfl_SIGPIPE));
+	dfl_SIGPIPE.sa_handler = SIG_DFL;
+	sigemptyset(&dfl_SIGPIPE.sa_mask);
+	dfl_SIGPIPE.sa_flags = 0;
+	sigaction(SIGPIPE, &dfl_SIGPIPE, &save_SIGPIPE);
 
 	/* execute the user command */
 	file->handle->pid = popen_with_stderr(file->handle->pipes,
@@ -281,7 +290,7 @@ url_execute_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	save_errno = errno;
 
 	/* Restore the SIGPIPE handler */
-	pqsignal(SIGPIPE, save_SIGPIPE);
+	sigaction(SIGPIPE, &save_SIGPIPE, NULL);
 
 	/* Restore process interval timers */
 	restoreTimers(&savetimers);

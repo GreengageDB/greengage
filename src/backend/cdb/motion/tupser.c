@@ -450,7 +450,7 @@ SerializeTuple(TupleTableSlot *slot, SerTupInfo *pSerInfo, struct directTranspor
 			}
 		}
 		mintuple = heap_form_minimal_tuple(slot->tts_tupleDescriptor, values,
-										   slot->tts_isnull);
+										   slot->tts_isnull, 0);
 		if (values != slot->tts_values)
 			pfree(values);
 
@@ -586,7 +586,7 @@ CvtChunksToTup(TupleChunkList tcList, SerTupInfo *pSerInfo, TupleRemapper *remap
 		 * the sender is indicating that there was a row with no
 		 * attributes: return a NULL tuple
 		 */
-		return heap_form_minimal_tuple(pSerInfo->tupdesc, pSerInfo->values, pSerInfo->nulls);
+		return heap_form_minimal_tuple(pSerInfo->tupdesc, pSerInfo->values, pSerInfo->nulls, 0);
 	}
 	else if (tcType == TC_PARTIAL_START)
 	{

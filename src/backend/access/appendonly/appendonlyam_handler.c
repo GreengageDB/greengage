@@ -2031,43 +2031,27 @@ appendonly_estimate_rel_size(Relation rel, int32 *attr_widths,
  * ------------------------------------------------------------------------
  */
 
-static bool
-appendonly_scan_bitmap_next_block(TableScanDesc scan,
-								  TBMIterateResult *tbmres)
-{
-	AppendOnlyScanDesc aoscan = (AppendOnlyScanDesc) scan;
-
-	/*
-	 * Start scanning from the beginning of the offsets array (or
-	 * at first "offset number" if it's a lossy page).
-	 * Have to set the init value before return fase. Since in
-	 * nodeBitmapHeapscan.c's BitmapHeapNext. After call
-	 * `table_scan_bitmap_next_block` and return false, it doesn't
-	 * clean the tbmres. And then it'll read tuples from the page
-	 * which should be skipped.
-	 */
-	aoscan->rs_cindex = 0;
-
-	/* If tbmres contains no tuples, continue. */
-	if (tbmres->ntuples == 0)
-		return false;
-
-	/* Make sure we never cross 15-bit offset number [MPP-24326] */
-	Assert(tbmres->ntuples <= INT16_MAX + 1);
-
-	return true;
-}
-
+/*
+ * appendonly_scan_bitmap_next_tuple
+ *
+ * PG18 removed the separate scan_bitmap_next_block table-AM callback, so the
+ * AM must now drive per-block iteration internally.  We pull the next bitmap
+ * page from the executor-provided iterator (scan->st.rs_tbmiterator) via
+ * tbm_iterate(), extract its offsets with tbm_extract_page_tuple() (the new
+ * TBMIterateResult no longer carries ntuples/offsets[]), and fetch tuples one
+ * per call, advancing to the next page when the current one is exhausted.
+ */
 static bool
 appendonly_scan_bitmap_next_tuple(TableScanDesc scan,
-								  TBMIterateResult *tbmres,
-								  TupleTableSlot *slot)
+								  TupleTableSlot *slot,
+								  bool *recheck,
+								  uint64 *lossy_pages,
+								  uint64 *exact_pages)
 {
 	AppendOnlyScanDesc	aoscan = (AppendOnlyScanDesc) scan;
 	OffsetNumber		pseudoHeapOffset;
 	ItemPointerData 	pseudoHeapTid;
 	AOTupleId			aoTid;
-	int					numTuples;
 
 	if (aoscan->aofetch == NULL)
 	{
@@ -2078,48 +2062,91 @@ appendonly_scan_bitmap_next_tuple(TableScanDesc scan,
 
 	}
 
+	/* Lazily allocate the per-page offsets buffer for exact pages. */
+	if (aoscan->rs_offsets == NULL)
+		aoscan->rs_offsets = (OffsetNumber *)
+			MemoryContextAlloc(aoscan->aoScanInitContext,
+							   TBM_MAX_TUPLES_PER_PAGE * sizeof(OffsetNumber));
+
 	ExecClearTuple(slot);
 
-	/* ntuples == -1 indicates a lossy page */
-	numTuples = (tbmres->ntuples == -1) ? INT16_MAX + 1 : tbmres->ntuples;
-	while (aoscan->rs_cindex < numTuples)
+	for (;;)
 	{
 		/*
-		 * If it's a lossy pase, iterate through all possible "offset numbers".
-		 * Otherwise iterate through the array of "offset numbers".
+		 * Advance to the next bitmap page if the current one is exhausted (or
+		 * we have not fetched a page yet: rs_cindex == rs_ntuples == 0).
 		 */
-		if (tbmres->ntuples == -1)
+		while (aoscan->rs_cindex >= aoscan->rs_ntuples)
+		{
+			TBMIterateResult tbmres;
+
+			if (!tbm_iterate(&scan->st.rs_tbmiterator, &tbmres))
+				return false;	/* bitmap exhausted */
+
+			aoscan->rs_blockno = tbmres.blockno;
+			aoscan->rs_lossy = tbmres.lossy;
+			aoscan->rs_recheck = tbmres.recheck;
+
+			if (tbmres.lossy)
+			{
+				/* A lossy page: iterate over every possible offset number. */
+				aoscan->rs_ntuples = INT16_MAX + 1;
+				(*lossy_pages)++;
+			}
+			else
+			{
+				aoscan->rs_ntuples =
+					tbm_extract_page_tuple(&tbmres, aoscan->rs_offsets,
+										   TBM_MAX_TUPLES_PER_PAGE);
+				(*exact_pages)++;
+			}
+
+			/* Make sure we never cross 15-bit offset number [MPP-24326] */
+			Assert(aoscan->rs_ntuples <= INT16_MAX + 1);
+
+			aoscan->rs_cindex = 0;
+		}
+
+		while (aoscan->rs_cindex < aoscan->rs_ntuples)
 		{
 			/*
-			 * +1 to convert index to offset, since TID offsets are not zero
-			 * based.
+			 * If it's a lossy page, iterate through all possible "offset
+			 * numbers". Otherwise iterate through the array of extracted
+			 * "offset numbers".
 			 */
-			pseudoHeapOffset = aoscan->rs_cindex + 1;
+			if (aoscan->rs_lossy)
+			{
+				/*
+				 * +1 to convert index to offset, since TID offsets are not
+				 * zero based.
+				 */
+				pseudoHeapOffset = aoscan->rs_cindex + 1;
+			}
+			else
+				pseudoHeapOffset = aoscan->rs_offsets[aoscan->rs_cindex];
+
+			aoscan->rs_cindex++;
+
+			/*
+			 * Okay to fetch the tuple
+			 */
+			ItemPointerSet(&pseudoHeapTid, aoscan->rs_blockno, pseudoHeapOffset);
+			tbm_convert_appendonly_tid_out(&pseudoHeapTid, &aoTid);
+
+			if(appendonly_fetch(aoscan->aofetch, &aoTid, slot))
+			{
+				/* OK to return this tuple */
+				/* GPDB: see aoco_scan_bitmap_next_tuple -- keep tableOid valid */
+				slot->tts_tableOid = RelationGetRelid(aoscan->aos_rd);
+				pgstat_count_heap_fetch(aoscan->aos_rd);
+				*recheck = aoscan->rs_recheck;
+
+				return true;
+			}
 		}
-		else
-			pseudoHeapOffset = tbmres->offsets[aoscan->rs_cindex];
 
-		aoscan->rs_cindex++;
-
-		/*
-		 * Okay to fetch the tuple
-		 */
-		ItemPointerSet(&pseudoHeapTid, tbmres->blockno, pseudoHeapOffset);
-		tbm_convert_appendonly_tid_out(&pseudoHeapTid, &aoTid);
-
-		if(appendonly_fetch(aoscan->aofetch, &aoTid, slot))
-		{
-			/* OK to return this tuple */
-			/* GPDB: see aoco_scan_bitmap_next_tuple -- keep tableOid valid */
-			slot->tts_tableOid = RelationGetRelid(aoscan->aos_rd);
-			pgstat_count_heap_fetch(aoscan->aos_rd);
-
-			return true;
-		}
+		/* Current page exhausted; loop back to advance to the next one. */
 	}
-
-	/* Done with this block */
-	return false;
 }
 
 static bool
@@ -2211,7 +2238,6 @@ static const TableAmRoutine ao_row_methods = {
 
 	.relation_estimate_size = appendonly_estimate_rel_size,
 
-	.scan_bitmap_next_block = appendonly_scan_bitmap_next_block,
 	.scan_bitmap_next_tuple = appendonly_scan_bitmap_next_tuple,
 	.scan_sample_next_block = appendonly_scan_sample_next_block,
 	.scan_sample_next_tuple = appendonly_scan_sample_next_tuple

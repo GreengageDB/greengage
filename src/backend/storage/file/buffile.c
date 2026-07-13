@@ -3,7 +3,7 @@
  * buffile.c
  *	  Management of large buffered temporary files.
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1104,9 +1104,9 @@ BufFileSeekBlock(BufFile *file, int64 blknum)
 }
 
 /*
- * Return the current fileset based BufFile size.
+ * Returns the amount of data in the given BufFile, in bytes.
  *
- * Counts any holes left behind by BufFileAppend as part of the size.
+ * Returned value includes the size of any holes left behind by BufFileAppend.
  * ereport()s on failure.
  */
 int64
@@ -1204,10 +1204,8 @@ BufFileAppend(BufFile *target, BufFile *source)
 	int			newNumFiles = target->numFiles + source->numFiles;
 	int			i;
 
-	Assert(target->fileset != NULL);
 	Assert(source->readOnly);
 	Assert(!source->dirty);
-	Assert(source->fileset != NULL);
 
 	if (target->resowner != source->resowner)
 		elog(ERROR, "could not append BufFile with non-matching resource owner");

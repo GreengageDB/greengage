@@ -3,7 +3,7 @@
  * snapshot.h
  *	  POSTGRES snapshot definition
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/snapshot.h
@@ -13,11 +13,7 @@
 #ifndef SNAPSHOT_H
 #define SNAPSHOT_H
 
-#include "access/htup.h"
-#include "access/xlogdefs.h"
-#include "datatype/timestamp.h"
 #include "lib/pairingheap.h"
-#include "storage/buf.h"
 
 #include "cdb/cdbdistributedsnapshot.h"  /* DistributedSnapshotWithLocalMapping */
 
@@ -207,9 +203,6 @@ typedef struct SnapshotData
 	uint32		active_count;	/* refcount on ActiveSnapshot stack */
 	uint32		regd_count;		/* refcount on RegisteredSnapshots */
 	pairingheap_node ph_node;	/* link in the RegisteredSnapshots heap */
-
-	TimestampTz whenTaken;		/* timestamp when snapshot was taken */
-	XLogRecPtr	lsn;			/* position in the WAL stream when taken */
 
 	/*
 	 * GP: Global information about which transactions are visible for a

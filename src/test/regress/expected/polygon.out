@@ -324,7 +324,7 @@ FROM quad_poly_tbl WHERE p <@ polygon '((300,300),(400,600),(600,500),(700,200))
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
  WindowAgg
-   Order By: ((p <-> '(123,456)'::point))
+   Window: w1 AS (ORDER BY (p <-> '(123,456)'::point) ROWS UNBOUNDED PRECEDING)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: ((p <-> '(123,456)'::point))
          ->  Index Scan using quad_poly_tbl_idx on quad_poly_tbl

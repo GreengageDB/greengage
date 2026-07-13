@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/heap.h
@@ -25,6 +25,7 @@
 #define CHKATYPE_ANYARRAY		0x01	/* allow ANYARRAY */
 #define CHKATYPE_ANYRECORD		0x02	/* allow RECORD and RECORD[] */
 #define CHKATYPE_IS_PARTKEY		0x04	/* attname is part key # not column */
+#define CHKATYPE_IS_VIRTUAL		0x08	/* is virtual generated column */
 
 typedef struct RawColumnDefault
 {
@@ -47,14 +48,16 @@ typedef struct CookedConstraint
 	 * in GPDB.
 	 */
 	NodeTag		type;
-	ConstrType	contype;		/* CONSTR_DEFAULT or CONSTR_CHECK */
+	ConstrType	contype;		/* CONSTR_DEFAULT, CONSTR_CHECK,
+								 * CONSTR_NOTNULL */
 	Oid			conoid;			/* constr OID if created, otherwise Invalid */
 	char	   *name;			/* name, or NULL if none */
-	AttrNumber	attnum;			/* which attr (only for DEFAULT) */
+	AttrNumber	attnum;			/* which attr (only for NOTNULL, DEFAULT) */
 	Node	   *expr;			/* transformed default or check expr */
+	bool		is_enforced;	/* is enforced? (only for CHECK) */
 	bool		skip_validation;	/* skip validation? (only for CHECK) */
 	bool		is_local;		/* constraint has local (non-inherited) def */
-	int			inhcount;		/* number of times constraint is inherited */
+	int16		inhcount;		/* number of times constraint is inherited */
 	bool		is_no_inherit;	/* constraint has local def and cannot be
 								 * inherited */
 	/*
@@ -132,11 +135,14 @@ extern List *AddRelationNewConstraints(Relation rel,
 									   bool is_local,
 									   bool is_internal,
 									   const char *queryString);
-extern List *AddRelationConstraints(Relation rel,
-						  List *rawColDefaults,
-						  List *constraints);
+extern List *AddRelationNotNullConstraints(Relation rel,
+										   List *constraints,
+										   List *old_notnulls);
 
 extern void RelationClearMissing(Relation rel);
+
+extern void StoreAttrMissingVal(Relation rel, AttrNumber attnum,
+								Datum missingval);
 extern void SetAttrMissing(Oid relid, char *attname, char *value);
 
 extern Node *cookDefault(ParseState *pstate,

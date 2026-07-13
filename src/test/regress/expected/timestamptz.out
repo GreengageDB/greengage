@@ -178,6 +178,65 @@ SELECT '205000-01-10 17:32:01 Europe/Helsinki'::timestamptz; -- non-DST
  Fri Jan 10 07:32:01 205000 PST
 (1 row)
 
+-- Recognize "LMT" as whatever it means in the current zone
+SELECT 'Jan 01 00:00:00 1000 LMT'::timestamptz;
+         timestamptz          
+------------------------------
+ Wed Jan 01 00:00:00 1000 LMT
+(1 row)
+
+SELECT 'Jan 01 00:00:00 2024 LMT'::timestamptz;
+         timestamptz          
+------------------------------
+ Sun Dec 31 23:52:58 2023 PST
+(1 row)
+
+SET timezone = 'Europe/London';
+SELECT 'Jan 01 00:00:00 1000 LMT'::timestamptz;
+         timestamptz          
+------------------------------
+ Wed Jan 01 00:00:00 1000 LMT
+(1 row)
+
+SELECT 'Jan 01 00:00:00 2024 LMT'::timestamptz;
+         timestamptz          
+------------------------------
+ Mon Jan 01 00:01:15 2024 GMT
+(1 row)
+
+-- which might be nothing
+SET timezone = 'UTC';
+SELECT 'Jan 01 00:00:00 2024 LMT'::timestamptz;  -- fail
+ERROR:  invalid input syntax for type timestamp with time zone: "Jan 01 00:00:00 2024 LMT"
+LINE 1: SELECT 'Jan 01 00:00:00 2024 LMT'::timestamptz;
+               ^
+-- Another example of an abbrev that varies across zones
+SELECT '1912-01-01 00:00 MMT'::timestamptz;  -- from timezone_abbreviations
+         timestamptz          
+------------------------------
+ Sun Dec 31 17:30:00 1911 UTC
+(1 row)
+
+SET timezone = 'America/Montevideo';
+SELECT '1912-01-01 00:00'::timestamptz;
+         timestamptz          
+------------------------------
+ Mon Jan 01 00:00:00 1912 MMT
+(1 row)
+
+SELECT '1912-01-01 00:00 MMT'::timestamptz;
+         timestamptz          
+------------------------------
+ Mon Jan 01 00:00:00 1912 MMT
+(1 row)
+
+SELECT '1912-01-01 00:00 MMT'::timestamptz AT TIME ZONE 'UTC';
+         timezone         
+--------------------------
+ Mon Jan 01 03:44:51 1912
+(1 row)
+
+RESET timezone;
 -- Test non-error-throwing API
 SELECT pg_input_is_valid('now', 'timestamptz');
  pg_input_is_valid 
@@ -287,7 +346,7 @@ SELECT 'Wed Jul 11 10:51:14 PST+03:00 2001'::timestamptz;
 (1 row)
 
 SELECT '' AS "64", d1 FROM TIMESTAMPTZ_TBL;
- 64 |               d1                
+ 64 |               d1
 ----+---------------------------------
     | -infinity
     | infinity
@@ -361,19 +420,19 @@ SELECT '' AS "64", d1 FROM TIMESTAMPTZ_TBL;
 SELECT '4714-11-24 00:00:00+00 BC'::timestamptz;
            timestamptz           
 ---------------------------------
- Sun Nov 23 16:00:00 4714 PST BC
+ Sun Nov 23 16:07:02 4714 LMT BC
 (1 row)
 
 SELECT '4714-11-23 16:00:00-08 BC'::timestamptz;
            timestamptz           
 ---------------------------------
- Sun Nov 23 16:00:00 4714 PST BC
+ Sun Nov 23 16:07:02 4714 LMT BC
 (1 row)
 
 SELECT 'Sun Nov 23 16:00:00 4714 PST BC'::timestamptz;
            timestamptz           
 ---------------------------------
- Sun Nov 23 16:00:00 4714 PST BC
+ Sun Nov 23 16:07:02 4714 LMT BC
 (1 row)
 
 SELECT '4714-11-23 23:59:59+00 BC'::timestamptz;  -- out of range
@@ -684,8 +743,10 @@ SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone '2004
                  | Mon Feb 23 00:00:00 2004 PST
 (1 row)
 
+SELECT date_trunc( 'ago', timestamp with time zone 'infinity' ) AS invalid_trunc;
+ERROR:  unit "ago" not recognized for type timestamp with time zone
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'Australia/Sydney') as sydney_trunc;  -- zone name
- date_trunc_at_tz |         sydney_trunc         
+ date_trunc_at_tz |         sydney_trunc
 ------------------+------------------------------
                   | Fri Feb 16 05:00:00 2001 PST
 (1 row)
@@ -702,6 +763,8 @@ SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-
                   | Thu Feb 15 20:00:00 2001 PST
 (1 row)
 
+SELECT date_trunc('ago', timestamp with time zone 'infinity', 'GMT') AS invalid_zone_trunc;
+ERROR:  unit "ago" not recognized for type timestamp with time zone
 -- verify date_bin behaves the same as date_trunc for relevant intervals
 SELECT
   str,
@@ -2345,10 +2408,16 @@ SELECT make_timestamptz(2014, 12, 10, 0, 0, 0, 'Europe/Prague') AT TIME ZONE 'UT
  Tue Dec 09 23:00:00 2014
 (1 row)
 
-SELECT make_timestamptz(1846, 12, 10, 0, 0, 0, 'Asia/Manila') AT TIME ZONE 'UTC';
+SELECT make_timestamptz(1881, 12, 10, 0, 0, 0, 'Asia/Singapore') AT TIME ZONE 'UTC';
          timezone         
 --------------------------
- Wed Dec 09 15:56:00 1846
+ Fri Dec 09 17:04:35 1881
+(1 row)
+
+SELECT make_timestamptz(1881, 12, 10, 0, 0, 0, 'Pacific/Honolulu') AT TIME ZONE 'UTC';
+         timezone         
+--------------------------
+ Sat Dec 10 10:31:26 1881
 (1 row)
 
 SELECT make_timestamptz(1881, 12, 10, 0, 0, 0, 'Europe/Paris') AT TIME ZONE 'UTC';
@@ -2372,7 +2441,14 @@ SELECT make_timestamptz(2008, 12, 10, 10, 10, 10, 'EDT');
  Wed Dec 10 09:10:10 2008 EST
 (1 row)
 
-SELECT make_timestamptz(2014, 12, 10, 10, 10, 10, 'PST8PDT');
+SELECT make_timestamptz(2014, 12, 10, 10, 10, 10, 'FOO8BAR');
+       make_timestamptz       
+------------------------------
+ Wed Dec 10 13:10:10 2014 EST
+(1 row)
+
+-- POSIX
+SELECT make_timestamptz(2014, 12, 10, 10, 10, 10, 'PST8PDT,M3.2.0,M11.1.0');
        make_timestamptz       
 ------------------------------
  Wed Dec 10 13:10:10 2014 EST
@@ -3262,3 +3338,16 @@ SELECT age(timestamptz '-infinity', timestamptz 'infinity');
 
 SELECT age(timestamptz '-infinity', timestamptz '-infinity');
 ERROR:  interval out of range
+-- test timestamp near POSTGRES_EPOCH_JDATE
+select timestamptz '1999-12-31 24:00:00';
+         timestamptz          
+------------------------------
+ Sat Jan 01 00:00:00 2000 PST
+(1 row)
+
+select make_timestamptz(1999, 12, 31, 24, 0, 0);
+       make_timestamptz       
+------------------------------
+ Sat Jan 01 00:00:00 2000 PST
+(1 row)
+

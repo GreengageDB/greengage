@@ -438,12 +438,12 @@ retry:
 			 * mask_block(). It might throw a hard ERROR on a bogus block,
 			 * so we better catch that here so we can retry.
 			 */
-			if (!PageIsVerified(primaryFileBuf, blockno))
+			if (!PageIsVerified(primaryFileBuf, blockno, 0, NULL))
 			{
 				elog(NOTICE, "invalid page header or checksum in heap file \"%s\", block %u", primaryfilepath, blockno);
 				goto retry;
 			}
-			if (!PageIsVerified(mirrorFileBuf, blockno))
+			if (!PageIsVerified(mirrorFileBuf, blockno, 0, NULL))
 			{
 				elog(NOTICE, "invalid page header or checksum in heap file \"%s\", block %u", mirrorfilepath, blockno);
 				goto retry;

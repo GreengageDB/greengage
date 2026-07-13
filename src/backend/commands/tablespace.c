@@ -43,7 +43,7 @@
  *
  * Portions Copyright (c) 2005-2010 Greenplum Inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -438,9 +438,9 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 		xlrec.ts_id = tablespaceoid;
 
 		XLogBeginInsert();
-		XLogRegisterData((char *) &xlrec,
+		XLogRegisterData(&xlrec,
 						 offsetof(xl_tblspc_create_rec, ts_path));
-		XLogRegisterData((char *) location, strlen(location) + 1);
+		XLogRegisterData(location, strlen(location) + 1);
 
 		SIMPLE_FAULT_INJECTOR("before_xlog_create_tablespace");
 		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_CREATE);
@@ -501,7 +501,7 @@ is_tablespace_empty(const Oid tablespace_oid)
 	char	   *subfile;
 	int is_empty = true;
 
-	linkloc_with_version_dir = psprintf("pg_tblspc/%u/%s", tablespace_oid,
+	linkloc_with_version_dir = psprintf("%s/%u/%s", PG_TBLSPC_DIR, tablespace_oid,
 										GP_TABLESPACE_VERSION_DIRECTORY);
 
 	dirdesc = AllocateDir(linkloc_with_version_dir);
@@ -699,7 +699,7 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 		xlrec.ts_id = tablespaceoid;
 
 		XLogBeginInsert();
-		XLogRegisterData((char *) &xlrec, sizeof(xl_tblspc_drop_rec));
+		XLogRegisterData(&xlrec, sizeof(xl_tblspc_drop_rec));
 
 		(void) XLogInsert(RM_TBLSPC_ID, XLOG_TBLSPC_DROP);
 	}
@@ -763,7 +763,7 @@ create_tablespace_directories(const char *location, const Oid tablespaceoid)
 	elog(DEBUG5, "creating tablespace directories for tablespaceoid %d on dbid %d",
 		tablespaceoid, GpIdentity.dbid);
 
-	linkloc = psprintf("pg_tblspc/%u", tablespaceoid);
+	linkloc = psprintf("%s/%u", PG_TBLSPC_DIR, tablespaceoid);
 	/*
 	 * If we're asked to make an 'in place' tablespace, create the directory
 	 * directly where the symlink would normally go.  This is a developer-only
@@ -1055,7 +1055,7 @@ destroy_tablespace_directories(Oid tablespaceoid, bool redo)
 	elog(DEBUG5, "destroy_tablespace_directories for tablespace %u on dbid %d",
 		tablespaceoid, GpIdentity.dbid);
 
-	linkloc_with_version_dir = psprintf("pg_tblspc/%u/%s", tablespaceoid,
+	linkloc_with_version_dir = psprintf("%s/%u/%s", PG_TBLSPC_DIR, tablespaceoid,
 										GP_TABLESPACE_VERSION_DIRECTORY);
 
 	/*
@@ -1777,7 +1777,7 @@ check_temp_tablespaces(char **newval, void **extra, GucSource source)
 			return false;
 		myextra->numSpcs = numSpcs;
 		memcpy(myextra->tblSpcs, tblSpcs, numSpcs * sizeof(Oid));
-		*extra = (void *) myextra;
+		*extra = myextra;
 
 		pfree(tblSpcs);
 	}

@@ -27,7 +27,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2023, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -46,6 +46,7 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_coerce.h"
 #include "parser/parsetree.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 #include "access/htup_details.h"
@@ -686,9 +687,8 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 *
 			 * INSERTs should insert NULL in this case.  (We assume the
 			 * rewriter would have inserted any available non-NULL default
-			 * value.)  Also, if the column isn't dropped, apply any domain
-			 * constraints that might exist --- this is to catch domain NOT
-			 * NULL.
+			 * value.)  Also, normally we must apply any domain constraints
+			 * that might exist --- this is to catch domain NOT NULL.
 			 *
 			 * When generating a NULL constant for a dropped column, we label
 			 * it INT4 (any other guaranteed-to-exist datatype would do as
@@ -698,6 +698,13 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 * representation is datatype-independent.  This could perhaps
 			 * confuse code comparing the finished plan to the target
 			 * relation, however.
+			 *
+			 * Another exception is that if the column is generated, the value
+			 * we produce here will be ignored, and we don't want to risk
+			 * throwing an error.  So in that case we *don't* want to apply
+			 * domain constraints, so we must produce a NULL of the base type.
+			 * Again, code comparing the finished plan to the target relation
+			 * must account for this.
 			 */
 			Oid			atttype = att_tup->atttypid;
 			int32		atttypmod = att_tup->atttypmod;
@@ -732,22 +739,32 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 											attcollation,
 											0);
 			}
-			else
+			else if (att_tup->attgenerated)
 			{
-				new_expr = (Node *) makeConst(atttype,
-											  -1,
-											  attcollation,
+				/* Generated column, insert a NULL of the base type */
+				Oid			baseTypeId = att_tup->atttypid;
+				int32		baseTypeMod = att_tup->atttypmod;
+
+				baseTypeId = getBaseTypeAndTypmod(baseTypeId, &baseTypeMod);
+				new_expr = (Node *) makeConst(baseTypeId,
+											  baseTypeMod,
+											  att_tup->attcollation,
 											  att_tup->attlen,
 											  (Datum) 0,
 											  true, /* isnull */
 											  att_tup->attbyval);
-				new_expr = coerce_to_domain(new_expr,
-											InvalidOid, -1,
-											atttype,
-											COERCION_IMPLICIT,
-											COERCE_IMPLICIT_CAST,
-											-1,
-											false);
+			}
+			else
+			{
+				/* Normal column, insert a NULL of the column datatype */
+				new_expr = coerce_null_to_domain(att_tup->atttypid,
+												 att_tup->atttypmod,
+												 att_tup->attcollation,
+												 att_tup->attlen,
+												 att_tup->attbyval);
+				/* Must run expression preprocessing on any non-const nodes */
+				if (!IsA(new_expr, Const))
+					new_expr = eval_const_expressions(root, new_expr);
 			}
 
 			new_tle = makeTargetEntry((Expr *) new_expr,
