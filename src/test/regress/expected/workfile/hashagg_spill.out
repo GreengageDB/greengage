@@ -132,10 +132,25 @@ INSERT INTO spill_temptblspace SELECT avg(col2) col2 FROM hashagg_spill GROUP BY
 RESET temp_tablespaces;
 RESET statement_mem;
 RESET gp_workfile_compression;
+-- Check that the value of work_mem does not affect spill.
+-- start_ignore
+-- end_ignore
+CREATE TABLE t1 (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO t1 SELECT a, a FROM generate_series(1, 100000)a;
+ANALYSE t1;
+SET work_mem = '512kB';
+SELECT * FROM hashagg_spill.is_workfile_created('explain (analyze, verbose) SELECT avg(a) FROM t1 GROUP BY b;');
+ is_workfile_created 
+---------------------
+                   0
+(1 row)
+
+RESET work_mem;
 drop schema hashagg_spill cascade;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to function is_workfile_created(text)
 drop cascades to table testhagg
 drop cascades to table aggspill
 drop cascades to table hashagg_spill
 drop cascades to table spill_temptblspace
+drop cascades to table t1
