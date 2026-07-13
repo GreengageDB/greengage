@@ -96,7 +96,8 @@ typedef struct
 	int			objsubid;		/* subobject (table column #) */
 } SecLabelItem;
 
-typedef struct TypeNamesList {
+typedef struct TypeNamesList 
+{
 	Oid 	schema_oid;
 	char  **names;
 	int 	count;
