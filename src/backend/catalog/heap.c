@@ -2882,31 +2882,25 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 	colobject.objectId = RelationGetRelid(rel);
 	colobject.objectSubId = attnum;
 
-	recordDependencyOn(&defobject, &colobject, DEPENDENCY_AUTO);
+	recordDependencyOn(&defobject, &colobject,
+					   attgenerated ? DEPENDENCY_INTERNAL : DEPENDENCY_AUTO);
 
 	/*
 	 * Record dependencies on objects used in the expression, too.
+	 *
+	 * For both a normal default and a generation expression, the dependency
+	 * on referenced objects is recorded from the pg_attrdef entry (defobject),
+	 * not from the column: PG18 unified this so that dropping something the
+	 * expression refers to requires CASCADE and (for a generated column) is
+	 * blocked by the INTERNAL pg_attrdef->column dependency above.  Recording
+	 * a generated column's expression dependency from the column itself (as
+	 * older code did, with DEPENDENCY_AUTO) makes ALTER COLUMN ... TYPE on the
+	 * generated column choke in ATExecAlterColumnType's dependency scan with
+	 * "found unexpected dependency type 'a'".
 	 */
-	if (attgenerated)
-	{
-		/*
-		 * Generated column: Dropping anything that the generation expression
-		 * refers to automatically drops the generated column.
-		 */
-		recordDependencyOnSingleRelExpr(&colobject, expr, RelationGetRelid(rel),
-										DEPENDENCY_AUTO,
-										DEPENDENCY_AUTO, false);
-	}
-	else
-	{
-		/*
-		 * Normal default: Dropping anything that the default refers to
-		 * requires CASCADE and drops the default only.
-		 */
-		recordDependencyOnSingleRelExpr(&defobject, expr, RelationGetRelid(rel),
-										DEPENDENCY_NORMAL,
-										DEPENDENCY_NORMAL, false);
-	}
+	recordDependencyOnSingleRelExpr(&defobject, expr, RelationGetRelid(rel),
+									DEPENDENCY_NORMAL,
+									DEPENDENCY_NORMAL, false);
 
 	/*
 	 * Post creation hook for attribute defaults.
