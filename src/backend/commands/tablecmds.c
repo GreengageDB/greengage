@@ -9557,14 +9557,27 @@ ATExecDropNotNull(Relation rel, const char *colName, bool recurse,
 
 	table_close(attr_rel, RowExclusiveLock);
 
-	/* MPP-6929: metadata tracking */
+	/*
+	 * MPP-6929: metadata tracking.
+	 *
+	 * Since PG18 a NOT NULL is a pg_constraint row, so dropconstraint_internal()
+	 * above already recorded an "ALTER"/"DROP CONSTRAINT" metadata-tracking entry
+	 * for this relation in the current command.  pg_stat_last_operation is keyed
+	 * by (classid, objid, staactionname) with staactionname "ALTER", so updating
+	 * it again below without advancing the command counter would hit "tuple
+	 * already updated by self".  Bump the command counter so this update lands as
+	 * a fresh command and the recorded subtype ends up as DROP NOT NULL.
+	 */
 	if ((Gp_role == GP_ROLE_DISPATCH)
 		&& MetaTrackValidKindNsp(rel->rd_rel))
+	{
+		CommandCounterIncrement();
 		MetaTrackUpdObject(RelationRelationId,
 						   RelationGetRelid(rel),
 						   GetUserId(),
 						   "ALTER", "ALTER COLUMN DROP NOT NULL"
 				);
+	}
 
 	return address;
 }
