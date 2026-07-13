@@ -2528,6 +2528,7 @@ _outCreateStmtInfo(StringInfo str, const CreateStmt *node)
     WRITE_NODE_FIELD(partbound);
 	WRITE_NODE_FIELD(ofTypename);
 	WRITE_NODE_FIELD(constraints);
+	WRITE_NODE_FIELD(nnconstraints);
 	WRITE_NODE_FIELD(options);
 	WRITE_ENUM_FIELD(oncommit, OnCommitAction);
 	WRITE_STRING_FIELD(tablespacename);

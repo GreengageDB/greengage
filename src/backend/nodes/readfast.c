@@ -5150,6 +5150,7 @@ _readCreateStmt_common(CreateStmt *local_node)
 	READ_NODE_FIELD(partbound);
 	READ_NODE_FIELD(ofTypename);
 	READ_NODE_FIELD(constraints);
+	READ_NODE_FIELD(nnconstraints);
 	READ_NODE_FIELD(options);
 	READ_ENUM_FIELD(oncommit,OnCommitAction);
 	READ_STRING_FIELD(tablespacename);
