@@ -2729,11 +2729,20 @@ BeginCopyTo(ParseState *pstate,
 							RelationGetRelationName(rel)),
 					 errhint("Try the COPY (SELECT ...) TO variant.")));
 		else if (rel->rd_rel->relkind == RELKIND_MATVIEW)
-			ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("cannot copy from materialized view \"%s\"",
-							RelationGetRelationName(rel)),
-					 errhint("Try the COPY (SELECT ...) TO variant.")));
+		{
+			/*
+			 * PG18: COPY TO from a materialized view is allowed once it has
+			 * been populated (a populated matview has a distribution policy and
+			 * is read from the segment heaps like an ordinary table).  Only an
+			 * unpopulated matview is rejected.
+			 */
+			if (!RelationIsPopulated(rel))
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot copy from unpopulated materialized view \"%s\"",
+								RelationGetRelationName(rel)),
+						 errhint("Use the REFRESH MATERIALIZED VIEW command.")));
+		}
 		else if (rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE)
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -6698,7 +6707,7 @@ CopyReadLineText(CopyState cstate)
 							cstate->raw_buf_index = raw_buf_ptr;
 							ereport(ERROR,
 									(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
-									 errmsg("end-of-copy marker corrupt")));
+									 errmsg("end-of-copy marker is not alone on its line")));
 						}
 						else
 							NO_END_OF_COPY_GOTO;
@@ -6734,13 +6743,25 @@ CopyReadLineText(CopyState cstate)
 				}
 
 				/*
-				 * Transfer only the data before the \. into line_buf, then
-				 * discard the data and the \. sequence.
+				 * PG18: in CSV mode a \. is an ordinary data value, never an
+				 * end-of-copy marker, so back up and reprocess it as data.
 				 */
-				if (prev_raw_ptr > cstate->raw_buf_index)
-					appendBinaryStringInfo(&cstate->line_buf,
-										   cstate->raw_buf + cstate->raw_buf_index,
-										   prev_raw_ptr - cstate->raw_buf_index);
+				if (cstate->csv_mode)
+					NO_END_OF_COPY_GOTO;
+
+				/*
+				 * In text mode the \. end-of-copy marker must be alone on its
+				 * line: anything before it on the line is an error (rather than
+				 * being silently transferred into line_buf as we used to do).
+				 */
+				if (cstate->line_buf.len > 0 ||
+					prev_raw_ptr > cstate->raw_buf_index)
+				{
+					cstate->raw_buf_index = raw_buf_ptr;
+					ereport(ERROR,
+							(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
+							 errmsg("end-of-copy marker is not alone on its line")));
+				}
 				cstate->raw_buf_index = raw_buf_ptr;
 				result = true;	/* report EOF */
 				break;
