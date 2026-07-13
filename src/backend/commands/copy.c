@@ -2186,7 +2186,11 @@ BeginCopy(ParseState *pstate,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("COPY (SELECT INTO) is not supported")));
 
-		Assert(query->utilityStmt == NULL);
+		/* The only other utility command we could see is NOTIFY */
+		if (query->utilityStmt != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("COPY query must not be a utility command")));
 
 		/*
 		 * Similarly the grammar doesn't enforce the presence of a RETURNING
@@ -2197,7 +2201,8 @@ BeginCopy(ParseState *pstate,
 		{
 			Assert(query->commandType == CMD_INSERT ||
 				   query->commandType == CMD_UPDATE ||
-				   query->commandType == CMD_DELETE);
+				   query->commandType == CMD_DELETE ||
+				   query->commandType == CMD_MERGE);
 
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
