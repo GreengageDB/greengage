@@ -1888,14 +1888,16 @@ AsyncReadBuffers(ReadBuffersOperation *operation, int *nblocks_progress)
 
 		/*
 		 * GPDB: temporary relations live in shared buffers
-		 * (RelationUsesLocalBuffers is always false), so their IO references
-		 * shared, not backend-local, buffers.  Only flag it as local when the
-		 * buffers really are local; otherwise the AIO subsystem and the readv
-		 * callback selected below would treat a positive (shared) buffer as a
-		 * local one and dereference a bogus local buffer descriptor.
+		 * (RelationUsesLocalBuffers is always false), so the readv callback is
+		 * chosen by the actual buffer kind below (shared, not local) to avoid
+		 * dereferencing a bogus local buffer descriptor.  Their storage is
+		 * still backend-private (a backend-qualified temp relfilelocator),
+		 * which an IO worker cannot open -- smgropen() asserts the temp backend
+		 * is the current process.  So still force synchronous execution for
+		 * temp-relation IO, exactly as upstream does for its local-buffer temp
+		 * IO; PGAIO_HF_REFERENCES_LOCAL only controls sync-vs-worker here.
 		 */
-		if (BufferIsLocal(io_buffers[0]))
-			ioh_flags |= PGAIO_HF_REFERENCES_LOCAL;
+		ioh_flags |= PGAIO_HF_REFERENCES_LOCAL;
 	}
 	else
 	{
