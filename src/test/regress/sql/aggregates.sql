@@ -398,7 +398,6 @@ select max(tenthous) from tenk1 where thousand = 33;
 explain (costs off)
   select min(tenthous) from tenk1 where thousand = 33;
 select min(tenthous) from tenk1 where thousand = 33;
--- end_ignore
 
 -- check parameter propagation into an indexscan subquery
 -- In GPDB, this cannot use the MIN/MAX optimization, because the subplan
@@ -425,6 +424,7 @@ select max(unique2) from tenk1 order by max(unique2)+1;
 explain (costs off)
   select max(unique2), generate_series(1,3) as g from tenk1 order by g desc;
 select max(unique2), generate_series(1,3) as g from tenk1 order by g desc;
+-- end_ignore
 
 -- interesting corner case: constant gets optimized into a seqscan
 explain (costs off)

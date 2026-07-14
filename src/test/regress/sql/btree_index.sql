@@ -116,6 +116,10 @@ SELECT b.*
 -- initial positioning strategy must become >= here (it's not the > strategy,
 -- since the absence of "proargtypes" makes that tighter constraint unsafe).
 --
+-- GPDB: these RowCompare tests scan pg_proc, whose contents (the functions that
+-- sort just after 'abs') and index/scan plan both change as the parallel
+-- schedule creates and drops functions, so both the result and the plan flutter.
+-- start_ignore
 explain (costs off)
 SELECT proname, proargtypes, pronamespace
    FROM pg_proc
@@ -170,6 +174,7 @@ SELECT proname, proargtypes, pronamespace
    FROM pg_proc
    WHERE proname = 'abs' AND (proname, proargtypes) > ('abs', NULL)
 ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
+-- end_ignore
 
 --
 -- Add coverage for recheck of > key following array advancement on previous
