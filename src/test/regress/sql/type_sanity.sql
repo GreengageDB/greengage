@@ -386,16 +386,20 @@ WHERE relkind NOT IN ('r', 'i', 'S', 't', 'v', 'm', 'c', 'f', 'p', 'I') OR
 
 -- All tables, indexes, partitioned indexes and matviews should have an
 -- access method.
+-- GPDB: unlike upstream, Greengage stores the (heap) access method oid on
+-- partitioned tables ('p') too, so treat them like regular tables here rather
+-- than excluding them.
 SELECT c1.oid, c1.relname
 FROM pg_class as c1
-WHERE c1.relkind NOT IN ('S', 'v', 'f', 'c', 'p') and
+WHERE c1.relkind NOT IN ('S', 'v', 'f', 'c') and
     c1.relam = 0;
 
--- Conversely, sequences, views, foreign tables, types and partitioned
--- tables shouldn't have them.
+-- Conversely, sequences, views, foreign tables and types shouldn't have them.
+-- GPDB: partitioned tables ('p') do carry a relam in Greengage (see above), so
+-- they are intentionally omitted from this list.
 SELECT c1.oid, c1.relname
 FROM pg_class as c1
-WHERE c1.relkind IN ('S', 'v', 'f', 'c', 'p') and
+WHERE c1.relkind IN ('S', 'v', 'f', 'c') and
     c1.relam != 0;
 
 -- Indexes and partitioned indexes should have AMs of type 'i'.
