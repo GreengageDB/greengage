@@ -926,7 +926,7 @@ drop table atacc1;
 -- not null not valid with partitions
 CREATE TABLE atnnparted (id int, col1 int) PARTITION BY LIST (id);
 ALTER TABLE atnnparted ADD CONSTRAINT dummy_constr NOT NULL id NOT VALID;
-CREATE TABLE atnnpart1 (col1 int, id int);
+CREATE TABLE atnnpart1 (col1 int, id int) DISTRIBUTED BY (id);
 ALTER TABLE atnnpart1 ADD CONSTRAINT another_constr NOT NULL id;
 ALTER TABLE atnnpart1 ADD PRIMARY KEY (id);
 ALTER TABLE atnnparted ATTACH PARTITION atnnpart1 FOR VALUES IN ('1');
