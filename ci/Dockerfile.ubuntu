@@ -49,6 +49,16 @@ ENV TARGET_OS=ubuntu \
 RUN test "$(lsb_release -sr)" == "22.04" && export PYTHON3=python3; \
     gpdb_src/concourse/scripts/compile_gpdb.bash
 
+# Build python modules for isolation2 tests
+# PyGresSQL requires libpq, so build wheel here to install later
+RUN set -eux; \
+    source /usr/local/greengage-db-devel/greengage_path.sh; \
+    unset PYTHONPATH; \
+    export PYTHON_SRC="/home/gpadmin/gpdb_src/gpMgmt/bin/pythonSrc/"; \
+    apt update && apt install -y python3-pip; \
+    python3 -m pip wheel $PYTHON_SRC/PyGreSQL-5.2.5 -w bin_gpdb/; \
+    python3 -m pip wheel $PYTHON_SRC/PyGreSQL-compat -w bin_gpdb/;
+
 FROM base AS code
 # Use --exclude, when it will be available in stable syntax.
 COPY . gpdb_src
@@ -57,6 +67,10 @@ RUN rm -rf gpdb_src/.git/
 FROM base AS test
 
 COPY --from=build /home/gpadmin/gpdb_src/concourse/scripts gpdb_src/concourse/scripts
+
+# Install pygresql for python3
+RUN find bin_gpdb -name "PyGreSQL*.whl" -exec python3 \
+    -m installer {} \;
 
 RUN source gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
     add_gpadmin_user && \
