@@ -11552,7 +11552,18 @@ get_windowfunc_expr_helper(WindowFunc *wfunc, deparse_context *context,
 
 				if (wagg->winref == wfunc->winref)
 				{
-					appendStringInfoString(buf, quote_identifier(wagg->winname));
+					/*
+					 * GPDB: an ORCA-generated WindowAgg has no window-clause
+					 * name (winname is NULL, the window is effectively
+					 * anonymous), whereas upstream's plan-decompilation path
+					 * assumes a name is always present.  Fall back to a
+					 * synthesized "w<winref>" name so EXPLAIN of an ORCA window
+					 * plan does not crash in quote_identifier(NULL).
+					 */
+					if (wagg->winname)
+						appendStringInfoString(buf, quote_identifier(wagg->winname));
+					else
+						appendStringInfo(buf, "w%u", wfunc->winref);
 					break;
 				}
 			}
