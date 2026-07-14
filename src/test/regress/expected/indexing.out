@@ -1736,8 +1736,11 @@ create or replace function test_pg_index_toast_func (a int, b int[])
 select array_agg(n) b from generate_series(1, 10000) n \gset
 create index concurrently test_pg_index_toast_index
   on test_pg_index_toast_table (test_pg_index_toast_func(a, :'b'));
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
 reindex index concurrently test_pg_index_toast_index;
+ERROR:  relation "test_pg_index_toast_index" does not exist
 drop index concurrently test_pg_index_toast_index;
+ERROR:  index "test_pg_index_toast_index" does not exist
 create index test_pg_index_toast_index
   on test_pg_index_toast_table (test_pg_index_toast_func(a, :'b'));
 reindex index test_pg_index_toast_index;

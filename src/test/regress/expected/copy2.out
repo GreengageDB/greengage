@@ -91,6 +91,14 @@ COPY x from stdin (encoding 'sql_ascii', encoding 'sql_ascii');
 ERROR:  conflicting or redundant options
 LINE 1: COPY x from stdin (encoding 'sql_ascii', encoding 'sql_ascii...
                                                  ^
+COPY x from stdin (on_error ignore, on_error ignore);
+ERROR:  conflicting or redundant options
+LINE 1: COPY x from stdin (on_error ignore, on_error ignore);
+                                            ^
+COPY x from stdin (log_verbosity default, log_verbosity verbose);
+ERROR:  conflicting or redundant options
+LINE 1: COPY x from stdin (log_verbosity default, log_verbosity verb...
+                                                  ^
 -- incorrect options
 COPY x from stdin (format BINARY, delimiter ',');
 ERROR:  cannot specify DELIMITER in BINARY mode
@@ -295,10 +303,10 @@ COPY testnull FROM stdin WITH NULL AS E'\\0';
 SELECT * FROM testnull;
  a  | b  
 ----+----
-  1 | \0
     | 
  42 | \0
     | 
+  1 | \0
 (4 rows)
 
 BEGIN;
@@ -329,8 +337,8 @@ COPY vistest FROM stdin CSV;
 SELECT * FROM vistest;
  a  
 ----
- d1
  e
+ d1
 (2 rows)
 
 COMMIT;
@@ -365,8 +373,8 @@ COMMIT;
 SELECT * FROM vistest;
  a  
 ----
- e
  d2
+ e
 (2 rows)
 
 BEGIN;
@@ -418,8 +426,8 @@ COPY vistest FROM stdin CSV FREEZE;
 SELECT * FROM vistest;
  a  
 ----
- e
  d4
+ e
 (2 rows)
 
 COMMIT;
@@ -478,6 +486,50 @@ BEGIN;
 COPY forcetest (d, e) FROM STDIN WITH (FORMAT csv, FORCE_NULL(b));
 ERROR:  FORCE_NULL column "b" not referenced by COPY
 ROLLBACK;
+-- should succeed with no effect ("b" remains an empty string, "c" remains NULL)
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *, FORCE_NULL *);
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 4;
+ b |  c   
+---+------
+   | NULL
+(1 row)
+
+-- should succeed with effect ("b" remains an empty string)
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *);
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 5;
+ b | c 
+---+---
+   | 
+(1 row)
+
+-- should succeed with effect ("c" remains NULL)
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NULL *);
+COMMIT;
+SELECT b, c FROM forcetest WHERE a = 6;
+ b |  c   
+---+------
+ b | NULL
+(1 row)
+
+-- should fail with "conflicting or redundant options" error
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *, FORCE_NOT_NULL(b));
+ERROR:  conflicting or redundant options
+LINE 1: ...c) FROM STDIN WITH (FORMAT csv, FORCE_NOT_NULL *, FORCE_NOT_...
+                                                             ^
+ROLLBACK;
+-- should fail with "conflicting or redundant options" error
+BEGIN;
+COPY forcetest (a, b, c) FROM STDIN WITH (FORMAT csv, FORCE_NULL *, FORCE_NULL(b));
+ERROR:  conflicting or redundant options
+LINE 1: ... b, c) FROM STDIN WITH (FORMAT csv, FORCE_NULL *, FORCE_NULL...
+                                                             ^
+ROLLBACK;
 \pset null ''
 -- test case with whole-row Var in a check constraint
 create table check_con_tbl (f1 int);
@@ -490,10 +542,10 @@ begin
 end $$ language plpgsql immutable;
 alter table check_con_tbl add check (check_con_function(check_con_tbl.*));
 \d+ check_con_tbl
-                                      Table "public.check_con_tbl"
- Column |  Type   | Collation | Nullable | Default | Storage | Compression | Stats target | Description 
---------+---------+-----------+----------+---------+---------+-------------+--------------+-------------
- f1     | integer |           |          |         | plain   |             |              | 
+                               Table "public.check_con_tbl"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           |          |         | plain   |              | 
 Check constraints:
     "check_con_tbl_check" CHECK (check_con_function(check_con_tbl.*))
 Distributed by: (f1)
@@ -501,10 +553,10 @@ Distributed by: (f1)
 -- GPDB: Change from 1 (value in PG) to 2 for copy to make test deterministic.
 -- 2 and null are on seg0 in a 3-seg test environment.
 copy check_con_tbl from stdin;
-NOTICE:  input = {"f1":2}  (seg0 172.17.0.2:7002 pid=23676)
-NOTICE:  input = {"f1":null}  (seg0 172.17.0.2:7002 pid=23676)
+NOTICE:  input = {"f1":2}  (seg0 172.17.0.2:7002 pid=2582451)
+NOTICE:  input = {"f1":null}  (seg0 172.17.0.2:7002 pid=2582451)
 copy check_con_tbl from stdin;
-NOTICE:  input = {"f1":0}  (seg1 172.17.0.2:7003 pid=23680)
+NOTICE:  input = {"f1":0}  (seg1 172.17.0.2:7003 pid=2582455)
 ERROR:  new row for relation "check_con_tbl" violates check constraint "check_con_tbl_check"
 DETAIL:  Failing row contains (0).
 CONTEXT:  COPY check_con_tbl, line 1: "0"
@@ -642,6 +694,8 @@ RESET SESSION AUTHORIZATION;
  */
 -- tests for on_error option
 CREATE TABLE check_ign_err (n int, m int[], k int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY check_ign_err FROM STDIN WITH (on_error stop);
 ERROR:  invalid input syntax for type integer: "a"
 CONTEXT:  COPY check_ign_err, line 2, column n: "a"
@@ -650,22 +704,24 @@ CONTEXT:  COPY check_ign_err, line 2, column n: "a"
 COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
 NOTICE:  skipping row due to data type incompatibility at line 2 for column "n": "a"
 CONTEXT:  COPY check_ign_err
-NOTICE:  skipping row due to data type incompatibility at line 3 for column "k": "3333333333"
-CONTEXT:  COPY check_ign_err
-NOTICE:  skipping row due to data type incompatibility at line 4 for column "m": "{a, 4}"
-CONTEXT:  COPY check_ign_err
 NOTICE:  skipping row due to data type incompatibility at line 5 for column "n": ""
 CONTEXT:  COPY check_ign_err
-NOTICE:  skipping row due to data type incompatibility at line 7 for column "m": "a"
+NOTICE:  skipping row due to data type incompatibility at line 3 for column "k": "3333333333"  (seg0 172.17.0.2:7002 pid=2582451)
 CONTEXT:  COPY check_ign_err
-NOTICE:  skipping row due to data type incompatibility at line 8 for column "k": "a"
+NOTICE:  skipping row due to data type incompatibility at line 4 for column "m": "{a, 4}"  (seg0 172.17.0.2:7002 pid=2582451)
+CONTEXT:  COPY check_ign_err
+NOTICE:  skipping row due to data type incompatibility at line 8 for column "k": "a"  (seg0 172.17.0.2:7002 pid=2582451)
+CONTEXT:  COPY check_ign_err
+NOTICE:  skipping row due to data type incompatibility at line 7 for column "m": "a"  (seg2 172.17.0.2:7004 pid=2582456)
 CONTEXT:  COPY check_ign_err
 NOTICE:  6 rows were skipped due to data type incompatibility
 -- tests for on_error option with log_verbosity and null constraint via domain
 CREATE DOMAIN dcheck_ign_err2 varchar(15) NOT NULL;
 CREATE TABLE check_ign_err2 (n int, m int[], k int, l dcheck_ign_err2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 COPY check_ign_err2 FROM STDIN WITH (on_error ignore, log_verbosity verbose);
-NOTICE:  skipping row due to data type incompatibility at line 2 for column "l": null input
+NOTICE:  skipping row due to data type incompatibility at line 2 for column "l": null input  (seg0 172.17.0.2:7002 pid=2582451)
 CONTEXT:  COPY check_ign_err2
 NOTICE:  1 row was skipped due to data type incompatibility
 COPY check_ign_err2 FROM STDIN WITH (on_error ignore, log_verbosity silent);
@@ -674,20 +730,21 @@ COPY check_ign_err2 FROM STDIN WITH (on_error ignore, log_verbosity silent);
 SELECT * FROM check_ign_err;
  n |  m  | k 
 ---+-----+---
- 1 | {1} | 1
  5 | {5} | 5
  8 | {8} | 8
+ 1 | {1} | 1
 (3 rows)
 
 SELECT * FROM check_ign_err2;
  n |  m  | k |   l   
 ---+-----+---+-------
- 1 | {1} | 1 | 'foo'
  3 | {3} | 3 | 'bar'
+ 1 | {1} | 1 | 'foo'
 (2 rows)
 
 -- test datatype error that can't be handled as soft: should fail
 CREATE TABLE hard_err(foo widget);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 COPY hard_err FROM STDIN WITH (on_error ignore);
 ERROR:  invalid input syntax for type widget: "1"
 CONTEXT:  COPY hard_err, line 1, column foo: "1"
@@ -701,8 +758,7 @@ ERROR:  extra data after last expected column
 CONTEXT:  COPY check_ign_err, line 1: "1	{1}	3	abc"
 -- tests for reject_limit option
 COPY check_ign_err FROM STDIN WITH (on_error ignore, reject_limit 3);
-ERROR:  skipped more than REJECT_LIMIT (3) rows due to data type incompatibility
-CONTEXT:  COPY check_ign_err, line 5, column n: ""
+NOTICE:  4 rows were skipped due to data type incompatibility
 COPY check_ign_err FROM STDIN WITH (on_error ignore, reject_limit 4);
 NOTICE:  4 rows were skipped due to data type incompatibility
 -- clean up
@@ -715,7 +771,11 @@ DROP ROLE regress_rls_copy_user;
 DROP ROLE regress_rls_copy_user_colperms;
 DROP FUNCTION fn_x_before();
 DROP FUNCTION fn_x_after();
--- When error reject limit is set, copy should be able to continue after hit a corrupted end-of-copy marker 
+DROP TABLE check_ign_err;
+DROP TABLE check_ign_err2;
+DROP DOMAIN dcheck_ign_err2;
+DROP TABLE hard_err;
+-- When error reject limit is set, copy should be able to continue after hit a corrupted end-of-copy marker
 CREATE TABLE copy_eoc_marker(a int, b int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.

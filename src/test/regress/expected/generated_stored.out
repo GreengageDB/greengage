@@ -2,7 +2,7 @@
 set optimizer_trace_fallback=on;
 -- sanity check of system catalog
 SELECT attrelid, attname, attgenerated FROM pg_attribute WHERE attgenerated NOT IN ('', 's');
- attrelid | attname | attgenerated
+ attrelid | attname | attgenerated 
 ----------+---------+--------------
 (0 rows)
 
@@ -23,7 +23,8 @@ SELECT table_name, column_name, column_default, is_nullable, is_generated, gener
 SELECT table_name, column_name, dependent_column FROM information_schema.column_column_usage WHERE table_schema = 'generated_stored_tests' ORDER BY 1, 2, 3;
  table_name | column_name | dependent_column 
 ------------+-------------+------------------
-(0 rows)
+ gtest1     | a           | b
+(1 row)
 
 \d gtest1
                     Table "generated_stored_tests.gtest1"
@@ -186,7 +187,7 @@ SELECT a, b FROM gtest1 WHERE b = 4 ORDER BY a;
 
 -- test that overflow error happens on write
 INSERT INTO gtest1 VALUES (2000000000);
-ERROR:  integer out of range  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  integer out of range  (seg1 172.17.0.2:7003 pid=2580033)
 SELECT * FROM gtest1;
  a | b 
 ---+---
@@ -203,8 +204,8 @@ INSERT INTO gtestx VALUES (11, 1), (22, 2), (33, 3);
 SELECT * FROM gtestx, gtest1 WHERE gtestx.y = gtest1.a;
  x  | y | a | b 
 ----+---+---+---
- 22 | 2 | 2 | 4
  11 | 1 | 1 | 2
+ 22 | 2 | 2 | 4
 (2 rows)
 
 DROP TABLE gtestx;
@@ -217,23 +218,20 @@ SELECT * FROM gtest1 ORDER BY a;
 (2 rows)
 
 UPDATE gtest1 SET a = 3 WHERE b = 4 RETURNING old.*, new.*;
- a | b | a | b 
----+---+---+---
- 2 | 4 | 3 | 6
-(1 row)
-
+ERROR:  RETURNING OLD is not supported for an UPDATE that changes the distribution key
+DETAIL:  The updated row is moved between segments, so its previous values are not available.
 SELECT * FROM gtest1 ORDER BY a;
  a | b 
 ---+---
  1 | 2
- 3 | 6
+ 2 | 4
 (2 rows)
 
 DELETE FROM gtest1 WHERE b = 2;
 SELECT * FROM gtest1 ORDER BY a;
  a | b 
 ---+---
- 3 | 6
+ 2 | 4
 (1 row)
 
 -- test MERGE
@@ -251,8 +249,8 @@ MERGE INTO gtestm t USING (VALUES (1, 10), (2, 20)) v(id, f1) ON t.id = v.id
   RETURNING merge_action(), old.*, new.*;
  merge_action | id | f1 | f2  | f3 | f4  | id | f1 | f2  | f3 | f4  
 --------------+----+----+-----+----+-----+----+----+-----+----+-----
- UPDATE       |  1 |  5 | 100 | 10 | 200 |  1 | 10 | 100 | 20 | 200
  INSERT       |    |    |     |    |     |  2 | 20 | 200 | 40 | 400
+ UPDATE       |  1 |  5 | 100 | 10 | 200 |  1 | 10 | 100 | 20 | 200
 (2 rows)
 
 SELECT * FROM gtestm ORDER BY id;
@@ -269,27 +267,15 @@ CREATE TABLE gtestm (
 );
 INSERT INTO gtestm (a) SELECT g FROM generate_series(1, 10) g;
 MERGE INTO gtestm t USING gtestm AS s ON 2 * t.a = s.b WHEN MATCHED THEN DELETE RETURNING *;
- a  | b  | a  | b  
-----+----+----+----
-  1 |  2 |  1 |  2
-  2 |  4 |  2 |  4
-  3 |  6 |  3 |  6
-  4 |  8 |  4 |  8
-  5 | 10 |  5 | 10
-  6 | 12 |  6 | 12
-  7 | 14 |  7 | 14
-  8 | 16 |  8 | 16
-  9 | 18 |  9 | 18
- 10 | 20 | 10 | 20
-(10 rows)
-
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 DROP TABLE gtestm;
 -- views
 CREATE VIEW gtest1v AS SELECT * FROM gtest1;
 SELECT * FROM gtest1v;
  a | b 
 ---+---
- 3 | 6
+ 2 | 4
 (1 row)
 
 INSERT INTO gtest1v VALUES (4, 8);  -- error
@@ -316,7 +302,7 @@ DETAIL:  Column "b" is a generated column.
 SELECT * FROM gtest1v;
  a | b  
 ---+----
- 3 |  6
+ 2 |  4
  7 | 14
  5 | 10
  6 | 12
@@ -328,7 +314,7 @@ DROP VIEW gtest1v;
 WITH foo AS (SELECT * FROM gtest1) SELECT * FROM foo;
  a | b 
 ---+---
- 3 | 6
+ 2 | 4
 (1 row)
 
 -- inheritance
@@ -358,7 +344,7 @@ SELECT * FROM gtest1_1;
 SELECT * FROM gtest1;
  a | b 
 ---+---
- 3 | 6
+ 2 | 4
  4 | 8
 (2 rows)
 
@@ -388,6 +374,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "b" with inherited definition
 ERROR:  column "b" inherits from generated column but specifies identity
 CREATE TABLE gtestx (x int, b int GENERATED ALWAYS AS (a * 22) VIRTUAL) INHERITS (gtest1);  -- error
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "b" with inherited definition
 ERROR:  column "b" inherits from generated column of different kind
 DETAIL:  Parent column is STORED, child column is VIRTUAL.
@@ -410,7 +397,7 @@ INSERT INTO gtestx (a, x) VALUES (11, 22);
 SELECT * FROM gtest1;
  a  |  b  
 ----+-----
-  3 |   6
+  2 |   4
   4 |   8
  11 | 242
 (3 rows)
@@ -639,15 +626,18 @@ ALTER TABLE gtest_tableoid ADD COLUMN
 SELECT * FROM gtest_tableoid;
  a | b |       c        
 ---+---+----------------
- 1 | t | gtest_tableoid
  2 | t | gtest_tableoid
+ 1 | t | gtest_tableoid
 (2 rows)
 
 -- drop column behavior
 CREATE TABLE gtest10 (a int PRIMARY KEY, b int, c int GENERATED ALWAYS AS (b * 2) STORED);
 ALTER TABLE gtest10 DROP COLUMN b;  -- fails
+ERROR:  cannot drop column b of table gtest10 because other objects depend on it
+DETAIL:  column c of table gtest10 depends on column b of table gtest10
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 ALTER TABLE gtest10 DROP COLUMN b CASCADE;  -- drops c too
-ERROR:  column "b" of relation "gtest10" does not exist
+NOTICE:  drop cascades to column c of table gtest10
 \d gtest10
       Table "generated_stored_tests.gtest10"
  Column |  Type   | Collation | Nullable | Default 
@@ -677,19 +667,19 @@ ERROR:  permission denied for table gtest11
 SELECT a, c FROM gtest11;  -- allowed
  a | c  
 ---+----
- 2 | 40
  1 | 20
+ 2 | 40
 (2 rows)
 
 SELECT gf1(10);  -- not allowed
 ERROR:  permission denied for function gf1
 INSERT INTO gtest12 VALUES (3, 30), (4, 40);  -- currently not allowed because of function permissions, should arguably be allowed
-ERROR:  permission denied for function gf1
+ERROR:  permission denied for function gf1  (seg0 172.17.0.2:7002 pid=2580032)
 SELECT a, c FROM gtest12;  -- allowed (does not actually invoke the function)
  a | c  
 ---+----
- 1 | 30
  2 | 60
+ 1 | 30
 (2 rows)
 
 RESET ROLE;
@@ -699,50 +689,51 @@ DETAIL:  column c of table gtest12 depends on function gf1(integer)
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP TABLE gtest11, gtest12;
 DROP FUNCTION gf1(int);
-ERROR:  function gf1(integer) does not exist
 DROP USER regress_user11;
 -- check constraints
 CREATE TABLE gtest20 (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED CHECK (b < 50));
 INSERT INTO gtest20 (a) VALUES (10);  -- ok
 INSERT INTO gtest20 (a) VALUES (30);  -- violates constraint
-ERROR:  new row for relation "gtest20" violates check constraint "gtest20_b_check"  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  new row for relation "gtest20" violates check constraint "gtest20_b_check"  (seg1 172.17.0.2:7003 pid=2580033)
 DETAIL:  Failing row contains (30, 60).
 ALTER TABLE gtest20 ALTER COLUMN b SET EXPRESSION AS (a * 100);  -- violates constraint
-ERROR:  check constraint "gtest20_b_check" of relation "gtest20" is violated by some row  (seg2 172.17.0.4:7004 pid=1162904)
+ERROR:  check constraint "gtest20_b_check" of relation "gtest20" is violated by some row  (seg2 172.17.0.2:7004 pid=2580034)
 ALTER TABLE gtest20 ALTER COLUMN b SET EXPRESSION AS (a * 3);  -- ok
 CREATE TABLE gtest20a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);
 INSERT INTO gtest20a (a) VALUES (10);
 INSERT INTO gtest20a (a) VALUES (30);
 ALTER TABLE gtest20a ADD CHECK (b < 50);  -- fails on existing row
-ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=2580033)
 -- table rewrite cases
 ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 50); -- fails on existing row
-ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row
+ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=2580033)
 ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 61); -- ok
 CREATE TABLE gtest20b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) STORED);
 INSERT INTO gtest20b (a) VALUES (10);
 INSERT INTO gtest20b (a) VALUES (30);
 ALTER TABLE gtest20b ADD CONSTRAINT chk CHECK (b < 50) NOT VALID;
 ALTER TABLE gtest20b VALIDATE CONSTRAINT chk;  -- fails on existing row
-ERROR:  check constraint "chk" of relation "gtest20b" is violated by some row  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  check constraint "chk" of relation "gtest20b" is violated by some row  (seg1 172.17.0.2:7003 pid=2580033)
 -- check with whole-row reference
 CREATE TABLE gtest20c (a int, b int GENERATED ALWAYS AS (a * 2) STORED);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest20c ADD CONSTRAINT whole_row_check CHECK (gtest20c IS NOT NULL);
 INSERT INTO gtest20c VALUES (1);  -- ok
 INSERT INTO gtest20c VALUES (NULL);  -- fails
-ERROR:  new row for relation "gtest20c" violates check constraint "whole_row_check"
+ERROR:  new row for relation "gtest20c" violates check constraint "whole_row_check"  (seg0 172.17.0.2:7002 pid=2580032)
 DETAIL:  Failing row contains (null, null).
 -- not-null constraints
 CREATE TABLE gtest21a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) STORED NOT NULL);
 INSERT INTO gtest21a (a) VALUES (1);  -- ok
 INSERT INTO gtest21a (a) VALUES (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21a" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  null value in column "b" of relation "gtest21a" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580033)
 DETAIL:  Failing row contains (0, null).
 CREATE TABLE gtest21b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) STORED);
 ALTER TABLE gtest21b ALTER COLUMN b SET NOT NULL;
 INSERT INTO gtest21b (a) VALUES (1);  -- ok
 INSERT INTO gtest21b (a) VALUES (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580033)
 DETAIL:  Failing row contains (0, null).
 ALTER TABLE gtest21b ALTER COLUMN b DROP NOT NULL;
 INSERT INTO gtest21b (a) VALUES (0);  -- ok now
@@ -750,13 +741,13 @@ INSERT INTO gtest21b (a) VALUES (0);  -- ok now
 CREATE TABLE gtest22a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a / 2) STORED UNIQUE) distributed replicated;
 INSERT INTO gtest22a VALUES (2);
 INSERT INTO gtest22a VALUES (3);
-ERROR:  duplicate key value violates unique constraint "gtest22a_b_key"  (seg1 172.17.0.4:7003 pid=1162886)
+ERROR:  duplicate key value violates unique constraint "gtest22a_b_key"  (seg1 172.17.0.2:7003 pid=2580033)
 DETAIL:  Key (b)=(1) already exists.
 INSERT INTO gtest22a VALUES (4);
 CREATE TABLE gtest22b (a int, b int GENERATED ALWAYS AS (a / 2) STORED, PRIMARY KEY (a, b)) distributed by (a);
 INSERT INTO gtest22b VALUES (2);
 INSERT INTO gtest22b VALUES (2);
-ERROR:  duplicate key value violates unique constraint "gtest22b_pkey"  (seg0 172.17.0.4:7002 pid=1162914)
+ERROR:  duplicate key value violates unique constraint "gtest22b_pkey"  (seg0 172.17.0.2:7002 pid=2580032)
 DETAIL:  Key (a, b)=(2, 1) already exists.
 -- indexes
 CREATE TABLE gtest22c (a int, b int GENERATED ALWAYS AS (a * 2) STORED);
@@ -916,17 +907,19 @@ CREATE DOMAIN gtestdomain1 AS int CHECK (VALUE < 10);
 CREATE TABLE gtest24 (a int PRIMARY KEY, b gtestdomain1 GENERATED ALWAYS AS (a * 2) STORED);
 INSERT INTO gtest24 (a) VALUES (4);  -- ok
 INSERT INTO gtest24 (a) VALUES (6);  -- error
-ERROR:  value for domain gtestdomain1 violates check constraint "gtestdomain1_check"  (seg2 172.17.0.4:7004 pid=1162904)
+ERROR:  value for domain gtestdomain1 violates check constraint "gtestdomain1_check"  (seg2 172.17.0.2:7004 pid=2580034)
 CREATE TYPE gtestdomain1range AS range (subtype = gtestdomain1);
 CREATE TABLE gtest24r (a int PRIMARY KEY, b gtestdomain1range GENERATED ALWAYS AS (gtestdomain1range(a, a + 5)) STORED);
 INSERT INTO gtest24r (a) VALUES (4);  -- ok
 INSERT INTO gtest24r (a) VALUES (6);  -- error
-ERROR:  value for domain gtestdomain1 violates check constraint "gtestdomain1_check"
+ERROR:  value for domain gtestdomain1 violates check constraint "gtestdomain1_check"  (seg2 172.17.0.2:7004 pid=2580034)
 CREATE DOMAIN gtestdomainnn AS int CHECK (VALUE IS NOT NULL);
 CREATE TABLE gtest24nn (a int, b gtestdomainnn GENERATED ALWAYS AS (a * 2) STORED);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest24nn (a) VALUES (4);  -- ok
 INSERT INTO gtest24nn (a) VALUES (NULL);  -- error
-ERROR:  value for domain gtestdomainnn violates check constraint "gtestdomainnn_check"
+ERROR:  value for domain gtestdomainnn violates check constraint "gtestdomainnn_check"  (seg0 172.17.0.2:7002 pid=2580032)
 -- typed tables (currently not supported)
 CREATE TYPE gtest_type AS (f1 integer, f2 text, f3 bigint);
 CREATE TABLE gtest28 OF gtest_type (f1 WITH OPTIONS GENERATED ALWAYS AS (f2 *2) STORED);
@@ -970,6 +963,7 @@ ERROR:  identity columns are not supported on partitions
 CREATE TABLE gtest_child3 PARTITION OF gtest_parent (
     f3 GENERATED ALWAYS AS (f2 * 2) VIRTUAL  -- error
 ) FOR VALUES FROM ('2016-09-01') TO ('2016-10-01');
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  column "f3" inherits from generated column of different kind
 DETAIL:  Parent column is STORED, child column is VIRTUAL.
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint);
@@ -992,6 +986,8 @@ ERROR:  table "gtest_child3" being attached contains an identity column "f3"
 DETAIL:  The new partition may not contain an identity column.
 DROP TABLE gtest_child3;
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 33) VIRTUAL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01'); -- error
 ERROR:  column "f3" inherits from generated column of different kind
 DETAIL:  Parent column is STORED, child column is VIRTUAL.
@@ -1243,14 +1239,13 @@ ALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error
 ERROR:  cannot alter type of a column used by a generated column
 DETAIL:  Column "a" is used by generated column "x".
 ALTER TABLE gtest27 ALTER COLUMN x TYPE numeric;
-ERROR:  found unexpected dependency type 'a' (tablecmds.c:15202)
 \d gtest27
                         Table "generated_stored_tests.gtest27"
- Column |  Type   | Collation | Nullable |                  Default
+ Column |  Type   | Collation | Nullable |                  Default                   
 --------+---------+-----------+----------+--------------------------------------------
- a      | integer |           |          |
+ a      | integer |           |          | 
  b      | integer |           |          | 
- x      | integer |           |          | generated always as ((a + b) * 2) stored
+ x      | numeric |           |          | generated always as (((a + b) * 2)) stored
 Distributed randomly
 
 SELECT * FROM gtest27;
@@ -1334,9 +1329,9 @@ ALTER TABLE gtest29 ALTER COLUMN a DROP EXPRESSION;  -- error
 ERROR:  column "a" of relation "gtest29" is not a generated column
 ALTER TABLE gtest29 ALTER COLUMN a DROP EXPRESSION IF EXISTS;  -- notice
 NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg2 172.17.0.4:7004 pid=1162904)
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg1 172.17.0.4:7003 pid=1162886)
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg0 172.17.0.4:7002 pid=1162914)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg0 172.17.0.2:7002 pid=2580032)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg1 172.17.0.2:7003 pid=2580033)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg2 172.17.0.2:7004 pid=2580034)
 -- Change the expression
 ALTER TABLE gtest29 ALTER COLUMN b SET EXPRESSION AS (a * 3);
 SELECT * FROM gtest29;
@@ -1379,9 +1374,9 @@ ALTER TABLE gtest29 DROP COLUMN a;  -- should not drop b
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 \d gtest29
       Table "generated_stored_tests.gtest29"
- Column |  Type   | Collation | Nullable | Default
+ Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
- b      | integer |           |          |
+ b      | integer |           |          | 
 Distributed randomly
 
 -- with inheritance
@@ -1446,13 +1441,21 @@ ALTER TABLE gtest30_1 ALTER COLUMN b DROP EXPRESSION;  -- error
 ERROR:  cannot drop generation expression from inherited column
 -- composite type dependencies
 CREATE TABLE gtest31_1 (a int, b text GENERATED ALWAYS AS ('hello') STORED, c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest31_2 (x int, y gtest31_1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest31_1 ALTER COLUMN b TYPE varchar;  -- fails
 ERROR:  cannot alter table "gtest31_1" because column "gtest31_2.y" uses its row type
 DROP TABLE gtest31_1, gtest31_2;
 -- Check it for a partitioned table, too
 CREATE TABLE gtest31_1 (a int, b text GENERATED ALWAYS AS ('hello') STORED, c text) PARTITION BY LIST (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest31_2 (x int, y gtest31_1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest31_1 ALTER COLUMN b TYPE varchar;  -- fails
 ERROR:  cannot alter table "gtest31_1" because column "gtest31_2.y" uses its row type
 DROP TABLE gtest31_1, gtest31_2;
@@ -1511,8 +1514,8 @@ CREATE TRIGGER gtest4 AFTER INSERT OR UPDATE ON gtest26
   WHEN (NEW.b < 0)  -- ok
   EXECUTE PROCEDURE gtest_trigger_func();
 INSERT INTO gtest26 (a) VALUES (-2), (0), (3);
-INFO:  gtest2: BEFORE: new = (-2,)  (seg1 172.17.0.4:7003 pid=1162886)
-INFO:  gtest4: AFTER: new = (-2,-4)  (seg1 172.17.0.4:7003 pid=1162886)
+INFO:  gtest2: BEFORE: new = (-2,)  (seg1 172.17.0.2:7003 pid=2580033)
+INFO:  gtest4: AFTER: new = (-2,-4)  (seg1 172.17.0.2:7003 pid=2580033)
 SELECT * FROM gtest26 ORDER BY a;
  a  | b  
 ----+----
@@ -1536,17 +1539,17 @@ alter table gtest26 add column distkey integer;
 alter table gtest26 set distributed by (distkey);
 truncate gtest26;
 INSERT INTO gtest26 (a) VALUES (-2), (0), (3);
-INFO:  gtest2: BEFORE: new = (-2,,)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest4: AFTER: new = (-2,-4,)  (seg0 172.17.0.4:7002 pid=1162914)
+INFO:  gtest2: BEFORE: new = (-2,,)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest4: AFTER: new = (-2,-4,)  (seg0 172.17.0.2:7002 pid=2580032)
 alter table gtest26 drop column distkey;
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 UPDATE gtest26 SET a = a * -2;
-INFO:  gtest1: BEFORE: old = (-2,-4)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest1: BEFORE: new = (4,)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest3: AFTER: old = (-2,-4)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest3: AFTER: new = (4,8)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest4: AFTER: old = (3,6)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest4: AFTER: new = (-6,-12)  (seg0 172.17.0.4:7002 pid=1162914)
+INFO:  gtest1: BEFORE: old = (-2,-4)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest1: BEFORE: new = (4,)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest3: AFTER: old = (-2,-4)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest3: AFTER: new = (4,8)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest4: AFTER: old = (3,6)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest4: AFTER: new = (-6,-12)  (seg0 172.17.0.2:7002 pid=2580032)
 SELECT * FROM gtest26 ORDER BY a;
  a  |  b  
 ----+-----
@@ -1556,8 +1559,8 @@ SELECT * FROM gtest26 ORDER BY a;
 (3 rows)
 
 DELETE FROM gtest26 WHERE a = -6;
-INFO:  gtest1: BEFORE: old = (-6,-12)  (seg0 172.17.0.4:7002 pid=1162914)
-INFO:  gtest3: AFTER: old = (-6,-12)  (seg0 172.17.0.4:7002 pid=1162914)
+INFO:  gtest1: BEFORE: old = (-6,-12)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest3: AFTER: old = (-6,-12)  (seg0 172.17.0.2:7002 pid=2580032)
 SELECT * FROM gtest26 ORDER BY a;
  a | b 
 ---+---
@@ -1582,7 +1585,7 @@ CREATE TRIGGER gtest11 BEFORE UPDATE OF b ON gtest26
   FOR EACH ROW
   EXECUTE PROCEDURE gtest_trigger_func3();
 UPDATE gtest26 SET a = 1 WHERE a = 0;
-NOTICE:  OK  (seg0 172.17.0.4:7002 pid=1162914)
+NOTICE:  OK  (seg0 172.17.0.2:7002 pid=2580032)
 DROP TRIGGER gtest11 ON gtest26;
 TRUNCATE gtest26;
 -- check that modifications of generated columns in triggers do
@@ -1606,19 +1609,19 @@ CREATE TRIGGER gtest12_03 BEFORE INSERT OR UPDATE ON gtest26
   FOR EACH ROW
   EXECUTE PROCEDURE gtest_trigger_func();
 INSERT INTO gtest26 (a) VALUES (1);
-INFO:  gtest12_01: BEFORE: new = (1,)
-INFO:  gtest12_03: BEFORE: new = (10,300)
+INFO:  gtest12_01: BEFORE: new = (1,)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest12_03: BEFORE: new = (10,300)  (seg0 172.17.0.2:7002 pid=2580032)
 SELECT * FROM gtest26 ORDER BY a;
- a  | b
+ a  | b  
 ----+----
  10 | 20
 (1 row)
 
 UPDATE gtest26 SET a = 11 WHERE a = 10;
-INFO:  gtest12_01: BEFORE: old = (10,20)
-INFO:  gtest12_01: BEFORE: new = (11,)
-INFO:  gtest12_03: BEFORE: old = (10,20)
-INFO:  gtest12_03: BEFORE: new = (10,)
+INFO:  gtest12_01: BEFORE: old = (10,20)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest12_01: BEFORE: new = (11,)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest12_03: BEFORE: old = (10,20)  (seg0 172.17.0.2:7002 pid=2580032)
+INFO:  gtest12_03: BEFORE: new = (10,)  (seg0 172.17.0.2:7002 pid=2580032)
 SELECT * FROM gtest26 ORDER BY a;
  a  | b  
 ----+----
@@ -1657,7 +1660,7 @@ Distributed randomly
 
 -- sanity check of system catalog
 SELECT attrelid, attname, attgenerated FROM pg_attribute WHERE attgenerated NOT IN ('', 's', 'v');
- attrelid | attname | attgenerated
+ attrelid | attname | attgenerated 
 ----------+---------+--------------
 (0 rows)
 

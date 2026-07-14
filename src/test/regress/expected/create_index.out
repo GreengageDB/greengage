@@ -663,9 +663,9 @@ SELECT circle_center(f1), round(radius(f1)) as radius FROM gcircle_tbl ORDER BY 
 
 EXPLAIN (COSTS OFF)
 SELECT point(x,x), (SELECT f1 FROM gpolygon_tbl ORDER BY f1 <-> point(x,x) LIMIT 1) as c FROM generate_series(0,10,1) x;
-ERROR:  could not devise a query plan for the given query (pathnode.c:275)
+ERROR:  could not devise a query plan for the given query (pathnode.c:302)
 SELECT point(x,x), (SELECT f1 FROM gpolygon_tbl ORDER BY f1 <-> point(x,x) LIMIT 1) as c FROM generate_series(0,10,1) x;
-ERROR:  could not devise a query plan for the given query (pathnode.c:275)
+ERROR:  could not devise a query plan for the given query (pathnode.c:302)
 -- Now check the results from bitmap indexscan
 SET enable_seqscan = OFF;
 SET enable_indexscan = OFF;
@@ -1306,17 +1306,20 @@ SELECT count(*) FROM tenk1 WHERE stringu1 = 'TVAAAA';
 SET enable_seqscan = off;
 EXPLAIN (COSTS OFF)
 SELECT COUNT(*) FROM tenk1 WHERE stringu1 = 'TVAAAA' OR  stringu1 = 'TVAAAB';
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: ((stringu1 = 'TVAAAA'::name) OR (stringu1 = 'TVAAAB'::name))
-         ->  BitmapOr
-               ->  Bitmap Index Scan on hash_tuplesort_idx
-                     Index Cond: (stringu1 = 'TVAAAA'::name)
-               ->  Bitmap Index Scan on hash_tuplesort_idx
-                     Index Cond: (stringu1 = 'TVAAAB'::name)
-(8 rows)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on tenk1
+                     Recheck Cond: ((stringu1 = 'TVAAAA'::name) OR (stringu1 = 'TVAAAB'::name))
+                     ->  BitmapOr
+                           ->  Bitmap Index Scan on hash_tuplesort_idx
+                                 Index Cond: (stringu1 = 'TVAAAA'::name)
+                           ->  Bitmap Index Scan on hash_tuplesort_idx
+                                 Index Cond: (stringu1 = 'TVAAAB'::name)
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 RESET enable_seqscan;
 DROP INDEX hash_tuplesort_idx;
@@ -1336,14 +1339,14 @@ INSERT INTO unique_tbl VALUES (4, 'four');
 INSERT INTO unique_tbl VALUES (5, 'one');
 INSERT INTO unique_tbl (t) VALUES ('six');
 INSERT INTO unique_tbl (t) VALUES ('seven');  -- error from unique_idx2
-ERROR:  duplicate key value violates unique constraint "unique_idx2"  (seg0 172.17.0.4:7002 pid=1159705)
+ERROR:  duplicate key value violates unique constraint "unique_idx2"  (seg0 172.17.0.2:7002 pid=2573999)
 DETAIL:  Key (i)=(null) already exists.
 DROP INDEX unique_idx1, unique_idx2;
 INSERT INTO unique_tbl (t) VALUES ('seven');
 -- build indexes on filled table
 CREATE UNIQUE INDEX unique_idx3 ON unique_tbl (i) NULLS DISTINCT;  -- ok
 CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- error
-ERROR:  could not create unique index "unique_idx4"  (seg0 172.17.0.4:7002 pid=1159705)
+ERROR:  could not create unique index "unique_idx4"  (seg0 172.17.0.2:7002 pid=2573999)
 DETAIL:  Key (i)=(null) is duplicated.
 DELETE FROM unique_tbl WHERE t = 'seven';
 CREATE UNIQUE INDEX unique_idx4 ON unique_tbl (i) NULLS NOT DISTINCT;  -- ok now
@@ -1464,7 +1467,7 @@ INSERT INTO covering_index_heap VALUES(1,1,'AAA');
 INSERT INTO covering_index_heap VALUES(1,2,'AAA');
 -- this should fail because of unique index on f1,f2:
 INSERT INTO covering_index_heap VALUES(1,2,'BBB');
-ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 172.17.0.4:7003 pid=1159707)
+ERROR:  duplicate key value violates unique constraint "covering_index_index"  (seg1 172.17.0.2:7003 pid=2574002)
 DETAIL:  Key (f1, f2)=(1, 2) already exists.
 -- and this shouldn't:
 INSERT INTO covering_index_heap VALUES(1,4,'AAA');
@@ -1962,8 +1965,8 @@ SELECT unique1, unique2 FROM onek_with_null
  unique1 |  unique2   
 ---------+------------
      500 |           
-     100 |           
          |           
+     100 |           
          | 2147483647
      278 |        999
 (5 rows)
@@ -1995,11 +1998,13 @@ DROP TABLE onek_with_null;
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42 OR tenthous = 0);
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Index Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3,42,0}'::integer[])))
-(2 rows)
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3,42,0}'::integer[])))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42 OR tenthous = 0);
@@ -2011,13 +2016,15 @@ SELECT * FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = (SELECT 1 + 2) OR tenthous = 42);
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
- Index Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand = 42) AND (tenthous = ANY (ARRAY[1, (InitPlan 1).col1, 42])))
-   InitPlan 1
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   InitPlan 1  (slice2)
      ->  Result
-(4 rows)
+   ->  Index Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand = 42) AND (tenthous = ANY (ARRAY[1, (InitPlan 1).col1, 42])))
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = (SELECT 1 + 2) OR tenthous = 42);
@@ -2029,71 +2036,75 @@ SELECT * FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42 OR tenthous IS NULL);
-                                                                QUERY PLAN                                                                 
--------------------------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (((thousand = 42) AND ((tenthous = 1) OR (tenthous = 3) OR (tenthous = 42))) OR ((thousand = 42) AND (tenthous IS NULL)))
-   Filter: ((tenthous = 1) OR (tenthous = 3) OR (tenthous = 42) OR (tenthous IS NULL))
-   ->  BitmapOr
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (thousand = 42)
+         Filter: ((tenthous = 1) OR (tenthous = 3) OR (tenthous = 42) OR (tenthous IS NULL))
          ->  Bitmap Index Scan on tenk1_thous_tenthous
-               Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3,42}'::integer[])))
-         ->  Bitmap Index Scan on tenk1_thous_tenthous
-               Index Cond: ((thousand = 42) AND (tenthous IS NULL))
-(8 rows)
+               Index Cond: (thousand = 42)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1::int2 OR tenthous::int2 = 3::int8 OR tenthous = 42::int8);
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (thousand = 42)
-   Filter: ((tenthous = '1'::smallint) OR ((tenthous)::smallint = '3'::bigint) OR (tenthous = '42'::bigint))
-   ->  Bitmap Index Scan on tenk1_thous_tenthous
-         Index Cond: (thousand = 42)
-(5 rows)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (thousand = 42)
+         Filter: ((tenthous = '1'::smallint) OR ((tenthous)::smallint = '3'::bigint) OR (tenthous = '42'::bigint))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: (thousand = 42)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1::int2 OR tenthous::int2 = 3::int8 OR tenthous::int2 = 42::int8);
-                                                       QUERY PLAN                                                        
--------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (thousand = 42)
-   Filter: ((tenthous = '1'::smallint) OR ((tenthous)::smallint = '3'::bigint) OR ((tenthous)::smallint = '42'::bigint))
-   ->  Bitmap Index Scan on tenk1_thous_tenthous
-         Index Cond: (thousand = 42)
-(5 rows)
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (thousand = 42)
+         Filter: ((tenthous = '1'::smallint) OR ((tenthous)::smallint = '3'::bigint) OR ((tenthous)::smallint = '42'::bigint))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: (thousand = 42)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1::int2 OR tenthous = 3::int8 OR tenthous = 42::int8);
-                                                                     QUERY PLAN                                                                      
------------------------------------------------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (((thousand = 42) AND (tenthous = '1'::smallint)) OR ((thousand = 42) AND ((tenthous = '3'::bigint) OR (tenthous = '42'::bigint))))
-   Filter: ((tenthous = '1'::smallint) OR (tenthous = '3'::bigint) OR (tenthous = '42'::bigint))
-   ->  BitmapOr
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (thousand = 42)
+         Filter: ((tenthous = '1'::smallint) OR (tenthous = '3'::bigint) OR (tenthous = '42'::bigint))
          ->  Bitmap Index Scan on tenk1_thous_tenthous
-               Index Cond: ((thousand = 42) AND (tenthous = '1'::smallint))
-         ->  Bitmap Index Scan on tenk1_thous_tenthous
-               Index Cond: ((thousand = 42) AND (tenthous = ANY ('{3,42}'::bigint[])))
-(8 rows)
+               Index Cond: (thousand = 42)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
-         ->  BitmapAnd
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand = ANY ('{42,99}'::integer[]))
-(8 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
+               ->  BitmapAnd
+                     ->  Bitmap Index Scan on tenk1_hundred
+                           Index Cond: (hundred = 42)
+                     ->  Bitmap Index Scan on tenk1_thous_tenthous
+                           Index Cond: (thousand = ANY ('{42,99}'::integer[]))
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
@@ -2105,11 +2116,13 @@ SELECT count(*) FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42);
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Index Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3,42}'::integer[])))
-(2 rows)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3,42}'::integer[])))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42);
@@ -2121,37 +2134,47 @@ SELECT * FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1::numeric OR tenthous = 3::int4 OR tenthous = 42::numeric);
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (thousand = 42)
-   Filter: (((tenthous)::numeric = '1'::numeric) OR (tenthous = 3) OR ((tenthous)::numeric = '42'::numeric))
-   ->  Bitmap Index Scan on tenk1_thous_tenthous
-         Index Cond: (thousand = 42)
-(5 rows)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (thousand = 42)
+         Filter: (((tenthous)::numeric = '1'::numeric) OR (tenthous = 3) OR ((tenthous)::numeric = '42'::numeric))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: (thousand = 42)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1
   WHERE tenthous = 1::numeric OR tenthous = 3::int4 OR tenthous = 42::numeric;
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
- Seq Scan on tenk1
-   Filter: (((tenthous)::numeric = '1'::numeric) OR (tenthous = 3) OR ((tenthous)::numeric = '42'::numeric))
-(2 rows)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on tenk1
+         Filter: (((tenthous)::numeric = '1'::numeric) OR (tenthous = 3) OR ((tenthous)::numeric = '42'::numeric))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1 t1
   WHERE t1.thousand = 42 OR t1.thousand = (SELECT t2.tenthous FROM tenk1 t2 WHERE t2.thousand = t1.tenthous + 1 LIMIT 1);
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Aggregate
-   ->  Index Only Scan using tenk1_thous_tenthous on tenk1 t1
-         Filter: ((thousand = 42) OR (thousand = (SubPlan 1)))
-         SubPlan 1
-           ->  Limit
-                 ->  Index Only Scan using tenk1_thous_tenthous on tenk1 t2
-                       Index Cond: (thousand = (t1.tenthous + 1))
-(7 rows)
+                                       QUERY PLAN                                        
+-----------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on tenk1 t1
+                     Filter: ((thousand = 42) OR (thousand = (SubPlan 1)))
+                     SubPlan 1
+                       ->  Limit
+                             ->  Result
+                                   Filter: (t2.thousand = (t1.tenthous + 1))
+                                   ->  Materialize
+                                         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                               ->  Seq Scan on tenk1 t2
+ Optimizer: Postgres query optimizer
+(13 rows)
 
 SELECT count(*) FROM tenk1 t1
   WHERE t1.thousand = 42 OR t1.thousand = (SELECT t2.tenthous FROM tenk1 t2 WHERE t2.thousand = t1.tenthous + 1 LIMIT 1);
@@ -2166,14 +2189,16 @@ SELECT count(*) FROM tenk1
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
  Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
-         ->  BitmapAnd
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand = ANY ('{42,99}'::integer[]))
-(8 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
+               ->  BitmapAnd
+                     ->  Bitmap Index Scan on tenk1_hundred
+                           Index Cond: (hundred = 42)
+                     ->  Bitmap Index Scan on tenk1_thous_tenthous
+                           Index Cond: (thousand = ANY ('{42,99}'::integer[]))
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
@@ -2185,17 +2210,18 @@ SELECT count(*) FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand < 42 OR thousand < 99 OR 43 > thousand OR 42 > thousand);
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: ((hundred = 42) AND ((thousand < 42) OR (thousand < 99) OR (43 > thousand) OR (42 > thousand)))
-         ->  BitmapAnd
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand < ANY ('{42,99,43,42}'::integer[]))
-(8 rows)
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on tenk1
+                     Recheck Cond: (hundred = 42)
+                     Filter: ((thousand < 42) OR (thousand < 99) OR (43 > thousand) OR (42 > thousand))
+                     ->  Bitmap Index Scan on tenk1_hundred
+                           Index Cond: (hundred = 42)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand < 42 OR thousand < 99 OR 43 > thousand OR 42 > thousand);
@@ -2207,17 +2233,20 @@ SELECT count(*) FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3) OR thousand = 41;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: (((thousand = 42) AND ((tenthous = 1) OR (tenthous = 3))) OR (thousand = 41))
-         ->  BitmapOr
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3}'::integer[])))
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand = 41)
-(8 rows)
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on tenk1
+                     Recheck Cond: (((thousand = 42) AND ((tenthous = 1) OR (tenthous = 3))) OR (thousand = 41))
+                     ->  BitmapOr
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: ((thousand = 42) AND (tenthous = ANY ('{1,3}'::integer[])))
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: (thousand = 41)
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 SELECT count(*) FROM tenk1
   WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3) OR thousand = 41;
@@ -2229,24 +2258,21 @@ SELECT count(*) FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99 OR tenthous < 2) OR thousand = 41;
-                                                        QUERY PLAN                                                        
---------------------------------------------------------------------------------------------------------------------------
- Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: (((hundred = 42) AND (((thousand = 42) OR (thousand = 99)) OR (tenthous < 2))) OR (thousand = 41))
-         Filter: (((hundred = 42) AND ((thousand = 42) OR (thousand = 99) OR (tenthous < 2))) OR (thousand = 41))
-         ->  BitmapOr
-               ->  BitmapAnd
-                     ->  Bitmap Index Scan on tenk1_hundred
-                           Index Cond: (hundred = 42)
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Bitmap Heap Scan on tenk1
+                     Recheck Cond: ((hundred = 42) OR (thousand = 41))
+                     Filter: (((hundred = 42) AND ((thousand = 42) OR (thousand = 99) OR (tenthous < 2))) OR (thousand = 41))
                      ->  BitmapOr
+                           ->  Bitmap Index Scan on tenk1_hundred
+                                 Index Cond: (hundred = 42)
                            ->  Bitmap Index Scan on tenk1_thous_tenthous
-                                 Index Cond: (thousand = ANY ('{42,99}'::integer[]))
-                           ->  Bitmap Index Scan on tenk1_thous_tenthous
-                                 Index Cond: (tenthous < 2)
-               ->  Bitmap Index Scan on tenk1_thous_tenthous
-                     Index Cond: (thousand = 41)
-(15 rows)
+                                 Index Cond: (thousand = 41)
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 99 OR tenthous < 2) OR thousand = 41;
@@ -2258,21 +2284,23 @@ SELECT count(*) FROM tenk1
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 41 OR thousand = 99 AND tenthous = 2);
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
+                                                           QUERY PLAN                                                            
+---------------------------------------------------------------------------------------------------------------------------------
  Aggregate
-   ->  Bitmap Heap Scan on tenk1
-         Recheck Cond: ((hundred = 42) AND (((thousand = 42) OR (thousand = 41)) OR ((thousand = 99) AND (tenthous = 2))))
-         Filter: ((thousand = 42) OR (thousand = 41) OR ((thousand = 99) AND (tenthous = 2)))
-         ->  BitmapAnd
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
-               ->  BitmapOr
-                     ->  Bitmap Index Scan on tenk1_thous_tenthous
-                           Index Cond: (thousand = ANY ('{42,41}'::integer[]))
-                     ->  Bitmap Index Scan on tenk1_thous_tenthous
-                           Index Cond: ((thousand = 99) AND (tenthous = 2))
-(12 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Bitmap Heap Scan on tenk1
+               Recheck Cond: ((hundred = 42) AND (((thousand = 42) OR (thousand = 41)) OR ((thousand = 99) AND (tenthous = 2))))
+               Filter: ((thousand = 42) OR (thousand = 41) OR ((thousand = 99) AND (tenthous = 2)))
+               ->  BitmapAnd
+                     ->  Bitmap Index Scan on tenk1_hundred
+                           Index Cond: (hundred = 42)
+                     ->  BitmapOr
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: (thousand = ANY ('{42,41}'::integer[]))
+                           ->  Bitmap Index Scan on tenk1_thous_tenthous
+                                 Index Cond: ((thousand = 99) AND (tenthous = 2))
+ Optimizer: Postgres query optimizer
+(14 rows)
 
 SELECT count(*) FROM tenk1
   WHERE hundred = 42 AND (thousand = 42 OR thousand = 41 OR thousand = 99 AND tenthous = 2);
@@ -2285,73 +2313,96 @@ EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1, tenk2
   WHERE tenk1.hundred = 42 AND (tenk2.thousand = 42 OR tenk1.thousand = 41 OR tenk2.tenthous = 2) AND
   tenk2.hundred = tenk1.hundred;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         Join Filter: ((tenk2.thousand = 42) OR (tenk1.thousand = 41) OR (tenk2.tenthous = 2))
-         ->  Bitmap Heap Scan on tenk1
-               Recheck Cond: (hundred = 42)
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = 42)
-         ->  Materialize
-               ->  Bitmap Heap Scan on tenk2
-                     Recheck Cond: (hundred = 42)
-                     ->  Bitmap Index Scan on tenk2_hundred
-                           Index Cond: (hundred = 42)
-(12 rows)
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Disabled: true
+                     Join Filter: ((tenk2.thousand = 42) OR (tenk1.thousand = 41) OR (tenk2.tenthous = 2))
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Bitmap Heap Scan on tenk1
+                                 Recheck Cond: (hundred = 42)
+                                 ->  Bitmap Index Scan on tenk1_hundred
+                                       Index Cond: (hundred = 42)
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk2
+                                 Recheck Cond: (hundred = 42)
+                                 ->  Bitmap Index Scan on tenk2_hundred
+                                       Index Cond: (hundred = 42)
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1, tenk2
   WHERE tenk1.hundred = 42 AND (tenk2.thousand = 42 OR tenk2.thousand = 41 OR tenk2.tenthous = 2) AND
   tenk2.hundred = tenk1.hundred;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Bitmap Heap Scan on tenk2
-               Recheck Cond: (hundred = 42)
-               Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
-               ->  Bitmap Index Scan on tenk2_hundred
-                     Index Cond: (hundred = 42)
-         ->  Index Only Scan using tenk1_hundred on tenk1
-               Index Cond: (hundred = 42)
-(9 rows)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Disabled: true
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Bitmap Heap Scan on tenk2
+                                 Recheck Cond: (hundred = 42)
+                                 Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
+                                 ->  Bitmap Index Scan on tenk2_hundred
+                                       Index Cond: (hundred = 42)
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk1
+                                 Recheck Cond: (hundred = 42)
+                                 ->  Bitmap Index Scan on tenk1_hundred
+                                       Index Cond: (hundred = 42)
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1 JOIN tenk2 ON
   tenk1.hundred = 42 AND (tenk2.thousand = 42 OR tenk2.thousand = 41 OR tenk2.tenthous = 2) AND
   tenk2.hundred = tenk1.hundred;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Bitmap Heap Scan on tenk2
-               Recheck Cond: (hundred = 42)
-               Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
-               ->  Bitmap Index Scan on tenk2_hundred
-                     Index Cond: (hundred = 42)
-         ->  Index Only Scan using tenk1_hundred on tenk1
-               Index Cond: (hundred = 42)
-(9 rows)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Nested Loop
+                     Disabled: true
+                     ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                           ->  Bitmap Heap Scan on tenk2
+                                 Recheck Cond: (hundred = 42)
+                                 Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
+                                 ->  Bitmap Index Scan on tenk2_hundred
+                                       Index Cond: (hundred = 42)
+                     ->  Materialize
+                           ->  Bitmap Heap Scan on tenk1
+                                 Recheck Cond: (hundred = 42)
+                                 ->  Bitmap Index Scan on tenk1_hundred
+                                       Index Cond: (hundred = 42)
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM tenk1 LEFT JOIN tenk2 ON
   tenk1.hundred = 42 AND (tenk2.thousand = 42 OR tenk2.thousand = 41 OR tenk2.tenthous = 2) AND
   tenk2.hundred = tenk1.hundred;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop Left Join
-         Join Filter: (tenk1.hundred = 42)
-         ->  Index Only Scan using tenk1_hundred on tenk1
-         ->  Memoize
-               Cache Key: tenk1.hundred
-               Cache Mode: logical
-               ->  Index Scan using tenk2_hundred on tenk2
-                     Index Cond: (hundred = tenk1.hundred)
-                     Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
-(10 rows)
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Hash Left Join
+                     Hash Cond: (tenk1.hundred = tenk2.hundred)
+                     Join Filter: (tenk1.hundred = 42)
+                     ->  Seq Scan on tenk1
+                     ->  Hash
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                                 ->  Seq Scan on tenk2
+                                       Filter: ((thousand = 42) OR (thousand = 41) OR (tenthous = 2))
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 --
 -- Check behavior with duplicate index column contents
@@ -2461,11 +2512,14 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > 995 and tenthous in (998, 999)
 ORDER BY thousand desc;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Index Only Scan Backward using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand > 995) AND (tenthous = ANY ('{998,999}'::integer[])))
-(2 rows)
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: thousand
+   ->  Index Only Scan Backward using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand > 995) AND (tenthous = ANY ('{998,999}'::integer[])))
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > 995 and tenthous in (998, 999)
@@ -2511,11 +2565,13 @@ SELECT unique1 FROM tenk1 WHERE unique1 = ANY('{7, 14, 22}') and unique1 = ANY('
 
 explain (costs off)
 SELECT unique1 FROM tenk1 WHERE unique1 = ANY(NULL);
-                   QUERY PLAN                    
--------------------------------------------------
- Index Only Scan using tenk1_unique1 on tenk1
-   Index Cond: (unique1 = ANY (NULL::integer[]))
-(2 rows)
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = ANY (NULL::integer[]))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT unique1 FROM tenk1 WHERE unique1 = ANY(NULL);
  unique1 
@@ -2524,11 +2580,13 @@ SELECT unique1 FROM tenk1 WHERE unique1 = ANY(NULL);
 
 explain (costs off)
 SELECT unique1 FROM tenk1 WHERE unique1 = ANY('{NULL,NULL,NULL}');
-                          QUERY PLAN                           
----------------------------------------------------------------
- Index Only Scan using tenk1_unique1 on tenk1
-   Index Cond: (unique1 = ANY ('{NULL,NULL,NULL}'::integer[]))
-(2 rows)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: (unique1 = ANY ('{NULL,NULL,NULL}'::integer[]))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT unique1 FROM tenk1 WHERE unique1 = ANY('{NULL,NULL,NULL}');
  unique1 
@@ -2537,11 +2595,13 @@ SELECT unique1 FROM tenk1 WHERE unique1 = ANY('{NULL,NULL,NULL}');
 
 explain (costs off)
 SELECT unique1 FROM tenk1 WHERE unique1 IS NULL AND unique1 IS NULL;
-                       QUERY PLAN                        
----------------------------------------------------------
- Index Only Scan using tenk1_unique1 on tenk1
-   Index Cond: ((unique1 IS NULL) AND (unique1 IS NULL))
-(2 rows)
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Index Only Scan using tenk1_unique1 on tenk1
+         Index Cond: ((unique1 IS NULL) AND (unique1 IS NULL))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT unique1 FROM tenk1 WHERE unique1 IS NULL AND unique1 IS NULL;
  unique1 
@@ -2673,11 +2733,13 @@ SELECT unique1 FROM tenk1 WHERE unique1 IN (1, 42, 7) and unique1 < (-1)::bigint
 
 explain (costs off)
 SELECT unique1 FROM tenk1 WHERE (thousand, tenthous) > (NULL, 5);
-                           QUERY PLAN                            
------------------------------------------------------------------
- Index Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: (ROW(thousand, tenthous) > ROW(NULL::integer, 5))
-(2 rows)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Index Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: (ROW(thousand, tenthous) > ROW(NULL::integer, 5))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 SELECT unique1 FROM tenk1 WHERE (thousand, tenthous) > (NULL, 5);
  unique1 
@@ -2689,11 +2751,16 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > -1 and thousand >= 0 AND tenthous = 3000
 ORDER BY thousand;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
- Index Only Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand > '-1'::integer) AND (thousand >= 0) AND (tenthous = 3000))
-(2 rows)
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: thousand
+   ->  Sort
+         Sort Key: thousand
+         ->  Seq Scan on tenk1
+               Filter: ((thousand > '-1'::integer) AND (thousand >= 0) AND (tenthous = 3000))
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > -1 and thousand >= 0 AND tenthous = 3000
@@ -2708,11 +2775,14 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 3 and thousand <= 2 AND tenthous = 1001
 ORDER BY thousand;
-                                QUERY PLAN                                
---------------------------------------------------------------------------
- Index Only Scan using tenk1_thous_tenthous on tenk1
-   Index Cond: ((thousand < 3) AND (thousand <= 2) AND (tenthous = 1001))
-(2 rows)
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: thousand
+   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand < 3) AND (thousand <= 2) AND (tenthous = 1001))
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand < 3 and thousand <= 2 AND tenthous = 1001
@@ -2727,12 +2797,18 @@ explain (costs off)
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > -1 AND tenthous IN (1001,3000)
 ORDER BY thousand limit 2;
-                                            QUERY PLAN                                            
---------------------------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
  Limit
-   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
-         Index Cond: ((thousand > '-1'::integer) AND (tenthous = ANY ('{1001,3000}'::integer[])))
-(3 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: thousand
+         ->  Limit
+               ->  Sort
+                     Sort Key: thousand
+                     ->  Seq Scan on tenk1
+                           Filter: ((thousand > '-1'::integer) AND (tenthous = ANY ('{1001,3000}'::integer[])))
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 SELECT thousand, tenthous FROM tenk1
 WHERE thousand > -1 AND tenthous IN (1001,3000)
@@ -2918,7 +2994,7 @@ ERROR:  relation "concur_reindex_tab3_c2_excl" does not exist
 REINDEX TABLE CONCURRENTLY concur_reindex_tab3;  -- succeeds with warning
 NOTICE:  concurrent reindex of "concur_reindex_tab3" is not supported in Greenplum, reindexing non-concurrently instead
 INSERT INTO concur_reindex_tab3 VALUES  (4, '[2,4]');
-ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 172.17.0.4:7003 pid=1159707)
+ERROR:  conflicting key value violates exclusion constraint "concur_reindex_tab3_c2_distkey_excl"  (seg1 172.17.0.2:7003 pid=2574002)
 DETAIL:  Key (c2, distkey)=([2,5), empty) conflicts with existing key (c2, distkey)=([1,3), empty).
 -- Check materialized views
 CREATE MATERIALIZED VIEW concur_reindex_matview AS SELECT * FROM concur_reindex_tab;
@@ -3607,36 +3683,42 @@ DROP TABLE concur_temp_tab_1, concur_temp_tab_2, reindex_temp_before;
 -- permutations in the filtering conditions we could see in the EXPLAIN.
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 WHERE unique1 < 1 OR hundred < 2;
-                    QUERY PLAN                    
---------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: ((unique1 < 1) OR (hundred < 2))
-   ->  BitmapOr
-         ->  Bitmap Index Scan on tenk1_unique1
-               Index Cond: (unique1 < 1)
-         ->  Bitmap Index Scan on tenk1_hundred
-               Index Cond: (hundred < 2)
-(7 rows)
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: ((unique1 < 1) OR (hundred < 2))
+         ->  BitmapOr
+               ->  Bitmap Index Scan on tenk1_unique1
+                     Index Cond: (unique1 < 1)
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred < 2)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- OR clauses in the 'unique1' column are grouped, so clause permutation
 -- occurs. W e can see it in the 'Recheck Cond': the second clause involving
 -- the 'unique1' column goes just after the first one.
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 WHERE unique1 < 1 OR unique1 < 3 OR hundred < 2;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Bitmap Heap Scan on tenk1
-   Recheck Cond: (((unique1 < 1) OR (unique1 < 3)) OR (hundred < 2))
-   ->  BitmapOr
-         ->  Bitmap Index Scan on tenk1_unique1
-               Index Cond: (unique1 < ANY ('{1,3}'::integer[]))
-         ->  Bitmap Index Scan on tenk1_hundred
-               Index Cond: (hundred < 2)
-(7 rows)
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: (((unique1 < 1) OR (unique1 < 3)) OR (hundred < 2))
+         ->  BitmapOr
+               ->  Bitmap Index Scan on tenk1_unique1
+                     Index Cond: (unique1 < ANY ('{1,3}'::integer[]))
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred < 2)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- Check bitmap scan can consider similar OR arguments separately without
 -- grouping them into SAOP.
 CREATE TABLE bitmap_split_or (a int NOT NULL, b int NOT NULL, c int NOT NULL);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO bitmap_split_or (SELECT 1, 1, i FROM generate_series(1, 1000) i);
 INSERT INTO bitmap_split_or (select i, 2, 2 FROM generate_series(1, 1000) i);
 VACUUM ANALYZE bitmap_split_or;
@@ -3644,16 +3726,13 @@ CREATE INDEX t_b_partial_1_idx ON bitmap_split_or (b) WHERE a = 1;
 CREATE INDEX t_b_partial_2_idx ON bitmap_split_or (b) WHERE a = 2;
 EXPLAIN (COSTS OFF)
 SELECT * FROM bitmap_split_or WHERE (a = 1 OR a = 2) AND b = 2;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Bitmap Heap Scan on bitmap_split_or
-   Recheck Cond: (((b = 2) AND (a = 1)) OR ((b = 2) AND (a = 2)))
-   ->  BitmapOr
-         ->  Bitmap Index Scan on t_b_partial_1_idx
-               Index Cond: (b = 2)
-         ->  Bitmap Index Scan on t_b_partial_2_idx
-               Index Cond: (b = 2)
-(7 rows)
+                     QUERY PLAN                     
+----------------------------------------------------
+ Gather Motion 2:1  (slice1; segments: 2)
+   ->  Seq Scan on bitmap_split_or
+         Filter: ((b = 2) AND ((a = 1) OR (a = 2)))
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 DROP INDEX t_b_partial_1_idx;
 DROP INDEX t_b_partial_2_idx;
@@ -3665,27 +3744,33 @@ ANALYZE bitmap_split_or;
 EXPLAIN (COSTS OFF)
 SELECT * FROM bitmap_split_or t1, bitmap_split_or t2
 WHERE t1.a = t2.b OR t1.a = 2;
-                       QUERY PLAN                       
---------------------------------------------------------
- Nested Loop
-   ->  Seq Scan on bitmap_split_or t2
-   ->  Index Scan using t_a_b_idx on bitmap_split_or t1
-         Index Cond: (a = ANY (ARRAY[t2.b, 2]))
-(4 rows)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Disabled: true
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  Seq Scan on bitmap_split_or t2
+         ->  Index Scan using t_a_b_idx on bitmap_split_or t1
+               Index Cond: (a = ANY (ARRAY[t2.b, 2]))
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM bitmap_split_or WHERE a = 1 AND (b = 1 OR b = 2) AND c = 2;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Bitmap Heap Scan on bitmap_split_or
-   Recheck Cond: (((b = 1) AND (c = 2)) OR ((a = 1) AND (b = 2)))
-   Filter: ((a = 1) AND (c = 2))
-   ->  BitmapOr
-         ->  Bitmap Index Scan on t_b_c_idx
-               Index Cond: ((b = 1) AND (c = 2))
-         ->  Bitmap Index Scan on t_a_b_idx
-               Index Cond: ((a = 1) AND (b = 2))
-(8 rows)
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Bitmap Heap Scan on bitmap_split_or
+         Recheck Cond: (((b = 1) AND (c = 2)) OR ((a = 1) AND (b = 2)))
+         Filter: ((a = 1) AND (c = 2))
+         ->  BitmapOr
+               ->  Bitmap Index Scan on t_b_c_idx
+                     Index Cond: ((b = 1) AND (c = 2))
+               ->  Bitmap Index Scan on t_a_b_idx
+                     Index Cond: ((a = 1) AND (b = 2))
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 DROP TABLE bitmap_split_or;
 --

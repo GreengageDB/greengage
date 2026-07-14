@@ -163,7 +163,7 @@ DROP OWNED BY regress_priv_user2;  -- removes both grants
 SELECT roleid::regrole, member::regrole FROM pg_auth_members
   WHERE roleid IN ('regress_priv_user1'::regrole,'regress_priv_user2'::regrole)
   ORDER BY roleid::regrole::text;
- roleid | member
+ roleid | member 
 --------+--------
 (0 rows)
 
@@ -306,9 +306,9 @@ REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY foo
 ERROR:  role "foo" does not exist
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY regress_priv_user2; -- warning, noop
 WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"
-WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg0 172.17.0.2:7002 pid=20273)
-WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg1 172.17.0.2:7003 pid=20267)
-WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg2 172.17.0.2:7004 pid=20269)
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg2 172.17.0.2:7004 pid=2578497)
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg1 172.17.0.2:7003 pid=2578496)
+WARNING:  role "regress_priv_user1" has not been granted membership in role "regress_priv_role" by role "regress_priv_user2"  (seg0 172.17.0.2:7002 pid=2578495)
 REVOKE ADMIN OPTION FOR regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_USER;
 REVOKE regress_priv_role FROM regress_priv_user1 GRANTED BY CURRENT_ROLE;
 DROP ROLE regress_priv_role;
@@ -350,9 +350,9 @@ CREATE TABLE atest2 (col1 varchar(10), col2 boolean);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT pg_get_acl('pg_class'::regclass, 'atest2'::regclass::oid, 0);
- pg_get_acl
+ pg_get_acl 
 ------------
-
+ 
 (1 row)
 
 GRANT SELECT ON atest2 TO regress_priv_user2;
@@ -1166,20 +1166,20 @@ INSERT INTO t1 VALUES (2, 2, 2);
 INSERT INTO t1 VALUES (3, 1, 3);
 SET SESSION AUTHORIZATION regress_priv_user2;
 INSERT INTO t1 (c1, c2) VALUES (1, 1); -- fail, but row not shown
-ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=20267)
+ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=2578496)
 UPDATE t1 SET c2 = 1; -- fail, but row not shown
-ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=20267)
+ERROR:  duplicate key value violates unique constraint "t1_pkey"  (seg1 172.17.0.2:7003 pid=2578496)
 INSERT INTO t1 (c1, c2) VALUES (null, null); -- fail, but see columns being inserted
-ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=20273)
+ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2578495)
 DETAIL:  Failing row contains (c1, c2) = (null, null).
 INSERT INTO t1 (c3) VALUES (null); -- fail, but see columns being inserted or have SELECT
-ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=20273)
+ERROR:  null value in column "c1" of relation "t1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2578495)
 DETAIL:  Failing row contains (c1, c3) = (null, null).
 INSERT INTO t1 (c1) VALUES (5); -- fail, but see columns being inserted or have SELECT
-ERROR:  null value in column "c2" of relation "t1" violates not-null constraint  (seg1 172.17.0.2:7003 pid=20267)
+ERROR:  null value in column "c2" of relation "t1" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2578496)
 DETAIL:  Failing row contains (c1) = (5).
 UPDATE t1 SET c3 = 10; -- fail, but see columns with SELECT rights, or being modified
-ERROR:  new row for relation "t1" violates check constraint "t1_c3_check"  (seg1 172.17.0.2:7003 pid=20267)
+ERROR:  new row for relation "t1" violates check constraint "t1_c3_check"  (seg1 172.17.0.2:7003 pid=2578496)
 DETAIL:  Failing row contains (c1, c3) = (1, 10).
 SET SESSION AUTHORIZATION regress_priv_user1;
 DROP TABLE t1;
@@ -1207,7 +1207,7 @@ SET SESSION AUTHORIZATION regress_priv_user2;
 -- the error messages don't leak the secret fields.
 -- simple insert.
 INSERT INTO errtst (a, b) VALUES ('aaa', NULL);
-ERROR:  no partition of relation "errtst" found for row  (seg1 172.17.0.2:7003 pid=20267)
+ERROR:  no partition of relation "errtst" found for row  (seg1 172.17.0.2:7003 pid=2578496)
 DETAIL:  Partition key of the failing row contains (a) = (aaa).
 -- simple update.
 UPDATE errtst SET b = NULL;
@@ -1528,9 +1528,9 @@ CREATE DOMAIN priv_testdomain3b AS int;
 CREATE FUNCTION castfunc(int) RETURNS priv_testdomain3b AS $$ SELECT $1::priv_testdomain3b $$ LANGUAGE SQL;
 CREATE CAST (priv_testdomain1 AS priv_testdomain3b) WITH FUNCTION castfunc(int);
 WARNING:  cast will be ignored because the source data type is a domain
-WARNING:  cast will be ignored because the source data type is a domain  (seg2 172.17.0.2:7004 pid=21165)
-WARNING:  cast will be ignored because the source data type is a domain  (seg1 172.17.0.2:7003 pid=21164)
-WARNING:  cast will be ignored because the source data type is a domain  (seg0 172.17.0.2:7002 pid=21163)
+WARNING:  cast will be ignored because the source data type is a domain  (seg1 172.17.0.2:7003 pid=2578648)
+WARNING:  cast will be ignored because the source data type is a domain  (seg0 172.17.0.2:7002 pid=2578647)
+WARNING:  cast will be ignored because the source data type is a domain  (seg2 172.17.0.2:7004 pid=2578649)
 CREATE FUNCTION priv_testfunc5b(a priv_testdomain1) RETURNS int LANGUAGE SQL AS $$ SELECT $1 $$;
 CREATE FUNCTION priv_testfunc6b(b int) RETURNS priv_testdomain1 LANGUAGE SQL AS $$ SELECT $1::priv_testdomain1 $$;
 CREATE OPERATOR !! (PROCEDURE = priv_testfunc5b, RIGHTARG = priv_testdomain1);
@@ -2020,7 +2020,7 @@ SELECT brin_desummarize_range('sro_brin', 0);
 (1 row)
 
 SELECT brin_summarize_range('sro_brin', 0);
-ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=21262)
+ERROR:  Greenplum could not summarize indicated page range  (seg1 slice1 172.17.0.2:7003 pid=2578687)
 CONTEXT:  SQL function "brin_summarize_range" statement 1
 DROP TABLE sro_tab;
 -- Check with a partitioned table
@@ -2041,7 +2041,7 @@ SET SESSION AUTHORIZATION regress_sro_user;
 CREATE FUNCTION unwanted_grant() RETURNS void LANGUAGE sql AS
 	'GRANT regress_priv_group2 TO regress_sro_user';
 CREATE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
-	'DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELECT true';
+	'DECLARE c CURSOR WITH HOLD FOR SELECT public.unwanted_grant(); SELECT true';
 -- REFRESH of this MV will queue a GRANT at end of transaction
 CREATE MATERIALIZED VIEW sro_mv AS SELECT mv_action() WITH NO DATA;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action' as the Greenplum Database data distribution key for this table.
@@ -2058,23 +2058,23 @@ SET SESSION AUTHORIZATION regress_sro_user;
 CREATE TABLE sro_trojan_table ();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE FUNCTION sro_trojan() RETURNS trigger LANGUAGE plpgsql AS
-	'BEGIN PERFORM unwanted_grant(); RETURN NULL; END';
+	'BEGIN PERFORM public.unwanted_grant(); RETURN NULL; END';
 CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
     INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE sro_trojan();
 -- Now, REFRESH will issue such an INSERT, queueing the GRANT
 CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
-	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
+	'INSERT INTO public.sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21289)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg1 172.17.0.2:7003 pid=2578702)
 CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21307)
+ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=2578719)
 CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 172.17.0.2:7004 pid=21308)
-CONTEXT:  SQL function "unwanted_grant" during startup
-SQL statement "SELECT unwanted_grant()"
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=2578720)
+CONTEXT:  SQL function "unwanted_grant" statement 1
+SQL statement "SELECT public.unwanted_grant()"
 PL/pgSQL function sro_trojan() line 1 at PERFORM
 SQL function "mv_action" statement 1
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY use of eval_const_expressions()
@@ -2082,7 +2082,7 @@ SET SESSION AUTHORIZATION regress_sro_user;
 CREATE FUNCTION unwanted_grant_nofail(int) RETURNS int
 	IMMUTABLE LANGUAGE plpgsql AS $$
 BEGIN
-	PERFORM unwanted_grant();
+	PERFORM public.unwanted_grant();
 	RAISE WARNING 'owned';
 	RETURN 1;
 EXCEPTION WHEN OTHERS THEN
@@ -2250,49 +2250,49 @@ ERROR:  large objects are not supported
 SELECT has_largeobject_privilege(1001, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1003, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1004, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1001, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1003, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1004, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 -- not-existing large object
@@ -2307,79 +2307,79 @@ SET SESSION AUTHORIZATION regress_priv_user2;
 SELECT has_largeobject_privilege(1001, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'SELECT');	-- false
  has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1003, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1004, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1001, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'UPDATE');	-- false
  has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1003, 'UPDATE');	-- false
  has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1004, 'UPDATE');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege('regress_priv_user3', 1001, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege('regress_priv_user3', 1003, 'SELECT');	-- false
  has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege('regress_priv_user3', 1005, 'SELECT');
  has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege('regress_priv_user3', 1005, 'UPDATE');	-- false
  has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege('regress_priv_user3', 2001, 'UPDATE');
- has_largeobject_privilege
+ has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 -- compatibility mode in largeobject permission
@@ -2388,15 +2388,15 @@ SET lo_compat_privileges = false;	-- default setting
 SET SESSION AUTHORIZATION regress_priv_user4;
 -- start_ignore
 SELECT has_largeobject_privilege(1002, 'SELECT'); -- false
- has_largeobject_privilege
+ has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'UPDATE'); -- false
- has_largeobject_privilege
+ has_largeobject_privilege 
 ---------------------------
- f
+ 
 (1 row)
 
 SELECT loread(lo_open(1002, x'40000'::int), 32);	-- to be denied
@@ -2421,15 +2421,15 @@ SET lo_compat_privileges = true;	-- compatibility mode
 SET SESSION AUTHORIZATION regress_priv_user4;
 -- start_ignore
 SELECT has_largeobject_privilege(1002, 'SELECT'); -- true
- has_largeobject_privilege
+ has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT has_largeobject_privilege(1002, 'UPDATE'); -- true
- has_largeobject_privilege
+ has_largeobject_privilege 
 ---------------------------
- t
+ 
 (1 row)
 
 SELECT loread(lo_open(1002, x'40000'::int), 32);
@@ -2453,12 +2453,30 @@ SELECT * FROM pg_largeobject LIMIT 0;
 SET SESSION AUTHORIZATION regress_priv_user1;
 SELECT * FROM pg_largeobject LIMIT 0;			-- to be denied
 ERROR:  permission denied for table pg_largeobject
+-- pg_signal_backend can't signal superusers
+RESET SESSION AUTHORIZATION;
+BEGIN;
+CREATE OR REPLACE FUNCTION terminate_nothrow(pid int) RETURNS bool
+	LANGUAGE plpgsql SECURITY DEFINER SET client_min_messages = error AS $$
+BEGIN
+	RETURN pg_terminate_backend($1);
+EXCEPTION WHEN OTHERS THEN
+	RETURN false;
+END$$;
+ALTER FUNCTION terminate_nothrow OWNER TO pg_signal_backend;
+SELECT backend_type FROM pg_stat_activity
+WHERE CASE WHEN COALESCE(usesysid, 10) = 10 THEN terminate_nothrow(pid) END;
+ backend_type 
+--------------
+(0 rows)
+
+ROLLBACK;
 -- test pg_database_owner
 RESET SESSION AUTHORIZATION;
 GRANT pg_database_owner TO regress_priv_user1;
-ERROR:  role "pg_database_owner" cannot have explicit members (user.c:3215)
+ERROR:  role "pg_database_owner" cannot have explicit members
 GRANT regress_priv_user1 TO pg_database_owner;
-ERROR:  role "pg_database_owner" cannot be a member of any role (user.c:2332)
+ERROR:  role "pg_database_owner" cannot be a member of any role
 CREATE TABLE datdba_only ();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 ALTER TABLE datdba_only OWNER TO pg_database_owner;
@@ -2725,86 +2743,37 @@ COMMIT;
 --
 BEGIN;
 SELECT lo_create(1007);
- lo_create 
------------
-      1007
-(1 row)
-
+ERROR:  large objects are not supported
 SELECT has_largeobject_privilege('regress_priv_user2', 1007, 'SELECT'); -- no
- has_largeobject_privilege 
----------------------------
- f
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1007, 'UPDATE'); -- no
- has_largeobject_privilege 
----------------------------
- f
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ALTER DEFAULT PRIVILEGES GRANT SELECT ON LARGE OBJECTS TO regress_priv_user2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT lo_create(1008);
- lo_create 
------------
-      1008
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1008, 'SELECT'); -- yes
- has_largeobject_privilege 
----------------------------
- t
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user6', 1008, 'SELECT'); -- no
- has_largeobject_privilege 
----------------------------
- f
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1008, 'UPDATE'); -- no
- has_largeobject_privilege 
----------------------------
- f
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ALTER DEFAULT PRIVILEGES GRANT ALL ON LARGE OBJECTS TO regress_priv_user2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT lo_create(1009);
- lo_create 
------------
-      1009
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1009, 'SELECT'); -- true
- has_largeobject_privilege 
----------------------------
- t
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1009, 'UPDATE'); -- true
- has_largeobject_privilege 
----------------------------
- t
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ALTER DEFAULT PRIVILEGES REVOKE UPDATE ON LARGE OBJECTS FROM regress_priv_user2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT lo_create(1010);
- lo_create 
------------
-      1010
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1010, 'SELECT'); -- true
- has_largeobject_privilege 
----------------------------
- t
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 SELECT has_largeobject_privilege('regress_priv_user2', 1010, 'UPDATE'); -- false
- has_largeobject_privilege 
----------------------------
- f
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON LARGE OBJECTS TO public; -- error
 ERROR:  cannot use IN SCHEMA clause when using GRANT/REVOKE ON LARGE OBJECTS
@@ -2982,32 +2951,32 @@ SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t1', 'SELECT
  segid | has_table_privilege 
 -------+---------------------
      2 | f
-     1 | f
      0 | f
+     1 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     2 | f
      0 | f
      1 | f
+     2 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_extra', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
-     2 | f
      0 | f
      1 | f
+     2 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
      1 | f
-     0 | f
      2 | f
+     0 | f
 (3 rows)
 
 GRANT ALL ON ALL TABLES IN SCHEMA testns TO regress_priv_user1;
@@ -3026,25 +2995,25 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.t2', 'SELECT'); -- true
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t1', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     0 | t
      1 | t
      2 | t
+     0 | t
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     1 | t
      0 | t
+     1 | t
      2 | t
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_extra', 'SELECT'); -- true
  segid | has_table_privilege 
 -------+---------------------
-     2 | t
      0 | t
      1 | t
+     2 | t
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- true
@@ -3071,25 +3040,25 @@ SELECT has_table_privilege('regress_priv_user1', 'testns.t2', 'SELECT'); -- fals
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
+     0 | f
      1 | f
      2 | f
-     0 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t3_1_prt_extra', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
+     2 | f
      0 | f
      1 | f
-     2 | f
 (3 rows)
 
 SELECT * FROM has_table_privilege_seg('regress_priv_user1', 'testns.t4', 'SELECT'); -- false
  segid | has_table_privilege 
 -------+---------------------
+     1 | f
      0 | f
      2 | f
-     1 | f
 (3 rows)
 
 CREATE FUNCTION testns.priv_testfunc(int) RETURNS int AS 'select 3 * $1;' LANGUAGE sql;
@@ -3259,11 +3228,19 @@ CREATE MATERIALIZED VIEW sro_mv AS SELECT mv_action() WITH NO DATA;
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'mv_action' as the Greenplum Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot create a cursor WITH HOLD within security-restricted operation
+ERROR:  function unwanted_grant() does not exist
+LINE 1: DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELE...
+                                              ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELECT true
 CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot create a cursor WITH HOLD within security-restricted operation
+ERROR:  function unwanted_grant() does not exist
+LINE 1: DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELE...
+                                              ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  DECLARE c CURSOR WITH HOLD FOR SELECT unwanted_grant(); SELECT true
 CONTEXT:  SQL function "mv_action" statement 1
 SET SESSION AUTHORIZATION regress_sro_user;
 -- INSERT to this table will queue a GRANT at end of transaction
@@ -3277,19 +3254,24 @@ CREATE CONSTRAINT TRIGGER t AFTER INSERT ON sro_trojan_table
 CREATE OR REPLACE FUNCTION mv_action() RETURNS bool LANGUAGE sql AS
 	'INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true';
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.2:7004 pid=21599)
+ERROR:  relation "sro_trojan_table" does not exist
+LINE 1: INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
+                    ^
+QUERY:  INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
 CONTEXT:  SQL function "mv_action" statement 1
 \c -
 REFRESH MATERIALIZED VIEW sro_mv;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg2 172.17.0.2:7004 pid=21611)
+ERROR:  relation "sro_trojan_table" does not exist
+LINE 1: INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
+                    ^
+QUERY:  INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
 CONTEXT:  SQL function "mv_action" statement 1
 BEGIN; SET allow_segment_DML = ON; SET CONSTRAINTS ALL IMMEDIATE; REFRESH MATERIALIZED VIEW sro_mv; COMMIT;
-ERROR:  permission denied to grant role "regress_priv_group2"  (seg2 172.17.0.2:7004 pid=21611)
-DETAIL:  Only roles with the ADMIN option on role "regress_priv_group2" may grant this role.
-CONTEXT:  SQL function "unwanted_grant" statement 1
-SQL statement "SELECT unwanted_grant()"
-PL/pgSQL function sro_trojan() line 1 at PERFORM
-SQL function "mv_action" statement 1
+ERROR:  relation "sro_trojan_table" does not exist
+LINE 1: INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
+                    ^
+QUERY:  INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
+CONTEXT:  SQL function "mv_action" statement 1
 DROP OWNED BY regress_sro_user;
 DROP ROLE regress_sro_user;
 -- Test sandbox escape with CVE-2020-25695 on Greenplum.
@@ -3350,7 +3332,7 @@ SELECT DISTINCT is_superuser_on_segments('regress_sro_user');
 -- Execute a trap with superuser.
 RESET SESSION AUTHORIZATION;
 ANALYZE trap;
-ERROR:  cannot fire deferred trigger within security-restricted operation  (seg0 172.17.0.2:7002 pid=21623)
+ERROR:  relation "executor" does not exist  (seg0 172.17.0.2:7002 pid=2578942)
 CONTEXT:  SQL function "trap_sfunc" statement 2
 -- Check "regress_sro_user" superuser privileges on segments.
 SELECT DISTINCT is_superuser_on_segments('regress_sro_user');
@@ -3515,7 +3497,7 @@ DROP USER regress_locktable_user;
 CREATE ROLE regress_readallstats;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT has_table_privilege('regress_readallstats','pg_aios','SELECT'); -- no
- has_table_privilege
+ has_table_privilege 
 ---------------------
  f
 (1 row)
@@ -3692,7 +3674,7 @@ WARNING:  permission denied to vacuum "maintain_test", skipping it
 CLUSTER maintain_test USING maintain_test_a_idx;
 ERROR:  permission denied for table maintain_test
 REFRESH MATERIALIZED VIEW refresh_test;
-ERROR:  permission denied for table refresh_test
+ERROR:  permission denied for materialized view refresh_test
 REINDEX TABLE maintain_test;
 ERROR:  permission denied for table maintain_test
 REINDEX INDEX maintain_test_a_idx;
@@ -3729,11 +3711,17 @@ DROP ROLE regress_maintain;
 DROP ROLE regress_maintain_all;
 -- grantor selection
 CREATE ROLE regress_grantor1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_grantor2 ROLE regress_grantor1;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_grantor3;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE grantor_test1 ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE grantor_test2 ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE grantor_test3 ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 GRANT SELECT ON grantor_test2 TO regress_grantor1 WITH GRANT OPTION;
 GRANT SELECT, UPDATE ON grantor_test3 TO regress_grantor2 WITH GRANT OPTION;
 SET ROLE regress_grantor1;
