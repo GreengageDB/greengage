@@ -103,7 +103,6 @@ Indexes:
     "test_replica_identity_partial" UNIQUE, btree (keya, keyb) WHERE keyb <> '3'::text
     "test_replica_identity_unique_defer" UNIQUE CONSTRAINT, btree (keya, keyb) DEFERRABLE
     "test_replica_identity_unique_nondefer" UNIQUE CONSTRAINT, btree (keya, keyb)
-Distributed by: (keya)
 
 -- succeed, nondeferrable unique constraint over nonnullable cols
 ALTER TABLE test_replica_identity REPLICA IDENTITY USING INDEX test_replica_identity_unique_nondefer;
@@ -134,7 +133,6 @@ Indexes:
     "test_replica_identity_partial" UNIQUE, btree (keya, keyb) WHERE keyb <> '3'::text
     "test_replica_identity_unique_defer" UNIQUE CONSTRAINT, btree (keya, keyb) DEFERRABLE
     "test_replica_identity_unique_nondefer" UNIQUE CONSTRAINT, btree (keya, keyb)
-Distributed by: (keya)
 
 SELECT count(*) FROM pg_index WHERE indrelid = 'test_replica_identity'::regclass AND indisreplident;
  count 
@@ -188,7 +186,6 @@ Not-null constraints:
     "test_replica_identity_keya_not_null" NOT NULL "keya"
     "test_replica_identity_keyb_not_null" NOT NULL "keyb"
 Replica Identity: FULL
-Distributed by: (keya)
 
 ALTER TABLE test_replica_identity REPLICA IDENTITY NOTHING;
 SELECT relreplident FROM pg_class WHERE oid = 'test_replica_identity'::regclass;
@@ -210,7 +207,6 @@ ALTER TABLE test_replica_identity2 REPLICA IDENTITY USING INDEX test_replica_ide
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity2_id_key" UNIQUE CONSTRAINT, btree (id) REPLICA IDENTITY
-Distributed by: (id)
 
 ALTER TABLE test_replica_identity2 ALTER COLUMN id TYPE bigint;
 ERROR:  cannot alter column with primary key or unique constraint
@@ -222,12 +218,9 @@ HINT:  DROP the constraint first, and recreate it after the ALTER
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity2_id_key" UNIQUE CONSTRAINT, btree (id) REPLICA IDENTITY
-Distributed by: (id)
 
 -- straight index variant
 CREATE TABLE test_replica_identity3 (id int NOT NULL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX test_replica_identity3_id_key ON test_replica_identity3 (id);
 ALTER TABLE test_replica_identity3 REPLICA IDENTITY USING INDEX test_replica_identity3_id_key;
 \d test_replica_identity3
@@ -237,7 +230,6 @@ ALTER TABLE test_replica_identity3 REPLICA IDENTITY USING INDEX test_replica_ide
  id     | integer |           | not null | 
 Indexes:
     "test_replica_identity3_id_key" UNIQUE, btree (id) REPLICA IDENTITY
-Distributed by: (id)
 
 ALTER TABLE test_replica_identity3 ALTER COLUMN id TYPE bigint;
 \d test_replica_identity3
@@ -247,7 +239,6 @@ ALTER TABLE test_replica_identity3 ALTER COLUMN id TYPE bigint;
  id     | bigint |           | not null | 
 Indexes:
     "test_replica_identity3_id_key" UNIQUE, btree (id) REPLICA IDENTITY
-Distributed by: (id)
 
 -- ALTER TABLE DROP NOT NULL is not allowed for columns part of an index
 -- used as replica identity.
@@ -261,11 +252,7 @@ ALTER TABLE test_replica_identity3 ALTER COLUMN id DROP NOT NULL;
 -- (This matches the way pg_dump will try to dump a partitioned table.)
 --
 CREATE TABLE test_replica_identity4(id integer NOT NULL) PARTITION BY LIST (id);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test_replica_identity4_1(id integer NOT NULL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ONLY test_replica_identity4
   ATTACH PARTITION test_replica_identity4_1 FOR VALUES IN (1);
 ALTER TABLE ONLY test_replica_identity4
@@ -285,7 +272,6 @@ Indexes:
 Not-null constraints:
     "test_replica_identity4_id_not_null" NOT NULL "id"
 Partitions: test_replica_identity4_1 FOR VALUES IN (1)
-Distributed by: (id)
 
 ALTER INDEX test_replica_identity4_pkey
   ATTACH PARTITION test_replica_identity4_1_pkey;
@@ -300,12 +286,11 @@ Indexes:
 Not-null constraints:
     "test_replica_identity4_id_not_null" NOT NULL "id"
 Partitions: test_replica_identity4_1 FOR VALUES IN (1)
-Distributed by: (id)
 
 -- Dropping the primary key is not allowed if that would leave the replica
 -- identity as nullable
 CREATE TABLE test_replica_identity5 (a int not null, b int, c int,
-	PRIMARY KEY (b, c));
+	PRIMARY KEY (b, c)) DISTRIBUTED REPLICATED;
 CREATE UNIQUE INDEX test_replica_identity5_a_b_key ON test_replica_identity5 (a, b);
 ALTER TABLE test_replica_identity5 REPLICA IDENTITY USING INDEX test_replica_identity5_a_b_key;
 ALTER TABLE test_replica_identity5 DROP CONSTRAINT test_replica_identity5_pkey;

@@ -27,11 +27,11 @@ INSERT INTO DEFAULT_TBL VALUES (3, null, 1.0);
 SELECT '' AS five, * FROM DEFAULT_TBL;
  five |  i  |   x    |    f    
 ------+-----+--------+---------
-      | 100 | marc   | 123.456
-      |   1 | thomas | 57.0613
-      |   1 | bruce  | 123.456
       |   2 | vadim  | 987.654
       |   3 |        |       1
+      |   1 | thomas | 57.0613
+      |   1 | bruce  | 123.456
+      | 100 | marc   | 123.456
 (5 rows)
 
 CREATE SEQUENCE DEFAULT_SEQ CACHE 1;
@@ -74,21 +74,21 @@ CREATE TABLE CHECK_TBL (x int,
 INSERT INTO CHECK_TBL VALUES (5);
 INSERT INTO CHECK_TBL VALUES (4);
 INSERT INTO CHECK_TBL VALUES (3);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (3).
 INSERT INTO CHECK_TBL VALUES (2);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (2).
 INSERT INTO CHECK_TBL VALUES (6);
 INSERT INTO CHECK_TBL VALUES (1);
-ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "check_tbl" violates check constraint "check_con"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (1).
 SELECT '' AS three, * FROM CHECK_TBL;
  three | x 
 -------+---
-       | 4
        | 5
        | 6
+       | 4
 (3 rows)
 
 CREATE TABLE NE_CHECK_TBL (x int,
@@ -100,13 +100,13 @@ INSERT INTO NE_CHECK_TBL VALUES (2);
 INSERT INTO NE_CHECK_TBL VALUES (6);
 INSERT INTO NE_CHECK_TBL VALUES (1);
 SELECT * FROM NE_CHECK_TBL;
- x
+ x 
 ---
  5
+ 6
  4
  3
  2
- 6
  1
 (6 rows)
 
@@ -116,16 +116,16 @@ CREATE TABLE CHECK2_TBL (x int, y text, z int,
 	CHECK (x > 3 and y <> 'check failed' and z < 8));
 INSERT INTO CHECK2_TBL VALUES (4, 'check ok', -2);
 INSERT INTO CHECK2_TBL VALUES (1, 'x check failed', -2);
-ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (1, x check failed, -2).
 INSERT INTO CHECK2_TBL VALUES (5, 'z check failed', 10);
-ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (5, z check failed, 10).
 INSERT INTO CHECK2_TBL VALUES (0, 'check failed', -2);
-ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (0, check failed, -2).
 INSERT INTO CHECK2_TBL VALUES (6, 'check failed', 11);
-ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "check2_tbl" violates check constraint "sequence_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (6, check failed, 11).
 INSERT INTO CHECK2_TBL VALUES (7, 'check ok', 7);
 SELECT '' AS two, * from CHECK2_TBL;
@@ -146,7 +146,7 @@ CREATE TABLE INSERT_TBL (x INT DEFAULT nextval('insert_seq'),
 	CHECK (x + z = 0) ENFORCED, /* no change it is a default */
 	CONSTRAINT NE_INSERT_TBL_CON CHECK (x + z = 1) NOT ENFORCED) DISTRIBUTED BY(y);
 INSERT INTO INSERT_TBL(x,z) VALUES (2, -2);
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (2, -NULL-, -2).
 SELECT '' AS zero, * FROM INSERT_TBL;
  zero | x | y | z 
@@ -160,15 +160,15 @@ SELECT 'one' AS one, nextval('insert_seq');
 (1 row)
 
 INSERT INTO INSERT_TBL(y) VALUES ('Y');
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (2, Y, -2).
 INSERT INTO INSERT_TBL(y) VALUES ('Y');
 INSERT INTO INSERT_TBL(x,z) VALUES (1, -2);
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (1, -NULL-, -2).
 INSERT INTO INSERT_TBL(z,x) VALUES (-7,  7);
 INSERT INTO INSERT_TBL VALUES (5, 'check failed', -5);
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (5, check failed, -5).
 INSERT INTO INSERT_TBL VALUES (7, '!check failed', -7);
 INSERT INTO INSERT_TBL(y) VALUES ('-!NULL-');
@@ -189,17 +189,17 @@ insert into insert_tbl values
   (7, '!check failed', -7),
   (4, '-!NULL-', -4);
 INSERT INTO INSERT_TBL(y,z) VALUES ('check failed', 4);
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (8, check failed, 4).
 INSERT INTO INSERT_TBL(x,y) VALUES (5, 'check failed');
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (5, check failed, -8).
 -- these fail on GPDB, because we cannot use currval in the z columns' DEFAULT like in upstream.
 INSERT INTO INSERT_TBL(x,y) VALUES (5, '!check failed');
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (5, !check failed, -9).
 INSERT INTO INSERT_TBL(y) VALUES ('-!NULL-');
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (11, -!NULL-, -11).
 -- GPDB: fix the table contents to match upstream again, so that the subsequent
 -- tests start with the same state as in upstream.
@@ -209,12 +209,12 @@ insert into insert_tbl values
 SELECT '' AS six, * FROM INSERT_TBL;
  six | x |       y       | z  
 -----+---+---------------+----
-     | 3 | Y             | -3
      | 7 | -NULL-        | -7
      | 7 | !check failed | -7
      | 4 | -!NULL-       | -4
      | 5 | !check failed | -5
      | 6 | -!NULL-       | -6
+     | 3 | Y             | -3
 (6 rows)
 
 SELECT 'seven' AS one, nextval('insert_seq');
@@ -224,7 +224,7 @@ SELECT 'seven' AS one, nextval('insert_seq');
 (1 row)
 
 INSERT INTO INSERT_TBL(y) VALUES ('Y');
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (14, Y, -14).
 SELECT 'eight' AS one, nextval('insert_seq');
   one  | nextval 
@@ -239,13 +239,13 @@ INSERT INTO INSERT_TBL VALUES (null, null, null);
 SELECT '' AS nine, * FROM INSERT_TBL;
  nine | x |       y       | z  
 ------+---+---------------+----
+      | 3 | Y             | -3
       | 7 | -NULL-        | -7
       | 7 | !check failed | -7
       | 4 | -!NULL-       | -4
       | 5 | !check failed | -5
       | 6 | -!NULL-       | -6
       |   |               |   
-      | 3 | Y             | -3
 (7 rows)
 
 --
@@ -256,7 +256,7 @@ CREATE TABLE SYS_COL_CHECK_TBL (city text, state text, is_capital bool,
                   CHECK (NOT (is_capital AND tableoid::regclass::text = 'sys_col_check_tbl')));
 INSERT INTO SYS_COL_CHECK_TBL VALUES ('Seattle', 'Washington', false, 100);
 INSERT INTO SYS_COL_CHECK_TBL VALUES ('Olympia', 'Washington', true, 100);
-ERROR:  new row for relation "sys_col_check_tbl" violates check constraint "sys_col_check_tbl_check"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "sys_col_check_tbl" violates check constraint "sys_col_check_tbl_check"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (Olympia, Washington, t, 100).
 SELECT *, tableoid::regclass::text FROM SYS_COL_CHECK_TBL;
   city   |   state    | is_capital | altitude |     tableoid      
@@ -283,13 +283,13 @@ CREATE TABLE INSERT_CHILD (cx INT default 42,
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO INSERT_CHILD(x,z,cy) VALUES (7,-7,11);
 INSERT INTO INSERT_CHILD(x,z,cy) VALUES (7,-7,6);
-ERROR:  new row for relation "insert_child" violates check constraint "insert_child_check"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_child" violates check constraint "insert_child_check"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (7, -NULL-, -7, 42, 6).
 INSERT INTO INSERT_CHILD(x,z,cy) VALUES (6,-7,7);
-ERROR:  new row for relation "insert_child" violates check constraint "insert_tbl_check"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "insert_child" violates check constraint "insert_tbl_check"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (6, -NULL-, -7, 42, 7).
 INSERT INTO INSERT_CHILD(x,y,z,cy) VALUES (6,'check failed',-6,7);
-ERROR:  new row for relation "insert_child" violates check constraint "insert_tbl_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_child" violates check constraint "insert_tbl_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (6, check failed, -6, 42, 7).
 SELECT * FROM INSERT_CHILD;
  x |   y    | z  | cx | cy 
@@ -309,7 +309,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO ATACC2 (TEST) VALUES (-3);
 -- check constraint is there on parent
 INSERT INTO ATACC1 (TEST) VALUES (-3);
-ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test_check"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test_check"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (-3).
 DROP TABLE ATACC1 CASCADE;
 NOTICE:  drop cascades to table atacc2
@@ -319,17 +319,17 @@ CREATE TABLE ATACC2 () INHERITS (ATACC1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- check constraint is there on child
 INSERT INTO ATACC2 (TEST) VALUES (-3);
-ERROR:  new row for relation "atacc2" violates check constraint "atacc1_test_check"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "atacc2" violates check constraint "atacc1_test_check"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (-3, null).
 -- check constraint is there on parent
 INSERT INTO ATACC1 (TEST) VALUES (-3);
-ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test_check"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test_check"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (-3, null).
 -- check constraint is not there on child
 INSERT INTO ATACC2 (TEST2) VALUES (3);
 -- check constraint is there on parent
 INSERT INTO ATACC1 (TEST2) VALUES (3);
-ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test2_check"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  new row for relation "atacc1" violates check constraint "atacc1_test2_check"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (null, 3).
 DROP TABLE ATACC1 CASCADE;
 NOTICE:  drop cascades to table atacc2
@@ -353,28 +353,28 @@ INSERT INTO INSERT_TBL VALUES
 SELECT '' AS three, * FROM INSERT_TBL;
  three | x |       y       | z  
 -------+---+---------------+----
+       | 5 | !check failed | -5
        | 4 | Y             | -4
        | 6 | try again     | -6
-       | 5 | !check failed | -5
 (3 rows)
 
 INSERT INTO INSERT_TBL SELECT * FROM tmp WHERE yd = 'try again';
 INSERT INTO INSERT_TBL(y,z) SELECT yd, -7 FROM tmp WHERE yd = 'try again';
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (4, try again, -7).
 INSERT INTO INSERT_TBL(y,z) SELECT yd, -8 FROM tmp WHERE yd = 'try again';
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_check"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (5, try again, -8).
 -- GPDB: Fixup
 INSERT INTO INSERT_TBL VALUES (7, 'try again', -7);
 SELECT '' AS four, * FROM INSERT_TBL;
  four | x |       y       | z  
 ------+---+---------------+----
+      | 5 | !check failed | -5
       | 4 | Y             | -4
       | 6 | try again     | -6
       |   | try again     |   
       | 7 | try again     | -7
-      | 5 | !check failed | -5
 (5 rows)
 
 DROP TABLE tmp;
@@ -385,16 +385,16 @@ UPDATE INSERT_TBL SET x = NULL WHERE x = 5;
 UPDATE INSERT_TBL SET x = 6 WHERE x = 6;
 UPDATE INSERT_TBL SET x = -z, z = -x;
 UPDATE INSERT_TBL SET x = z, z = x;
-ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  new row for relation "insert_tbl" violates check constraint "insert_tbl_con"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Failing row contains (-4, Y, 4).
 SELECT * FROM INSERT_TBL;
  x |       y       | z  
 ---+---------------+----
- 5 | !check failed |   
  4 | Y             | -4
    | try again     |   
  7 | try again     | -7
  6 | try again     | -6
+ 5 | !check failed |   
 (5 rows)
 
 -- DROP TABLE INSERT_TBL;
@@ -409,8 +409,8 @@ COPY COPY_TBL FROM :'filename';
 SELECT '' AS two, * FROM COPY_TBL;
  two | x |       y       | z 
 -----+---+---------------+---
-     | 6 | OK            | 4
      | 4 | !check failed | 5
+     | 6 | OK            | 4
 (2 rows)
 
 \set filename :abs_srcdir '/data/constrf.data'
@@ -421,8 +421,8 @@ CONTEXT:  COPY copy_tbl, line 2: "7	check failed	6"
 SELECT * FROM COPY_TBL;
  x |       y       | z 
 ---+---------------+---
- 6 | OK            | 4
  4 | !check failed | 5
+ 6 | OK            | 4
 (2 rows)
 
 --
@@ -432,20 +432,20 @@ CREATE TABLE PRIMARY_TBL (i int PRIMARY KEY, t text);
 INSERT INTO PRIMARY_TBL VALUES (1, 'one');
 INSERT INTO PRIMARY_TBL VALUES (2, 'two');
 INSERT INTO PRIMARY_TBL VALUES (1, 'three');
-ERROR:  duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  duplicate key value violates unique constraint "primary_tbl_pkey"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (i)=(1) already exists.
 INSERT INTO PRIMARY_TBL VALUES (4, 'three');
 INSERT INTO PRIMARY_TBL VALUES (5, 'one');
 INSERT INTO PRIMARY_TBL (t) VALUES ('six');
-ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (null, six).
 SELECT '' AS four, * FROM PRIMARY_TBL;
  four | i |   t   
 ------+---+-------
       | 2 | two
       | 4 | three
-      | 1 | one
       | 5 | one
+      | 1 | one
 (4 rows)
 
 DROP TABLE PRIMARY_TBL;
@@ -457,16 +457,16 @@ INSERT INTO PRIMARY_TBL VALUES (1, 'three');
 INSERT INTO PRIMARY_TBL VALUES (4, 'three');
 INSERT INTO PRIMARY_TBL VALUES (5, 'one');
 INSERT INTO PRIMARY_TBL (t) VALUES ('six');
-ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  null value in column "i" of relation "primary_tbl" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Failing row contains (null, six).
 SELECT '' AS three, * FROM PRIMARY_TBL;
  three | i |   t   
 -------+---+-------
        | 1 | three
-       | 2 | two
-       | 4 | three
        | 1 | one
        | 5 | one
+       | 2 | two
+       | 4 | three
 (5 rows)
 
 DROP TABLE PRIMARY_TBL;
@@ -477,7 +477,7 @@ CREATE TABLE UNIQUE_TBL (i int UNIQUE, t text);
 INSERT INTO UNIQUE_TBL VALUES (1, 'one');
 INSERT INTO UNIQUE_TBL VALUES (2, 'two');
 INSERT INTO UNIQUE_TBL VALUES (1, 'three');
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (i)=(1) already exists.
 INSERT INTO UNIQUE_TBL VALUES (4, 'four');
 INSERT INTO UNIQUE_TBL VALUES (5, 'one');
@@ -487,7 +487,7 @@ INSERT INTO UNIQUE_TBL VALUES (5, 'five-upsert-insert') ON CONFLICT (i) DO UPDAT
 INSERT INTO UNIQUE_TBL VALUES (6, 'six-upsert-insert') ON CONFLICT (i) DO UPDATE SET t = 'six-upsert-update';
 -- should fail
 INSERT INTO UNIQUE_TBL VALUES (1, 'a'), (2, 'b'), (2, 'b') ON CONFLICT (i) DO UPDATE SET t = 'fails';
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.2:7002 pid=2258684)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 SELECT '' AS five, * FROM UNIQUE_TBL;
  five | i |         t          
@@ -506,23 +506,23 @@ CREATE TABLE UNIQUE_TBL (i int UNIQUE NULLS NOT DISTINCT, t text);
 INSERT INTO UNIQUE_TBL VALUES (1, 'one');
 INSERT INTO UNIQUE_TBL VALUES (2, 'two');
 INSERT INTO UNIQUE_TBL VALUES (1, 'three');  -- fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (i)=(1) already exists.
 INSERT INTO UNIQUE_TBL VALUES (4, 'four');
 INSERT INTO UNIQUE_TBL VALUES (5, 'one');
 INSERT INTO UNIQUE_TBL (t) VALUES ('six');
 INSERT INTO UNIQUE_TBL (t) VALUES ('seven');  -- fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (i)=(null) already exists.
 INSERT INTO UNIQUE_TBL (t) VALUES ('eight') ON CONFLICT DO NOTHING;  -- no-op
 SELECT * FROM UNIQUE_TBL;
  i |  t   
 ---+------
+ 1 | one
+ 5 | one
  2 | two
  4 | four
    | six
- 1 | one
- 5 | one
 (5 rows)
 
 DROP TABLE UNIQUE_TBL;
@@ -532,7 +532,7 @@ INSERT INTO UNIQUE_TBL VALUES (1, 'one');
 INSERT INTO UNIQUE_TBL VALUES (2, 'two');
 INSERT INTO UNIQUE_TBL VALUES (1, 'three');
 INSERT INTO UNIQUE_TBL VALUES (1, 'one');
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_t_key"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_t_key"  (seg2 172.17.0.2:7004 pid=2258686)
 DETAIL:  Key (i, t)=(1, one) already exists.
 INSERT INTO UNIQUE_TBL VALUES (5, 'one');
 INSERT INTO UNIQUE_TBL (t) VALUES ('six');
@@ -616,8 +616,8 @@ SELECT * FROM unique_tbl;
  2 | two
  4 | four
  3 | three
- 5 | five
  1 | one
+ 5 | five
 (5 rows)
 
 -- GPDB: Reset the table to the state the rest of the test expects, again.
@@ -627,13 +627,13 @@ INSERT INTO unique_tbl VALUES (3, 'three'), (1, 'five'), (5, 'one'), (4, 'two'),
 BEGIN;
 INSERT INTO unique_tbl VALUES (3, 'Three'); -- should succeed for now
 COMMIT; -- should fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (i)=(3) already exists.
 -- make constraint check immediate
 BEGIN;
 SET CONSTRAINTS ALL IMMEDIATE;
 INSERT INTO unique_tbl VALUES (3, 'Three'); -- should fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (i)=(3) already exists.
 COMMIT;
 -- forced check when SET CONSTRAINTS is called
@@ -641,7 +641,7 @@ BEGIN;
 SET CONSTRAINTS ALL DEFERRED;
 INSERT INTO unique_tbl VALUES (3, 'Three'); -- should succeed for now
 SET CONSTRAINTS ALL IMMEDIATE; -- should fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (i)=(3) already exists.
 COMMIT;
 -- test deferrable UNIQUE with a partitioned table
@@ -663,13 +663,13 @@ BEGIN;
 INSERT INTO parted_uniq_tbl VALUES (1);
 SAVEPOINT f;
 INSERT INTO parted_uniq_tbl VALUES (1);	-- unique violation
-ERROR:  duplicate key value violates unique constraint "parted_uniq_tbl_1_i_key"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  duplicate key value violates unique constraint "parted_uniq_tbl_1_i_key"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (i)=(1) already exists.
 ROLLBACK TO f;
 SET CONSTRAINTS parted_uniq_tbl_i_key DEFERRED;
 INSERT INTO parted_uniq_tbl VALUES (1);	-- OK now, fail at commit
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "parted_uniq_tbl_1_i_key"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  duplicate key value violates unique constraint "parted_uniq_tbl_1_i_key"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (i)=(1) already exists.
 DROP TABLE parted_uniq_tbl;
 -- test naming a constraint in a partition when a conflict exists
@@ -690,6 +690,7 @@ CREATE TABLE parted_fk_naming_1 (
 );
 ALTER TABLE parted_fk_naming ATTACH PARTITION parted_fk_naming_1 FOR VALUES IN ('1');
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 SELECT conname FROM pg_constraint WHERE conrelid = 'parted_fk_naming_1'::regclass AND contype = 'f';
     conname     
 ----------------
@@ -702,8 +703,8 @@ DROP TABLE parted_fk_naming;
 -- indexes (without constraints) on the partitioned table.  Ideally these should
 -- fail, but we don't dare change released behavior, so instead cope with it at
 -- DETACH time.
-CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b);
-CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a));
+CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b) DISTRIBUTED BY (a, b);
+CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a)) DISTRIBUTED BY (a, b);
 ALTER TABLE t ATTACH PARTITION tp FOR VALUES WITH (MODULUS 1, REMAINDER 0);
 CREATE UNIQUE INDEX t_a_idx ON t (a, b);
 CREATE UNIQUE INDEX t_b_idx ON t (b, a);
@@ -734,6 +735,7 @@ ALTER TABLE t DETACH PARTITION tp;
 DROP TABLE t, tp;
 CREATE TABLE regress_constr_partitioned (a integer) PARTITION BY LIST (a);
 CREATE TABLE regress_constr_partition1 PARTITION OF regress_constr_partitioned FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE regress_constr_partition1 ADD PRIMARY KEY (a);
 CREATE UNIQUE INDEX ON regress_constr_partitioned (a);
 BEGIN;
@@ -746,16 +748,16 @@ BEGIN;
 INSERT INTO unique_tbl VALUES (3, 'Three'); -- should succeed for now
 UPDATE unique_tbl SET t = 'THREE' WHERE i = 3 AND t = 'Three';
 COMMIT; -- should fail
-ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  duplicate key value violates unique constraint "unique_tbl_i_key"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (i)=(3) already exists.
 SELECT * FROM unique_tbl;
  i |   t   
 ---+-------
- 5 | one
  3 | three
  4 | two
  2 | four
  1 | five
+ 5 | one
 (5 rows)
 
 -- test a HOT update that modifies the newly inserted tuple,
@@ -778,11 +780,11 @@ COMMIT;
 SELECT * FROM unique_tbl;
  i |   t    
 ---+--------
- 1 | five
- 5 | one
  4 | two
  2 | four
  3 | threex
+ 1 | five
+ 5 | one
 (5 rows)
 
 -- enforceability cannot be specified or set for unique constraint
@@ -816,7 +818,7 @@ INSERT INTO circles VALUES('<(0,0), 5>', '<(0,0), 4>');
 INSERT INTO circles VALUES('<(10,10), 10>', '<(0,0), 5>');
 -- fail, overlaps
 INSERT INTO circles VALUES('<(20,20), 10>', '<(0,0), 4>');
-ERROR:  conflicting key value violates exclusion constraint "circles_c1_c2_excl"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  conflicting key value violates exclusion constraint "circles_c1_c2_excl"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (c1, (c2::circle))=(<(20,20),10>, <(0,0),4>) conflicts with existing key (c1, (c2::circle))=(<(10,10),10>, <(0,0),5>).
 -- succeed, because violation is ignored
 INSERT INTO circles VALUES('<(20,20), 10>', '<(0,0), 4>')
@@ -832,7 +834,7 @@ INSERT INTO circles VALUES('<(20,20), 10>', '<(10,10), 5>');
 -- should fail on existing data without the WHERE clause
 ALTER TABLE circles ADD EXCLUDE USING gist
   (c1 WITH &&, (c2::circle) WITH &&);
-ERROR:  could not create exclusion constraint "circles_c1_c2_excl1"  (seg2 172.17.0.4:7004 pid=1570338)
+ERROR:  could not create exclusion constraint "circles_c1_c2_excl1"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (c1, (c2::circle))=(<(0,0),5>, <(0,0),5>) conflicts with key (c1, (c2::circle))=(<(0,0),5>, <(0,0),4>).
 -- try reindexing an existing constraint
 REINDEX INDEX circles_c1_c2_excl;
@@ -846,20 +848,20 @@ CREATE TABLE deferred_excl (
 INSERT INTO deferred_excl VALUES(1);
 INSERT INTO deferred_excl VALUES(2);
 INSERT INTO deferred_excl VALUES(1); -- fail
-ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg1 172.17.0.2:7003 pid=2258685)
 DETAIL:  Key (f1)=(1) conflicts with existing key (f1)=(1).
 INSERT INTO deferred_excl VALUES(1) ON CONFLICT ON CONSTRAINT deferred_excl_con DO NOTHING; -- fail
-ERROR:  ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters  (seg1 172.17.0.4:7003 pid=1570336)
+ERROR:  ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters  (seg1 172.17.0.2:7003 pid=2258685)
 BEGIN;
 INSERT INTO deferred_excl VALUES(2); -- no fail here
 COMMIT; -- should fail here
-ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (f1)=(2) conflicts with existing key (f1)=(2).
 BEGIN;
 INSERT INTO deferred_excl VALUES(3);
 INSERT INTO deferred_excl VALUES(3); -- no fail here
 COMMIT; -- should fail here
-ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  conflicting key value violates exclusion constraint "deferred_excl_con"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (f1)=(3) conflicts with existing key (f1)=(3).
 -- bug #13148: deferred constraint versus HOT update
 BEGIN;
@@ -870,15 +872,15 @@ COMMIT; -- should not fail
 SELECT * FROM deferred_excl;
  f1 | f2 
 ----+----
-  2 |  2
   1 |   
+  2 |  2
 (2 rows)
 
 ALTER TABLE deferred_excl DROP CONSTRAINT deferred_excl_con;
 -- This should fail, but worth testing because of HOT updates
 UPDATE deferred_excl SET f1 = 3;
 ALTER TABLE deferred_excl ADD EXCLUDE (f1 WITH =);
-ERROR:  could not create exclusion constraint "deferred_excl_f1_excl"  (seg0 172.17.0.4:7002 pid=1570324)
+ERROR:  could not create exclusion constraint "deferred_excl_f1_excl"  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Key (f1)=(3) conflicts with key (f1)=(3).
 DROP TABLE deferred_excl;
 -- verify constraints created for NOT NULL clauses
@@ -1005,7 +1007,7 @@ Not-null constraints:
 drop table notnull_tbl2, notnull_tbl3, notnull_tbl4, notnull_tbl5, notnull_tbl6;
 -- error cases:
 create table notnull_tbl_fail (a serial constraint foo not null constraint bar not null);
-ERROR:  conflicting not-null constraint names "foo" and "bar"
+ERROR:  conflicting not-null constraint names "foo" and "bar" (parse_utilcmd.c:902)
 create table notnull_tbl_fail (a serial constraint foo not null no inherit constraint foo not null);
 ERROR:  conflicting NO INHERIT declarations for not-null constraints on column "a"
 create table notnull_tbl_fail (a int constraint foo not null, constraint foo not null a no inherit);
@@ -1036,6 +1038,7 @@ drop table notnull_tbl1;
 -- NOT NULL NO INHERIT
 CREATE TABLE ATACC1 (a int, NOT NULL a NO INHERIT);
 CREATE TABLE ATACC2 () INHERITS (ATACC1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ ATACC2
                                   Table "public.atacc2"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
@@ -1047,6 +1050,7 @@ DROP TABLE ATACC1, ATACC2;
 CREATE TABLE ATACC1 (a int);
 ALTER TABLE ATACC1 ADD NOT NULL a NO INHERIT;
 CREATE TABLE ATACC2 () INHERITS (ATACC1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ ATACC2
                                   Table "public.atacc2"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
@@ -1057,6 +1061,7 @@ Inherits: atacc1
 DROP TABLE ATACC1, ATACC2;
 CREATE TABLE ATACC1 (a int);
 CREATE TABLE ATACC2 () INHERITS (ATACC1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ATACC1 ADD NOT NULL a NO INHERIT;
 \d+ ATACC2
                                   Table "public.atacc2"
@@ -1087,6 +1092,7 @@ ERROR:  not-null constraints on partitioned tables cannot be NO INHERIT
 CREATE TABLE ATACC2 (a int, CONSTRAINT a_is_not_null NOT NULL a NO INHERIT);
 CREATE TABLE ATACC1 (a int);
 CREATE TABLE ATACC3 (a int) INHERITS (ATACC2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 ALTER TABLE ATACC2 INHERIT ATACC1;
 -- can't override
@@ -1139,8 +1145,9 @@ Check constraints:
     "notnull_tbl3_a_check" CHECK (a IS NOT NULL)
 
 -- Primary keys cause not-null constraints to be created.
-CREATE TABLE cnn_pk (a int, b int);
+CREATE TABLE cnn_pk (a int, b int) DISTRIBUTED BY (b);
 CREATE TABLE cnn_pk_child () INHERITS (cnn_pk);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY (b);
 \d+ cnn_pk*
                                   Table "public.cnn_pk"
@@ -1187,6 +1194,7 @@ DROP TABLE cnn_pk, cnn_pk_child;
 -- As above, but create the primary key ahead of time
 CREATE TABLE cnn_pk (a int, b int, CONSTRAINT cnn_primarykey PRIMARY KEY (b));
 CREATE TABLE cnn_pk_child () INHERITS (cnn_pk);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ cnn_pk*
                                   Table "public.cnn_pk"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
@@ -1230,9 +1238,10 @@ Inherits: cnn_pk
 
 DROP TABLE cnn_pk, cnn_pk_child;
 -- As above, but create the primary key using a UNIQUE index
-CREATE TABLE cnn_pk (a int, b int);
+CREATE TABLE cnn_pk (a int, b int) DISTRIBUTED BY (b);
 CREATE UNIQUE INDEX cnn_uq ON cnn_pk (b);
 CREATE TABLE cnn_pk_child () INHERITS (cnn_pk);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY USING INDEX cnn_uq;
 NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "cnn_uq" to "cnn_primarykey"
 \d+ cnn_pk*
@@ -1290,9 +1299,10 @@ drop table cnn_pk;
 -- Ensure partitions are scanned for null values when adding a PK
 create table cnn2_parted(a int) partition by list (a);
 create table cnn_part1 partition of cnn2_parted for values in (1, null);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into cnn_part1 values (null);
 alter table cnn2_parted add primary key (a);
-ERROR:  column "a" of relation "cnn_part1" contains null values
+ERROR:  column "a" of relation "cnn_part1" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 drop table cnn2_parted;
 -- columns in regular and LIKE inheritance should be marked not-nullable
 -- for primary keys, even if those are deferred
@@ -1302,6 +1312,7 @@ CREATE TABLE notnull_tbl4_lk2 (LIKE notnull_tbl4 INCLUDING INDEXES);
 CREATE TABLE notnull_tbl4_lk3 (LIKE notnull_tbl4 INCLUDING INDEXES, NOT NULL a);
 ALTER TABLE notnull_tbl4_lk3 RENAME CONSTRAINT notnull_tbl4_a_not_null TO a_nn;
 CREATE TABLE notnull_tbl4_cld () INHERITS (notnull_tbl4);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE notnull_tbl4_cld2 (PRIMARY KEY (a) DEFERRABLE) INHERITS (notnull_tbl4);
 CREATE TABLE notnull_tbl4_cld3 (PRIMARY KEY (a) DEFERRABLE, CONSTRAINT a_nn NOT NULL a) INHERITS (notnull_tbl4);
 \d+ notnull_tbl4
@@ -1381,6 +1392,7 @@ Inherits: notnull_tbl4
 CREATE TABLE notnull_tbl5 (a int CONSTRAINT ann NOT NULL,
 	b int CONSTRAINT bnn NOT NULL);
 CREATE TABLE notnull_tbl5_child () INHERITS (notnull_tbl5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ONLY notnull_tbl5 DROP CONSTRAINT ann;
 ALTER TABLE ONLY notnull_tbl5 ALTER b DROP NOT NULL;
 \d+ notnull_tbl5_child
@@ -1397,6 +1409,7 @@ Inherits: notnull_tbl5
 CREATE TABLE notnull_tbl6 (a int CONSTRAINT ann NOT NULL,
 	b int CONSTRAINT bnn NOT NULL, check (a > 0)) PARTITION BY LIST (a);
 CREATE TABLE notnull_tbl6_1 PARTITION OF notnull_tbl6 FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ONLY notnull_tbl6 DROP CONSTRAINT ann;
 ALTER TABLE ONLY notnull_tbl6 ALTER b DROP NOT NULL;
 \d+ notnull_tbl6_1
@@ -1422,11 +1435,11 @@ ORDER BY conrelid::regclass::text COLLATE "C", conname;
 CREATE TABLE notnull_tbl1 (a int, b int);
 INSERT INTO notnull_tbl1 VALUES (NULL, 1), (300, 3);
 ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a; -- error
-ERROR:  column "a" of relation "notnull_tbl1" contains null values
+ERROR:  column "a" of relation "notnull_tbl1" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 ALTER TABLE notnull_tbl1 ADD CONSTRAINT nn NOT NULL a NOT VALID; -- ok
 -- even an invalid not-null forbids new nulls
 INSERT INTO notnull_tbl1 VALUES (NULL, 4);
-ERROR:  null value in column "a" of relation "notnull_tbl1" violates not-null constraint
+ERROR:  null value in column "a" of relation "notnull_tbl1" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2258684)
 DETAIL:  Failing row contains (null, 4).
 \d+ notnull_tbl1
                                Table "public.notnull_tbl1"
@@ -1452,7 +1465,7 @@ HINT:  You might need to validate it using ALTER TABLE ... VALIDATE CONSTRAINT.
 -- ALTER column SET NOT NULL validates an invalid constraint (but this fails
 -- because of rows with null values)
 ALTER TABLE notnull_tbl1 ALTER a SET NOT NULL;
-ERROR:  column "a" of relation "notnull_tbl1" contains null values
+ERROR:  column "a" of relation "notnull_tbl1" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 \d+ notnull_tbl1
                                Table "public.notnull_tbl1"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
@@ -1472,6 +1485,7 @@ EXECUTE get_nnconstraint_info('{notnull_tbl1_copy}');
 
 -- An inheritance child table gets the constraint, but it's valid
 CREATE TABLE notnull_tbl1_child (a int, b int) INHERITS (notnull_tbl1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 NOTICE:  merging column "b" with inherited definition
 EXECUTE get_nnconstraint_info('{notnull_tbl1_child, notnull_tbl1}');
@@ -1497,7 +1511,7 @@ EXECUTE get_nnconstraint_info('{notnull_tbl1_child2}');
 ALTER TABLE notnull_tbl1 ADD column d float8 default random();
 -- VALIDATE CONSTRAINT scans the table
 ALTER TABLE notnull_tbl1 VALIDATE CONSTRAINT nn; -- error, nulls exist
-ERROR:  column "a" of relation "notnull_tbl1" contains null values
+ERROR:  column "a" of relation "notnull_tbl1" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 UPDATE notnull_tbl1 SET a = 100 WHERE b = 1;
 ALTER TABLE notnull_tbl1 VALIDATE CONSTRAINT nn; -- now ok
 EXECUTE get_nnconstraint_info('{notnull_tbl1}');
@@ -1519,6 +1533,7 @@ DROP TABLE notnull_tbl1;
 -- ALTER .. NO INHERIT works for invalid constraints
 CREATE TABLE notnull_tbl1 (a int);
 CREATE TABLE notnull_tbl1_chld () INHERITS (notnull_tbl1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE notnull_tbl1 ADD CONSTRAINT nntbl1_a NOT NULL a NOT VALID;
 ALTER TABLE notnull_tbl1 ALTER CONSTRAINT nntbl1_a NO INHERIT;
 -- DROP CONSTRAINT recurses correctly on invalid constraints
@@ -1548,8 +1563,10 @@ DROP TABLE notnull_tbl1, notnull_chld0;
 -- Test invalid not null on inheritance table.
 CREATE TABLE notnull_inhparent (i int);
 CREATE TABLE notnull_inhchild (i int) INHERITS (notnull_inhparent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "i" with inherited definition
 CREATE TABLE notnull_inhgrand () INHERITS (notnull_inhparent, notnull_inhchild);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "i"
 ALTER TABLE notnull_inhparent ADD CONSTRAINT nn NOT NULL i NOT VALID;
 ALTER TABLE notnull_inhchild ADD CONSTRAINT nn1 NOT NULL i; -- error
@@ -1579,6 +1596,7 @@ ERROR:  table "notnull_tbl1" does not exist
 CREATE TABLE notnull_tbl1 (a int, b int) PARTITION BY LIST (a);
 ALTER TABLE notnull_tbl1 ADD CONSTRAINT notnull_con NOT NULL a NOT VALID; --ok
 CREATE TABLE notnull_tbl1_1 PARTITION OF notnull_tbl1 FOR VALUES IN (1,2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE notnull_tbl1_2(a int, CONSTRAINT nn2 NOT NULL a, b int);
 ALTER TABLE notnull_tbl1 ATTACH PARTITION notnull_tbl1_2 FOR VALUES IN (3,4);
 CREATE TABLE notnull_tbl1_3(a int, b int);
@@ -1595,9 +1613,9 @@ EXECUTE get_nnconstraint_info('{notnull_tbl1, notnull_tbl1_1, notnull_tbl1_2, no
 (4 rows)
 
 ALTER TABLE notnull_tbl1 ALTER COLUMN a SET NOT NULL; --error, notnull_tbl1_3 have null values
-ERROR:  column "a" of relation "notnull_tbl1_3" contains null values
+ERROR:  column "a" of relation "notnull_tbl1_3" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 ALTER TABLE notnull_tbl1_3 VALIDATE CONSTRAINT nn3; --error
-ERROR:  column "a" of relation "notnull_tbl1_3" contains null values
+ERROR:  column "a" of relation "notnull_tbl1_3" contains null values  (seg0 172.17.0.2:7002 pid=2258684)
 TRUNCATE notnull_tbl1;
 ALTER TABLE notnull_tbl1 ALTER COLUMN a SET NOT NULL; --OK
 EXECUTE get_nnconstraint_info('{notnull_tbl1, notnull_tbl1_1, notnull_tbl1_2, notnull_tbl1_3}');
@@ -1622,6 +1640,7 @@ DROP TABLE pp_nn;
 -- Try a partition with an invalid constraint and create a PK on the parent.
 CREATE TABLE pp_nn (a int) PARTITION BY HASH (a);
 CREATE TABLE pp_nn_1 PARTITION OF pp_nn FOR VALUES WITH (MODULUS 2, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE pp_nn_1 ADD CONSTRAINT nn NOT NULL a NOT VALID;
 ALTER TABLE ONLY pp_nn ADD PRIMARY KEY (a);
 ERROR:  cannot create primary key on column "a"
@@ -1631,6 +1650,7 @@ DROP TABLE pp_nn;
 -- same as above, but the constraint is NO INHERIT
 CREATE TABLE pp_nn (a int) PARTITION BY HASH (a);
 CREATE TABLE pp_nn_1 PARTITION OF pp_nn FOR VALUES WITH (MODULUS 2, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE pp_nn_1 ADD CONSTRAINT nn NOT NULL a NO INHERIT;
 ALTER TABLE ONLY pp_nn ADD PRIMARY KEY (a);
 ERROR:  cannot create primary key on column "a"
@@ -1644,6 +1664,7 @@ ALTER TABLE notnull_tbl1_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;
 -- Inherit test for pg_upgrade
 CREATE TABLE notnull_parent_upg (a int);
 CREATE TABLE notnull_child_upg () INHERITS (notnull_parent_upg);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE notnull_child_upg ADD CONSTRAINT nn NOT NULL a;
 ALTER TABLE notnull_parent_upg ADD CONSTRAINT nn NOT NULL a NOT VALID;
 SELECT conrelid::regclass, contype, convalidated, conislocal
@@ -1660,6 +1681,7 @@ ORDER BY 1;
 CREATE TABLE notnull_part1_upg (a int, b int) PARTITION BY LIST (a);
 ALTER TABLE notnull_part1_upg ADD CONSTRAINT notnull_con NOT NULL a NOT VALID; --ok
 CREATE TABLE notnull_part1_1_upg PARTITION OF notnull_part1_upg FOR VALUES IN (1,2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE notnull_part1_2_upg (a int, CONSTRAINT nn2 NOT NULL a, b int);
 ALTER TABLE notnull_part1_upg ATTACH PARTITION notnull_part1_2_upg FOR VALUES IN (3,4);
 CREATE TABLE notnull_part1_3_upg (a int, b int);
@@ -1678,6 +1700,7 @@ EXECUTE get_nnconstraint_info('{notnull_part1_upg, notnull_part1_1_upg, notnull_
 -- Inheritance test tables for pg_upgrade
 create table constr_parent (a int);
 create table constr_child (a int) inherits (constr_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
 alter table constr_parent add not null a not valid;
 alter table constr_child validate constraint constr_parent_a_not_null;
@@ -1690,6 +1713,7 @@ EXECUTE get_nnconstraint_info('{constr_parent, constr_child}');
 
 create table constr_parent2 (a int);
 create table constr_child2 () inherits (constr_parent2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table constr_parent2 add not null a not valid;
 alter table constr_child2 validate constraint constr_parent2_a_not_null;
 EXECUTE get_nnconstraint_info('{constr_parent2, constr_child2}');
@@ -1701,6 +1725,7 @@ EXECUTE get_nnconstraint_info('{constr_parent2, constr_child2}');
 
 create table constr_parent3 (a int not null);
 create table constr_child3 () inherits (constr_parent2, constr_parent3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "a"
 EXECUTE get_nnconstraint_info('{constr_parent3, constr_child3}');
     tabname     |          conname          | convalidated | conislocal | coninhcount 

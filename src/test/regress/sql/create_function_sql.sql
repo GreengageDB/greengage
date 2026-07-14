@@ -400,7 +400,7 @@ SELECT * FROM voidtest5(3);
 SET check_function_bodies TO off;
 
 CREATE FUNCTION create_and_insert() RETURNS VOID LANGUAGE sql AS $$
-  create table ddl_test (f1 int);
+  create table ddl_test (f1 int) distributed replicated;
   insert into ddl_test values (1.2);
 $$;
 

@@ -87,13 +87,9 @@ SELECT 2;
 SELECT $1 \bind 'val1' \sendpipeline
 \endpipeline
 
--- Convert an implicit transaction block to an explicit transaction block.
-\startpipeline
-INSERT INTO psql_pipeline VALUES ($1) \bind 1 \sendpipeline
-BEGIN \bind \sendpipeline
-INSERT INTO psql_pipeline VALUES ($1) \bind 2 \sendpipeline
-ROLLBACK \bind \sendpipeline
-\endpipeline
+-- GPDB: the "convert an implicit transaction block to an explicit transaction
+-- block" subtest is omitted: a distributed write dispatched earlier in the same
+-- pipeline cannot be promoted to an explicit BEGIN block (rejected by cdbtm.c).
 
 -- Multiple explicit transactions
 \startpipeline

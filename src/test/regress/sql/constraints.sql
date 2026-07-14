@@ -506,8 +506,8 @@ DROP TABLE parted_fk_naming;
 -- indexes (without constraints) on the partitioned table.  Ideally these should
 -- fail, but we don't dare change released behavior, so instead cope with it at
 -- DETACH time.
-CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b);
-CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a));
+CREATE TEMP TABLE t (a integer, b integer) PARTITION BY HASH (a, b) DISTRIBUTED BY (a, b);
+CREATE TEMP TABLE tp (a integer, b integer, PRIMARY KEY (a, b), UNIQUE (b, a)) DISTRIBUTED BY (a, b);
 ALTER TABLE t ATTACH PARTITION tp FOR VALUES WITH (MODULUS 1, REMAINDER 0);
 CREATE UNIQUE INDEX t_a_idx ON t (a, b);
 CREATE UNIQUE INDEX t_b_idx ON t (b, a);
@@ -765,7 +765,7 @@ ALTER TABLE notnull_tbl3 DROP CONSTRAINT pk;
 \d notnull_tbl3
 
 -- Primary keys cause not-null constraints to be created.
-CREATE TABLE cnn_pk (a int, b int);
+CREATE TABLE cnn_pk (a int, b int) DISTRIBUTED BY (b);
 CREATE TABLE cnn_pk_child () INHERITS (cnn_pk);
 ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY (b);
 \d+ cnn_pk*
@@ -782,7 +782,7 @@ ALTER TABLE cnn_pk DROP CONSTRAINT cnn_primarykey;
 DROP TABLE cnn_pk, cnn_pk_child;
 
 -- As above, but create the primary key using a UNIQUE index
-CREATE TABLE cnn_pk (a int, b int);
+CREATE TABLE cnn_pk (a int, b int) DISTRIBUTED BY (b);
 CREATE UNIQUE INDEX cnn_uq ON cnn_pk (b);
 CREATE TABLE cnn_pk_child () INHERITS (cnn_pk);
 ALTER TABLE cnn_pk ADD CONSTRAINT cnn_primarykey PRIMARY KEY USING INDEX cnn_uq;

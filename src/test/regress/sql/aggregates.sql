@@ -478,7 +478,7 @@ from tenk1 a2(col2);
 --
 
 create temp table t1 (a int, b int, c int, d int, primary key (a, b));
-create temp table t2 (x int, y int, z int, primary key (x, y));
+create temp table t2 (x int, y int, z int, primary key (x, y)) distributed replicated;
 create temp table t3 (a int, b int, c int, primary key(a, b) deferrable);
 
 -- Non-primary-key columns can be removed from GROUP BY
@@ -994,8 +994,8 @@ select string_agg(v, decode('ee', 'hex')) from bytea_test_table;
 select min(v) from bytea_test_table;
 select max(v) from bytea_test_table;
 
-insert into bytea_test_table values(decode('ffff','hex'));
-insert into bytea_test_table values(decode('aaaa','hex'));
+insert into bytea_test_table(v) values(decode('ffff','hex'));
+insert into bytea_test_table(v) values(decode('aaaa','hex'));
 
 select min(v) from bytea_test_table;
 select max(v) from bytea_test_table;
@@ -1003,7 +1003,7 @@ select max(v) from bytea_test_table;
 drop table bytea_test_table;
 
 -- Test parallel string_agg and array_agg
-create table pagg_test (x int, y int) with (autovacuum_enabled = off);
+create table pagg_test (x int, y int) with (autovacuum_enabled = off) distributed replicated;
 insert into pagg_test
 select (case x % 4 when 1 then null else x end), x % 10
 from generate_series(1,5000) x;

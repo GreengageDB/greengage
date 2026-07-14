@@ -212,13 +212,9 @@ SELECT $1 \bind 'val1' \sendpipeline
  val1
 (1 row)
 
--- Convert an implicit transaction block to an explicit transaction block.
-\startpipeline
-INSERT INTO psql_pipeline VALUES ($1) \bind 1 \sendpipeline
-BEGIN \bind \sendpipeline
-INSERT INTO psql_pipeline VALUES ($1) \bind 2 \sendpipeline
-ROLLBACK \bind \sendpipeline
-\endpipeline
+-- GPDB: the "convert an implicit transaction block to an explicit transaction
+-- block" subtest is omitted: a distributed write dispatched earlier in the same
+-- pipeline cannot be promoted to an explicit BEGIN block (rejected by cdbtm.c).
 -- Multiple explicit transactions
 \startpipeline
 BEGIN \bind \sendpipeline
@@ -457,7 +453,7 @@ BEGIN \bind \sendpipeline
 INSERT INTO psql_pipeline VALUES ($1) \bind 1 \sendpipeline
 ROLLBACK \bind \sendpipeline
 \endpipeline
-ERROR:  duplicate key value violates unique constraint "psql_pipeline_pkey"
+ERROR:  duplicate key value violates unique constraint "psql_pipeline_pkey"  (seg1 172.17.0.2:7003 pid=2265127)
 DETAIL:  Key (a)=(1) already exists.
 ROLLBACK;
 -- \watch is not allowed in a pipeline.
@@ -701,6 +697,7 @@ ERROR:  REINDEX CONCURRENTLY cannot run inside a transaction block
 REINDEX TABLE CONCURRENTLY psql_pipeline \bind \sendpipeline
 SELECT $1 \bind 2 \sendpipeline
 \endpipeline
+NOTICE:  concurrent reindex of "psql_pipeline" is not supported in Greenplum, reindexing non-concurrently instead
  ?column? 
 ----------
  2

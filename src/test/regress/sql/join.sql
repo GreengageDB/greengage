@@ -2514,7 +2514,7 @@ select * from
 set enable_hashjoin to off;
 set enable_mergejoin to off;
 
-create table sj (a int unique, b int, c int unique);
+create table sj (a int unique, b int, c int unique) distributed replicated;
 insert into sj values (1, null, 2), (null, 2, null), (2, 1, 1);
 analyze sj;
 
@@ -2807,7 +2807,7 @@ reset join_collapse_limit;
 reset enable_seqscan;
 
 -- Check that clauses from the join filter list is not lost on the self-join removal
-CREATE TABLE emp1 (id SERIAL PRIMARY KEY NOT NULL, code int);
+CREATE TABLE emp1 (id SERIAL PRIMARY KEY NOT NULL, code int) DISTRIBUTED REPLICATED;
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM emp1 e1, emp1 e2 WHERE e1.id = e2.id AND e2.code <> e1.code;
 

@@ -204,7 +204,6 @@ Publications:
     "testpub_foralltables"
 Not-null constraints:
     "testpub_tbl2_id_not_null" NOT NULL "id"
-Distributed by: (id)
 
 \dRp+ testpub_foralltables
                                         Publication testpub_foralltables
@@ -217,6 +216,7 @@ DROP TABLE testpub_tbl2;
 DROP PUBLICATION testpub_foralltables, testpub_fortable, testpub_forschema, testpub_for_tbl_schema;
 CREATE TABLE testpub_tbl3 (a int);
 CREATE TABLE testpub_tbl3a (b text) INHERITS (testpub_tbl3);
+NOTICE:  table has parent, setting distribution columns to match parent table
 SET client_min_messages = 'ERROR';
 CREATE PUBLICATION testpub3 FOR TABLE testpub_tbl3;
 CREATE PUBLICATION testpub4 FOR TABLE ONLY testpub_tbl3;
@@ -318,7 +318,6 @@ Tables:
  Column |  Type   | Collation | Nullable | Default 
 --------+---------+-----------+----------+---------
  e      | integer |           |          | 
-Distributed by: (e)
 
 ALTER PUBLICATION testpub5 ADD TABLE testpub_rf_tbl3 WHERE (e > 1000 AND e < 2000);
 \dRp+ testpub5
@@ -338,7 +337,6 @@ Tables:
  e      | integer |           |          | 
 Publications:
     "testpub5" WHERE ((e > 1000) AND (e < 2000))
-Distributed by: (e)
 
 ALTER PUBLICATION testpub5 DROP TABLE testpub_rf_tbl2;
 \dRp+ testpub5
@@ -367,7 +365,6 @@ Tables:
  e      | integer |           |          | 
 Publications:
     "testpub5" WHERE ((e > 300) AND (e < 500))
-Distributed by: (e)
 
 -- test \d <tablename> (now it displays filter information)
 SET client_min_messages = 'ERROR';
@@ -383,7 +380,6 @@ RESET client_min_messages;
 Publications:
     "testpub_rf_no"
     "testpub_rf_yes" WHERE (a > 1)
-Distributed by: (a)
 
 DROP PUBLICATION testpub_rf_yes, testpub_rf_no;
 -- some more syntax tests to exercise other parser pathways
@@ -716,7 +712,7 @@ DROP TABLE rf_tbl_abcd_part_pk;
 -- Tests with generated column
 SET client_min_messages = 'ERROR';
 -- stored
-CREATE TABLE testpub_gencol (a INT, b INT GENERATED ALWAYS AS (a + 1) STORED NOT NULL);
+CREATE TABLE testpub_gencol (a INT, b INT GENERATED ALWAYS AS (a + 1) STORED NOT NULL) DISTRIBUTED REPLICATED;
 CREATE UNIQUE INDEX testpub_gencol_idx ON testpub_gencol (b);
 ALTER TABLE testpub_gencol REPLICA IDENTITY USING index testpub_gencol_idx;
 -- error - generated column "b" must be published explicitly as it is
@@ -870,7 +866,6 @@ Publications:
     "testpub_fortable" (a, b)
 Not-null constraints:
     "testpub_tbl7_a_not_null" NOT NULL "a"
-Distributed by: (a)
 
 -- ok: the column list is the same, we should skip this table (or at least not fail)
 ALTER PUBLICATION testpub_fortable SET TABLE testpub_tbl7 (a, b);
@@ -887,7 +882,6 @@ Publications:
     "testpub_fortable" (a, b)
 Not-null constraints:
     "testpub_tbl7_a_not_null" NOT NULL "a"
-Distributed by: (a)
 
 -- ok: the column list changes, make sure the catalog gets updated
 ALTER PUBLICATION testpub_fortable SET TABLE testpub_tbl7 (a, c);
@@ -904,17 +898,18 @@ Publications:
     "testpub_fortable" (a, c)
 Not-null constraints:
     "testpub_tbl7_a_not_null" NOT NULL "a"
-Distributed by: (a)
 
 -- column list for partitioned tables has to cover replica identities for
 -- all child relations
 CREATE TABLE testpub_tbl8 (a int, b text, c text) PARTITION BY HASH (a);
 -- first partition has replica identity "a"
 CREATE TABLE testpub_tbl8_0 PARTITION OF testpub_tbl8 FOR VALUES WITH (modulus 2, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE testpub_tbl8_0 ADD PRIMARY KEY (a);
 ALTER TABLE testpub_tbl8_0 REPLICA IDENTITY USING INDEX testpub_tbl8_0_pkey;
 -- second partition has replica identity "b"
 CREATE TABLE testpub_tbl8_1 PARTITION OF testpub_tbl8 FOR VALUES WITH (modulus 2, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE testpub_tbl8_1 ADD PRIMARY KEY (b);
 ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
 DETAIL:  Distribution key column "a" is not included in the constraint.
@@ -1057,7 +1052,6 @@ Publications:
 Not-null constraints:
     "testpub_tbl_both_filters_a_not_null" NOT NULL "a"
     "testpub_tbl_both_filters_c_not_null" NOT NULL "c"
-Distributed by: (a, c)
 
 DROP TABLE testpub_tbl_both_filters;
 DROP PUBLICATION testpub_both_filters;
@@ -1284,7 +1278,6 @@ Publications:
     "testpub_default"
     "testpub_fortbl"
     "testpub_ins_trunct"
-Distributed by: (foo)
 
 \d+ testpub_tbl1
                                                 Table "public.testpub_tbl1"
@@ -1300,7 +1293,6 @@ Publications:
     "testpub_ins_trunct"
 Not-null constraints:
     "testpub_tbl1_id_not_null" NOT NULL "id"
-Distributed by: (id)
 
 \dRp+ testpub_default
                                           Publication testpub_default
@@ -1328,7 +1320,6 @@ Publications:
     "testpub_ins_trunct"
 Not-null constraints:
     "testpub_tbl1_id_not_null" NOT NULL "id"
-Distributed by: (id)
 
 -- verify relation cache invalidation when a primary key is added using
 -- an existing index
@@ -1704,6 +1695,7 @@ CREATE SCHEMA pub_testpart1;
 CREATE SCHEMA pub_testpart2;
 CREATE TABLE pub_testpart1.parent1 (a int) partition by list (a);
 CREATE TABLE pub_testpart2.child_parent1 partition of pub_testpart1.parent1 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pub_testpart2.child_parent1 values(1);
 UPDATE pub_testpart2.child_parent1 set a = 1;
 SET client_min_messages = 'ERROR';
@@ -1721,6 +1713,7 @@ DROP PUBLICATION testpubpart_forschema;
 -- parent and child tables of different partition hierarchies
 CREATE TABLE pub_testpart2.parent2 (a int) partition by list (a);
 CREATE TABLE pub_testpart1.child_parent2 partition of pub_testpart2.parent2 for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pub_testpart1.child_parent2 values(1);
 UPDATE pub_testpart1.child_parent2 set a = 1;
 SET client_min_messages = 'ERROR';

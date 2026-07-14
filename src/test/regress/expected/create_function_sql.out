@@ -614,9 +614,9 @@ END;
 SELECT * FROM functest_sri2();
  functest_sri2 
 ---------------
+             1
              2
              3
-             1
 (3 rows)
 
 EXPLAIN (verbose, costs off) SELECT * FROM functest_sri2();
@@ -677,8 +677,8 @@ SELECT voidtest4(39);
 TABLE sometable;
  f1 
 ----
- 18
  38
+ 18
 (2 rows)
 
 CREATE FUNCTION voidtest5(a int) RETURNS SETOF VOID LANGUAGE SQL AS
@@ -692,7 +692,7 @@ SELECT * FROM voidtest5(3);
 -- though that doesn't work if check_function_bodies is on.
 SET check_function_bodies TO off;
 CREATE FUNCTION create_and_insert() RETURNS VOID LANGUAGE sql AS $$
-  create table ddl_test (f1 int);
+  create table ddl_test (f1 int) distributed replicated;
   insert into ddl_test values (1.2);
 $$;
 SELECT create_and_insert();

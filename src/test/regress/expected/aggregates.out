@@ -729,6 +729,7 @@ order by 1, 2;
    Output: s1.s1, s2.s2, (sum((s1.s1 + s2.s2)))
    Sort Key: s1.s1, s2.s2
    ->  Nested Loop
+         Disabled: true
          Output: s1.s1, s2.s2, (sum((s1.s1 + s2.s2)))
          ->  Function Scan on pg_catalog.generate_series s1
                Output: s1.s1
@@ -742,7 +743,7 @@ order by 1, 2;
                            Output: s2.s2
                            Function Call: generate_series(1, 3)
  Optimizer: Postgres query optimizer
-(17 rows)
+(18 rows)
 
 select s1, s2, sm
 from generate_series(1, 3) s1,
@@ -1262,8 +1263,11 @@ select max(100) from tenk1;
 -- try it on an inheritance tree
 create table minmaxtest(f1 int);
 create table minmaxtest1() inherits (minmaxtest);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table minmaxtest2() inherits (minmaxtest);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table minmaxtest3() inherits (minmaxtest);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index minmaxtesti on minmaxtest(f1);
 create index minmaxtest1i on minmaxtest1(f1);
 create index minmaxtest2i on minmaxtest2(f1 desc);
@@ -1402,7 +1406,7 @@ LINE 1: select avg((select avg(a1.col1 order by (select avg(a2.col2)...
 -- Test removal of redundant GROUP BY columns
 --
 create temp table t1 (a int, b int, c int, d int, primary key (a, b));
-create temp table t2 (x int, y int, z int, primary key (x, y));
+create temp table t2 (x int, y int, z int, primary key (x, y)) distributed replicated;
 create temp table t3 (a int, b int, c int, primary key(a, b) deferrable);
 -- Non-primary-key columns can be removed from GROUP BY
 explain (costs off) select * from t1 group by a,b,c,d;
@@ -1423,7 +1427,7 @@ explain (costs off) select a,c from t1 group by a,c,d;
    ->  HashAggregate
          Group Key: a, c, d
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: a, c, d
+               Hash Key: t1.a, t1.c, t1.d
                ->  HashAggregate
                      Group Key: a, c, d
                      ->  Seq Scan on t1
@@ -1476,6 +1480,7 @@ explain (costs off) select * from t3 group by a,b,c;
 (5 rows)
 
 create temp table t1c () inherits (t1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Ensure we don't remove any columns when t1 has a child table
 explain (costs off) select * from t1 group by a,b,c,d;
                 QUERY PLAN                 
@@ -1508,7 +1513,9 @@ create temp table p_t1 (
   primary key(a,b)
 ) partition by list(a);
 create temp table p_t1_1 partition of p_t1 for values in(1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table p_t1_2 partition of p_t1 for values in(2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Ensure we can remove non-PK columns for partitioned tables.
 explain (costs off) select * from p_t1 group by a,b,c,d;
                 QUERY PLAN                
@@ -1526,54 +1533,64 @@ create unique index t2_z_uidx on t2(z);
 -- Ensure we don't remove any columns from the GROUP BY for a unique
 -- index on a NULLable column.
 explain (costs off) select y,z from t2 group by y,z;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: y, z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: y, z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- Make the column NOT NULL and ensure we remove the redundant column
 alter table t2 alter column z set not null;
 explain (costs off) select y,z from t2 group by y,z;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- When there are multiple supporting unique indexes and the GROUP BY contains
 -- columns to cover all of those, ensure we pick the index with the least
 -- number of columns so that we can remove more columns from the GROUP BY.
 explain (costs off) select x,y,z from t2 group by x,y,z;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- As above but try ordering the columns differently to ensure we get the
 -- same result.
 explain (costs off) select x,y,z from t2 group by z,x,y;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- Ensure we don't use a partial index as proof of functional dependency
 drop index t2_z_uidx;
 create index t2_z_uidx on t2 (z) where z > 0;
 explain (costs off) select y,z from t2 group by y,z;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: y, z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: y, z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- A unique index defined as NULLS NOT DISTINCT does not need a supporting NOT
 -- NULL constraint on the indexed columns.  Ensure the redundant columns are
@@ -1582,12 +1599,14 @@ drop index t2_z_uidx;
 alter table t2 alter column z drop not null;
 create unique index t2_z_uidx on t2(z) nulls not distinct;
 explain (costs off) select y,z from t2 group by y,z;
-      QUERY PLAN      
-----------------------
- HashAggregate
-   Group Key: z
-   ->  Seq Scan on t2
-(3 rows)
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 drop table t1 cascade;
 NOTICE:  drop cascades to table t1c
@@ -1720,7 +1739,7 @@ group by ten;
          ->  Sort
                Sort Key: ten
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
+                     Hash Key: tenk1.ten
                      ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1743,7 +1762,7 @@ group by ten;
          ->  Sort
                Sort Key: ten
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
+                     Hash Key: tenk1.ten
                      ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1775,36 +1794,39 @@ reset enable_presorted_aggregate;
 -- Ensure we presort when the aggregate contains plain Vars
 explain (costs off)
 select sum(two order by two) filter (where two > 1) from tenk1;
-          QUERY PLAN           
--------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Aggregate
-   ->  Sort
-         Sort Key: two
+   ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on tenk1
+ Optimizer: Postgres query optimizer
 (4 rows)
 
 -- Ensure we presort for RelabelType'd Vars
 explain (costs off)
 select string_agg(distinct f1, ',') filter (where length(f1) > 1)
 from varchar_tbl;
-             QUERY PLAN              
--------------------------------------
- Aggregate
-   ->  Sort
-         Sort Key: f1
-         ->  Seq Scan on varchar_tbl
-(4 rows)
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on varchar_tbl
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- Ensure we don't presort when the aggregate's argument contains an
 -- explicit cast.
 explain (costs off)
 select string_agg(distinct f1::varchar(2), ',') filter (where length(f1) > 1)
 from varchar_tbl;
-          QUERY PLAN           
--------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Aggregate
-   ->  Seq Scan on varchar_tbl
-(2 rows)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on varchar_tbl
+ Optimizer: Postgres query optimizer
+(4 rows)
 
 --
 -- Test combinations of DISTINCT and/or ORDER BY
@@ -2164,16 +2186,16 @@ select ten, sum(distinct four) filter (where four::text ~ '123') from onek a
 group by ten;
  ten | sum 
 -----+-----
-   4 |    
-   2 |    
-   8 |    
-   7 |    
-   3 |    
    0 |    
    1 |    
    9 |    
    6 |    
    5 |    
+   4 |    
+   2 |    
+   8 |    
+   7 |    
+   3 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
@@ -2571,8 +2593,8 @@ select max(v) from bytea_test_table;
  \xff
 (1 row)
 
-insert into bytea_test_table values(decode('ffff','hex'));
-insert into bytea_test_table values(decode('aaaa','hex'));
+insert into bytea_test_table(v) values(decode('ffff','hex'));
+insert into bytea_test_table(v) values(decode('aaaa','hex'));
 select min(v) from bytea_test_table;
  min  
 ------
@@ -2587,7 +2609,7 @@ select max(v) from bytea_test_table;
 
 drop table bytea_test_table;
 -- Test parallel string_agg and array_agg
-create table pagg_test (x int, y int) with (autovacuum_enabled = off);
+create table pagg_test (x int, y int) with (autovacuum_enabled = off) distributed replicated;
 insert into pagg_test
 select (case x % 4 when 1 then null else x end), x % 10
 from generate_series(1,5000) x;
@@ -2642,20 +2664,20 @@ select * from v_pagg_test order by y;
 
 -- Ensure parallel aggregation is actually being used.
 explain (costs off) select * from v_pagg_test order by y;
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: pagg_test.y
    ->  GroupAggregate
          Group Key: pagg_test.y
-         ->  Result
-               ->  ProjectSet
-                     ->  GroupAggregate
-                           Group Key: pagg_test.y
-                           ->  Sort
-                                 Sort Key: pagg_test.y
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Hash Key: pagg_test.y
+         ->  Sort
+               Sort Key: pagg_test.y
+               ->  Result
+                     ->  ProjectSet
+                           ->  GroupAggregate
+                                 Group Key: pagg_test.y
+                                 ->  Sort
+                                       Sort Key: pagg_test.y
                                        ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
 (14 rows)
@@ -2681,12 +2703,12 @@ select * from v_pagg_test order by y;
 set max_parallel_workers_per_gather = 2;
 explain (costs off)
 select array_dims(array_agg(s)) from (select * from pagg_test) s;
-                 QUERY PLAN                 
---------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Aggregate
-   ->  Gather
-         Workers Planned: 2
-         ->  Parallel Seq Scan on pagg_test
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on pagg_test
+ Optimizer: Postgres query optimizer
 (4 rows)
 
 select array_dims(array_agg(s)) from (select * from pagg_test) s;
@@ -2739,10 +2761,10 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
    0 |    
-   6 |    
    4 |    
    2 |    
    8 |    
+   6 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -3481,22 +3503,21 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
   FROM btg t1 JOIN btg t2 ON t1.w = t2.w AND t1.x = t2.x AND t1.z = t2.z
   GROUP BY t1.w, t1.z, t1.x;
-                                  QUERY PLAN
------------------------------------------------------------------------------
+                           QUERY PLAN                           
+----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
-         Group Key: t1.x, t1.w, t1.z
-         ->  Merge Join
-               Merge Cond: ((t1.x = t2.x) AND (t1.w = t2.w) AND (t1.z = t2.z))
-               ->  Incremental Sort
-                     Sort Key: t1.x, t1.w, t1.z
-                     Presorted Key: t1.x
+         Group Key: t1.w, t1.z, t1.x
+         ->  Sort
+               Sort Key: t1.w, t1.z, t1.x
+               ->  Nested Loop
+                     Disabled: true
                      ->  Index Scan using btg_x_y_idx on btg t1
-               ->  Sort
-                     Sort Key: t2.x, t2.w, t2.z
                      ->  Index Scan using btg_x_y_idx on btg t2
+                           Index Cond: (x = t1.x)
+                           Filter: ((t1.w = w) AND (t1.z = z))
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 RESET enable_nestloop;
 RESET enable_hashjoin;
@@ -3506,7 +3527,7 @@ SELECT count(*) FROM btg GROUP BY w, x, z, y ORDER BY y, x, z, w;
                       QUERY PLAN                       
 -------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: y, x, z, w
+   Merge Key: btg.y, btg.x, btg.z, btg.w
    ->  GroupAggregate
          Group Key: y, x, z, w
          ->  Sort
@@ -3521,7 +3542,7 @@ SELECT count(*) FROM btg GROUP BY w, x, y, z ORDER BY x*x, z;
                          QUERY PLAN                          
 -------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: ((x * x)), z
+   Merge Key: ((btg.x * btg.x)), btg.z
    ->  Sort
          Sort Key: ((x * x)), z
          ->  GroupAggregate
@@ -3571,7 +3592,7 @@ EXPLAIN (COSTS OFF)
 SELECT avg(c1.f ORDER BY c1.x, c1.y)
 FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
 GROUP BY c1.w, c1.z;
-                            QUERY PLAN
+                            QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
@@ -3581,15 +3602,18 @@ GROUP BY c1.w, c1.z;
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: c1.w, c1.z
                      ->  Merge Join
+                           Disabled: true
                            Merge Cond: (c1.x = c2.x)
                            ->  Sort
                                  Sort Key: c1.x
                                  ->  Seq Scan on group_agg_pk c1
+                                       Disabled: true
                            ->  Sort
                                  Sort Key: c2.x
                                  ->  Seq Scan on group_agg_pk c2
+                                       Disabled: true
  Optimizer: Postgres query optimizer
-(16 rows)
+(19 rows)
 
 SELECT avg(c1.f ORDER BY c1.x, c1.y)
 FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
@@ -3608,7 +3632,7 @@ SELECT c1.y,c1.x FROM group_agg_pk c1
   JOIN group_agg_pk c2
   ON c1.x = c2.x
 GROUP BY c1.y,c1.x,c2.x;
-                        QUERY PLAN
+                        QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
@@ -3616,22 +3640,25 @@ GROUP BY c1.y,c1.x,c2.x;
          ->  Sort
                Sort Key: c1.y, c1.x
                ->  Merge Join
+                     Disabled: true
                      Merge Cond: (c1.x = c2.x)
                      ->  Sort
                            Sort Key: c1.x
                            ->  Seq Scan on group_agg_pk c1
+                                 Disabled: true
                      ->  Sort
                            Sort Key: c2.x
                            ->  Seq Scan on group_agg_pk c2
+                                 Disabled: true
  Optimizer: Postgres query optimizer
-(14 rows)
+(17 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT c1.y,c1.x FROM group_agg_pk c1
   JOIN group_agg_pk c2
   ON c1.x = c2.x
 GROUP BY c1.y,c2.x,c1.x;
-                        QUERY PLAN
+                        QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  GroupAggregate
@@ -3639,15 +3666,18 @@ GROUP BY c1.y,c2.x,c1.x;
          ->  Sort
                Sort Key: c1.y, c2.x
                ->  Merge Join
+                     Disabled: true
                      Merge Cond: (c1.x = c2.x)
                      ->  Sort
                            Sort Key: c1.x
                            ->  Seq Scan on group_agg_pk c1
+                                 Disabled: true
                      ->  Sort
                            Sort Key: c2.x
                            ->  Seq Scan on group_agg_pk c2
+                                 Disabled: true
  Optimizer: Postgres query optimizer
-(14 rows)
+(17 rows)
 
 RESET enable_nestloop;
 RESET enable_hashjoin;
@@ -3666,7 +3696,7 @@ FROM agg_sort_order WHERE c2 < 100 GROUP BY c1 ORDER BY 2;
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: c2
+   Merge Key: agg_sort_order.c2
    ->  Sort
          Sort Key: c2
          ->  GroupAggregate
@@ -4009,7 +4039,7 @@ select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
          ->  Sort
                Sort Key: ((g % 10000))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ((g % 10000))
+                     Hash Key: ((agg_data_20k.g % 10000))
                      ->  Seq Scan on agg_data_20k
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -4049,7 +4079,7 @@ select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
    ->  HashAggregate
          Group Key: ((g % 10000))
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: ((g % 10000))
+               Hash Key: ((agg_data_20k.g % 10000))
                ->  Seq Scan on agg_data_20k
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -4121,19 +4151,25 @@ drop table agg_hash_4;
 set enable_indexscan = off;
 set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
-                                                       QUERY PLAN                                                       
-------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000084.49..10000000084.50 rows=1 width=8) (actual time=0.255..0.257 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000077.88 rows=2642 width=0) (actual time=0.014..0.218 rows=898 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.004 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.002 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..51.42 rows=2642 width=0) (actual time=0.009..0.148 rows=898 loops=1)
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=21.35..21.36 rows=1 width=8) (actual time=0.235..0.236 rows=1.00 loops=1)
+   Buffers: shared hit=7
+   ->  Nested Loop  (cost=0.02..19.76 rows=636 width=0) (actual time=0.015..0.179 rows=978.00 loops=1)
+         Disabled: true
+         Buffers: shared hit=7
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.004 rows=1.00 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..13.36 rows=636 width=0) (actual time=0.010..0.094 rows=978.00 loops=1)
+               Buffers: shared hit=7
  Optimizer: Postgres query optimizer
- Planning Time: 0.630 ms
-   (slice0)    Executor memory: 30K bytes.
+ Planning:
+   Buffers: shared hit=152
+ Planning Time: 0.747 ms
+   (slice0)    Executor memory: 33K bytes.
  Memory used:  128000kB
- Execution Time: 0.295 ms
-(10 rows)
+ Execution Time: 0.274 ms
+(16 rows)
 
 reset enable_indexscan;
 reset enable_indexonlyscan;

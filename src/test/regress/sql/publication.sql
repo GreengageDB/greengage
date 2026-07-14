@@ -416,7 +416,7 @@ DROP TABLE rf_tbl_abcd_part_pk;
 SET client_min_messages = 'ERROR';
 
 -- stored
-CREATE TABLE testpub_gencol (a INT, b INT GENERATED ALWAYS AS (a + 1) STORED NOT NULL);
+CREATE TABLE testpub_gencol (a INT, b INT GENERATED ALWAYS AS (a + 1) STORED NOT NULL) DISTRIBUTED REPLICATED;
 CREATE UNIQUE INDEX testpub_gencol_idx ON testpub_gencol (b);
 ALTER TABLE testpub_gencol REPLICA IDENTITY USING index testpub_gencol_idx;
 

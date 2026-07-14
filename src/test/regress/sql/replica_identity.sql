@@ -134,7 +134,7 @@ ALTER INDEX test_replica_identity4_pkey
 -- Dropping the primary key is not allowed if that would leave the replica
 -- identity as nullable
 CREATE TABLE test_replica_identity5 (a int not null, b int, c int,
-	PRIMARY KEY (b, c));
+	PRIMARY KEY (b, c)) DISTRIBUTED REPLICATED;
 CREATE UNIQUE INDEX test_replica_identity5_a_b_key ON test_replica_identity5 (a, b);
 ALTER TABLE test_replica_identity5 REPLICA IDENTITY USING INDEX test_replica_identity5_a_b_key;
 ALTER TABLE test_replica_identity5 DROP CONSTRAINT test_replica_identity5_pkey;
