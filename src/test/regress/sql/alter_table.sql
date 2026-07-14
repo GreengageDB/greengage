@@ -1844,8 +1844,9 @@ select * from my_locks order by 1;
 rollback;
 
 begin;
-create function ttdummy () returns trigger language plpgsql as
-$$ begin return new; end $$;
+-- GGDB: use the shared ttdummy() trigger function created in test_setup
+-- (Greengage keeps the ttdummy C example that upstream PG18 dropped), instead
+-- of defining a local plpgsql ttdummy which would collide with it.
 create trigger ttdummy
 	before delete or update on alterlock
 	for each row

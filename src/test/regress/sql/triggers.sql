@@ -7,11 +7,25 @@
 \getenv dlsuffix PG_DLSUFFIX
 
 \set regresslib :libdir '/regress' :dlsuffix
+\set autoinclib :libdir '/autoinc' :dlsuffix
 
 CREATE FUNCTION trigger_return_old ()
         RETURNS trigger
         AS :'regresslib'
         LANGUAGE C;
+
+-- GGDB: PostgreSQL dropped the autoinc/time-travel trigger coverage from the
+-- core triggers test, but Greengage keeps it.  Re-create the C functions the
+-- retained tttest/ttdummy block uses (ttdummy() itself comes from test_setup).
+CREATE FUNCTION autoinc ()
+        RETURNS trigger
+        AS :'autoinclib'
+        LANGUAGE C;
+
+CREATE FUNCTION set_ttdummy (int4)
+        RETURNS int4
+        AS :'regresslib'
+        LANGUAGE C STRICT;
 
 
 -- Check behavior when trigger returns unmodified trigtuple
