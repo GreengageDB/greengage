@@ -31,6 +31,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
+#include "optimizer/prep.h"
 #include "optimizer/tlist.h"
 #include "optimizer/transform.h"
 #include "parser/parse_collate.h"
@@ -44,6 +45,15 @@
 extern PlannedStmt * GPOPTOptimizedPlan(Query *parse, bool *had_unexpected_failure);
 
 static Node *transformGroupedWindows(Node *node, void *context);
+
+/* Context and mutator for expanding virtual generated columns before ORCA */
+typedef struct expand_vgc_context
+{
+	PlannerGlobal *glob;			/* shared, for unique PlaceHolderVar ids */
+	MemoryContext planner_cxt;
+} expand_vgc_context;
+
+static Node *expand_virtual_generated_columns_mutator(Node *node, void *context);
 
 static Plan *remove_redundant_results(PlannerInfo *root, Plan *plan);
 static Node *remove_redundant_results_mutator(Node *node, void *);
@@ -140,6 +150,26 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	/* create a local copy to hand to the optimizer */
 	pqueryCopy = (Query *) copyObject(parse);
+
+	/*
+	 * Expand references to PG18 virtual generated columns into their generation
+	 * expressions, at every query level.  The Postgres planner does this in
+	 * subquery_planner() via expand_virtual_generated_columns(), a phase ORCA
+	 * bypasses; without it ORCA would read a virtual generated column as its
+	 * (never-stored, NULL) on-disk value instead of computing it.  That helper
+	 * is single-level by design, so walk the whole tree and apply it per Query,
+	 * sharing one PlannerGlobal so PlaceHolderVar ids stay unique.  Do this
+	 * before fold_constants() so the injected expressions get folded, matching
+	 * the planner's expand-then-fold ordering.
+	 */
+	{
+		expand_vgc_context ctx;
+
+		ctx.glob = glob;
+		ctx.planner_cxt = CurrentMemoryContext;
+		pqueryCopy = (Query *)
+			expand_virtual_generated_columns_mutator((Node *) pqueryCopy, &ctx);
+	}
 
 	/*
 	 * Pre-process the Query tree before calling optimizer.
@@ -454,6 +484,53 @@ push_down_expr_mutator(Node *node, List *child_tlist)
  * The function is structured as a mutator, so that we can transform
  * all of the Query nodes in the entire tree, bottom-up.
  */
+
+/*
+ * expand_virtual_generated_columns_mutator
+ *
+ * Recursively apply expand_virtual_generated_columns() to every Query node in
+ * the tree.  expand_virtual_generated_columns() rewrites references to virtual
+ * generated columns of the current query level only (it deliberately does not
+ * descend into subqueries, because in the normal planner each subquery gets its
+ * own subquery_planner() call); ORCA plans the whole tree at once, so we must
+ * run it at every level ourselves.  It returns a possibly-rebuilt Query, so we
+ * capture and splice the result back.  A fresh PlannerInfo is used per level
+ * (only ->parse matters), but the PlannerGlobal is shared so any PlaceHolderVar
+ * ids created (grouping sets / outer-join nullable side) stay unique.
+ */
+static Node *
+expand_virtual_generated_columns_mutator(Node *node, void *context)
+{
+	if (node == NULL)
+		return NULL;
+
+	if (IsA(node, Query))
+	{
+		expand_vgc_context *ctx = (expand_vgc_context *) context;
+		Query	   *query = (Query *) node;
+		PlannerInfo *subroot;
+
+		/* Minimal per-level root; mirrors optimize_query()'s root init. */
+		subroot = makeNode(PlannerInfo);
+		subroot->parse = query;
+		subroot->glob = ctx->glob;
+		subroot->query_level = 1;
+		subroot->planner_cxt = ctx->planner_cxt;
+		subroot->wt_param_id = -1;
+
+		/* Expand this level (may return a rebuilt Query). */
+		query = expand_virtual_generated_columns(subroot);
+
+		/* Then recurse into all sub-Queries (subqueries, CTEs, SubLinks). */
+		return (Node *) query_tree_mutator(query,
+										   expand_virtual_generated_columns_mutator,
+										   context, 0);
+	}
+
+	return expression_tree_mutator(node,
+								   expand_virtual_generated_columns_mutator,
+								   context);
+}
 
 /* Context for transformGroupedWindows() which mutates components
  * of a query that mixes windowing and aggregation or grouping.  It
