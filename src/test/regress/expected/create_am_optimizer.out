@@ -3,10 +3,10 @@
 --
 -- GPDB: "SELECT relam FROM pg_class WHERE relname = 'am_partitioned'" prints
 -- heap2's OID, which is assigned dynamically and varies between parallel runs;
--- mask the bare 6+ digit relam OID so the test is deterministic.
+-- mask the bare 5+ digit relam OID so the test is deterministic.
 -- start_matchsubs
--- m/^ \d\d\d\d\d\d+$/
--- s/^ \d\d\d\d\d\d+$/ <relam_oid>/
+-- m/^ \d\d\d\d\d+$/
+-- s/^ \d\d\d\d\d+$/ <relam_oid>/
 -- end_matchsubs
 -- Make gist2 over gisthandler. In fact, it would be a synonym to gist.
 CREATE ACCESS METHOD gist2 TYPE INDEX HANDLER gisthandler;
