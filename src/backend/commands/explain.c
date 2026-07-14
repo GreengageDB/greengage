@@ -373,7 +373,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 #ifdef USE_ORCA
 	if (es->dxl)
 	{
-		ExplainDXL(query, es, queryString, params);
+		ExplainDXL(query, es, pstate->p_sourcetext, params);
 		return;
 	}
 #endif

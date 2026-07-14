@@ -216,6 +216,24 @@ CTranslatorDXLToPlStmt::GetPlannedStmtFromDXL(const CDXLNode *dxlnode,
 	// PG16: permission-check info parallel to the rtable
 	planned_stmt->permInfos =
 		m_dxl_to_plstmt_context->GetRTEPermissionInfoList();
+
+	// PG18: ORCA performs its own partition pruning (PartitionSelector /
+	// DynamicSeqScan) and never uses the executor's initial-pruning path, so
+	// no range-table entry is pruned at ExecInitRangeTable() time.  Mark every
+	// RTE as unpruned: es_unpruned_relids is initialized from this bitmap, and
+	// nodeModifyTable asserts that a ModifyTable's rootRelation belongs to it
+	// (execUtils.c:ExecInitRangeTable, nodeModifyTable.c:ExecInitModifyTable).
+	planned_stmt->unprunableRelids = nullptr;
+	{
+		int num_rtes = (int) gpdb::ListLength(planned_stmt->rtable);
+
+		for (int rti = 1; rti <= num_rtes; rti++)
+		{
+			planned_stmt->unprunableRelids =
+				gpdb::BmsAddMember(planned_stmt->unprunableRelids, rti);
+		}
+	}
+
 	planned_stmt->subplans = m_dxl_to_plstmt_context->GetSubplanEntriesList();
 	planned_stmt->planTree = plan;
 
@@ -2091,8 +2109,8 @@ CTranslatorDXLToPlStmt::TranslateDXLMergeJoin(
 
 	merge_join->mergeFamilies =
 		(Oid *) gpdb::GPDBAlloc(sizeof(Oid) * num_join_conds);
-	merge_join->mergeStrategies =
-		(int *) gpdb::GPDBAlloc(sizeof(int) * num_join_conds);
+	merge_join->mergeReversals =
+		(bool *) gpdb::GPDBAlloc(sizeof(bool) * num_join_conds);
 	merge_join->mergeCollations =
 		(Oid *) gpdb::GPDBAlloc(sizeof(Oid) * num_join_conds);
 	merge_join->mergeNullsFirst =
@@ -2129,7 +2147,7 @@ CTranslatorDXLToPlStmt::TranslateDXLMergeJoin(
 
 			// Make sure that the following properties match
 			// those in CPhysicalFullMergeJoin::PosRequired().
-			merge_join->mergeStrategies[ul] = BTLessStrategyNumber;
+			merge_join->mergeReversals[ul] = false;
 			merge_join->mergeNullsFirst[ul] = false;
 			++ul;
 		}

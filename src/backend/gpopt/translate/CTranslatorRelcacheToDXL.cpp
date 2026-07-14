@@ -498,14 +498,14 @@ CTranslatorRelcacheToDXL::RetrieveRelColumns(CMemoryPool *mp,
 
 	for (ULONG ul = 0; ul < (ULONG) rel->rd_att->natts; ul++)
 	{
-		Form_pg_attribute att = &rel->rd_att->attrs[ul];
+		Form_pg_attribute att = TupleDescAttr(rel->rd_att, ul);
 		CMDName *md_colname =
 			CDXLUtils::CreateMDNameFromCharArray(mp, NameStr(att->attname));
 
 		// translate the default column value
 		CDXLNode *dxl_default_col_val = nullptr;
 
-		if (!att->attisdropped && !rel->rd_att->attrs[ul].attgenerated)
+		if (!att->attisdropped && !TupleDescAttr(rel->rd_att, ul)->attgenerated)
 		{
 			dxl_default_col_val = GetDefaultColumnValue(
 				mp, md_accessor, rel->rd_att, att->attnum);
@@ -611,7 +611,7 @@ CTranslatorRelcacheToDXL::GetDefaultColumnValue(CMemoryPool *mp,
 	if (nullptr == node)
 	{
 		// get the default value for the type
-		Form_pg_attribute att_tup = &rd_att->attrs[attno - 1];
+		Form_pg_attribute att_tup = TupleDescAttr(rd_att, attno - 1);
 		node = gpdb::GetTypeDefault(att_tup->atttypid);
 	}
 

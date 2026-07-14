@@ -3477,7 +3477,7 @@ CTranslatorQueryToDXL::NoteDistributionPolicyOpclasses(const RangeTblEntry *rte)
 		for (int i = 0; i < policy_nattrs; i++)
 		{
 			AttrNumber attnum = policy->attrs[i];
-			Oid typeoid = desc->attrs[attnum - 1].atttypid;
+			Oid typeoid = TupleDescAttr(desc, attnum - 1)->atttypid;
 			Oid opfamily;
 			Oid hashfunc;
 
