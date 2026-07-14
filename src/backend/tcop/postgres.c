@@ -5856,8 +5856,16 @@ PostgresMain(const char *dbname, const char *username)
 		if (ignore_till_sync && firstchar != EOF)
 			continue;
 
-		/* last txn abort, try to synchronize guc to cached QE */
-		if(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list)
+		/*
+		 * Last txn abort, or a synced GUC restored by a mid-command nest-level
+		 * pop (e.g. PG18 RestrictSearchPath): try to synchronize guc to cached
+		 * QE.  restore_guc_to_QE() runs its own start/finish_xact_command, so it
+		 * must only be called at a clean boundary; in extended-query/pipeline
+		 * mode the transaction is still held open here (BeginImplicitTransaction
+		 * block), and starting a command in that state fails.  Defer to the next
+		 * clean boundary in that case.
+		 */
+		if(Gp_role == GP_ROLE_DISPATCH && gp_guc_restore_list && !IsTransactionState())
 			restore_guc_to_QE();
 
 
