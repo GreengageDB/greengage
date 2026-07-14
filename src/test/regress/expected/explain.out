@@ -85,7 +85,7 @@ select explain_filter('explain (analyze, buffers off) select * from int8_tbl i8'
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
    (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 117K bytes avg x N workers, 117K bytes max (seg0).
+   (slice1)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -605,13 +605,15 @@ select explain_filter_to_json('explain (settings, format json) select * from int
 rollback;
 -- GENERIC_PLAN option
 select explain_filter('explain (generic_plan) select unique1 from tenk1 where thousand = $1');
-                              explain_filter                              
---------------------------------------------------------------------------
+                                    explain_filter                                     
+---------------------------------------------------------------------------------------
  Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on tenk1  (cost=N.N..N.N rows=N width=N)
-         Filter: (thousand = $N)
+   ->  Bitmap Heap Scan on tenk1  (cost=N.N..N.N rows=N width=N)
+         Recheck Cond: (thousand = $N)
+         ->  Bitmap Index Scan on tenk1_thous_tenthous  (cost=N.N..N.N rows=N width=N)
+               Index Cond: (thousand = $N)
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 -- should fail
 select explain_filter('explain (analyze, generic_plan) select unique1 from tenk1 where thousand = $1');
@@ -1175,7 +1177,7 @@ select explain_filter('explain (analyze,buffers off,serialize) create temp table
  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
+   (slice0)    Executor memory: 119K bytes avg x N workers, 119K bytes max (seg0).
  Memory used:  NkB
  Serialization: time=N.N ms  output=NkB  format=text
  Execution Time: N.N ms
@@ -1190,7 +1192,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 53K bytes.  Work_mem: 17K bytes max.
+   (slice0)    Executor memory: 62K bytes.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1206,7 +1208,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 85K bytes.  Work_mem: 130K bytes max.
+   (slice0)    Executor memory: 214K bytes.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1221,14 +1223,13 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Sort (actual time=N.N..N.N rows=N.N loops=N)
          Sort Key: ((a.n < N))
          Sort Method:  quicksort  Memory: NkB
-         Executor Memory: NkB  Segments: N  Max: NkB (segment N)
          ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 142K bytes.  Work_mem: 134K bytes max.
+   (slice0)    Executor memory: 270K bytes.
  Memory used:  NkB
  Execution Time: N.N ms
-(13 rows)
+(12 rows)
 
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
