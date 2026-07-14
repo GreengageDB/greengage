@@ -254,9 +254,18 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 			 * not-null constraints).  It doesn't seem worth insisting on that
 			 * exact type though, since a null value is type-independent.  As
 			 * above, just insist on *some* NULL constant.
+			 *
+			 * GPDB: as with the dropped-column case above, the subplan can be a
+			 * Motion (or, under ORCA, a stack of Result nodes), so the NULL
+			 * constant produced for a generated column is carried up as a Var
+			 * rather than surviving as a literal Const.  Accept a Var here too;
+			 * the executor always recomputes generated columns
+			 * (ExecComputeStoredGenerated / virtual columns are computed on
+			 * read), so the plan's expression for the column is never used.
 			 */
-			if (!IsA(tle->expr, Const) ||
-				!((Const *) tle->expr)->constisnull)
+			if (!IsA(tle->expr, Var) &&
+				(!IsA(tle->expr, Const) ||
+				 !((Const *) tle->expr)->constisnull))
 				ereport(ERROR,
 						(errcode(ERRCODE_DATATYPE_MISMATCH),
 						 errmsg("table row type and query-specified row type do not match"),
