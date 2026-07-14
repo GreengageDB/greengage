@@ -39,6 +39,7 @@ static void check_for_missing_support_function_for_partitions(void);
 static void check_for_incompatible_guc_settings(void);
 static void check_views_with_removed_columns(void);
 static void check_views_with_removed_relations(void);
+static void check_for_removed_guc_settings(void);
 
 /*
  *	check_greengage
@@ -69,6 +70,7 @@ check_greengage(void)
 	check_execute_on_master_functions();
 	check_for_missing_support_function_for_partitions();
 	check_for_incompatible_guc_settings();
+	check_for_removed_guc_settings();
 }
 
 /*
@@ -1749,6 +1751,99 @@ check_views_with_removed_relations()
 		   "| These views must be updated to use relations supported in the\n"
 		   "| target version or removed before upgrade can continue. A list\n"
 		   "| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_for_removed_guc_settings(void)
+{
+	char		output_path[MAXPGPATH];
+	FILE	   *script = NULL;
+	bool		found = false;
+	PGresult   *res;
+	PGconn	   *conn;
+	int			ntups;
+	int			i_datname;
+	int			i_rolname;
+	int			i_guc_name;
+	int			i_setting;
+
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	prep_status("Checking for removed GUC settings");
+
+	snprintf(output_path, sizeof(output_path), "%s/%s",
+			 log_opts.basedir, "removed_guc_settings.txt");
+
+	/*
+	 * pg_db_role_setting is a shared catalog, so checking it once is enough
+	 * for ALTER DATABASE/ROLE SET and ALTER ROLE IN DATABASE SET values.
+	 */
+	conn = connectToServer(&old_cluster, old_cluster.dbarr.dbs[0].db_name);
+	res = executeQueryOrDie(conn,
+							"SELECT coalesce(d.datname, '<none>') AS datname,"
+							"       coalesce(r.rolname, '<none>') AS rolname,"
+							"       pg_catalog.lower(pg_catalog.split_part(u.setting, '=', 1)) AS guc_name,"
+							"       u.setting "
+							"FROM pg_catalog.pg_db_role_setting s "
+							"LEFT JOIN pg_catalog.pg_database d ON d.oid = s.setdatabase "
+							"LEFT JOIN pg_catalog.pg_roles r ON r.oid = s.setrole "
+							"CROSS JOIN pg_catalog.unnest(s.setconfig) AS u(setting) "
+							"WHERE pg_catalog.lower(pg_catalog.split_part(u.setting, '=', 1)) IN ("
+							"    'gp_autostats_on_change_ratio_threshold',"
+							"    'gp_enable_exchange_default_partition',"
+							"    'gp_enable_groupext_distinct_gather',"
+							"    'gp_enable_groupext_distinct_pruning',"
+							"    'gp_enable_sort_distinct',"
+							"    'gp_gpperfmon_send_interval',"
+							"    'gp_keep_partition_children_locks',"
+							"    'gp_log_resqueue_priority_sleep_time',"
+							"    'gp_resource_group_enable_recalculate_query_mem',"
+							"    'gp_use_synchronize_seqscans_catalog_vacuum_full',"
+							"    'gpperfmon_log_alert_level',"
+							"    'memory_spill_ratio',"
+							"    'password_hash_algorithm',"
+							"    'debug_assertions'"
+							") "
+							"ORDER BY datname, rolname, guc_name;");
+
+	ntups = PQntuples(res);
+	i_datname = PQfnumber(res, "datname");
+	i_rolname = PQfnumber(res, "rolname");
+	i_guc_name = PQfnumber(res, "guc_name");
+	i_setting = PQfnumber(res, "setting");
+
+	for (int rowno = 0; rowno < ntups; rowno++)
+	{
+		found = true;
+		if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+			pg_fatal("could not open file \"%s\": %s\n",
+					 output_path, strerror(errno));
+
+		fprintf(script, "Database: %s\n", PQgetvalue(res, rowno, i_datname));
+		fprintf(script, "Role: %s\n", PQgetvalue(res, rowno, i_rolname));
+		fprintf(script, "GUC: %s\n", PQgetvalue(res, rowno, i_guc_name));
+		fprintf(script, "Setting: %s\n\n",
+				PQgetvalue(res, rowno, i_setting));
+	}
+
+	PQclear(res);
+	PQfinish(conn);
+
+	if (script)
+		fclose(script);
+
+	if (found)
+	{
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains settings for GUCs that are not supported\n"
+			"| by the new cluster. Remove these settings before the upgrade can\n"
+			"| continue. A list of the problem settings is in the file:\n"
+			"|     %s\n\n", output_path);
 	}
 	else
 		check_ok();
