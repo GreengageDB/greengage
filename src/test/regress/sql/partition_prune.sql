@@ -1373,8 +1373,8 @@ drop function explain_analyze(text);
 
 -- Runtime pruning on UPDATE using WITH CHECK OPTIONS and RETURNING
 create table part_abc (a int, b text, c bool) partition by list (a);
-create table part_abc_1 (b text, a int, c bool);
-create table part_abc_2 (a int, c bool, b text);
+create table part_abc_1 (b text, a int, c bool) distributed by (a);
+create table part_abc_2 (a int, c bool, b text) distributed by (a);
 alter table part_abc attach partition part_abc_1 for values in (1);
 alter table part_abc attach partition part_abc_2 for values in (2);
 insert into part_abc values (1, 'b', true);

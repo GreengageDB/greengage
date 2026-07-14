@@ -213,19 +213,10 @@ INSERT INTO foo VALUES (4)
   RETURNING old.tableoid::regclass, old.ctid, old.*,
             new.tableoid::regclass, new.ctid, new.*, *;
 
--- INSERT ... ON CONFLICT ... UPDATE has OLD and NEW
-CREATE UNIQUE INDEX foo_f1_idx ON foo (f1);
-EXPLAIN (verbose, costs off)
-INSERT INTO foo VALUES (4, 'conflict'), (5, 'ok')
-  ON CONFLICT (f1) DO UPDATE SET f2 = excluded.f2||'ed', f3 = -1
-  RETURNING WITH (OLD AS o, NEW AS n)
-            o.tableoid::regclass, o.ctid, o.*,
-            n.tableoid::regclass, n.ctid, n.*, *;
-INSERT INTO foo VALUES (4, 'conflict'), (5, 'ok')
-  ON CONFLICT (f1) DO UPDATE SET f2 = excluded.f2||'ed', f3 = -1
-  RETURNING WITH (OLD AS o, NEW AS n)
-            o.tableoid::regclass, o.ctid, o.*,
-            n.tableoid::regclass, n.ctid, n.*, *;
+-- GPDB: foo is DISTRIBUTED RANDOMLY, so it cannot carry a UNIQUE index on f1,
+-- and therefore ON CONFLICT (f1) has no arbiter index.  Just insert the row the
+-- following UPDATE/DELETE OLD/NEW tests expect.
+INSERT INTO foo VALUES (5, 'ok');
 
 -- UPDATE has OLD and NEW
 EXPLAIN (verbose, costs off)
@@ -289,40 +280,9 @@ UPDATE joinview SET f3 = f3 + 1 WHERE f3 = 57
 UPDATE joinview SET f3 = f3 + 1 WHERE f3 = 57
   RETURNING old.*, new.*, *, new.f3 - old.f3 AS delta_f3;
 
--- UPDATE on view with INSTEAD OF trigger
-CREATE FUNCTION joinview_upd_trig_fn() RETURNS trigger
-LANGUAGE plpgsql AS
-$$
-BEGIN
-  RAISE NOTICE 'UPDATE: % -> %', old, new;
-  UPDATE foo SET f1 = new.f1, f3 = new.f3, f4 = new.f4 * 10
-    FROM joinme WHERE f2 = f2j AND f2 = old.f2
-    RETURNING new.f1, new.f4 INTO new.f1, new.f4;  -- should fail
-  RETURN NEW;
-END;
-$$;
-CREATE TRIGGER joinview_upd_trig INSTEAD OF UPDATE ON joinview
-  FOR EACH ROW EXECUTE FUNCTION joinview_upd_trig_fn();
-DROP RULE joinview_u ON joinview;
-UPDATE joinview SET f3 = f3 + 1, f4 = 7 WHERE f3 = 58
-  RETURNING old.*, new.*, *, new.f3 - old.f3 AS delta_f3;  -- should fail
-
-CREATE OR REPLACE FUNCTION joinview_upd_trig_fn() RETURNS trigger
-LANGUAGE plpgsql AS
-$$
-BEGIN
-  RAISE NOTICE 'UPDATE: % -> %', old, new;
-  UPDATE foo SET f1 = new.f1, f3 = new.f3, f4 = new.f4 * 10
-    FROM joinme WHERE f2 = f2j AND f2 = old.f2
-    RETURNING WITH (new AS n) new.f1, n.f4 INTO new.f1, new.f4;  -- now ok
-  RETURN NEW;
-END;
-$$;
-EXPLAIN (verbose, costs off)
-UPDATE joinview SET f3 = f3 + 1, f4 = 7 WHERE f3 = 58
-  RETURNING old.*, new.*, *, new.f3 - old.f3 AS delta_f3;
-UPDATE joinview SET f3 = f3 + 1, f4 = 7 WHERE f3 = 58
-  RETURNING old.*, new.*, *, new.f3 - old.f3 AS delta_f3;  -- should succeed
+-- GPDB: INSTEAD OF triggers are not supported in Greenplum, so the upstream
+-- "UPDATE on view with INSTEAD OF trigger" sub-block (CREATE TRIGGER and the
+-- two joinview UPDATEs that rely on it) is dropped here.
 
 -- Test wholerow & dropped column handling
 ALTER TABLE foo DROP COLUMN f3 CASCADE;
@@ -347,12 +307,16 @@ UPDATE public.tt SET b = b * 2 RETURNING a, b, old.b, new.b, tt.b, public.tt.b;
 DROP TABLE public.tt;
 
 -- Test cross-partition updates and attribute mapping
-CREATE TABLE foo_parted (a int, b float8, c text) PARTITION BY LIST (a);
+-- GPDB: foo_parted is DISTRIBUTED RANDOMLY so the cross-partition UPDATEs below
+-- (which change the partition/attribute a) do not update a distribution column;
+-- the standalone children keep their upstream (differing) column order but must
+-- share the same DISTRIBUTED RANDOMLY policy for ATTACH PARTITION to succeed.
+CREATE TABLE foo_parted (a int, b float8, c text) PARTITION BY LIST (a) DISTRIBUTED RANDOMLY;
 CREATE TABLE foo_part_s1 PARTITION OF foo_parted FOR VALUES IN (1);
 CREATE TABLE foo_part_s2 PARTITION OF foo_parted FOR VALUES IN (2);
-CREATE TABLE foo_part_d1 (c text, a int, b float8);
+CREATE TABLE foo_part_d1 (c text, a int, b float8) DISTRIBUTED RANDOMLY;
 ALTER TABLE foo_parted ATTACH PARTITION foo_part_d1 FOR VALUES IN (3);
-CREATE TABLE foo_part_d2 (b float8, c text, a int);
+CREATE TABLE foo_part_d2 (b float8, c text, a int) DISTRIBUTED RANDOMLY;
 ALTER TABLE foo_parted ATTACH PARTITION foo_part_d2 FOR VALUES IN (4);
 
 INSERT INTO foo_parted
@@ -388,27 +352,6 @@ DELETE FROM foo_parted
 
 DROP TABLE foo_parted CASCADE;
 
--- Test deparsing
-CREATE FUNCTION foo_update()
-  RETURNS void
-  LANGUAGE sql
-BEGIN ATOMIC
-  WITH u1 AS (
-    UPDATE foo SET f1 = f1 + 1 RETURNING old.*, new.*
-  ), u2 AS (
-    UPDATE foo SET f1 = f1 + 1 RETURNING WITH (OLD AS "old foo") "old foo".*, new.*
-  ), u3 AS (
-    UPDATE foo SET f1 = f1 + 1 RETURNING WITH (NEW AS "new foo") old.*, "new foo".*
-  )
-  UPDATE foo SET f1 = f1 + 1
-    RETURNING WITH (OLD AS o, NEW AS n)
-              o.*, n.*, o, n, o.f1 = n.f1, o = n,
-              (SELECT o.f2 = n.f2),
-              (SELECT count(*) FROM foo WHERE foo.f1 = o.f4),
-              (SELECT count(*) FROM foo WHERE foo.f4 = n.f4),
-              (SELECT count(*) FROM foo WHERE foo = o),
-              (SELECT count(*) FROM foo WHERE foo = n);
-END;
-
-\sf foo_update
-DROP FUNCTION foo_update;
+-- GPDB: the upstream "Test deparsing" case uses multiple writable CTEs in a
+-- single query, which Greenplum does not support (only one modifying WITH clause
+-- is allowed per query), so that deparse test is dropped here.

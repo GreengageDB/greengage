@@ -228,6 +228,10 @@ DROP TABLE firstparent, secondparent, jointchild, thirdparent, otherchild;
 -- Test changing the type of inherited columns
 insert into d values('test','one','two','three');
 alter table z drop constraint z_pkey;
+-- In GPDB, also drop z2's UNIQUE constraint so that ALL inheritance children of
+-- 'a' are free of unique indexes; otherwise 'set distributed randomly' below
+-- fails because a child relation still has a unique index.
+alter table z2 drop constraint z2_aa_b_key;
 alter table a alter column aa type integer using bit_length(aa);
 -- In GPDB, the table is distributed by the 'aa' column, changing its type
 -- therefore fails. Change the distribution key and try again.
@@ -1057,7 +1061,9 @@ drop table inh_parent, inh_child;
 -- don't interfere with other types of constraints
 create table inh_parent (a int primary key);
 create table inh_child (a int primary key) inherits (inh_parent);
-alter table inh_parent add constraint inh_parent_excl exclude ((1) with =);
+-- In GPDB, a constant EXCLUDE constraint cannot include the distribution key,
+-- and inh_parent has an inheritance child so it cannot be DISTRIBUTED REPLICATED;
+-- there is no working distribution for this exclusion constraint, so omit it.
 alter table inh_parent add constraint inh_parent_uq unique (a);
 alter table inh_parent add constraint inh_parent_fk foreign key (a) references inh_parent (a);
 create table inh_child2 () inherits (inh_parent);
