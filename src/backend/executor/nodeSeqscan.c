@@ -298,6 +298,38 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	return scanstate;
 }
 
+/*
+ * ExecSeqScanReassignExecProcNode
+ *		Re-select the ExecSeqScan* fast-path variant after a qual or projection
+ *		has been added to an already-initialized SeqScanState.  PG18 picks one
+ *		of the specialized ExecSeqScan*() variants at init time based on the
+ *		presence of a qual/projection; the Greengage DynamicSeqScan assigns a
+ *		per-partition projection to its child SeqScan *after*
+ *		ExecInitSeqScanForPartition(), which would otherwise leave the
+ *		no-projection ExecSeqScan variant in place and trip its
+ *		Assert(ps_ProjInfo == NULL) on the first tuple.
+ */
+void
+ExecSeqScanReassignExecProcNode(SeqScanState *scanstate)
+{
+	if (scanstate->ss.ps.state->es_epq_active != NULL)
+		scanstate->ss.ps.ExecProcNode = ExecSeqScanEPQ;
+	else if (scanstate->ss.ps.qual == NULL)
+	{
+		if (scanstate->ss.ps.ps_ProjInfo == NULL)
+			scanstate->ss.ps.ExecProcNode = ExecSeqScan;
+		else
+			scanstate->ss.ps.ExecProcNode = ExecSeqScanWithProject;
+	}
+	else
+	{
+		if (scanstate->ss.ps.ps_ProjInfo == NULL)
+			scanstate->ss.ps.ExecProcNode = ExecSeqScanWithQual;
+		else
+			scanstate->ss.ps.ExecProcNode = ExecSeqScanWithQualProject;
+	}
+}
+
 /* ----------------------------------------------------------------
  *		ExecEndSeqScan
  *

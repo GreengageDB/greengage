@@ -3722,6 +3722,12 @@ CTranslatorDXLToPlStmt::TranslateDXLAppend(
 	// create append plan node
 	Append *append = MakeNode(Append);
 
+	// PG18: ORCA does not use the executor's initial partition pruning, so
+	// disable it on the Append (the standard planner defaults this to -1;
+	// MakeNode zeroes it to 0, which would make ExecInitAppend call
+	// ExecInitPartitionExecPruning with a NULL apprelids and crash).
+	append->part_prune_index = -1;
+
 	Plan *plan = &(append->plan);
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 

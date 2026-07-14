@@ -172,6 +172,14 @@ initNextTableToScan(DynamicSeqScanState *node)
 	{
 		ExecInitResultSlot(planstate, &TTSOpsVirtual);
 		ExecAssignProjectionInfo(planstate, partTupDesc);
+
+		/*
+		 * PG18: the child SeqScan's ExecProcNode was set to a no-projection
+		 * ExecSeqScan* variant by ExecInitSeqScanForPartition(); now that we
+		 * have added a projection, re-select the matching variant or
+		 * ExecSeqScan would assert ps_ProjInfo == NULL.
+		 */
+		ExecSeqScanReassignExecProcNode(node->seqScanState);
 	}
 
 	return true;
