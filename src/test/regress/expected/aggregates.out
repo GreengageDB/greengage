@@ -693,8 +693,8 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
    4 |   2
    2 |   2
    8 |   2
-   6 |   2
    0 |   2
+   6 |   2
 (5 rows)
 
 -- this should fail because subquery has an agg of its own in WHERE
@@ -2203,11 +2203,11 @@ group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
  ten | sum 
 -----+-----
-   6 |    
-   0 |    
    4 |    
    2 |    
    8 |    
+   6 |    
+   0 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -3620,8 +3620,8 @@ FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
 GROUP BY c1.w, c1.z;
         avg         
 --------------------
- 5.0000000000000000
  4.0000000000000000
+ 5.0000000000000000
 (2 rows)
 
 -- Pathkeys, built in a subtree, can be used to optimize GROUP-BY clause
@@ -4153,22 +4153,22 @@ set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=21.35..21.36 rows=1 width=8) (actual time=0.235..0.236 rows=1.00 loops=1)
+ Aggregate  (cost=19.53..19.54 rows=1 width=8) (actual time=0.171..0.172 rows=1.00 loops=1)
    Buffers: shared hit=7
-   ->  Nested Loop  (cost=0.02..19.76 rows=636 width=0) (actual time=0.015..0.179 rows=978.00 loops=1)
+   ->  Nested Loop  (cost=0.02..18.14 rows=555 width=0) (actual time=0.012..0.135 rows=974.00 loops=1)
          Disabled: true
          Buffers: shared hit=7
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.004..0.004 rows=1.00 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..13.36 rows=636 width=0) (actual time=0.010..0.094 rows=978.00 loops=1)
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.003..0.004 rows=1.00 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.001..0.002 rows=1.00 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..12.55 rows=555 width=0) (actual time=0.008..0.072 rows=974.00 loops=1)
                Buffers: shared hit=7
  Optimizer: Postgres query optimizer
  Planning:
    Buffers: shared hit=152
- Planning Time: 0.747 ms
+ Planning Time: 1.044 ms
    (slice0)    Executor memory: 33K bytes.
  Memory used:  128000kB
- Execution Time: 0.274 ms
+ Execution Time: 0.204 ms
 (16 rows)
 
 reset enable_indexscan;

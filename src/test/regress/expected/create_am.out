@@ -67,46 +67,42 @@ SELECT * FROM fast_emp4000
 SELECT * FROM fast_emp4000
     WHERE home_base <@ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-       home_base       
------------------------
- (337,455),(240,359)
- (1444,403),(1346,344)
-(2 rows)
+ home_base 
+-----------
+(0 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Finalize Aggregate
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Index Only Scan using grect2ind2 on fast_emp4000
-                     Index Cond: (home_base && '(1000,1000),(0,0)'::box)
+         ->  Index Only Scan using grect2ind2 on fast_emp4000
+               Index Cond: (home_base && '(1000,1000),(0,0)'::box)
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
  count 
 -------
-     2
+     0
 (1 row)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Finalize Aggregate
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Index Only Scan using grect2ind2 on fast_emp4000
-                     Index Cond: (home_base IS NULL)
+         ->  Index Only Scan using grect2ind2 on fast_emp4000
+               Index Cond: (home_base IS NULL)
  Optimizer: Postgres query optimizer
-(6 rows)
+(5 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
  count 
 -------
-   278
+     0
 (1 row)
 
 ROLLBACK;
@@ -477,7 +473,7 @@ ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam  
 --------
- 420958
+ 138493
 (1 row)
 
 -- Upon ALTER TABLE SET ACCESS METHOD on a partitioned table, new partitions
@@ -485,7 +481,7 @@ SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam  
 --------
- 420958
+ 138493
 (1 row)
 
 SET LOCAL default_table_access_method = 'heap';
@@ -505,7 +501,7 @@ ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam  
 --------
- 420958
+ 138493
 (1 row)
 
 CREATE TABLE am_partitioned_3 PARTITION OF am_partitioned

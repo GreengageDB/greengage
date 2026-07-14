@@ -2,8 +2,6 @@
 -- VACUUM
 --
 CREATE TABLE vactst (j INT DEFAULT 1,i INT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'j' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vactst(i) VALUES (1);
 ANALYZE vactst;
 INSERT INTO vactst SELECT * FROM vactst;
@@ -73,8 +71,8 @@ CREATE INDEX ON vaccluster(wrap_do_analyze(i));
 -- support that in short time. Note this causes "ANALYZE/VACUUM FULL vaccluster"
 -- succeed (On PG it fails: "ERROR:  ANALYZE cannot be executed from VACUUM or ANALYZE")
 INSERT INTO vaccluster VALUES (1), (2);
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=16695)
-CONTEXT:  SQL function "do_analyze" during startup
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg1 172.17.0.2:7003 pid=2510935)
+CONTEXT:  SQL function "do_analyze" statement 1
 SQL function "wrap_do_analyze" statement 1
 ANALYZE vaccluster;
 -- Test ANALYZE in transaction, where the transaction surrounding
@@ -93,6 +91,7 @@ COMMIT;
 BEGIN;
 CREATE TABLE past_inh_parent ();
 CREATE TABLE past_inh_child () INHERITS (past_inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO past_inh_child DEFAULT VALUES;
 INSERT INTO past_inh_child DEFAULT VALUES;
 ANALYZE past_inh_parent;
@@ -109,7 +108,7 @@ SELECT reltuples, relhassubclass
   FROM pg_class WHERE oid = 'past_inh_parent'::regclass;
  reltuples | relhassubclass 
 -----------+----------------
-         0 | f
+         0 | t
 (1 row)
 
 COMMIT;
@@ -117,6 +116,7 @@ COMMIT;
 BEGIN;
 CREATE TABLE past_parted (i int) PARTITION BY LIST(i);
 CREATE TABLE past_part PARTITION OF past_parted FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO past_parted VALUES (1),(1);
 ANALYZE past_parted;
 DROP TABLE past_part;
@@ -144,8 +144,6 @@ VACUUM FULL vactst;
 VACUUM (DISABLE_PAGE_SKIPPING) vaccluster;
 -- PARALLEL option
 CREATE TABLE pvactst (i INT, a INT[], p POINT) with (autovacuum_enabled = off);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO pvactst SELECT i, array[1,2,3], point(i, i+1) FROM generate_series(1,1000) i;
 CREATE INDEX btree_pvactst ON pvactst USING btree (i);
 CREATE INDEX hash_pvactst ON pvactst USING hash (i);
@@ -194,8 +192,14 @@ LINE 1: VACUUM (PARALLEL) pvactst;
 -- dead tuples.
 SET maintenance_work_mem TO 64;
 VACUUM (PARALLEL 2) pvactst2;
+ERROR:  VACUUM option "parallel" not supported in GPDB
+LINE 1: VACUUM (PARALLEL 2) pvactst2;
+                ^
 DELETE FROM pvactst2 WHERE i < 1000;
 VACUUM (PARALLEL 2) pvactst2;
+ERROR:  VACUUM option "parallel" not supported in GPDB
+LINE 1: VACUUM (PARALLEL 2) pvactst2;
+                ^
 RESET maintenance_work_mem;
 -- Test different combinations of parallel and full options for temporary tables
 CREATE TEMPORARY TABLE tmp (a int PRIMARY KEY);
@@ -251,10 +255,8 @@ VACUUM (INDEX_CLEANUP FALSE, FREEZE TRUE) vaccluster;
 -- TRUNCATE option
 CREATE TEMP TABLE vac_truncate_test(i INT NOT NULL, j text)
 	WITH (vacuum_truncate=true, autovacuum_enabled=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vac_truncate_test VALUES (1, NULL), (NULL, NULL);
-ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint  (seg0 172.17.0.2:7002 pid=16695)
+ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2510934)
 DETAIL:  Failing row contains (null, null).
 VACUUM (TRUNCATE FALSE, DISABLE_PAGE_SKIPPING) vac_truncate_test;
 SELECT pg_relation_size('vac_truncate_test') > 0;
@@ -274,7 +276,7 @@ SELECT pg_relation_size('vac_truncate_test') = 0;
 VACUUM (TRUNCATE FALSE, FULL TRUE) vac_truncate_test;
 ALTER TABLE vac_truncate_test RESET (vacuum_truncate);
 INSERT INTO vac_truncate_test VALUES (1, NULL), (NULL, NULL);
-ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint
+ERROR:  null value in column "i" of relation "vac_truncate_test" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2510934)
 DETAIL:  Failing row contains (null, null).
 VACUUM (DISABLE_PAGE_SKIPPING) vac_truncate_test;
 SELECT pg_relation_size('vac_truncate_test') > 0;
@@ -301,8 +303,6 @@ SELECT pg_relation_size('vac_truncate_test') = 0;
 DROP TABLE vac_truncate_test;
 -- partitioned table
 CREATE TABLE vacparted (a int, b char) PARTITION BY LIST (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacparted1 PARTITION OF vacparted FOR VALUES IN (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO vacparted VALUES (1, 'a');
@@ -367,6 +367,7 @@ COMMIT;
 --
 CREATE TABLE only_parted (a int, b text) PARTITION BY LIST (a);
 CREATE TABLE only_parted1 PARTITION OF only_parted FOR VALUES IN (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO only_parted VALUES (1, 'a');
 -- Ensure only the partitioned table is analyzed
 ANALYZE ONLY only_parted;
@@ -403,6 +404,7 @@ ANALYZE ONLY vacparted(a,b);
 --
 CREATE TABLE only_inh_parent (a int primary key, b TEXT);
 CREATE TABLE only_inh_child () INHERITS (only_inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO only_inh_child(a,b) VALUES (1, 'aaa'), (2, 'bbb'), (3, 'ccc');
 -- Ensure only parent is analyzed
 ANALYZE ONLY only_inh_parent;
@@ -488,8 +490,6 @@ ANALYZE vactst;
 COMMIT;
 -- PROCESS_TOAST option
 CREATE TABLE vac_option_tab (a INT, t TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO vac_option_tab SELECT a, 't' || a FROM generate_series(1, 10) AS a;
 ALTER TABLE vac_option_tab ALTER COLUMN t SET STORAGE EXTERNAL;
 -- Check the number of vacuums done on table vac_option_tab and on its
@@ -591,11 +591,7 @@ DROP TABLE vacparted;
 DROP TABLE no_index_cleanup;
 -- relation ownership, WARNING logs generated as all are skipped.
 CREATE TABLE vacowned (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacowned_parted (a int) PARTITION BY LIST (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE vacowned_part1 PARTITION OF vacowned_parted FOR VALUES IN (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE vacowned_part2 PARTITION OF vacowned_parted FOR VALUES IN (2);

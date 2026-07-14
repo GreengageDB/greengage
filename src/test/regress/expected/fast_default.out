@@ -1,6 +1,15 @@
 --
 -- ALTER TABLE ADD COLUMN DEFAULT test
 --
+-- start_ignore
+-- GPDB currently prints a "Settings: " line in the EXPLAIN output, if
+-- there any GUCs are set. gpdiff masks them out, but it does not mask
+-- out the differences in "(xx rows)" lines that happens if there is
+-- no Settings line at all. The expected output does include some Settings.
+-- To make those "(xx rows)" lines stable, set a GUC. Doesn't matter which
+-- one, as long as it's printed in the Settings lines.
+set seq_page_cost=1.001;
+-- end_ignore
 SET search_path = fast_default;
 CREATE SCHEMA fast_default;
 CREATE TABLE m(id OID);
@@ -132,6 +141,9 @@ ALTER TABLE T ALTER COLUMN c_bpchar    DROP DEFAULT,
               ALTER COLUMN c_time      DROP DEFAULT,
               ALTER COLUMN c_hugetext  DROP DEFAULT;
 INSERT INTO T VALUES (27), (28);
+-- start_ignore
+ANALYZE T;
+-- end_ignore
 SELECT pk, c_int, c_bpchar, c_text, c_date, c_timestamp,
        c_timestamp_null, c_array, c_small, c_small_null,
        c_big, c_num, c_time, c_interval,
@@ -232,22 +244,22 @@ INSERT INTO T VALUES (15), (16);
 SELECT * FROM T;
  pk | c_int | c_bpchar |    c_text    |   c_date   |       c_timestamp        |            c_array            
 ----+-------+----------+--------------+------------+--------------------------+-------------------------------
-  1 |     6 | abcd     | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   2 |     6 | abcd     | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   3 |     8 | abcd     | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   4 |     8 | abcd     | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
-  5 |     8 | abc      | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
-  6 |     8 | abc      | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   7 |     8 | abc      | abcdefghijkl | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   8 |     8 | abc      | abcdefghijkl | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
+ 16 |       |          |              |            |                          | 
+  1 |     6 | abcd     | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
+ 12 |     8 | abc      | abcdefghijkl | 12-28-2009 | Sat Jan 30 00:00:00 1971 | {This,is,abcd,the,real,world}
+ 15 |       |          |              |            |                          | 
+  5 |     8 | abc      | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
+  6 |     8 | abc      | abcdef       | 06-12-2016 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
   9 |     8 | abc      | abcdefghijkl | 12-28-2009 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
  10 |     8 | abc      | abcdefghijkl | 12-28-2009 | Sun Sep 11 00:00:00 2016 | {This,is,abcd,the,real,world}
  11 |     8 | abc      | abcdefghijkl | 12-28-2009 | Sat Jan 30 00:00:00 1971 | {This,is,abcd,the,real,world}
- 12 |     8 | abc      | abcdefghijkl | 12-28-2009 | Sat Jan 30 00:00:00 1971 | {This,is,abcd,the,real,world}
  13 |       | abc      | abcdefghijkl | 12-28-2009 | Sat Jan 30 00:00:00 1971 | {This,is,a,fantasy}
  14 |       | abc      | abcdefghijkl | 12-28-2009 | Sat Jan 30 00:00:00 1971 | {This,is,a,fantasy}
- 15 |       |          |              |            |                          | 
- 16 |       |          |              |            |                          | 
 (16 rows)
 
 SELECT comp();
@@ -286,17 +298,16 @@ SELECT attnum, attname, atthasmissing, atthasdef, attmissingval
 FROM pg_attribute
 WHERE attnum > 0 AND attrelid = 't2'::regclass
 ORDER BY attnum;
- attnum | attname | atthasmissing | atthasdef |           attmissingval           
---------+---------+---------------+-----------+-----------------------------------
+ attnum | attname | atthasmissing | atthasdef | attmissingval 
+--------+---------+---------------+-----------+---------------
       1 | a       | f             | f         | 
       2 | b       | f             | t         | 
       3 | c       | f             | t         | 
-      4 | d       | t             | f         | {"{This,is,abcd,the,real,world}"}
+      4 | d       | f             | f         | 
 (4 rows)
 
 -- table rewrite should happen
 ALTER TABLE t2 ADD COLUMN e domain2;
-NOTICE:  rewriting table t2 for reason 2
 SELECT attnum, attname, atthasmissing, atthasdef, attmissingval
 FROM pg_attribute
 WHERE attnum > 0 AND attrelid = 't2'::regclass
@@ -311,10 +322,10 @@ ORDER BY attnum;
 (5 rows)
 
 SELECT a, b, length(c) = 3 as c_ok, d, e >= 10 as e_ok FROM t2;
- a | b | c_ok |               d               | e_ok 
----+---+------+-------------------------------+------
- 1 | 3 | t    | {This,is,abcd,the,real,world} | t
- 2 | 3 | t    | {This,is,abcd,the,real,world} | t
+ a | b | c_ok | d | e_ok 
+---+---+------+---+------
+ 2 | 3 | t    |   | 
+ 1 | 3 | t    |   | 
 (2 rows)
 
 DROP TABLE t2;
@@ -381,6 +392,9 @@ ALTER TABLE T ADD COLUMN c_bigint BIGINT NOT NULL DEFAULT -1;
 INSERT INTO T SELECT b, b - 10 FROM generate_series(11, 20) a(b);
 ALTER TABLE T ADD COLUMN c_text TEXT DEFAULT 'hello';
 INSERT INTO T SELECT b, b - 10, (b + 10)::text FROM generate_series(21, 30) a(b);
+-- start_ignore
+ANALYZE T;
+-- end_ignore
 -- WHERE clause
 SELECT c_bigint, c_text FROM T WHERE c_bigint = -1 LIMIT 1;
  c_bigint | c_text 
@@ -402,7 +416,7 @@ SELECT c_bigint, c_text FROM T WHERE c_bigint = -1 LIMIT 1;
                      Output: c_bigint, c_text
                      Filter: (t.c_bigint = '-1'::integer)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', seq_page_cost = '1'
+ Settings: seq_page_cost = '1.001'
 (11 rows)
 
 SELECT c_bigint, c_text FROM T WHERE c_text = 'hello' LIMIT 1;
@@ -424,7 +438,7 @@ EXPLAIN (VERBOSE TRUE, COSTS FALSE) SELECT c_bigint, c_text FROM T WHERE c_text 
                      Output: c_bigint, c_text
                      Filter: (t.c_text = 'hello'::text)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', seq_page_cost = '1'
+ Settings: seq_page_cost = '1.001'
 (11 rows)
 
 -- COALESCE
@@ -485,7 +499,7 @@ SELECT * FROM T ORDER BY c_bigint, c_text, pk LIMIT 10;
                      ->  Seq Scan on fast_default.t
                            Output: pk, c_bigint, c_text
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', seq_page_cost = '1'
+ Settings: seq_page_cost = '1.001'
 (14 rows)
 
 -- LIMIT
@@ -522,24 +536,24 @@ SELECT * FROM T WHERE c_bigint > -1 ORDER BY c_bigint, c_text, pk LIMIT 10;
                            Output: pk, c_bigint, c_text
                            Filter: (t.c_bigint > '-1'::integer)
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', seq_page_cost = '1'
+ Settings: seq_page_cost = '1.001'
 (15 rows)
 
 --  DELETE with RETURNING
 DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
  pk | c_bigint | c_text 
 ----+----------+--------
+ 12 |        2 | hello
+ 15 |        5 | hello
+ 20 |       10 | hello
  10 |       -1 | hello
  11 |        1 | hello
- 12 |        2 | hello
  13 |        3 | hello
  14 |        4 | hello
- 15 |        5 | hello
- 16 |        6 | hello
  17 |        7 | hello
+ 16 |        6 | hello
  18 |        8 | hello
  19 |        9 | hello
- 20 |       10 | hello
 (11 rows)
 
 EXPLAIN (VERBOSE TRUE, COSTS FALSE)
@@ -554,7 +568,7 @@ DELETE FROM T WHERE pk BETWEEN 10 AND 20 RETURNING *;
                Output: ctid, gp_segment_id
                Filter: ((t.pk >= 10) AND (t.pk <= 20))
  Optimizer: Postgres query optimizer
- Settings: optimizer = 'off', seq_page_cost = '1'
+ Settings: seq_page_cost = '1.001'
 (9 rows)
 
 -- UPDATE
@@ -611,6 +625,9 @@ SELECT * FROM T ORDER BY pk;
 
 -- Add an index
 CREATE INDEX i ON T(c_int, c_text);
+-- start_ignore
+ANALYZE T;
+-- end_ignore
 SELECT c_text FROM T WHERE c_int = -1;
  c_text 
 --------
@@ -694,7 +711,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":5}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":5}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -715,7 +732,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":null}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":4,"y":null}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -736,7 +753,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":5}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":5}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -757,7 +774,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":null}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":3,"x":null,"y":null}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -779,7 +796,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":5}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":5}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -800,7 +817,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":null}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":4,"y":null}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -821,7 +838,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":5}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":5}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -842,7 +859,7 @@ SELECT * FROM t;
 (1 row)
 
 UPDATE t SET y = 2;
-NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":null}
+NOTICE:  old tuple: {"id":1,"a":1,"b":2,"c":null,"x":null,"y":null}  (seg1 172.17.0.2:7003 pid=2521801)
 SELECT * FROM t;
  id | a | b | c | x | y 
 ----+---+---+---+---+---
@@ -854,6 +871,7 @@ DROP TABLE t;
 -- it will be required by the RI trigger doing the cascading delete
 CREATE TABLE leader (a int PRIMARY KEY, b int);
 CREATE TABLE follower (a int REFERENCES leader ON DELETE CASCADE, b int);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 INSERT INTO leader VALUES (1, 1), (2, 2);
 ALTER TABLE leader ADD c int;
 ALTER TABLE leader DROP c;
@@ -889,8 +907,8 @@ ALTER TABLE vtype2 ALTER COLUMN b TYPE varchar(20) USING b::varchar(20);
 SELECT * FROM vtype2;
  a |  b  
 ---+-----
- 1 | xxx
  2 | yyy
+ 1 | xxx
 (2 rows)
 
 -- Ensure that defaults are checked when evaluating whether HOT update
