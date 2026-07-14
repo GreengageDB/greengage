@@ -52,6 +52,7 @@
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
+#include "nodes/miscnodes.h"
 #include "optimizer/optimizer.h"
 #include "parser/parse_coerce.h"
 #include "postmaster/autostats.h"
@@ -3499,6 +3500,16 @@ CopyFromErrorCallback(void *arg)
 	CopyState	cstate = (CopyState) arg;
 	char		curlineno_str[32];
 
+	/*
+	 * ON_ERROR verbose NOTICE: suppress line/column detail and show only the
+	 * relation name in the error context (matches upstream copyfrom.c).
+	 */
+	if (cstate->relname_only)
+	{
+		errcontext("COPY %s", cstate->cur_relname);
+		return;
+	}
+
 	snprintf(curlineno_str, sizeof(curlineno_str), UINT64_FORMAT,
 			 cstate->cur_lineno);
 
@@ -4413,6 +4424,31 @@ CopyFrom(CopyState cstate)
 					break;
 			}
 		}
+
+		/*
+		 * ON_ERROR IGNORE: a row that soft-errored during parsing must be
+		 * dropped before it is routed (GetTargetSeg / SendCopyFromForwardedTuple),
+		 * partition-routed (ExecFindPartition) or inserted.  num_errors was
+		 * bumped in NextCopyFromX; reset the trap and, when a REJECT_LIMIT is
+		 * set, enforce it.  In COPY_DISPATCH/COPY_EXECUTOR num_errors is
+		 * per-node; the total is aggregated on the QD for the summary NOTICE, so
+		 * REJECT_LIMIT here is per-node (see copy2).
+		 */
+		if (cstate->escontext && cstate->escontext->error_occurred)
+		{
+			cstate->escontext->error_occurred = false;
+
+			if (cstate->reject_limit > 0 &&
+				cstate->num_errors > cstate->reject_limit)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						 errmsg("skipped more than REJECT_LIMIT (%lld) rows due to data type incompatibility",
+								(long long) cstate->reject_limit)));
+
+			MemoryContextSwitchTo(oldcontext);
+			continue;
+		}
+
 		ExecStoreVirtualTuple(myslot);
 
 		/*
@@ -4827,7 +4863,33 @@ CopyFrom(CopyState cstate)
 
 			ReportSrehResults(cstate->cdbsreh, total_rejected);
 		}
+		else if (cstate->on_error == COPY_ON_ERROR_IGNORE)
+		{
+			/*
+			 * ON_ERROR IGNORE without the GGDB SREH clause: cstate->num_errors
+			 * currently holds only the QD-local (distribution-key) soft errors;
+			 * fold in the soft errors reported by all QEs so the summary NOTICE
+			 * below reflects the whole cluster.
+			 */
+			cstate->num_errors += total_rejected_from_qes;
+		}
 	}
+
+	/*
+	 * ON_ERROR IGNORE: emit the aggregate summary NOTICE once, on the QD (or in
+	 * utility / COPY_DIRECT mode).  QEs never emit it — they report their count
+	 * via SendNumRows below.  For COPY_DIRECT num_errors is already the local
+	 * total; for COPY_DISPATCH it was aggregated from all QEs just above.
+	 */
+	if (Gp_role != GP_ROLE_EXECUTE &&
+		cstate->on_error != COPY_ON_ERROR_STOP &&
+		cstate->num_errors > 0 &&
+		cstate->log_verbosity >= COPY_LOG_VERBOSITY_DEFAULT)
+		ereport(NOTICE,
+				errmsg_plural("%llu row was skipped due to data type incompatibility",
+							  "%llu rows were skipped due to data type incompatibility",
+							  (unsigned long) cstate->num_errors,
+							  (unsigned long long) cstate->num_errors));
 
 	/*
 	 * PG14 removed the pre-3.0 ("old") FE/BE protocol, so COPY_OLD_FE is now
@@ -4851,7 +4913,16 @@ CopyFrom(CopyState cstate)
 	 */
 	if (Gp_role == GP_ROLE_EXECUTE)
 	{
-		SendNumRows((cstate->errMode != ALL_OR_NOTHING) ? cstate->cdbsreh->rejectcount : 0, processed);
+		int64		num_rejected;
+
+		if (cstate->errMode != ALL_OR_NOTHING)
+			num_rejected = cstate->cdbsreh->rejectcount;	/* GGDB SREH */
+		else if (cstate->on_error == COPY_ON_ERROR_IGNORE)
+			num_rejected = cstate->num_errors; /* PG18 ON_ERROR soft errors */
+		else
+			num_rejected = 0;
+
+		SendNumRows(num_rejected, processed);
 	}
 
 	ExecResetTupleTable(estate->es_tupleTable, false);
@@ -5048,6 +5119,24 @@ BeginCopyFrom(ParseState *pstate,
 	cstate->volatile_defexprs = volatile_defexprs;
 	cstate->num_defaults = num_defaults;
 	cstate->is_program = is_program;
+
+	/*
+	 * Set up the soft-error trap for ON_ERROR (PG18).  BeginCopyFrom runs on
+	 * every node (QD entry and QE executor), so this covers COPY_DISPATCH,
+	 * COPY_EXECUTOR and COPY_DIRECT.  When ON_ERROR is STOP (the default),
+	 * escontext stays NULL and InputFunctionCallSafe behaves exactly like the
+	 * hard InputFunctionCall.
+	 */
+	if (cstate->on_error != COPY_ON_ERROR_STOP)
+	{
+		cstate->escontext = makeNode(ErrorSaveContext);
+		cstate->escontext->error_occurred = false;
+		/* We only support IGNORE; we never need the ErrorData details. */
+		cstate->escontext->details_wanted = false;
+	}
+	else
+		cstate->escontext = NULL;
+	cstate->num_errors = 0;
 
 	bool		pipe = (filename == NULL || cstate->dispatch_mode == COPY_EXECUTOR);
 
@@ -5624,10 +5713,58 @@ NextCopyFromX(CopyState cstate, ExprContext *econtext,
 
 			cstate->cur_attname = NameStr(att->attname);
 			cstate->cur_attval = string;
-			values[m] = InputFunctionCall(&in_functions[m],
-										  string,
-										  typioparams[m],
-										  att->atttypmod);
+
+			if (!InputFunctionCallSafe(&in_functions[m],
+									   string,
+									   typioparams[m],
+									   att->atttypmod,
+									   (Node *) cstate->escontext,
+									   &values[m]))
+			{
+				/*
+				 * Soft error (ON_ERROR IGNORE): the input function reported a
+				 * data-type error instead of throwing.  Only reachable when an
+				 * escontext was set up, i.e. on_error != STOP.  Count it, and,
+				 * under VERBOSE, emit the per-row NOTICE (relname-only context).
+				 * Stop parsing this row at the first bad column; the whole raw
+				 * line was already read (text) or the forwarded fields consumed
+				 * (dispatch), so the input stream stays in sync.  The caller
+				 * detects escontext->error_occurred and skips the row before it
+				 * is routed or inserted.
+				 */
+				Assert(cstate->on_error != COPY_ON_ERROR_STOP);
+
+				cstate->num_errors++;
+
+				if (cstate->log_verbosity == COPY_LOG_VERBOSITY_VERBOSE)
+				{
+					Assert(!cstate->relname_only);
+					cstate->relname_only = true;
+
+					if (cstate->cur_attval)
+					{
+						char	   *attval = CopyLimitPrintoutLength(cstate->cur_attval);
+
+						ereport(NOTICE,
+								errmsg("skipping row due to data type incompatibility at line %llu for column \"%s\": \"%s\"",
+									   (unsigned long long) cstate->cur_lineno,
+									   cstate->cur_attname, attval));
+						pfree(attval);
+					}
+					else
+						ereport(NOTICE,
+								errmsg("skipping row due to data type incompatibility at line %llu for column \"%s\": null input",
+									   (unsigned long long) cstate->cur_lineno,
+									   cstate->cur_attname));
+
+					cstate->relname_only = false;
+				}
+
+				cstate->cur_attname = NULL;
+				cstate->cur_attval = NULL;
+				return true;
+			}
+
 			if (string != NULL)
 				nulls[m] = false;
 			cstate->cur_attname = NULL;
