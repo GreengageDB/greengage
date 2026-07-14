@@ -207,13 +207,6 @@ typedef struct CopyStateData
 	int64		cur_lineno;		/* line number for error messages */
 	const char *cur_attname;	/* current att for error messages */
 	const char *cur_attval;		/* current att value for error messages */
-	bool		relname_only;	/* suppress line/column in error context
-								 * (ON_ERROR verbose NOTICE) */
-
-	/* Working state for ON_ERROR / soft errors (PG18) */
-	struct ErrorSaveContext *escontext; /* soft-error trap, NULL when ON_ERROR
-										 * STOP */
-	int64		num_errors;		/* # rows skipped by ON_ERROR on this node */
 
 	/* Working state */
 	CopyDispatchMode dispatch_mode;
@@ -278,6 +271,18 @@ typedef struct CopyStateData
 	struct CdbCopy *cdbCopy;
 
 	bool		delim_off;		/* delimiter is set to OFF? */
+
+	/*
+	 * Working state for ON_ERROR / soft errors (PG18).  Kept at the very end of
+	 * the struct so adding them does not shift the offsets of the fields above,
+	 * which are also read by out-of-tree consumers of CopyStateData such as the
+	 * gp_exttable_fdw external-scan code.
+	 */
+	bool		relname_only;	/* suppress line/column in the error context
+								 * (ON_ERROR verbose NOTICE) */
+	struct ErrorSaveContext *escontext; /* soft-error trap, NULL when ON_ERROR
+										 * STOP */
+	int64		num_errors;		/* # rows skipped by ON_ERROR on this node */
 } CopyStateData;
 
 typedef CopyStateData *CopyState;
