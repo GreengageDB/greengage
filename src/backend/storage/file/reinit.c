@@ -337,11 +337,11 @@ ResetUnloggedRelationsInDbspaceDir(const char *dbspacedirname, int op)
 					 strlen(forkNames[INIT_FORKNUM]));
 
 			/*
-			 * Sometimes, before recovery there is not init fork, but there is
+			 * Sometimes, before recovery there is no init fork, but there is
 			 * main fork. So at cleanup it was not removed. Next, at
 			 * recovery init fork will be created and if we will not remove main
 			 * fork here, function copy_file will return error. Let's check main
-			 * fork here and remove if it is presented.
+			 * fork here and remove it if presented.
 			 * Such situations may happen when pg_basebackup checks main fork
 			 * file at time when init fork is not created yet. pg_basebackup
 			 * does not filter such file and adds it to the backup. Next, init
