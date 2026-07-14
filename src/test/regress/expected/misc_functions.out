@@ -611,17 +611,16 @@ ALTER FUNCTION my_int_eq(int, int) SUPPORT test_support_func;
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 a JOIN tenk1 b ON a.unique1 = b.unique1
 WHERE my_int_eq(a.unique2, 42);
-                     QUERY PLAN                     
-----------------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Hash Join
-         Hash Cond: (b.unique1 = a.unique1)
-         ->  Seq Scan on tenk1 b
-         ->  Hash
-               ->  Seq Scan on tenk1 a
-                     Filter: my_int_eq(unique2, 42)
+   ->  Nested Loop
+         ->  Seq Scan on tenk1 a
+               Filter: my_int_eq(unique2, 42)
+         ->  Index Scan using tenk1_unique1 on tenk1 b
+               Index Cond: (unique1 = a.unique1)
  Optimizer: Postgres query optimizer
-(8 rows)
+(7 rows)
 
 -- Also test non-default rowcount estimate
 CREATE FUNCTION my_gen_series(int, int) RETURNS SETOF integer
@@ -636,29 +635,27 @@ set enable_hashjoin = off;
 set enable_mergejoin = off;
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 a JOIN my_gen_series(1,1000) g ON a.unique1 = g;
-                  QUERY PLAN                  
-----------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         Join Filter: (a.unique1 = g.g)
          ->  Function Scan on my_gen_series g
-         ->  Materialize
-               ->  Seq Scan on tenk1 a
+         ->  Index Scan using tenk1_unique1 on tenk1 a
+               Index Cond: (unique1 = g.g)
  Optimizer: Postgres query optimizer
-(7 rows)
+(6 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM tenk1 a JOIN my_gen_series(1,10) g ON a.unique1 = g;
-                  QUERY PLAN                  
-----------------------------------------------
+                      QUERY PLAN                       
+-------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
-         Join Filter: (a.unique1 = g.g)
          ->  Function Scan on my_gen_series g
-         ->  Materialize
-               ->  Seq Scan on tenk1 a
+         ->  Index Scan using tenk1_unique1 on tenk1 a
+               Index Cond: (unique1 = g.g)
  Optimizer: Postgres query optimizer
-(7 rows)
+(6 rows)
 
 reset enable_hashjoin;
 reset enable_mergejoin;

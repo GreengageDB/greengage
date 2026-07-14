@@ -190,8 +190,8 @@ SET enable_seqscan = 0;
 -- Check to see we get an incremental sort plan
 EXPLAIN (costs off)
 SELECT DISTINCT hundred, two FROM tenk1;
-                    QUERY PLAN                    
---------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  GroupAggregate
    Group Key: hundred, two
    ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -202,10 +202,9 @@ SELECT DISTINCT hundred, two FROM tenk1;
                      Group Key: hundred, two
                      ->  Sort
                            Sort Key: hundred, two
-                           ->  Seq Scan on tenk1
-                                 Disabled: true
+                           ->  Index Scan using tenk1_hundred on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 RESET enable_seqscan;
 SET enable_hashagg=TRUE;
@@ -418,10 +417,10 @@ INSERT INTO DISTTABLE VALUES(NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
  f1 | not 2 
 ----+-------
+  1 | t
   2 | f
   3 | t
     | t
-  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
@@ -436,10 +435,10 @@ SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
 SELECT f1, f1 IS DISTINCT FROM f1 as "false" FROM disttable;
  f1 | false 
 ----+-------
-  1 | f
   2 | f
   3 | f
     | f
+  1 | f
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 as "not null" FROM disttable;

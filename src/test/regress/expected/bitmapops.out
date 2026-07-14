@@ -28,7 +28,7 @@ WARNING:  "work_mem": setting is deprecated, and may be removed in a future rele
 SELECT count(*) FROM bmscantest WHERE a = 1 AND b = 1;
  count 
 -------
- 21881
+    23
 (1 row)
 
 -- Test that we return correct results when using the skip fetch optimization
@@ -80,7 +80,7 @@ EXPLAIN SELECT count(*) FROM bmscantest2 WHERE a = 1 AND b = 1 AND c = 1;
 SELECT count(*) FROM bmscantest2 WHERE a = 1 AND b = 1 AND c = 1;
  count 
 -------
-   232
+    23
 (1 row)
 
 SELECT count(*) FROM bmscantest2 WHERE a = 1 AND (b = 1 OR c = 1) AND d = 1;

@@ -119,17 +119,15 @@ SELECT DISTINCT ON (four) four,two
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (four) four,hundred
    FROM tenk1 WHERE four = 0 ORDER BY 1,2;
-                   QUERY PLAN                   
-------------------------------------------------
+                     QUERY PLAN                      
+-----------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred
-         ->  Sort
-               Sort Key: hundred
-               ->  Seq Scan on tenk1
-                     Filter: (four = 0)
+         ->  Index Scan using tenk1_hundred on tenk1
+               Filter: (four = 0)
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 --
 -- Test the planner's ability to reorder the distinctClause Pathkeys to match

@@ -256,13 +256,15 @@ explain (costs off)
 SELECT thousand, tenthous
   FROM tenk1
   WHERE thousand IN (182, 183) AND tenthous > 7550;
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on tenk1
-         Filter: ((thousand = ANY ('{182,183}'::integer[])) AND (tenthous > 7550))
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: ((thousand = ANY ('{182,183}'::integer[])) AND (tenthous > 7550))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: ((thousand = ANY ('{182,183}'::integer[])) AND (tenthous > 7550))
  Optimizer: Postgres query optimizer
-(4 rows)
+(6 rows)
 
 SELECT thousand, tenthous
   FROM tenk1
@@ -270,9 +272,9 @@ SELECT thousand, tenthous
  thousand | tenthous 
 ----------+----------
       182 |     8182
+      183 |     9183
       182 |     9182
       183 |     8183
-      183 |     9183
 (4 rows)
 
 --
@@ -291,19 +293,16 @@ set enable_indexscan to true;
 set enable_bitmapscan to false;
 explain (costs off)
 select hundred, twenty from tenk1 where hundred < 48 order by hundred desc limit 1;
-                    QUERY PLAN                    
---------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred
          ->  Limit
-               ->  Sort
-                     Sort Key: hundred DESC
-                     ->  Seq Scan on tenk1
-                           Disabled: true
-                           Filter: (hundred < 48)
+               ->  Index Scan Backward using tenk1_hundred on tenk1
+                     Index Cond: (hundred < 48)
  Optimizer: Postgres query optimizer
-(10 rows)
+(7 rows)
 
 select hundred, twenty from tenk1 where hundred < 48 order by hundred desc limit 1;
  hundred | twenty 
@@ -316,19 +315,16 @@ select hundred, twenty from tenk1 where hundred < 48 order by hundred desc limit
 -- leaf page (the right sibling of the page scanned by the last test case):
 explain (costs off)
 select hundred, twenty from tenk1 where hundred <= 48 order by hundred desc limit 1;
-                    QUERY PLAN                     
----------------------------------------------------
+                             QUERY PLAN                             
+--------------------------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred
          ->  Limit
-               ->  Sort
-                     Sort Key: hundred DESC
-                     ->  Seq Scan on tenk1
-                           Disabled: true
-                           Filter: (hundred <= 48)
+               ->  Index Scan Backward using tenk1_hundred on tenk1
+                     Index Cond: (hundred <= 48)
  Optimizer: Postgres query optimizer
-(10 rows)
+(7 rows)
 
 select hundred, twenty from tenk1 where hundred <= 48 order by hundred desc limit 1;
  hundred | twenty 
@@ -341,20 +337,19 @@ select hundred, twenty from tenk1 where hundred <= 48 order by hundred desc limi
 --
 explain (costs off)
 select distinct hundred from tenk1 where hundred in (47, 48, 72, 82);
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
          Group Key: hundred
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: hundred
-               ->  HashAggregate
+               ->  GroupAggregate
                      Group Key: hundred
-                     ->  Seq Scan on tenk1
-                           Disabled: true
-                           Filter: (hundred = ANY ('{47,48,72,82}'::integer[]))
+                     ->  Index Only Scan using tenk1_hundred on tenk1
+                           Index Cond: (hundred = ANY ('{47,48,72,82}'::integer[]))
  Optimizer: Postgres query optimizer
-(11 rows)
+(10 rows)
 
 select distinct hundred from tenk1 where hundred in (47, 48, 72, 82);
  hundred 
@@ -367,8 +362,8 @@ select distinct hundred from tenk1 where hundred in (47, 48, 72, 82);
 
 explain (costs off)
 select distinct hundred from tenk1 where hundred in (47, 48, 72, 82) order by hundred desc;
-                                      QUERY PLAN                                      
---------------------------------------------------------------------------------------
+                                        QUERY PLAN                                        
+------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: hundred
    ->  Sort
@@ -377,13 +372,12 @@ select distinct hundred from tenk1 where hundred in (47, 48, 72, 82) order by hu
                Group Key: hundred
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: hundred
-                     ->  HashAggregate
+                     ->  GroupAggregate
                            Group Key: hundred
-                           ->  Seq Scan on tenk1
-                                 Disabled: true
-                                 Filter: (hundred = ANY ('{47,48,72,82}'::integer[]))
+                           ->  Index Only Scan Backward using tenk1_hundred on tenk1
+                                 Index Cond: (hundred = ANY ('{47,48,72,82}'::integer[]))
  Optimizer: Postgres query optimizer
-(14 rows)
+(13 rows)
 
 select distinct hundred from tenk1 where hundred in (47, 48, 72, 82) order by hundred desc;
  hundred 
@@ -396,14 +390,13 @@ select distinct hundred from tenk1 where hundred in (47, 48, 72, 82) order by hu
 
 explain (costs off)
 select thousand from tenk1 where thousand in (364, 366,380) and tenthous = 200000;
-                                       QUERY PLAN                                        
------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on tenk1
-         Disabled: true
-         Filter: ((tenthous = 200000) AND (thousand = ANY ('{364,366,380}'::integer[])))
+   ->  Index Only Scan using tenk1_thous_tenthous on tenk1
+         Index Cond: ((thousand = ANY ('{364,366,380}'::integer[])) AND (tenthous = 200000))
  Optimizer: Postgres query optimizer
-(5 rows)
+(4 rows)
 
 select thousand from tenk1 where thousand in (364, 366,380) and tenthous = 200000;
  thousand 
@@ -721,9 +714,9 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             2 | btree_stats_idx |         0
              1 | btree_stats_idx |         0
              0 | btree_stats_idx |         0
+             2 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -744,9 +737,9 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             2 | btree_stats_idx |         0
              0 | btree_stats_idx |         0
              1 | btree_stats_idx |         0
+             2 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -768,8 +761,8 @@ SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE r
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
              0 | btree_stats_idx |         0
-             1 | btree_stats_idx |         0
              2 | btree_stats_idx |         0
+             1 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -804,8 +797,8 @@ SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE r
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
              0 | btree_stats_idx |         0
-             1 | btree_stats_idx |         0
              2 | btree_stats_idx |         0
+             1 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';

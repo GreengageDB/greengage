@@ -147,16 +147,16 @@ SELECT four FROM tenk1 WHERE FALSE WINDOW w AS (PARTITION BY ten);
 SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE unique2 < 10;
  sum_1 | ten | four 
 -------+-----+------
-     1 |   9 |    1
-     3 |   3 |    3
-     0 |   4 |    0
-     1 |   7 |    1
      0 |   0 |    0
      0 |   0 |    0
      2 |   0 |    2
      3 |   1 |    3
      4 |   1 |    1
      5 |   1 |    1
+     1 |   9 |    1
+     3 |   3 |    3
+     0 |   4 |    0
+     1 |   7 |    1
 (10 rows)
 
 SELECT row_number() OVER (ORDER BY unique2) FROM tenk1 WHERE unique2 < 10;
@@ -207,9 +207,6 @@ SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 
 SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
     percent_rank    | ten | four 
 --------------------+-----+------
-                  0 |   0 |    2
-                  0 |   1 |    3
-                  1 |   3 |    3
                   0 |   0 |    0
                   0 |   0 |    0
                   1 |   4 |    0
@@ -217,6 +214,9 @@ SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk
                   0 |   1 |    1
  0.6666666666666666 |   7 |    1
                   1 |   9 |    1
+                  0 |   0 |    2
+                  0 |   1 |    3
+                  1 |   3 |    3
 (10 rows)
 
 SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
@@ -259,9 +259,6 @@ SELECT ntile(NULL) OVER (ORDER BY ten, four), ten, four FROM tenk1 LIMIT 2;
 SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lag | ten | four 
 -----+-----+------
-     |   0 |    2
-     |   1 |    3
-   1 |   3 |    3
      |   0 |    0
    0 |   0 |    0
    0 |   4 |    0
@@ -269,6 +266,9 @@ SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHER
    1 |   1 |    1
    1 |   7 |    1
    7 |   9 |    1
+     |   0 |    2
+     |   1 |    3
+   1 |   3 |    3
 (10 rows)
 
 SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
@@ -289,6 +289,9 @@ SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk
 SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lag | ten | four 
 -----+-----+------
+   0 |   0 |    2
+   0 |   1 |    3
+   0 |   3 |    3
    0 |   0 |    0
    0 |   0 |    0
    4 |   4 |    0
@@ -296,9 +299,6 @@ SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten), ten, four FROM t
    1 |   1 |    1
    1 |   7 |    1
    7 |   9 |    1
-   0 |   0 |    2
-   0 |   1 |    3
-   0 |   3 |    3
 (10 rows)
 
 SELECT lag(ten, four, 0.7) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10 ORDER BY four, ten;
@@ -334,6 +334,9 @@ SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHE
 SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lead | ten | four 
 ------+-----+------
+      |   0 |    2
+    6 |   1 |    3
+      |   3 |    3
     0 |   0 |    0
     8 |   0 |    0
       |   4 |    0
@@ -341,9 +344,6 @@ SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM te
    14 |   1 |    1
    18 |   7 |    1
       |   9 |    1
-      |   0 |    2
-    6 |   1 |    3
-      |   3 |    3
 (10 rows)
 
 SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
@@ -379,6 +379,9 @@ SELECT lead(ten * 2, 1, -1.4) OVER (PARTITION BY four ORDER BY ten), ten, four F
 SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  first_value | ten | four 
 -------------+-----+------
+           0 |   0 |    2
+           1 |   1 |    3
+           1 |   3 |    3
            0 |   0 |    0
            0 |   0 |    0
            0 |   4 |    0
@@ -386,9 +389,6 @@ SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM te
            1 |   1 |    1
            1 |   7 |    1
            1 |   9 |    1
-           0 |   0 |    2
-           1 |   1 |    3
-           1 |   3 |    3
 (10 rows)
 
 -- last_value returns the last row of the frame, which is CURRENT ROW in ORDER BY window.
@@ -693,16 +693,6 @@ SELECT four, ten,
 FROM (select distinct ten, four from tenk1) ss;
  four | ten | sum | last_value 
 ------+-----+-----+------------
-    2 |   0 |   0 |          0
-    2 |   2 |   2 |          2
-    2 |   4 |   6 |          4
-    2 |   6 |  12 |          6
-    2 |   8 |  20 |          8
-    3 |   1 |   1 |          1
-    3 |   3 |   4 |          3
-    3 |   5 |   9 |          5
-    3 |   7 |  16 |          7
-    3 |   9 |  25 |          9
     0 |   0 |   0 |          0
     0 |   2 |   2 |          2
     0 |   4 |   6 |          4
@@ -713,6 +703,16 @@ FROM (select distinct ten, four from tenk1) ss;
     1 |   5 |   9 |          5
     1 |   7 |  16 |          7
     1 |   9 |  25 |          9
+    2 |   0 |   0 |          0
+    2 |   2 |   2 |          2
+    2 |   4 |   6 |          4
+    2 |   6 |  12 |          6
+    2 |   8 |  20 |          8
+    3 |   1 |   1 |          1
+    3 |   3 |   4 |          3
+    3 |   5 |   9 |          5
+    3 |   7 |  16 |          7
+    3 |   9 |  25 |          9
 (20 rows)
 
 SELECT four, ten,
@@ -777,16 +777,6 @@ SELECT four, ten/4 as two,
 FROM (select distinct ten, four from tenk1) ss;
  four | two | sum | last_value 
 ------+-----+-----+------------
-    0 |   0 |   0 |          0
-    0 |   0 |   0 |          0
-    0 |   1 |   2 |          1
-    0 |   1 |   2 |          1
-    0 |   2 |   4 |          2
-    1 |   0 |   0 |          0
-    1 |   0 |   0 |          0
-    1 |   1 |   2 |          1
-    1 |   1 |   2 |          1
-    1 |   2 |   4 |          2
     2 |   0 |   0 |          0
     2 |   0 |   0 |          0
     2 |   1 |   2 |          1
@@ -797,6 +787,16 @@ FROM (select distinct ten, four from tenk1) ss;
     3 |   1 |   2 |          1
     3 |   1 |   2 |          1
     3 |   2 |   4 |          2
+    0 |   0 |   0 |          0
+    0 |   0 |   0 |          0
+    0 |   1 |   2 |          1
+    0 |   1 |   2 |          1
+    0 |   2 |   4 |          2
+    1 |   0 |   0 |          0
+    1 |   0 |   0 |          0
+    1 |   1 |   2 |          1
+    1 |   1 |   2 |          1
+    1 |   2 |   4 |          2
 (20 rows)
 
 SELECT four, ten/4 as two,
@@ -1942,24 +1942,21 @@ $$;
 SELECT * FROM unbounded_syntax_test2a(2);
  a  | b | c 
 ----+---+---
- 45 | 1 | 1
- 45 | 0 | 0
- 45 | 6 | 2
- 45 | 9 | 1
- 45 | 5 | 1
  45 | 4 | 0
  45 | 2 | 2
  45 | 8 | 0
  45 | 3 | 3
  45 | 7 | 3
+ 45 | 1 | 1
+ 45 | 0 | 0
+ 45 | 6 | 2
+ 45 | 9 | 1
+ 45 | 5 | 1
 (10 rows)
 
 SELECT * FROM unbounded_syntax_test2b(2);
  a  | b | c 
 ----+---+---
- 45 | 6 | 2
- 45 | 9 | 1
- 45 | 5 | 1
  45 | 4 | 0
  45 | 2 | 2
  45 | 8 | 0
@@ -1967,6 +1964,9 @@ SELECT * FROM unbounded_syntax_test2b(2);
  45 | 7 | 3
  45 | 1 | 1
  45 | 0 | 0
+ 45 | 6 | 2
+ 45 | 9 | 1
+ 45 | 5 | 1
 (10 rows)
 
 DROP FUNCTION unbounded_syntax_test1a, unbounded_syntax_test1b,
@@ -3233,9 +3233,6 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
-     |       5 |    1 |   5
-     |       6 |    2 |   6
-     |       9 |    1 |   9
      |       2 |    2 |   2
      |       3 |    3 |   3
      |       4 |    0 |   4
@@ -3243,6 +3240,9 @@ FROM tenk1 WHERE unique1 < 10;
      |       8 |    0 |   8
      |       0 |    0 |   0
      |       1 |    1 |   1
+     |       5 |    1 |   5
+     |       6 |    2 |   6
+     |       9 |    1 |   9
 (10 rows)
 
 SELECT sum(unique1) over (partition by ten
@@ -3250,16 +3250,16 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
-     |       5 |    1 |   5
-     |       6 |    2 |   6
-     |       9 |    1 |   9
+     |       0 |    0 |   0
+     |       1 |    1 |   1
      |       2 |    2 |   2
      |       3 |    3 |   3
      |       4 |    0 |   4
      |       7 |    3 |   7
      |       8 |    0 |   8
-     |       0 |    0 |   0
-     |       1 |    1 |   1
+     |       5 |    1 |   5
+     |       6 |    2 |   6
+     |       9 |    1 |   9
 (10 rows)
 
 SELECT sum(unique1) over (partition by ten
@@ -3267,16 +3267,16 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
+   0 |       0 |    0 |   0
+   1 |       1 |    1 |   1
+   5 |       5 |    1 |   5
+   6 |       6 |    2 |   6
+   9 |       9 |    1 |   9
    2 |       2 |    2 |   2
    3 |       3 |    3 |   3
    4 |       4 |    0 |   4
    7 |       7 |    3 |   7
    8 |       8 |    0 |   8
-   5 |       5 |    1 |   5
-   6 |       6 |    2 |   6
-   9 |       9 |    1 |   9
-   0 |       0 |    0 |   0
-   1 |       1 |    1 |   1
 (10 rows)
 
 select first_value(salary) over(order by enroll_date groups between 1 preceding and 1 following),
@@ -3585,8 +3585,8 @@ select f1, sum(f1) over (partition by f1 order by f2
 from t1 where f1 = f2;
  f1 | sum 
 ----+-----
-  2 |   2
   1 |   1
+  2 |   2
 (2 rows)
 
 select f1, sum(f1) over (partition by f1, f1 order by f2
@@ -5631,17 +5631,16 @@ LIMIT 1;
          Order By: t1.unique1
          ->  Gather Motion 3:1  (slice1; segments: 3)
                Merge Key: t1.unique1
-               ->  Sort
-                     Sort Key: t1.unique1
-                     ->  Hash Join
-                           Hash Cond: (t2.tenthous = t1.unique1)
+               ->  Nested Loop
+                     Disabled: true
+                     Join Filter: (t1.unique1 = t2.tenthous)
+                     ->  Index Only Scan using tenk1_unique1 on tenk1 t1
+                     ->  Materialize
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
                                  Hash Key: t2.tenthous
                                  ->  Seq Scan on tenk1 t2
-                           ->  Hash
-                                 ->  Seq Scan on tenk1 t1
  Optimizer: Postgres query optimizer
-(15 rows)
+(14 rows)
 
 -- Ensure we get a cheap total plan.  Lack of ORDER BY in the WindowClause
 -- means that all rows must be read from the join, so a cheap startup plan

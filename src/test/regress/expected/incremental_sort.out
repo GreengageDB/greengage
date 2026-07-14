@@ -763,8 +763,8 @@ explain (costs off) select * from t left join (select * from (select * from t or
 select * from t left join (select * from (select * from t order by a) v order by a, b) s on s.a = t.a where t.a in (1, 2); -- order none
  a | b | a | b 
 ---+---+---+---
- 1 | 1 | 1 | 1
  2 | 2 | 2 | 2
+ 1 | 1 | 1 | 1
 (2 rows)
 
 rollback;
@@ -1655,8 +1655,8 @@ set min_parallel_index_scan_size = 0;
 -- Parallel sort below join.
 explain (costs off) select distinct sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
-                        QUERY PLAN                        
-----------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, tenk1.stringu1
    ->  Unique
@@ -1667,16 +1667,15 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
                      Disabled: true
                      ->  Function Scan on generate_series
                      ->  Materialize
-                           ->  Seq Scan on tenk1
-                                 Disabled: true
+                           ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, stringu1
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
 order by 1, 2;
-                     QUERY PLAN                     
-----------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: tenk1.unique1, tenk1.stringu1
    ->  Sort
@@ -1685,10 +1684,9 @@ order by 1, 2;
                Disabled: true
                ->  Function Scan on generate_series
                ->  Materialize
-                     ->  Seq Scan on tenk1
-                           Disabled: true
+                     ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(11 rows)
+(10 rows)
 
 -- Parallel sort but with expression that can be safely generated at the base rel.
 explain (costs off) select distinct sub.unique1, md5(stringu1)
@@ -1705,10 +1703,9 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
                      Disabled: true
                      ->  Function Scan on generate_series
                      ->  Materialize
-                           ->  Seq Scan on tenk1
-                                 Disabled: true
+                           ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, md5(stringu1)
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
@@ -1723,10 +1720,9 @@ order by 1, 2;
                Disabled: true
                ->  Function Scan on generate_series
                ->  Materialize
-                     ->  Seq Scan on tenk1
-                           Disabled: true
+                     ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(11 rows)
+(10 rows)
 
 -- Parallel sort with an aggregate that can be safely generated in parallel,
 -- but we can't sort by partial aggregate values.
@@ -1735,31 +1731,26 @@ from tenk1 t1
 join tenk1 t2 on t1.unique1 = t2.unique2
 join tenk1 t3 on t2.unique1 = t3.unique1
 order by count(*);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Sort
    Sort Key: (count(*))
    ->  Finalize Aggregate
          ->  Gather Motion 3:1  (slice1; segments: 3)
                ->  Partial Aggregate
                      ->  Hash Join
-                           Hash Cond: (t2.unique1 = t3.unique1)
+                           Hash Cond: (t2.unique2 = t1.unique1)
                            ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: t2.unique1
+                                 Hash Key: t2.unique2
                                  ->  Hash Join
-                                       Hash Cond: (t1.unique1 = t2.unique2)
-                                       ->  Seq Scan on tenk1 t1
-                                             Disabled: true
+                                       Hash Cond: (t3.unique1 = t2.unique1)
+                                       ->  Index Only Scan using tenk1_unique1 on tenk1 t3
                                        ->  Hash
-                                             ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                                   Hash Key: t2.unique2
-                                                   ->  Seq Scan on tenk1 t2
-                                                         Disabled: true
+                                             ->  Index Scan using tenk1_unique2 on tenk1 t2
                            ->  Hash
-                                 ->  Seq Scan on tenk1 t3
-                                       Disabled: true
+                                 ->  Index Only Scan using tenk1_unique1 on tenk1 t1
  Optimizer: Postgres query optimizer
-(22 rows)
+(17 rows)
 
 -- Parallel sort but with expression (correlated subquery) that
 -- is prohibited in parallel plans.
@@ -1767,8 +1758,8 @@ explain (costs off) select distinct
   unique1,
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000);
-                                    QUERY PLAN                                     
------------------------------------------------------------------------------------
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t.unique1, ((SubPlan 1))
    ->  Unique
@@ -1779,25 +1770,24 @@ from tenk1 t, generate_series(1, 1000);
                      Disabled: true
                      ->  Function Scan on generate_series
                      ->  Materialize
-                           ->  Seq Scan on tenk1 t
-                                 Disabled: true
+                           ->  Index Only Scan using tenk1_unique1 on tenk1 t
                      SubPlan 1
                        ->  Result
                              Filter: (tenk1.unique1 = t.unique1)
                              ->  Materialize
                                    ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                         ->  Seq Scan on tenk1
-                                               Disabled: true
+                                         ->  Bitmap Heap Scan on tenk1
+                                               ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(20 rows)
+(19 rows)
 
 explain (costs off) select
   unique1,
   (select t.unique1 from tenk1 where tenk1.unique1 = t.unique1)
 from tenk1 t, generate_series(1, 1000)
 order by 1, 2;
-                                 QUERY PLAN                                  
------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: t.unique1, ((SubPlan 1))
    ->  Sort
@@ -1806,17 +1796,16 @@ order by 1, 2;
                Disabled: true
                ->  Function Scan on generate_series
                ->  Materialize
-                     ->  Seq Scan on tenk1 t
-                           Disabled: true
+                     ->  Index Only Scan using tenk1_unique1 on tenk1 t
                SubPlan 1
                  ->  Result
                        Filter: (tenk1.unique1 = t.unique1)
                        ->  Materialize
                              ->  Broadcast Motion 3:3  (slice2; segments: 3)
-                                   ->  Seq Scan on tenk1
-                                         Disabled: true
+                                   ->  Bitmap Heap Scan on tenk1
+                                         ->  Bitmap Index Scan on tenk1_unique1
  Optimizer: Postgres query optimizer
-(18 rows)
+(17 rows)
 
 -- Parallel sort but with expression not available until the upper rel.
 explain (costs off) select distinct sub.unique1, stringu1 || random()::text
@@ -1833,10 +1822,9 @@ from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub;
                      Disabled: true
                      ->  Function Scan on generate_series
                      ->  Materialize
-                           ->  Seq Scan on tenk1
-                                 Disabled: true
+                           ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(13 rows)
+(12 rows)
 
 explain (costs off) select sub.unique1, stringu1 || random()::text
 from tenk1, lateral (select tenk1.unique1 from generate_series(1, 1000)) as sub
@@ -1851,10 +1839,9 @@ order by 1, 2;
                Disabled: true
                ->  Function Scan on generate_series
                ->  Materialize
-                     ->  Seq Scan on tenk1
-                           Disabled: true
+                     ->  Index Scan using tenk1_unique1 on tenk1
  Optimizer: Postgres query optimizer
-(11 rows)
+(10 rows)
 
 reset enable_hashagg;
 reset enable_seqscan;
