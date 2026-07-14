@@ -1176,7 +1176,7 @@ expand_vacuum_rel(VacuumRelation *vrel, MemoryContext vac_context,
 		 * check the ownership of the partitions/tables, which get added to
 		 * the list to process.  Ownership will be checked later on anyway.
 		 */
-		if (include_parts && include_children && !skip_children)
+		if (include_children && !skip_children)
 		{
 			List	   *part_oids = find_all_inheritors(relid, NoLock, NULL);
 			ListCell   *part_lc;
