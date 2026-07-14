@@ -20,17 +20,15 @@ SELECT * FROM mvtest_tv ORDER BY type;
 -- create a materialized view with no data, and confirm correct behavior
 EXPLAIN (costs off)
   CREATE MATERIALIZED VIEW mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
-                         QUERY PLAN                         
-------------------------------------------------------------
- GroupAggregate
+                      QUERY PLAN                      
+------------------------------------------------------
+ HashAggregate
    Group Key: type
-   ->  Sort
-         Sort Key: type
-         ->  Redistribute Motion 3:3  (slice1; segments: 3)
-               Hash Key: type
-               ->  Seq Scan on mvtest_t
- Optimizer: Pivotal Optimizer (GPORCA)
-(8 rows)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3)
+         Hash Key: mvtest_t.type
+         ->  Seq Scan on mvtest_t
+ Optimizer: Postgres query optimizer
+(6 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tm AS SELECT type, sum(amt) AS totamt FROM mvtest_t GROUP BY type WITH NO DATA distributed by(type);
 SELECT relispopulated FROM pg_class WHERE oid = 'mvtest_tm'::regclass;
@@ -61,29 +59,25 @@ SELECT * FROM mvtest_tm ORDER BY type;
 -- create various views
 EXPLAIN (costs off)
   CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
- Result
+                         QUERY PLAN                         
+------------------------------------------------------------
+ GroupAggregate
+   Group Key: mvtest_t.type
    ->  Sort
-         Sort Key: type
+         Sort Key: mvtest_t.type
          ->  Redistribute Motion 3:3  (slice1; segments: 3)
-               ->  GroupAggregate
-                     Group Key: type
-                     ->  Sort
-                           Sort Key: type
-                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                 Hash Key: type
-                                 ->  Seq Scan on mvtest_t
- Optimizer: Pivotal Optimizer (GPORCA)
-(12 rows)
+               Hash Key: mvtest_t.type
+               ->  Seq Scan on mvtest_t
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
 SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
  x    |      5
- z    |     11
  y    |     12
+ z    |     11
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
@@ -95,22 +89,20 @@ CREATE UNIQUE INDEX mvtest_tvmm_pred ON mvtest_tvmm (grandtot) WHERE grandtot < 
 CREATE VIEW mvtest_tvv AS SELECT sum(totamt) AS grandtot FROM mvtest_tv;
 EXPLAIN (costs off)
   CREATE MATERIALIZED VIEW mvtest_tvvm AS SELECT * FROM mvtest_tvv;
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
- Result
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         ->  Finalize Aggregate
-               ->  Gather Motion 3:1  (slice2; segments: 3)
-                     ->  Partial Aggregate
-                           ->  GroupAggregate
-                                 Group Key: type
-                                 ->  Sort
-                                       Sort Key: type
-                                       ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                                             Hash Key: type
-                                             ->  Seq Scan on mvtest_t
- Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Redistribute Motion 1:3  (slice1; segments: 1)
+   Hash Key: (sum(mvtest_tv.totamt))
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Subquery Scan on mvtest_tv
+                     ->  HashAggregate
+                           Group Key: mvtest_t.type
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: mvtest_t.type
+                                 ->  Seq Scan on mvtest_t
+ Optimizer: Postgres query optimizer
+(11 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tvvm AS SELECT * FROM mvtest_tvv;
 CREATE VIEW mvtest_tvvmv AS SELECT * FROM mvtest_tvvm;
@@ -128,7 +120,6 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
-Distributed randomly
 
 \d+ mvtest_tvm
                            Materialized view "public.mvtest_tvm"
@@ -141,7 +132,6 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
-Distributed randomly
 
 \d+ mvtest_tvvm
                            Materialized view "public.mvtest_tvvm"
@@ -151,7 +141,6 @@ Distributed randomly
 View definition:
  SELECT grandtot
    FROM mvtest_tvv;
-Distributed randomly
 
 \d+ mvtest_bb
                             Materialized view "public.mvtest_bb"
@@ -192,7 +181,6 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
-Distributed randomly
 
 -- modify the underlying table data
 INSERT INTO mvtest_t VALUES (6, 'z', 13);
@@ -431,7 +419,7 @@ CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a)
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.4:7003 pid=1665830)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.2:7003 pid=2480240)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -569,21 +557,21 @@ DELETE FROM mvtest_v WHERE EXISTS ( SELECT * FROM mvtest_mv_v WHERE mvtest_mv_v.
 SELECT * FROM mvtest_v;
  a  
 ----
- 10
   6
   8
-  9
+ 10
   7
+  9
 (5 rows)
 
 SELECT * FROM mvtest_mv_v;
  a 
 ---
- 4
- 5
- 2
  3
+ 5
  1
+ 2
+ 4
 (5 rows)
 
 DROP TABLE mvtest_v CASCADE;
@@ -625,9 +613,9 @@ END;
 $$ LANGUAGE plpgsql;
 CREATE MATERIALIZED VIEW drop_idx_matview AS
   SELECT 1 as i WHERE mvtest_drop_the_index();
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg2 slice1 172.17.0.4:7004 pid=1666141)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 slice1 172.17.0.2:7002 pid=2480667)
 CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_mvschema.mvtest_drop_idx"
-PL/pgSQL function mvtest_drop_the_index() line 3 at EXECUTE
+PL/pgSQL function mvtest_mvschema.mvtest_drop_the_index() line 3 at EXECUTE
 CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
 ERROR:  relation "drop_idx_matview" does not exist
 REFRESH MATERIALIZED VIEW CONCURRENTLY drop_idx_matview;
@@ -682,3 +670,93 @@ distributed randomly;
 refresh materialized view mat_view_github_issue_11956;
 drop materialized view mat_view_github_issue_11956;
 drop table t_github_issue_11956;
+-- INSERT privileges if relation owner is not allowed to insert.
+CREATE SCHEMA matview_schema;
+CREATE USER regress_matview_user;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+ALTER DEFAULT PRIVILEGES FOR ROLE regress_matview_user
+  REVOKE INSERT ON TABLES FROM regress_matview_user;
+GRANT ALL ON SCHEMA matview_schema TO public;
+SET SESSION AUTHORIZATION regress_matview_user;
+CREATE MATERIALIZED VIEW matview_schema.mv_withdata1 (a) AS
+  SELECT generate_series(1, 10) WITH DATA;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW matview_schema.mv_withdata2 (a) AS
+  SELECT generate_series(1, 10) WITH DATA;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Result (actual rows=4.00 loops=1)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=4.00 loops=1)
+         ->  Result (actual rows=10.00 loops=1)
+               One-Time Filter: (gp_execution_segment() = 0)
+               ->  ProjectSet (actual rows=10.00 loops=1)
+                     ->  Result (actual rows=1.00 loops=1)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+REFRESH MATERIALIZED VIEW matview_schema.mv_withdata2;
+CREATE MATERIALIZED VIEW matview_schema.mv_nodata1 (a) AS
+  SELECT generate_series(1, 10) WITH NO DATA;
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW matview_schema.mv_nodata2 (a) AS
+  SELECT generate_series(1, 10) WITH NO DATA;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Result (never executed)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (never executed)
+         ->  Result (never executed)
+               One-Time Filter: (gp_execution_segment() = 2)
+               ->  ProjectSet (never executed)
+                     ->  Result (never executed)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+REFRESH MATERIALIZED VIEW matview_schema.mv_nodata2;
+RESET SESSION AUTHORIZATION;
+ALTER DEFAULT PRIVILEGES FOR ROLE regress_matview_user
+  GRANT INSERT ON TABLES TO regress_matview_user;
+DROP SCHEMA matview_schema CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to materialized view matview_schema.mv_withdata1
+drop cascades to materialized view matview_schema.mv_withdata2
+drop cascades to materialized view matview_schema.mv_nodata1
+drop cascades to materialized view matview_schema.mv_nodata2
+DROP USER regress_matview_user;
+-- CREATE MATERIALIZED VIEW ... IF NOT EXISTS
+CREATE MATERIALIZED VIEW matview_ine_tab AS SELECT 1;
+CREATE MATERIALIZED VIEW matview_ine_tab AS SELECT 1 / 0; -- error
+ERROR:  relation "matview_ine_tab" already exists
+CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS
+  SELECT 1 / 0; -- ok
+NOTICE:  relation "matview_ine_tab" already exists, skipping
+CREATE MATERIALIZED VIEW matview_ine_tab AS
+  SELECT 1 / 0 WITH NO DATA; -- error
+ERROR:  relation "matview_ine_tab" already exists
+CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS
+  SELECT 1 / 0 WITH NO DATA; -- ok
+NOTICE:  relation "matview_ine_tab" already exists, skipping
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW matview_ine_tab AS
+    SELECT 1 / 0; -- error
+ERROR:  relation "matview_ine_tab" already exists
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS
+    SELECT 1 / 0; -- ok
+NOTICE:  relation "matview_ine_tab" already exists, skipping
+ QUERY PLAN 
+------------
+(0 rows)
+
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW matview_ine_tab AS
+    SELECT 1 / 0 WITH NO DATA; -- error
+ERROR:  relation "matview_ine_tab" already exists
+EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
+  CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS
+    SELECT 1 / 0 WITH NO DATA; -- ok
+NOTICE:  relation "matview_ine_tab" already exists, skipping
+ QUERY PLAN 
+------------
+(0 rows)
+
+DROP MATERIALIZED VIEW matview_ine_tab;

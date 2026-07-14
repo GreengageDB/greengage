@@ -474,7 +474,7 @@ ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam 
 -------
- 24489
+ 90272
 (1 row)
 
 -- Upon ALTER TABLE SET ACCESS METHOD on a partitioned table, new partitions
@@ -482,7 +482,7 @@ SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam 
 -------
- 24489
+ 90272
 (1 row)
 
 SET LOCAL default_table_access_method = 'heap';
@@ -502,7 +502,7 @@ ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
  relam 
 -------
- 24489
+ 90272
 (1 row)
 
 CREATE TABLE am_partitioned_3 PARTITION OF am_partitioned
