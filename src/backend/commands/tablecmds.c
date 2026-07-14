@@ -10010,7 +10010,7 @@ ATExecColumnDefault(Relation rel, const char *colName,
 		/* SET DEFAULT */
 		RawColumnDefault *rawEnt;
 
-		rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
+		rawEnt = (RawColumnDefault *) palloc0(sizeof(RawColumnDefault));
 		rawEnt->attnum = attnum;
 		rawEnt->raw_default = newDefault;
 		rawEnt->generated = '\0';
@@ -10524,7 +10524,7 @@ ATExecSetExpression(AlteredTableInfo *tab, Relation rel, const char *colName,
 					  false, false);
 
 	/* Prepare to store the new expression, in the catalogs */
-	rawEnt = (RawColumnDefault *) palloc(sizeof(RawColumnDefault));
+	rawEnt = (RawColumnDefault *) palloc0(sizeof(RawColumnDefault));
 	rawEnt->attnum = attnum;
 	rawEnt->raw_default = newExpr;
 	rawEnt->generated = attgenerated;
