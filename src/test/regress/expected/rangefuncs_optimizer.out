@@ -261,8 +261,8 @@ HINT:  likely caused by a function that reads or modifies data in a distributed 
 CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(1) z where z.rngfuncid = rngfunc2.rngfuncid) ORDER BY 1,2;
-ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.4:7000 pid=1607076)
-CONTEXT:  SQL function "rngfunct" during startup
+ERROR:  function cannot execute on a QE slice because it accesses relation "public.rngfunc2"  (entry db 172.17.0.2:7000 pid=2451037)
+CONTEXT:  SQL function "rngfunct" statement 1
 -- function in subselect
 select * from rngfunc2 where f2 in (select f2 from rngfunct(rngfunc2.rngfuncid) z where z.rngfuncid = 1) ORDER BY 1,2;
 ERROR:  query plan with multiple segworker groups is not supported
@@ -1656,10 +1656,10 @@ select insert_tt('fool');
 select * from tt;
  f1 |   data   
 ----+----------
-  3 | fool
   4 | foolfool
   1 | foo
   2 | bar
+  3 | fool
 (4 rows)
 
 -- setof does what's expected
@@ -1669,8 +1669,8 @@ language sql;
 select insert_tt2('foolish','barrish');
  insert_tt2 
 ------------
-          6
           5
+          6
 (2 rows)
 
 select * from insert_tt2('baz','quux');
@@ -1683,14 +1683,14 @@ select * from insert_tt2('baz','quux');
 select * from tt;
  f1 |   data   
 ----+----------
-  4 | foolfool
-  5 | foolish
   1 | foo
   2 | bar
   7 | baz
   8 | quux
   3 | fool
   6 | barrish
+  4 | foolfool
+  5 | foolish
 (8 rows)
 
 -- limit doesn't prevent execution to completion
@@ -1703,16 +1703,16 @@ select insert_tt2('foolish','barrish') limit 1;
 select * from tt;
  f1 |   data   
 ----+----------
-  3 | fool
-  6 | barrish
-  4 | foolfool
-  5 | foolish
   1 | foo
   2 | bar
   7 | baz
   8 | quux
   9 | foolish
  10 | barrish
+  3 | fool
+  6 | barrish
+  4 | foolfool
+  5 | foolish
 (10 rows)
 
 -- triggers will fire, too
@@ -1724,8 +1724,8 @@ end $$ language plpgsql;
 create trigger tnoticetrigger after insert on tt for each row
 execute procedure noticetrigger();
 select insert_tt2('foolme','barme') limit 1;
-NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.4:7002 pid=1606895)
-NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.4:7002 pid=1606895)
+NOTICE:  noticetrigger 11 foolme  (seg0 slice1 172.17.0.2:7002 pid=2450973)
+NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.2:7002 pid=2450973)
  insert_tt2 
 ------------
          11
@@ -1734,8 +1734,6 @@ NOTICE:  noticetrigger 12 barme  (seg0 slice1 172.17.0.4:7002 pid=1606895)
 select * from tt;
  f1 |   data   
 ----+----------
-  3 | fool
-  6 | barrish
   1 | foo
   2 | bar
   7 | baz
@@ -1746,6 +1744,8 @@ select * from tt;
  12 | barme
   4 | foolfool
   5 | foolish
+  3 | fool
+  6 | barrish
 (12 rows)
 
 -- and rules work
@@ -1753,8 +1753,8 @@ create temp table tt_log(f1 int, data text);
 create rule insert_tt_rule as on insert to tt do also
   insert into tt_log values(new.*);
 select insert_tt2('foollog','barlog') limit 1;
-NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.4:7002 pid=1606895)
-NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.4:7002 pid=1606895)
+NOTICE:  noticetrigger 13 foollog  (seg0 slice1 172.17.0.2:7002 pid=2450973)
+NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.2:7002 pid=2450973)
  insert_tt2 
 ------------
          13
@@ -1763,8 +1763,6 @@ NOTICE:  noticetrigger 14 barlog  (seg0 slice1 172.17.0.4:7002 pid=1606895)
 select * from tt;
  f1 |   data   
 ----+----------
-  4 | foolfool
-  5 | foolish
   1 | foo
   2 | bar
   7 | baz
@@ -1775,6 +1773,8 @@ select * from tt;
  12 | barme
  13 | foollog
  14 | barlog
+  4 | foolfool
+  5 | foolish
   3 | fool
   6 | barrish
 (14 rows)
@@ -1846,7 +1846,7 @@ select * from array_to_set(array['one', 'two']) as t(f1 numeric(4,2),f2 text);
 select * from array_to_set(array['one', 'two']) as t(f1 point,f2 text);
 ERROR:  return type mismatch in function declared to return record
 DETAIL:  Final statement returns integer instead of point at column 1.
-CONTEXT:  SQL function "array_to_set" during startup
+CONTEXT:  SQL function "array_to_set" statement 1
 -- with "strict", this function can't be inlined in FROM
 explain (verbose, costs off)
   select * from array_to_set(array['one', 'two']) as t(f1 numeric(4,2),f2 text);
@@ -1886,7 +1886,7 @@ select * from array_to_set(array['one', 'two']) as t(f1 numeric(4,2),f2 text);
 select * from array_to_set(array['one', 'two']) as t(f1 point,f2 text);
 ERROR:  return type mismatch in function declared to return record
 DETAIL:  Final statement returns integer instead of point at column 1.
-CONTEXT:  SQL function "array_to_set" during startup
+CONTEXT:  SQL function "array_to_set" statement 1
 explain (verbose, costs off)
   select * from array_to_set(array['one', 'two']) as t(f1 numeric(4,2),f2 text);
                      QUERY PLAN                     
@@ -2175,8 +2175,8 @@ SELECT get_users();
 SELECT * FROM get_users();
  userid | seq | email  | moredrop | enabled 
 --------+-----+--------+----------+---------
- id2    |   2 | email2 |       12 | t
  id     |   1 | email  |       11 | t
+ id2    |   2 | email2 |       12 | t
 (2 rows)
 
 SELECT * FROM get_users() WITH ORDINALITY;   -- make sure ordinality copes
@@ -2325,6 +2325,7 @@ select x from int8_tbl, extractq2(int8_tbl) f(x);
  Gather Motion 3:1  (slice1; segments: 3)
    Output: f.x
    ->  Nested Loop
+         Disabled: true
          Output: f.x
          ->  Seq Scan on public.int8_tbl
                Output: int8_tbl.q1, int8_tbl.q2
@@ -2332,7 +2333,7 @@ select x from int8_tbl, extractq2(int8_tbl) f(x);
                Output: f.x
                Function Call: int8_tbl.q2
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 select x from int8_tbl, extractq2(int8_tbl) f(x);
          x         
@@ -2354,6 +2355,7 @@ select x from int8_tbl, extractq2_2(int8_tbl) f(x);
  Gather Motion 3:1  (slice1; segments: 3)
    Output: ((int8_tbl.*).q2)
    ->  Nested Loop
+         Disabled: true
          Output: ((int8_tbl.*).q2)
          ->  Seq Scan on public.int8_tbl
                Output: int8_tbl.*
@@ -2362,16 +2364,16 @@ select x from int8_tbl, extractq2_2(int8_tbl) f(x);
                ->  Result
                      Output: (int8_tbl.*).q2
  Optimizer: Postgres query optimizer
-(11 rows)
+(12 rows)
 
 select x from int8_tbl, extractq2_2(int8_tbl) f(x);
          x         
 -------------------
+               456
+  4567890123456789
                123
   4567890123456789
  -4567890123456789
-               456
-  4567890123456789
 (5 rows)
 
 -- without the "offset 0", this function gets optimized quite differently
@@ -2409,6 +2411,7 @@ select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extract
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Nested Loop
+   Disabled: true
    Output: (int8_tbl.q2)
    ->  Limit
          Output: int8_tbl.q1, int8_tbl.q2
@@ -2430,7 +2433,7 @@ select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extract
                ->  Result
                      Output: int8_tbl.q2
  Optimizer: Postgres query optimizer
-(22 rows)
+(23 rows)
 
 select x from (select * from int8_tbl order by 1 limit 100) as int8_tbl, extractq2_append(int8_tbl) f(x);
          x         
@@ -2513,6 +2516,7 @@ select * from
                                                                        QUERY PLAN                                                                       
 --------------------------------------------------------------------------------------------------------------------------------------------------------
  Nested Loop
+   Disabled: true
    Output: jsonb_path_query_array((unnested_modules.module -> 'lectures'::text), '$[*]'::jsonpath, '{}'::jsonb, false), j.id
    ->  Function Scan on pg_catalog.unnest unnested_modules
          Output: unnested_modules.module
@@ -2521,7 +2525,7 @@ select * from
          Output: j.id
          Function Call: jsonb_to_recordset(jsonb_path_query_array((unnested_modules.module -> 'lectures'::text), '$[*]'::jsonpath, '{}'::jsonb, false))
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 select * from
   (select jsonb_path_query_array(module->'lectures', '$[*]') as lecture
@@ -2547,5 +2551,5 @@ select * from a, coalesce(b) as c(d int, e int, f float);  -- fail
 ERROR:  function return row and query-specified return row do not match
 DETAIL:  Returned type integer at ordinal position 3, but query expects double precision.
 select * from int8_tbl, coalesce(row(1)) as (a int, b int);  -- fail
-ERROR:  function return row and query-specified return row do not match  (seg0 slice1 172.17.0.4:7002 pid=1606895)
+ERROR:  function return row and query-specified return row do not match  (seg0 slice1 172.17.0.2:7002 pid=2450973)
 DETAIL:  Returned row contains 1 attribute, but query expects 2.

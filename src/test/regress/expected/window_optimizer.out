@@ -52,6 +52,8 @@ SELECT depname, empno, salary, rank() OVER (PARTITION BY depname ORDER BY salary
 -- with GROUP BY
 SELECT four, ten, SUM(SUM(four)) OVER (PARTITION BY four), AVG(ten) FROM tenk1
 GROUP BY four, ten ORDER BY four, ten;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  four | ten | sum  |          avg           
 ------+-----+------+------------------------
     0 |   0 |    0 | 0.00000000000000000000
@@ -177,6 +179,9 @@ SELECT row_number() OVER (ORDER BY unique2) FROM tenk1 WHERE unique2 < 10;
 SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE unique2 < 10;
  rank_1 | ten | four 
 --------+-----+------
+      1 |   0 |    2
+      1 |   1 |    3
+      2 |   3 |    3
       1 |   0 |    0
       1 |   0 |    0
       3 |   4 |    0
@@ -184,14 +189,14 @@ SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM te
       1 |   1 |    1
       3 |   7 |    1
       4 |   9 |    1
-      1 |   0 |    2
-      1 |   1 |    3
-      2 |   3 |    3
 (10 rows)
 
 SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  dense_rank | ten | four 
 ------------+-----+------
+          1 |   0 |    2
+          1 |   1 |    3
+          2 |   3 |    3
           1 |   0 |    0
           1 |   0 |    0
           2 |   4 |    0
@@ -199,14 +204,14 @@ SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 
           1 |   1 |    1
           2 |   7 |    1
           3 |   9 |    1
-          1 |   0 |    2
-          1 |   1 |    3
-          2 |   3 |    3
 (10 rows)
 
 SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
     percent_rank    | ten | four 
 --------------------+-----+------
+                  0 |   0 |    2
+                  0 |   1 |    3
+                  1 |   3 |    3
                   0 |   0 |    0
                   0 |   0 |    0
                   1 |   4 |    0
@@ -214,17 +219,11 @@ SELECT percent_rank() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk
                   0 |   1 |    1
  0.6666666666666666 |   7 |    1
                   1 |   9 |    1
-                  0 |   0 |    2
-                  0 |   1 |    3
-                  1 |   3 |    3
 (10 rows)
 
 SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
      cume_dist      | ten | four 
 --------------------+-----+------
-                  1 |   0 |    2
-                0.5 |   1 |    3
-                  1 |   3 |    3
  0.6666666666666666 |   0 |    0
  0.6666666666666666 |   0 |    0
                   1 |   4 |    0
@@ -232,6 +231,9 @@ SELECT cume_dist() OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 W
                 0.5 |   1 |    1
                0.75 |   7 |    1
                   1 |   9 |    1
+                  1 |   0 |    2
+                0.5 |   1 |    3
+                  1 |   3 |    3
 (10 rows)
 
 SELECT ntile(3) OVER (ORDER BY ten, four), ten, four FROM tenk1 WHERE unique2 < 10;
@@ -259,6 +261,9 @@ SELECT ntile(NULL) OVER (ORDER BY ten, four), ten, four FROM tenk1 LIMIT 2;
 SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lag | ten | four 
 -----+-----+------
+     |   0 |    2
+     |   1 |    3
+   1 |   3 |    3
      |   0 |    0
    0 |   0 |    0
    0 |   4 |    0
@@ -266,14 +271,14 @@ SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHER
    1 |   1 |    1
    1 |   7 |    1
    7 |   9 |    1
-     |   0 |    2
-     |   1 |    3
-   1 |   3 |    3
 (10 rows)
 
 SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lag | ten | four 
 -----+-----+------
+     |   0 |    2
+     |   1 |    3
+     |   3 |    3
    0 |   0 |    0
    0 |   0 |    0
    4 |   4 |    0
@@ -281,17 +286,11 @@ SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk
    1 |   1 |    1
    1 |   7 |    1
    7 |   9 |    1
-     |   0 |    2
-     |   1 |    3
-     |   3 |    3
 (10 rows)
 
 SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lag | ten | four 
 -----+-----+------
-   0 |   0 |    2
-   0 |   1 |    3
-   0 |   3 |    3
    0 |   0 |    0
    0 |   0 |    0
    4 |   4 |    0
@@ -299,6 +298,9 @@ SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten), ten, four FROM t
    1 |   1 |    1
    1 |   7 |    1
    7 |   9 |    1
+   0 |   0 |    2
+   0 |   1 |    3
+   0 |   3 |    3
 (10 rows)
 
 SELECT lag(ten, four, 0.7) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10 ORDER BY four, ten;
@@ -319,9 +321,6 @@ SELECT lag(ten, four, 0.7) OVER (PARTITION BY four ORDER BY ten), ten, four FROM
 SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  lead | ten | four 
 ------+-----+------
-      |   0 |    2
-    3 |   1 |    3
-      |   3 |    3
     0 |   0 |    0
     4 |   0 |    0
       |   4 |    0
@@ -329,6 +328,9 @@ SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHE
     7 |   1 |    1
     9 |   7 |    1
       |   9 |    1
+      |   0 |    2
+    3 |   1 |    3
+      |   3 |    3
 (10 rows)
 
 SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
@@ -379,9 +381,6 @@ SELECT lead(ten * 2, 1, -1.4) OVER (PARTITION BY four ORDER BY ten), ten, four F
 SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM tenk1 WHERE unique2 < 10;
  first_value | ten | four 
 -------------+-----+------
-           0 |   0 |    2
-           1 |   1 |    3
-           1 |   3 |    3
            0 |   0 |    0
            0 |   0 |    0
            0 |   4 |    0
@@ -389,6 +388,9 @@ SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten), ten, four FROM te
            1 |   1 |    1
            1 |   7 |    1
            1 |   9 |    1
+           0 |   0 |    2
+           1 |   1 |    3
+           1 |   3 |    3
 (10 rows)
 
 -- last_value returns the last row of the frame, which is CURRENT ROW in ORDER BY window.
@@ -447,6 +449,8 @@ SELECT nth_value(ten, four + 1) OVER (PARTITION BY four ORDER BY ten), ten, four
 reset search_path;
 SELECT ten, two, sum(hundred) AS gsum, sum(sum(hundred)) OVER (PARTITION BY two ORDER BY ten) AS wsum
 FROM tenk1 GROUP BY ten, two;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | two | gsum  |  wsum  
 -----+-----+-------+--------
    0 |   0 | 45000 |  45000
@@ -464,12 +468,12 @@ FROM tenk1 GROUP BY ten, two;
 SELECT count(*) OVER (PARTITION BY four), four FROM (SELECT * FROM tenk1 WHERE two = 1)s WHERE unique2 < 10;
  count | four 
 -------+------
+     4 |    1
+     4 |    1
+     4 |    1
+     4 |    1
      2 |    3
      2 |    3
-     4 |    1
-     4 |    1
-     4 |    1
-     4 |    1
 (6 rows)
 
 SELECT (count(*) OVER (PARTITION BY four ORDER BY ten) +
@@ -519,6 +523,8 @@ SELECT avg(four) OVER (PARTITION BY four ORDER BY thousand / 100) FROM tenk1 WHE
 
 SELECT ten, two, sum(hundred) AS gsum, sum(sum(hundred)) OVER win AS wsum
 FROM tenk1 GROUP BY ten, two WINDOW win AS (PARTITION BY two ORDER BY ten);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | two | gsum  |  wsum  
 -----+-----+-------+--------
    0 |   0 | 45000 |  45000
@@ -538,11 +544,13 @@ SELECT sum(salary),
 	row_number() OVER (ORDER BY depname),
 	sum(sum(salary)) OVER (ORDER BY depname DESC)
 FROM empsalary GROUP BY depname;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
   sum  | row_number |  sum  
 -------+------------+-------
- 14600 |          3 | 14600
-  7400 |          2 | 22000
  25100 |          1 | 47100
+  7400 |          2 | 22000
+ 14600 |          3 | 14600
 (3 rows)
 
 -- identical windows with different names
@@ -568,14 +576,14 @@ FROM tenk1 s WHERE unique2 < 10;
  lead 
 ------
     0
-    3
-     
-    0
     0
     4
     1
     7
     9
+     
+    0
+    3
      
 (10 rows)
 
@@ -638,6 +646,8 @@ select ten,
   rank() over (order by sum(unique1) + sum(unique2)) as rank
 from tenk1
 group by ten order by ten;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten |   res    | rank 
 -----+----------+------
    0 |  9976146 |    4
@@ -657,18 +667,20 @@ explain (costs off)
 select first_value(max(x)) over (), y
   from (select unique1 as x, ten+four as y from tenk1) ss
   group by y;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                             QUERY PLAN                            
 ------------------------------------------------------------------
  WindowAgg
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Finalize HashAggregate
-               Group Key: ((ten + four))
+               Group Key: ((tenk1.ten + tenk1.four))
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ((ten + four))
-                     ->  Streaming Partial HashAggregate
-                           Group Key: (ten + four)
+                     Hash Key: ((tenk1.ten + tenk1.four))
+                     ->  Partial HashAggregate
+                           Group Key: (tenk1.ten + tenk1.four)
                            ->  Seq Scan on tenk1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
 (10 rows)
 
 -- window functions returning pass-by-ref values from different rows
@@ -695,16 +707,6 @@ SELECT four, ten,
 FROM (select distinct ten, four from tenk1) ss;
  four | ten | sum | last_value 
 ------+-----+-----+------------
-    2 |   0 |   0 |          0
-    2 |   2 |   2 |          2
-    2 |   4 |   6 |          4
-    2 |   6 |  12 |          6
-    2 |   8 |  20 |          8
-    3 |   1 |   1 |          1
-    3 |   3 |   4 |          3
-    3 |   5 |   9 |          5
-    3 |   7 |  16 |          7
-    3 |   9 |  25 |          9
     0 |   0 |   0 |          0
     0 |   2 |   2 |          2
     0 |   4 |   6 |          4
@@ -715,6 +717,16 @@ FROM (select distinct ten, four from tenk1) ss;
     1 |   5 |   9 |          5
     1 |   7 |  16 |          7
     1 |   9 |  25 |          9
+    2 |   0 |   0 |          0
+    2 |   2 |   2 |          2
+    2 |   4 |   6 |          4
+    2 |   6 |  12 |          6
+    2 |   8 |  20 |          8
+    3 |   1 |   1 |          1
+    3 |   3 |   4 |          3
+    3 |   5 |   9 |          5
+    3 |   7 |  16 |          7
+    3 |   9 |  25 |          9
 (20 rows)
 
 SELECT four, ten,
@@ -751,16 +763,6 @@ SELECT four, ten,
 FROM (select distinct ten, four from tenk1) ss;
  four | ten | sum | last_value 
 ------+-----+-----+------------
-    2 |   0 |  20 |          8
-    2 |   2 |  20 |          8
-    2 |   4 |  20 |          8
-    2 |   6 |  20 |          8
-    2 |   8 |  20 |          8
-    3 |   1 |  25 |          9
-    3 |   3 |  25 |          9
-    3 |   5 |  25 |          9
-    3 |   7 |  25 |          9
-    3 |   9 |  25 |          9
     0 |   0 |  20 |          8
     0 |   2 |  20 |          8
     0 |   4 |  20 |          8
@@ -771,6 +773,16 @@ FROM (select distinct ten, four from tenk1) ss;
     1 |   5 |  25 |          9
     1 |   7 |  25 |          9
     1 |   9 |  25 |          9
+    2 |   0 |  20 |          8
+    2 |   2 |  20 |          8
+    2 |   4 |  20 |          8
+    2 |   6 |  20 |          8
+    2 |   8 |  20 |          8
+    3 |   1 |  25 |          9
+    3 |   3 |  25 |          9
+    3 |   5 |  25 |          9
+    3 |   7 |  25 |          9
+    3 |   9 |  25 |          9
 (20 rows)
 
 SELECT four, ten/4 as two,
@@ -807,16 +819,6 @@ SELECT four, ten/4 as two,
 FROM (select distinct ten, four from tenk1) ss;
  four | two | sum | last_value 
 ------+-----+-----+------------
-    0 |   0 |   0 |          0
-    0 |   0 |   0 |          0
-    0 |   1 |   1 |          1
-    0 |   1 |   2 |          1
-    0 |   2 |   4 |          2
-    1 |   0 |   0 |          0
-    1 |   0 |   0 |          0
-    1 |   1 |   1 |          1
-    1 |   1 |   2 |          1
-    1 |   2 |   4 |          2
     2 |   0 |   0 |          0
     2 |   0 |   0 |          0
     2 |   1 |   1 |          1
@@ -827,6 +829,16 @@ FROM (select distinct ten, four from tenk1) ss;
     3 |   1 |   1 |          1
     3 |   1 |   2 |          1
     3 |   2 |   4 |          2
+    0 |   0 |   0 |          0
+    0 |   0 |   0 |          0
+    0 |   1 |   1 |          1
+    0 |   1 |   2 |          1
+    0 |   2 |   4 |          2
+    1 |   0 |   0 |          0
+    1 |   0 |   0 |          0
+    1 |   1 |   1 |          1
+    1 |   1 |   2 |          1
+    1 |   2 |   4 |          2
 (20 rows)
 
 SELECT sum(unique1) over (order by four range between current row and unbounded following),
@@ -1532,16 +1544,16 @@ SELECT sum(unique1) over (partition by four order by unique1 range between 5::in
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four 
 -----+---------+------
-   8 |       2 |    2
-   8 |       6 |    2
-  10 |       3 |    3
-  10 |       7 |    3
    4 |       0 |    0
   12 |       4 |    0
   12 |       8 |    0
    6 |       1 |    1
   15 |       5 |    1
   14 |       9 |    1
+   8 |       2 |    2
+   8 |       6 |    2
+  10 |       3 |    3
+  10 |       7 |    3
 (10 rows)
 
 SELECT sum(unique1) over (partition by four order by unique1 range between 5::int8 preceding and 6::int2 following
@@ -1911,8 +1923,6 @@ AS $$
 $$;
 -- These will apply the argument to the window specification inside the function.
 SELECT * FROM unbounded_syntax_test1a(2);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
  a  | b | c 
 ----+---+---
   3 | 0 | 0
@@ -1928,8 +1938,6 @@ DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
 (10 rows)
 
 SELECT * FROM unbounded_syntax_test1b(2);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
  a  | b | c 
 ----+---+---
   3 | 0 | 0
@@ -1977,9 +1985,6 @@ SELECT * FROM unbounded_syntax_test2a(2);
 SELECT * FROM unbounded_syntax_test2b(2);
  a  | b | c 
 ----+---+---
- 45 | 5 | 1
- 45 | 6 | 2
- 45 | 9 | 1
  45 | 2 | 2
  45 | 3 | 3
  45 | 4 | 0
@@ -1987,6 +1992,9 @@ SELECT * FROM unbounded_syntax_test2b(2);
  45 | 8 | 0
  45 | 0 | 0
  45 | 1 | 1
+ 45 | 5 | 1
+ 45 | 6 | 2
+ 45 | 9 | 1
 (10 rows)
 
 DROP FUNCTION unbounded_syntax_test1a, unbounded_syntax_test1b,
@@ -2014,10 +2022,6 @@ FROM tenk1 WHERE unique1 < 10;
 SELECT sum(unique1) over (order by unique1 rows between unbounded(1) preceding and unbounded(1) following),
        unique1, four
 FROM tenk1 WHERE unique1 < 10;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
  sum | unique1 | four 
 -----+---------+------
    1 |       0 |    0
@@ -3240,14 +3244,14 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
+   5 |       5 |    1 |   5
+   6 |       6 |    2 |   6
+   9 |       9 |    1 |   9
    2 |       2 |    2 |   2
    3 |       3 |    3 |   3
    4 |       4 |    0 |   4
    7 |       7 |    3 |   7
    8 |       8 |    0 |   8
-   5 |       5 |    1 |   5
-   6 |       6 |    2 |   6
-   9 |       9 |    1 |   9
    0 |       0 |    0 |   0
    1 |       1 |    1 |   1
 (10 rows)
@@ -3257,13 +3261,13 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
-     |       0 |    0 |   0
-     |       1 |    1 |   1
      |       2 |    2 |   2
      |       3 |    3 |   3
      |       4 |    0 |   4
      |       7 |    3 |   7
      |       8 |    0 |   8
+     |       0 |    0 |   0
+     |       1 |    1 |   1
      |       5 |    1 |   5
      |       6 |    2 |   6
      |       9 |    1 |   9
@@ -3274,14 +3278,14 @@ SELECT sum(unique1) over (partition by ten
 FROM tenk1 WHERE unique1 < 10;
  sum | unique1 | four | ten 
 -----+---------+------+-----
-     |       5 |    1 |   5
-     |       6 |    2 |   6
-     |       9 |    1 |   9
      |       2 |    2 |   2
      |       3 |    3 |   3
      |       4 |    0 |   4
      |       7 |    3 |   7
      |       8 |    0 |   8
+     |       5 |    1 |   5
+     |       6 |    2 |   6
+     |       9 |    1 |   9
      |       0 |    0 |   0
      |       1 |    1 |   1
 (10 rows)
@@ -3629,8 +3633,8 @@ select f1, sum(f1) over (partition by f1, f2 order by f2
 from t1 where f1 = f2;
  f1 | sum 
 ----+-----
-  1 |    
   2 |    
+  1 |    
 (2 rows)
 
 select f1, sum(f1) over (partition by f1
@@ -3679,8 +3683,8 @@ select f1, sum(f1) over (partition by f1, f2 order by f2
 from t1 where f1 = f2;
  f1 | sum 
 ----+-----
-  1 |    
   2 |    
+  1 |    
 (2 rows)
 
 -- ordering by a non-integer constant is allowed
@@ -3755,7 +3759,7 @@ SELECT sum(salary), row_number() OVER (ORDER BY depname), sum(
     depname
 FROM empsalary GROUP BY depname;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
   sum  | row_number | filtered_sum |  depname  
 -------+------------+--------------+-----------
  25100 |          1 |        22600 | develop
@@ -3821,20 +3825,20 @@ SELECT
     count(*) OVER (PARTITION BY depname ORDER BY enroll_date RANGE BETWEEN
                    CURRENT ROW AND CURRENT ROW) cnt
 FROM empsalary;
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Output: empno, depname, (row_number() OVER (?)), (rank() OVER (?)), (count(*) OVER (?))
+   Output: empno, depname, (row_number() OVER w1), (rank() OVER w1), (count(*) OVER w1)
    ->  WindowAgg
-         Output: empno, depname, (row_number() OVER (?)), (rank() OVER (?)), count(*) OVER (?)
+         Output: empno, depname, (row_number() OVER w1), (rank() OVER w1), count(*) OVER w1
          Partition By: empsalary.depname
          Order By: empsalary.enroll_date
          ->  WindowAgg
-               Output: rank() OVER (?), depname, empno, enroll_date, (row_number() OVER (?))
+               Output: rank() OVER w1, depname, empno, enroll_date, (row_number() OVER w1)
                Partition By: empsalary.depname
                Order By: empsalary.enroll_date
                ->  WindowAgg
-                     Output: row_number() OVER (?), depname, empno, enroll_date
+                     Output: row_number() OVER w1, depname, empno, enroll_date
                      Partition By: empsalary.depname
                      Order By: empsalary.enroll_date
                      ->  Sort
@@ -3960,7 +3964,7 @@ WHERE rn < 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((row_number() OVER (?)) < 3)
+   Filter: ((row_number() OVER w1) < 3)
    ->  WindowAgg
          Order By: empno
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4016,7 +4020,7 @@ WHERE r <= 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((rank() OVER (?)) <= 3)
+   Filter: ((rank() OVER w1) <= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4051,7 +4055,7 @@ WHERE dr = 1;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((dense_rank() OVER (?)) = 1)
+   Filter: ((dense_rank() OVER w1) = 1)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4084,7 +4088,7 @@ WHERE c <= 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(*) OVER (?)) <= 3)
+   Filter: ((count(*) OVER w1) <= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4118,7 +4122,7 @@ WHERE c <= 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(empno) OVER (?)) <= 3)
+   Filter: ((count(empno) OVER w1) <= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4152,7 +4156,7 @@ WHERE c >= 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(*) OVER (?)) >= 3)
+   Filter: ((count(*) OVER w1) >= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4173,7 +4177,7 @@ WHERE 11 <= c;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(*) OVER (?)) >= 11)
+   Filter: ((count(*) OVER w1) >= 11)
    ->  WindowAgg
          ->  Gather Motion 3:1  (slice1; segments: 3)
                ->  Seq Scan on empsalary
@@ -4191,7 +4195,7 @@ WHERE dr = 1;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((dense_rank() OVER (?)) = 1)
+   Filter: ((dense_rank() OVER w1) = 1)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4214,7 +4218,7 @@ WHERE rn < 3;
 -----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: ((row_number() OVER (?)) < 3)
+         Filter: ((row_number() OVER w1) < 3)
          ->  WindowAgg
                Partition By: depname
                Order By: empno
@@ -4254,7 +4258,7 @@ WHERE rn < 3;
 -----------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: ((row_number() OVER (?)) < 3)
+         Filter: ((row_number() OVER w1) < 3)
          ->  WindowAgg
                Partition By: depname
                Order By: empno
@@ -4277,7 +4281,7 @@ WHERE c <= 3;
 ----------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: ((count(empno) OVER (?)) <= 3)
+         Filter: ((count(empno) OVER w1) <= 3)
          ->  WindowAgg
                Partition By: depname
                Order By: salary
@@ -4320,12 +4324,22 @@ WHERE c = 1;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(empno) OVER (?)) = 1)
+   Filter: ((count(empno) OVER w1) = 1)
    ->  WindowAgg
          ->  Gather Motion 3:1  (slice1; segments: 3)
                ->  Seq Scan on empsalary
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
+
+-- Try another case with a WindowFunc with a byref return type
+SELECT * FROM
+  (SELECT row_number() OVER (PARTITION BY salary) AS rn,
+          lead(depname) OVER (PARTITION BY salary) || ' Department' AS n_dep
+   FROM empsalary) emp
+WHERE rn < 1;
+ rn | n_dep 
+----+-------
+(0 rows)
 
 -- Some more complex cases with multiple window clauses
 EXPLAIN (COSTS OFF)
@@ -4338,11 +4352,11 @@ SELECT * FROM
           ntile(2) OVER (PARTITION BY depname) nt -- w2
    FROM empsalary
 ) e WHERE rn <= 1 AND c1 <= 3 AND nt < 2;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: (((row_number() OVER (?)) <= 1) AND ((count(salary) OVER (?)) <= 3) AND ((ntile(2) OVER (?)) < 2))
+         Filter: (((row_number() OVER w1) <= 1) AND ((count(salary) OVER w1) <= 3) AND ((ntile(2) OVER w1) < 2))
          ->  WindowAgg
                Partition By: ((''::text || (depname)::text))
                ->  Sort
@@ -4394,7 +4408,7 @@ WHERE s.c = 1;
  Result
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Result
-               Filter: ((ntile(empsalary_1.salary) OVER (?)) = 1)
+               Filter: ((ntile(empsalary_1.salary) OVER w1) = 1)
                ->  WindowAgg
                      Partition By: empsalary.depname
                      ->  Sort
@@ -4423,7 +4437,7 @@ WHERE s.c = 1;
               QUERY PLAN               
 ---------------------------------------
  Result
-   Filter: ((ntile((1)) OVER (?)) = 1)
+   Filter: ((ntile((1)) OVER w1) = 1)
    ->  WindowAgg
          ->  Nested Loop Left Join
                Join Filter: true
@@ -4446,7 +4460,7 @@ WHERE c <= 3;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(*) OVER (?)) <= 3)
+   Filter: ((count(*) OVER w1) <= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4469,7 +4483,7 @@ WHERE 3 <= c;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(*) OVER (?)) >= 3)
+   Filter: ((count(*) OVER w1) >= 3)
    ->  WindowAgg
          Order By: salary
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4492,7 +4506,7 @@ WHERE c = 1;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count(random()) OVER (?)) = 1)
+   Filter: ((count(random()) OVER w1) = 1)
    ->  WindowAgg
          Order By: empno
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4514,7 +4528,7 @@ WHERE c = 1;
                       QUERY PLAN                      
 ------------------------------------------------------
  Result
-   Filter: ((count((1)) OVER (?)) = 1)
+   Filter: ((count((1)) OVER w1) = 1)
    ->  WindowAgg
          Order By: empno
          ->  Gather Motion 3:1  (slice1; segments: 3)
@@ -4624,16 +4638,16 @@ SELECT DISTINCT
        min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
 FROM empsalary
 ORDER BY depname, enroll_date;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: depname, enroll_date
    ->  Sort
          Sort Key: depname, enroll_date
          ->  GroupAggregate
-               Group Key: depname, enroll_date, empno, (sum(salary) OVER (?)), (min(salary) OVER (?))
+               Group Key: depname, enroll_date, empno, (sum(salary) OVER w1), (min(salary) OVER w1)
                ->  Sort
-                     Sort Key: depname, enroll_date, empno, (sum(salary) OVER (?)), (min(salary) OVER (?))
+                     Sort Key: depname, enroll_date, empno, (sum(salary) OVER w1), (min(salary) OVER w1)
                      ->  WindowAgg
                            Partition By: depname
                            Order By: enroll_date
@@ -4659,16 +4673,16 @@ SELECT DISTINCT
        min(salary) OVER (PARTITION BY depname order by enroll_date) depminsalary
 FROM empsalary
 ORDER BY depname, empno;
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
+                                               QUERY PLAN                                                
+---------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: depname, empno
    ->  Sort
          Sort Key: depname, empno
          ->  GroupAggregate
-               Group Key: depname, empno, enroll_date, (sum(salary) OVER (?)), (min(salary) OVER (?))
+               Group Key: depname, empno, enroll_date, (sum(salary) OVER w1), (min(salary) OVER w1)
                ->  Sort
-                     Sort Key: depname, empno, enroll_date, (sum(salary) OVER (?)), (min(salary) OVER (?))
+                     Sort Key: depname, empno, enroll_date, (sum(salary) OVER w1), (min(salary) OVER w1)
                      ->  WindowAgg
                            Partition By: depname
                            Order By: enroll_date
@@ -4718,11 +4732,11 @@ SELECT * FROM
           row_number() OVER (PARTITION BY depname ORDER BY enroll_date DESC) AS last_emp
    FROM empsalary) emp
 WHERE first_emp = 1 OR last_emp = 1;
-                                    QUERY PLAN                                    
-----------------------------------------------------------------------------------
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: (((row_number() OVER (?)) = 1) OR ((row_number() OVER (?)) = 1))
+         Filter: (((row_number() OVER w1) = 1) OR ((row_number() OVER w1) = 1))
          ->  WindowAgg
                Partition By: depname
                Order By: enroll_date
@@ -4874,22 +4888,6 @@ FROM (VALUES
 ) AS t(p, i, v)
 WINDOW wnd AS (PARTITION BY P ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 ORDER BY p, i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
    row    |                    nstrict                    |                  nstrict_init                   |  strict   |  strict_init   
 ----------+-----------------------------------------------+-------------------------------------------------+-----------+----------------
  1,1:NULL | +NULL                                         | MI+NULL                                         |           | MI
@@ -4926,12 +4924,6 @@ WINDOW wnd AS (PARTITION BY p ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT RO
 ORDER BY p, i;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
    row    | nstrict_filt | nstrict_init_filt | strict_filt | strict_init_filt 
 ----------+--------------+-------------------+-------------+------------------
  1,1:NULL | +NULL        | MI+NULL           |             | MI
@@ -4959,12 +4951,6 @@ FROM (VALUES
 ) AS t(i, v)
 WINDOW wnd AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 ORDER BY i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
  row |    inverse    | noinverse 
 -----+---------------+-----------
  1:a | a             | a
@@ -4987,12 +4973,6 @@ WINDOW wnd AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)
 ORDER BY i;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
  row |    inverse    | noinverse 
 -----+---------------+-----------
  1:a | a             | a
@@ -5159,13 +5139,401 @@ WINDOW fwd AS (
 	ORDER BY vs.i ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 );
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: SIRV functions
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: SIRV functions
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: SIRV functions
  eq1 | eq2 | eq3 
 -----+-----+-----
  t   | t   | t
@@ -5837,8 +6205,6 @@ EXPLAIN (costs off) SELECT * FROM pg_temp.f(2);
 (2 rows)
 
 SELECT * FROM pg_temp.f(2);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
     f    
 ---------
  {1,2,3}

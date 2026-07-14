@@ -1148,9 +1148,9 @@ SELECT * FROM fract_only;
   4 | -0.9999
   7 |  0.0000
   8 |  0.0002
+  1 |  0.0000
   5 |  0.9999
   9 |     NaN
-  1 |  0.0000
 (7 rows)
 
 DROP TABLE fract_only;
@@ -1346,6 +1346,108 @@ FROM generate_series(-5,5) AS t(i);
    5 |  -300000 |  -200000 |  -100000 |  100000 |  200000 |  300000
 (11 rows)
 
+-- Check limits of rounding before the decimal point
+SELECT round(4.4e131071, -131071) = 4e131071;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT round(4.5e131071, -131071) = 5e131071;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT round(4.5e131071, -131072); -- loses all digits
+ round 
+-------
+     0
+(1 row)
+
+SELECT round(5.5e131071, -131072); -- rounds up and overflows
+ERROR:  value overflows numeric format
+SELECT round(5.5e131071, -131073); -- loses all digits
+ round 
+-------
+     0
+(1 row)
+
+SELECT round(5.5e131071, -1000000); -- loses all digits
+ round 
+-------
+     0
+(1 row)
+
+-- Check limits of rounding after the decimal point
+SELECT round(5e-16383, 1000000) = 5e-16383;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT round(5e-16383, 16383) = 5e-16383;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT round(5e-16383, 16382) = 1e-16382;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT round(5e-16383, 16381) = 0;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Check limits of trunc() before the decimal point
+SELECT trunc(9.9e131071, -131071) = 9e131071;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT trunc(9.9e131071, -131072); -- loses all digits
+ trunc 
+-------
+     0
+(1 row)
+
+SELECT trunc(9.9e131071, -131073);  -- loses all digits
+ trunc 
+-------
+     0
+(1 row)
+
+SELECT trunc(9.9e131071, -1000000);  -- loses all digits
+ trunc 
+-------
+     0
+(1 row)
+
+-- Check limits of trunc() after the decimal point
+SELECT trunc(5e-16383, 1000000) = 5e-16383;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT trunc(5e-16383, 16383) = 5e-16383;
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT trunc(5e-16383, 16382) = 0;
+ ?column? 
+----------
+ t
+(1 row)
+
 -- Testing for width_bucket(). For convenience, we test both the
 -- numeric and float8 versions of the function in this file.
 -- errors
@@ -1388,13 +1490,6 @@ SELECT
     FROM width_bucket_test;
    operand_num    | wb_1 | wb_1f | wb_2 | wb_2f | wb_3 | wb_3f | wb_4 | wb_4f | wb_5 | wb_5f 
 ------------------+------+-------+------+-------+------+-------+------+-------+------+-------
-                3 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
-                4 |    3 |     3 |    4 |     4 |    2 |     2 |    0 |     0 |    6 |     6
-                5 |    3 |     3 |    3 |     3 |    3 |     3 |    1 |     1 |    7 |     7
-              5.5 |    3 |     3 |    3 |     3 |    3 |     3 |   21 |    21 |    7 |     7
-                7 |    4 |     4 |    2 |     2 |    4 |     4 |   21 |    21 |    7 |     7
-                8 |    5 |     5 |    2 |     2 |    5 |     5 |   21 |    21 |    7 |     7
- 9.99999999999999 |    5 |     5 |    1 |     1 |    5 |     5 |   21 |    21 |    7 |     7
              -5.2 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    4 |     4
     -0.0000000001 |    0 |     0 |    6 |     6 |    0 |     0 |    0 |     0 |    5 |     5
                 2 |    2 |     2 |    5 |     5 |    1 |     1 |    0 |     0 |    6 |     6
@@ -1407,6 +1502,13 @@ SELECT
  1.99999999999999 |    1 |     1 |    5 |     5 |    0 |     0 |    0 |     0 |    6 |     6
  2.00000000000001 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
                10 |    6 |     6 |    1 |     1 |    5 |     5 |   21 |    21 |    8 |     8
+                3 |    2 |     2 |    4 |     4 |    1 |     1 |    0 |     0 |    6 |     6
+                4 |    3 |     3 |    4 |     4 |    2 |     2 |    0 |     0 |    6 |     6
+                5 |    3 |     3 |    3 |     3 |    3 |     3 |    1 |     1 |    7 |     7
+              5.5 |    3 |     3 |    3 |     3 |    3 |     3 |   21 |    21 |    7 |     7
+                7 |    4 |     4 |    2 |     2 |    4 |     4 |   21 |    21 |    7 |     7
+                8 |    5 |     5 |    2 |     2 |    5 |     5 |   21 |    21 |    7 |     7
+ 9.99999999999999 |    5 |     5 |    1 |     1 |    5 |     5 |   21 |    21 |    7 |     7
 (19 rows)
 
 -- Check positive and negative infinity: we require
@@ -1581,11 +1683,11 @@ SELECT to_char(val, '9999999999999999.999999999999999PR')
            7799461.411900000000000 
          <83028485.000000000000000>
              74881.000000000000000 
-                  .000000000000000 
-                  .000000000000000 
              16397.038491000000000 
              93901.577630260000000 
          <24926804.045047420000000>
+                  .000000000000000 
+                  .000000000000000 
 (10 rows)
 
 SELECT to_char(val, '9999999999999999.999999999999999S')
@@ -1595,25 +1697,25 @@ SELECT to_char(val, '9999999999999999.999999999999999S')
             16397.038491000000000+
             93901.577630260000000+
          24926804.045047420000000-
+                 .000000000000000+
+                 .000000000000000+
          34338492.215397047000000-
                 4.310000000000000+
           7799461.411900000000000+
          83028485.000000000000000-
             74881.000000000000000+
-                 .000000000000000+
-                 .000000000000000+
 (10 rows)
 
 SELECT to_char(val, 'MI9999999999999999.999999999999999')     FROM num_data;
               to_char              
 -----------------------------------
+                  .000000000000000
+                  .000000000000000
  -        34338492.215397047000000
                  4.310000000000000
            7799461.411900000000000
  -        83028485.000000000000000
              74881.000000000000000
-                  .000000000000000
-                  .000000000000000
              16397.038491000000000
              93901.577630260000000
  -        24926804.045047420000000
@@ -1622,13 +1724,13 @@ SELECT to_char(val, 'MI9999999999999999.999999999999999')     FROM num_data;
 SELECT to_char(val, 'FMS9999999999999999.999999999999999')    FROM num_data;
        to_char       
 ---------------------
+ +0.
+ +0.
  -34338492.215397047
  +4.31
  +7799461.4119
  -83028485.
  +74881.
- +0.
- +0.
  +16397.038491
  +93901.57763026
  -24926804.04504742
@@ -1637,16 +1739,16 @@ SELECT to_char(val, 'FMS9999999999999999.999999999999999')    FROM num_data;
 SELECT to_char(val, 'FM9999999999999999.999999999999999THPR') FROM num_data;
        to_char        
 ----------------------
- 16397.038491
- 93901.57763026
- <24926804.04504742>
+ 0.
+ 0.
  <34338492.215397047>
  4.31
  7799461.4119
  <83028485.>
  74881.
- 0.
- 0.
+ 16397.038491
+ 93901.57763026
+ <24926804.04504742>
 (10 rows)
 
 SELECT to_char(val, 'SG9999999999999999.999999999999999th')   FROM num_data;
@@ -1669,14 +1771,14 @@ SELECT to_char(val, '0999999999999999.999999999999999')       FROM num_data;
 -----------------------------------
   0000000000000000.000000000000000
   0000000000000000.000000000000000
-  0000000000016397.038491000000000
-  0000000000093901.577630260000000
- -0000000024926804.045047420000000
  -0000000034338492.215397047000000
   0000000000000004.310000000000000
   0000000007799461.411900000000000
  -0000000083028485.000000000000000
   0000000000074881.000000000000000
+  0000000000016397.038491000000000
+  0000000000093901.577630260000000
+ -0000000024926804.045047420000000
 (10 rows)
 
 SELECT to_char(val, 'S0999999999999999.999999999999999')      FROM num_data;
@@ -1684,14 +1786,14 @@ SELECT to_char(val, 'S0999999999999999.999999999999999')      FROM num_data;
 -----------------------------------
  +0000000000000000.000000000000000
  +0000000000000000.000000000000000
- +0000000000016397.038491000000000
- +0000000000093901.577630260000000
- -0000000024926804.045047420000000
  -0000000034338492.215397047000000
  +0000000000000004.310000000000000
  +0000000007799461.411900000000000
  -0000000083028485.000000000000000
  +0000000000074881.000000000000000
+ +0000000000016397.038491000000000
+ +0000000000093901.577630260000000
+ -0000000024926804.045047420000000
 (10 rows)
 
 SELECT to_char(val, 'FM0999999999999999.999999999999999')     FROM num_data;
@@ -1714,26 +1816,26 @@ SELECT to_char(val, 'FM9999999999999999.099999999999999') 	FROM num_data;
 ---------------------
  .0
  .0
- 16397.038491
- 93901.57763026
- -24926804.04504742
  -34338492.215397047
  4.31
  7799461.4119
  -83028485.0
  74881.0
+ 16397.038491
+ 93901.57763026
+ -24926804.04504742
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999990999.990999999999999') 	FROM num_data;
        to_char       
 ---------------------
+ 0000.000
+ 0000.000
  -34338492.215397047
  0004.310
  7799461.4119
  -83028485.000
  74881.000
- 0000.000
- 0000.000
  16397.038491
  93901.57763026
  -24926804.04504742
@@ -1772,6 +1874,8 @@ SELECT to_char(val, 'FM9999999990999999.099999999999999') 	FROM num_data;
 SELECT to_char(val, 'L9999999999999999.099999999999999')	FROM num_data;
               to_char               
 ------------------------------------
+                   .000000000000000
+                   .000000000000000
               16397.038491000000000
               93901.577630260000000
           -24926804.045047420000000
@@ -1780,8 +1884,6 @@ SELECT to_char(val, 'L9999999999999999.099999999999999')	FROM num_data;
             7799461.411900000000000
           -83028485.000000000000000
               74881.000000000000000
-                   .000000000000000
-                   .000000000000000
 (10 rows)
 
 SELECT to_char(val, 'FM9999999999999999.99999999999999')	FROM num_data;
@@ -1832,16 +1934,16 @@ SELECT to_char(val, 'FMS 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 . 9 9 9 9 9 9 9 9 9 9 9
 SELECT to_char(val, E'99999 "text" 9999 "9999" 999 "\\"text between quote marks\\"" 9999') FROM num_data;
                           to_char                          
 -----------------------------------------------------------
-       text      9999    1 "text between quote marks" 6397
-       text      9999    9 "text between quote marks" 3902
-       text    -2 9999 492 "text between quote marks" 6804
+       text      9999     "text between quote marks"     0
+       text      9999     "text between quote marks"     0
        text    -3 9999 433 "text between quote marks" 8492
        text      9999     "text between quote marks"     4
        text      9999  779 "text between quote marks" 9461
        text    -8 9999 302 "text between quote marks" 8485
        text      9999    7 "text between quote marks" 4881
-       text      9999     "text between quote marks"     0
-       text      9999     "text between quote marks"     0
+       text      9999    1 "text between quote marks" 6397
+       text      9999    9 "text between quote marks" 3902
+       text    -2 9999 492 "text between quote marks" 6804
 (10 rows)
 
 SELECT to_char(val, '999999SG9999999999')			FROM num_data;
@@ -1862,6 +1964,8 @@ SELECT to_char(val, '999999SG9999999999')			FROM num_data;
 SELECT to_char(val, 'FM9999999999999999.999999999999999')	FROM num_data;
        to_char       
 ---------------------
+ 0.
+ 0.
  16397.038491
  93901.57763026
  -24926804.04504742
@@ -1870,23 +1974,36 @@ SELECT to_char(val, 'FM9999999999999999.999999999999999')	FROM num_data;
  7799461.4119
  -83028485.
  74881.
- 0.
- 0.
 (10 rows)
 
 SELECT to_char(val, '9.999EEEE')				FROM num_data;
   to_char   
 ------------
-  1.640e+04
-  9.390e+04
- -2.493e+07
+  0.000e+00
+  0.000e+00
  -3.434e+07
   4.310e+00
   7.799e+06
  -8.303e+07
   7.488e+04
-  0.000e+00
-  0.000e+00
+  1.640e+04
+  9.390e+04
+ -2.493e+07
+(10 rows)
+
+SELECT to_char(val, 'FMRN')					FROM num_data;
+     to_char     
+-----------------
+ ###############
+ ###############
+ ###############
+ ###############
+ IV
+ ###############
+ ###############
+ ###############
+ ###############
+ ###############
 (10 rows)
 
 WITH v(val) AS
@@ -1997,6 +2114,72 @@ SELECT to_char('12345678901'::float8, 'FM9999999999D9999900000000000000000');
      to_char     
 -----------------
  ##########.####
+(1 row)
+
+SELECT to_char('100'::numeric, 'rn');
+     to_char     
+-----------------
+               c
+(1 row)
+
+SELECT to_char('1234'::numeric, 'rn');
+     to_char     
+-----------------
+        mccxxxiv
+(1 row)
+
+SELECT to_char('1235'::float4, 'rn');
+     to_char     
+-----------------
+         mccxxxv
+(1 row)
+
+SELECT to_char('1236'::float8, 'rn');
+     to_char     
+-----------------
+        mccxxxvi
+(1 row)
+
+SELECT to_char('1237'::float8, 'fmrn');
+  to_char  
+-----------
+ mccxxxvii
+(1 row)
+
+SELECT to_char('100e9'::numeric, 'RN');
+     to_char     
+-----------------
+ ###############
+(1 row)
+
+SELECT to_char('100e9'::float4, 'RN');
+     to_char     
+-----------------
+ ###############
+(1 row)
+
+SELECT to_char('100e9'::float8, 'RN');
+     to_char     
+-----------------
+ ###############
+(1 row)
+
+SELECT to_char(1234.56::numeric, '99999V99');
+ to_char  
+----------
+   123456
+(1 row)
+
+SELECT to_char(1234.56::float4, '99999V99');
+ to_char  
+----------
+   123456
+(1 row)
+
+SELECT to_char(1234.56::float8, '99999V99');
+ to_char  
+----------
+   123456
 (1 row)
 
 -- Check parsing of literal text in a format string
@@ -2195,6 +2378,90 @@ SELECT to_number('42nd', '99th');
         42
 (1 row)
 
+SELECT to_number('123456', '99999V99');
+        to_number        
+-------------------------
+ 1234.560000000000000000
+(1 row)
+
+-- Test for correct conversion between numbers and Roman numerals
+WITH rows AS
+  (SELECT i, to_char(i, 'RN') AS roman FROM generate_series(1, 3999) AS i)
+SELECT
+  bool_and(to_number(roman, 'RN') = i) as valid
+FROM rows;
+ valid 
+-------
+ t
+(1 row)
+
+-- Some additional tests for RN input
+SELECT to_number('CvIiI', 'rn');
+ to_number 
+-----------
+       108
+(1 row)
+
+SELECT to_number('MMXX  ', 'RN');
+ to_number 
+-----------
+      2020
+(1 row)
+
+SELECT to_number('  XIV', '  RN');
+ to_number 
+-----------
+        14
+(1 row)
+
+SELECT to_number('  XIV  ', '  RN');
+ to_number 
+-----------
+        14
+(1 row)
+
+SELECT to_number('M CC', 'RN');
+ to_number 
+-----------
+      1000
+(1 row)
+
+-- error cases
+SELECT to_number('viv', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('DCCCD', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('XIXL', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('MCCM', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('MMMM', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('VV', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('IL', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('VIX', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('LXC', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('DCM', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('MMMDCM', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('CLXC', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('CM', 'MIRN');
+ERROR:  "RN" is incompatible with other formats
+DETAIL:  "RN" may only be used together with "FM".
+SELECT to_number('CM', 'RNRN');
+ERROR:  cannot use "RN" twice
+SELECT to_number('qiv', 'RN');
+ERROR:  invalid Roman numeral
+SELECT to_number('', 'RN');
+ERROR:  invalid input syntax for type numeric: " "
+SELECT to_number(' ', 'RN');
+ERROR:  invalid Roman numeral
 RESET lc_numeric;
 --
 -- Input syntax
@@ -2345,6 +2612,8 @@ SELECT * FROM num_input_test;
                               12.3
              -12345678901234567890
  987654321234567898765432123456789
+             -12345678900987654321
+                       -3735928559
                            3245874
                             555.50
                            -555.50
@@ -2359,8 +2628,6 @@ SELECT * FROM num_input_test;
                       12000.123456
                          299792458
                         9999999999
-             -12345678900987654321
-                       -3735928559
 (24 rows)
 
 -- Also try it with non-error-throwing API
@@ -2587,6 +2854,24 @@ select div(12345678901234567890, 123) * 123 + 12345678901234567890 % 123;
        ?column?       
 ----------------------
  12345678901234567890
+(1 row)
+
+select 8e9000 - div(8e18000 - 1, 9e9000 - 1) * 9;
+ ?column? 
+----------
+        8
+(1 row)
+
+select 7328412092 - div(53705623790171816464 - 1, 7328412092);
+ ?column? 
+----------
+        1
+(1 row)
+
+select div(539913372912345678, 539913372912345678);
+ div 
+-----
+   1
 (1 row)
 
 --

@@ -452,28 +452,28 @@ SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
  f1 | not null 
 ----+----------
-  1 | t
   2 | t
   3 | t
     | f
+  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1 as "false" FROM disttable;
  f1 | false 
 ----+-------
+  1 | f
   2 | f
   3 | f
     | f
-  1 | f
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 as "not null" FROM disttable;
  f1 | not null 
 ----+----------
-  1 | t
   2 | t
   3 | t
     | f
+  1 | t
 (4 rows)
 
 -- check that optimizer constant-folds it properly
@@ -536,45 +536,47 @@ CREATE TABLE distinct_2(a int);
 INSERT INTO distinct_1 VALUES(1),(2),(NULL);
 INSERT INTO distinct_2 VALUES(1),(NULL);
 EXPLAIN SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinct_2.a;
-                                               QUERY PLAN                                                
----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10214778180.80 rows=9264416310 width=8)
-   ->  Nested Loop  (cost=10000000000.00..10091252630.00 rows=3088138770 width=8)
+                                               QUERY PLAN                                               
+--------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..214778180.80 rows=9264416310 width=8)
+   ->  Nested Loop  (cost=0.00..91252630.00 rows=3088138770 width=8)
+         Disabled: true
          Join Filter: (distinct_1.a IS DISTINCT FROM distinct_2.a)
          ->  Seq Scan on distinct_1  (cost=0.00..355.00 rows=32100 width=4)
          ->  Materialize  (cost=0.00..2120.50 rows=96300 width=4)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1639.00 rows=96300 width=4)
                      ->  Seq Scan on distinct_2  (cost=0.00..355.00 rows=32100 width=4)
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 EXPLAIN SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
                                                QUERY PLAN                                               
 --------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10091376279.20 rows=9273690 width=8)
-   ->  Nested Loop  (cost=10000000000.00..10091252630.00 rows=3091230 width=8)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..91376279.20 rows=9273690 width=8)
+   ->  Nested Loop  (cost=0.00..91252630.00 rows=3091230 width=8)
+         Disabled: true
          Join Filter: (NOT (distinct_1.a IS DISTINCT FROM distinct_2.a))
          ->  Seq Scan on distinct_1  (cost=0.00..355.00 rows=32100 width=4)
          ->  Materialize  (cost=0.00..2120.50 rows=96300 width=4)
                ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1639.00 rows=96300 width=4)
                      ->  Seq Scan on distinct_2  (cost=0.00..355.00 rows=32100 width=4)
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
- 2 | 1
- 2 |  
-   | 1
  1 |  
+ 2 |  
+ 2 | 1
+   | 1
 (4 rows)
 
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
- 1 | 1
    |  
+ 1 | 1
 (2 rows)
 
 DROP TABLE distinct_1;
@@ -649,3 +651,142 @@ DROP TABLE capitals;
 DROP TABLE cities;
 set gp_statistics_pullup_from_child_partition to off;
 -- gpdb end: test inherit/partition table distinct when gp_statistics_pullup_from_child_partition is on
+--
+-- Test the planner's ability to reorder the distinctClause Pathkeys to match
+-- the input path's ordering
+--
+CREATE TABLE distinct_tbl (x int, y int);
+INSERT INTO distinct_tbl SELECT i%10, i%10 FROM generate_series(1, 1000) AS i;
+CREATE INDEX distinct_tbl_x_y_idx ON distinct_tbl (x, y);
+ANALYZE distinct_tbl;
+-- Produce results with sorting.
+SET enable_hashagg TO OFF;
+-- Ensure we avoid the need to re-sort by reordering the distinctClause
+-- Pathkeys to match the ordering of the input path
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT y, x FROM distinct_tbl;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: y, x
+         ->  Seq Scan on distinct_tbl
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
+SELECT DISTINCT y, x FROM distinct_tbl;
+ y | x 
+---+---
+ 1 | 1
+ 0 | 0
+ 5 | 5
+ 9 | 9
+ 6 | 6
+ 8 | 8
+ 4 | 4
+ 7 | 7
+ 2 | 2
+ 3 | 3
+(10 rows)
+
+-- Ensure we leverage incremental-sort by reordering the distinctClause
+-- Pathkeys to partially match the ordering of the input path
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  HashAggregate
+         Group Key: y, x
+         ->  Seq Scan on distinct_tbl
+ Optimizer: Pivotal Optimizer (GPORCA)
+(5 rows)
+
+SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
+ y | x 
+---+---
+ 1 | 1
+ 0 | 0
+ 5 | 5
+ 9 | 9
+ 6 | 6
+ 8 | 8
+ 4 | 4
+ 7 | 7
+ 2 | 2
+ 3 | 3
+(10 rows)
+
+-- Ensure we avoid the need to re-sort in partial distinct by reordering the
+-- distinctClause Pathkeys to match the ordering of the input path
+SET parallel_tuple_cost=0;
+SET parallel_setup_cost=0;
+SET min_parallel_table_scan_size=0;
+SET min_parallel_index_scan_size=0;
+SET max_parallel_workers_per_gather=2;
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT y, x FROM distinct_tbl limit 10;
+                    QUERY PLAN                    
+--------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Limit
+               ->  HashAggregate
+                     Group Key: y, x
+                     ->  Seq Scan on distinct_tbl
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
+
+SELECT DISTINCT y, x FROM distinct_tbl limit 10;
+ y | x 
+---+---
+ 5 | 5
+ 9 | 9
+ 6 | 6
+ 8 | 8
+ 4 | 4
+ 7 | 7
+ 2 | 2
+ 3 | 3
+ 1 | 1
+ 0 | 0
+(10 rows)
+
+RESET max_parallel_workers_per_gather;
+RESET min_parallel_index_scan_size;
+RESET min_parallel_table_scan_size;
+RESET parallel_setup_cost;
+RESET parallel_tuple_cost;
+-- Ensure we reorder the distinctClause Pathkeys to match the ordering of the
+-- input path even if there is ORDER BY clause
+EXPLAIN (COSTS OFF)
+SELECT DISTINCT y, x FROM distinct_tbl ORDER BY y;
+                 QUERY PLAN                 
+--------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: y
+   ->  Sort
+         Sort Key: y
+         ->  HashAggregate
+               Group Key: y, x
+               ->  Seq Scan on distinct_tbl
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+SELECT DISTINCT y, x FROM distinct_tbl ORDER BY y;
+ y | x 
+---+---
+ 0 | 0
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+ 6 | 6
+ 7 | 7
+ 8 | 8
+ 9 | 9
+(10 rows)
+
+RESET enable_hashagg;
+DROP TABLE distinct_tbl;

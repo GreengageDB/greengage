@@ -53,61 +53,57 @@ EXPLAIN (COSTS OFF)
 SELECT * FROM fast_emp4000
     WHERE home_base <@ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-                               QUERY PLAN                                
--------------------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((home_base[0])[0])
-         ->  Sort
-               Sort Key: ((home_base[0])[0])
-               ->  Seq Scan on fast_emp4000
-                     Filter: (home_base <@ '(2000,1000),(200,200)'::box)
+   ->  Sort
+         Sort Key: ((home_base[0])[0])
+         ->  Result
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     ->  Seq Scan on fast_emp4000
+                           Filter: (home_base <@ '(2000,1000),(200,200)'::box)
  Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 SELECT * FROM fast_emp4000
     WHERE home_base <@ '(200,200),(2000,1000)'::box
     ORDER BY (home_base[0])[0];
-       home_base       
------------------------
- (337,455),(240,359)
- (1444,403),(1346,344)
-(2 rows)
+ home_base 
+-----------
+(0 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
-                             QUERY PLAN                              
----------------------------------------------------------------------
- Finalize Aggregate
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on fast_emp4000
-                     Filter: (home_base && '(1000,1000),(0,0)'::box)
+         ->  Seq Scan on fast_emp4000
+               Filter: (home_base && '(1000,1000),(0,0)'::box)
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base && '(1000,1000,0,0)'::box;
  count 
 -------
-     2
+     0
 (1 row)
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
-                   QUERY PLAN                    
--------------------------------------------------
- Finalize Aggregate
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  Seq Scan on fast_emp4000
-                     Filter: (home_base IS NULL)
+         ->  Seq Scan on fast_emp4000
+               Filter: (home_base IS NULL)
  Optimizer: Pivotal Optimizer (GPORCA)
-(6 rows)
+(5 rows)
 
 SELECT count(*) FROM fast_emp4000 WHERE home_base IS NULL;
  count 
 -------
-   278
+     0
 (1 row)
 
 ROLLBACK;
@@ -386,6 +382,20 @@ ALTER MATERIALIZED VIEW heapmv SET ACCESS METHOD heap, SET ACCESS METHOD heap2;
 ERROR:  cannot have multiple SET ACCESS METHOD subcommands
 DROP MATERIALIZED VIEW heapmv;
 DROP TABLE heaptable;
+-- Partitioned table with USING
+CREATE TABLE am_partitioned(x INT, y INT) PARTITION BY hash (x) USING heap2;
+SELECT pg_describe_object(classid, objid, objsubid) AS obj,
+       pg_describe_object(refclassid, refobjid, refobjsubid) as refobj
+  FROM pg_depend, pg_am
+  WHERE pg_depend.refclassid = 'pg_am'::regclass
+    AND pg_am.oid = pg_depend.refobjid
+    AND pg_depend.objid = 'am_partitioned'::regclass;
+         obj          |       refobj        
+----------------------+---------------------
+ table am_partitioned | access method heap2
+(1 row)
+
+DROP TABLE am_partitioned;
 -- Partition hierarchies with access methods
 BEGIN;
 SET LOCAL default_table_access_method = 'heap';
@@ -462,17 +472,17 @@ SELECT a.amname FROM pg_class c, pg_am a
 -- Reset to default
 ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 623743
+ relam 
+-------
+ 24489
 (1 row)
 
 -- Upon ALTER TABLE SET ACCESS METHOD on a partitioned table, new partitions
 -- will inherit the AM set.  Existing partitioned are unchanged.
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 623743
+ relam 
+-------
+ 24489
 (1 row)
 
 SET LOCAL default_table_access_method = 'heap';
@@ -490,9 +500,9 @@ CREATE TABLE am_partitioned_2 PARTITION OF am_partitioned
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 623743
+ relam 
+-------
+ 24489
 (1 row)
 
 CREATE TABLE am_partitioned_3 PARTITION OF am_partitioned

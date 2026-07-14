@@ -59,6 +59,14 @@ CLUSTER clstr_tst_c ON clstr_tst;
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  | b  |       c       |           substring            | length 
 ----+----+---------------+--------------------------------+--------
+ 26 | 19 | diecinueve    |                                |       
+ 12 | 18 | dieciocho     |                                |       
+ 30 | 16 | dieciseis     |                                |       
+ 23 | 12 | doce          |                                |       
+ 31 |  8 | ocho          |                                |       
+  1 | 11 | once          |                                |       
+ 15 | 13 | trece         |                                |       
+ 20 |  1 | uno           |                                |       
  18 |  5 | cinco         |                                |       
  24 | 17 | diecisiete    |                                |       
   2 | 10 | diez          |                                |       
@@ -71,14 +79,6 @@ SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  27 | 26 | veintiseis    |                                |       
   7 | 23 | veintitres    |                                |       
   8 | 21 | veintiuno     |                                |       
- 26 | 19 | diecinueve    |                                |       
- 12 | 18 | dieciocho     |                                |       
- 30 | 16 | dieciseis     |                                |       
- 23 | 12 | doce          |                                |       
- 31 |  8 | ocho          |                                |       
-  1 | 11 | once          |                                |       
- 15 | 13 | trece         |                                |       
- 20 |  1 | uno           |                                |       
  10 | 14 | catorce       |                                |       
   9 |  4 | cuatro        |                                |       
  11 |  2 | dos           |                                |       
@@ -209,6 +209,15 @@ INSERT INTO clstr_tst_inh VALUES (0, 100, 'in child table');
 SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  a  |  b  |       c        |           substring            | length 
 ----+-----+----------------+--------------------------------+--------
+ 26 |  19 | diecinueve     |                                |       
+ 12 |  18 | dieciocho      |                                |       
+ 30 |  16 | dieciseis      |                                |       
+ 23 |  12 | doce           |                                |       
+ 31 |   8 | ocho           |                                |       
+  1 |  11 | once           |                                |       
+ 15 |  13 | trece          |                                |       
+ 20 |   1 | uno            |                                |       
+  0 | 100 | in child table |                                |       
  18 |   5 | cinco          |                                |       
  24 |  17 | diecisiete     |                                |       
   2 |  10 | diez           |                                |       
@@ -221,15 +230,6 @@ SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
  27 |  26 | veintiseis     |                                |       
   7 |  23 | veintitres     |                                |       
   8 |  21 | veintiuno      |                                |       
- 26 |  19 | diecinueve     |                                |       
- 12 |  18 | dieciocho      |                                |       
- 30 |  16 | dieciseis      |                                |       
- 23 |  12 | doce           |                                |       
- 31 |   8 | ocho           |                                |       
-  1 |  11 | once           |                                |       
- 15 |  13 | trece          |                                |       
- 20 |   1 | uno            |                                |       
-  0 | 100 | in child table |                                |       
  10 |  14 | catorce        |                                |       
   9 |   4 | cuatro         |                                |       
  11 |   2 | dos            |                                |       
@@ -248,11 +248,12 @@ SELECT a,b,c,substring(d for 30), length(d) from clstr_tst;
 INSERT INTO clstr_tst (b, c) VALUES (1111, 'this should fail');
 SELECT conname FROM pg_constraint WHERE conrelid = 'clstr_tst'::regclass
 ORDER BY 1;
-    conname     
-----------------
+       conname        
+----------------------
+ clstr_tst_a_not_null
  clstr_tst_con
  clstr_tst_pkey
-(2 rows)
+(3 rows)
 
 SELECT relname, relkind,
     EXISTS(SELECT 1 FROM pg_class WHERE oid = c.reltoastrelid) AS hastoast
@@ -333,12 +334,12 @@ SELECT * FROM clstr_1 UNION ALL
   SELECT * FROM clstr_3;
  a 
 ---
- 1
- 1
- 1
  2
  2
  2
+ 1
+ 1
+ 1
 (6 rows)
 
 -- revert to the original state
@@ -404,22 +405,22 @@ UPDATE clustertest SET key = 80 WHERE key = 70;
 SELECT key FROM clustertest;
  key 
 -----
+  30
+ 100
   20
   35
   80
-  30
- 100
 (5 rows)
 
 CLUSTER clustertest_pkey ON clustertest;
 SELECT key FROM clustertest;
  key 
 -----
-  30
- 100
   20
   35
   80
+  30
+ 100
 (5 rows)
 
 COMMIT;
@@ -440,8 +441,8 @@ cluster clstr_temp using clstr_temp_pkey;
 select * from clstr_temp;
  col1 | col2 
 ------+------
-    1 | one
     2 | two
+    1 | one
 (2 rows)
 
 drop table clstr_temp;

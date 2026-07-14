@@ -278,6 +278,39 @@ SELECT stddev_pop('nan'::numeric), stddev_samp('nan'::numeric);
         NaN |            
 (1 row)
 
+-- verify correct results for min(record) and max(record) aggregates
+SELECT max(row(a,b)) FROM aggtest;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+     max      
+--------------
+ (100,99.097)
+(1 row)
+
+SELECT max(row(b,a)) FROM aggtest;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+     max     
+-------------
+ (324.78,42)
+(1 row)
+
+SELECT min(row(a,b)) FROM aggtest;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+     min     
+-------------
+ (0,0.09561)
+(1 row)
+
+SELECT min(row(b,a)) FROM aggtest;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+     min     
+-------------
+ (0.09561,0)
+(1 row)
+
 -- verify correct results for null and NaN inputs
 select sum(null::int4) from generate_series(1,3);
  sum 
@@ -597,6 +630,8 @@ SELECT count(DISTINCT four) AS cnt_4 FROM onek;
 
 select ten, count(*), sum(four) from onek
 group by ten order by ten;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | count | sum 
 -----+-------+-----
    0 |   100 | 100
@@ -613,6 +648,8 @@ group by ten order by ten;
 
 select ten, count(four), sum(DISTINCT four) from onek
 group by ten order by ten;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | count | sum 
 -----+-------+-----
    0 |   100 |   2
@@ -659,10 +696,6 @@ SELECT oldcnt(*) AS cnt_1000 FROM onek;
 (1 row)
 
 SELECT sum2(q1,q2) FROM int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
        sum2        
 -------------------
  18271560493827981
@@ -673,6 +706,8 @@ DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
 select ten, sum(distinct four) from onek a
 group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
    0 |   2
@@ -718,6 +753,7 @@ DETAIL:  Feature not supported: LATERAL
    Output: s1.s1, s2.s2, (sum((s1.s1 + s2.s2)))
    Sort Key: s1.s1, s2.s2
    ->  Nested Loop
+         Disabled: true
          Output: s1.s1, s2.s2, (sum((s1.s1 + s2.s2)))
          ->  Function Scan on pg_catalog.generate_series s1
                Output: s1.s1
@@ -731,7 +767,7 @@ DETAIL:  Feature not supported: LATERAL
                            Output: s2.s2
                            Function Call: generate_series(1, 3)
  Optimizer: Postgres query optimizer
-(17 rows)
+(18 rows)
 
 select s1, s2, sm
 from generate_series(1, 3) s1,
@@ -973,13 +1009,13 @@ select max(unique1) from tenk1;
 
 explain (costs off)
   select max(unique1) from tenk1 where unique1 < 42;
-                   QUERY PLAN                   
-------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on tenk1
-                     Filter: (unique1 < 42)
+               ->  Index Scan using tenk1_unique1 on tenk1
+                     Index Cond: (unique1 < 42)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -991,13 +1027,13 @@ select max(unique1) from tenk1 where unique1 < 42;
 
 explain (costs off)
   select max(unique1) from tenk1 where unique1 > 42;
-                   QUERY PLAN                   
-------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on tenk1
-                     Filter: (unique1 > 42)
+               ->  Index Scan using tenk1_unique1 on tenk1
+                     Index Cond: (unique1 > 42)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1018,13 +1054,13 @@ set local enable_seqscan=off;
 set local enable_bitmapscan=off;
 explain (costs off)
   select max(unique1) from tenk1 where unique1 > 42000;
-                   QUERY PLAN                   
-------------------------------------------------
+                        QUERY PLAN                         
+-----------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on tenk1
-                     Filter: (unique1 > 42000)
+               ->  Index Scan using tenk1_unique1 on tenk1
+                     Index Cond: (unique1 > 42000)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1038,13 +1074,13 @@ rollback;
 -- multi-column index (uses tenk1_thous_tenthous)
 explain (costs off)
   select max(tenthous) from tenk1 where thousand = 33;
-                   QUERY PLAN                   
-------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on tenk1
-                     Filter: (thousand = 33)
+               ->  Index Scan using tenk1_thous_tenthous on tenk1
+                     Index Cond: (thousand = 33)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1056,13 +1092,13 @@ select max(tenthous) from tenk1 where thousand = 33;
 
 explain (costs off)
   select min(tenthous) from tenk1 where thousand = 33;
-                   QUERY PLAN                   
-------------------------------------------------
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Seq Scan on tenk1
-                     Filter: (thousand = 33)
+               ->  Index Scan using tenk1_thous_tenthous on tenk1
+                     Index Cond: (thousand = 33)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1384,70 +1420,88 @@ LINE 1: select avg((select avg(a1.col1 order by (select avg(a2.col2)...
 -- Test removal of redundant GROUP BY columns
 --
 create temp table t1 (a int, b int, c int, d int, primary key (a, b));
-create temp table t2 (x int, y int, z int, primary key (x, y));
+create temp table t2 (x int, y int, z int, primary key (x, y)) distributed replicated;
 create temp table t3 (a int, b int, c int, primary key(a, b) deferrable);
 -- Non-primary-key columns can be removed from GROUP BY
 explain (costs off) select * from t1 group by a,b,c,d;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on t1
- Optimizer: Pivotal Optimizer (GPORCA)
-(3 rows)
+   ->  HashAggregate
+         Group Key: a, b
+         ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 -- No removal can happen if the complete PK is not present in GROUP BY
 explain (costs off) select a,c from t1 group by a,c,d;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  GroupAggregate
+   ->  HashAggregate
          Group Key: a, c, d
-         ->  Sort
-               Sort Key: a, c, d
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: a, c, d
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Hash Key: t1.a, t1.c, t1.d
+               ->  HashAggregate
+                     Group Key: a, c, d
                      ->  Seq Scan on t1
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 -- Test removal across multiple relations
 explain (costs off) select *
 from t1 inner join t2 on t1.a = t2.x and t1.b = t2.y
 group by t1.a,t1.b,t1.c,t1.d,t2.x,t2.y,t2.z;
-                      QUERY PLAN                       
--------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
-         ->  Seq Scan on t1
-         ->  Index Scan using t2_pkey on t2
-               Index Cond: ((x = t1.a) AND (y = t1.b))
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+   ->  HashAggregate
+         Group Key: t1.a, t1.b
+         ->  Hash Join
+               Hash Cond: ((t2.x = t1.a) AND (t2.y = t1.b))
+               ->  Seq Scan on t2
+               ->  Hash
+                     ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- Test case where t1 can be optimized but not t2
 explain (costs off) select t1.*,t2.x,t2.z
 from t1 inner join t2 on t1.a = t2.x and t1.b = t2.y
 group by t1.a,t1.b,t1.c,t1.d,t2.x,t2.z;
-                      QUERY PLAN                       
--------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                         QUERY PLAN                         
+------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         Join Filter: true
-         ->  Seq Scan on t1
-         ->  Index Scan using t2_pkey on t2
-               Index Cond: ((x = t1.a) AND (y = t1.b))
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+   ->  HashAggregate
+         Group Key: t1.a, t1.b, t2.z
+         ->  Hash Join
+               Hash Cond: ((t2.x = t1.a) AND (t2.y = t1.b))
+               ->  Seq Scan on t2
+               ->  Hash
+                     ->  Seq Scan on t1
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- Cannot optimize when PK is deferrable
 explain (costs off) select * from t3 group by a,b,c;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                 QUERY PLAN                
 ------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Seq Scan on t3
- Optimizer: Pivotal Optimizer (GPORCA)
-(3 rows)
+   ->  HashAggregate
+         Group Key: a, b, c
+         ->  Seq Scan on t3
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 create temp table t1c () inherits (t1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1492,13 +1546,109 @@ create temp table p_t1_2 partition of p_t1 for values in(2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- Ensure we can remove non-PK columns for partitioned tables.
 explain (costs off) select * from p_t1 group by a,b,c,d;
-                     QUERY PLAN                     
-----------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  Dynamic Seq Scan on p_t1
-         Number of partitions to scan: 2 (out of 2)
- Optimizer: Pivotal Optimizer (GPORCA)
-(4 rows)
+   ->  HashAggregate
+         Group Key: p_t1.a, p_t1.b
+         ->  Append
+               ->  Seq Scan on p_t1_1
+               ->  Seq Scan on p_t1_2
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+create unique index t2_z_uidx on t2(z);
+-- Ensure we don't remove any columns from the GROUP BY for a unique
+-- index on a NULLable column.
+explain (costs off) select y,z from t2 group by y,z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: y, z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- Make the column NOT NULL and ensure we remove the redundant column
+alter table t2 alter column z set not null;
+explain (costs off) select y,z from t2 group by y,z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- When there are multiple supporting unique indexes and the GROUP BY contains
+-- columns to cover all of those, ensure we pick the index with the least
+-- number of columns so that we can remove more columns from the GROUP BY.
+explain (costs off) select x,y,z from t2 group by x,y,z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- As above but try ordering the columns differently to ensure we get the
+-- same result.
+explain (costs off) select x,y,z from t2 group by z,x,y;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- Ensure we don't use a partial index as proof of functional dependency
+drop index t2_z_uidx;
+create index t2_z_uidx on t2 (z) where z > 0;
+explain (costs off) select y,z from t2 group by y,z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: y, z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- A unique index defined as NULLS NOT DISTINCT does not need a supporting NOT
+-- NULL constraint on the indexed columns.  Ensure the redundant columns are
+-- removed from the GROUP BY for such a table.
+drop index t2_z_uidx;
+alter table t2 alter column z drop not null;
+create unique index t2_z_uidx on t2(z) nulls not distinct;
+explain (costs off) select y,z from t2 group by y,z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                QUERY PLAN                
+------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  HashAggregate
+         Group Key: z
+         ->  Seq Scan on t2
+ Optimizer: Postgres query optimizer
+(5 rows)
 
 drop table t1 cascade;
 NOTICE:  drop cascades to table t1c
@@ -1632,7 +1782,7 @@ select
 from tenk1
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1641,7 +1791,7 @@ DETAIL:  Feature not supported: Hash aggregation with ORDER BY
          ->  Sort
                Sort Key: ten
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
+                     Hash Key: tenk1.ten
                      ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1657,7 +1807,7 @@ select
 from tenk1
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -1666,7 +1816,7 @@ DETAIL:  Feature not supported: Hash aggregation with ORDER BY
          ->  Sort
                Sort Key: ten
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: ten
+                     Hash Key: tenk1.ten
                      ->  Seq Scan on tenk1
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -1693,6 +1843,52 @@ select sum(two order by two) from tenk1;
 (5 rows)
 
 reset enable_presorted_aggregate;
+--
+-- Test cases with FILTER clause
+--
+-- Ensure we presort when the aggregate contains plain Vars
+explain (costs off)
+select sum(two order by two) filter (where two > 1) from tenk1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Aggregate functions with FILTER
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on tenk1
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- Ensure we presort for RelabelType'd Vars
+explain (costs off)
+select string_agg(distinct f1, ',') filter (where length(f1) > 1)
+from varchar_tbl;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Aggregate functions with FILTER
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on varchar_tbl
+ Optimizer: Postgres query optimizer
+(5 rows)
+
+-- Ensure we don't presort when the aggregate's argument contains an
+-- explicit cast.
+explain (costs off)
+select string_agg(distinct f1::varchar(2), ',') filter (where length(f1) > 1)
+from varchar_tbl;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Aggregate functions with FILTER
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Seq Scan on varchar_tbl
+ Optimizer: Postgres query optimizer
+(4 rows)
+
 --
 -- Test combinations of DISTINCT and/or ORDER BY
 --
@@ -1755,8 +1951,6 @@ select array_agg(distinct a order by a desc nulls last)
 -- multi-arg aggs, strict/nonstrict, distinct/order by
 select aggfstr(a,b,c)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                 aggfstr                
 ---------------------------------------
  {"(1,3,foo)","(2,2,bar)","(3,1,baz)"}
@@ -1764,8 +1958,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 
 select aggfns(a,b,c)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c);
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                     aggfns                     
 -----------------------------------------------
  {"(1,3,foo)","(0,,)","(2,2,bar)","(3,1,baz)"}
@@ -1774,8 +1966,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfstr(distinct a,b,c)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,3) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                 aggfstr                
 ---------------------------------------
  {"(1,3,foo)","(2,2,bar)","(3,1,baz)"}
@@ -1784,8 +1974,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,b,c)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,3) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                     aggfns                     
 -----------------------------------------------
  {"(0,,)","(1,3,foo)","(2,2,bar)","(3,1,baz)"}
@@ -1794,8 +1982,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfstr(distinct a,b,c order by b)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,3) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                 aggfstr                
 ---------------------------------------
  {"(3,1,baz)","(2,2,bar)","(1,3,foo)"}
@@ -1804,8 +1990,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,b,c order by b)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,3) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                     aggfns                     
 -----------------------------------------------
  {"(3,1,baz)","(2,2,bar)","(1,3,foo)","(0,,)"}
@@ -1815,8 +1999,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,a,c order by c using ~<~,a)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,2) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                      aggfns                     
 ------------------------------------------------
  {"(2,2,bar)","(3,3,baz)","(1,1,foo)","(0,0,)"}
@@ -1825,8 +2007,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,a,c order by c using ~<~)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,2) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                      aggfns                     
 ------------------------------------------------
  {"(2,2,bar)","(3,3,baz)","(1,1,foo)","(0,0,)"}
@@ -1835,8 +2015,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,a,c order by a)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,2) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                      aggfns                     
 ------------------------------------------------
  {"(0,0,)","(1,1,foo)","(2,2,bar)","(3,3,baz)"}
@@ -1845,8 +2023,6 @@ DETAIL:  Feature not supported: ROW EXPRESSION
 select aggfns(distinct a,b,c order by a,c using ~<~,b)
   from (values (1,3,'foo'),(0,null,null),(2,2,'bar'),(3,1,'baz')) v(a,b,c),
        generate_series(1,2) i;
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
                     aggfns                     
 -----------------------------------------------
  {"(0,,)","(1,3,foo)","(2,2,bar)","(3,1,baz)"}
@@ -2076,11 +2252,9 @@ DETAIL:  Feature not supported: Aggregate functions with FILTER
 select ten, sum(distinct four) filter (where four::text ~ '123') from onek a
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
-   0 |    
-   1 |    
    4 |    
    2 |    
    8 |    
@@ -2089,13 +2263,15 @@ DETAIL:  Feature not supported: Aggregate functions with FILTER
    9 |    
    6 |    
    5 |    
+   0 |    
+   1 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
 group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
    0 |    
@@ -2172,8 +2348,6 @@ select aggfns(distinct a,b,c order by a,c using ~<~,b) filter (where a > 1)
     generate_series(1,2) i;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
           aggfns           
 ---------------------------
  {"(2,2,bar)","(3,1,baz)"}
@@ -2184,6 +2358,8 @@ select p, percentile_cont(p) within group (order by x::float8)
 from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
   p   | percentile_cont 
 ------+-----------------
     0 |               1
@@ -2433,7 +2609,7 @@ SET optimizer_trace_fallback to on;
 -- end_ignore
 select * from aggordview1 order by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | p50 | px  | rank 
 -----+-----+-----+------
    0 | 490 |     |  101
@@ -2451,26 +2627,258 @@ DETAIL:  Feature not supported: Aggregate functions with FILTER
 drop view aggordview1;
 -- variadic aggregates
 select least_agg(q1,q2) from int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select least_agg(variadic array[q1,q2]) from int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
--- string_agg bytea tests
+-- string_agg, min, max bytea tests
 create table bytea_test_table(gpDistKey int, v bytea);
 select string_agg(v, '') from bytea_test_table;
  string_agg 
@@ -2504,9 +2912,35 @@ select string_agg(v, decode('ee', 'hex')) from bytea_test_table;
  \xffeeaa
 (1 row)
 
+select min(v) from bytea_test_table;
+ min  
+------
+ \xaa
+(1 row)
+
+select max(v) from bytea_test_table;
+ max  
+------
+ \xff
+(1 row)
+
+insert into bytea_test_table(v) values(decode('ffff','hex'));
+insert into bytea_test_table(v) values(decode('aaaa','hex'));
+select min(v) from bytea_test_table;
+ min  
+------
+ \xaa
+(1 row)
+
+select max(v) from bytea_test_table;
+  max   
+--------
+ \xffff
+(1 row)
+
 drop table bytea_test_table;
 -- Test parallel string_agg and array_agg
-create table pagg_test (x int, y int) with (autovacuum_enabled = off);
+create table pagg_test (x int, y int) with (autovacuum_enabled = off) distributed replicated;
 insert into pagg_test
 select (case x % 4 when 1 then null else x end), x % 10
 from generate_series(1,5000) x;
@@ -2546,7 +2980,7 @@ group by y;
 -- Ensure results are correct.
 select * from v_pagg_test order by y;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disabled in the optimizer
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  y | tmin | tmax | tndistinct | bmin | bmax | bndistinct | amin | amax | andistinct | aamin | aamax | aandistinct 
 ---+------+------+------------+------+------+------------+------+------+------------+-------+-------+-------------
  0 |   10 | 5000 |        500 | 10   | 990  |        500 |   10 | 5000 |        500 |    10 |  5000 |         500
@@ -2564,30 +2998,30 @@ DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disab
 -- Ensure parallel aggregation is actually being used.
 explain (costs off) select * from v_pagg_test order by y;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disabled in the optimizer
-                                     QUERY PLAN                                     
-------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
    Merge Key: pagg_test.y
    ->  GroupAggregate
          Group Key: pagg_test.y
-         ->  Result
-               ->  ProjectSet
-                     ->  GroupAggregate
-                           Group Key: pagg_test.y
-                           ->  Sort
-                                 Sort Key: pagg_test.y
-                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                                       Hash Key: pagg_test.y
+         ->  Sort
+               Sort Key: pagg_test.y
+               ->  Result
+                     ->  ProjectSet
+                           ->  GroupAggregate
+                                 Group Key: pagg_test.y
+                                 ->  Sort
+                                       Sort Key: pagg_test.y
                                        ->  Seq Scan on pagg_test
  Optimizer: Postgres query optimizer
 (14 rows)
 
-set max_parallel_workers_per_gather = 0;
 -- Ensure results are the same without parallel aggregation.
+set max_parallel_workers_per_gather = 0;
 select * from v_pagg_test order by y;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disabled in the optimizer
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  y | tmin | tmax | tndistinct | bmin | bmax | bndistinct | amin | amax | andistinct | aamin | aamax | aandistinct 
 ---+------+------+------------+------+------+------------+------+------+------------+-------+-------+-------------
  0 |   10 | 5000 |        500 | 10   | 990  |        500 |   10 | 5000 |        500 |    10 |  5000 |         500
@@ -2601,6 +3035,28 @@ DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disab
  8 |    8 | 4998 |        500 | 1008 | 998  |        500 |    8 | 4998 |        500 |     8 |  4998 |         500
  9 |   19 | 4999 |        250 | 1019 | 999  |        250 |   19 | 4999 |        250 |    19 |  4999 |         250
 (10 rows)
+
+-- Check that we don't fail on anonymous record types.
+set max_parallel_workers_per_gather = 2;
+explain (costs off)
+select array_dims(array_agg(s)) from (select * from pagg_test) s;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Whole-row variable
+                   QUERY PLAN                   
+------------------------------------------------
+ Aggregate
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Seq Scan on pagg_test
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+select array_dims(array_agg(s)) from (select * from pagg_test) s;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Whole-row variable
+ array_dims 
+------------
+ [1:5000]
+(1 row)
 
 -- Clean up
 reset max_parallel_workers_per_gather;
@@ -2631,7 +3087,7 @@ DETAIL:  Feature not supported: Aggregate functions with FILTER
 select ten, sum(distinct four) filter (where four::text ~ '123') from onek a
 group by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
    0 |    
@@ -2650,14 +3106,14 @@ select ten, sum(distinct four) filter (where four > 10) from onek a
 group by ten
 having exists (select 1 from onek b where sum(distinct a.four) = b.four);
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
    0 |    
+   6 |    
    4 |    
    2 |    
    8 |    
-   6 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -2735,8 +3191,6 @@ select aggfns(distinct a,b,c order by a,c using ~<~,b) filter (where a > 1)
     generate_series(1,2) i;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Aggregate functions with FILTER
-INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: ROW EXPRESSION
           aggfns           
 ---------------------------
  {"(2,2,bar)","(3,1,baz)"}
@@ -2781,6 +3235,8 @@ select p, percentile_cont(p) within group (order by x::float8)
 from generate_series(1,5) x,
      (values (0::float8),(0.1),(0.25),(0.4),(0.5),(0.6),(0.75),(0.9),(1)) v(p)
 group by p order by p;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
   p   | percentile_cont 
 ------+-----------------
     0 |               1
@@ -3030,7 +3486,7 @@ SET optimizer_trace_fallback to on;
 -- end_ignore
 select * from aggordview1 order by ten;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Aggregate functions with FILTER
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | p50 | px  | rank 
 -----+-----+-----+------
    0 | 490 |     |  101
@@ -3048,30 +3504,378 @@ DETAIL:  Feature not supported: Aggregate functions with FILTER
 drop view aggordview1;
 -- variadic aggregates
 select least_agg(q1,q2) from int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select least_agg(variadic array[q1,q2]) from int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select cleast_agg(q1,q2) from int8_tbl;
-NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
     cleast_agg     
 -------------------
  -4567890123456789
@@ -3081,7 +3885,125 @@ select cleast_agg(4.5,f1) from int4_tbl;
 NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
  cleast_agg  
 -------------
  -2147483647
@@ -3091,7 +4013,125 @@ select cleast_agg(variadic array[4.5,f1]) from int4_tbl;
 NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
  cleast_agg  
 -------------
  -2147483647
@@ -3101,7 +4141,125 @@ select pg_typeof(cleast_agg(variadic array[4.5,f1])) from int4_tbl;
 NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  GPDB Expression type: Query Parameter not supported in DXL
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
+Stack trace:
+1    0x00005dffebeeec4e gpos::CException::Raise + 270
+2    0x00005dffec20217a <symbol not found> + 103353759572346
+3    0x00005dffec32d7ed gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x00005dffec32d870 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x00005dffec31cdcb gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x00005dffec22ea4a gpopt::CGroupExpression::Transform + 394
+11   0x00005dffec248b9e gpopt::CJobTransformation::EevtTransform + 206
+12   0x00005dffec249202 gpopt::CJobTransformation::FExecute + 162
+13   0x00005dffec254296 gpopt::CScheduler::ExecuteJobs + 118
+14   0x00005dffec254cda gpopt::CScheduler::Run + 26
+15   0x00005dffec12d23c gpopt::CEngine::Optimize + 1356
+16   0x00005dffec21925a gpopt::COptimizer::PdxlnOptimize + 970
+17   0x00005dffec39938b COptTasks::OptimizeTask + 923
+18   0x00005dffebf0111c gpos::CTask::Execute + 76
+19   0x00005dffebf03746 gpos::CWorker::Execute + 38
+20   0x00005dffebf002c8 gpos::CAutoTaskProxy::Execute + 120
+21   0x00005dffebf0508d gpos_exec + 637
  pg_typeof 
 -----------
  numeric
@@ -3485,6 +4643,8 @@ SET enable_seqscan = off;
 -- Utilize the ordering of index scan to avoid a Sort operation
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM btg GROUP BY y, x;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -3493,101 +4653,123 @@ SELECT count(*) FROM btg GROUP BY y, x;
          ->  Sort
                Sort Key: y, x
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: y, x
-                     ->  Seq Scan on btg
- Optimizer: Pivotal Optimizer (GPORCA)
+                     Hash Key: btg.y, btg.x
+                     ->  Index Only Scan using btg_x_y_idx on btg
+ Optimizer: Postgres query optimizer
 (9 rows)
 
 -- Engage incremental sort
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM btg GROUP BY z, y, w, x;
-                         QUERY PLAN                         
-------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
+   ->  GroupAggregate
          Group Key: z, y, w, x
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: z, y, w, x
-               ->  Seq Scan on btg
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+         ->  Sort
+               Sort Key: z, y, w, x
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: btg.z, btg.y, btg.w, btg.x
+                     ->  Index Scan using btg_x_y_idx on btg
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 -- Utilize the ordering of subquery scan to avoid a Sort operation
 EXPLAIN (COSTS OFF) SELECT count(*)
 FROM (SELECT * FROM btg ORDER BY x, y, w, z) AS q1
 GROUP BY w, x, z, y;
-                         QUERY PLAN                         
-------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: w, x, z, y
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: w, x, z, y
-               ->  Seq Scan on btg
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+   ->  GroupAggregate
+         Group Key: q1.w, q1.x, q1.z, q1.y
+         ->  Sort
+               Sort Key: q1.w, q1.x, q1.z, q1.y
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: q1.w, q1.x, q1.z, q1.y
+                     ->  Subquery Scan on q1
+                           ->  Incremental Sort
+                                 Sort Key: btg.x, btg.y, btg.w, btg.z
+                                 Presorted Key: btg.x, btg.y
+                                 ->  Index Scan using btg_x_y_idx on btg
+ Optimizer: Postgres query optimizer
+(13 rows)
 
--- Utilize the ordering of merge join to avoid a full Sort operation
+-- Utilize the ordering of merge join to avoid a Sort operation
 SET enable_hashjoin = off;
 SET enable_nestloop = off;
 EXPLAIN (COSTS OFF)
 SELECT count(*)
-  FROM btg t1 JOIN btg t2 ON t1.z = t2.z AND t1.w = t2.w AND t1.x = t2.x
-  GROUP BY t1.x, t1.y, t1.z, t1.w;
-                                        QUERY PLAN                                        
-------------------------------------------------------------------------------------------
+  FROM btg t1 JOIN btg t2 ON t1.w = t2.w AND t1.x = t2.x AND t1.z = t2.z
+  GROUP BY t1.w, t1.z, t1.x;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: btg.x, btg.y, btg.z, btg.w
-         ->  Hash Join
-               Hash Cond: ((btg.z = btg_1.z) AND (btg.w = btg_1.w) AND (btg.x = btg_1.x))
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: btg.z, btg.w, btg.x
-                     ->  Seq Scan on btg
-               ->  Hash
+   ->  GroupAggregate
+         Group Key: t1.w, t1.z, t1.x
+         ->  Merge Join
+               Disabled: true
+               Merge Cond: ((t1.w = t2.w) AND (t1.z = t2.z) AND (t1.x = t2.x))
+               ->  Sort
+                     Sort Key: t1.w, t1.z, t1.x
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t1.w, t1.x, t1.z
+                           ->  Index Scan using btg_x_y_idx on btg t1
+               ->  Sort
+                     Sort Key: t2.w, t2.z, t2.x
                      ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: btg_1.z, btg_1.w, btg_1.x
-                           ->  Seq Scan on btg btg_1
- Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+                           Hash Key: t2.w, t2.x, t2.z
+                           ->  Index Scan using btg_x_y_idx on btg t2
+ Optimizer: Postgres query optimizer
+(17 rows)
 
 RESET enable_nestloop;
 RESET enable_hashjoin;
 -- Should work with and without GROUP-BY optimization
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM btg GROUP BY w, x, z, y ORDER BY y, x, z, w;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: y, x, z, w
-         ->  GroupAggregate
-               Group Key: y, x, z, w
-               ->  Sort
-                     Sort Key: y, x, z, w
-                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: y, x, z, w
-                           ->  Seq Scan on btg
- Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: btg.y, btg.x, btg.z, btg.w
+   ->  GroupAggregate
+         Group Key: y, x, z, w
+         ->  Sort
+               Sort Key: y, x, z, w
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: btg.y, btg.x, btg.z, btg.w
+                     ->  Index Scan using btg_x_y_idx on btg
+ Optimizer: Postgres query optimizer
+(10 rows)
 
 -- Utilize incremental sort to make the ORDER BY rule a bit cheaper
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM btg GROUP BY w, x, y, z ORDER BY x*x, z;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                                QUERY PLAN                               
 ------------------------------------------------------------------------
- Result
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: ((x * x)), z
-         ->  Sort
-               Sort Key: ((x * x)), z
-               ->  HashAggregate
-                     Group Key: z, w, x, y
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: ((btg.x * btg.x)), btg.z
+   ->  Sort
+         Sort Key: ((x * x)), z
+         ->  GroupAggregate
+               Group Key: w, x, y, z
+               ->  Sort
+                     Sort Key: w, x, y, z
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                           Hash Key: z, w, x, y
-                           ->  Seq Scan on btg
- Optimizer: Pivotal Optimizer (GPORCA)
-(11 rows)
+                           Hash Key: btg.z, btg.w, btg.x, btg.y
+                           ->  Index Scan using btg_x_y_idx on btg
+ Optimizer: Postgres query optimizer
+(12 rows)
 
 -- Test the case where the number of incoming subtree path keys is more than
 -- the number of grouping keys.
@@ -3595,23 +4777,25 @@ CREATE INDEX btg_y_x_w_idx ON btg(y, x, w);
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT y, x, array_agg(distinct w)
   FROM btg WHERE y < 0 GROUP BY x, y;
-                             QUERY PLAN                             
---------------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: y, x, (array_agg(DISTINCT w))
    ->  GroupAggregate
          Output: y, x, array_agg(DISTINCT w)
          Group Key: btg.x, btg.y
          ->  Sort
-               Output: x, y, w
+               Output: y, x, w
                Sort Key: btg.x, btg.y
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Output: x, y, w
-                     Hash Key: x, y
-                     ->  Index Scan using btg_x_y_idx on public.btg
-                           Output: x, y, w
+                     Output: y, x, w
+                     Hash Key: btg.x, btg.y
+                     ->  Index Only Scan using btg_y_x_w_idx on public.btg
+                           Output: y, x, w
                            Index Cond: (btg.y < 0)
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
  Settings: enable_seqscan = 'off', enable_hashagg = 'off'
 (16 rows)
 
@@ -3632,7 +4816,7 @@ SELECT avg(c1.f ORDER BY c1.x, c1.y)
 FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
 GROUP BY c1.w, c1.z;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -3643,22 +4827,25 @@ DETAIL:  Feature not supported: Hash aggregation with ORDER BY
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
                      Hash Key: c1.w, c1.z
                      ->  Merge Join
+                           Disabled: true
                            Merge Cond: (c1.x = c2.x)
                            ->  Sort
                                  Sort Key: c1.x
                                  ->  Seq Scan on group_agg_pk c1
+                                       Disabled: true
                            ->  Sort
                                  Sort Key: c2.x
                                  ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                        ->  Seq Scan on group_agg_pk c2
+                                             Disabled: true
  Optimizer: Postgres query optimizer
-(17 rows)
+(20 rows)
 
 SELECT avg(c1.f ORDER BY c1.x, c1.y)
 FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
 GROUP BY c1.w, c1.z;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
         avg         
 --------------------
  5.0000000000000000
@@ -3673,44 +4860,64 @@ SELECT c1.y,c1.x FROM group_agg_pk c1
   JOIN group_agg_pk c2
   ON c1.x = c2.x
 GROUP BY c1.y,c1.x,c2.x;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: group_agg_pk.y, group_agg_pk.x, group_agg_pk_1.x
-         ->  Hash Join
-               Hash Cond: (group_agg_pk.x = group_agg_pk_1.x)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: group_agg_pk.x
-                     ->  Seq Scan on group_agg_pk
-               ->  Hash
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: group_agg_pk_1.x
-                           ->  Seq Scan on group_agg_pk group_agg_pk_1
- Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+   ->  GroupAggregate
+         Group Key: c1.y, c1.x
+         ->  Sort
+               Sort Key: c1.y, c1.x
+               ->  Merge Join
+                     Disabled: true
+                     Merge Cond: (c1.x = c2.x)
+                     ->  Sort
+                           Sort Key: c1.x
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: c1.x
+                                 ->  Seq Scan on group_agg_pk c1
+                                       Disabled: true
+                     ->  Sort
+                           Sort Key: c2.x
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: c2.x
+                                 ->  Seq Scan on group_agg_pk c2
+                                       Disabled: true
+ Optimizer: Postgres query optimizer
+(21 rows)
 
 EXPLAIN (COSTS OFF)
 SELECT c1.y,c1.x FROM group_agg_pk c1
   JOIN group_agg_pk c2
   ON c1.x = c2.x
 GROUP BY c1.y,c2.x,c1.x;
-                               QUERY PLAN                               
-------------------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
-         Group Key: group_agg_pk.y, group_agg_pk_1.x, group_agg_pk.x
-         ->  Hash Join
-               Hash Cond: (group_agg_pk.x = group_agg_pk_1.x)
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: group_agg_pk.x
-                     ->  Seq Scan on group_agg_pk
-               ->  Hash
-                     ->  Redistribute Motion 3:3  (slice3; segments: 3)
-                           Hash Key: group_agg_pk_1.x
-                           ->  Seq Scan on group_agg_pk group_agg_pk_1
- Optimizer: Pivotal Optimizer (GPORCA)
-(13 rows)
+   ->  GroupAggregate
+         Group Key: c1.y, c2.x
+         ->  Sort
+               Sort Key: c1.y, c2.x
+               ->  Merge Join
+                     Disabled: true
+                     Merge Cond: (c1.x = c2.x)
+                     ->  Sort
+                           Sort Key: c1.x
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: c1.x
+                                 ->  Seq Scan on group_agg_pk c1
+                                       Disabled: true
+                     ->  Sort
+                           Sort Key: c2.x
+                           ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                 Hash Key: c2.x
+                                 ->  Seq Scan on group_agg_pk c2
+                                       Disabled: true
+ Optimizer: Postgres query optimizer
+(21 rows)
 
 RESET enable_nestloop;
 RESET enable_hashjoin;
@@ -3731,7 +4938,7 @@ DETAIL:  Query-to-DXL Translation: No attribute entry found due to incorrect nor
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   Merge Key: c2
+   Merge Key: agg_sort_order.c2
    ->  Sort
          Sort Key: c2
          ->  GroupAggregate
@@ -3932,6 +5139,8 @@ DETAIL:  Feature not supported: Non-default collation
 ROLLBACK;
 -- test coverage for dense_rank
 SELECT dense_rank(x) WITHIN GROUP (ORDER BY x) FROM (VALUES (1),(1),(2),(2),(3),(3)) v(x) GROUP BY (x) ORDER BY 1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  dense_rank 
 ------------
           1
@@ -3958,6 +5167,8 @@ SELECT min(x ORDER BY y) FROM (VALUES(1, 2)) AS d(x,y);
 select v||'a', case v||'a' when 'aa' then 1 else 0 end, count(*)
   from unnest(array['a','b']) u(v)
  group by v||'a' order by 1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ?column? | case | count 
 ----------+------+-------
  aa       |    1 |     1
@@ -3967,6 +5178,8 @@ select v||'a', case v||'a' when 'aa' then 1 else 0 end, count(*)
 select v||'a', case when v||'a' = 'aa' then 1 else 0 end, count(*)
   from unnest(array['a','b']) u(v)
  group by v||'a' order by 1;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ?column? | case | count 
 ----------+------+-------
  aa       |    1 |     1
@@ -4011,6 +5224,8 @@ select unique1, count(*), sum(twothousand) from tenk1
 group by unique1
 having sum(fivethous) > 4975
 order by sum(twothousand);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  unique1 | count | sum  
 ---------+-------+------
     4976 |     1 |  976
@@ -4084,20 +5299,26 @@ set jit_above_cost = 0;
 explain (costs off)
 select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
   from agg_data_20k group by g%10000;
-                         QUERY PLAN                         
-------------------------------------------------------------
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
+                            QUERY PLAN                            
+------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
-   ->  HashAggregate
+   ->  GroupAggregate
          Group Key: ((g % 10000))
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: ((g % 10000))
-               ->  Seq Scan on agg_data_20k
- Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+         ->  Sort
+               Sort Key: ((g % 10000))
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: ((agg_data_20k.g % 10000))
+                     ->  Seq Scan on agg_data_20k
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 create table agg_group_1 as
 select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
   from agg_data_20k group by g%10000;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 /* GPDB_13_MERGE_FIXME: enable this test
 create table agg_group_2 as
 select * from
@@ -4114,11 +5335,13 @@ set jit_above_cost to default;
 create table agg_group_3 as
 select (g/2)::numeric as c1, sum(7::int4) as c2, count(*) as c3
   from agg_data_2k group by g/2;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 create table agg_group_4 as
 select (g/2)::numeric as c1, array_agg(g::numeric order by g) as c2, count(*) as c3
   from agg_data_2k group by g/2;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 -- Produce results with hash aggregation
 set enable_hashagg = true;
 set enable_sort = false;
@@ -4126,20 +5349,24 @@ set jit_above_cost = 0;
 explain (costs off)
 select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
   from agg_data_20k group by g%10000;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
                          QUERY PLAN                         
 ------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  HashAggregate
          Group Key: ((g % 10000))
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: ((g % 10000))
+               Hash Key: ((agg_data_20k.g % 10000))
                ->  Seq Scan on agg_data_20k
- Optimizer: Pivotal Optimizer (GPORCA)
+ Optimizer: Postgres query optimizer
 (7 rows)
 
 create table agg_hash_1 as
 select g%10000 as c1, sum(g::numeric) as c2, count(*) as c3
   from agg_data_20k group by g%10000;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 /* GPDB_13_MERGE_FIXME: enable this test
 create table agg_hash_2 as
 select * from
@@ -4156,11 +5383,13 @@ set jit_above_cost to default;
 create table agg_hash_3 as
 select (g/2)::numeric as c1, sum(7::int4) as c2, count(*) as c3
   from agg_data_2k group by g/2;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 create table agg_hash_4 as
 select (g/2)::numeric as c1, array_agg(g::numeric order by g) as c2, count(*) as c3
   from agg_data_2k group by g/2;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  Feature not supported: Hash aggregation with ORDER BY
+DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
 set enable_sort = true;
 set work_mem to default;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
@@ -4208,19 +5437,25 @@ set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=10000000018.30..10000000018.31 rows=1 width=8) (actual time=0.265..0.267 rows=1 loops=1)
-   ->  Nested Loop  (cost=10000000000.02..10000000016.94 rows=545 width=0) (actual time=0.028..0.218 rows=586 loops=1)
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.006..0.007 rows=1 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.003 rows=1 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..11.45 rows=545 width=0) (actual time=0.020..0.125 rows=586 loops=1)
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=21.35..21.36 rows=1 width=8) (actual time=0.147..0.148 rows=1.00 loops=1)
+   Buffers: shared hit=7
+   ->  Nested Loop  (cost=0.02..19.76 rows=636 width=0) (actual time=0.011..0.117 rows=973.00 loops=1)
+         Disabled: true
+         Buffers: shared hit=7
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.003..0.003 rows=1.00 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.002 rows=1.00 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..13.36 rows=636 width=0) (actual time=0.007..0.062 rows=973.00 loops=1)
+               Buffers: shared hit=7
  Optimizer: Postgres query optimizer
- Planning Time: 8.368 ms
-   (slice0)    Executor memory: 30K bytes.
+ Planning:
+   Buffers: shared hit=1035
+ Planning Time: 5.153 ms
+   (slice0)    Executor memory: 33K bytes.
  Memory used:  128000kB
- Execution Time: 0.337 ms
-(10 rows)
+ Execution Time: 0.179 ms
+(16 rows)
 
 reset enable_indexscan;
 reset enable_indexonlyscan;

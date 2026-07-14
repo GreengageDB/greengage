@@ -48,10 +48,10 @@ WHERE i.indrelid = 'tbl_include_unique1'::regclass ORDER BY c.relname;
 CREATE TABLE tbl_include_unique2 (c1 int, c2 int, c3 int, c4 box);
 INSERT INTO tbl_include_unique2 SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
 CREATE UNIQUE INDEX tbl_include_unique2_idx_unique ON tbl_include_unique2 using btree (c1, c2) INCLUDE (c3, c4);
-ERROR:  could not create unique index "tbl_include_unique2_idx_unique"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  could not create unique index "tbl_include_unique2_idx_unique"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) is duplicated.
 ALTER TABLE tbl_include_unique2 add UNIQUE (c1, c2) INCLUDE (c3, c4);
-ERROR:  could not create unique index "tbl_include_unique2_c1_c2_c3_c4_key"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  could not create unique index "tbl_include_unique2_c1_c2_c3_c4_key"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) is duplicated.
 -- PK constraint
 CREATE TABLE tbl_include_pk (c1 int, c2 int, c3 int, c4 box);
@@ -81,7 +81,7 @@ WHERE i.indrelid = 'tbl_include_box'::regclass ORDER BY c.relname;
 CREATE TABLE tbl_include_box_pk (c1 int, c2 int, c3 int, c4 box);
 INSERT INTO tbl_include_box_pk SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
 ALTER TABLE tbl_include_box_pk add PRIMARY KEY (c1, c2) INCLUDE (c3, c4);
-ERROR:  could not create unique index "tbl_include_box_pk_pkey"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  could not create unique index "tbl_include_box_pk_pkey"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) is duplicated.
 /*
  * 2. Test CREATE TABLE with constraint
@@ -102,7 +102,7 @@ SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conre
 
 -- ensure that constraint works
 INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  duplicate key value violates unique constraint "covering"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  duplicate key value violates unique constraint "covering"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) already exists.
 DROP TABLE tbl;
 CREATE TABLE tbl (c1 int,c2 int, c3 int, c4 box,
@@ -113,7 +113,7 @@ SELECT indexrelid::regclass, indnatts, indnkeyatts, indisunique, indisprimary, i
  covering   |        4 |           2 | t           | t            | 1 2 3 4 | 1978 1978
 (1 row)
 
-SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid;
+SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid AND contype = 'p';
          pg_get_constraintdef          | conname  | conkey 
 ---------------------------------------+----------+--------
  PRIMARY KEY (c1, c2) INCLUDE (c3, c4) | covering | {1,2}
@@ -121,10 +121,10 @@ SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conre
 
 -- ensure that constraint works
 INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  duplicate key value violates unique constraint "covering"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  duplicate key value violates unique constraint "covering"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) already exists.
 INSERT INTO tbl SELECT 1, NULL, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  null value in column "c2" of relation "tbl" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  null value in column "c2" of relation "tbl" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Failing row contains (1, null, 3, (4,4),(4,4)).
 INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,300) AS x;
 -- GPDB: Dial down random_page_cost to get the same plan as in upstream.
@@ -143,8 +143,8 @@ select * from tbl where (c1,c2,c3) < (2,5,1);
 select * from tbl where (c1,c2,c3) < (2,5,1);
  c1 | c2 | c3 | c4 
 ----+----+----+----
-  2 |  4 |    | 
   1 |  2 |    | 
+  2 |  4 |    | 
 (2 rows)
 
 reset random_page_cost;
@@ -188,7 +188,7 @@ SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conre
 
 -- ensure that constraint works
 INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  duplicate key value violates unique constraint "tbl_c1_c2_c3_c4_key"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  duplicate key value violates unique constraint "tbl_c1_c2_c3_c4_key"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) already exists.
 DROP TABLE tbl;
 CREATE TABLE tbl (c1 int,c2 int, c3 int, c4 box,
@@ -199,7 +199,7 @@ SELECT indexrelid::regclass, indnatts, indnkeyatts, indisunique, indisprimary, i
  tbl_pkey   |        4 |           2 | t           | t            | 1 2 3 4 | 1978 1978
 (1 row)
 
-SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid;
+SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conrelid = 'tbl'::regclass::oid AND contype = 'p';
          pg_get_constraintdef          | conname  | conkey 
 ---------------------------------------+----------+--------
  PRIMARY KEY (c1, c2) INCLUDE (c3, c4) | tbl_pkey | {1,2}
@@ -207,10 +207,10 @@ SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conre
 
 -- ensure that constraint works
 INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  duplicate key value violates unique constraint "tbl_pkey"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  duplicate key value violates unique constraint "tbl_pkey"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) already exists.
 INSERT INTO tbl SELECT 1, NULL, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  null value in column "c2" of relation "tbl" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  null value in column "c2" of relation "tbl" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Failing row contains (1, null, 3, (4,4),(4,4)).
 INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,10) AS x;
 DROP TABLE tbl;
@@ -230,7 +230,7 @@ SELECT pg_get_constraintdef(oid), conname, conkey FROM pg_constraint WHERE conre
 
 -- ensure that constraint works
 INSERT INTO tbl SELECT 1, 2, 3*x, box('4,4,4,4') FROM generate_series(1,10) AS x;
-ERROR:  conflicting key value violates exclusion constraint "tbl_c1_c3_c4_excl"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  conflicting key value violates exclusion constraint "tbl_c1_c3_c4_excl"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1)=(1) conflicts with existing key (c1)=(1).
 INSERT INTO tbl SELECT x, 2*x, NULL, NULL FROM generate_series(1,10) AS x;
 DROP TABLE tbl;
@@ -372,9 +372,9 @@ CREATE INDEX on tbl USING hash(c1, c2) INCLUDE (c3, c4);
 ERROR:  access method "hash" does not support included columns
 CREATE INDEX on tbl USING rtree(c3) INCLUDE (c1, c4);
 NOTICE:  substituting access method "gist" for obsolete method "rtree"
-NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg1 172.17.0.4:7003 pid=1598943)
-NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg0 172.17.0.4:7002 pid=1598941)
-NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg2 172.17.0.4:7004 pid=1598945)
+NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg1 172.17.0.2:7003 pid=2442339)
+NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg2 172.17.0.2:7004 pid=2442340)
+NOTICE:  substituting access method "gist" for obsolete method "rtree"  (seg0 172.17.0.2:7002 pid=2442338)
 CREATE INDEX on tbl USING btree(c1, c2) INCLUDE (c3, c4);
 DROP TABLE tbl;
 /*
@@ -387,7 +387,7 @@ UPDATE tbl SET c1 = 100 WHERE c1 = 2;
 UPDATE tbl SET c1 = 1 WHERE c1 = 3;
 -- should fail
 UPDATE tbl SET c2 = 2 WHERE c1 = 1;
-ERROR:  duplicate key value violates unique constraint "tbl_idx_unique"  (seg1 172.17.0.4:7003 pid=1598943)
+ERROR:  duplicate key value violates unique constraint "tbl_idx_unique"  (seg1 172.17.0.2:7003 pid=2442339)
 DETAIL:  Key (c1, c2)=(1, 2) already exists.
 UPDATE tbl SET c3 = 1;
 DELETE FROM tbl WHERE c1 = 5 OR c3 = 12;
