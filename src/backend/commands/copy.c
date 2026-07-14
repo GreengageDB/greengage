@@ -6726,7 +6726,7 @@ CopyReadLineText(CopyState cstate)
 						cstate->raw_buf_index = raw_buf_ptr;
 						ereport(ERROR,
 								(errcode(ERRCODE_BAD_COPY_FILE_FORMAT),
-								 errmsg("end-of-copy marker corrupt")));
+								 errmsg("end-of-copy marker is not alone on its line")));
 					}
 					else
 						NO_END_OF_COPY_GOTO;
