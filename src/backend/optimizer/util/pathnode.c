@@ -5595,6 +5595,37 @@ create_lockrows_path(PlannerInfo *root, RelOptInfo *rel,
 }
 
 /*
+ * split_update_returning_old_walker
+ *	  Detect a RETURNING clause that references OLD row values (a Var with
+ *	  varreturningtype VAR_RETURNING_OLD, or an already-rewritten ReturningExpr
+ *	  carrying OLD).  Unlike contain_vars_returning_old_or_new(), NEW references
+ *	  are ignored: a Split Update's INSERT half carries the new tuple, so
+ *	  RETURNING NEW works; only OLD is unavailable where RETURNING is evaluated.
+ */
+static bool
+split_update_returning_old_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Var))
+	{
+		Var		   *var = (Var *) node;
+
+		return (var->varlevelsup == 0 &&
+				var->varreturningtype == VAR_RETURNING_OLD);
+	}
+	if (IsA(node, ReturningExpr))
+	{
+		ReturningExpr *rexpr = (ReturningExpr *) node;
+
+		if (rexpr->retlevelsup == 0 && rexpr->retold)
+			return true;
+		return false;
+	}
+	return expression_tree_walker(node, split_update_returning_old_walker, context);
+}
+
+/*
  * create_modifytable_path
  *	  Creates a pathnode that represents performing INSERT/UPDATE/DELETE/MERGE
  *	  mods
@@ -5644,6 +5675,30 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	Assert(returningLists == NIL ||
 		   list_length(resultRelations) == list_length(returningLists));
 	Assert(list_length(resultRelations) == list_length(is_split_updates));
+
+	/*
+	 * Greengage: an UPDATE that changes the distribution key is executed as a
+	 * Split Update (a DELETE of the old tuple plus an INSERT of the new tuple,
+	 * routed to possibly different segments).  RETURNING evaluates on the INSERT
+	 * segment, which has the new tuple but not the old one, so RETURNING OLD
+	 * would silently come back NULL.  Reject it explicitly rather than return
+	 * wrong data.  (RETURNING NEW is fine and is left alone.)
+	 */
+	if (operation == CMD_UPDATE && returningLists != NIL)
+	{
+		ListCell   *lcr;
+		ListCell   *lcs;
+
+		forboth(lcr, returningLists, lcs, is_split_updates)
+		{
+			if (lfirst_int(lcs) &&
+				split_update_returning_old_walker((Node *) lfirst(lcr), NULL))
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("RETURNING OLD is not supported for an UPDATE that changes the distribution key"),
+						 errdetail("The updated row is moved between segments, so its previous values are not available.")));
+		}
+	}
 
 	pathnode->path.pathtype = T_ModifyTable;
 	pathnode->path.parent = rel;
