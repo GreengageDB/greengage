@@ -15059,13 +15059,12 @@ ATExecExpandTable(List **wqueue, Relation rel, AlterTableCmd *cmd)
 	 * crash immediately followed by an automatic mirror promotion can silently
 	 * lose/duplicate the rows this command just moved, if not all WAL was sent
 	 * to the mirror.
-	 * Force it "on" for this transaction only, so the
-	 * PREPARE below always either gets a real replication ack or a
-	 * catalog-visible mirror-down signal, regardless of the ambient GUC.
+	 * Therefore, forbid operation if synchronous_commit is not fully enabled.
 	 */
-	set_config_option("synchronous_commit", "on",
-					   PGC_USERSET, PGC_S_SESSION,
-					   GUC_ACTION_LOCAL, true, 0);
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during EXPAND")));
 
 	oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(rel));
 	newPolicy = GpPolicyCopy(policy);
@@ -15412,13 +15411,14 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 
 	/*
 	 * Like ATExecExpandTable, this command can rewrite and redistribute the
-	 * table's data via an internal CTAS. See the comment there: force
-	 * synchronous_commit "on" for this transaction so a segment's commit
-	 * cannot race ahead of its mirror regardless of the ambient GUC.
+	 * table's data via an internal CTAS. See the comment there.
+	 * And, forbid operation if synchronous_commit is not fully enabled here
+	 * as well.
 	 */
-	set_config_option("synchronous_commit", "on",
-					   PGC_USERSET, PGC_S_SESSION,
-					   GUC_ACTION_LOCAL, true, 0);
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during SET DISTRIBUTED BY")));
 
 	Assert(PointerIsValid(node));
 	Assert(IsA(node, List));
