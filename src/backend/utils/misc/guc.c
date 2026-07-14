@@ -2735,11 +2735,24 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 			/*
 			 * If a guc's value changed on QD,
 			 * record it and restore QE before next query start
+			 *
+			 * The isCommit/gp_guc_need_restore cases cover end-of-transaction
+			 * unwinding (nestLevel == 1).  But a synced GUC can also be changed
+			 * and then unwound *within* a single command via a GUC nest level
+			 * (NewGUCNestLevel()/AtEOXact_GUC(false, save_nestlevel)); PG18's
+			 * RestrictSearchPath() does exactly this for CREATE INDEX, ANALYZE,
+			 * VACUUM, CLUSTER and REFRESH MATVIEW.  Because the restricted value
+			 * was already dispatched to the QEs with the command but the QD
+			 * unwinds it locally before end-of-xact, the commit-time
+			 * AtEOXact_GUC never sees the change, so the QEs would be left with
+			 * the restricted value for the next command.  Detect that here by
+			 * nestLevel > 1 (mid-command pop) and re-sync the restored value.
 			 */
 			if (Gp_role == GP_ROLE_DISPATCH
 					&& !IsTransactionBlock()
 					&& changed
-					&& ((isCommit) || (!isCommit && gp_guc_need_restore))
+					&& ((isCommit) || (!isCommit && gp_guc_need_restore)
+						|| (nestLevel > 1))
 					&& (gconf->flags & GUC_GPDB_NEED_SYNC))
 			{
 				MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
