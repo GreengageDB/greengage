@@ -2,6 +2,8 @@
 -- Test inheritance features
 --
 CREATE TABLE a (aa TEXT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE b (bb TEXT) INHERITS (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE c (cc TEXT) INHERITS (a);
@@ -37,11 +39,6 @@ INSERT INTO d(aa) VALUES('dddddddd');
 SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
- a       | aaaaaa
- a       | aaaaaaaa
- c       | ccccc
- d       | dddd
- d       | dddddddd
  a       | aaaa
  a       | aaaaa
  a       | aaaaaaa
@@ -61,6 +58,11 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  c       | cccccc
  c       | ccccccc
  d       | ddddddd
+ a       | aaaaaa
+ a       | aaaaaaaa
+ c       | ccccc
+ d       | dddd
+ d       | dddddddd
 (24 rows)
 
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
@@ -83,15 +85,15 @@ SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | cccc     | 
- c       | cccccc   | 
- c       | ccccccc  | 
- d       | ddddddd  | 
  c       | ccc      | 
  c       | cccccccc | 
  d       | ddd      | 
  d       | ddddd    | 
  d       | dddddd   | 
+ c       | cccc     | 
+ c       | cccccc   | 
+ c       | ccccccc  | 
+ d       | ddddddd  | 
  c       | ccccc    | 
  d       | dddd     | 
  d       | dddddddd | 
@@ -100,34 +102,34 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
  d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
 (6 rows)
 
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
- a       | aaaaaa
- a       | aaaaaaaa
  a       | aaa
  a       | aaaa
  a       | aaaaa
  a       | aaaaaaa
+ a       | aaaaaa
+ a       | aaaaaaaa
 (6 rows)
 
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
- b       | bbbbbbbb | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
+ b       | bbbbbbbb | 
 (6 rows)
 
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
@@ -144,12 +146,12 @@ SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | ddddddd  |    |    | 
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
- d       | ddddddd  |    |    | 
 (6 rows)
 
 UPDATE a SET aa='zzzz' WHERE aa='aaaa';
@@ -191,88 +193,88 @@ SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
 ---------+----------+----
  d       | dddd     | 
  d       | dddddddd | 
- b       | bbbbbbbb | 
- d       | ddd      | 
- d       | ddddd    | 
- d       | dddddd   | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
  d       | ddddddd  | 
+ b       | bbbbbbbb | 
+ d       | ddd      | 
+ d       | ddddd    | 
+ d       | dddddd   | 
 (12 rows)
 
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
+ c       | cccc     | 
+ c       | cccccc   | 
+ c       | ccccccc  | 
+ d       | ddddddd  | 
+ c       | ccccc    | 
+ d       | dddd     | 
+ d       | dddddddd | 
  c       | ccc      | 
  c       | cccccccc | 
  d       | ddd      | 
  d       | ddddd    | 
  d       | dddddd   | 
- c       | ccccc    | 
- d       | dddd     | 
- d       | dddddddd | 
- c       | cccc     | 
- c       | cccccc   | 
- c       | ccccccc  | 
- d       | ddddddd  | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
+ d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
- d       | ddddddd  |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
 (6 rows)
 
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
  relname |   aa   
 ---------+--------
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
  a       | zzzz
  a       | zzzzz
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
 (6 rows)
 
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
- b       | bbbbbbbb | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
+ b       | bbbbbbbb | 
 (6 rows)
 
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | ccc      | 
- c       | cccccccc | 
- c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
+ c       | ccc      | 
+ c       | cccccccc | 
+ c       | ccccc    | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
- d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
  d       | dddd     |    |    | 
  d       | dddddddd |    |    | 
+ d       | ddddddd  |    |    | 
 (6 rows)
 
 UPDATE b SET aa='new';
@@ -327,6 +329,7 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
 ---------+----------+----
  c       | ccc      | 
  c       | cccccccc | 
+ c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
@@ -336,7 +339,6 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  d       | new      | 
  d       | new      | 
  d       | new      | 
- c       | ccccc    | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
@@ -540,10 +542,15 @@ SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
 -- Confirm PRIMARY KEY adds NOT NULL constraint to child table
 CREATE TEMP TABLE z (b TEXT, PRIMARY KEY(aa, b)) inherits (a);
 INSERT INTO z VALUES (NULL, 'text'); -- should fail
-ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (null, text).
+-- ... but not UNIQUE.
+CREATE TEMP TABLE z2 (b TEXT, UNIQUE(aa, b)) inherits (a);
+INSERT INTO z2 VALUES (NULL, 'text'); -- should work
 -- Check inherited UPDATE with first child excluded
 create table some_tab (f1 int, f2 int, f3 int, check (f1 < 10) no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table some_tab_child () inherits(some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into some_tab_child select i, i+1, 0 from generate_series(1,1000) i;
@@ -573,6 +580,8 @@ NOTICE:  drop cascades to table some_tab_child
 drop function some_tab_stmt_trig_func();
 -- Check inherited UPDATE with all children excluded
 create table some_tab (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table some_tab_child () inherits (some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into some_tab_child values(1,2);
@@ -617,9 +626,13 @@ drop table some_tab cascade;
 NOTICE:  drop cascades to table some_tab_child
 -- Check UPDATE with inherited target and an inherited source table
 create temp table foo(f1 int, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table foo2(f3 int) inherits (foo);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table bar(f1 int, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table bar2(f3 int) inherits (bar);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into foo values(1,1);
@@ -668,11 +681,15 @@ select tableoid::regclass::text as relname, bar.* from bar order by 1,2;
 
 -- Check UPDATE with *partitioned* inherited target and an appendrel subquery
 create table some_tab (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into some_tab values (0);
 create table some_tab_child () inherits (some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into some_tab_child values (1);
 create table parted_tab (a int, b char) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_tab_part1 partition of parted_tab for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_tab_part2 partition of parted_tab for values in (2);
@@ -719,6 +736,8 @@ explain update parted_tab set a = 2 where false;
 drop table parted_tab;
 -- Check UPDATE with multi-level partitioned inherited target
 create table mlparted_tab (a int, b char, c text) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mlparted_tab_part1 partition of mlparted_tab for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mlparted_tab_part2 partition of mlparted_tab for values in (2) partition by list (b);
@@ -748,11 +767,17 @@ drop table some_tab cascade;
 NOTICE:  drop cascades to table some_tab_child
 /* Test multiple inheritance of column defaults */
 CREATE TABLE firstparent (tomorrow date default now()::date + 1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE secondparent (tomorrow date default  now() :: date  +  1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE jointchild () INHERITS (firstparent, secondparent);  -- ok
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "tomorrow"
 CREATE TABLE thirdparent (tomorrow date default now()::date - 1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE otherchild () INHERITS (firstparent, thirdparent);  -- not ok
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "tomorrow"
@@ -767,6 +792,10 @@ DROP TABLE firstparent, secondparent, jointchild, thirdparent, otherchild;
 -- Test changing the type of inherited columns
 insert into d values('test','one','two','three');
 alter table z drop constraint z_pkey;
+-- In GPDB, also drop z2's UNIQUE constraint so that ALL inheritance children of
+-- 'a' are free of unique indexes; otherwise 'set distributed randomly' below
+-- fails because a child relation still has a unique index.
+alter table z2 drop constraint z2_aa_b_key;
 alter table a alter column aa type integer using bit_length(aa);
 ERROR:  cannot alter type of a column used in a distribution policy
 -- In GPDB, the table is distributed by the 'aa' column, changing its type
@@ -783,7 +812,11 @@ select * from d;
 -- column; but we should reject that if any definition was inherited from
 -- an unrelated parent.
 create temp table parent1(f1 int, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table parent2(f1 int, f3 bigint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table childtab(f4 int) inherits(parent1, parent2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "f1"
@@ -792,6 +825,8 @@ ERROR:  cannot alter inherited column "f1" of relation "childtab"
 alter table parent1 alter column f2 type bigint;  -- ok
 -- Test non-inheritable parent constraints
 create table p1(ff1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table p1 add constraint p1chk check (ff1 > 0) no inherit;
 alter table p1 add constraint p2chk check (ff1 > 10);
 -- connoinherit should be true for NO INHERIT constraint
@@ -814,6 +849,7 @@ Check constraints:
     "p1chk" CHECK (ff1 > 0) NO INHERIT
     "p2chk" CHECK (ff1 > 10)
 Number of child tables: 1 (Use \d+ to list them.)
+Distributed by: (ff1)
 
 \d c1
                  Table "public.c1"
@@ -823,6 +859,7 @@ Number of child tables: 1 (Use \d+ to list them.)
 Check constraints:
     "p2chk" CHECK (ff1 > 10)
 Inherits: p1
+Distributed by: (ff1)
 
 -- Test that child does not override inheritable constraints of the parent
 create table c2 (constraint p2chk check (ff1 > 10) no inherit) inherits (p1);	--fails
@@ -833,6 +870,8 @@ NOTICE:  drop cascades to table c1
 -- Tests for casting between the rowtypes of parent and child
 -- tables. See the pgsql-hackers thread beginning Dec. 4/04
 create table base (i integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table derived () inherits (base);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table more_derived (like derived, b int) inherits (derived);
@@ -874,7 +913,11 @@ drop table more_derived;
 drop table derived;
 drop table base;
 create table p1(ff1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f1 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function p2text(p2) returns text as 'select $1.f1' language sql;
 create table c1(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -890,6 +933,8 @@ drop table c1;
 drop table p2;
 drop table p1;
 CREATE TABLE ac (aa TEXT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ac add constraint ac_check check (aa is not null);
 CREATE TABLE bc (bb TEXT) INHERITS (ac);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -901,10 +946,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1599396)
+ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=2621775)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.4:7002 pid=1599396)
+ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=2621775)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_check" of relation "bc"
@@ -924,10 +969,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1599396)
+ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=2621775)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.4:7002 pid=1599396)
+ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=2621775)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_aa_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_aa_check" of relation "bc"
@@ -962,6 +1007,8 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 drop table bc;
 drop table ac;
 create table ac (a int constraint check_a check (a <> 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bc (a int constraint check_a check (a <> 0), b int constraint check_b check (b <> 0)) inherits (ac);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
@@ -977,7 +1024,11 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 drop table bc;
 drop table ac;
 create table ac (a int constraint check_a check (a <> 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bc (b int constraint check_b check (b <> 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cc (c int constraint check_c check (c <> 0)) inherits (ac, bc);
 NOTICE:  table has parent, setting distribution columns to match parent table
 select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg_get_expr(pgc.conbin, pc.oid) as consrc from pg_class as pc inner join pg_constraint as pgc on (pgc.conrelid = pc.oid) where pc.relname in ('ac', 'bc', 'cc') order by 1,2;
@@ -1005,19 +1056,23 @@ drop table cc;
 drop table bc;
 drop table ac;
 create table p1(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table c1(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into c1 values(1,-1,2);
 alter table p2 add constraint cc check (f2>0);  -- fail
-ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=2621777)
 alter table p2 add check (f2>0);  -- check it without a name, too
-ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=2621777)
 delete from c1;
 insert into c1 values(1,1,2);
 alter table p2 add check (f2>0);
 insert into c1 values(1,-1,2);  -- fail
-ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (1, -1, 2).
 create table c2(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1032,6 +1087,7 @@ Check constraints:
     "p2_f2_check" CHECK (f2 > 0)
 Inherits: p1,
           p2
+Distributed by: (f1)
 
 create table c3 (f4 int) inherits(c1,c2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1050,6 +1106,7 @@ Check constraints:
     "p2_f2_check" CHECK (f2 > 0)
 Inherits: c1,
           c2
+Distributed by: (f1)
 
 drop table p1 cascade;
 NOTICE:  drop cascades to 3 other objects
@@ -1058,6 +1115,8 @@ drop cascades to table c2
 drop cascades to table c3
 drop table p2 cascade;
 create table pp1 (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cc1 (f2 text, f3 int) inherits (pp1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 alter table pp1 add column a1 int check (a1 > 0);
@@ -1072,6 +1131,7 @@ alter table pp1 add column a1 int check (a1 > 0);
 Check constraints:
     "pp1_a1_check" CHECK (a1 > 0)
 Inherits: pp1
+Distributed by: (f1)
 
 create table cc2(f4 float) inherits(pp1,cc1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1090,6 +1150,7 @@ Check constraints:
     "pp1_a1_check" CHECK (a1 > 0)
 Inherits: pp1,
           cc1
+Distributed by: (f1)
 
 alter table pp1 add column a2 int check (a2 > 0);
 NOTICE:  merging definition of column "a2" for child "cc2"
@@ -1109,6 +1170,7 @@ Check constraints:
     "pp1_a2_check" CHECK (a2 > 0)
 Inherits: pp1,
           cc1
+Distributed by: (f1)
 
 drop table pp1 cascade;
 NOTICE:  drop cascades to 2 other objects
@@ -1116,7 +1178,11 @@ DETAIL:  drop cascades to table cc1
 drop cascades to table cc2
 -- Test for renaming in simple multiple inheritance
 CREATE TABLE inht1 (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inhs1 (b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inhts (d int) INHERITS (inht1, inhs1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "b"
@@ -1136,26 +1202,42 @@ ALTER TABLE inhts RENAME d TO dd;
  dd     | integer |           |          |         | plain   |              | 
 Inherits: inht1,
           inhs1
+Distributed by: (aa)
 
 DROP TABLE inhts;
 -- Test for adding a column to a parent table with complex inheritance
 CREATE TABLE inhta ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE inhtb () INHERITS (inhta);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE inhtc () INHERITS (inhtb);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE inhtd () INHERITS (inhta, inhtb, inhtc);
 NOTICE:  table has parent, setting distribution columns to match parent table
-ALTER TABLE inhta ADD COLUMN i int;
+ALTER TABLE inhta ADD COLUMN i int, ADD COLUMN j bigint DEFAULT 1;
 NOTICE:  merging definition of column "i" for child "inhtd"
 NOTICE:  merging definition of column "i" for child "inhtd"
+NOTICE:  merging definition of column "j" for child "inhtd"
+NOTICE:  merging definition of column "j" for child "inhtd"
 \d+ inhta
                                    Table "public.inhta"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
 --------+---------+-----------+----------+---------+---------+--------------+-------------
  i      | integer |           |          |         | plain   |              | 
+ j      | bigint  |           |          | 1       | plain   |              | 
 Child tables: inhtb,
               inhtd
+Distributed randomly
+
+\d+ inhtd
+                                   Table "public.inhtd"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ i      | integer |           |          |         | plain   |              | 
+ j      | bigint  |           |          | 1       | plain   |              | 
+Inherits: inhta,
+          inhtb,
+          inhtc
 Distributed randomly
 
 DROP TABLE inhta, inhtb, inhtc, inhtd;
@@ -1180,6 +1262,7 @@ ALTER TABLE inht1 RENAME aa TO aaa;
  z      | integer |           |          |         | plain   |              | 
 Inherits: inht2,
           inht3
+Distributed by: (aaa)
 
 CREATE TABLE inhts (d int) INHERITS (inht2, inhs1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1198,6 +1281,7 @@ ERROR:  cannot rename inherited column "b"
  d      | integer |           |          |         | plain   |              | 
 Inherits: inht2,
           inhs1
+Distributed by: (aaaa)
 
 WITH RECURSIVE r AS (
   SELECT 'inht1'::regclass AS inhrelid
@@ -1245,6 +1329,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 Indexes:
     "test_constraints_val1_val2_key" UNIQUE CONSTRAINT, btree (val1, val2)
 Child tables: test_constraints_inh
+Distributed by: (val1, val2)
 
 ALTER TABLE ONLY test_constraints DROP CONSTRAINT test_constraints_val1_val2_key;
 \d+ test_constraints
@@ -1255,6 +1340,7 @@ ALTER TABLE ONLY test_constraints DROP CONSTRAINT test_constraints_val1_val2_key
  val1   | character varying |           |          |         | extended |              | 
  val2   | integer           |           |          |         | plain    |              | 
 Child tables: test_constraints_inh
+Distributed by: (val1, val2)
 
 \d+ test_constraints_inh
                                  Table "public.test_constraints_inh"
@@ -1264,6 +1350,7 @@ Child tables: test_constraints_inh
  val1   | character varying |           |          |         | extended |              | 
  val2   | integer           |           |          |         | plain    |              | 
 Inherits: test_constraints
+Distributed by: (val1, val2)
 
 DROP TABLE test_constraints_inh;
 DROP TABLE test_constraints;
@@ -1272,6 +1359,8 @@ CREATE TABLE test_ex_constraints (
     dkey inet,
     EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ test_ex_constraints
@@ -1283,6 +1372,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 Indexes:
     "test_ex_constraints_dkey_c_excl" EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
 Child tables: test_ex_constraints_inh
+Distributed by: (dkey)
 
 ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
 \d+ test_ex_constraints
@@ -1292,6 +1382,7 @@ ALTER TABLE test_ex_constraints DROP CONSTRAINT test_ex_constraints_dkey_c_excl;
  c      | circle |           |          |         | plain   |              | 
  dkey   | inet   |           |          |         | main    |              | 
 Child tables: test_ex_constraints_inh
+Distributed by: (dkey)
 
 \d+ test_ex_constraints_inh
                          Table "public.test_ex_constraints_inh"
@@ -1300,12 +1391,15 @@ Child tables: test_ex_constraints_inh
  c      | circle |           |          |         | plain   |              | 
  dkey   | inet   |           |          |         | main    |              | 
 Inherits: test_ex_constraints
+Distributed by: (dkey)
 
 DROP TABLE test_ex_constraints_inh;
 DROP TABLE test_ex_constraints;
 -- Test non-inheritable foreign key constraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
 CREATE TABLE test_foreign_constraints(id1 int REFERENCES test_primary_constraints(id));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 CREATE TABLE test_foreign_constraints_inh () INHERITS (test_foreign_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1318,6 +1412,9 @@ Indexes:
     "test_primary_constraints_pkey" PRIMARY KEY, btree (id)
 Referenced by:
     TABLE "test_foreign_constraints" CONSTRAINT "test_foreign_constraints_id1_fkey" FOREIGN KEY (id1) REFERENCES test_primary_constraints(id)
+Not-null constraints:
+    "test_primary_constraints_id_not_null" NOT NULL "id"
+Distributed by: (id)
 
 \d+ test_foreign_constraints
                          Table "public.test_foreign_constraints"
@@ -1327,6 +1424,7 @@ Referenced by:
 Foreign-key constraints:
     "test_foreign_constraints_id1_fkey" FOREIGN KEY (id1) REFERENCES test_primary_constraints(id)
 Child tables: test_foreign_constraints_inh
+Distributed by: (id1)
 
 ALTER TABLE test_foreign_constraints DROP CONSTRAINT test_foreign_constraints_id1_fkey;
 \d+ test_foreign_constraints
@@ -1335,6 +1433,7 @@ ALTER TABLE test_foreign_constraints DROP CONSTRAINT test_foreign_constraints_id
 --------+---------+-----------+----------+---------+---------+--------------+-------------
  id1    | integer |           |          |         | plain   |              | 
 Child tables: test_foreign_constraints_inh
+Distributed by: (id1)
 
 \d+ test_foreign_constraints_inh
                        Table "public.test_foreign_constraints_inh"
@@ -1342,6 +1441,7 @@ Child tables: test_foreign_constraints_inh
 --------+---------+-----------+----------+---------+---------+--------------+-------------
  id1    | integer |           |          |         | plain   |              | 
 Inherits: test_foreign_constraints
+Distributed by: (id1)
 
 DROP TABLE test_foreign_constraints_inh;
 DROP TABLE test_foreign_constraints;
@@ -1378,6 +1478,8 @@ select * from inh_fk_2 order by 1, 2;
 drop table inh_fk_1, inh_fk_2, inh_fk_2_child;
 -- Test that parent and child CHECK constraints can be created in either order
 create table p1(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits(p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 alter table p1 add constraint inh_check_constraint1 check (f1 > 0);
@@ -1386,23 +1488,130 @@ NOTICE:  merging constraint "inh_check_constraint1" with inherited definition
 alter table p1_c1 add constraint inh_check_constraint2 check (f1 < 10);
 alter table p1 add constraint inh_check_constraint2 check (f1 < 10);
 NOTICE:  merging constraint "inh_check_constraint2" with inherited definition
-select conrelid::regclass::text as relname, conname, conislocal, coninhcount
+alter table p1 add constraint inh_check_constraint3 check (f1 > 0) not enforced;
+alter table p1_c1 add constraint inh_check_constraint3 check (f1 > 0) not enforced;
+NOTICE:  merging constraint "inh_check_constraint3" with inherited definition
+alter table p1_c1 add constraint inh_check_constraint4 check (f1 < 10) not enforced;
+alter table p1 add constraint inh_check_constraint4 check (f1 < 10) not enforced;
+NOTICE:  merging constraint "inh_check_constraint4" with inherited definition
+-- allowed to merge enforced constraint with parent's not enforced constraint
+alter table p1_c1 add constraint inh_check_constraint5 check (f1 < 10) enforced;
+alter table p1 add constraint inh_check_constraint5 check (f1 < 10) not enforced;
+NOTICE:  merging constraint "inh_check_constraint5" with inherited definition
+alter table p1 add constraint inh_check_constraint6 check (f1 < 10) not enforced;
+alter table p1_c1 add constraint inh_check_constraint6 check (f1 < 10) enforced;
+NOTICE:  merging constraint "inh_check_constraint6" with inherited definition
+alter table p1_c1 add constraint inh_check_constraint9 check (f1 < 10) not valid enforced;
+alter table p1 add constraint inh_check_constraint9 check (f1 < 10) not enforced;
+NOTICE:  merging constraint "inh_check_constraint9" with inherited definition
+-- the not-valid state of the child constraint will be ignored here.
+alter table p1 add constraint inh_check_constraint10 check (f1 < 10) not enforced;
+alter table p1_c1 add constraint inh_check_constraint10 check (f1 < 10) not valid enforced;
+NOTICE:  merging constraint "inh_check_constraint10" with inherited definition
+create table p1_c2(f1 int constraint inh_check_constraint4 check (f1 < 10)) inherits(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging column "f1" with inherited definition
+NOTICE:  merging constraint "inh_check_constraint4" with inherited definition
+-- but reverse is not allowed
+alter table p1_c1 add constraint inh_check_constraint7 check (f1 < 10) not enforced;
+alter table p1 add constraint inh_check_constraint7 check (f1 < 10) enforced;
+ERROR:  constraint "inh_check_constraint7" conflicts with NOT ENFORCED constraint on relation "p1_c1"
+alter table p1 add constraint inh_check_constraint8 check (f1 < 10) enforced;
+alter table p1_c1 add constraint inh_check_constraint8 check (f1 < 10) not enforced;
+ERROR:  constraint "inh_check_constraint8" conflicts with NOT ENFORCED constraint on relation "p1_c1"
+create table p1_fail(f1 int constraint inh_check_constraint2 check (f1 < 10) not enforced) inherits(p1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging column "f1" with inherited definition
+ERROR:  constraint "inh_check_constraint2" conflicts with NOT ENFORCED constraint on relation "p1_fail"
+-- constraints with different enforceability can be merged by marking them as ENFORCED
+create table p1_c3() inherits(p1, p1_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+-- but not allowed if the child constraint is explicitly asked to be NOT ENFORCED
+create table p1_fail(f1 int constraint inh_check_constraint6 check (f1 < 10) not enforced) inherits(p1, p1_c1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging column "f1" with inherited definition
+ERROR:  constraint "inh_check_constraint6" conflicts with NOT ENFORCED constraint on relation "p1_fail"
+select conrelid::regclass::text as relname, conname, conislocal, coninhcount, conenforced, convalidated
 from pg_constraint where conname like 'inh\_check\_constraint%'
 order by 1, 2;
- relname |        conname        | conislocal | coninhcount 
----------+-----------------------+------------+-------------
- p1      | inh_check_constraint1 | t          |           0
- p1      | inh_check_constraint2 | t          |           0
- p1_c1   | inh_check_constraint1 | t          |           1
- p1_c1   | inh_check_constraint2 | t          |           1
-(4 rows)
+ relname |        conname         | conislocal | coninhcount | conenforced | convalidated 
+---------+------------------------+------------+-------------+-------------+--------------
+ p1      | inh_check_constraint1  | t          |           0 | t           | t
+ p1      | inh_check_constraint10 | t          |           0 | f           | f
+ p1      | inh_check_constraint2  | t          |           0 | t           | t
+ p1      | inh_check_constraint3  | t          |           0 | f           | f
+ p1      | inh_check_constraint4  | t          |           0 | f           | f
+ p1      | inh_check_constraint5  | t          |           0 | f           | f
+ p1      | inh_check_constraint6  | t          |           0 | f           | f
+ p1      | inh_check_constraint8  | t          |           0 | t           | t
+ p1      | inh_check_constraint9  | t          |           0 | f           | f
+ p1_c1   | inh_check_constraint1  | t          |           1 | t           | t
+ p1_c1   | inh_check_constraint10 | t          |           1 | t           | t
+ p1_c1   | inh_check_constraint2  | t          |           1 | t           | t
+ p1_c1   | inh_check_constraint3  | t          |           1 | f           | f
+ p1_c1   | inh_check_constraint4  | t          |           1 | f           | f
+ p1_c1   | inh_check_constraint5  | t          |           1 | t           | t
+ p1_c1   | inh_check_constraint6  | t          |           1 | t           | t
+ p1_c1   | inh_check_constraint7  | t          |           0 | f           | f
+ p1_c1   | inh_check_constraint8  | f          |           1 | t           | t
+ p1_c1   | inh_check_constraint9  | t          |           1 | t           | f
+ p1_c2   | inh_check_constraint1  | f          |           1 | t           | t
+ p1_c2   | inh_check_constraint10 | f          |           1 | f           | f
+ p1_c2   | inh_check_constraint2  | f          |           1 | t           | t
+ p1_c2   | inh_check_constraint3  | f          |           1 | f           | f
+ p1_c2   | inh_check_constraint4  | t          |           1 | t           | t
+ p1_c2   | inh_check_constraint5  | f          |           1 | f           | f
+ p1_c2   | inh_check_constraint6  | f          |           1 | f           | f
+ p1_c2   | inh_check_constraint8  | f          |           1 | t           | t
+ p1_c2   | inh_check_constraint9  | f          |           1 | f           | f
+ p1_c3   | inh_check_constraint1  | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint10 | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint2  | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint3  | f          |           2 | f           | f
+ p1_c3   | inh_check_constraint4  | f          |           2 | f           | f
+ p1_c3   | inh_check_constraint5  | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint6  | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint7  | f          |           1 | f           | f
+ p1_c3   | inh_check_constraint8  | f          |           2 | t           | t
+ p1_c3   | inh_check_constraint9  | f          |           2 | t           | t
+(38 rows)
 
 drop table p1 cascade;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table p1_c1
+drop cascades to table p1_c2
+drop cascades to table p1_c3
+--
+-- Similarly, check the merging of existing constraints; a parent constraint
+-- marked as NOT ENFORCED can merge with an ENFORCED child constraint, but the
+-- reverse is not allowed.
+--
+create table p1(f1 int constraint p1_a_check check (f1 > 0) not enforced);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table p1_c1(f1 int constraint p1_a_check check (f1 > 0) enforced);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table p1_c1 inherit p1;
+drop table p1 cascade;
 NOTICE:  drop cascades to table p1_c1
+create table p1(f1 int constraint p1_a_check check (f1 > 0) enforced);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table p1_c1(f1 int constraint p1_a_check check (f1 > 0) not enforced);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table p1_c1 inherit p1;
+ERROR:  constraint "p1_a_check" conflicts with NOT ENFORCED constraint on child table "p1_c1"
+drop table p1, p1_c1;
 --
 -- Test DROP behavior of multiply-defined CHECK constraints
 --
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1 (f1 int constraint f1_pos CHECK (f1 > 0)) inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "f1" with inherited definition
@@ -1418,11 +1627,16 @@ alter table p1 drop constraint f1_pos;
 Check constraints:
     "f1_pos" CHECK (f1 > 0)
 Inherits: p1
+Distributed by: (f1)
 
 drop table p1 cascade;
 NOTICE:  drop cascades to table p1_c1
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f1 int constraint f1_pos CHECK (f1 > 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1p2_c1 (f1 int) inherits (p1, p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "f1"
@@ -1441,6 +1655,7 @@ alter table p1 drop constraint f1_pos;
  f1     | integer |           |          | 
 Inherits: p1,
           p2
+Distributed by: (f1)
 
               Table "public.p1p2_c2"
  Column |  Type   | Collation | Nullable | Default 
@@ -1450,12 +1665,15 @@ Check constraints:
     "f1_pos" CHECK (f1 > 0)
 Inherits: p1,
           p2
+Distributed by: (f1)
 
 drop table p1, p2 cascade;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table p1p2_c1
 drop cascades to table p1p2_c2
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table p1_c2() inherits (p1);
@@ -1472,6 +1690,7 @@ Check constraints:
     "f1_pos" CHECK (f1 > 0)
 Inherits: p1_c1,
           p1_c2
+Distributed by: (f1)
 
 alter table p1 drop constraint f1_pos;
 \d p1_c1c2
@@ -1481,6 +1700,7 @@ alter table p1 drop constraint f1_pos;
  f1     | integer |           |          | 
 Inherits: p1_c1,
           p1_c2
+Distributed by: (f1)
 
 drop table p1 cascade;
 NOTICE:  drop cascades to 3 other objects
@@ -1488,6 +1708,8 @@ DETAIL:  drop cascades to table p1_c1
 drop cascades to table p1_c2
 drop cascades to table p1_c1c2
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table p1_c2(constraint f1_pos CHECK (f1 > 0)) inherits (p1);
@@ -1503,7 +1725,7 @@ alter table p1 drop constraint f1_pos;
 alter table p1_c1c2 drop constraint f1_pos;
 ERROR:  cannot drop inherited constraint "f1_pos" of relation "p1_c1c2"
 alter table p1_c2 drop constraint f1_pos;
-ERROR:  constraint "f1_pos" of relation "p1_c2" does not exist  (seg0 172.17.0.4:7002 pid=1599396)
+ERROR:  constraint "f1_pos" of relation "p1_c2" does not exist  (seg0 172.17.0.2:7002 pid=2621775)
 \d p1_c1c2
               Table "public.p1_c1c2"
  Column |  Type   | Collation | Nullable | Default 
@@ -1514,6 +1736,7 @@ Check constraints:
 Inherits: p1_c1,
           p1_c2,
           p1
+Distributed by: (f1)
 
 drop table p1 cascade;
 NOTICE:  drop cascades to 3 other objects
@@ -1522,6 +1745,8 @@ drop cascades to table p1_c2
 drop cascades to table p1_c1c2
 -- Test that a valid child can have not-valid parent, but not vice versa
 create table invalid_check_con(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table invalid_check_con_child() inherits(invalid_check_con);
 NOTICE:  table has parent, setting distribution columns to match parent table
 alter table invalid_check_con_child add constraint inh_check_constraint check(f1 > 0) not valid;
@@ -1533,10 +1758,10 @@ alter table invalid_check_con_child add constraint inh_check_constraint check(f1
 alter table invalid_check_con add constraint inh_check_constraint check(f1 > 0) not valid;
 NOTICE:  merging constraint "inh_check_constraint" with inherited definition
 insert into invalid_check_con values(0); -- fail
-ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0).
 insert into invalid_check_con_child values(0); -- fail
-ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0).
 select conrelid::regclass::text as relname, conname,
        convalidated, conislocal, coninhcount, connoinherit
@@ -1589,9 +1814,10 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
                            ->  Gather Motion 3:1  (slice3; segments: 3)
                                  ->  Limit
                                        ->  Seq Scan on int4_tbl
+                                             Disabled: true
                                              Filter: ((f1 < 10) AND (f1 > '-10'::integer))
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 limit 1) ss on id = f1;
  id | x | f1 
@@ -1613,6 +1839,7 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
                ->  Index Scan using patest0i on patest0 patest0_1
                ->  Index Scan using patest1i on patest1 patest0_2
                ->  Seq Scan on patest2 patest0_3
+                     Disabled: true
          ->  Hash
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: int4_tbl.f1
@@ -1620,9 +1847,10 @@ select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 l
                            ->  Gather Motion 3:1  (slice3; segments: 3)
                                  ->  Limit
                                        ->  Seq Scan on int4_tbl
+                                             Disabled: true
                                              Filter: ((f1 < 10) AND (f1 > '-10'::integer))
  Optimizer: Postgres query optimizer
-(16 rows)
+(18 rows)
 
 select * from patest0 join (select f1 from int4_tbl where f1 < 10 and f1 > -10 limit 1) ss on id = f1;
  id | x | f1 
@@ -1695,26 +1923,41 @@ select * from matest0 order by 1-id;
 (6 rows)
 
 explain (verbose, costs off) select min(1-id) from matest0;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Finalize Aggregate
-   Output: min((1 - matest0.id))
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         Output: (PARTIAL min((1 - matest0.id)))
-         ->  Partial Aggregate
-               Output: PARTIAL min((1 - matest0.id))
-               ->  Append
-                     ->  Seq Scan on public.matest0 matest0_1
-                           Output: matest0_1.id
-                     ->  Seq Scan on public.matest1 matest0_2
-                           Output: matest0_2.id
-                     ->  Seq Scan on public.matest2 matest0_3
-                           Output: matest0_3.id
-                     ->  Seq Scan on public.matest3 matest0_4
-                           Output: matest0_4.id
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
+ Result
+   Output: (InitPlan 1).col1
+   InitPlan 1  (slice1)
+     ->  Limit
+           Output: ((1 - matest0.id))
+           ->  Gather Motion 3:1  (slice2; segments: 3)
+                 Output: ((1 - matest0.id))
+                 Merge Key: ((1 - matest0.id))
+                 ->  Result
+                       Output: ((1 - matest0.id))
+                       ->  Merge Append
+                             Sort Key: ((1 - matest0.id))
+                             ->  Index Scan using matest0i on public.matest0 matest0_1
+                                   Disabled: true
+                                   Output: matest0_1.id, (1 - matest0_1.id)
+                                   Index Cond: ((1 - matest0_1.id) IS NOT NULL)
+                             ->  Index Scan using matest1i on public.matest1 matest0_2
+                                   Disabled: true
+                                   Output: matest0_2.id, (1 - matest0_2.id)
+                                   Index Cond: ((1 - matest0_2.id) IS NOT NULL)
+                             ->  Sort
+                                   Output: matest0_3.id, ((1 - matest0_3.id))
+                                   Sort Key: ((1 - matest0_3.id))
+                                   ->  Seq Scan on public.matest2 matest0_3
+                                         Output: matest0_3.id, (1 - matest0_3.id)
+                                         Filter: ((1 - matest0_3.id) IS NOT NULL)
+                             ->  Index Scan using matest3i on public.matest3 matest0_4
+                                   Disabled: true
+                                   Output: matest0_4.id, (1 - matest0_4.id)
+                                   Index Cond: ((1 - matest0_4.id) IS NOT NULL)
  Optimizer: Postgres query optimizer
  Settings: enable_indexscan = 'off'
-(17 rows)
+(32 rows)
 
 select min(1-id) from matest0;
  min 
@@ -1745,12 +1988,13 @@ explain (verbose, costs off) select * from matest0 order by 1-id;
                Output: matest0_3.id, matest0_3.name, ((1 - matest0_3.id))
                Sort Key: ((1 - matest0_3.id))
                ->  Seq Scan on public.matest2 matest0_3
+                     Disabled: true
                      Output: matest0_3.id, matest0_3.name, (1 - matest0_3.id)
          ->  Index Scan using matest3i on public.matest3 matest0_4
                Output: matest0_4.id, matest0_4.name, (1 - matest0_4.id)
  Optimizer: Postgres query optimizer
  Settings: enable_bitmapscan = 'off', enable_seqscan = 'off', enable_parallel_append = 'off'
-(18 rows)
+(19 rows)
 
 select * from matest0 order by 1-id;
  id |  name  
@@ -1806,6 +2050,39 @@ select min(1-id) from matest0;
 reset enable_seqscan;
 reset enable_parallel_append;
 reset enable_bitmapscan;
+explain (verbose, costs off)  -- bug #18652
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ((1 - matest3.id))
+   Merge Key: ((1 - matest3.id))
+   ->  Sort
+         Output: ((1 - matest3.id))
+         Sort Key: ((1 - matest3.id))
+         ->  Result
+               Output: (1 - matest3.id)
+               ->  Append
+                     ->  Seq Scan on public.matest3
+                           Output: matest3.id
+                     ->  Seq Scan on public.matest3 matest3_1
+                           Output: (matest3_1.id * 2)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(14 rows)
+
+select 1 - id as c from
+(select id from matest3 t1 union all select id * 2 from matest3 t2) ss
+order by c;
+  c  
+-----
+ -11
+  -9
+  -5
+  -4
+(4 rows)
+
 drop table matest0 cascade;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table matest1
@@ -1816,6 +2093,8 @@ drop cascades to table matest3
 -- a plan with extraneous sorting
 --
 create table matest0 (a int, b int, c int, d int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table matest1 () inherits(matest0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create index matest0i on matest0 (b, c);
@@ -2045,7 +2324,11 @@ rollback;
 -- Check handling of MULTIEXPR SubPlans in inherited updates
 --
 create table inhpar(f1 int, f2 name);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inhcld(f2 name, f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inhcld inherit inhpar;
 insert into inhpar select x, x::text from generate_series(1,5) x;
 insert into inhcld select x::text, x from generate_series(6,10) x;
@@ -2064,8 +2347,10 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                      Output: (SubPlan 1).col1, (SubPlan 1).col2, (rescan SubPlan 1), i.tableoid, i.ctid, i.gp_segment_id, i.*
                      ->  Append
                            ->  Seq Scan on public.inhpar i_1
+                                 Disabled: true
                                  Output: i_1.f1, i_1.f2, i_1.tableoid, i_1.ctid, i_1.gp_segment_id, i_1.*
                            ->  Seq Scan on public.inhcld i_2
+                                 Disabled: true
                                  Output: i_2.f1, i_2.f2, i_2.tableoid, i_2.ctid, i_2.gp_segment_id, i_2.*
                      SubPlan 1
                        ->  Limit
@@ -2075,24 +2360,25 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                                    ->  Materialize
                                          ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                                ->  Seq Scan on public.int4_tbl
+                                                     Disabled: true
  Optimizer: Postgres query optimizer
  Settings: enable_mergejoin = 'on', enable_bitmapscan = 'off', enable_seqscan = 'off'
-(24 rows)
+(27 rows)
 
 update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
 select * from inhpar;
  f1 | f2  
 ----+-----
+  5 | 5-
+  6 | 6-
+  9 | 9-
+ 10 | 10-
   2 | 2-
   3 | 3-
   4 | 4-
   8 | 8-
   7 | 7-
   1 | 1-
-  5 | 5-
-  6 | 6-
-  9 | 9-
- 10 | 10-
 (10 rows)
 
 drop table inhpar cascade;
@@ -2119,6 +2405,7 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                Output: ((SubPlan 1 (copy 2)).col1), (((SubPlan 1 (copy 2)).col2)::name), ((rescan SubPlan 1 (copy 2))), i.tableoid, i.ctid, i.gp_segment_id, DMLAction
                ->  Append
                      ->  Seq Scan on public.inhcld1 i_1
+                           Disabled: true
                            Output: (SubPlan 1 (copy 2)).col1, (SubPlan 1 (copy 2)).col2, (rescan SubPlan 1 (copy 2)), i_1.tableoid, i_1.ctid, i_1.gp_segment_id
                            SubPlan 1 (copy 2)
                              ->  Limit
@@ -2128,7 +2415,9 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                                          ->  Materialize
                                                ->  Broadcast Motion 3:3  (slice2; segments: 3)
                                                      ->  Seq Scan on public.int4_tbl
+                                                           Disabled: true
                      ->  Seq Scan on public.inhcld2 i_2
+                           Disabled: true
                            Output: (SubPlan 1 (copy 3)).col1, (SubPlan 1 (copy 3)).col2, (rescan SubPlan 1 (copy 3)), i_2.tableoid, i_2.ctid, i_2.gp_segment_id
                            SubPlan 1 (copy 3)
                              ->  Limit
@@ -2138,9 +2427,10 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
                                          ->  Materialize
                                                ->  Broadcast Motion 3:3  (slice3; segments: 3)
                                                      ->  Seq Scan on public.int4_tbl int4_tbl_1
+                                                           Disabled: true
  Optimizer: Postgres query optimizer
  Settings: enable_mergejoin = 'on', enable_bitmapscan = 'off', enable_seqscan = 'off'
-(30 rows)
+(34 rows)
 
 update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
 select * from inhpar;
@@ -2151,11 +2441,11 @@ select * from inhpar;
   4 | 4-
   7 | 7-
   8 | 8-
-  1 | 1-
   5 | 5-
   6 | 6-
   9 | 9-
  10 | 10-
+  1 | 1-
 (10 rows)
 
 -- Also check ON CONFLICT
@@ -2182,6 +2472,8 @@ drop table inhpar cascade;
 -- Check handling of a constant-null CHECK constraint
 --
 create table cnullparent (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cnullchild (check (f1 = 1 or f1 = null)) inherits(cnullparent);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into cnullchild values(1);
@@ -2204,6 +2496,871 @@ select * from cnullparent where f1 = 2;
 drop table cnullparent cascade;
 NOTICE:  drop cascades to table cnullchild
 --
+-- Test inheritance of NOT NULL constraints
+--
+create table pp1 (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table cc1 (f2 text, f3 int) inherits (pp1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table cc2 (f4 float) inherits (pp1,cc1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+create table cc3 () inherits (pp1,cc1,cc2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging multiple inherited definitions of column "f2"
+NOTICE:  merging multiple inherited definitions of column "f3"
+alter table pp1 alter f1 set not null;
+\d+ cc3
+                                         Table "public.cc3"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+Inherits: pp1,
+          cc1,
+          cc2
+Distributed by: (f1)
+
+alter table cc3 no inherit pp1;
+alter table cc3 no inherit cc1;
+alter table cc3 no inherit cc2;
+\d+ cc3
+                                         Table "public.cc3"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1"
+Distributed by: (f1)
+
+drop table cc3;
+-- named NOT NULL constraint
+alter table cc1 add column a2 int constraint nn not null;
+\d+ cc1
+                                    Table "public.cc1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer |           | not null |         | plain    |              | 
+ f2     | text    |           |          |         | extended |              | 
+ f3     | integer |           |          |         | plain    |              | 
+ a2     | integer |           | not null |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+    "nn" NOT NULL "a2"
+Inherits: pp1
+Child tables: cc2
+Distributed by: (f1)
+
+\d+ cc2
+                                         Table "public.cc2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+ a2     | integer          |           | not null |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+    "nn" NOT NULL "a2" (inherited)
+Inherits: pp1,
+          cc1
+Distributed by: (f1)
+
+alter table pp1 alter column f1 set not null;
+\d+ pp1
+                                    Table "public.pp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1"
+Child tables: cc1,
+              cc2
+Distributed by: (f1)
+
+\d+ cc1
+                                    Table "public.cc1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer |           | not null |         | plain    |              | 
+ f2     | text    |           |          |         | extended |              | 
+ f3     | integer |           |          |         | plain    |              | 
+ a2     | integer |           | not null |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+    "nn" NOT NULL "a2"
+Inherits: pp1
+Child tables: cc2
+Distributed by: (f1)
+
+\d+ cc2
+                                         Table "public.cc2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+ a2     | integer          |           | not null |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+    "nn" NOT NULL "a2" (inherited)
+Inherits: pp1,
+          cc1
+Distributed by: (f1)
+
+-- cannot create table with inconsistent NO INHERIT constraint
+create table cc3 (a2 int not null no inherit) inherits (cc1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  moving and merging column "a2" with inherited definition
+DETAIL:  User-specified column moved to the position of the inherited column.
+ERROR:  cannot define not-null constraint with NO INHERIT on column "a2"
+DETAIL:  The column has an inherited not-null constraint.
+-- change NO INHERIT status of inherited constraint: no dice, it's inherited
+alter table cc2 add not null a2 no inherit;
+ERROR:  cannot change NO INHERIT status of NOT NULL constraint "nn" on relation "cc2"
+HINT:  You might need to make the existing constraint inheritable using ALTER TABLE ... ALTER CONSTRAINT ... INHERIT.
+-- remove constraint from cc2: no dice, it's inherited
+alter table cc2 alter column a2 drop not null;
+ERROR:  cannot drop inherited constraint "nn" of relation "cc2"
+-- remove constraint from cc1, should succeed
+alter table cc1 alter column a2 drop not null;
+\d+ cc1
+                                    Table "public.cc1"
+ Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+---------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer |           | not null |         | plain    |              | 
+ f2     | text    |           |          |         | extended |              | 
+ f3     | integer |           |          |         | plain    |              | 
+ a2     | integer |           |          |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+Inherits: pp1
+Child tables: cc2
+Distributed by: (f1)
+
+-- same for cc2
+alter table cc2 alter column f1 drop not null;
+ERROR:  cannot drop inherited constraint "pp1_f1_not_null" of relation "cc2"
+\d+ cc2
+                                         Table "public.cc2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+ a2     | integer          |           |          |         | plain    |              | 
+Not-null constraints:
+    "pp1_f1_not_null" NOT NULL "f1" (inherited)
+Inherits: pp1,
+          cc1
+Distributed by: (f1)
+
+-- remove from cc1, should fail again
+alter table cc1 alter column f1 drop not null;
+ERROR:  cannot drop inherited constraint "pp1_f1_not_null" of relation "cc1"
+-- remove from pp1, should succeed
+alter table pp1 alter column f1 drop not null;
+\d+ pp1
+                                    Table "public.pp1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           |          |         | plain   |              | 
+Child tables: cc1,
+              cc2
+Distributed by: (f1)
+
+alter table pp1 add primary key (f1);
+-- Leave these tables around, for pg_upgrade testing
+-- test that removing inheritance of NOT NULL NO INHERIT works correctly
+create table inh_parent (f1 int not null no inherit, f2 int not null no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child (f1 int not null no inherit, f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table inh_child inherit inh_parent;
+alter table inh_child no inherit inh_parent;
+\d+ inh_child
+                                 Table "public.inh_child"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+ f2     | integer |           |          |         | plain   |              | 
+Not-null constraints:
+    "inh_child_f1_not_null" NOT NULL "f1" NO INHERIT
+Distributed by: (f1)
+
+drop table inh_parent, inh_child;
+-- test that inhcount is updated correctly through multiple inheritance
+create table inh_pp1 (f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_cc1 (f2 text, f3 int) inherits (inh_pp1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_cc2(f4 float) inherits(inh_pp1,inh_cc1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+alter table inh_pp1 alter column f1 set not null;
+alter table inh_cc2 no inherit inh_pp1;
+alter table inh_cc2 no inherit inh_cc1;
+\d+ inh_cc2
+                                       Table "public.inh_cc2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           | not null |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+Not-null constraints:
+    "inh_pp1_f1_not_null" NOT NULL "f1"
+Distributed by: (f1)
+
+drop table inh_pp1, inh_cc1, inh_cc2;
+create table inh_pp1 (f1 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_cc1 (f2 text, f3 int) inherits (inh_pp1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_cc2(f4 float) inherits(inh_pp1,inh_cc1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+alter table inh_pp1 alter column f1 drop not null;
+\d+ inh_cc2
+                                       Table "public.inh_cc2"
+ Column |       Type       | Collation | Nullable | Default | Storage  | Stats target | Description 
+--------+------------------+-----------+----------+---------+----------+--------------+-------------
+ f1     | integer          |           |          |         | plain    |              | 
+ f2     | text             |           |          |         | extended |              | 
+ f3     | integer          |           |          |         | plain    |              | 
+ f4     | double precision |           |          |         | plain    |              | 
+Inherits: inh_pp1,
+          inh_cc1
+Distributed by: (f1)
+
+drop table inh_pp1, inh_cc1, inh_cc2;
+-- Test a not-null addition that must walk down the hierarchy
+CREATE TABLE inh_parent ();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+CREATE TABLE inh_child (i int) INHERITS (inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE inh_grandchild () INHERITS (inh_parent, inh_child);
+NOTICE:  table has parent, setting distribution columns to match parent table
+ALTER TABLE inh_parent ADD COLUMN i int NOT NULL;
+NOTICE:  merging definition of column "i" for child "inh_child"
+NOTICE:  merging definition of column "i" for child "inh_grandchild"
+drop table inh_parent, inh_child, inh_grandchild;
+-- Test the same constraint name for different columns in different parents
+create table inh_parent1(a int constraint nn not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_parent2(b int constraint nn not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child1 () inherits (inh_parent1, inh_parent2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+\d+ inh_child1
+                                Table "public.inh_child1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           | not null |         | plain   |              | 
+ b      | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "nn" NOT NULL "a" (inherited)
+    "inh_child1_b_not_null" NOT NULL "b" (inherited)
+Inherits: inh_parent1,
+          inh_parent2
+Distributed by: (a)
+
+create table inh_child2 (constraint foo not null a) inherits (inh_parent1, inh_parent2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+alter table inh_child2 no inherit inh_parent2;
+\d+ inh_child2
+                                Table "public.inh_child2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           | not null |         | plain   |              | 
+ b      | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "foo" NOT NULL "a" (local, inherited)
+    "nn" NOT NULL "b"
+Inherits: inh_parent1
+Distributed by: (a)
+
+drop table inh_parent1, inh_parent2, inh_child1, inh_child2;
+-- Test multiple parents with overlapping primary keys
+create table inh_parent1(a int, b int, c int, primary key (a, b));
+create table inh_parent2(d int, e int, b int, primary key (d, b));
+create table inh_child() inherits (inh_parent1, inh_parent2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "b"
+select conrelid::regclass, conname, contype, conkey,
+ coninhcount, conislocal, connoinherit
+ from pg_constraint where contype in ('n','p') and
+ conrelid::regclass::text in ('inh_child', 'inh_parent1', 'inh_parent2')
+ order by 1, 2;
+  conrelid   |        conname         | contype | conkey | coninhcount | conislocal | connoinherit 
+-------------+------------------------+---------+--------+-------------+------------+--------------
+ inh_parent1 | inh_parent1_a_not_null | n       | {1}    |           0 | t          | f
+ inh_parent1 | inh_parent1_b_not_null | n       | {2}    |           0 | t          | f
+ inh_parent1 | inh_parent1_pkey       | p       | {1,2}  |           0 | t          | t
+ inh_parent2 | inh_parent2_b_not_null | n       | {3}    |           0 | t          | f
+ inh_parent2 | inh_parent2_d_not_null | n       | {1}    |           0 | t          | f
+ inh_parent2 | inh_parent2_pkey       | p       | {1,3}  |           0 | t          | t
+ inh_child   | inh_parent1_a_not_null | n       | {1}    |           1 | f          | f
+ inh_child   | inh_parent1_b_not_null | n       | {2}    |           2 | f          | f
+ inh_child   | inh_parent2_d_not_null | n       | {4}    |           1 | f          | f
+(9 rows)
+
+\d+ inh_child
+                                 Table "public.inh_child"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           | not null |         | plain   |              | 
+ b      | integer |           | not null |         | plain   |              | 
+ c      | integer |           |          |         | plain   |              | 
+ d      | integer |           | not null |         | plain   |              | 
+ e      | integer |           |          |         | plain   |              | 
+Not-null constraints:
+    "inh_parent1_a_not_null" NOT NULL "a" (inherited)
+    "inh_parent1_b_not_null" NOT NULL "b" (inherited)
+    "inh_parent2_d_not_null" NOT NULL "d" (inherited)
+Inherits: inh_parent1,
+          inh_parent2
+Distributed by: (a, b)
+
+drop table inh_parent1, inh_parent2, inh_child;
+-- NOT NULL NO INHERIT
+create table inh_nn_parent(a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_nn_child() inherits (inh_nn_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+alter table inh_nn_parent add not null a no inherit;
+create table inh_nn_child2() inherits (inh_nn_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+select conrelid::regclass, conname, contype, conkey,
+ (select attname from pg_attribute where attrelid = conrelid and attnum = conkey[1]),
+ coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text like 'inh\_nn\_%'
+ order by 2, 1;
+   conrelid    |         conname          | contype | conkey | attname | coninhcount | conislocal | connoinherit 
+---------------+--------------------------+---------+--------+---------+-------------+------------+--------------
+ inh_nn_parent | inh_nn_parent_a_not_null | n       | {1}    | a       |           0 | t          | t
+(1 row)
+
+\d+ inh_nn*
+                               Table "public.inh_nn_child"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+Inherits: inh_nn_parent
+Distributed by: (a)
+
+                               Table "public.inh_nn_child2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           |          |         | plain   |              | 
+Inherits: inh_nn_parent
+Distributed by: (a)
+
+                               Table "public.inh_nn_parent"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ a      | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_nn_parent_a_not_null" NOT NULL "a" NO INHERIT
+Child tables: inh_nn_child,
+              inh_nn_child2
+Distributed by: (a)
+
+drop table inh_nn_parent, inh_nn_child, inh_nn_child2;
+CREATE TABLE inh_nn_parent (a int, NOT NULL a NO INHERIT);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE inh_nn_child() INHERITS (inh_nn_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+ALTER TABLE inh_nn_parent ADD CONSTRAINT nna NOT NULL a;
+ERROR:  cannot change NO INHERIT status of NOT NULL constraint "inh_nn_parent_a_not_null" on relation "inh_nn_parent"
+HINT:  You might need to make the existing constraint inheritable using ALTER TABLE ... ALTER CONSTRAINT ... INHERIT.
+ALTER TABLE inh_nn_parent ALTER a SET NOT NULL;
+ERROR:  cannot change NO INHERIT status of NOT NULL constraint "inh_nn_parent_a_not_null" on relation "inh_nn_parent"
+DROP TABLE inh_nn_parent cascade;
+NOTICE:  drop cascades to table inh_nn_child
+-- Adding a PK at the top level of a hierarchy should cause all descendants
+-- to be checked for nulls, even past a no-inherit constraint
+CREATE TABLE inh_nn_lvl1 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE inh_nn_lvl2 () INHERITS (inh_nn_lvl1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+CREATE TABLE inh_nn_lvl3 (CONSTRAINT foo NOT NULL a NO INHERIT) INHERITS (inh_nn_lvl2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+ALTER TABLE inh_nn_lvl1 ADD PRIMARY KEY (a);
+ERROR:  cannot change NO INHERIT status of NOT NULL constraint "foo" on relation "inh_nn_lvl3"
+HINT:  You might need to make the existing constraint inheritable using ALTER TABLE ... ALTER CONSTRAINT ... INHERIT.
+DROP TABLE inh_nn_lvl1, inh_nn_lvl2, inh_nn_lvl3;
+-- Disallow specifying conflicting NO INHERIT flags for the same constraint
+CREATE TABLE inh_nn1 (a int primary key, b int, not null a no inherit);
+ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
+CREATE TABLE inh_nn1 (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE TABLE inh_nn2 (a int not null no inherit) INHERITS (inh_nn1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging column "a" with inherited definition
+ERROR:  cannot define not-null constraint with NO INHERIT on column "a"
+DETAIL:  The column has an inherited not-null constraint.
+CREATE TABLE inh_nn3 (a int not null, b int,  not null a no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
+CREATE TABLE inh_nn4 (a int not null no inherit, b int,  not null a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
+DROP TABLE IF EXISTS inh_nn1, inh_nn2, inh_nn3, inh_nn4;
+NOTICE:  table "inh_nn2" does not exist, skipping
+NOTICE:  table "inh_nn3" does not exist, skipping
+NOTICE:  table "inh_nn4" does not exist, skipping
+--
+-- test inherit/deinherit
+--
+create table inh_parent(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child1(f1 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child2(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+-- inh_child1 should have not null constraint
+alter table inh_child1 inherit inh_parent;
+-- should fail, missing NOT NULL constraint
+alter table inh_child2 inherit inh_child1;
+ERROR:  column "f1" in child table "inh_child2" must be marked NOT NULL
+alter table inh_child2 alter column f1 set not null;
+alter table inh_child2 inherit inh_child1;
+-- add NOT NULL constraint recursively
+alter table inh_parent alter column f1 set not null;
+\d+ inh_parent
+                                Table "public.inh_parent"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_parent_f1_not_null" NOT NULL "f1"
+Child tables: inh_child1
+Distributed by: (f1)
+
+\d+ inh_child1
+                                Table "public.inh_child1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_child1_f1_not_null" NOT NULL "f1" (local, inherited)
+Inherits: inh_parent
+Child tables: inh_child2
+Distributed by: (f1)
+
+\d+ inh_child2
+                                Table "public.inh_child2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_child2_f1_not_null" NOT NULL "f1" (local, inherited)
+Inherits: inh_child1
+Distributed by: (f1)
+
+select conrelid::regclass, conname, contype, coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid in ('inh_parent'::regclass, 'inh_child1'::regclass, 'inh_child2'::regclass)
+ order by 2, 1;
+  conrelid  |        conname         | contype | coninhcount | conislocal 
+------------+------------------------+---------+-------------+------------
+ inh_child1 | inh_child1_f1_not_null | n       |           1 | t
+ inh_child2 | inh_child2_f1_not_null | n       |           1 | t
+ inh_parent | inh_parent_f1_not_null | n       |           0 | t
+(3 rows)
+
+--
+-- test deinherit procedure
+--
+-- deinherit inh_child1
+create table inh_child3 () inherits (inh_child1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+alter table inh_child1 no inherit inh_parent;
+\d+ inh_parent
+                                Table "public.inh_parent"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_parent_f1_not_null" NOT NULL "f1"
+Distributed by: (f1)
+
+\d+ inh_child1
+                                Table "public.inh_child1"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_child1_f1_not_null" NOT NULL "f1"
+Child tables: inh_child2,
+              inh_child3
+Distributed by: (f1)
+
+\d+ inh_child2
+                                Table "public.inh_child2"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
+--------+---------+-----------+----------+---------+---------+--------------+-------------
+ f1     | integer |           | not null |         | plain   |              | 
+Not-null constraints:
+    "inh_child2_f1_not_null" NOT NULL "f1" (local, inherited)
+Inherits: inh_child1
+Distributed by: (f1)
+
+select conrelid::regclass, conname, contype, coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_parent', 'inh_child1', 'inh_child2', 'inh_child3')
+ order by 2, 1;
+  conrelid  |        conname         | contype | coninhcount | conislocal 
+------------+------------------------+---------+-------------+------------
+ inh_child1 | inh_child1_f1_not_null | n       |           0 | t
+ inh_child3 | inh_child1_f1_not_null | n       |           1 | f
+ inh_child2 | inh_child2_f1_not_null | n       |           1 | t
+ inh_parent | inh_parent_f1_not_null | n       |           0 | t
+(4 rows)
+
+drop table inh_parent, inh_child1, inh_child2, inh_child3;
+-- ALTER TABLE INHERIT ensures that the child has not-null constraints
+create table inh_parent (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table inh_child inherit inh_parent; -- nope
+ERROR:  column "a" in child table "inh_child" must be marked NOT NULL
+drop table inh_parent, inh_child;
+-- Can't merge a NO INHERIT constraint with a normal one
+create table inh_parent (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child (a int not null no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table inh_child inherit inh_parent;
+ERROR:  constraint "inh_child_a_not_null" conflicts with non-inherited constraint on child table "inh_child"
+drop table inh_parent, inh_child;
+-- don't interfere with other types of constraints
+create table inh_parent (a int primary key);
+create table inh_child (a int primary key) inherits (inh_parent);
+NOTICE:  merging column "a" with inherited definition
+-- In GPDB, a constant EXCLUDE constraint cannot include the distribution key,
+-- and inh_parent has an inheritance child so it cannot be DISTRIBUTED REPLICATED;
+-- there is no working distribution for this exclusion constraint, so omit it.
+alter table inh_parent add constraint inh_parent_uq unique (a);
+alter table inh_parent add constraint inh_parent_fk foreign key (a) references inh_parent (a);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+create table inh_child2 () inherits (inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_child3 (like inh_parent);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+alter table inh_child3 inherit inh_parent;
+select conrelid::regclass, conname, contype, coninhcount, conislocal
+ from pg_constraint
+ where conrelid::regclass::text in ('inh_parent', 'inh_child', 'inh_child2', 'inh_child3')
+ order by 2, 1;
+  conrelid  |        conname        | contype | coninhcount | conislocal 
+------------+-----------------------+---------+-------------+------------
+ inh_child  | inh_child_a_not_null  | n       |           1 | t
+ inh_child  | inh_child_pkey        | p       |           0 | t
+ inh_parent | inh_parent_a_not_null | n       |           0 | t
+ inh_child2 | inh_parent_a_not_null | n       |           1 | f
+ inh_child3 | inh_parent_a_not_null | n       |           1 | t
+ inh_parent | inh_parent_fk         | f       |           0 | t
+ inh_parent | inh_parent_pkey       | p       |           0 | t
+ inh_parent | inh_parent_uq         | u       |           0 | t
+(8 rows)
+
+drop table inh_parent, inh_child, inh_child2, inh_child3;
+--
+-- test multi inheritance tree
+--
+create table inh_parent(f1 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child1() inherits(inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_child2() inherits(inh_parent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_child3() inherits(inh_child1, inh_child2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+-- show constraint info
+select conrelid::regclass, conname, contype, coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid in ('inh_parent'::regclass, 'inh_child1'::regclass, 'inh_child2'::regclass, 'inh_child3'::regclass)
+ order by 2, conrelid::regclass::text;
+  conrelid  |        conname         | contype | coninhcount | conislocal 
+------------+------------------------+---------+-------------+------------
+ inh_child1 | inh_parent_f1_not_null | n       |           1 | f
+ inh_child2 | inh_parent_f1_not_null | n       |           1 | f
+ inh_child3 | inh_parent_f1_not_null | n       |           2 | f
+ inh_parent | inh_parent_f1_not_null | n       |           0 | t
+(4 rows)
+
+drop table inh_parent cascade;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table inh_child1
+drop cascades to table inh_child2
+drop cascades to table inh_child3
+-- test child table with inherited columns and
+-- with explicitly specified not null constraints
+create table inh_parent_1(f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_parent_2(f2 text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_child(f1 int not null, f2 text not null) inherits(inh_parent_1, inh_parent_2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging column "f1" with inherited definition
+NOTICE:  merging column "f2" with inherited definition
+-- show constraint info
+select conrelid::regclass, conname, contype, coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid in ('inh_parent_1'::regclass, 'inh_parent_2'::regclass, 'inh_child'::regclass)
+ order by 2, conrelid::regclass::text;
+ conrelid  |        conname        | contype | coninhcount | conislocal 
+-----------+-----------------------+---------+-------------+------------
+ inh_child | inh_child_f1_not_null | n       |           0 | t
+ inh_child | inh_child_f2_not_null | n       |           0 | t
+(2 rows)
+
+-- also drops inh_child table
+drop table inh_parent_1 cascade;
+NOTICE:  drop cascades to table inh_child
+drop table inh_parent_2;
+-- test multi layer inheritance tree
+create table inh_p1(f1 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_p2(f1 int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_p3(f2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_p4(f1 int not null, f3 text not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_multiparent() inherits(inh_p1, inh_p2, inh_p3, inh_p4);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+NOTICE:  merging multiple inherited definitions of column "f1"
+-- constraint on f1 should have three parents
+select conrelid::regclass, contype, conname,
+  (select attname from pg_attribute where attrelid = conrelid and attnum = conkey[1]),
+  coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass in ('inh_p1', 'inh_p2', 'inh_p3', 'inh_p4',
+	'inh_multiparent')
+ order by conrelid::regclass::text, conname;
+    conrelid     | contype |      conname       | attname | coninhcount | conislocal 
+-----------------+---------+--------------------+---------+-------------+------------
+ inh_multiparent | n       | inh_p1_f1_not_null | f1      |           3 | f
+ inh_multiparent | n       | inh_p4_f3_not_null | f3      |           1 | f
+ inh_p1          | n       | inh_p1_f1_not_null | f1      |           0 | t
+ inh_p2          | n       | inh_p2_f1_not_null | f1      |           0 | t
+ inh_p4          | n       | inh_p4_f1_not_null | f1      |           0 | t
+ inh_p4          | n       | inh_p4_f3_not_null | f3      |           0 | t
+(6 rows)
+
+create table inh_multiparent2 (a int not null, f1 int) inherits(inh_p3, inh_multiparent);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f2"
+NOTICE:  merging column "f1" with inherited definition
+select conrelid::regclass, contype, conname,
+  (select attname from pg_attribute where attrelid = conrelid and attnum = conkey[1]),
+  coninhcount, conislocal
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass in ('inh_p3', 'inh_multiparent', 'inh_multiparent2')
+ order by conrelid::regclass::text, conname;
+     conrelid     | contype |           conname           | attname | coninhcount | conislocal 
+------------------+---------+-----------------------------+---------+-------------+------------
+ inh_multiparent  | n       | inh_p1_f1_not_null          | f1      |           3 | f
+ inh_multiparent  | n       | inh_p4_f3_not_null          | f3      |           1 | f
+ inh_multiparent2 | n       | inh_multiparent2_a_not_null | a       |           0 | t
+ inh_multiparent2 | n       | inh_p1_f1_not_null          | f1      |           1 | f
+ inh_multiparent2 | n       | inh_p4_f3_not_null          | f3      |           1 | f
+(5 rows)
+
+drop table inh_p1, inh_p2, inh_p3, inh_p4 cascade;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table inh_multiparent
+drop cascades to table inh_multiparent2
+--
+-- Test ALTER CONSTRAINT SET [NO] INHERIT
+--
+create table inh_nn1 (f1 int not null no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_nn2 (f2 text, f3 int, f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table inh_nn2 inherit inh_nn1;
+create table inh_nn3 (f4 float) inherits (inh_nn2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_nn4 (f5 int, f4 float, f2 text, f3 int, f1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f5' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+alter table inh_nn4 inherit inh_nn2, inherit inh_nn1, inherit inh_nn3;
+alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit;
+select conrelid::regclass, conname, conkey, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3', 'inh_nn4')
+ order by 2, 1;
+ conrelid |       conname       | conkey | coninhcount | conislocal | connoinherit 
+----------+---------------------+--------+-------------+------------+--------------
+ inh_nn1  | inh_nn1_f1_not_null | {1}    |           0 | t          | f
+ inh_nn2  | inh_nn1_f1_not_null | {3}    |           1 | f          | f
+ inh_nn3  | inh_nn1_f1_not_null | {3}    |           1 | f          | f
+ inh_nn4  | inh_nn1_f1_not_null | {5}    |           3 | f          | f
+(4 rows)
+
+-- ALTER CONSTRAINT NO INHERIT should work on top-level constraints
+alter table inh_nn1 alter constraint inh_nn1_f1_not_null no inherit;
+select conrelid::regclass, conname, conkey, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3', 'inh_nn4')
+ order by 2, 1;
+ conrelid |       conname       | conkey | coninhcount | conislocal | connoinherit 
+----------+---------------------+--------+-------------+------------+--------------
+ inh_nn1  | inh_nn1_f1_not_null | {1}    |           0 | t          | t
+ inh_nn2  | inh_nn1_f1_not_null | {3}    |           0 | t          | f
+ inh_nn3  | inh_nn1_f1_not_null | {3}    |           1 | f          | f
+ inh_nn4  | inh_nn1_f1_not_null | {5}    |           2 | t          | f
+(4 rows)
+
+-- A constraint that's NO INHERIT can be dropped without damaging children
+alter table inh_nn1 drop constraint inh_nn1_f1_not_null;
+select conrelid::regclass, conname, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3', 'inh_nn4')
+ order by 2, 1;
+ conrelid |       conname       | coninhcount | conislocal | connoinherit 
+----------+---------------------+-------------+------------+--------------
+ inh_nn2  | inh_nn1_f1_not_null |           0 | t          | f
+ inh_nn3  | inh_nn1_f1_not_null |           1 | f          | f
+ inh_nn4  | inh_nn1_f1_not_null |           2 | t          | f
+(3 rows)
+
+drop table inh_nn1, inh_nn2, inh_nn3, inh_nn4;
+-- Test inherit constraint and make sure it validates.
+create table inh_nn1 (f1 int not null no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_nn2 (f2 text, f3 int) inherits (inh_nn1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into inh_nn2 values(NULL, 'sample', 1);
+alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit;
+ERROR:  column "f1" of relation "inh_nn2" contains null values  (seg0 172.17.0.2:7002 pid=2621775)
+delete from inh_nn2;
+create table inh_nn3 () inherits (inh_nn2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_nn4 () inherits (inh_nn1, inh_nn2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+alter table inh_nn1	-- test multicommand alter table while at it
+   alter constraint inh_nn1_f1_not_null inherit,
+   alter constraint inh_nn1_f1_not_null no inherit;
+select conrelid::regclass, conname, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3', 'inh_nn4')
+ order by 2, 1;
+ conrelid |       conname       | coninhcount | conislocal | connoinherit 
+----------+---------------------+-------------+------------+--------------
+ inh_nn1  | inh_nn1_f1_not_null |           0 | t          | t
+ inh_nn2  | inh_nn1_f1_not_null |           0 | t          | f
+ inh_nn3  | inh_nn1_f1_not_null |           1 | f          | f
+ inh_nn4  | inh_nn1_f1_not_null |           1 | t          | f
+(4 rows)
+
+drop table inh_nn1, inh_nn2, inh_nn3, inh_nn4;
+-- Test not null inherit constraint which already exists on child table.
+create table inh_nn1 (f1 int not null no inherit);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table inh_nn2 (f2 text, f3 int) inherits (inh_nn1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table inh_nn3 (f4 float, constraint nn3_f1 not null f1 no inherit) inherits (inh_nn1, inh_nn2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+NOTICE:  merging multiple inherited definitions of column "f1"
+select conrelid::regclass, conname, conkey, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3')
+ order by 2, 1;
+ conrelid |       conname       | conkey | coninhcount | conislocal | connoinherit 
+----------+---------------------+--------+-------------+------------+--------------
+ inh_nn1  | inh_nn1_f1_not_null | {1}    |           0 | t          | t
+ inh_nn3  | nn3_f1              | {1}    |           0 | t          | t
+(2 rows)
+
+-- error: inh_nn3 has an incompatible NO INHERIT constraint
+alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit;
+ERROR:  cannot change NO INHERIT status of NOT NULL constraint "nn3_f1" on relation "inh_nn3"
+alter table inh_nn3 alter constraint nn3_f1 inherit;
+alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit; -- now it works
+select conrelid::regclass, conname, conkey, coninhcount, conislocal, connoinherit
+ from pg_constraint where contype = 'n' and
+ conrelid::regclass::text in ('inh_nn1', 'inh_nn2', 'inh_nn3')
+ order by 2, 1;
+ conrelid |       conname       | conkey | coninhcount | conislocal | connoinherit 
+----------+---------------------+--------+-------------+------------+--------------
+ inh_nn1  | inh_nn1_f1_not_null | {1}    |           0 | t          | f
+ inh_nn2  | inh_nn1_f1_not_null | {1}    |           1 | f          | f
+ inh_nn3  | nn3_f1              | {1}    |           2 | t          | f
+(3 rows)
+
+drop table inh_nn1, inh_nn2, inh_nn3;
+-- Negative scenarios for alter constraint .. inherit.
+create table inh_nn1 (f1 int check(f1 > 5) primary key references inh_nn1, f2 int not null);
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+-- constraints other than not-null are not supported
+alter table inh_nn1 alter constraint inh_nn1_f1_check inherit;
+ERROR:  constraint "inh_nn1_f1_check" of relation "inh_nn1" is not a not-null constraint
+alter table inh_nn1 alter constraint inh_nn1_pkey inherit;
+ERROR:  constraint "inh_nn1_pkey" of relation "inh_nn1" is not a not-null constraint
+alter table inh_nn1 alter constraint inh_nn1_f1_fkey inherit;
+ERROR:  constraint "inh_nn1_f1_fkey" of relation "inh_nn1" is not a not-null constraint
+-- try to drop a nonexistant constraint
+alter table inh_nn1 alter constraint foo inherit;
+ERROR:  constraint "foo" of relation "inh_nn1" does not exist
+-- Can't modify inheritability of inherited constraints
+create table inh_nn2 () inherits (inh_nn1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+alter table inh_nn2 alter constraint inh_nn1_f2_not_null no inherit;
+ERROR:  cannot alter inherited constraint "inh_nn1_f2_not_null" on relation "inh_nn2"
+drop table inh_nn1, inh_nn2;
+--
 -- Mixed ownership inheritance tree
 --
 create role regress_alice;
@@ -2214,6 +3371,8 @@ grant all on schema public to regress_alice, regress_bob;
 grant regress_alice to regress_bob;
 set session authorization regress_alice;
 create table inh_parent (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set session authorization regress_bob;
 create table inh_child () inherits (inh_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2231,7 +3390,11 @@ drop role regress_alice, regress_bob;
 -- Check use of temporary tables with inheritance trees
 --
 create table inh_perm_parent (a1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table inh_temp_parent (a1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table inh_temp_child () inherits (inh_perm_parent); -- ok
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table inh_perm_child () inherits (inh_temp_parent); -- error
@@ -2268,6 +3431,8 @@ NOTICE:  drop cascades to table inh_temp_child_2
 create table list_parted (
 	a	varchar
 ) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_ab_cd partition of list_parted for values in ('ab', 'cd');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table part_ef_gh partition of list_parted for values in ('ef', 'gh');
@@ -2337,6 +3502,8 @@ create table range_list_parted (
 	a	int,
 	b	char(2)
 ) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_1_10 partition of range_list_parted for values from (1) to (10) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table part_1_10_ab partition of part_1_10 for values in ('ab');
@@ -2369,16 +3536,25 @@ explain (costs off) select * from range_list_parted;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on part_1_10_ab range_list_parted_1
+               Disabled: true
          ->  Seq Scan on part_1_10_cd range_list_parted_2
+               Disabled: true
          ->  Seq Scan on part_10_20_ab range_list_parted_3
+               Disabled: true
          ->  Seq Scan on part_10_20_cd range_list_parted_4
+               Disabled: true
          ->  Seq Scan on part_21_30_ab range_list_parted_5
+               Disabled: true
          ->  Seq Scan on part_21_30_cd range_list_parted_6
+               Disabled: true
          ->  Seq Scan on part_40_inf_ab range_list_parted_7
+               Disabled: true
          ->  Seq Scan on part_40_inf_cd range_list_parted_8
+               Disabled: true
          ->  Seq Scan on part_40_inf_null range_list_parted_9
+               Disabled: true
  Optimizer: Postgres query optimizer
-(12 rows)
+(21 rows)
 
 explain (costs off) select * from range_list_parted where a = 5;
                         QUERY PLAN                        
@@ -2386,11 +3562,13 @@ explain (costs off) select * from range_list_parted where a = 5;
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on part_1_10_ab range_list_parted_1
+               Disabled: true
                Filter: (a = 5)
          ->  Seq Scan on part_1_10_cd range_list_parted_2
+               Disabled: true
                Filter: (a = 5)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off) select * from range_list_parted where b = 'ab';
                          QUERY PLAN                         
@@ -2398,15 +3576,19 @@ explain (costs off) select * from range_list_parted where b = 'ab';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on part_1_10_ab range_list_parted_1
+               Disabled: true
                Filter: (b = 'ab'::bpchar)
          ->  Seq Scan on part_10_20_ab range_list_parted_2
+               Disabled: true
                Filter: (b = 'ab'::bpchar)
          ->  Seq Scan on part_21_30_ab range_list_parted_3
+               Disabled: true
                Filter: (b = 'ab'::bpchar)
          ->  Seq Scan on part_40_inf_ab range_list_parted_4
+               Disabled: true
                Filter: (b = 'ab'::bpchar)
  Optimizer: Postgres query optimizer
-(11 rows)
+(15 rows)
 
 explain (costs off) select * from range_list_parted where a between 3 and 23 and b in ('ab');
                               QUERY PLAN                               
@@ -2414,13 +3596,16 @@ explain (costs off) select * from range_list_parted where a between 3 and 23 and
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on part_1_10_ab range_list_parted_1
+               Disabled: true
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
          ->  Seq Scan on part_10_20_ab range_list_parted_2
+               Disabled: true
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
          ->  Seq Scan on part_21_30_ab range_list_parted_3
+               Disabled: true
                Filter: ((a >= 3) AND (a <= 23) AND (b = 'ab'::bpchar))
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 /* Should select no rows because range partition key cannot be null */
 explain (costs off) select * from range_list_parted where a is null;
@@ -2437,9 +3622,10 @@ explain (costs off) select * from range_list_parted where b is null;
 ------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on part_40_inf_null range_list_parted
+         Disabled: true
          Filter: (b IS NULL)
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 explain (costs off) select * from range_list_parted where a is not null and a < 67;
                           QUERY PLAN                          
@@ -2447,25 +3633,34 @@ explain (costs off) select * from range_list_parted where a is not null and a < 
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on part_1_10_ab range_list_parted_1
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_1_10_cd range_list_parted_2
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_10_20_ab range_list_parted_3
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_10_20_cd range_list_parted_4
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_21_30_ab range_list_parted_5
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_21_30_cd range_list_parted_6
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_40_inf_ab range_list_parted_7
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_40_inf_cd range_list_parted_8
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
          ->  Seq Scan on part_40_inf_null range_list_parted_9
+               Disabled: true
                Filter: ((a IS NOT NULL) AND (a < 67))
  Optimizer: Postgres query optimizer
-(21 rows)
+(30 rows)
 
 explain (costs off) select * from range_list_parted where a >= 30;
                           QUERY PLAN                          
@@ -2473,19 +3668,24 @@ explain (costs off) select * from range_list_parted where a >= 30;
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on part_40_inf_ab range_list_parted_1
+               Disabled: true
                Filter: (a >= 30)
          ->  Seq Scan on part_40_inf_cd range_list_parted_2
+               Disabled: true
                Filter: (a >= 30)
          ->  Seq Scan on part_40_inf_null range_list_parted_3
+               Disabled: true
                Filter: (a >= 30)
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 drop table list_parted;
 drop table range_list_parted;
 -- check that constraint exclusion is able to cope with the partition
 -- constraint emitted for multi-column range partitioned tables
 create table mcrparted (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mcrparted_def partition of mcrparted default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mcrparted0 partition of mcrparted for values from (minvalue, minvalue, minvalue) to (1, 1, 1);
@@ -2506,11 +3706,13 @@ explain (costs off) select * from mcrparted where a = 0;	-- scans mcrparted0, mc
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on mcrparted0 mcrparted_1
+               Disabled: true
                Filter: (a = 0)
          ->  Seq Scan on mcrparted_def mcrparted_2
+               Disabled: true
                Filter: (a = 0)
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off) select * from mcrparted where a = 10 and abs(b) < 5;	-- scans mcrparted1, mcrparted_def
                     QUERY PLAN                     
@@ -2518,11 +3720,13 @@ explain (costs off) select * from mcrparted where a = 10 and abs(b) < 5;	-- scan
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on mcrparted1 mcrparted_1
+               Disabled: true
                Filter: ((a = 10) AND (abs(b) < 5))
          ->  Seq Scan on mcrparted_def mcrparted_2
+               Disabled: true
                Filter: ((a = 10) AND (abs(b) < 5))
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 explain (costs off) select * from mcrparted where a = 10 and abs(b) = 5;	-- scans mcrparted1, mcrparted2, mcrparted_def
                     QUERY PLAN                     
@@ -2530,13 +3734,16 @@ explain (costs off) select * from mcrparted where a = 10 and abs(b) = 5;	-- scan
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on mcrparted1 mcrparted_1
+               Disabled: true
                Filter: ((a = 10) AND (abs(b) = 5))
          ->  Seq Scan on mcrparted2 mcrparted_2
+               Disabled: true
                Filter: ((a = 10) AND (abs(b) = 5))
          ->  Seq Scan on mcrparted_def mcrparted_3
+               Disabled: true
                Filter: ((a = 10) AND (abs(b) = 5))
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 explain (costs off) select * from mcrparted where abs(b) = 5;	-- scans all partitions
                     QUERY PLAN                     
@@ -2544,21 +3751,28 @@ explain (costs off) select * from mcrparted where abs(b) = 5;	-- scans all parti
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on mcrparted0 mcrparted_1
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted1 mcrparted_2
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted2 mcrparted_3
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted3 mcrparted_4
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted4 mcrparted_5
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted5 mcrparted_6
+               Disabled: true
                Filter: (abs(b) = 5)
          ->  Seq Scan on mcrparted_def mcrparted_7
+               Disabled: true
                Filter: (abs(b) = 5)
  Optimizer: Postgres query optimizer
-(17 rows)
+(24 rows)
 
 explain (costs off) select * from mcrparted where a > -1;	-- scans all partitions
                     QUERY PLAN                     
@@ -2566,30 +3780,38 @@ explain (costs off) select * from mcrparted where a > -1;	-- scans all partition
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Append
          ->  Seq Scan on mcrparted0 mcrparted_1
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted1 mcrparted_2
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted2 mcrparted_3
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted3 mcrparted_4
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted4 mcrparted_5
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted5 mcrparted_6
+               Disabled: true
                Filter: (a > '-1'::integer)
          ->  Seq Scan on mcrparted_def mcrparted_7
+               Disabled: true
                Filter: (a > '-1'::integer)
  Optimizer: Postgres query optimizer
-(17 rows)
+(24 rows)
 
 explain (costs off) select * from mcrparted where a = 20 and abs(b) = 10 and c > 10;	-- scans mcrparted4
                         QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on mcrparted4 mcrparted
+         Disabled: true
          Filter: ((c > 10) AND (a = 20) AND (abs(b) = 10))
  Optimizer: Postgres query optimizer
-(4 rows)
+(5 rows)
 
 explain (costs off) select * from mcrparted where a = 20 and c > 20; -- scans mcrparted3, mcrparte4, mcrparte5, mcrparted_def
                     QUERY PLAN                     
@@ -2597,19 +3819,25 @@ explain (costs off) select * from mcrparted where a = 20 and c > 20; -- scans mc
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Append
          ->  Seq Scan on mcrparted3 mcrparted_1
+               Disabled: true
                Filter: ((c > 20) AND (a = 20))
          ->  Seq Scan on mcrparted4 mcrparted_2
+               Disabled: true
                Filter: ((c > 20) AND (a = 20))
          ->  Seq Scan on mcrparted5 mcrparted_3
+               Disabled: true
                Filter: ((c > 20) AND (a = 20))
          ->  Seq Scan on mcrparted_def mcrparted_4
+               Disabled: true
                Filter: ((c > 20) AND (a = 20))
  Optimizer: Postgres query optimizer
-(11 rows)
+(15 rows)
 
 -- check that partitioned table Appends cope with being referenced in
 -- subplans
 create table parted_minmax (a int, b varchar(16)) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_minmax1 partition of parted_minmax for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create index parted_minmax1i on parted_minmax1 (a, b);
@@ -2756,6 +3984,8 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c;
 set enable_bitmapscan to off;
 set enable_sort to off;
 create table mclparted (a int) partition by list(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mclparted1 partition of mclparted for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mclparted2 partition of mclparted for values in(2);
@@ -2932,6 +4162,7 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c l
                      ->  Sort
                            Sort Key: mcrparted_1.a, (abs(mcrparted_1.b)), mcrparted_1.c
                            ->  Seq Scan on mcrparted0 mcrparted_1
+                                 Disabled: true
                                  Filter: (a < 20)
                      ->  Index Scan using mcrparted1_a_abs_c_idx on mcrparted1 mcrparted_2
                            Index Cond: (a < 20)
@@ -2940,7 +4171,7 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c l
                      ->  Index Scan using mcrparted3_a_abs_c_idx on mcrparted3 mcrparted_4
                            Index Cond: (a < 20)
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 set enable_bitmapscan = 0;
 -- Ensure Append node can be used when the partition is ordered by some
@@ -2962,6 +4193,8 @@ reset enable_bitmapscan;
 drop table mcrparted;
 -- Ensure LIST partitions allow an Append to be used instead of a MergeAppend
 create table bool_lp (b bool) partition by list(b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bool_lp_true partition of bool_lp for values in(true);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table bool_lp_false partition of bool_lp for values in(false);
@@ -2982,6 +4215,8 @@ explain (costs off) select * from bool_lp order by b;
 drop table bool_lp;
 -- Ensure const bool quals can be properly detected as redundant
 create table bool_rp (b bool, a int) partition by range(b,a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bool_rp_false_1k partition of bool_rp for values from (false,0) to (false,1000);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table bool_rp_true_1k partition of bool_rp for values from (true,0) to (true,1000);
@@ -3056,6 +4291,8 @@ drop table bool_rp;
 -- Ensure an Append scan is chosen when the partition order is a subset of
 -- the required order.
 create table range_parted (a int, b int, c int) partition by range(a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table range_parted1 partition of range_parted for values from (0,0) to (10,10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table range_parted2 partition of range_parted for values from (10,10) to (20,20);
@@ -3221,33 +4458,33 @@ INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '5');
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '5');
 -- insert with child check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', '10');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '10');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '10');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 1, 10).
 -- insert with child not null constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 1, null).
 -- insert with shared check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '5', '5');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '5', '5');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '5', '5');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 5, 5).
 -- within partition update without child check constraint violation
 BEGIN;
@@ -3257,13 +4494,13 @@ UPDATE errtst_parent SET data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- within partition update with child check constraint violation
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 1, 15).
 -- direct leaf partition update, without partition id violation
 BEGIN;
@@ -3273,13 +4510,13 @@ UPDATE errtst_child_reorder SET partid = 21 WHERE partid = 20;
 ROLLBACK;
 -- direct leaf partition update, with partition id violation
 UPDATE errtst_child_fastdef SET partid = partid + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 1, 5).
 UPDATE errtst_child_plaindef SET partid = partid + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 1, 5).
 UPDATE errtst_child_reorder SET partid = partid + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (5, 1, 30).
 -- partition move, without child check constraint violation
 BEGIN;
@@ -3289,16 +4526,56 @@ UPDATE errtst_parent SET partid = 0, data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- partition move, with child check constraint violation
 UPDATE errtst_parent SET partid = 10, data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.4:7004 pid=1599411)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET partid = 20, data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (20, 1, 15).
 UPDATE errtst_parent SET partid = 0, data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Failing row contains (0, 1, 15).
 -- partition move, without target partition
 UPDATE errtst_parent SET partid = 30, data = data + 10 WHERE partid = 20;
-ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.4:7003 pid=1599408)
+ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.2:7003 pid=2621777)
 DETAIL:  Partition key of the failing row contains (partid) = (30).
 DROP TABLE errtst_parent;
+-- Check that we have the correct tuples estimate for an appendrel
+create table tuplesest_parted (a int, b int, c float) partition by range(a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table tuplesest_parted1 partition of tuplesest_parted for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table tuplesest_parted2 partition of tuplesest_parted for values from (100) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table tuplesest_tab (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+insert into tuplesest_parted select i%200, i%300, i%400 from generate_series(1, 1000)i;
+insert into tuplesest_tab select i, i from generate_series(1, 100)i;
+analyze tuplesest_parted;
+analyze tuplesest_tab;
+explain (costs off)
+select * from tuplesest_tab join
+  (select b from tuplesest_parted where c < 100 group by b) sub
+  on tuplesest_tab.a = sub.b;
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Hash Join
+         Hash Cond: (tuplesest_parted.b = tuplesest_tab.a)
+         ->  HashAggregate
+               Group Key: tuplesest_parted.b
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: tuplesest_parted.b
+                     ->  Append
+                           ->  Seq Scan on tuplesest_parted1 tuplesest_parted_1
+                                 Filter: (c < '100'::double precision)
+                           ->  Seq Scan on tuplesest_parted2 tuplesest_parted_2
+                                 Filter: (c < '100'::double precision)
+         ->  Hash
+               ->  Seq Scan on tuplesest_tab
+ Optimizer: Postgres query optimizer
+(15 rows)
+
+drop table tuplesest_parted;
+drop table tuplesest_tab;

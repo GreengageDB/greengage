@@ -59,6 +59,8 @@ SELECT * FROM mvtest_tm ORDER BY type;
 -- create various views
 EXPLAIN (costs off)
   CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'type' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
                          QUERY PLAN                         
 ------------------------------------------------------------
  GroupAggregate
@@ -72,6 +74,8 @@ EXPLAIN (costs off)
 (8 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tvm AS SELECT * FROM mvtest_tv ORDER BY type;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'type' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mvtest_tvm;
  type | totamt 
 ------+--------
@@ -81,6 +85,7 @@ SELECT * FROM mvtest_tvm;
 (3 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tm;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_tvmm AS SELECT sum(totamt) AS grandtot FROM mvtest_tvm distributed by(grandtot);
 CREATE UNIQUE INDEX mvtest_tvmm_expr ON mvtest_tvmm ((grandtot > 0));
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
@@ -89,6 +94,8 @@ CREATE UNIQUE INDEX mvtest_tvmm_pred ON mvtest_tvmm (grandtot) WHERE grandtot < 
 CREATE VIEW mvtest_tvv AS SELECT sum(totamt) AS grandtot FROM mvtest_tv;
 EXPLAIN (costs off)
   CREATE MATERIALIZED VIEW mvtest_tvvm AS SELECT * FROM mvtest_tvv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'grandtot' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Redistribute Motion 1:3  (slice1; segments: 1)
@@ -105,8 +112,11 @@ EXPLAIN (costs off)
 (11 rows)
 
 CREATE MATERIALIZED VIEW mvtest_tvvm AS SELECT * FROM mvtest_tvv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'grandtot' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW mvtest_tvvmv AS SELECT * FROM mvtest_tvvm;
 CREATE MATERIALIZED VIEW mvtest_bb AS SELECT * FROM mvtest_tvvmv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE INDEX mvtest_aa ON mvtest_bb (grandtot);
 -- check that plans seem reasonable
 \d+ mvtest_tvm
@@ -120,6 +130,7 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
+Distributed by: (type)
 
 \d+ mvtest_tvm
                            Materialized view "public.mvtest_tvm"
@@ -132,6 +143,7 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
+Distributed by: (type)
 
 \d+ mvtest_tvvm
                            Materialized view "public.mvtest_tvvm"
@@ -141,6 +153,7 @@ View definition:
 View definition:
  SELECT grandtot
    FROM mvtest_tvv;
+Distributed by: (grandtot)
 
 \d+ mvtest_bb
                             Materialized view "public.mvtest_bb"
@@ -168,6 +181,7 @@ Indexes:
 View definition:
  SELECT sum(totamt) AS grandtot
    FROM mvtest_mvschema.mvtest_tvm;
+Distributed by: (grandtot)
 
 SET search_path = mvtest_mvschema, public;
 \d+ mvtest_tvm
@@ -181,6 +195,7 @@ View definition:
     totamt
    FROM mvtest_tv
   ORDER BY type;
+Distributed by: (type)
 
 -- modify the underlying table data
 INSERT INTO mvtest_t VALUES (6, 'z', 13);
@@ -202,6 +217,8 @@ SELECT * FROM mvtest_tvm ORDER BY type;
 (3 rows)
 
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_tm;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW mvtest_tvm;
 SELECT * FROM mvtest_tm ORDER BY type;
  type | totamt 
@@ -385,6 +402,7 @@ UNION ALL
    FROM mvtest_vt1;
 
 CREATE MATERIALIZED VIEW mv_test2 AS SELECT moo, 2*moo FROM mvtest_vt2 UNION ALL SELECT moo, 3*moo FROM mvtest_vt2;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 \d+ mv_test2
                             Materialized view "public.mv_test2"
   Column  |  Type   | Collation | Nullable | Default | Storage | Stats target | Description 
@@ -402,6 +420,7 @@ UNION ALL
 Distributed randomly
 
 CREATE MATERIALIZED VIEW mv_test3 AS SELECT * FROM mv_test2 WHERE moo = 12345;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 SELECT relispopulated FROM pg_class WHERE oid = 'mv_test3'::regclass;
  relispopulated 
 ----------------
@@ -415,11 +434,12 @@ drop cascades to materialized view mv_test2
 drop cascades to materialized view mv_test3
 -- test that duplicate values on unique index prevent refresh
 CREATE TABLE mvtest_foo(a, b) AS VALUES(1, 10);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a);
 CREATE UNIQUE INDEX ON mvtest_mv(a);
 INSERT INTO mvtest_foo SELECT * FROM mvtest_foo;
 REFRESH MATERIALIZED VIEW mvtest_mv;
-ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.2:7003 pid=2480240)
+ERROR:  could not create unique index "mvtest_mv_a_idx"  (seg1 172.17.0.2:7003 pid=2625740)
 DETAIL:  Key (a)=(1) is duplicated.
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
 ERROR:  new data for materialized view "mvtest_mv" contains duplicate rows without any null columns
@@ -428,18 +448,23 @@ DROP TABLE mvtest_foo CASCADE;
 NOTICE:  drop cascades to materialized view mvtest_mv
 -- make sure that all columns covered by unique indexes works
 CREATE TABLE mvtest_foo(a, b, c) AS VALUES(1, 2, 3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv AS SELECT * FROM mvtest_foo distributed by(a);
 CREATE UNIQUE INDEX ON mvtest_mv (a);
 INSERT INTO mvtest_foo VALUES(2, 3, 4);
 INSERT INTO mvtest_foo VALUES(3, 4, 5);
 REFRESH MATERIALIZED VIEW mvtest_mv;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP TABLE mvtest_foo CASCADE;
 NOTICE:  drop cascades to materialized view mvtest_mv
 -- allow subquery to reference unpopulated matview if WITH NO DATA is specified
 CREATE MATERIALIZED VIEW mvtest_mv1 AS SELECT 1 AS col1 WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv2 AS SELECT * FROM mvtest_mv1
   WHERE col1 = (SELECT LEAST(col1) FROM mvtest_mv1) WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 DROP MATERIALIZED VIEW mvtest_mv1 CASCADE;
 NOTICE:  drop cascades to materialized view mvtest_mv2
 -- make sure that types with unusual equality tests work
@@ -452,6 +477,8 @@ CREATE MATERIALIZED VIEW mvtest_boxmv AS SELECT * FROM mvtest_boxes distributed 
 CREATE UNIQUE INDEX mvtest_boxmv_id ON mvtest_boxmv (id);
 UPDATE mvtest_boxes SET b = '(2,2),(1,1)' WHERE id = 2;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_boxmv;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM mvtest_boxmv ORDER BY id;
  id |              b              
 ----+-----------------------------
@@ -464,20 +491,29 @@ DROP TABLE mvtest_boxes CASCADE;
 NOTICE:  drop cascades to materialized view mvtest_boxmv
 -- make sure that column names are handled correctly
 CREATE TABLE mvtest_v (i int, j int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE MATERIALIZED VIEW mvtest_mv_v (ii, jj, kk) AS SELECT i, j FROM mvtest_v; -- error
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ERROR:  too many column names were specified
 CREATE MATERIALIZED VIEW mvtest_mv_v (ii, jj) AS SELECT i, j FROM mvtest_v distributed by(ii); -- ok
 CREATE MATERIALIZED VIEW mvtest_mv_v_2 (ii) AS SELECT i, j FROM mvtest_v; -- ok
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv_v_3 (ii, jj, kk) AS SELECT i, j FROM mvtest_v WITH NO DATA; -- error
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ERROR:  too many column names were specified
 CREATE MATERIALIZED VIEW mvtest_mv_v_3 (ii, jj) AS SELECT i, j FROM mvtest_v WITH NO DATA; -- ok
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv_v_4 (ii) AS SELECT i, j FROM mvtest_v WITH NO DATA; -- ok
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 ALTER TABLE mvtest_v RENAME COLUMN i TO x;
 INSERT INTO mvtest_v values (1, 2);
 CREATE UNIQUE INDEX mvtest_mv_v_ii ON mvtest_mv_v (ii);
 REFRESH MATERIALIZED VIEW mvtest_mv_v;
 UPDATE mvtest_v SET j = 3 WHERE x = 1;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_v;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REFRESH MATERIALIZED VIEW mvtest_mv_v_2;
 REFRESH MATERIALIZED VIEW mvtest_mv_v_3;
 REFRESH MATERIALIZED VIEW mvtest_mv_v_4;
@@ -521,6 +557,7 @@ drop cascades to materialized view mvtest_mv_v_4
 -- so that we don't end up with unknown-type columns.
 CREATE MATERIALIZED VIEW mv_unspecified_types AS
   SELECT 42 as i, 42.5 as num, 'foo' as u, 'foo'::unknown as u2, null as n;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 \d+ mv_unspecified_types
                       Materialized view "public.mv_unspecified_types"
  Column |  Type   | Collation | Nullable | Default | Storage  | Stats target | Description 
@@ -552,25 +589,27 @@ create materialized view mvtest_error as select 1/0 as x with no data;
 ERROR:  division by zero
 -- make sure that matview rows can be referenced as source rows (bug #9398)
 CREATE TABLE mvtest_v AS SELECT generate_series(1,10) AS a;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv_v AS SELECT a FROM mvtest_v WHERE a <= 5;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 DELETE FROM mvtest_v WHERE EXISTS ( SELECT * FROM mvtest_mv_v WHERE mvtest_mv_v.a = mvtest_v.a );
 SELECT * FROM mvtest_v;
  a  
 ----
-  6
-  8
  10
-  7
+  6
   9
+  7
+  8
 (5 rows)
 
 SELECT * FROM mvtest_mv_v;
  a 
 ---
+ 2
  3
  5
  1
- 2
  4
 (5 rows)
 
@@ -590,6 +629,7 @@ CREATE TABLE mvtest_foo_data AS SELECT i,
   fipshash(random()::text) AS newdata2,
   fipshash(random()::text) AS diff
   FROM generate_series(1, 10) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 CREATE MATERIALIZED VIEW mvtest_mv_foo AS SELECT * FROM mvtest_foo_data distributed by(i);
 ERROR:  relation "mvtest_mv_foo" already exists
@@ -599,6 +639,8 @@ CREATE UNIQUE INDEX ON mvtest_mv_foo (i);
 RESET ROLE;
 REFRESH MATERIALIZED VIEW mvtest_mv_foo;
 REFRESH MATERIALIZED VIEW CONCURRENTLY mvtest_mv_foo;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP OWNED BY regress_user_mvtest CASCADE;
 DROP ROLE regress_user_mvtest;
 -- Concurrent refresh requires a unique index on the materialized
@@ -613,7 +655,8 @@ END;
 $$ LANGUAGE plpgsql;
 CREATE MATERIALIZED VIEW drop_idx_matview AS
   SELECT 1 as i WHERE mvtest_drop_the_index();
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 slice1 172.17.0.2:7002 pid=2480667)
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 slice1 172.17.0.2:7002 pid=2626236)
 CONTEXT:  SQL statement "DROP INDEX IF EXISTS mvtest_mvschema.mvtest_drop_idx"
 PL/pgSQL function mvtest_mvschema.mvtest_drop_the_index() line 3 at EXECUTE
 CREATE UNIQUE INDEX mvtest_drop_idx ON drop_idx_matview (i);
@@ -633,6 +676,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT mvtest_func();
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
  mvtest_func 
 -------------
  
@@ -680,15 +725,17 @@ GRANT ALL ON SCHEMA matview_schema TO public;
 SET SESSION AUTHORIZATION regress_matview_user;
 CREATE MATERIALIZED VIEW matview_schema.mv_withdata1 (a) AS
   SELECT generate_series(1, 10) WITH DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
   CREATE MATERIALIZED VIEW matview_schema.mv_withdata2 (a) AS
   SELECT generate_series(1, 10) WITH DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
- Result (actual rows=4.00 loops=1)
-   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=4.00 loops=1)
+ Result (actual rows=6.00 loops=1)
+   ->  Redistribute Motion 3:3  (slice1; segments: 3) (actual rows=6.00 loops=1)
          ->  Result (actual rows=10.00 loops=1)
-               One-Time Filter: (gp_execution_segment() = 0)
+               One-Time Filter: (gp_execution_segment() = 1)
                ->  ProjectSet (actual rows=10.00 loops=1)
                      ->  Result (actual rows=1.00 loops=1)
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -697,15 +744,17 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
 REFRESH MATERIALIZED VIEW matview_schema.mv_withdata2;
 CREATE MATERIALIZED VIEW matview_schema.mv_nodata1 (a) AS
   SELECT generate_series(1, 10) WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF)
   CREATE MATERIALIZED VIEW matview_schema.mv_nodata2 (a) AS
   SELECT generate_series(1, 10) WITH NO DATA;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Result (never executed)
    ->  Redistribute Motion 3:3  (slice1; segments: 3) (never executed)
          ->  Result (never executed)
-               One-Time Filter: (gp_execution_segment() = 2)
+               One-Time Filter: (gp_execution_segment() = 0)
                ->  ProjectSet (never executed)
                      ->  Result (never executed)
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -724,6 +773,7 @@ drop cascades to materialized view matview_schema.mv_nodata2
 DROP USER regress_matview_user;
 -- CREATE MATERIALIZED VIEW ... IF NOT EXISTS
 CREATE MATERIALIZED VIEW matview_ine_tab AS SELECT 1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 CREATE MATERIALIZED VIEW matview_ine_tab AS SELECT 1 / 0; -- error
 ERROR:  relation "matview_ine_tab" already exists
 CREATE MATERIALIZED VIEW IF NOT EXISTS matview_ine_tab AS

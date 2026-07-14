@@ -43,9 +43,29 @@
 -- m/^ +Extra Text: /
 -- m/^ +Executor Memory: /
 -- end_matchignore
+-- Helper function which can be used for masking out portions of EXPLAIN
+-- ANALYZE which could contain information that's not consistent on all
+-- platforms.
+create function explain_analyze(query text) returns setof text
+language plpgsql as
+$$
+declare
+    ln text;
+begin
+    for ln in
+        execute format('explain (analyze, costs off, summary off, timing off, buffers off) %s',
+            query)
+    loop
+        ln := regexp_replace(ln, 'Maximum Storage: \d+', 'Maximum Storage: N');
+        return next ln;
+    end loop;
+end;
+$$;
 -- Force generic plans to be used for all prepared statements in this file.
 set plan_cache_mode = force_generic_plan;
 create table lp (a char) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lp_default partition of lp default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table lp_ef partition of lp for values in ('e', 'f');
@@ -179,6 +199,8 @@ explain (costs off) select * from lp where a not in ('a', 'd');
 
 -- collation matches the partitioning collation, pruning works
 create table coll_pruning (a text collate "C") partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_a partition of coll_pruning for values in ('a');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_b partition of coll_pruning for values in ('b');
@@ -210,6 +232,8 @@ explain (costs off) select * from coll_pruning where a collate "POSIX" = 'a' col
 (9 rows)
 
 create table rlp (a int, b varchar) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rlp_default partition of rlp default partition by list (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp_default_default partition of rlp_default default;
@@ -225,6 +249,8 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp2 partition of rlp for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rlp3 (b varchar, a int) partition by list (b varchar_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: distribution policy must match the parent table.
 alter table rlp3 set distributed by (a);
 create table rlp3_default partition of rlp3 default;
@@ -800,6 +826,8 @@ explain (costs off) select * from rlp where (a = 1 and a = 3) or (a > 1 and a = 
 
 -- multi-column keys
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p_default partition of mc3p default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc3p0 partition of mc3p for values from (minvalue, minvalue, minvalue) to (1, 1, 1);
@@ -1120,6 +1148,8 @@ explain (costs off) select * from mc3p where (a = 1 and abs(b) = 1) or (a = 10 a
 
 -- a simpler multi-column keys case
 create table mc2p (a int, b int) partition by range (a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc2p_default partition of mc2p default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mc2p0 partition of mc2p for values from (minvalue, minvalue) to (1, minvalue);
@@ -1234,6 +1264,8 @@ explain (costs off) select * from mc2p where b is null;
 
 -- boolean partitioning
 create table boolpart (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolpart_default partition of boolpart default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolpart_t partition of boolpart for values in ('true');
@@ -1343,9 +1375,9 @@ select * from boolpart where not a = false;
 select * from boolpart where a is true or a is not true;
  a 
 ---
+ 
  f
  t
- 
 (3 rows)
 
 select * from boolpart where a is not true;
@@ -1435,8 +1467,8 @@ select * from boolpart where a is not true and a is not false;
 select * from boolpart where a is not false;
  a 
 ---
- t
  
+ t
 (2 rows)
 
 select * from boolpart where a is not unknown;
@@ -1480,6 +1512,8 @@ explain (costs off) select * from boolpart where a is true and a is unknown;
 -- inverse boolean partitioning - a seemingly unlikely design, but we've got
 -- code for it, so we'd better test it.
 create table iboolpart (a bool) partition by list ((not a));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table iboolpart_default partition of iboolpart default;
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table iboolpart_f partition of iboolpart for values in ('true');
@@ -1664,11 +1698,13 @@ select * from iboolpart where a is not true and a is not false;
 select * from iboolpart where a is not false;
  a 
 ---
- 
  t
+ 
 (2 rows)
 
 create table boolrangep (a bool, b bool, c int) partition by range (a,b,c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolrangep_tf partition of boolrangep for values from ('true', 'false', 0) to ('true', 'false', 100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolrangep_ft partition of boolrangep for values from ('false', 'true', 0) to ('false', 'true', 100);
@@ -1721,6 +1757,8 @@ explain (costs off)  select * from boolrangep where a is not false and not b and
 
 -- test scalar-to-array operators
 create table coercepart (a varchar) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coercepart_ab partition of coercepart for values in ('ab');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coercepart_bc partition of coercepart for values in ('bc');
@@ -1905,6 +1943,7 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Nested Loop
+   Disabled: true
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Append
                ->  Seq Scan on mc2p1 t1_1
@@ -1939,7 +1978,7 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
                                        ->  Seq Scan on mc3p_default t2_9
                                              Filter: ((c = 1) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
-(35 rows)
+(36 rows)
 
 -- pruning should work fine, because values for a prefix of keys (a, b) are
 -- available
@@ -1947,6 +1986,7 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Nested Loop
+   Disabled: true
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Append
                ->  Seq Scan on mc2p1 t1_1
@@ -1969,7 +2009,7 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
                                        ->  Seq Scan on mc3p_default t2_3
                                              Filter: ((a = 1) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
-(23 rows)
+(24 rows)
 
 -- also here, because values for all keys are provided
 explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2 where t2.a = 1 and abs(t2.b) = 1 and t2.c = 1) s where t1.a = 1;
@@ -1977,6 +2017,7 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
 --------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Disabled: true
          ->  Redistribute Motion 1:3  (slice2; segments: 1)
                Hash Key: 1
                ->  Aggregate
@@ -1991,13 +2032,15 @@ explain (costs off) select * from mc2p t1, lateral (select count(*) from mc3p t2
                ->  Seq Scan on mc2p_default t1_3
                      Filter: (a = 1)
  Optimizer: Postgres query optimizer
-(16 rows)
+(17 rows)
 
 --
 -- pruning with clauses containing <> operator
 --
 -- doesn't prune range partitions
 create table rp (a int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp0 partition of rp for values from (minvalue) to (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp1 partition of rp for values from (1) to (2);
@@ -2073,6 +2116,8 @@ explain (costs off) select * from rlp where a = 15 and b <> 'ab' and b <> 'cd' a
 -- different collations for different keys with same expression
 --
 create table coll_pruning_multi (a text) partition by range (substr(a, 1) collate "POSIX", substr(a, 1) collate "C");
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table coll_pruning_multi1 partition of coll_pruning_multi for values from ('a', 'a') to ('a', 'e');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table coll_pruning_multi2 partition of coll_pruning_multi for values from ('a', 'e') to ('a', 'z');
@@ -2121,6 +2166,8 @@ explain (costs off) select * from coll_pruning_multi where substr(a, 1) = 'e' co
 -- LIKE operators don't prune
 --
 create table like_op_noprune (a text) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table like_op_noprune1 partition of like_op_noprune for values in ('ABC');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table like_op_noprune2 partition of like_op_noprune for values in ('BCD');
@@ -2139,6 +2186,8 @@ explain (costs off) select * from like_op_noprune where a like '%BC';
 -- tests wherein clause value requires a cross-type comparison function
 --
 create table lparted_by_int2 (a smallint) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lparted_by_int2_1 partition of lparted_by_int2 for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table lparted_by_int2_16384 partition of lparted_by_int2 for values in (16384);
@@ -2152,6 +2201,8 @@ explain (costs off) select * from lparted_by_int2 where a = 100_000_000_000_000;
 (3 rows)
 
 create table rparted_by_int2 (a smallint) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rparted_by_int2_1 partition of rparted_by_int2 for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rparted_by_int2_16384 partition of rparted_by_int2 for values from (10) to (16384);
@@ -2179,6 +2230,42 @@ explain (costs off) select * from rparted_by_int2 where a > 100_000_000_000_000;
 (5 rows)
 
 drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, iboolpart, boolrangep, rp, coll_pruning_multi, like_op_noprune, lparted_by_int2, rparted_by_int2;
+-- check that AlternativeSubPlan within a pruning expression gets cleaned up
+create table asptab (id int primary key) partition by range (id);
+create table asptab0 partition of asptab for values from (0) to (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table asptab1 partition of asptab for values from (1) to (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
+explain (costs off)
+select * from
+  (select exists (select 1 from int4_tbl tinner where f1 = touter.f1) as b
+   from int4_tbl touter) ss,
+  asptab
+where asptab.id > ss.b::int;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int4_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Join Filter: true
+         ->  Broadcast Motion 3:3  (slice2; segments: 3)
+               ->  GroupAggregate
+                     Group Key: int4_tbl.f1, int4_tbl.ctid, int4_tbl.gp_segment_id, (true)
+                     ->  Sort
+                           Sort Key: int4_tbl.f1, int4_tbl.ctid, int4_tbl.gp_segment_id, (true)
+                           ->  Hash Left Join
+                                 Hash Cond: (int4_tbl.f1 = int4_tbl_1.f1)
+                                 ->  Seq Scan on int4_tbl
+                                 ->  Hash
+                                       ->  Seq Scan on int4_tbl int4_tbl_1
+         ->  Dynamic Index Scan on asptab_pkey on asptab
+               Index Cond: (id > int4((CASE WHEN (NOT ((true) IS NULL)) THEN true ELSE false END)))
+               Number of partitions to scan: 2 (out of 2)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
+
+drop table asptab;
 --
 -- Test Partition pruning for HASH partitioning
 --
@@ -2187,6 +2274,8 @@ drop table lp, coll_pruning, rlp, mc3p, mc2p, boolpart, iboolpart, boolrangep, r
 -- part_test_int4_ops and part_test_text_ops in test_setup.sql.
 --
 create table hp (a int, b text, c int) partition by hash (a part_test_int4_ops, b part_test_text_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp0 partition of hp for values with (modulus 4, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp3 partition of hp for values with (modulus 4, remainder 3);
@@ -2204,12 +2293,12 @@ insert into hp values (1, 'abcde');
 select tableoid::regclass, * from hp;
  tableoid | a |   b   | c 
 ----------+---+-------+---
- hp0      |   |       |  
- hp2      |   | xxx   |  
- hp3      | 2 | xxx   |  
  hp0      | 1 | xxx   |  
  hp1      | 1 |       |  
  hp2      | 1 | abcde |  
+ hp0      |   |       |  
+ hp2      |   | xxx   |  
+ hp3      | 2 | xxx   |  
 (6 rows)
 
 -- partial keys won't prune, nor would non-equality conditions
@@ -2431,6 +2520,8 @@ explain (costs off) select * from hp where a = 1 and b = 'abcde' and
 -- Test runtime partition pruning
 --
 create table ab (a int not null, b int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ab_a2 partition of ab for values in(2) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table ab_a2_b1 partition of ab_a2 for values in (1);
@@ -2461,38 +2552,38 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 set enable_indexonlyscan = off;
 prepare ab_q1 (int, int, int) as
 select * from ab where a between $1 and $2 and b <= $3;
-explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 2, 3);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q1 (2, 2, 3);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b3 ab_3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b3 ab_3 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
  Optimizer: Postgres query optimizer
 (10 rows)
 
-explain (analyze, costs off, summary off, timing off) execute ab_q1 (1, 2, 3);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q1 (1, 2, 3);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 3
-         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a1_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a1_b3 ab_3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b3 ab_3 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b2 ab_5 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_5 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
-         ->  Seq Scan on ab_a2_b3 ab_6 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b3 ab_6 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b <= $3))
  Optimizer: Postgres query optimizer
 (16 rows)
@@ -2501,32 +2592,32 @@ deallocate ab_q1;
 -- Runtime pruning after optimizer pruning
 prepare ab_q1 (int, int) as
 select a from ab where a between $1 and $2 and b < 3;
-explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 2);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q1 (2, 2);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 4
-         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
  Optimizer: Postgres query optimizer
 (8 rows)
 
-explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 4);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q1 (2, 4);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 2
-         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a3_b1 ab_3 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_3 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
-         ->  Seq Scan on ab_a3_b2 ab_4 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b2 ab_4 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < 3))
  Optimizer: Postgres query optimizer
 (12 rows)
@@ -2535,17 +2626,17 @@ explain (analyze, costs off, summary off, timing off) execute ab_q1 (2, 4);
 -- different levels of partitioning.
 prepare ab_q2 (int, int) as
 select a from ab where a between $1 and $2 and b < (select 3);
-explain (analyze, costs off, summary off, timing off) execute ab_q2 (2, 2);
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q2 (2, 2);
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < (InitPlan 1).col1))
-         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((a >= $1) AND (a <= $2) AND (b < (InitPlan 1).col1))
          ->  Seq Scan on ab_a2_b3 ab_3 (never executed)
                Filter: ((a >= $1) AND (a <= $2) AND (b < (InitPlan 1).col1))
@@ -2555,17 +2646,17 @@ explain (analyze, costs off, summary off, timing off) execute ab_q2 (2, 2);
 -- As above, but swap the PARAM_EXEC Param to the first partition level
 prepare ab_q3 (int, int) as
 select a from ab where b between $1 and $2 and a < (select 3);
-explain (analyze, costs off, summary off, timing off) execute ab_q3 (2, 2);
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q3 (2, 2);
                                  QUERY PLAN                                  
 -----------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 6
-         ->  Seq Scan on ab_a1_b2 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b2 ab_1 (actual rows=0.00 loops=1)
                Filter: ((b >= $1) AND (b <= $2) AND (a < (InitPlan 1).col1))
-         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b2 ab_2 (actual rows=0.00 loops=1)
                Filter: ((b >= $1) AND (b <= $2) AND (a < (InitPlan 1).col1))
          ->  Seq Scan on ab_a3_b2 ab_3 (never executed)
                Filter: ((b >= $1) AND (b <= $2) AND (a < (InitPlan 1).col1))
@@ -2600,6 +2691,8 @@ deallocate hp_q1;
 drop table hp;
 -- Test a backwards Append scan
 create table list_part (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table list_part1 partition of list_part for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table list_part2 partition of list_part for values in (2);
@@ -2623,33 +2716,33 @@ begin;
 -- Test run-time pruning using stable functions
 create function list_part_fn(int) returns int as $$ begin return $1; end;$$ language plpgsql stable;
 -- Ensure pruning works using a stable function containing no Vars
-explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(1);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1) (actual rows=1 loops=1)
-   ->  Dynamic Seq Scan on list_part (actual rows=1 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) select * from list_part where a = list_part_fn(1);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1) (actual rows=1.00 loops=1)
+   ->  Dynamic Seq Scan on list_part (actual rows=1.00 loops=1)
          Number of partitions to scan: 1 (out of 4)
          Filter: (a = 1)
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
 -- Ensure pruning does not take place when the function has a Var parameter
-explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(a);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=4 loops=1)
-   ->  Dynamic Seq Scan on list_part (actual rows=3 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) select * from list_part where a = list_part_fn(a);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=4.00 loops=1)
+   ->  Dynamic Seq Scan on list_part (actual rows=3.00 loops=1)
          Number of partitions to scan: 4 (out of 4)
          Filter: (a = list_part_fn(a))
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
 -- Ensure pruning does not take place when the expression contains a Var.
-explain (analyze, costs off, summary off, timing off) select * from list_part where a = list_part_fn(1) + a;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on list_part (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) select * from list_part where a = list_part_fn(1) + a;
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on list_part (actual rows=0.00 loops=1)
          Number of partitions to scan: 4 (out of 4)
          Filter: (a = (1 + a))
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -2673,12 +2766,16 @@ declare
     ln text;
 begin
     for ln in
-        execute format('explain (analyze, costs off, summary off, timing off) %s',
+        execute format('explain (analyze, costs off, summary off, timing off, buffers off) %s',
             $1)
     loop
         ln := regexp_replace(ln, 'Workers Launched: \d+', 'Workers Launched: N');
-        ln := regexp_replace(ln, 'actual rows=\d+ loops=\d+', 'actual rows=N loops=N');
+        ln := regexp_replace(ln, 'actual rows=\d+(?:\.\d+)? loops=\d+', 'actual rows=N loops=N');
         ln := regexp_replace(ln, 'Rows Removed by Filter: \d+', 'Rows Removed by Filter: N');
+        perform regexp_matches(ln, 'Index Searches: \d+');
+        if found then
+          continue;
+        end if;
         return next ln;
     end loop;
 end;
@@ -2785,6 +2882,8 @@ select explain_parallel_append('select count(*) from ab where (a = (select 1) or
 
 -- Test pruning during parallel nested loop query
 create table lprt_a (a int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Insert some values we won't find in ab
 insert into lprt_a select 0 from generate_series(1,100);
 -- and insert some values that we should find.
@@ -2809,6 +2908,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
+                     Disabled: true
                      Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
@@ -2834,7 +2934,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{0,0,1}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(30 rows)
 
 -- Ensure the same partitions are pruned when we make the nested loop
 -- parameter an Expr rather than a plain Param.
@@ -2845,6 +2945,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Nested Loop (actual rows=N loops=N)
+                     Disabled: true
                      ->  Redistribute Motion 1:3  (slice2; segments: 1) (actual rows=N loops=N)
                            Hash Key: (a.a + 0)
                            ->  Seq Scan on lprt_a a (actual rows=N loops=N)
@@ -2869,7 +2970,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                            ->  Index Scan using ab_a3_b3_a_idx on ab_a3_b3 ab_9 (never executed)
                                  Index Cond: (a = (a.a + 0))
  Optimizer: Postgres query optimizer
-(28 rows)
+(29 rows)
 
 insert into lprt_a values(3),(3);
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 3)');
@@ -2879,6 +2980,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 2:1  (slice1; segments: 2) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
+                     Disabled: true
                      Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
@@ -2916,7 +3018,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,3}'::integer[]))
  Optimizer: Postgres query optimizer
-(41 rows)
+(42 rows)
 
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
                                         explain_parallel_append                                        
@@ -2925,6 +3027,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
+                     Disabled: true
                      Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
@@ -2950,7 +3053,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(30 rows)
 
 delete from lprt_a where a = 1;
 select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on ab.a = a.a where a.a in(1, 0, 0)');
@@ -2960,6 +3063,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
    ->  Gather Motion 1:1  (slice1; segments: 1) (actual rows=N loops=N)
          ->  Partial Aggregate (actual rows=N loops=N)
                ->  Merge Join (actual rows=N loops=N)
+                     Disabled: true
                      Merge Cond: (ab.a = a.a)
                      ->  Sort (actual rows=N loops=N)
                            Sort Key: ab.a
@@ -2985,7 +3089,7 @@ select explain_parallel_append('select avg(ab.a) from ab inner join lprt_a a on 
                                  ->  Seq Scan on lprt_a a (actual rows=N loops=N)
                                        Filter: (a = ANY ('{1,0,0}'::integer[]))
  Optimizer: Postgres query optimizer
-(29 rows)
+(30 rows)
 
 reset enable_hashjoin;
 reset enable_mergejoin;
@@ -2995,168 +3099,185 @@ reset parallel_tuple_cost;
 reset min_parallel_table_scan_size;
 reset max_parallel_workers_per_gather;
 -- Test run-time partition pruning with an initplan
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from ab where a = (select max(a) from lprt_a) and b = (select max(a)-1 from lprt_a);
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Finalize Aggregate (actual rows=1 loops=1)
-           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
+     ->  Finalize Aggregate (actual rows=1.00 loops=1)
+           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3.00 loops=1)
                  ->  Partial Aggregate (never executed)
                        ->  Seq Scan on lprt_a (never executed)
    InitPlan 2  (slice4)
-     ->  Finalize Aggregate (actual rows=1 loops=1)
-           ->  Gather Motion 3:1  (slice5; segments: 3) (actual rows=3 loops=1)
+     ->  Finalize Aggregate (actual rows=1.00 loops=1)
+           ->  Gather Motion 3:1  (slice5; segments: 3) (actual rows=3.00 loops=1)
                  ->  Partial Aggregate (never executed)
                        ->  Seq Scan on lprt_a lprt_a_1 (never executed)
-   ->  Append (actual rows=0 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a1_b1_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a2_b1 ab_4 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a2_b1_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a2_b2 ab_5 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a2_b2_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a2_b3 ab_6 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a2_b3_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a3_b1 ab_7 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a3_b1_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
-         ->  Bitmap Heap Scan on ab_a3_b2 ab_8 (actual rows=0 loops=1)
+                     Index Searches: 0
+         ->  Bitmap Heap Scan on ab_a3_b2 ab_8 (actual rows=0.00 loops=1)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
-               ->  Bitmap Index Scan on ab_a3_b2_a_idx (actual rows=0 loops=1)
+               ->  Bitmap Index Scan on ab_a3_b2_a_idx (actual rows=0.00 loops=1)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
          ->  Bitmap Heap Scan on ab_a3_b3 ab_9 (never executed)
                Recheck Cond: (a = (InitPlan 1).col1)
                Filter: (b = (InitPlan 2).col1)
                ->  Bitmap Index Scan on ab_a3_b3_a_idx (never executed)
                      Index Cond: (a = (InitPlan 1).col1)
+                     Index Searches: 0
  Optimizer: Postgres query optimizer
-(58 rows)
+(67 rows)
 
 -- Test run-time partition pruning with UNION ALL parents
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from (select * from ab where a = 1 union all select * from ab) ab where b = (select 1);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
-         ->  Append (actual rows=0 loops=1)
-               ->  Bitmap Heap Scan on ab_a1_b1 ab_11 (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
+         ->  Append (actual rows=0.00 loops=1)
+               ->  Bitmap Heap Scan on ab_a1_b1 ab_11 (actual rows=0.00 loops=1)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
-                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
+                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0.00 loops=1)
                            Index Cond: (a = 1)
+                           Index Searches: 0
                ->  Bitmap Heap Scan on ab_a1_b2 ab_12 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
                      ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                            Index Cond: (a = 1)
+                           Index Searches: 0
                ->  Bitmap Heap Scan on ab_a1_b3 ab_13 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
-         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
+                           Index Searches: 0
+         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a1_b2 ab_2 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a1_b3 ab_3 (never executed)
                Filter: (b = (InitPlan 1).col1)
-         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a2_b2 ab_5 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a2_b3 ab_6 (never executed)
                Filter: (b = (InitPlan 1).col1)
-         ->  Seq Scan on ab_a3_b1 ab_7 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_7 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a3_b2 ab_8 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a3_b3 ab_9 (never executed)
                Filter: (b = (InitPlan 1).col1)
  Optimizer: Postgres query optimizer
-(39 rows)
+(42 rows)
 
 -- A case containing a UNION ALL with a non-partitioned child.
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from (select * from ab where a = 1 union all (values(10,5)) union all select * from ab) ab where b = (select 1);
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
-         ->  Append (actual rows=0 loops=1)
-               ->  Bitmap Heap Scan on ab_a1_b1 ab_11 (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
+         ->  Append (actual rows=0.00 loops=1)
+               ->  Bitmap Heap Scan on ab_a1_b1 ab_11 (actual rows=0.00 loops=1)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
-                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
+                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0.00 loops=1)
                            Index Cond: (a = 1)
+                           Index Searches: 0
                ->  Bitmap Heap Scan on ab_a1_b2 ab_12 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
                      ->  Bitmap Index Scan on ab_a1_b2_a_idx (never executed)
                            Index Cond: (a = 1)
+                           Index Searches: 0
                ->  Bitmap Heap Scan on ab_a1_b3 ab_13 (never executed)
                      Recheck Cond: (a = 1)
                      Filter: (b = (InitPlan 1).col1)
                      ->  Bitmap Index Scan on ab_a1_b3_a_idx (never executed)
                            Index Cond: (a = 1)
-         ->  Result (actual rows=0 loops=1)
+                           Index Searches: 0
+         ->  Result (actual rows=0.00 loops=1)
                One-Time Filter: (gp_execution_segment() = 2)
-               ->  Result (actual rows=0 loops=1)
+               ->  Result (actual rows=0.00 loops=1)
                      One-Time Filter: (5 = (InitPlan 1).col1)
-         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a1_b1 ab_1 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a1_b2 ab_2 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a1_b3 ab_3 (never executed)
                Filter: (b = (InitPlan 1).col1)
-         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a2_b1 ab_4 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a2_b2 ab_5 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a2_b3 ab_6 (never executed)
                Filter: (b = (InitPlan 1).col1)
-         ->  Seq Scan on ab_a3_b1 ab_7 (actual rows=0 loops=1)
+         ->  Seq Scan on ab_a3_b1 ab_7 (actual rows=0.00 loops=1)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a3_b2 ab_8 (never executed)
                Filter: (b = (InitPlan 1).col1)
          ->  Seq Scan on ab_a3_b3 ab_9 (never executed)
                Filter: (b = (InitPlan 1).col1)
  Optimizer: Postgres query optimizer
-(43 rows)
+(46 rows)
 
 -- Another UNION ALL test, but containing a mix of exec init and exec run-time pruning.
 create table xy_1 (x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into xy_1 values(100,-10);
 set enable_bitmapscan = 0;
 set enable_indexscan = 0;
@@ -3169,13 +3290,13 @@ union all
 	select tableoid::regclass,a,b from ab
 ) ab where a = $1 and b = (select -10);
 -- Ensure the xy_1 subplan is not pruned.
-explain (analyze, costs off, summary off, timing off) execute ab_q6(1);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute ab_q6(1);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 12
          ->  Seq Scan on ab_a1_b1 ab_1 (never executed)
                Filter: ((a = $1) AND (b = (InitPlan 1).col1))
@@ -3183,7 +3304,7 @@ explain (analyze, costs off, summary off, timing off) execute ab_q6(1);
                Filter: ((a = $1) AND (b = (InitPlan 1).col1))
          ->  Seq Scan on ab_a1_b3 ab_3 (never executed)
                Filter: ((a = $1) AND (b = (InitPlan 1).col1))
-         ->  Seq Scan on xy_1 (actual rows=0 loops=1)
+         ->  Seq Scan on xy_1 (actual rows=0.00 loops=1)
                Filter: ((x = $1) AND (y = (InitPlan 1).col1))
          ->  Seq Scan on ab_a1_b1 ab_4 (never executed)
                Filter: ((a = $1) AND (b = (InitPlan 1).col1))
@@ -3211,44 +3332,51 @@ deallocate ab_q5;
 deallocate ab_q6;
 -- UPDATE on a partition subtree has been seen to have problems.
 insert into ab values (1,2);
-explain (analyze, costs off, summary off, timing off)
-update ab_a1 set b = 3 from ab where ab.a = 1 and ab.a = ab_a1.a;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
- Update on ab_a1 (actual rows=0 loops=1)
+select explain_analyze('
+update ab_a1 set b = 3 from ab where ab.a = 1 and ab.a = ab_a1.a;');
+                                       explain_analyze                                        
+----------------------------------------------------------------------------------------------
+ Update on ab_a1 (actual rows=0.00 loops=1)
    Update on ab_a1_b1 ab_a1_1
    Update on ab_a1_b2 ab_a1_2
    Update on ab_a1_b3 ab_a1_3
-   ->  Nested Loop (actual rows=1 loops=1)
-         ->  Append (actual rows=1 loops=1)
-               ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_1 (actual rows=0 loops=1)
+   ->  Nested Loop (actual rows=1.00 loops=1)
+         Disabled: true
+         ->  Append (actual rows=1.00 loops=1)
+               ->  Bitmap Heap Scan on ab_a1_b1 ab_a1_1 (actual rows=0.00 loops=1)
                      Recheck Cond: (a = 1)
-                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
+                     ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0.00 loops=1)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_2 (actual rows=1 loops=1)
+                           Index Searches: 0
+               ->  Bitmap Heap Scan on ab_a1_b2 ab_a1_2 (actual rows=1.00 loops=1)
                      Recheck Cond: (a = 1)
-                     ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1 loops=1)
+                     ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1.00 loops=1)
                            Index Cond: (a = 1)
-               ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_3 (actual rows=0 loops=1)
+                           Index Searches: 0
+               ->  Bitmap Heap Scan on ab_a1_b3 ab_a1_3 (actual rows=0.00 loops=1)
                      Recheck Cond: (a = 1)
-                     ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
+                     ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1.00 loops=1)
                            Index Cond: (a = 1)
-         ->  Materialize (actual rows=1 loops=1)
-               ->  Append (actual rows=1 loops=1)
-                     ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=0 loops=1)
+                           Index Searches: 0
+         ->  Materialize (actual rows=1.00 loops=1)
+               ->  Append (actual rows=1.00 loops=1)
+                     ->  Bitmap Heap Scan on ab_a1_b1 ab_1 (actual rows=0.00 loops=1)
                            Recheck Cond: (a = 1)
-                           ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0 loops=1)
+                           ->  Bitmap Index Scan on ab_a1_b1_a_idx (actual rows=0.00 loops=1)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (actual rows=1 loops=1)
+                                 Index Searches: 0
+                     ->  Bitmap Heap Scan on ab_a1_b2 ab_2 (actual rows=1.00 loops=1)
                            Recheck Cond: (a = 1)
-                           ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1 loops=1)
+                           ->  Bitmap Index Scan on ab_a1_b2_a_idx (actual rows=1.00 loops=1)
                                  Index Cond: (a = 1)
-                     ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (actual rows=0 loops=1)
+                                 Index Searches: 0
+                     ->  Bitmap Heap Scan on ab_a1_b3 ab_3 (actual rows=0.00 loops=1)
                            Recheck Cond: (a = 1)
-                           ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1 loops=1)
+                           ->  Bitmap Index Scan on ab_a1_b3_a_idx (actual rows=1.00 loops=1)
                                  Index Cond: (a = 1)
+                                 Index Searches: 0
  Optimizer: Postgres query optimizer
-(33 rows)
+(40 rows)
 
 table ab;
  a | b 
@@ -3259,49 +3387,54 @@ table ab;
 -- Test UPDATE where source relation has run-time pruning enabled
 truncate ab;
 insert into ab values (1, 1), (1, 2), (1, 3), (2, 1);
-explain (analyze, costs off, summary off, timing off)
-update ab_a1 set b = 3 from ab_a2 where ab_a2.b = (select 1);
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Update on ab_a1 (actual rows=0 loops=1)
+select explain_analyze('
+update ab_a1 set b = 3 from ab_a2 where ab_a2.b = (select 1);');
+                                  explain_analyze                                   
+------------------------------------------------------------------------------------
+ Update on ab_a1 (actual rows=0.00 loops=1)
    Update on ab_a1_b1 ab_a1_1
    Update on ab_a1_b2 ab_a1_2
    Update on ab_a1_b3 ab_a1_3
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Nested Loop (actual rows=3 loops=1)
-         ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=1 loops=1)
-               ->  Append (actual rows=1 loops=1)
-                     ->  Seq Scan on ab_a2_b1 ab_a2_1 (actual rows=1 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Nested Loop (actual rows=3.00 loops=1)
+         Disabled: true
+         ->  Broadcast Motion 3:3  (slice1; segments: 3) (actual rows=1.00 loops=1)
+               ->  Append (actual rows=1.00 loops=1)
+                     ->  Seq Scan on ab_a2_b1 ab_a2_1 (actual rows=1.00 loops=1)
                            Filter: (b = (InitPlan 1).col1)
                      ->  Seq Scan on ab_a2_b2 ab_a2_2 (never executed)
                            Filter: (b = (InitPlan 1).col1)
                      ->  Seq Scan on ab_a2_b3 ab_a2_3 (never executed)
                            Filter: (b = (InitPlan 1).col1)
-         ->  Materialize (actual rows=3 loops=1)
-               ->  Append (actual rows=3 loops=1)
-                     ->  Seq Scan on ab_a1_b1 ab_a1_1 (actual rows=1 loops=1)
-                     ->  Seq Scan on ab_a1_b2 ab_a1_2 (actual rows=1 loops=1)
-                     ->  Seq Scan on ab_a1_b3 ab_a1_3 (actual rows=1 loops=1)
+         ->  Materialize (actual rows=3.00 loops=1)
+               ->  Append (actual rows=3.00 loops=1)
+                     ->  Seq Scan on ab_a1_b1 ab_a1_1 (actual rows=1.00 loops=1)
+                     ->  Seq Scan on ab_a1_b2 ab_a1_2 (actual rows=1.00 loops=1)
+                     ->  Seq Scan on ab_a1_b3 ab_a1_3 (actual rows=1.00 loops=1)
  Optimizer: Postgres query optimizer
-(21 rows)
+(22 rows)
 
 select tableoid::regclass, * from ab;
  tableoid | a | b 
 ----------+---+---
- ab_a1_b3 | 1 | 3
- ab_a1_b3 | 1 | 3
- ab_a1_b3 | 1 | 3
  ab_a2_b1 | 2 | 1
+ ab_a1_b3 | 1 | 3
+ ab_a1_b3 | 1 | 3
+ ab_a1_b3 | 1 | 3
 (4 rows)
 
 drop table ab, lprt_a;
 -- Join
 create table tbl1(col1 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tbl1 values (501), (505);
 analyze tbl1;
 -- Basic table
 create table tprt (col1 int) partition by range (col1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tprt_1 partition of tprt for values from (1) to (501);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table tprt_2 partition of tprt for values from (501) to (1001);
@@ -3324,32 +3457,32 @@ insert into tprt values (10), (20), (501), (502), (505), (1001), (4500);
 set enable_hashjoin = off;
 set enable_mergejoin = off;
 set enable_seqscan=off;
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 join tprt on tbl1.col1 > tprt.col1;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=6 loops=1)
-   ->  Nested Loop (actual rows=4 loops=1)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=6.00 loops=1)
+   ->  Nested Loop (actual rows=4.00 loops=1)
          Join Filter: (tbl1.col1 > tprt.col1)
          Rows Removed by Join Filter: 3
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7.00 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-         ->  Seq Scan on tbl1 (actual rows=1 loops=8)
+         ->  Seq Scan on tbl1 (actual rows=1.00 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
-   ->  Hash Join (actual rows=1 loops=1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=2.00 loops=1)
+   ->  Hash Join (actual rows=1.00 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
-         ->  Seq Scan on tbl1 (actual rows=1 loops=1)
-         ->  Hash (actual rows=3 loops=1)
+         ->  Seq Scan on tbl1 (actual rows=1.00 loops=1)
+         ->  Hash (actual rows=3.00 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
@@ -3378,32 +3511,32 @@ order by tbl1.col1, tprt.col1;
 
 -- Multiple partitions
 insert into tbl1 values (1001), (1010), (1011);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 inner join tprt on tbl1.col1 > tprt.col1;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=23 loops=1)
-   ->  Nested Loop (actual rows=15 loops=1)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=23.00 loops=1)
+   ->  Nested Loop (actual rows=15.00 loops=1)
          Join Filter: (tbl1.col1 > tprt.col1)
          Rows Removed by Join Filter: 6
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7.00 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-         ->  Seq Scan on tbl1 (actual rows=3 loops=8)
+         ->  Seq Scan on tbl1 (actual rows=2.75 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 inner join tprt on tbl1.col1 = tprt.col1;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
-   ->  Hash Join (actual rows=2 loops=1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=3.00 loops=1)
+   ->  Hash Join (actual rows=2.00 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
-         ->  Seq Scan on tbl1 (actual rows=3 loops=1)
-         ->  Hash (actual rows=3 loops=1)
+         ->  Seq Scan on tbl1 (actual rows=3.00 loops=1)
+         ->  Hash (actual rows=3.00 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
@@ -3451,18 +3584,18 @@ order by tbl1.col1, tprt.col1;
 -- Last partition
 delete from tbl1;
 insert into tbl1 values (4400);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 join tprt on tbl1.col1 < tprt.col1;
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
-   ->  Nested Loop (actual rows=1 loops=1)
+                                     QUERY PLAN                                     
+------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1.00 loops=1)
+   ->  Nested Loop (actual rows=1.00 loops=1)
          Join Filter: (tbl1.col1 < tprt.col1)
          Rows Removed by Join Filter: 6
-         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7 loops=1)
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+         ->  Broadcast Motion 3:3  (slice2; segments: 3) (actual rows=7.00 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
-         ->  Seq Scan on tbl1 (actual rows=1 loops=8)
+         ->  Seq Scan on tbl1 (actual rows=1.00 loops=8)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
@@ -3478,17 +3611,17 @@ reset enable_seqscan;
 -- No matching partition
 delete from tbl1;
 insert into tbl1 values (10000);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from tbl1 join tprt on tbl1.col1 = tprt.col1;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Join (actual rows=0 loops=1)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Hash Join (actual rows=0.00 loops=1)
          Hash Cond: (tbl1.col1 = tprt.col1)
-         ->  Seq Scan on tbl1 (actual rows=1 loops=1)
-         ->  Hash (actual rows=3 loops=1)
+         ->  Seq Scan on tbl1 (actual rows=1.00 loops=1)
+         ->  Hash (actual rows=3.00 loops=1)
                Buckets: 524288  Batches: 1  Memory Usage: 4097kB
-               ->  Dynamic Seq Scan on tprt (actual rows=3 loops=1)
+               ->  Dynamic Seq Scan on tprt (actual rows=3.00 loops=1)
                      Number of partitions to scan: 6 (out of 6)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
@@ -3503,9 +3636,17 @@ order by tbl1.col1, tprt.col1;
 drop table tbl1, tprt;
 -- Test with columns defined in varying orders between each level
 create table part_abc (a int not null, b int not null, c int not null) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_bac (b int not null, a int not null, c int not null) partition by list (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_cab (c int not null, a int not null, b int not null) partition by list (c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_abc_p1 (a int not null, b int not null, c int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: the distribution keys must be the same in all parts of partition
 -- hierarchy.
 alter table part_bac set distributed by (a);
@@ -3516,11 +3657,11 @@ alter table part_cab attach partition part_abc_p1 for values in(3);
 prepare part_abc_q1 (int, int, int) as
 select * from part_abc where a = $1 and b = $2 and c = $3;
 -- Single partition should be scanned.
-explain (analyze, costs off, summary off, timing off) execute part_abc_q1 (1, 2, 3);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Seq Scan on part_abc_p1 part_abc (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute part_abc_q1 (1, 2, 3);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Seq Scan on part_abc_p1 part_abc (actual rows=0.00 loops=1)
          Filter: ((a = $1) AND (b = $2) AND (c = $3))
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -3530,6 +3671,8 @@ drop table part_abc;
 -- Ensure that an Append node properly handles a sub-partitioned table
 -- matching without any of its leaf partitions matching the clause.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp_1 partition of listp for values in(1) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp_1_1 partition of listp_1 for values in(1);
@@ -3547,34 +3690,34 @@ select * from listp where b = 1;
 -- partitions before finally detecting the correct set of 2nd level partitions
 -- which match the given parameter.
 prepare q1 (int,int) as select * from listp where b in ($1,$2);
-explain (analyze, costs off, summary off, timing off)  execute q1 (1,1);
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off)  execute q1 (1,1);
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 listp_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_1_1 listp_1 (actual rows=0.00 loops=1)
                Filter: (b = ANY (ARRAY[$1, $2]))
  Optimizer: Postgres query optimizer
 (6 rows)
 
-explain (analyze, costs off, summary off, timing off)  execute q1 (2,2);
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off)  execute q1 (2,2);
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_2_1 listp_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_2_1 listp_1 (actual rows=0.00 loops=1)
                Filter: (b = ANY (ARRAY[$1, $2]))
  Optimizer: Postgres query optimizer
 (6 rows)
 
 -- Try with no matching partitions.
-explain (analyze, costs off, summary off, timing off)  execute q1 (0,0);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off)  execute q1 (0,0);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 2
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -3583,36 +3726,36 @@ deallocate q1;
 -- Test more complex cases where a not-equal condition further eliminates partitions.
 prepare q1 (int,int,int,int) as select * from listp where b in($1,$2) and $3 <> b and $4 <> b;
 -- Both partitions allowed by IN clause, but one disallowed by <> clause
-explain (analyze, costs off, summary off, timing off)  execute q1 (1,2,2,0);
+explain (analyze, costs off, summary off, timing off, buffers off)  execute q1 (1,2,2,0);
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on listp_1_1 listp_1 (actual rows=0 loops=1)
+         ->  Seq Scan on listp_1_1 listp_1 (actual rows=0.00 loops=1)
                Filter: ((b = ANY (ARRAY[$1, $2])) AND ($3 <> b) AND ($4 <> b))
  Optimizer: Postgres query optimizer
 (6 rows)
 
 -- Both partitions allowed by IN clause, then both excluded again by <> clauses.
-explain (analyze, costs off, summary off, timing off)  execute q1 (1,2,2,1);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Append (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off)  execute q1 (1,2,2,1);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          Subplans Removed: 2
  Optimizer: Postgres query optimizer
 (4 rows)
 
 -- Ensure Params that evaluate to NULL properly prune away all partitions
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from listp where a = (select null::int);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=0.00 loops=1)
          ->  Seq Scan on listp_1_1 listp_1 (never executed)
                Filter: (a = (InitPlan 1).col1)
          ->  Seq Scan on listp_2_1 listp_2 (never executed)
@@ -3637,93 +3780,93 @@ create table stable_qual_pruning3 partition of stable_qual_pruning
   for values from ('3000-02-01') to ('3000-03-01');
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- comparison against a stable value requires run-time pruning
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning where a < localtimestamp;
                                       QUERY PLAN                                      
 --------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 2 (out of 3)
-         Filter: (a < 'Fri Jul 10 04:31:21.273901 2026'::timestamp without time zone)
+         Filter: (a < 'Tue Jul 14 09:59:54.551972 2026'::timestamp without time zone)
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
 -- timestamp < timestamptz comparison is only stable, not immutable
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning where a < '2000-02-01'::timestamptz;
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a < 'Tue Feb 01 00:00:00 2000 PST'::timestamp with time zone)
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
 -- check ScalarArrayOp cases
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(array['2010-02-01', '2020-01-01']::timestamp[]);
               QUERY PLAN               
 ---------------------------------------
- Result (actual rows=0 loops=1)
+ Result (actual rows=0.00 loops=1)
    One-Time Filter: false
  Optimizer: Pivotal Optimizer (GPORCA)
 (3 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', '2010-01-01']::timestamp[]);
                                                       QUERY PLAN                                                      
 ----------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Fri Jan 01 00:00:00 2010"}'::timestamp without time zone[]))
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', localtimestamp]::timestamp[]);
-                                                         QUERY PLAN                                                         
-----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 1 (out of 3)
-         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Fri Jul 10 04:31:21.31057 2026"}'::timestamp without time zone[]))
+         Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000","Tue Jul 14 09:59:54.583367 2026"}'::timestamp without time zone[]))
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(array['2010-02-01', '2020-01-01']::timestamptz[]);
               QUERY PLAN               
 ---------------------------------------
- Result (actual rows=0 loops=1)
+ Result (actual rows=0.00 loops=1)
    One-Time Filter: false
  Optimizer: Pivotal Optimizer (GPORCA)
 (3 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(array['2000-02-01', '2010-01-01']::timestamptz[]);
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 1 (out of 3)
          Filter: (a = ANY ('{"Tue Feb 01 00:00:00 2000 PST","Fri Jan 01 00:00:00 2010 PST"}'::timestamp with time zone[]))
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from stable_qual_pruning
   where a = any(null::timestamptz[]);
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0 loops=1)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Dynamic Seq Scan on stable_qual_pruning (actual rows=0.00 loops=1)
          Number of partitions to scan: 3 (out of 3)
          Filter: (a = ANY (NULL::timestamp with time zone[]))
  Optimizer: Pivotal Optimizer (GPORCA)
@@ -3736,6 +3879,8 @@ drop table stable_qual_pruning;
 -- non-inclusive operator for an earlier key
 --
 create table mc3p (a int, b int, c int) partition by range (a, abs(b), c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mc3p0 partition of mc3p
   for values from (0, 0, 0) to (0, maxvalue, maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3746,17 +3891,17 @@ create table mc3p2 partition of mc3p
   for values from (2, minvalue, minvalue) to (3, maxvalue, maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into mc3p values (0, 1, 1), (1, 1, 1), (2, 1, 1);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from mc3p where a < 3 and abs(b) = 1;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=1)
-   ->  Append (actual rows=2 loops=1)
-         ->  Seq Scan on mc3p0 mc3p_1 (actual rows=1 loops=1)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=3.00 loops=1)
+   ->  Append (actual rows=2.00 loops=1)
+         ->  Seq Scan on mc3p0 mc3p_1 (actual rows=1.00 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p1 mc3p_2 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p_2 (actual rows=1.00 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
-         ->  Seq Scan on mc3p2 mc3p_3 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p2 mc3p_3 (actual rows=1.00 loops=1)
                Filter: ((a < 3) AND (abs(b) = 1))
  Optimizer: Postgres query optimizer
 (9 rows)
@@ -3768,16 +3913,16 @@ select * from mc3p where a < 3 and abs(b) = 1;
 --
 prepare ps1 as
   select * from mc3p where a = $1 and abs(b) < (select 3);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 execute ps1(1);
-                            QUERY PLAN                             
--------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=1 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=1.00 loops=1)
          Subplans Removed: 2
-         ->  Seq Scan on mc3p1 mc3p_1 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p_1 (actual rows=1.00 loops=1)
                Filter: ((a = $1) AND (abs(b) < (InitPlan 1).col1))
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -3785,18 +3930,18 @@ execute ps1(1);
 deallocate ps1;
 prepare ps2 as
   select * from mc3p where a <= $1 and abs(b) < (select 3);
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 execute ps2(1);
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=2.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Append (actual rows=2 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Append (actual rows=2.00 loops=1)
          Subplans Removed: 1
-         ->  Seq Scan on mc3p0 mc3p_1 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p0 mc3p_1 (actual rows=1.00 loops=1)
                Filter: ((a <= $1) AND (abs(b) < (InitPlan 1).col1))
-         ->  Seq Scan on mc3p1 mc3p_2 (actual rows=1 loops=1)
+         ->  Seq Scan on mc3p1 mc3p_2 (actual rows=1.00 loops=1)
                Filter: ((a <= $1) AND (abs(b) < (InitPlan 1).col1))
  Optimizer: Postgres query optimizer
 (10 rows)
@@ -3805,54 +3950,58 @@ deallocate ps2;
 drop table mc3p;
 -- Ensure runtime pruning works with initplans params with boolean types
 create table boolvalues (value bool not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'value' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into boolvalues values('t'),('f');
 create table boolp (a bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table boolp_t partition of boolp for values in('t');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table boolp_f partition of boolp for values in('f');
 NOTICE:  table has parent, setting distribution columns to match parent table
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from boolp where a = (select value from boolvalues where value);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Join (actual rows=0 loops=1)
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Hash Join (actual rows=0.00 loops=1)
          Hash Cond: (boolvalues.value = boolp.a)
          ->  Redistribute Motion 1:3  (slice2) (never executed)
-               ->  Assert (actual rows=1 loops=1)
-                     Assert Cond: ((row_number() OVER (?)) = 1)
-                     ->  WindowAgg (actual rows=1 loops=1)
-                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1 loops=1)
-                                 ->  Seq Scan on boolvalues (actual rows=1 loops=1)
+               ->  Assert (actual rows=1.00 loops=1)
+                     Assert Cond: ((row_number() OVER w1) = 1)
+                     ->  WindowAgg (actual rows=1.00 loops=1)
+                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1.00 loops=1)
+                                 ->  Seq Scan on boolvalues (actual rows=1.00 loops=1)
                                        Filter: value
                                        Rows Removed by Filter: 1
-         ->  Hash (actual rows=0 loops=1)
+         ->  Hash (actual rows=0.00 loops=1)
                Buckets: 262144  Batches: 1  Memory Usage: 2048kB
-               ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0 loops=1)
-                     ->  Dynamic Seq Scan on boolp (actual rows=0 loops=1)
+               ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0.00 loops=1)
+                     ->  Dynamic Seq Scan on boolp (actual rows=0.00 loops=1)
                            Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (17 rows)
 
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from boolp where a = (select value from boolvalues where not value);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
-   ->  Hash Join (actual rows=0 loops=1)
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
+   ->  Hash Join (actual rows=0.00 loops=1)
          Hash Cond: (boolvalues.value = boolp.a)
          ->  Redistribute Motion 1:3  (slice2) (never executed)
-               ->  Assert (actual rows=1 loops=1)
-                     Assert Cond: ((row_number() OVER (?)) = 1)
-                     ->  WindowAgg (actual rows=1 loops=1)
-                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1 loops=1)
-                                 ->  Seq Scan on boolvalues (actual rows=1 loops=1)
+               ->  Assert (actual rows=1.00 loops=1)
+                     Assert Cond: ((row_number() OVER w1) = 1)
+                     ->  WindowAgg (actual rows=1.00 loops=1)
+                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=1.00 loops=1)
+                                 ->  Seq Scan on boolvalues (actual rows=1.00 loops=1)
                                        Filter: (NOT value)
                                        Rows Removed by Filter: 1
-         ->  Hash (actual rows=0 loops=1)
+         ->  Hash (actual rows=0.00 loops=1)
                Buckets: 262144  Batches: 1  Memory Usage: 2048kB
-               ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0 loops=1)
-                     ->  Dynamic Seq Scan on boolp (actual rows=0 loops=1)
+               ->  Broadcast Motion 3:3  (slice4; segments: 3) (actual rows=0.00 loops=1)
+                     ->  Dynamic Seq Scan on boolp (actual rows=0.00 loops=1)
                            Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (17 rows)
@@ -3864,6 +4013,8 @@ drop table boolp;
 set enable_seqscan = off;
 set enable_sort = off;
 create table ma_test (a int, b int) partition by range (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table ma_test_p1 partition of ma_test for values from (0) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table ma_test_p2 partition of ma_test for values from (10) to (20);
@@ -3874,22 +4025,24 @@ insert into ma_test select x,x from generate_series(0,29) t(x);
 create index on ma_test (b);
 analyze ma_test;
 prepare mt_q1 (int) as select a from ma_test where a >= $1 and a % 10 = 5 order by b;
-explain (analyze, costs off, summary off, timing off) execute mt_q1(15);
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=2 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute mt_q1(15);
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=2.00 loops=1)
    Merge Key: ma_test.b
-   ->  Merge Append (actual rows=1 loops=1)
+   ->  Merge Append (actual rows=1.00 loops=1)
          Sort Key: ma_test.b
          Subplans Removed: 1
-         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 ma_test_1 (actual rows=1 loops=1)
+         ->  Index Scan using ma_test_p2_b_idx on ma_test_p2 ma_test_1 (actual rows=1.00 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 1
-         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test_2 (actual rows=1 loops=1)
+               Index Searches: 0
+         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test_2 (actual rows=1.00 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 2
+               Index Searches: 0
  Optimizer: Postgres query optimizer
-(12 rows)
+(14 rows)
 
 execute mt_q1(15);
  a  
@@ -3898,19 +4051,20 @@ execute mt_q1(15);
  25
 (2 rows)
 
-explain (analyze, costs off, summary off, timing off) execute mt_q1(25);
-                                          QUERY PLAN                                           
------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=1 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute mt_q1(25);
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=1.00 loops=1)
    Merge Key: ma_test.b
-   ->  Merge Append (actual rows=1 loops=1)
+   ->  Merge Append (actual rows=1.00 loops=1)
          Sort Key: ma_test.b
          Subplans Removed: 2
-         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test_1 (actual rows=1 loops=1)
+         ->  Index Scan using ma_test_p3_b_idx on ma_test_p3 ma_test_1 (actual rows=1.00 loops=1)
                Filter: ((a >= $1) AND ((a % 10) = 5))
                Rows Removed by Filter: 2
+               Index Searches: 0
  Optimizer: Postgres query optimizer
-(9 rows)
+(10 rows)
 
 execute mt_q1(25);
  a  
@@ -3919,12 +4073,12 @@ execute mt_q1(25);
 (1 row)
 
 -- Ensure MergeAppend behaves correctly when no subplans match
-explain (analyze, costs off, summary off, timing off) execute mt_q1(35);
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) execute mt_q1(35);
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    Merge Key: ma_test.b
-   ->  Merge Append (actual rows=0 loops=1)
+   ->  Merge Append (actual rows=0.00 loops=1)
          Sort Key: ma_test.b
          Subplans Removed: 3
  Optimizer: Postgres query optimizer
@@ -3938,17 +4092,17 @@ execute mt_q1(35);
 deallocate mt_q1;
 prepare mt_q2 (int) as select * from ma_test where a >= $1 order by b limit 1;
 -- Ensure output list looks sane when the MergeAppend has no subplans.
-explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35);
+explain (analyze, verbose, costs off, summary off, timing off, buffers off) execute mt_q2 (35);
                                                                       QUERY PLAN                                                                      
 ------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit (actual rows=0 loops=1)
+ Limit (actual rows=0.00 loops=1)
    Output: ma_test.a, ma_test.b
-   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
          Output: ma_test.a, ma_test.b
          Merge Key: ma_test.b
-         ->  Limit (actual rows=0 loops=1)
+         ->  Limit (actual rows=0.00 loops=1)
                Output: ma_test.a, ma_test.b
-               ->  Merge Append (actual rows=0 loops=1)
+               ->  Merge Append (actual rows=0.00 loops=1)
                      Sort Key: ma_test.b
                      Subplans Removed: 3
  Optimizer: Postgres query optimizer
@@ -3957,23 +4111,23 @@ explain (analyze, verbose, costs off, summary off, timing off) execute mt_q2 (35
 
 deallocate mt_q2;
 -- ensure initplan params properly prune partitions
-explain (analyze, costs off, summary off, timing off) select * from ma_test where a >= (select min(b) from ma_test_p2) order by b;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=20 loops=1)
+explain (analyze, costs off, summary off, timing off, buffers off) select * from ma_test where a >= (select min(b) from ma_test_p2) order by b;
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=20.00 loops=1)
    Merge Key: ma_test.b
-   ->  Sort (actual rows=8 loops=1)
+   ->  Sort (actual rows=8.00 loops=1)
          Sort Key: ma_test.b
          Sort Method:  quicksort  Memory: 75kB
-         ->  Nested Loop (actual rows=8 loops=1)
+         ->  Nested Loop (actual rows=8.00 loops=1)
                Join Filter: (ma_test.a >= (min(ma_test_p2.b)))
                Rows Removed by Join Filter: 3
-               ->  Broadcast Motion 1:3  (slice2) (actual rows=1 loops=1)
-                     ->  Finalize Aggregate (actual rows=1 loops=1)
-                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3 loops=1)
-                                 ->  Partial Aggregate (actual rows=1 loops=1)
-                                       ->  Seq Scan on ma_test_p2 (actual rows=5 loops=1)
-               ->  Dynamic Seq Scan on ma_test (actual rows=6 loops=2)
+               ->  Broadcast Motion 1:3  (slice2) (actual rows=1.00 loops=1)
+                     ->  Finalize Aggregate (actual rows=1.00 loops=1)
+                           ->  Gather Motion 3:1  (slice3; segments: 3) (actual rows=3.00 loops=1)
+                                 ->  Partial Aggregate (actual rows=1.00 loops=1)
+                                       ->  Seq Scan on ma_test_p2 (actual rows=5.00 loops=1)
+               ->  Dynamic Seq Scan on ma_test (actual rows=6.50 loops=2)
                      Number of partitions to scan: 3 (out of 3)
  Optimizer: Pivotal Optimizer (GPORCA)
 (16 rows)
@@ -3988,6 +4142,8 @@ reset enable_indexonlyscan;
 --
 -- array type list partition key
 create table pp_arrpart (a int[]) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_arrpart1 partition of pp_arrpart for values in ('{1}');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_arrpart2 partition of pp_arrpart for values in ('{2, 3}', '{4, 5}');
@@ -4043,6 +4199,8 @@ explain (costs off) delete from pp_arrpart where a = '{1}';
 drop table pp_arrpart;
 -- array type hash partition key
 create table pph_arrpart (a int[]) partition by hash (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pph_arrpart1 partition of pph_arrpart for values with (modulus 2, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pph_arrpart2 partition of pph_arrpart for values with (modulus 2, remainder 1);
@@ -4090,6 +4248,8 @@ drop table pph_arrpart;
 -- enum type list partition key
 create type pp_colors as enum ('green', 'blue', 'black');
 create table pp_enumpart (a pp_colors) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_enumpart_green partition of pp_enumpart for values in ('green');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_enumpart_blue partition of pp_enumpart for values in ('blue');
@@ -4117,6 +4277,8 @@ drop type pp_colors;
 -- record type as partition key
 create type pp_rectype as (a int, b int);
 create table pp_recpart (a pp_rectype) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_recpart_11 partition of pp_recpart for values in ('(1,1)');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_recpart_23 partition of pp_recpart for values in ('(2,3)');
@@ -4143,6 +4305,8 @@ drop table pp_recpart;
 drop type pp_rectype;
 -- range type partition key
 create table pp_intrangepart (a int4range) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_intrangepart12 partition of pp_intrangepart for values in ('[1,2]');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_intrangepart2inf partition of pp_intrangepart for values in ('[2,)');
@@ -4170,6 +4334,8 @@ drop table pp_intrangepart;
 -- Ensure the enable_partition_prune GUC properly disables partition pruning.
 --
 create table pp_lp (a int, value int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table pp_lp1 partition of pp_lp for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table pp_lp2 partition of pp_lp for values in(2);
@@ -4286,6 +4452,8 @@ explain (costs off) delete from pp_lp where a = 1;
 drop table pp_lp;
 -- Ensure enable_partition_prune does not affect non-partitioned tables.
 create table inh_lp (a int, value int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_lp1 (a int, value int, check(a = 1)) inherits (inh_lp);
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
@@ -4358,6 +4526,8 @@ reset enable_partition_pruning;
 reset constraint_exclusion;
 -- Check pruning for a partition tree containing only temporary relations
 create temp table pp_temp_parent (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table pp_temp_part_1 partition of pp_temp_parent for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table pp_temp_part_def partition of pp_temp_parent default;
@@ -4384,11 +4554,15 @@ explain (costs off) select * from pp_temp_parent where a = 2;
 drop table pp_temp_parent;
 -- Stress run-time partition pruning a bit more, per bug reports
 create temp table p (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table p1 partition of p for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table p2 partition of p for values in (2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q (a int, b int, c int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table q1 partition of q for values in (1) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table q11 partition of q1 for values in (1) partition by list (c);
@@ -4487,20 +4661,22 @@ drop table p, q;
 -- Ensure run-time pruning works correctly when we match a partitioned table
 -- on the first level but find no matching partitions on the second level.
 create table listp (a int, b int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table listp1 partition of listp for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp2 partition of listp for values in(2) partition by list(b);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table listp2_10 partition of listp2 for values in (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
-explain (analyze, costs off, summary off, timing off)
+explain (analyze, costs off, summary off, timing off, buffers off)
 select * from listp where a = (select 2) and b <> 10;
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3) (actual rows=0 loops=1)
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3) (actual rows=0.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Result (actual rows=1 loops=1)
-   ->  Seq Scan on listp1 listp (actual rows=0 loops=1)
+     ->  Result (actual rows=1.00 loops=1)
+   ->  Seq Scan on listp1 listp (actual rows=0.00 loops=1)
          Filter: ((b <> 10) AND (a = (InitPlan 1).col1))
  Optimizer: Postgres query optimizer
 (6 rows)
@@ -4567,6 +4743,8 @@ drop table listp;
 -- clauses for different partition keys
 --
 create table rp_prefix_test1 (a int, b varchar) partition by range(a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test1_p1 partition of rp_prefix_test1 for values from (1, 'a') to (1, 'b');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test1_p2 partition of rp_prefix_test1 for values from (2, 'a') to (2, 'b');
@@ -4583,6 +4761,8 @@ explain (costs off) select * from rp_prefix_test1 where a <= 1 and b = 'a';
 (4 rows)
 
 create table rp_prefix_test2 (a int, b int, c int) partition by range(a, b, c);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test2_p1 partition of rp_prefix_test2 for values from (1, 1, 0) to (1, 1, 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test2_p2 partition of rp_prefix_test2 for values from (2, 2, 0) to (2, 2, 10);
@@ -4599,6 +4779,8 @@ explain (costs off) select * from rp_prefix_test2 where a <= 1 and b = 1 and c >
 (4 rows)
 
 create table rp_prefix_test3 (a int, b int, c int, d int) partition by range(a, b, c, d);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table rp_prefix_test3_p1 partition of rp_prefix_test3 for values from (1, 1, 1, 0) to (1, 1, 1, 10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table rp_prefix_test3_p2 partition of rp_prefix_test3 for values from (2, 2, 2, 0) to (2, 2, 2, 10);
@@ -4634,6 +4816,8 @@ drop table rp_prefix_test3;
 --
 create table hp_prefix_test (a int, b int, c int, d int)
   partition by hash (a part_test_int4_ops, b part_test_int4_ops, c part_test_int4_ops, d part_test_int4_ops);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- create 8 partitions
 select 'create table hp_prefix_test_p' || x::text || ' partition of hp_prefix_test for values with (modulus 8, remainder ' || x::text || ');'
 from generate_Series(0,7) x;
@@ -4896,6 +5080,8 @@ using hash as
 operator 1 ===,
 function 2 part_hashint4_noop(int4, int8);
 create table hp_contradict_test (a int, b int) partition by hash (a part_test_int4_ops2, b part_test_int4_ops2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hp_contradict_test_p1 partition of hp_contradict_test for values with (modulus 2, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table hp_contradict_test_p2 partition of hp_contradict_test for values with (modulus 2, remainder 1);
@@ -4919,3 +5105,226 @@ explain (costs off) select * from hp_contradict_test where a === 1 and b === 1 a
 drop table hp_contradict_test;
 drop operator class part_test_int4_ops2 using hash;
 drop operator ===(int4, int4);
+drop function explain_analyze(text);
+-- Runtime pruning on UPDATE using WITH CHECK OPTIONS and RETURNING
+create table part_abc (a int, b text, c bool) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+create table part_abc_1 (b text, a int, c bool) distributed by (a);
+create table part_abc_2 (a int, c bool, b text) distributed by (a);
+alter table part_abc attach partition part_abc_1 for values in (1);
+alter table part_abc attach partition part_abc_2 for values in (2);
+insert into part_abc values (1, 'b', true);
+insert into part_abc values (2, 'c', true);
+create view part_abc_view as select * from part_abc where b <> 'a' with check option;
+prepare update_part_abc_view as update part_abc_view set b = $2 where a = $1 returning *;
+-- Only the unpruned partition should be shown in the list of relations to be
+-- updated
+explain (verbose, costs off) execute update_part_abc_view (1, 'd');
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+   ->  Update on public.part_abc
+         Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+         Update on public.part_abc_1
+         ->  Append
+               Subplans Removed: 1
+               ->  Seq Scan on public.part_abc_1
+                     Output: $2, part_abc_1.tableoid, part_abc_1.ctid, part_abc_1.gp_segment_id
+                     Filter: ((part_abc_1.b <> 'a'::text) AND (part_abc_1.a = $1))
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashjoin = 'off', plan_cache_mode = 'force_generic_plan'
+(12 rows)
+
+execute update_part_abc_view (1, 'd');
+ a | b | c 
+---+---+---
+ 1 | d | t
+(1 row)
+
+explain (verbose, costs off) execute update_part_abc_view (2, 'a');
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+   ->  Update on public.part_abc
+         Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+         Update on public.part_abc_2
+         ->  Append
+               Subplans Removed: 1
+               ->  Seq Scan on public.part_abc_2
+                     Output: $2, part_abc_2.tableoid, part_abc_2.ctid, part_abc_2.gp_segment_id
+                     Filter: ((part_abc_2.b <> 'a'::text) AND (part_abc_2.a = $1))
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashjoin = 'off', plan_cache_mode = 'force_generic_plan'
+(12 rows)
+
+execute update_part_abc_view (2, 'a');
+ERROR:  new row violates check option for view "part_abc_view"  (seg0 slice1 172.17.0.2:7002 pid=2631065)
+DETAIL:  Failing row contains (2, a, t).
+-- All pruned.
+explain (verbose, costs off) execute update_part_abc_view (3, 'a');
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+   ->  Update on public.part_abc
+         Output: part_abc_1.a, part_abc_1.b, part_abc_1.c
+         ->  Append
+               Subplans Removed: 2
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashjoin = 'off', plan_cache_mode = 'force_generic_plan'
+(8 rows)
+
+execute update_part_abc_view (3, 'a');
+ a | b | c 
+---+---+---
+(0 rows)
+
+deallocate update_part_abc_view;
+-- Runtime pruning on MERGE using a stable function
+create function stable_one() returns int as $$ begin return 1; end; $$ language plpgsql stable;
+explain (costs off)
+merge into part_abc_view pt
+using (select stable_one() as pid) as q join part_abc_1 pt1 on (q.pid = pt1.a) on pt.a = pt1.a
+when matched then delete returning pt.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)
+   ->  Merge on part_abc
+         Merge on part_abc_1
+         ->  Nested Loop
+               Disabled: true
+               ->  Seq Scan on part_abc_1 pt1
+                     Filter: (a = 1)
+               ->  Materialize
+                     ->  Seq Scan on part_abc_1
+                           Filter: ((b <> 'a'::text) AND (a = 1))
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+merge into part_abc_view pt
+using (select stable_one() as pid) as q join part_abc_1 pt1 on (q.pid = pt1.a) on pt.a = pt1.a
+when matched then delete returning pt.a;
+ a 
+---
+ 1
+(1 row)
+
+table part_abc_view;
+ a | b | c 
+---+---+---
+ 2 | c | t
+(1 row)
+
+-- All pruned.
+explain (costs off)
+merge into part_abc_view pt
+using (select stable_one() + 2 as pid) as q join part_abc_1 pt1 on (q.pid = pt1.a) on pt.a = pt1.a
+when matched then delete returning pt.a;
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
+merge into part_abc_view pt
+using (select stable_one() + 2 as pid) as q join part_abc_1 pt1 on (q.pid = pt1.a) on pt.a = pt1.a
+when matched then delete returning pt.a;
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
+table part_abc_view;
+ a | b | c 
+---+---+---
+ 2 | c | t
+(1 row)
+
+-- MERGE ... INSERT when all pruned from MERGE source.
+begin;
+explain (costs off)
+merge into part_abc_view pt
+using (select stable_one() + 1 as pid) as q join part_abc_2 pt2 on (q.pid = pt2.a) on pt.a = stable_one() + 2
+when not matched then insert values (1, 'd', false) returning pt.a;
+ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
+HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
+merge into part_abc_view pt
+using (select stable_one() + 1 as pid) as q join part_abc_2 pt2 on (q.pid = pt2.a) on pt.a = stable_one() + 2
+when not matched then insert values (1, 'd', false) returning pt.a;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+table part_abc_view;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+rollback;
+-- A case with multiple ModifyTable nodes.
+begin;
+create table part_abc_log (action text, a int, b text, c bool);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'action' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+explain (costs off)
+with t as (
+  merge into part_abc_view pt
+  using (select stable_one() + 1 as pid) as q join part_abc_2 pt2 on (q.pid = pt2.a) on pt.a = stable_one() + 2
+  when not matched then insert values (1, 'd', false) returning merge_action(), pt.*
+)
+insert into part_abc_log select * from t returning *;
+ERROR:  writable CTE queries cannot be themselves writable
+DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+HINT:  Rewrite the query to only include one writable clause.
+with t as (
+  merge into part_abc_view pt
+  using (select stable_one() + 1 as pid) as q join part_abc_2 pt2 on (q.pid = pt2.a) on pt.a = stable_one() + 2
+  when not matched then insert values (1, 'd', false) returning merge_action(), pt.*
+)
+insert into part_abc_log select * from t returning *;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+table part_abc_view;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+table part_abc_log;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+rollback;
+-- A case with nested MergeAppend with its own PartitionPruneInfo.
+create index on part_abc (a);
+alter table part_abc add d int;
+create table part_abc_3 partition of part_abc for values in (3, 4) partition by range (d);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table part_abc_3_1 partition of part_abc_3 for values from (minvalue) to (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table part_abc_3_2 partition of part_abc_3 for values from (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table part_abc_3_3 partition of part_abc_3 for values from (100) to (maxvalue);
+NOTICE:  table has parent, setting distribution columns to match parent table
+explain (costs off)
+select min(a) over (partition by a order by a) from part_abc where a >= stable_one() + 1 and d <= stable_one()
+union all
+select min(a) over (partition by a order by a) from part_abc where a >= stable_one() + 1 and d >= stable_one();
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Append
+         ->  Subquery Scan on "*SELECT* 1_1"
+               ->  WindowAgg
+                     Partition By: part_abc.a
+                     Order By: part_abc.a
+                     ->  Sort
+                           Sort Key: part_abc.a
+                           ->  Append
+                                 ->  Seq Scan on part_abc_2 part_abc_1
+                                       Filter: ((a >= 2) AND (d <= 1))
+                                 ->  Seq Scan on part_abc_3_1 part_abc_2
+                                       Filter: ((a >= 2) AND (d <= 1))
+                                 ->  Seq Scan on part_abc_3_2 part_abc_3
+                                       Filter: ((a >= 2) AND (d <= 1))
+         ->  Subquery Scan on "*SELECT* 2"
+               ->  WindowAgg
+                     Partition By: part_abc_4.a
+                     Order By: part_abc_4.a
+                     ->  Sort
+                           Sort Key: part_abc_4.a
+                           ->  Append
+                                 ->  Seq Scan on part_abc_2 part_abc_5
+                                       Filter: ((a >= 2) AND (d >= 1))
+                                 ->  Seq Scan on part_abc_3_2 part_abc_6
+                                       Filter: ((a >= 2) AND (d >= 1))
+                                 ->  Seq Scan on part_abc_3_3 part_abc_7
+                                       Filter: ((a >= 2) AND (d >= 1))
+ Optimizer: Postgres query optimizer
+(29 rows)
+
+drop view part_abc_view;
+drop table part_abc;
