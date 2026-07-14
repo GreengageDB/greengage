@@ -116,24 +116,32 @@ SELECT DISTINCT ON (four) four,two
 
 -- Same again but use a column that is indexed so that we get an index scan
 -- then a limit
+-- GPDB: the plan for this query flutters between an Index Scan and a
+-- Seq Scan+Sort on a cost tie, so ignore the plan shape.
+-- start_ignore
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (four) four,hundred
    FROM tenk1 WHERE four = 0 ORDER BY 1,2;
-                     QUERY PLAN                      
------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
          Merge Key: hundred
-         ->  Index Scan using tenk1_hundred on tenk1
-               Filter: (four = 0)
+         ->  Sort
+               Sort Key: hundred
+               ->  Seq Scan on tenk1
+                     Filter: (four = 0)
  Optimizer: Postgres query optimizer
-(6 rows)
+(8 rows)
 
+-- end_ignore
 --
 -- Test the planner's ability to reorder the distinctClause Pathkeys to match
 -- the input path's ordering
 --
 CREATE TABLE distinct_on_tbl (x int, y int, z int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO distinct_on_tbl SELECT i%10, i%10, i%10 FROM generate_series(1, 1000) AS i;
 CREATE INDEX distinct_on_tbl_x_y_idx ON distinct_on_tbl (x, y);
 ANALYZE distinct_on_tbl;
@@ -180,19 +188,22 @@ SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
-SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s;
+-- GPDB: the outer result order is not defined (the ORDER BY is only in the
+-- subquery) and MPP redistributes the rows; atmsort will not re-sort because it
+-- sees the inner ORDER BY, so order the execute here.
+SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s ORDER BY x, y;
  x | y 
 ---+---
- 1 | 1
  0 | 0
- 5 | 5
- 9 | 9
- 6 | 6
- 8 | 8
- 4 | 4
- 7 | 7
+ 1 | 1
  2 | 2
  3 | 3
+ 4 | 4
+ 5 | 5
+ 6 | 6
+ 7 | 7
+ 8 | 8
+ 9 | 9
 (10 rows)
 
 -- Ensure we reorder the distinctClause Pathkeys to match the ordering of the

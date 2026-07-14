@@ -39,9 +39,13 @@ SELECT DISTINCT ON (four) four,two
 
 -- Same again but use a column that is indexed so that we get an index scan
 -- then a limit
+-- GPDB: the plan for this query flutters between an Index Scan and a
+-- Seq Scan+Sort on a cost tie, so ignore the plan shape.
+-- start_ignore
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (four) four,hundred
    FROM tenk1 WHERE four = 0 ORDER BY 1,2;
+-- end_ignore
 
 --
 -- Test the planner's ability to reorder the distinctClause Pathkeys to match
@@ -66,7 +70,10 @@ SELECT DISTINCT ON (y, x) x, y FROM distinct_on_tbl;
 -- Pathkeys to partially match the ordering of the input path
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s;
-SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s;
+-- GPDB: the outer result order is not defined (the ORDER BY is only in the
+-- subquery) and MPP redistributes the rows; atmsort will not re-sort because it
+-- sees the inner ORDER BY, so order the execute here.
+SELECT DISTINCT ON (y, x) x, y FROM (SELECT * FROM distinct_on_tbl ORDER BY x) s ORDER BY x, y;
 
 -- Ensure we reorder the distinctClause Pathkeys to match the ordering of the
 -- input path even if there is ORDER BY clause

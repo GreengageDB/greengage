@@ -959,18 +959,25 @@ commit;
 -- expression that doesn't need to be wrapped in a PlaceHolderVar
 --
 
+-- GPDB: the plan for this pg_class scan flutters (Bitmap vs Index Scan) as the
+-- parallel group churns the catalog, so ignore its plan shape.
+-- start_ignore
 explain (costs off)
 select tname, attname from (
 select relname::information_schema.sql_identifier as tname, * from
   (select * from pg_class c) ss1) ss2
   right join pg_attribute a on a.attrelid = ss2.oid
 where tname = 'tenk1' and attnum = 1;
+-- end_ignore
 
+-- GPDB: copy.sql leaves a second relation named tenk1 in schema singleseg, so
+-- an unqualified relname='tenk1' would match two rows depending on schedule
+-- order; restrict to the public tenk1 that test_setup always builds.
 select tname, attname from (
 select relname::information_schema.sql_identifier as tname, * from
   (select * from pg_class c) ss1) ss2
   right join pg_attribute a on a.attrelid = ss2.oid
-where tname = 'tenk1' and attnum = 1;
+where tname = 'tenk1' and attnum = 1 and ss2.relnamespace = 'public'::regnamespace;
 
 -- Check behavior when there's a lateral reference in the output expression
 explain (verbose, costs off)

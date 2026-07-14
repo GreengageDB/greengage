@@ -449,10 +449,10 @@ INSERT INTO DISTTABLE VALUES(NULL);
 SELECT f1, f1 IS DISTINCT FROM 2 as "not 2" FROM disttable;
  f1 | not 2 
 ----+-------
-  1 | t
   2 | f
   3 | t
     | t
+  1 | t
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
@@ -467,19 +467,19 @@ SELECT f1, f1 IS DISTINCT FROM NULL as "not null" FROM disttable;
 SELECT f1, f1 IS DISTINCT FROM f1 as "false" FROM disttable;
  f1 | false 
 ----+-------
+  1 | f
   2 | f
   3 | f
     | f
-  1 | f
 (4 rows)
 
 SELECT f1, f1 IS DISTINCT FROM f1+1 as "not null" FROM disttable;
  f1 | not null 
 ----+----------
-  1 | t
   2 | t
   3 | t
     | f
+  1 | t
 (4 rows)
 
 -- check that optimizer constant-folds it properly
@@ -576,17 +576,17 @@ EXPLAIN SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT 
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
- 1 |  
- 2 |  
  2 | 1
+ 2 |  
    | 1
+ 1 |  
 (4 rows)
 
 SELECT * FROM distinct_1, distinct_2 WHERE distinct_1.a IS NOT DISTINCT FROM distinct_2.a;
  a | a 
 ---+---
- 1 | 1
    |  
+ 1 | 1
 (2 rows)
 
 DROP TABLE distinct_1;
@@ -691,13 +691,13 @@ SELECT DISTINCT y, x FROM distinct_tbl;
 SELECT DISTINCT y, x FROM distinct_tbl;
  y | x 
 ---+---
- 1 | 1
- 0 | 0
  8 | 8
  4 | 4
  7 | 7
  2 | 2
  3 | 3
+ 1 | 1
+ 0 | 0
  5 | 5
  9 | 9
  6 | 6
@@ -716,19 +716,22 @@ SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
  Optimizer: Pivotal Optimizer (GPORCA)
 (5 rows)
 
-SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
+-- GPDB: the outer DISTINCT output order is not defined (the ORDER BY is only in
+-- the subquery), and under MPP the rows come back redistributed; atmsort does
+-- not re-sort because it sees the inner ORDER BY, so order the execute here.
+SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s ORDER BY y, x;
  y | x 
 ---+---
- 8 | 8
- 4 | 4
- 7 | 7
+ 0 | 0
+ 1 | 1
  2 | 2
  3 | 3
- 1 | 1
- 0 | 0
+ 4 | 4
  5 | 5
- 9 | 9
  6 | 6
+ 7 | 7
+ 8 | 8
+ 9 | 9
 (10 rows)
 
 -- Ensure we avoid the need to re-sort in partial distinct by reordering the

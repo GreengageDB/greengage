@@ -298,7 +298,10 @@ SELECT DISTINCT y, x FROM distinct_tbl;
 -- Pathkeys to partially match the ordering of the input path
 EXPLAIN (COSTS OFF)
 SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
-SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s;
+-- GPDB: the outer DISTINCT output order is not defined (the ORDER BY is only in
+-- the subquery), and under MPP the rows come back redistributed; atmsort does
+-- not re-sort because it sees the inner ORDER BY, so order the execute here.
+SELECT DISTINCT y, x FROM (SELECT * FROM distinct_tbl ORDER BY x) s ORDER BY y, x;
 
 -- Ensure we avoid the need to re-sort in partial distinct by reordering the
 -- distinctClause Pathkeys to match the ordering of the input path

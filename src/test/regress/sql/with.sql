@@ -401,14 +401,16 @@ select count(*) from tenk1 a
 -- test that pathkeys from a materialized CTE are propagated up to the
 -- outer query
 -- GPDB: tenk1's all-visible state varies across the parallel schedule (this
--- file inserts into tenk1 above), so an index-only scan on tenk1_unique1 may
--- replace the Sort here; pin it off for a stable plan -- the Sort is what
--- exercises pathkey propagation anyway.
+-- file inserts into tenk1 above), so an index-only scan or a plain index scan
+-- on tenk1_unique1 may replace the Sort here; pin both off for a stable plan --
+-- the Sort is what exercises pathkey propagation anyway.
 set enable_indexonlyscan = off;
+set enable_indexscan = off;
 explain (costs off)
 with x as materialized (select unique1 from tenk1 b order by unique1)
 select count(*) from tenk1 a
   where unique1 in (select * from x);
+reset enable_indexscan;
 reset enable_indexonlyscan;
 
 -- SEARCH clause

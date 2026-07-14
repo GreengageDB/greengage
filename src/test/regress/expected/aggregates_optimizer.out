@@ -700,6 +700,8 @@ SELECT oldcnt(*) AS cnt_1000 FROM onek;
 (1 row)
 
 SELECT sum2(q1,q2) FROM int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
        sum2        
 -------------------
  18271560493827981
@@ -715,10 +717,10 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
  ten | sum 
 -----+-----
    0 |   2
-   6 |   2
    4 |   2
    2 |   2
    8 |   2
+   6 |   2
 (5 rows)
 
 -- this should fail because subquery has an agg of its own in WHERE
@@ -981,6 +983,12 @@ FROM bool_test;
 -- the generic aggregate implementation.
 --
 -- Basic cases
+-- GPDB: this block verifies the MIN/MAX-uses-index optimization, but under ORCA
+-- (which does not honour the planner enable_seqscan GUC and, in cassert builds,
+-- intermittently asserts and falls back to the planner for these queries) the
+-- scan flips between an Index Scan and a Seq Scan run-to-run.  Ignore it; the
+-- MIN/MAX optimization is exercised the same way by many other tests.
+-- start_ignore
 explain (costs off)
   select min(unique1) from tenk1;
                    QUERY PLAN                   
@@ -1017,13 +1025,13 @@ select max(unique1) from tenk1;
 
 explain (costs off)
   select max(unique1) from tenk1 where unique1 < 42;
-                        QUERY PLAN                         
------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using tenk1_unique1 on tenk1
-                     Index Cond: (unique1 < 42)
+               ->  Seq Scan on tenk1
+                     Filter: (unique1 < 42)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1035,13 +1043,13 @@ select max(unique1) from tenk1 where unique1 < 42;
 
 explain (costs off)
   select max(unique1) from tenk1 where unique1 > 42;
-                        QUERY PLAN                         
------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using tenk1_unique1 on tenk1
-                     Index Cond: (unique1 > 42)
+               ->  Seq Scan on tenk1
+                     Filter: (unique1 > 42)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1062,13 +1070,13 @@ set local enable_seqscan=off;
 set local enable_bitmapscan=off;
 explain (costs off)
   select max(unique1) from tenk1 where unique1 > 42000;
-                        QUERY PLAN                         
------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using tenk1_unique1 on tenk1
-                     Index Cond: (unique1 > 42000)
+               ->  Seq Scan on tenk1
+                     Filter: (unique1 > 42000)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1082,13 +1090,13 @@ rollback;
 -- multi-column index (uses tenk1_thous_tenthous)
 explain (costs off)
   select max(tenthous) from tenk1 where thousand = 33;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using tenk1_thous_tenthous on tenk1
-                     Index Cond: (thousand = 33)
+               ->  Seq Scan on tenk1
+                     Filter: (thousand = 33)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1100,13 +1108,13 @@ select max(tenthous) from tenk1 where thousand = 33;
 
 explain (costs off)
   select min(tenthous) from tenk1 where thousand = 33;
-                            QUERY PLAN                            
-------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Finalize Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
-               ->  Index Scan using tenk1_thous_tenthous on tenk1
-                     Index Cond: (thousand = 33)
+               ->  Seq Scan on tenk1
+                     Filter: (thousand = 33)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -1116,6 +1124,7 @@ select min(tenthous) from tenk1 where thousand = 33;
   33
 (1 row)
 
+-- end_ignore
 -- check parameter propagation into an indexscan subquery
 -- In GPDB, this cannot use the MIN/MAX optimization, because the subplan
 -- parameter cannot be pushed through a Motion node.
@@ -1403,11 +1412,11 @@ NOTICE:  One or more columns in the following table(s) do not have statistics: i
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
      f1      |     min     
 -------------+-------------
+      123456 |      123456
+     -123456 |     -123456
            0 |           0
   2147483647 |  2147483647
  -2147483647 | -2147483647
-      123456 |      123456
-     -123456 |     -123456
 (5 rows)
 
 rollback;
@@ -2272,13 +2281,13 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
    9 |    
    6 |    
    5 |    
-   0 |    
-   1 |    
    4 |    
    2 |    
    8 |    
    7 |    
    3 |    
+   0 |    
+   1 |    
 (10 rows)
 
 select ten, sum(distinct four) filter (where four > 10) from onek a
@@ -2289,10 +2298,10 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
  ten | sum 
 -----+-----
    0 |    
-   6 |    
    4 |    
    2 |    
    8 |    
+   6 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -2641,252 +2650,256 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
 drop view aggordview1;
 -- variadic aggregates
 select least_agg(q1,q2) from int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select least_agg(variadic array[q1,q2]) from int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
@@ -3106,13 +3119,13 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
+   0 |    
+   1 |    
    4 |    
    2 |    
    8 |    
    7 |    
    3 |    
-   0 |    
-   1 |    
    9 |    
    6 |    
    5 |    
@@ -3125,11 +3138,11 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
  ten | sum 
 -----+-----
-   0 |    
-   6 |    
    4 |    
    2 |    
    8 |    
+   0 |    
+   6 |    
 (5 rows)
 
 select max(foo COLLATE "C") filter (where (bar collate "POSIX") > '0')
@@ -3374,14 +3387,14 @@ DETAIL:  Feature not supported: Non-default collation
 -----+--------
    0 | HHHHxx
    1 | OOOOxx
+   5 | HHHHxx
+   6 | OOOOxx
+   9 | VVVVxx
    2 | VVVVxx
    3 | OOOOxx
    4 | HHHHxx
    7 | AAAAxx
    8 | VVVVxx
-   5 | HHHHxx
-   6 | OOOOxx
-   9 | VVVVxx
 (10 rows)
 
 select percentile_disc(array[0.25,0.5,0.75]) within group (order by x)
@@ -3520,378 +3533,384 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
 drop view aggordview1;
 -- variadic aggregates
 select least_agg(q1,q2) from int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select least_agg(variadic array[q1,q2]) from int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
      least_agg     
 -------------------
  -4567890123456789
 (1 row)
 
 select cleast_agg(q1,q2) from int8_tbl;
+NOTICE:  One or more columns in the following table(s) do not have statistics: int8_tbl
+HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
     cleast_agg     
 -------------------
  -4567890123456789
@@ -3903,123 +3922,123 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
  cleast_agg  
 -------------
  -2147483647
@@ -4031,123 +4050,123 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
  cleast_agg  
 -------------
  -2147483647
@@ -4159,123 +4178,123 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  ../../../../../../src/backend/gporca/libgpopt/include/gpopt/operators/CScalarArrayRefIndexList.h:97: Failed assertion: !"Invalid function call: CScalarArrayRefIndexList::MdidType()"
 Stack trace:
-1    0x000061f9792ec35e gpos::CException::Raise + 270
-2    0x000061f9795ff88a <symbol not found> + 107724111083658
-3    0x000061f97972aefd gpopt::CXformUtils::FHasAmbiguousType + 205
-4    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-5    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-6    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-7    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-8    0x000061f97972af80 gpopt::CXformUtils::FHasAmbiguousType + 336
-9    0x000061f97971a4db gpopt::CXformSplitGbAgg::Exfp + 235
-10   0x000061f97962c15a gpopt::CGroupExpression::Transform + 394
-11   0x000061f9796462ae gpopt::CJobTransformation::EevtTransform + 206
-12   0x000061f979646912 gpopt::CJobTransformation::FExecute + 162
-13   0x000061f9796519a6 gpopt::CScheduler::ExecuteJobs + 118
-14   0x000061f9796523ea gpopt::CScheduler::Run + 26
-15   0x000061f97952a94c gpopt::CEngine::Optimize + 1356
-16   0x000061f97961696a gpopt::COptimizer::PdxlnOptimize + 970
-17   0x000061f979796a9b COptTasks::OptimizeTask + 923
-18   0x000061f9792fe82c gpos::CTask::Execute + 76
-19   0x000061f979300e56 gpos::CWorker::Execute + 38
-20   0x000061f9792fd9d8 gpos::CAutoTaskProxy::Execute + 120
-21   0x000061f97930279d gpos_exec + 637
+1    0x00006415257104ae gpos::CException::Raise + 270
+2    0x0000641525a239da <symbol not found> + 110041988479450
+3    0x0000641525b4f04d gpopt::CXformUtils::FHasAmbiguousType + 205
+4    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+5    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+6    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+7    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+8    0x0000641525b4f0d0 gpopt::CXformUtils::FHasAmbiguousType + 336
+9    0x0000641525b3e62b gpopt::CXformSplitGbAgg::Exfp + 235
+10   0x0000641525a502aa gpopt::CGroupExpression::Transform + 394
+11   0x0000641525a6a3fe gpopt::CJobTransformation::EevtTransform + 206
+12   0x0000641525a6aa62 gpopt::CJobTransformation::FExecute + 162
+13   0x0000641525a75af6 gpopt::CScheduler::ExecuteJobs + 118
+14   0x0000641525a7653a gpopt::CScheduler::Run + 26
+15   0x000064152594ea9c gpopt::CEngine::Optimize + 1356
+16   0x0000641525a3aaba gpopt::COptimizer::PdxlnOptimize + 970
+17   0x0000641525bbabeb COptTasks::OptimizeTask + 923
+18   0x000064152572297c gpos::CTask::Execute + 76
+19   0x0000641525724fa6 gpos::CWorker::Execute + 38
+20   0x0000641525721b28 gpos::CAutoTaskProxy::Execute + 120
+21   0x00006415257268ed gpos_exec + 637
  pg_typeof 
 -----------
  numeric
@@ -4859,9 +4878,11 @@ DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect norm
  Optimizer: Postgres query optimizer
 (20 rows)
 
+-- GPDB: no outer ORDER BY, and atmsort does not re-sort because the aggregate
+-- carries an ORDER BY; order the execute so the two GROUP BY rows are stable.
 SELECT avg(c1.f ORDER BY c1.x, c1.y)
 FROM group_agg_pk c1 JOIN group_agg_pk c2 ON c1.x = c2.x
-GROUP BY c1.w, c1.z;
+GROUP BY c1.w, c1.z ORDER BY 1;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Query-to-DXL Translation: No variable entry found due to incorrect normalization of query
         avg         
@@ -5469,24 +5490,24 @@ set enable_indexonlyscan = off;
 explain analyze select count(*) from pg_class,  (select count(*) >0 from  (select count(*) from pg_class where relname like 't%')x)y;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
-                                                      QUERY PLAN                                                       
------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=33.66..33.67 rows=1 width=8) (actual time=0.168..0.169 rows=1.00 loops=1)
-   Buffers: shared hit=10
-   ->  Nested Loop  (cost=0.02..31.04 rows=1050 width=0) (actual time=0.020..0.140 rows=971.00 loops=1)
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=19.18..19.19 rows=1 width=8) (actual time=0.189..0.190 rows=1.00 loops=1)
+   Buffers: shared hit=6
+   ->  Nested Loop  (cost=0.02..17.72 rows=584 width=0) (actual time=0.021..0.149 rows=586.00 loops=1)
          Disabled: true
-         Buffers: shared hit=10
-         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.010..0.011 rows=1.00 loops=1)
-               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.008..0.008 rows=1.00 loops=1)
-         ->  Seq Scan on pg_class  (cost=0.00..20.50 rows=1050 width=0) (actual time=0.009..0.080 rows=971.00 loops=1)
-               Buffers: shared hit=10
+         Buffers: shared hit=6
+         ->  Aggregate  (cost=0.02..0.03 rows=1 width=1) (actual time=0.005..0.006 rows=1.00 loops=1)
+               ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.002..0.003 rows=1.00 loops=1)
+         ->  Seq Scan on pg_class  (cost=0.00..11.84 rows=584 width=0) (actual time=0.015..0.077 rows=586.00 loops=1)
+               Buffers: shared hit=6
  Optimizer: Postgres query optimizer
  Planning:
-   Buffers: shared hit=1035
- Planning Time: 4.346 ms
+   Buffers: shared hit=1101
+ Planning Time: 9.195 ms
    (slice0)    Executor memory: 33K bytes.
  Memory used:  128000kB
- Execution Time: 0.196 ms
+ Execution Time: 0.245 ms
 (16 rows)
 
 reset enable_indexscan;

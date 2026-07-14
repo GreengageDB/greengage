@@ -91,6 +91,13 @@ m/^DEBUG:  probing availability of JIT provider/
 m/^DEBUG:  LLVMJIT detected CPU/
 m/^DEBUG:  time to inline:/
 
+# Stack-trace frame lines "<n>    0x<addr> <symbol> + <off>" printed after a
+# "Stack trace:" header (e.g. an ORCA cassert exception that then falls back to
+# the planner).  The instruction addresses -- and the number of frames -- vary
+# from run to run, so drop every frame line; the deterministic DETAIL assertion
+# text and the fallback INFO/WARNING around it still compare.
+m/^\d+\s+0x[0-9a-f]{6,}/
+
 -- end_matchignore
 
 -- start_matchsubs
@@ -214,5 +221,25 @@ s/connection to server on socket "[^"]+" failed:\s*//
 # REFRESH ... WITH NO DATA error context exposes them
 m/pg_temp_\d+/
 s/pg_temp_\d+/pg_temp_NNN/g
+
+# EXPLAIN ANALYZE per-node "actual rows" is non-deterministic under MPP: the
+# row count seen on a node fed by a Motion depends on how the hash distribution
+# spreads rows across segments, so it varies from run to run.  Normalise it
+# (PG18 reports it as a fractional value, e.g. "actual rows=6.00").
+m/actual rows=\d+(\.\d+)? loops=\d+/
+s/actual rows=\d+(\.\d+)? loops=\d+/actual rows=### loops=#/
+
+# Mask RETURNING ctids in the returning test.  RETURNING old/new.ctid on the
+# randomly-distributed table foo and the partitioned foo_parted emits physical
+# ctids (e.g. "foo | (0,1)", "foo_part_s1 | (0,2)") that vary run to run as
+# tuples land on / move between segments and partitions; the data columns are
+# identical.  Anchor on a foo* tableoid immediately followed by the ctid column
+# (this "foo* | (block,offset)" shape occurs only in returning.out, verified by
+# grep), so no other test's ctids are touched; /g masks both the old- and
+# new-tableoid ctid on a row, and atmsort then sorts the now-identical rows to
+# absorb the row-order flutter.  Composite ROW values like "(5,ok,42,99)" are
+# not touched (the pattern requires two all-digit fields).
+m/foo\w*\s+\|\s+\(\d+,\d+\)/
+s/(foo\w*\s+\|\s+)\(\d+,\d+\)/${1}(#,#)/g
 
 -- end_matchsubs
