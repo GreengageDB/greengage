@@ -96,11 +96,11 @@ gp_aoblkdir(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("function not supported on non append-optimized relation")));
-		sst = GetLatestSnapshot();
+		sst = GetActiveSnapshot();
 		GetAppendOnlyEntryAuxOids(aoRelOid, sst,
 								  NULL, &blkdirrelid, NULL,
 								  NULL, NULL);
-		sst = gp_select_invisible ? SnapshotAny : GetLatestSnapshot();
+		sst = gp_select_invisible ? SnapshotAny : GetActiveSnapshot();
 		if (blkdirrelid == InvalidOid)
 			ereport(ERROR,
 					(errmsg("appendoptimized relation doesn't have a block directory"),

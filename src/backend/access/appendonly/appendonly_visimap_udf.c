@@ -87,7 +87,7 @@ gp_aovisimap(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("function not supported on relation")));
 
-		Snapshot sst = GetLatestSnapshot();
+		Snapshot sst = GetActiveSnapshot();
 
         GetAppendOnlyEntryAuxOids(context->aorel->rd_id, sst,
                                   NULL, NULL, NULL,
@@ -203,7 +203,7 @@ gp_aovisimap_hidden_info(PG_FUNCTION_ARGS)
 					 errmsg("function not supported on relation")));
 
         Oid segrelid;
-		snapshot = GetLatestSnapshot();
+		snapshot = GetActiveSnapshot();
         GetAppendOnlyEntryAuxOids(context->parentRelation->rd_id, snapshot,
                                   &segrelid, NULL, NULL,
                                   &visimaprelid, &visimapidxid);
@@ -382,7 +382,7 @@ gp_aovisimap_entry(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("function not supported on relation")));
 
-        Snapshot sst = GetLatestSnapshot();
+        Snapshot sst = GetActiveSnapshot();
 
         GetAppendOnlyEntryAuxOids(context->parentRelation->rd_id, sst,
                                   NULL, NULL, NULL,
