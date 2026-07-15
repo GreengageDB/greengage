@@ -159,6 +159,10 @@ ParseExplainOptionList(ExplainState *es, List *options, ParseState *pstate)
 								opt->defname, p),
 						 parser_errposition(pstate, opt->location)));
 		}
+		else if (strcmp(opt->defname, "dxl") == 0)	/* GPDB: print ORCA DXL plan */
+			es->dxl = defGetBoolean(opt);
+		else if (strcmp(opt->defname, "slicetable") == 0)	/* GPDB: print MPP slice table */
+			es->slicetable = defGetBoolean(opt);
 		else if (!ApplyExtensionExplainOption(es, opt, pstate))
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
