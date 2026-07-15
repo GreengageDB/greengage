@@ -1846,9 +1846,7 @@ ExecStoreVirtualTuple(TupleTableSlot *slot)
 	Assert(TTS_EMPTY(slot));
 
 	slot->tts_flags &= ~TTS_FLAG_EMPTY;
-
-	if (slot->tts_nvalid == 0)
-		slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
+	slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
 
 	return slot;
 }
