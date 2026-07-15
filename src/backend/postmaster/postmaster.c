@@ -5183,7 +5183,28 @@ load_auxiliary_libraries(void)
 				strcmp(rw->rw_worker.bgw_library_name, worker->bgw_library_name) == 0 &&
 				strcmp(rw->rw_worker.bgw_function_name, worker->bgw_function_name) == 0 &&
 				rw->rw_worker.bgw_start_rule == worker->bgw_start_rule)
+			{
 				registered = true;
+
+				/*
+				 * GPDB: this function is also called from the postmaster
+				 * crash-reinitialization path, at which point all children
+				 * (including these auxiliary bgworkers) have already exited.
+				 *
+				 * A bgworker that was killed during a crash is reaped through
+				 * CleanupBackend()'s "crashed" early-return path, which does
+				 * NOT clear rw_pid.  The stale pid would then make
+				 * maybe_start_bgworkers() treat the worker as still running
+				 * ("ignore if already running") and never relaunch it -- which
+				 * for the dtx recovery process leaves the coordinator stuck
+				 * forever "waiting for distributed transaction recovery to
+				 * complete".  Since the process is known to be gone here, clear
+				 * the bookkeeping so the worker is restarted.
+				 */
+				rw->rw_pid = 0;
+				rw->rw_crashed_at = 0;
+				break;
+			}
 		}
 		if (registered)
 			continue;
