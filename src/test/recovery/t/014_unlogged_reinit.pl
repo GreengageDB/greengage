@@ -7,7 +7,7 @@ use strict;
 use warnings;
 use PostgresNode;
 use TestLib;
-use Test::More tests => 12;
+use Test::More tests => 16;
 
 my $node = get_new_node('main');
 
@@ -79,3 +79,42 @@ ok( !-f "$pgdata/${ts1UnloggedPath}_vm",
 	'vm fork in tablespace removed at startup');
 ok( !-f "$pgdata/${ts1UnloggedPath}_fsm",
 	'fsm fork in tablespace removed at startup');
+
+
+# Create new unlogged tables to check recovery when DB contains main fork only.
+
+# Make it impossible to get a checkpoint after table creation before a crash.
+$node->append_conf('postgresql.conf', <<EOF);
+checkpoint_timeout=1h
+EOF
+$node->restart;
+
+$node->safe_psql('postgres', 'CREATE UNLOGGED TABLE base_unlogged2 (id int)');
+$node->safe_psql('postgres',
+	'CREATE UNLOGGED TABLE ts1_unlogged2 (id int) TABLESPACE ts1');
+
+$baseUnloggedPath = $node->safe_psql('postgres',
+	q{select pg_relation_filepath('base_unlogged2')});
+$ts1UnloggedPath = $node->safe_psql('postgres',
+	q{select pg_relation_filepath('ts1_unlogged2')});
+
+# Crash the postmaster.
+$node->stop('immediate');
+
+# Remove init fork to test that it is recreated from init.
+unlink("$pgdata/${baseUnloggedPath}_init")
+  or BAIL_OUT("could not remove \"${baseUnloggedPath}_init\": $!");
+unlink("$pgdata/${ts1UnloggedPath}_init")
+  or BAIL_OUT("could not remove \"${ts1UnloggedPath}_init\": $!");
+
+$node->start;
+
+# check unlogged table in tablespace
+ok( -f "$pgdata/${ts1UnloggedPath}_init",
+	'init fork recreated at startup in tablespace');
+ok(-f "$pgdata/$ts1UnloggedPath",
+	'main fork in tablespace recreated at startup');
+
+# check unlogged table in base
+ok(-f "$pgdata/${baseUnloggedPath}_init", 'init fork in base recreated at startup');
+ok(-f "$pgdata/${baseUnloggedPath}", 'main fork in base recreated at startup');
