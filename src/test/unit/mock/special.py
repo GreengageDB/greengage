@@ -69,6 +69,7 @@ class ByValStructs(object):
     """
     type_names = set([
             'ArrayTuple',
+            'BackendTypeMask',
             'CdbPathLocus',
             'Complex',
             'DbDirNode',

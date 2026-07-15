@@ -89,7 +89,7 @@ errdetail_internal_impl(const char* fmt, ...)
 static void
 test__incompatible_module_error__struct_size_mismatch(void **state)
 {
-	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA;
+	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA();
 
 	/* Simulate a smaller structure for the module's Pg_magic_struct */
 	module_magic.len = offsetof(Pg_magic_struct, version);
@@ -100,7 +100,7 @@ test__incompatible_module_error__struct_size_mismatch(void **state)
 
 	PG_TRY();
 	{
-		incompatible_module_error("test", &module_magic);
+		incompatible_module_error("test", &module_magic.abi_fields);
 		assert_true(false);
 	}
 	PG_CATCH();
@@ -117,7 +117,7 @@ test__incompatible_module_error__struct_size_mismatch(void **state)
  */
 static void CheckHeaderVersionMismatch(int diffOffset)
 {
-	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA;
+	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA();
 
 	snprintf(expectedErrorMsg, 255, "Magic block has unexpected length or padding difference.");
 
@@ -125,7 +125,7 @@ static void CheckHeaderVersionMismatch(int diffOffset)
 
 	PG_TRY();
 	{
-		incompatible_module_error("test", &module_magic);
+		incompatible_module_error("test", &module_magic.abi_fields);
 		assert_true(false);
 	}
 	PG_CATCH();
@@ -151,7 +151,7 @@ static void
 test__incompatible_module_error__headerversion_identical(void **state)
 {
 	/* Module magic is identical to ours */
-	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA;
+	Pg_magic_struct module_magic = PG_MODULE_MAGIC_DATA();
 
 	/* We should expect a "default" error */
 	snprintf(expectedErrorMsg, 255, "Magic block has unexpected length or padding difference.");
@@ -160,7 +160,7 @@ test__incompatible_module_error__headerversion_identical(void **state)
 
 	PG_TRY();
 	{
-		incompatible_module_error("test", &module_magic);
+		incompatible_module_error("test", &module_magic.abi_fields);
 		assert_true(false);
 	}
 	PG_CATCH();

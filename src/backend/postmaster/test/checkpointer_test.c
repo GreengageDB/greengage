@@ -19,7 +19,7 @@ init_request_queue(void)
 	CheckpointerShmem->max_requests = MAX_BGW_REQUESTS;
 	IsUnderPostmaster = true;
 	ProcGlobal = (PROC_HDR *) malloc(sizeof(PROC_HDR));
-	ProcGlobal->checkpointerLatch = NULL;
+	ProcGlobal->checkpointerProc = INVALID_PROC_NUMBER;
 }
 
 /*
@@ -33,7 +33,7 @@ test__ForwardSyncRequest_enqueue(void **state)
 	int i;
 	FileTag dummy_tag = {1, MAIN_FORKNUM, {1, 1, 1}, 1};
 	init_request_queue();
-	ProcGlobal->checkpointerLatch = NULL;
+	ProcGlobal->checkpointerProc = INVALID_PROC_NUMBER;
 	expect_value(LWLockAcquire, lock, CheckpointerCommLock);
 	expect_value(LWLockAcquire, mode, LW_EXCLUSIVE);
 	will_return(LWLockAcquire, true);

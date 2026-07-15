@@ -25,10 +25,9 @@ test__aocs_begin_headerscan(void **state)
 	reldata.rd_rel = &pgclass;
 	reldata.rd_id = 12345;
 	reldata.rd_rel->relnatts = nattr;
-	reldata.rd_att = (TupleDesc) palloc(sizeof(TupleDescData) +
-										(sizeof(Form_pg_attribute *) * nattr));
-	memset(reldata.rd_att->attrs, 0, sizeof(Form_pg_attribute *) * nattr);
-	reldata.rd_att->natts = nattr;
+	reldata.rd_att = CreateTemplateTupleDesc(nattr);
+	memset(TupleDescAttr(reldata.rd_att, 0), 0,
+		   nattr * sizeof(FormData_pg_attribute));
 
 	/* opts and opt will be freed by aocs_begin_headerscan */
 	StdRdOptions **opts =
@@ -114,10 +113,9 @@ test__aocs_addcol_init(void **state)
 	reldata.rd_rel = &rel;
 
 	reldata.rd_rel->relnatts = 5;
-	reldata.rd_att = (TupleDesc) palloc(sizeof(TupleDescData) +
-										(sizeof(Form_pg_attribute *) * nattr));
-	memset(reldata.rd_att->attrs, 0, sizeof(Form_pg_attribute *) * nattr);
-	reldata.rd_att->natts = 5;
+	reldata.rd_att = CreateTemplateTupleDesc(nattr);
+	memset(TupleDescAttr(reldata.rd_att, 0), 0,
+		   nattr * sizeof(FormData_pg_attribute));
 
 	expect_value(GetAppendOnlyEntryAttributes, relid, 12345);
 	expect_any(GetAppendOnlyEntryAttributes, blocksize);

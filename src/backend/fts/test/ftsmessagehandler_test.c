@@ -133,7 +133,16 @@ test_HandleFtsWalRepProbeMirror(void **state)
 static void
 set_replication_slot(void *ptr)
 {
-	ReplicationSlotCtlData *repCtl = (ReplicationSlotCtlData *) ptr;
+	/*
+	 * The caller passes &ReplicationSlotCtl (the address of the global ctl
+	 * pointer), so dereference once to get the actual ReplicationSlotCtlData,
+	 * which points at the caller's stack-allocated ctl.  Casting ptr directly
+	 * to ReplicationSlotCtlData * (as this used to) made MyReplicationSlot
+	 * alias the global pointer variable; writing restart_lsn through it then
+	 * scribbled over unrelated globals -- harmless until PG18 grew
+	 * ReplicationSlot enough to push the write onto an unmapped page (crash).
+	 */
+	ReplicationSlotCtlData *repCtl = *(ReplicationSlotCtlData **) ptr;
 	MyReplicationSlot = &repCtl->replication_slots[0];
 	/*
 	 * any number except 1 to avoid calling ReplicationSlotReserveWal and
