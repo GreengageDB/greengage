@@ -33,6 +33,20 @@ else
     echo "SQL_SCHEMA is set. This test will load \"${SQL_SCHEMA}\" before performing upgrade."
 fi
 
+CLEANUP_SCRIPT=${CLEANUP_SCRIPT:-}
+if [ -z "${CLEANUP_SCRIPT}" ]; then
+    echo "CLEANUP_SCRIPT environment variable is not set. No cleanup will occur."
+else
+    echo "CLEANUP_SCRIPT is set. This test will load \"${CLEANUP_SCRIPT}\" before performing upgrade."
+fi
+
+DUMP_OPTIONS=${DUMP_OPTIONS:-}
+if [ -z "${DUMP_OPTIONS}" ]; then
+    echo "DUMP_OPTIONS environment variable is not set. No additional options will be passed to pg_dumpall."
+else
+    echo "DUMP_OPTIONS is set. This test will pass ${DUMP_OPTIONS} to pg_dumpall."
+fi
+
 set -x
 
 # Create Greengage 6 demo cluster.
@@ -62,5 +76,7 @@ pushd ${GREENGAGE7_SRC}/src/bin/pg_upgrade
 ./test_gpdb.sh \
     -b ${GREENGAGE7_INSTALLATION}/bin \
     -B ${GREENGAGE6_INSTALLATION}/bin \
-    -O ${GREENGAGE6_SRC}/gpAux/gpdemo/datadirs/
+    -O ${GREENGAGE6_SRC}/gpAux/gpdemo/datadirs/ \
+    ${DUMP_OPTIONS:+-d "$DUMP_OPTIONS"} \
+    ${CLEANUP_SCRIPT:+-f "$CLEANUP_SCRIPT"}
 popd

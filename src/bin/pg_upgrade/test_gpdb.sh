@@ -66,6 +66,10 @@ retain_tempdir=0
 # GPDB_UPGRADE_FIXME: what about the pg_upgrade precheck for upgrade?
 perf_test=0
 
+# If it is specified, run a seperate script to delete/change objects failing
+# to upgrade. It comes handy when testing regression dump.
+cleanup_script=""
+
 # Not all platforms have a realpath binary in PATH, most notably macOS doesn't,
 # so provide an alternative implementation. Returns an absolute path in the
 # variable reference passed as the first parameter.  Code inspired by:
@@ -215,6 +219,8 @@ usage()
 	echo " -O <dir>     old cluster data directory"
 	echo " -b <dir>     new cluster executable directory"
 	echo " -B <dir>     old cluster executable directory (defaults to new binaries)"
+	echo " -f <file>    Script to run in the old cluster before performing upgrade (defaults to none)"
+	echo " -d <string>  Specify additional pg_dump options"
 	echo " -s           Run smoketest only"
 	echo " -C           Skip gpcheckcat test"
 	echo " -m           Upgrade mirrors"
@@ -320,7 +326,7 @@ main() {
 	local temp_root=`pwd`/tmp_check
 	local base_dir=`pwd`
 	
-	while getopts ":O:b:B:sCkKmrp" opt; do
+	while getopts ":O:b:B:f:d:sCkKmrp" opt; do
 		case ${opt} in
 			O )
 				realpath OLD_DATADIR "${OPTARG}"
@@ -330,6 +336,12 @@ main() {
 				;;
 			B )
 				realpath OLD_BINDIR "${OPTARG}"
+				;;
+			f )
+				realpath cleanup_script "${OPTARG}"
+				;;
+			d )
+				DUMP_OPTS+="${OPTARG}"
 				;;
 			s )
 				smoketest=1
@@ -392,8 +404,8 @@ main() {
 	fi
 	
 	# Run any pre-upgrade tasks to prep the cluster
-	if [ -f "test_gpdb_pre.sql" ]; then
-		if ! ${OLD_BINDIR}/psql -f test_gpdb_pre.sql -v ON_ERROR_STOP=1 postgres; then
+	if [ -n "$cleanup_script" ]; then
+		if ! ${OLD_BINDIR}/psql -f $cleanup_script -v ON_ERROR_STOP=1 postgres; then
 			echo "ERROR: unable to execute pre-upgrade cleanup"
 			exit 1
 		fi
