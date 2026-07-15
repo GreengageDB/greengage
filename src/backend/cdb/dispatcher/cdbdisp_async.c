@@ -1125,24 +1125,35 @@ processResults(CdbDispatchResult *dispatchResult)
 		 * time a command is sent to that connection, it will return an error
 		 * that there's a command pending.
 		 */
+		/*
+		 * The QE sends its "wrote xlog" ('x') message immediately before the
+		 * ReadyForQuery message, so it is parsed by the PQgetResult() call that
+		 * then reports the end of the command by returning NULL.  We must check
+		 * conn->wrote_xlog on every PQgetResult() -- including that final NULL
+		 * one, below -- and not only on the calls that return a PGresult.
+		 * Otherwise the flag set by the last message is never consumed, the QD
+		 * wrongly concludes that no QE wrote xlog, and a distributed transaction
+		 * that requires two-phase commit is committed one-phase instead.  (In
+		 * older libpq the 'x' message was usually parsed together with the
+		 * CommandComplete result; PG18's libpq returns that result before
+		 * parsing the trailing message, which exposed this bug.)
+		 *
+		 * Reset wrote_xlog after consuming it, since if a later pgresult does
+		 * not carry the 'x' message the value would otherwise still refer to a
+		 * previous dispatch statement and always mark the current top
+		 * transaction as having written xlog on the executor.
+		 */
+		if (segdbDesc->conn->wrote_xlog)
+		{
+			MarkTopTransactionWriteXLogOnExecutor();
+			segdbDesc->conn->wrote_xlog = false;
+		}
+
 		if (!pRes)
 		{
 			ELOG_DISPATCHER_DEBUG("%s -> idle", segdbDesc->whoami);
 			/* this is normal end of command */
 			return true;
-		}
-
-		if (segdbDesc->conn->wrote_xlog)
-		{
-			MarkTopTransactionWriteXLogOnExecutor();
-
-			/*
-			 * Reset the worte_xlog here. Since if the received pgresult not process
-			 * the xlog write message('x' message sends from QE in ReadyForQuery),
-			 * the value may still refer to previous dispatch statement. Which may
-			 * always mark current top transaction has wrote xlog on executor.
-			 */
-			segdbDesc->conn->wrote_xlog = false;
 		}
 
 		/*
