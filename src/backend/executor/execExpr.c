@@ -63,6 +63,9 @@ typedef struct ExprSetupInfo
 	Bitmapset  *all_scan_attrs;
 	/* MULTIEXPR SubPlan nodes appearing in the expression: */
 	List	   *multiexpr_subplans;
+	/* All attribute numbers referenced from inner/outer tuple slots: */
+	Bitmapset  *all_inner_attrs;
+	Bitmapset  *all_outer_attrs;
 } ExprSetupInfo;
 
 static void ExecReadyExpr(ExprState *state);
@@ -2397,7 +2400,7 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 	{
 		scratch.opcode = EEOP_INNER_FETCHSOME;
 		scratch.d.fetch.last_var = info->last_inner;
-		scratch.d.fetch.all_vars = NULL;
+		scratch.d.fetch.all_vars = info->all_inner_attrs;
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
@@ -2408,7 +2411,7 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 	{
 		scratch.opcode = EEOP_OUTER_FETCHSOME;
 		scratch.d.fetch.last_var = info->last_outer;
-		scratch.d.fetch.all_vars = NULL;
+		scratch.d.fetch.all_vars = info->all_outer_attrs;
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
@@ -2480,10 +2483,18 @@ expr_setup_walker(Node *node, ExprSetupInfo *info)
 		{
 			case INNER_VAR:
 				info->last_inner = Max(info->last_inner, attnum);
+				if (attnum > 0)
+				{
+					info->all_inner_attrs = bms_add_member(info->all_inner_attrs, attnum - 1);
+				}
 				break;
 
 			case OUTER_VAR:
 				info->last_outer = Max(info->last_outer, attnum);
+				if (attnum > 0)
+				{
+					info->all_outer_attrs = bms_add_member(info->all_outer_attrs, attnum - 1);
+				}
 				break;
 
 				/* INDEX_VAR is handled by default case */
