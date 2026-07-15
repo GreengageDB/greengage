@@ -1736,10 +1736,17 @@ aocs_delete_init(Relation rel)
 
 	aoDeleteDesc->aod_rel = rel;
 
-    Snapshot snapshot = GetCatalogSnapshot(InvalidOid);
-
+    /*
+     * GPDB: mirror appendonly_delete_init() (the AO-row path).  Pass NULL for
+     * the aux-oid lookup so systable_beginscan() registers the catalog
+     * snapshot itself, and use the active snapshot for the visimap.  Passing a
+     * raw GetCatalogSnapshot() here left it neither registered nor active,
+     * which trips the PG18 assertion snapshot->regd_count > 0 ||
+     * snapshot->active_count > 0 in HeapTupleSatisfiesMVCC() when the visimap
+     * OID lookup performs an index scan of pg_appendonly.
+     */
     GetAppendOnlyEntryAuxOids(rel->rd_id,
-                              snapshot,
+                              NULL,
                               NULL, NULL, NULL,
                               &visimaprelid, &visimapidxid);
 
@@ -1747,7 +1754,7 @@ aocs_delete_init(Relation rel)
 						   visimaprelid,
 						   visimapidxid,
 						   RowExclusiveLock,
-						   snapshot);
+						   GetActiveSnapshot());
 
 	AppendOnlyVisimapDelete_Init(&aoDeleteDesc->visiMapDelete,
 								 &aoDeleteDesc->visibilityMap);
