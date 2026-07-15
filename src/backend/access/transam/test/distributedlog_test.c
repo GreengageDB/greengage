@@ -19,11 +19,13 @@
 	((page) * (TransactionId) ENTRIES_PER_PAGE + (TransactionId) (entry))
 
 /*
- * Under the PG17 SLRU model the distributed log is protected by per-bank
+ * Under the PG17+ SLRU model the distributed log is protected by per-bank
  * LWLocks obtained via SimpleLruGetBankLock() instead of a single control
  * lock.  For the unit tests we point the SlruCtl at a single, statically
- * allocated bank lock (bank_mask == 0), so SimpleLruGetBankLock() always
- * returns a predictable pointer that the LWLock mocks can match against.
+ * allocated bank lock (nbanks == 1, so SimpleLruGetBankLock()'s
+ * "pageno % ctl->nbanks" is always bank 0), giving a predictable pointer
+ * that the LWLock mocks can match against.  (PG18 replaced the earlier
+ * bank_mask bitmask with the nbanks count.)
  */
 static LWLockPadded distributedlog_bank_locks[1];
 #define DistributedLogBankLock (&distributedlog_bank_locks[0].lock)
@@ -69,7 +71,7 @@ MPP_20426(void **state, TransactionId nextXid)
 
 	/* Point the SLRU at a single, predictable bank lock. */
 	DistributedLogCtl->shared->bank_locks = distributedlog_bank_locks;
-	DistributedLogCtl->bank_mask = 0;
+	DistributedLogCtl->nbanks = 1;
 
 	expect_value(LWLockAcquire, lock, DistributedLogBankLock);
 	expect_value(LWLockAcquire, mode, LW_EXCLUSIVE);
@@ -129,7 +131,7 @@ setup(TransactionId nextXid)
 
 	/* Point the SLRU at a single, predictable bank lock. */
 	DistributedLogCtl->shared->bank_locks = distributedlog_bank_locks;
-	DistributedLogCtl->bank_mask = 0;
+	DistributedLogCtl->nbanks = 1;
 
 	/* DistributedLog_InitOldestXmin() consults TransamVariables. */
 	distributedlog_transam_vars.oldestXid = FirstNormalTransactionId;
