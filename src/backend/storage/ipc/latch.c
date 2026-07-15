@@ -187,9 +187,20 @@ WaitLatch(Latch *latch, int wakeEvents, long timeout,
 	if (!(wakeEvents & WL_LATCH_SET))
 		latch = NULL;
 	ModifyWaitEvent(LatchWaitSet, LatchWaitSetLatchPos, WL_LATCH_SET, latch);
-	ModifyWaitEvent(LatchWaitSet, LatchWaitSetPostmasterDeathPos,
-					(wakeEvents & (WL_EXIT_ON_PM_DEATH | WL_POSTMASTER_DEATH)),
-					NULL);
+
+	/*
+	 * GPDB: the postmaster-death event is only present in LatchWaitSet when
+	 * running under the postmaster (see InitializeLatchWaitSet).  In
+	 * single-user mode (e.g. the "postgres --single" instance pg_rewind runs
+	 * to finish crash recovery) LatchWaitSet has only the latch event, so
+	 * modifying LatchWaitSetPostmasterDeathPos would trip the "pos <
+	 * set->nevents" assertion in ModifyWaitEvent().  There is no postmaster to
+	 * watch for in that case, so just skip it.
+	 */
+	if (IsUnderPostmaster)
+		ModifyWaitEvent(LatchWaitSet, LatchWaitSetPostmasterDeathPos,
+						(wakeEvents & (WL_EXIT_ON_PM_DEATH | WL_POSTMASTER_DEATH)),
+						NULL);
 
 	if (WaitEventSetWait(LatchWaitSet,
 						 (wakeEvents & WL_TIMEOUT) ? timeout : -1,
