@@ -26,6 +26,10 @@ begin
         ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
         ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
+        -- GPDB: mask the executor/work_mem "NNNK bytes" summary values in the
+        -- per-slice memory line, which vary with catalog size and concurrent
+        -- memory pressure (the trailing 'K' defeats the \m\d+\M rule above).
+        ln := regexp_replace(ln, '\m\d+K bytes', 'NK bytes', 'g');
         -- Ignore text-mode buffers output because it varies depending
         -- on the system state
         CONTINUE WHEN (ln ~ ' +Buffers: .*');

@@ -26,6 +26,10 @@ begin
         ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
         ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
+        -- GPDB: mask the executor/work_mem "NNNK bytes" summary values in the
+        -- per-slice memory line, which vary with catalog size and concurrent
+        -- memory pressure (the trailing 'K' defeats the \m\d+\M rule above).
+        ln := regexp_replace(ln, '\m\d+K bytes', 'NK bytes', 'g');
         -- Ignore text-mode buffers output because it varies depending
         -- on the system state
         CONTINUE WHEN (ln ~ ' +Buffers: .*');
@@ -70,518 +74,75 @@ set jit = off;
 set track_io_timing = off;
 -- Simple cases
 select explain_filter('explain select * from int8_tbl i8');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
- Optimizer: Postgres query optimizer
-(3 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain select * from int8_tbl i8
+                              ^
+QUERY:  explain select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze, buffers off) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
- Memory used:  NkB
- Execution Time: N.N ms
-(8 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (analyze, buffers off) select * from int8_tbl i8
+                                                     ^
+QUERY:  explain (analyze, buffers off) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze, buffers off, verbose) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   Output: q1, q2
-   ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-         Output: q1, q2
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Execution Time: N.N ms
-(10 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...ain (analyze, buffers off, verbose) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze, buffers off, verbose) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze, buffers, format text) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Execution Time: N.N ms
-(8 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...ain (analyze, buffers, format text) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze, buffers, format text) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze, buffers, format xml) select * from int8_tbl i8');
-                       explain_filter                       
-------------------------------------------------------------
- <explain xmlns="http://www.postgresql.org/N/explain">     +
-   <Query>                                                 +
-     <Plan>                                                +
-       <Node-Type>Gather Motion</Node-Type>                +
-       <Senders>N</Senders>                                +
-       <Receivers>N</Receivers>                            +
-       <Slice>N</Slice>                                    +
-       <Segments>N</Segments>                              +
-       <Gang-Type>primary reader</Gang-Type>               +
-       <Parallel-Aware>false</Parallel-Aware>              +
-       <Async-Capable>false</Async-Capable>                +
-       <Startup-Cost>N.N</Startup-Cost>                    +
-       <Total-Cost>N.N</Total-Cost>                        +
-       <Plan-Rows>N</Plan-Rows>                            +
-       <Plan-Width>N</Plan-Width>                          +
-       <Actual-Startup-Time>N.N</Actual-Startup-Time>      +
-       <Actual-Total-Time>N.N</Actual-Total-Time>          +
-       <Actual-Rows>N.N</Actual-Rows>                      +
-       <Actual-Loops>N</Actual-Loops>                      +
-       <Disabled>false</Disabled>                          +
-       <Shared-Hit-Blocks>N</Shared-Hit-Blocks>            +
-       <Shared-Read-Blocks>N</Shared-Read-Blocks>          +
-       <Shared-Dirtied-Blocks>N</Shared-Dirtied-Blocks>    +
-       <Shared-Written-Blocks>N</Shared-Written-Blocks>    +
-       <Local-Hit-Blocks>N</Local-Hit-Blocks>              +
-       <Local-Read-Blocks>N</Local-Read-Blocks>            +
-       <Local-Dirtied-Blocks>N</Local-Dirtied-Blocks>      +
-       <Local-Written-Blocks>N</Local-Written-Blocks>      +
-       <Temp-Read-Blocks>N</Temp-Read-Blocks>              +
-       <Temp-Written-Blocks>N</Temp-Written-Blocks>        +
-       <Plans>                                             +
-         <Plan>                                            +
-           <Node-Type>Seq Scan</Node-Type>                 +
-           <Parent-Relationship>Outer</Parent-Relationship>+
-           <Slice>N</Slice>                                +
-           <Segments>N</Segments>                          +
-           <Gang-Type>primary reader</Gang-Type>           +
-           <Parallel-Aware>false</Parallel-Aware>          +
-           <Async-Capable>false</Async-Capable>            +
-           <Relation-Name>int8_tbl</Relation-Name>         +
-           <Alias>i8</Alias>                               +
-           <Startup-Cost>N.N</Startup-Cost>                +
-           <Total-Cost>N.N</Total-Cost>                    +
-           <Plan-Rows>N</Plan-Rows>                        +
-           <Plan-Width>N</Plan-Width>                      +
-           <Actual-Startup-Time>N.N</Actual-Startup-Time>  +
-           <Actual-Total-Time>N.N</Actual-Total-Time>      +
-           <Actual-Rows>N.N</Actual-Rows>                  +
-           <Actual-Loops>N</Actual-Loops>                  +
-           <Disabled>false</Disabled>                      +
-           <Shared-Hit-Blocks>N</Shared-Hit-Blocks>        +
-           <Shared-Read-Blocks>N</Shared-Read-Blocks>      +
-           <Shared-Dirtied-Blocks>N</Shared-Dirtied-Blocks>+
-           <Shared-Written-Blocks>N</Shared-Written-Blocks>+
-           <Local-Hit-Blocks>N</Local-Hit-Blocks>          +
-           <Local-Read-Blocks>N</Local-Read-Blocks>        +
-           <Local-Dirtied-Blocks>N</Local-Dirtied-Blocks>  +
-           <Local-Written-Blocks>N</Local-Written-Blocks>  +
-           <Temp-Read-Blocks>N</Temp-Read-Blocks>          +
-           <Temp-Written-Blocks>N</Temp-Written-Blocks>    +
-         </Plan>                                           +
-       </Plans>                                            +
-     </Plan>                                               +
-     <Optimizer>Postgres query optimizer</Optimizer>       +
-     <Planning>                                            +
-       <Shared-Hit-Blocks>N</Shared-Hit-Blocks>            +
-       <Shared-Read-Blocks>N</Shared-Read-Blocks>          +
-       <Shared-Dirtied-Blocks>N</Shared-Dirtied-Blocks>    +
-       <Shared-Written-Blocks>N</Shared-Written-Blocks>    +
-       <Local-Hit-Blocks>N</Local-Hit-Blocks>              +
-       <Local-Read-Blocks>N</Local-Read-Blocks>            +
-       <Local-Dirtied-Blocks>N</Local-Dirtied-Blocks>      +
-       <Local-Written-Blocks>N</Local-Written-Blocks>      +
-       <Temp-Read-Blocks>N</Temp-Read-Blocks>              +
-       <Temp-Written-Blocks>N</Temp-Written-Blocks>        +
-     </Planning>                                           +
-     <Planning-Time>N.N</Planning-Time>                    +
-     <Triggers>                                            +
-     </Triggers>                                           +
-     <Slice-statistics>                                    +
-       <Slice>                                             +
-         <Slice>N</Slice>                                  +
-         <Executor-Memory>N</Executor-Memory>              +
-       </Slice>                                            +
-       <Slice>                                             +
-         <Slice>N</Slice>                                  +
-         <Executor-Memory>                                 +
-           <Average>N</Average>                            +
-           <Workers>N</Workers>                            +
-           <Maximum-Memory-Used>N</Maximum-Memory-Used>    +
-         </Executor-Memory>                                +
-       </Slice>                                            +
-     </Slice-statistics>                                   +
-     <Statement-statistics>                                +
-       <Memory-used>N</Memory-used>                        +
-     </Statement-statistics>                               +
-     <Execution-Time>N.N</Execution-Time>                  +
-   </Query>                                                +
- </explain>
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...lain (analyze, buffers, format xml) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze, buffers, format xml) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');
-             explain_filter              
------------------------------------------
- - Plan:                                +
-     Node Type: "Gather Motion"         +
-     Senders: N                         +
-     Receivers: N                       +
-     Slice: N                           +
-     Segments: N                        +
-     Gang Type: "primary reader"        +
-     Parallel Aware: false              +
-     Async Capable: false               +
-     Startup Cost: N.N                  +
-     Total Cost: N.N                    +
-     Plan Rows: N                       +
-     Plan Width: N                      +
-     Actual Startup Time: N.N           +
-     Actual Total Time: N.N             +
-     Actual Rows: N.N                   +
-     Actual Loops: N                    +
-     Disabled: false                    +
-     Shared Hit Blocks: N               +
-     Shared Read Blocks: N              +
-     Shared Dirtied Blocks: N           +
-     Shared Written Blocks: N           +
-     Local Hit Blocks: N                +
-     Local Read Blocks: N               +
-     Local Dirtied Blocks: N            +
-     Local Written Blocks: N            +
-     Temp Read Blocks: N                +
-     Temp Written Blocks: N             +
-     Plans:                             +
-       - Node Type: "Seq Scan"          +
-         Parent Relationship: "Outer"   +
-         Slice: N                       +
-         Segments: N                    +
-         Gang Type: "primary reader"    +
-         Parallel Aware: false          +
-         Async Capable: false           +
-         Relation Name: "int8_tbl"      +
-         Alias: "i8"                    +
-         Startup Cost: N.N              +
-         Total Cost: N.N                +
-         Plan Rows: N                   +
-         Plan Width: N                  +
-         Actual Startup Time: N.N       +
-         Actual Total Time: N.N         +
-         Actual Rows: N.N               +
-         Actual Loops: N                +
-         Disabled: false                +
-         Shared Hit Blocks: N           +
-         Shared Read Blocks: N          +
-         Shared Dirtied Blocks: N       +
-         Shared Written Blocks: N       +
-         Local Hit Blocks: N            +
-         Local Read Blocks: N           +
-         Local Dirtied Blocks: N        +
-         Local Written Blocks: N        +
-         Temp Read Blocks: N            +
-         Temp Written Blocks: N         +
-   Optimizer: "Postgres query optimizer"+
-   Planning:                            +
-     Shared Hit Blocks: N               +
-     Shared Read Blocks: N              +
-     Shared Dirtied Blocks: N           +
-     Shared Written Blocks: N           +
-     Local Hit Blocks: N                +
-     Local Read Blocks: N               +
-     Local Dirtied Blocks: N            +
-     Local Written Blocks: N            +
-     Temp Read Blocks: N                +
-     Temp Written Blocks: N             +
-   Planning Time: N.N                   +
-   Triggers:                            +
-   Slice statistics:                    +
-     - Slice: N                         +
-       Executor Memory: N               +
-     - Slice: N                         +
-       Executor Memory:                 +
-         Average: N                     +
-         Workers: N                     +
-         Maximum Memory Used: N         +
-   Statement statistics:                +
-     Memory used: N                     +
-   Serialization:                       +
-     Time: N.N                          +
-     Output Volume: N                   +
-     Format: "text"                     +
-     Shared Hit Blocks: N               +
-     Shared Read Blocks: N              +
-     Shared Dirtied Blocks: N           +
-     Shared Written Blocks: N           +
-     Local Hit Blocks: N                +
-     Local Read Blocks: N               +
-     Local Dirtied Blocks: N            +
-     Local Written Blocks: N            +
-     Temp Read Blocks: N                +
-     Temp Written Blocks: N             +
-   Execution Time: N.N
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...e, serialize, buffers, format yaml) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (buffers, format text) select * from int8_tbl i8');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
- Optimizer: Postgres query optimizer
-(3 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (buffers, format text) select * from int8_tbl i8
+                                                     ^
+QUERY:  explain (buffers, format text) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (buffers, format json) select * from int8_tbl i8');
-                explain_filter                
-----------------------------------------------
- [                                           +
-   {                                         +
-     "Plan": {                               +
-       "Node Type": "Gather Motion",         +
-       "Senders": N,                         +
-       "Receivers": N,                       +
-       "Slice": N,                           +
-       "Segments": N,                        +
-       "Gang Type": "primary reader",        +
-       "Parallel Aware": false,              +
-       "Async Capable": false,               +
-       "Startup Cost": N.N,                  +
-       "Total Cost": N.N,                    +
-       "Plan Rows": N,                       +
-       "Plan Width": N,                      +
-       "Disabled": false,                    +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N,             +
-       "Plans": [                            +
-         {                                   +
-           "Node Type": "Seq Scan",          +
-           "Parent Relationship": "Outer",   +
-           "Slice": N,                       +
-           "Segments": N,                    +
-           "Gang Type": "primary reader",    +
-           "Parallel Aware": false,          +
-           "Async Capable": false,           +
-           "Relation Name": "int8_tbl",      +
-           "Alias": "i8",                    +
-           "Startup Cost": N.N,              +
-           "Total Cost": N.N,                +
-           "Plan Rows": N,                   +
-           "Plan Width": N,                  +
-           "Disabled": false,                +
-           "Shared Hit Blocks": N,           +
-           "Shared Read Blocks": N,          +
-           "Shared Dirtied Blocks": N,       +
-           "Shared Written Blocks": N,       +
-           "Local Hit Blocks": N,            +
-           "Local Read Blocks": N,           +
-           "Local Dirtied Blocks": N,        +
-           "Local Written Blocks": N,        +
-           "Temp Read Blocks": N,            +
-           "Temp Written Blocks": N          +
-         }                                   +
-       ]                                     +
-     },                                      +
-     "Optimizer": "Postgres query optimizer",+
-     "Planning": {                           +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N              +
-     }                                       +
-   }                                         +
- ]
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (buffers, format json) select * from int8_tbl i8
+                                                     ^
+QUERY:  explain (buffers, format json) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- Check expansion of window definitions
 select explain_filter('explain verbose select sum(unique1) over w, sum(unique2) over (w order by hundred), sum(tenthous) over (w order by hundred) from tenk1 window w as (partition by ten)');
-                                               explain_filter                                                
--------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   Output: (sum(unique1) OVER w), (sum(unique2) OVER w1), (sum(tenthous) OVER w1), ten, hundred
-   ->  WindowAgg  (cost=N.N..N.N rows=N width=N)
-         Output: sum(unique1) OVER w, (sum(unique2) OVER w1), (sum(tenthous) OVER w1), ten, hundred
-         Partition By: tenk1.ten
-         ->  WindowAgg  (cost=N.N..N.N rows=N width=N)
-               Output: ten, hundred, unique1, unique2, tenthous, sum(unique2) OVER w1, sum(tenthous) OVER w1
-               Partition By: tenk1.ten
-               Order By: tenk1.hundred
-               ->  Sort  (cost=N.N..N.N rows=N width=N)
-                     Output: ten, hundred, unique1, unique2, tenthous
-                     Sort Key: tenk1.ten, tenk1.hundred
-                     ->  Redistribute Motion N:N  (slice2; segments: N)  (cost=N.N..N.N rows=N width=N)
-                           Output: ten, hundred, unique1, unique2, tenthous
-                           Hash Key: ten
-                           ->  Seq Scan on public.tenk1  (cost=N.N..N.N rows=N width=N)
-                                 Output: ten, hundred, unique1, unique2, tenthous
- Optimizer: Postgres query optimizer
-(18 rows)
-
+ERROR:  relation "tenk1" does not exist
+LINE 1: ...ed), sum(tenthous) over (w order by hundred) from tenk1 wind...
+                                                             ^
+QUERY:  explain verbose select sum(unique1) over w, sum(unique2) over (w order by hundred), sum(tenthous) over (w order by hundred) from tenk1 window w as (partition by ten)
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain verbose select sum(unique1) over w1, sum(unique2) over (w1 order by hundred), sum(tenthous) over (w1 order by hundred rows 10 preceding) from tenk1 window w1 as (partition by ten)');
-                                                explain_filter                                                 
----------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   Output: (sum(unique1) OVER w1), (sum(unique2) OVER w2), (sum(tenthous) OVER w3), ten, hundred
-   ->  WindowAgg  (cost=N.N..N.N rows=N width=N)
-         Output: sum(unique1) OVER w1, (sum(unique2) OVER w2), (sum(tenthous) OVER w3), ten, hundred
-         Partition By: tenk1.ten
-         ->  WindowAgg  (cost=N.N..N.N rows=N width=N)
-               Output: ten, hundred, unique1, unique2, tenthous, (sum(unique2) OVER w2), sum(tenthous) OVER w3
-               Partition By: tenk1.ten
-               Order By: tenk1.hundred
-               ->  WindowAgg  (cost=N.N..N.N rows=N width=N)
-                     Output: ten, hundred, unique1, unique2, tenthous, sum(unique2) OVER w2
-                     Partition By: tenk1.ten
-                     Order By: tenk1.hundred
-                     ->  Sort  (cost=N.N..N.N rows=N width=N)
-                           Output: ten, hundred, unique1, unique2, tenthous
-                           Sort Key: tenk1.ten, tenk1.hundred
-                           ->  Redistribute Motion N:N  (slice2; segments: N)  (cost=N.N..N.N rows=N width=N)
-                                 Output: ten, hundred, unique1, unique2, tenthous
-                                 Hash Key: ten
-                                 ->  Seq Scan on public.tenk1  (cost=N.N..N.N rows=N width=N)
-                                       Output: ten, hundred, unique1, unique2, tenthous
- Optimizer: Postgres query optimizer
-(22 rows)
-
+ERROR:  relation "tenk1" does not exist
+LINE 1: ...over (w1 order by hundred rows 10 preceding) from tenk1 wind...
+                                                             ^
+QUERY:  explain verbose select sum(unique1) over w1, sum(unique2) over (w1 order by hundred), sum(tenthous) over (w1 order by hundred rows 10 preceding) from tenk1 window w1 as (partition by ten)
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- Check output including I/O timings.  These fields are conditional
 -- but always set in JSON format, so check them only in this case.
 set track_io_timing = on;
 select explain_filter('explain (analyze, buffers, format json) select * from int8_tbl i8');
-                explain_filter                
-----------------------------------------------
- [                                           +
-   {                                         +
-     "Plan": {                               +
-       "Node Type": "Gather Motion",         +
-       "Senders": N,                         +
-       "Receivers": N,                       +
-       "Slice": N,                           +
-       "Segments": N,                        +
-       "Gang Type": "primary reader",        +
-       "Parallel Aware": false,              +
-       "Async Capable": false,               +
-       "Startup Cost": N.N,                  +
-       "Total Cost": N.N,                    +
-       "Plan Rows": N,                       +
-       "Plan Width": N,                      +
-       "Actual Startup Time": N.N,           +
-       "Actual Total Time": N.N,             +
-       "Actual Rows": N.N,                   +
-       "Actual Loops": N,                    +
-       "Disabled": false,                    +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N,             +
-       "Shared I/O Read Time": N.N,          +
-       "Shared I/O Write Time": N.N,         +
-       "Local I/O Read Time": N.N,           +
-       "Local I/O Write Time": N.N,          +
-       "Temp I/O Read Time": N.N,            +
-       "Temp I/O Write Time": N.N,           +
-       "Plans": [                            +
-         {                                   +
-           "Node Type": "Seq Scan",          +
-           "Parent Relationship": "Outer",   +
-           "Slice": N,                       +
-           "Segments": N,                    +
-           "Gang Type": "primary reader",    +
-           "Parallel Aware": false,          +
-           "Async Capable": false,           +
-           "Relation Name": "int8_tbl",      +
-           "Alias": "i8",                    +
-           "Startup Cost": N.N,              +
-           "Total Cost": N.N,                +
-           "Plan Rows": N,                   +
-           "Plan Width": N,                  +
-           "Actual Startup Time": N.N,       +
-           "Actual Total Time": N.N,         +
-           "Actual Rows": N.N,               +
-           "Actual Loops": N,                +
-           "Disabled": false,                +
-           "Shared Hit Blocks": N,           +
-           "Shared Read Blocks": N,          +
-           "Shared Dirtied Blocks": N,       +
-           "Shared Written Blocks": N,       +
-           "Local Hit Blocks": N,            +
-           "Local Read Blocks": N,           +
-           "Local Dirtied Blocks": N,        +
-           "Local Written Blocks": N,        +
-           "Temp Read Blocks": N,            +
-           "Temp Written Blocks": N,         +
-           "Shared I/O Read Time": N.N,      +
-           "Shared I/O Write Time": N.N,     +
-           "Local I/O Read Time": N.N,       +
-           "Local I/O Write Time": N.N,      +
-           "Temp I/O Read Time": N.N,        +
-           "Temp I/O Write Time": N.N        +
-         }                                   +
-       ]                                     +
-     },                                      +
-     "Optimizer": "Postgres query optimizer",+
-     "Planning": {                           +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N,             +
-       "Shared I/O Read Time": N.N,          +
-       "Shared I/O Write Time": N.N,         +
-       "Local I/O Read Time": N.N,           +
-       "Local I/O Write Time": N.N,          +
-       "Temp I/O Read Time": N.N,            +
-       "Temp I/O Write Time": N.N            +
-     },                                      +
-     "Planning Time": N.N,                   +
-     "Triggers": [                           +
-     ],                                      +
-     "Slice statistics": [                   +
-       {                                     +
-         "Slice": N,                         +
-         "Executor Memory": N                +
-       },                                    +
-       {                                     +
-         "Slice": N,                         +
-         "Executor Memory": {                +
-           "Average": N,                     +
-           "Workers": N,                     +
-           "Maximum Memory Used": N          +
-         }                                   +
-       }                                     +
-     ],                                      +
-     "Statement statistics": {               +
-       "Memory used": N                      +
-     },                                      +
-     "Execution Time": N.N                   +
-   }                                         +
- ]
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...ain (analyze, buffers, format json) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze, buffers, format json) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 set track_io_timing = off;
 -- SETTINGS option
 -- We have to ignore other settings that might be imposed by the environment,
@@ -591,213 +152,60 @@ set local plan_cache_mode = force_generic_plan;
 select true as "OK"
   from explain_filter('explain (settings) select * from int8_tbl i8') ln
   where ln ~ '^ *Settings: .*plan_cache_mode = ''force_generic_plan''';
- OK 
-----
- t
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (settings) select * from int8_tbl i8
+                                         ^
+QUERY:  explain (settings) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter_to_json('explain (settings, format json) select * from int8_tbl i8') #> '{0,Settings,plan_cache_mode}';
-       ?column?       
-----------------------
- "force_generic_plan"
-(1 row)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 rollback;
 -- GENERIC_PLAN option
 select explain_filter('explain (generic_plan) select unique1 from tenk1 where thousand = $1');
-                                    explain_filter                                     
----------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Bitmap Heap Scan on tenk1  (cost=N.N..N.N rows=N width=N)
-         Recheck Cond: (thousand = $N)
-         ->  Bitmap Index Scan on tenk1_thous_tenthous  (cost=N.N..N.N rows=N width=N)
-               Index Cond: (thousand = $N)
- Optimizer: Postgres query optimizer
-(6 rows)
-
+ERROR:  relation "tenk1" does not exist
+LINE 1: explain (generic_plan) select unique1 from tenk1 where thous...
+                                                   ^
+QUERY:  explain (generic_plan) select unique1 from tenk1 where thousand = $1
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- should fail
 select explain_filter('explain (analyze, generic_plan) select unique1 from tenk1 where thousand = $1');
-ERROR:  EXPLAIN options ANALYZE and GENERIC_PLAN cannot be used together
+ERROR:  relation "tenk1" does not exist
+LINE 1: ...plain (analyze, generic_plan) select unique1 from tenk1 wher...
+                                                             ^
+QUERY:  explain (analyze, generic_plan) select unique1 from tenk1 where thousand = $1
 CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- MEMORY option
 select explain_filter('explain (memory) select * from int8_tbl i8');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
- Optimizer: Postgres query optimizer
-   Memory: used=NkB  allocated=NkB
-(4 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (memory) select * from int8_tbl i8
+                                       ^
+QUERY:  explain (memory) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (memory, analyze, buffers off) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
-   Memory: used=NkB  allocated=NkB
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Execution Time: N.N ms
-(9 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...lain (memory, analyze, buffers off) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (memory, analyze, buffers off) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
-             explain_filter              
------------------------------------------
- - Plan:                                +
-     Node Type: "Gather Motion"         +
-     Senders: N                         +
-     Receivers: N                       +
-     Slice: N                           +
-     Segments: N                        +
-     Gang Type: "primary reader"        +
-     Parallel Aware: false              +
-     Async Capable: false               +
-     Startup Cost: N.N                  +
-     Total Cost: N.N                    +
-     Plan Rows: N                       +
-     Plan Width: N                      +
-     Disabled: false                    +
-     Plans:                             +
-       - Node Type: "Seq Scan"          +
-         Parent Relationship: "Outer"   +
-         Slice: N                       +
-         Segments: N                    +
-         Gang Type: "primary reader"    +
-         Parallel Aware: false          +
-         Async Capable: false           +
-         Relation Name: "int8_tbl"      +
-         Alias: "i8"                    +
-         Startup Cost: N.N              +
-         Total Cost: N.N                +
-         Plan Rows: N                   +
-         Plan Width: N                  +
-         Disabled: false                +
-   Optimizer: "Postgres query optimizer"+
-   Planning:                            +
-     Memory Used: N                     +
-     Memory Allocated: N                +
-   Planning Time: N.N
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...lain (memory, summary, format yaml) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (memory, summary, format yaml) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (memory, analyze, format json) select * from int8_tbl i8');
-                explain_filter                
-----------------------------------------------
- [                                           +
-   {                                         +
-     "Plan": {                               +
-       "Node Type": "Gather Motion",         +
-       "Senders": N,                         +
-       "Receivers": N,                       +
-       "Slice": N,                           +
-       "Segments": N,                        +
-       "Gang Type": "primary reader",        +
-       "Parallel Aware": false,              +
-       "Async Capable": false,               +
-       "Startup Cost": N.N,                  +
-       "Total Cost": N.N,                    +
-       "Plan Rows": N,                       +
-       "Plan Width": N,                      +
-       "Actual Startup Time": N.N,           +
-       "Actual Total Time": N.N,             +
-       "Actual Rows": N.N,                   +
-       "Actual Loops": N,                    +
-       "Disabled": false,                    +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N,             +
-       "Plans": [                            +
-         {                                   +
-           "Node Type": "Seq Scan",          +
-           "Parent Relationship": "Outer",   +
-           "Slice": N,                       +
-           "Segments": N,                    +
-           "Gang Type": "primary reader",    +
-           "Parallel Aware": false,          +
-           "Async Capable": false,           +
-           "Relation Name": "int8_tbl",      +
-           "Alias": "i8",                    +
-           "Startup Cost": N.N,              +
-           "Total Cost": N.N,                +
-           "Plan Rows": N,                   +
-           "Plan Width": N,                  +
-           "Actual Startup Time": N.N,       +
-           "Actual Total Time": N.N,         +
-           "Actual Rows": N.N,               +
-           "Actual Loops": N,                +
-           "Disabled": false,                +
-           "Shared Hit Blocks": N,           +
-           "Shared Read Blocks": N,          +
-           "Shared Dirtied Blocks": N,       +
-           "Shared Written Blocks": N,       +
-           "Local Hit Blocks": N,            +
-           "Local Read Blocks": N,           +
-           "Local Dirtied Blocks": N,        +
-           "Local Written Blocks": N,        +
-           "Temp Read Blocks": N,            +
-           "Temp Written Blocks": N          +
-         }                                   +
-       ]                                     +
-     },                                      +
-     "Optimizer": "Postgres query optimizer",+
-     "Planning": {                           +
-       "Shared Hit Blocks": N,               +
-       "Shared Read Blocks": N,              +
-       "Shared Dirtied Blocks": N,           +
-       "Shared Written Blocks": N,           +
-       "Local Hit Blocks": N,                +
-       "Local Read Blocks": N,               +
-       "Local Dirtied Blocks": N,            +
-       "Local Written Blocks": N,            +
-       "Temp Read Blocks": N,                +
-       "Temp Written Blocks": N,             +
-       "Memory Used": N,                     +
-       "Memory Allocated": N                 +
-     },                                      +
-     "Planning Time": N.N,                   +
-     "Triggers": [                           +
-     ],                                      +
-     "Slice statistics": [                   +
-       {                                     +
-         "Slice": N,                         +
-         "Executor Memory": N                +
-       },                                    +
-       {                                     +
-         "Slice": N,                         +
-         "Executor Memory": {                +
-           "Average": N,                     +
-           "Workers": N,                     +
-           "Maximum Memory Used": N          +
-         }                                   +
-       }                                     +
-     ],                                      +
-     "Statement statistics": {               +
-       "Memory used": N                      +
-     },                                      +
-     "Execution Time": N.N                   +
-   }                                         +
- ]
-(1 row)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...lain (memory, analyze, format json) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (memory, analyze, format json) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 prepare int8_query as select * from int8_tbl i8;
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: prepare int8_query as select * from int8_tbl i8;
+                                            ^
 select explain_filter('explain (memory) execute int8_query');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N)
- Optimizer: Postgres query optimizer
-   Memory: used=NkB  allocated=NkB
-(4 rows)
-
+ERROR:  prepared statement "int8_query" does not exist
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- Test EXPLAIN (GENERIC_PLAN) with partition pruning
 -- partitions should be pruned at plan time, based on constants,
 -- but there should be no pruning based on parameter placeholders
@@ -805,6 +213,8 @@ create table gen_part (
   key1 integer not null,
   key2 integer not null
 ) partition by list (key1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table gen_part_1
   partition of gen_part for values in (1)
   partition by range (key2);
@@ -871,212 +281,17 @@ select jsonb_pretty(
   #- '{0,Plan,Plans,0,Executor Max Memory Segment}'
   #- '{0,Slice statistics,1,Work Maximum Memory}'
 );
-                        jsonb_pretty                         
--------------------------------------------------------------
- [                                                          +
-     {                                                      +
-         "Plan": {                                          +
-             "Plans": [                                     +
-                 {                                          +
-                     "Plans": [                             +
-                         {                                  +
-                             "Alias": "tenk1",              +
-                             "Slice": 0,                    +
-                             "Output": [                    +
-                                 "unique1",                 +
-                                 "unique2",                 +
-                                 "two",                     +
-                                 "four",                    +
-                                 "ten",                     +
-                                 "twenty",                  +
-                                 "hundred",                 +
-                                 "thousand",                +
-                                 "twothousand",             +
-                                 "fivethous",               +
-                                 "tenthous",                +
-                                 "odd",                     +
-                                 "even",                    +
-                                 "stringu1",                +
-                                 "stringu2",                +
-                                 "string4"                  +
-                             ],                             +
-                             "Schema": "public",            +
-                             "Disabled": false,             +
-                             "Segments": 0,                 +
-                             "Gang Type": "primary reader", +
-                             "Node Type": "Seq Scan",       +
-                             "Plan Rows": 0,                +
-                             "Plan Width": 0,               +
-                             "Total Cost": 0.0,             +
-                             "Actual Rows": 0.0,            +
-                             "Actual Loops": 0,             +
-                             "Startup Cost": 0.0,           +
-                             "Async Capable": false,        +
-                             "Relation Name": "tenk1",      +
-                             "Parallel Aware": false,       +
-                             "Local Hit Blocks": 0,         +
-                             "Temp Read Blocks": 0,         +
-                             "Actual Total Time": 0.0,      +
-                             "Local Read Blocks": 0,        +
-                             "Shared Hit Blocks": 0,        +
-                             "Shared Read Blocks": 0,       +
-                             "Actual Startup Time": 0.0,    +
-                             "Parent Relationship": "Outer",+
-                             "Temp Written Blocks": 0,      +
-                             "Local Dirtied Blocks": 0,     +
-                             "Local Written Blocks": 0,     +
-                             "Shared Dirtied Blocks": 0,    +
-                             "Shared Written Blocks": 0     +
-                         }                                  +
-                     ],                                     +
-                     "Slice": 0,                            +
-                     "Output": [                            +
-                         "unique1",                         +
-                         "unique2",                         +
-                         "two",                             +
-                         "four",                            +
-                         "ten",                             +
-                         "twenty",                          +
-                         "hundred",                         +
-                         "thousand",                        +
-                         "twothousand",                     +
-                         "fivethous",                       +
-                         "tenthous",                        +
-                         "odd",                             +
-                         "even",                            +
-                         "stringu1",                        +
-                         "stringu2",                        +
-                         "string4"                          +
-                     ],                                     +
-                     "Disabled": false,                     +
-                     "Segments": 0,                         +
-                     "Sort Key": [                          +
-                         "tenk1.tenthous"                   +
-                     ],                                     +
-                     "Gang Type": "primary reader",         +
-                     "Node Type": "Sort",                   +
-                     "Plan Rows": 0,                        +
-                     "Plan Width": 0,                       +
-                     "Total Cost": 0.0,                     +
-                     "Actual Rows": 0.0,                    +
-                     "Actual Loops": 0,                     +
-                     "Startup Cost": 0.0,                   +
-                     "Async Capable": false,                +
-                     "Sort Segments": 0,                    +
-                     "Parallel Aware": false,               +
-                     "Sort Space Used": 0,                  +
-                     "Local Hit Blocks": 0,                 +
-                     "Temp Read Blocks": 0,                 +
-                     "Actual Total Time": 0.0,              +
-                     "Local Read Blocks": 0,                +
-                     "Shared Hit Blocks": 0,                +
-                     "Shared Read Blocks": 0,               +
-                     "Actual Startup Time": 0.0,            +
-                     "Parent Relationship": "Outer",        +
-                     "Temp Written Blocks": 0,              +
-                     "Local Dirtied Blocks": 0,             +
-                     "Local Written Blocks": 0,             +
-                     "Shared Dirtied Blocks": 0,            +
-                     "Shared Written Blocks": 0,            +
-                     "Sort Avg Segment Memory": 0,          +
-                     "Sort Max Segment Memory": 0           +
-                 }                                          +
-             ],                                             +
-             "Slice": 0,                                    +
-             "Output": [                                    +
-                 "unique1",                                 +
-                 "unique2",                                 +
-                 "two",                                     +
-                 "four",                                    +
-                 "ten",                                     +
-                 "twenty",                                  +
-                 "hundred",                                 +
-                 "thousand",                                +
-                 "twothousand",                             +
-                 "fivethous",                               +
-                 "tenthous",                                +
-                 "odd",                                     +
-                 "even",                                    +
-                 "stringu1",                                +
-                 "stringu2",                                +
-                 "string4"                                  +
-             ],                                             +
-             "Senders": 0,                                  +
-             "Disabled": false,                             +
-             "Segments": 0,                                 +
-             "Gang Type": "primary reader",                 +
-             "Merge Key": [                                 +
-                 "tenthous"                                 +
-             ],                                             +
-             "Node Type": "Gather Motion",                  +
-             "Plan Rows": 0,                                +
-             "Receivers": 0,                                +
-             "Plan Width": 0,                               +
-             "Total Cost": 0.0,                             +
-             "Actual Rows": 0.0,                            +
-             "Actual Loops": 0,                             +
-             "Startup Cost": 0.0,                           +
-             "Async Capable": false,                        +
-             "Parallel Aware": false,                       +
-             "Local Hit Blocks": 0,                         +
-             "Temp Read Blocks": 0,                         +
-             "Actual Total Time": 0.0,                      +
-             "Local Read Blocks": 0,                        +
-             "Shared Hit Blocks": 0,                        +
-             "Shared Read Blocks": 0,                       +
-             "Actual Startup Time": 0.0,                    +
-             "Temp Written Blocks": 0,                      +
-             "Local Dirtied Blocks": 0,                     +
-             "Local Written Blocks": 0,                     +
-             "Shared Dirtied Blocks": 0,                    +
-             "Shared Written Blocks": 0                     +
-         },                                                 +
-         "Planning": {                                      +
-             "Local Hit Blocks": 0,                         +
-             "Temp Read Blocks": 0,                         +
-             "Local Read Blocks": 0,                        +
-             "Shared Hit Blocks": 0,                        +
-             "Shared Read Blocks": 0,                       +
-             "Temp Written Blocks": 0,                      +
-             "Local Dirtied Blocks": 0,                     +
-             "Local Written Blocks": 0,                     +
-             "Shared Dirtied Blocks": 0,                    +
-             "Shared Written Blocks": 0                     +
-         },                                                 +
-         "Settings": {                                      +
-             "parallel_setup_cost": "0",                    +
-             "parallel_tuple_cost": "0",                    +
-             "min_parallel_table_scan_size": "0"            +
-         },                                                 +
-         "Triggers": [                                      +
-         ],                                                 +
-         "Optimizer": "Postgres query optimizer",           +
-         "Planning Time": 0.0,                              +
-         "Execution Time": 0.0,                             +
-         "Slice statistics": [                              +
-             {                                              +
-                 "Slice": 0,                                +
-                 "Executor Memory": 0                       +
-             },                                             +
-             {                                              +
-                 "Slice": 0,                                +
-                 "Executor Memory": {                       +
-                     "Average": 0,                          +
-                     "Workers": 0,                          +
-                     "Maximum Memory Used": 0               +
-                 }                                          +
-             }                                              +
-         ],                                                 +
-         "Statement statistics": {                          +
-             "Memory used": 0                               +
-         }                                                  +
-     }                                                      +
- ]
-(1 row)
-
+ERROR:  relation "tenk1" does not exist
+LINE 2:                          select * from tenk1 order by tentho...
+                                               ^
+QUERY:  explain (analyze, verbose, buffers, format json)
+                         select * from tenk1 order by tenthous
+CONTEXT:  PL/pgSQL function explain_filter_to_json(text) line 6 at FOR over EXECUTE statement
 rollback;
 -- Test display of temporary objects
 create temp table t1(f1 float8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function pg_temp.mysin(float8) returns float8 language plpgsql
 as 'begin return sin($1); end';
 select explain_filter('explain (verbose) select * from t1 where pg_temp.mysin(f1) < 0.5');
@@ -1093,29 +308,21 @@ select explain_filter('explain (verbose) select * from t1 where pg_temp.mysin(f1
 -- Test compute_query_id
 set compute_query_id = on;
 select explain_filter('explain (verbose) select * from int8_tbl i8');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   Output: q1, q2
-   ->  Seq Scan on public.int8_tbl i8  (cost=N.N..N.N rows=N width=N)
-         Output: q1, q2
- Optimizer: Postgres query optimizer
- Query Identifier: N
-(6 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: explain (verbose) select * from int8_tbl i8
+                                        ^
+QUERY:  explain (verbose) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- Test compute_query_id with utility statements containing plannable query
 select explain_filter('explain (verbose) declare test_cur cursor for select * from int8_tbl');
-                              explain_filter                              
---------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
-   Output: q1, q2
-   ->  Seq Scan on public.int8_tbl  (cost=N.N..N.N rows=N width=N)
-         Output: q1, q2
- Optimizer: Postgres query optimizer
- Query Identifier: N
-(6 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...(verbose) declare test_cur cursor for select * from int8_tbl
+                                                               ^
+QUERY:  explain (verbose) declare test_cur cursor for select * from int8_tbl
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (verbose) create table test_ctas as select 1');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
                                  explain_filter                                 
 --------------------------------------------------------------------------------
  Redistribute Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N)
@@ -1129,60 +336,30 @@ select explain_filter('explain (verbose) create table test_ctas as select 1');
 
 -- Test SERIALIZE option
 select explain_filter('explain (analyze,buffers off,serialize) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Serialization: time=N.N ms  output=NkB  format=text
- Execution Time: N.N ms
-(9 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...ain (analyze,buffers off,serialize) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze,buffers off,serialize) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8');
-                                           explain_filter                                           
-----------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Serialization: output=NkB  format=text
- Execution Time: N.N ms
-(9 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...,serialize text,buffers,timing off) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze,serialize text,buffers,timing off) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 select explain_filter('explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8');
-                                                  explain_filter                                                  
-------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (slice1; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
-   ->  Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
- Memory used:  NkB
- Serialization: time=N.N ms  output=NkB  format=binary
- Execution Time: N.N ms
-(9 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...ze,serialize binary,buffers,timing) select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze,serialize binary,buffers,timing) select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- this tests an edge case where we have no data to return
 select explain_filter('explain (analyze,buffers off,serialize) create temp table explain_temp as select * from int8_tbl i8');
-                                         explain_filter                                          
--------------------------------------------------------------------------------------------------
- Seq Scan on int8_tbl i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
- Optimizer: Postgres query optimizer
- Planning Time: N.N ms
-   (slice0)    Executor memory: 119K bytes avg x N workers, 119K bytes max (seg0).
- Memory used:  NkB
- Serialization: time=N.N ms  output=NkB  format=text
- Execution Time: N.N ms
-(7 rows)
-
+ERROR:  relation "int8_tbl" does not exist
+LINE 1: ...) create temp table explain_temp as select * from int8_tbl i...
+                                                             ^
+QUERY:  explain (analyze,buffers off,serialize) create temp table explain_temp as select * from int8_tbl i8
+CONTEXT:  PL/pgSQL function explain_filter(text) line 5 at FOR over EXECUTE statement
 -- Test tuplestore storage usage in Window aggregate (memory case)
 select explain_filter('explain (analyze,buffers off,costs off) select sum(n) over() from generate_series(1,10) a(n)');
                                   explain_filter                                  
@@ -1192,7 +369,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 62K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1208,7 +385,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 214K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1223,13 +400,14 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Sort (actual time=N.N..N.N rows=N.N loops=N)
          Sort Key: ((a.n < N))
          Sort Method:  quicksort  Memory: NkB
+         Executor Memory: NkB  Segments: N  Max: NkB (segment N)
          ->  Function Scan on generate_series a (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
-   (slice0)    Executor memory: 270K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
-(12 rows)
+(13 rows)
 
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.

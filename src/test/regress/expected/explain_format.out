@@ -117,8 +117,8 @@ select explain_filter('EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
    (sliceN)    Executor memory: NK bytes.
-   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
-   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
+   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
+   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
    (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
  Memory used:  NkB
  Execution Time: N.N ms
@@ -696,11 +696,13 @@ explain_filter
         Average: N
         Workers: N
         Maximum Memory Used: N
+      Work Maximum Memory: N
     - Slice: N
       Executor Memory: 
         Average: N
         Workers: N
         Maximum Memory Used: N
+      Work Maximum Memory: N
     - Slice: N
       Executor Memory: 
         Average: N
@@ -720,16 +722,18 @@ Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual
         Output: id, apple_id, location_id
         Sort Key: boxes.apple_id
         Sort Method:  quicksort  Memory: NkB  Max Memory: NkB  Avg Memory: NkB (N segments)
+        Executor Memory: NkB  Segments: N  Max: NkB (segment N)
+        work_mem: NkB  Segments: N  Max: NkB (segment N)  Workfile: (N spilling)
         ->  Seq Scan on public.boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
               Output: id, apple_id, location_id
 Optimizer: Postgres query optimizer
 Settings: random_page_cost = 'N', cpu_index_tuple_cost = 'N.N'
 Planning Time: N.N ms
   (sliceN)    Executor memory: NK bytes.
-  (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
+  (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
 Memory used:  NkB
 Execution Time: N.N ms
-(16 rows)
+(18 rows)
 RESET random_page_cost;
 RESET cpu_index_tuple_cost;
 --
