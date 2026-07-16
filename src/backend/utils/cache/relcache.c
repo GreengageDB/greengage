@@ -2764,6 +2764,31 @@ RelationRebuildRelation(Relation relation)
 		keep_tupdesc = equalTupleDescs(relation->rd_att, newrel->rd_att, true);
 		keep_rules = equalRuleLocks(relation->rd_rules, newrel->rd_rules);
 		keep_gp_policy = GpPolicyEqual(relation->rd_cdbpolicy, newrel->rd_cdbpolicy);
+
+		/*
+		 * GPDB: never let a rebuild-from-catalog downgrade a valid distribution
+		 * policy to POLICYTYPE_ENTRY.  GpPolicyFetch() (called from
+		 * RelationBuildDesc) returns an ENTRY policy whenever it finds no
+		 * *command-visible* gp_distribution_policy row.  While a relation is
+		 * still being created, its policy row is stored by GpPolicyStore() but
+		 * is not visible until the DefineRelation CommandCounterIncrement; if a
+		 * relcache invalidation forces this entry to be rebuilt inside that
+		 * window, newrel->rd_cdbpolicy comes back as ENTRY.  Because the swap
+		 * below memcpy's newrel over the live entry and only re-swaps
+		 * rd_cdbpolicy back when keep_gp_policy is set, a mismatch would leave
+		 * the live relation holding that transient ENTRY -- later read e.g. by
+		 * make_distributedby_for_rel(), tripping its Assert(ptype != ENTRY) and
+		 * corrupting a partition parent's policy.  A live relation never
+		 * legitimately reverts from a real policy to ENTRY (ALTER ... SET
+		 * DISTRIBUTED BY updates the row in place; it is only removed at DROP,
+		 * when the entry is discarded), so keep the existing policy instead.
+		 */
+		if (!keep_gp_policy &&
+			relation->rd_cdbpolicy != NULL &&
+			relation->rd_cdbpolicy->ptype != POLICYTYPE_ENTRY &&
+			(newrel->rd_cdbpolicy == NULL ||
+			 newrel->rd_cdbpolicy->ptype == POLICYTYPE_ENTRY))
+			keep_gp_policy = true;
 		keep_policies = equalRSDesc(relation->rd_rsdesc, newrel->rd_rsdesc);
 		/* partkey is immutable once set up, so we can always keep it */
 		keep_partkey = (relation->rd_partkey != NULL);
