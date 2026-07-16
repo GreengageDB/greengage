@@ -1047,6 +1047,8 @@ AtAbort_MetadataQueues(void)
 void
 PQCreateMetadataQueue(ggMetadataQueueId queue_id)
 {
+	Assert(TopTransactionContext != NULL);
+
 	MemoryContext oldcontext = MemoryContextSwitchTo(TopTransactionContext);
 
 	ggMetadataQueue *queue = palloc0(sizeof(ggMetadataQueue));
@@ -1068,6 +1070,6 @@ PQDeleteMetadataQueue(ggMetadataQueueId queue_id)
 
 	PQCleanMetadataInternal(queue);
 
-	ggMetadataQueues = list_delete(ggMetadataQueues, queue);
+	ggMetadataQueues = list_delete_ptr(ggMetadataQueues, queue);
 	pfree(queue);
 }

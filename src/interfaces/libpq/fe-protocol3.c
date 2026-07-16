@@ -2414,6 +2414,8 @@ pgGetMetadataMessage(PGconn *conn, int length)
 		return 1;
 	}
 
+	Assert(length >= sizeof(ggMetadataQueueId));
+
 	int payload_len = length - sizeof(ggMetadataQueueId);
 
 	/*
