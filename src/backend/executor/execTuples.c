@@ -544,6 +544,38 @@ tts_virtual_copy_minimal_tuple(TupleTableSlot *slot)
 								   slot->tts_isnull);
 }
 
+/*
+ * tts_virtual_materialize(), tts_virtual_copy_heap_tuple() and
+ * tts_virtual_copy_minimal_tuple() all read tts_values/tts_isnull directly,
+ * for every attribute, with no regard for how many of them are actually
+ * valid. That's fine for a plain virtual slot, which is documented to
+ * always be fully populated, but not for our lazy AOCS slot
+ * (TTSOpsVirtualAOCS), where only a sparse subset of attributes may have
+ * been fetched. Wrap each callback so it forces a full deform first,
+ * mirroring what tts_virtual_aocs_copyslot() already does for the copyslot
+ * callback.
+ */
+static void
+tts_virtual_aocs_materialize(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	tts_virtual_materialize(slot);
+}
+
+static HeapTuple
+tts_virtual_aocs_copy_heap_tuple(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	return tts_virtual_copy_heap_tuple(slot);
+}
+
+static MinimalTuple
+tts_virtual_aocs_copy_minimal_tuple(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	return tts_virtual_copy_minimal_tuple(slot);
+}
+
 
 /*
  * TupleTableSlotOps implementation for HeapTupleTableSlot.
@@ -1304,7 +1336,7 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.clear = tts_virtual_aocs_clear,
 	.getsomeattrs = tts_virtual_aocs_getsomeattrs,
 	.getsysattr = tts_virtual_getsysattr,
-	.materialize = tts_virtual_materialize,
+	.materialize = tts_virtual_aocs_materialize,
 	.copyslot = tts_virtual_aocs_copyslot,
 
 	/*
@@ -1313,8 +1345,8 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	 */
 	.get_heap_tuple = NULL,
 	.get_minimal_tuple = NULL,
-	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
-	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
+	.copy_heap_tuple = tts_virtual_aocs_copy_heap_tuple,
+	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
 
 	.gettargetattr = tts_virtual_aocs_gettargetattr,
 	.is_attr_valid = tts_virtual_aocs_is_attr_valid
