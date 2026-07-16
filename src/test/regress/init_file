@@ -98,6 +98,22 @@ m/^DEBUG:  time to inline:/
 # text and the fallback INFO/WARNING around it still compare.
 m/^\d+\s+0x[0-9a-f]{6,}/
 
+# PG18 enables BUFFERS by default in EXPLAIN (ANALYZE) and prints a "Planning:"
+# section; both carry run-varying shared/local/temp buffer counts.  Drop them.
+m/^\s*Planning:\s*$/
+m/^\s*Buffers: (shared|local|temp)/
+# PG18 ANALYZE VERBOSE prints a per-table summary block whose read/write rates,
+# buffer usage, WAL usage and CPU/elapsed timings vary from run to run.
+m/^INFO:  finished analyzing table ".*"/
+m/^avg read rate: .* MB\/s, avg write rate: .* MB\/s/
+m/^buffer usage: \d+ hits, \d+ reads, \d+ dirtied/
+m/^WAL usage: \d+ records, \d+ full page images, \d+ bytes, \d+ buffers full/
+m/^system usage: CPU: user: .* system: .* elapsed: .*/
+
+# A dispatch that races a segment fault/recovery can emit this NOTICE while it
+# retries the broadcast; it is timing-dependent, so ignore it.
+m/^NOTICE:  Releasing segworker groups to retry broadcast\./
+
 -- end_matchignore
 
 -- start_matchsubs
