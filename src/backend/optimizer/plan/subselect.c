@@ -2023,7 +2023,25 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	 * optimized to a InitPlan Node, which need targetlist.
 	 */
 	if (is_correlated)
+	{
 		query->targetList = NIL;
+
+		/*
+		 * We just threw away the targetlist.  If the subquery also groups, the
+		 * GROUP BY (and any ORDER BY) now reference targetlist entries that no
+		 * longer exist, and later planning would trip over "ORDER/GROUP BY
+		 * expression not found in targetlist".  Grouping does not change whether
+		 * an EXISTS subquery yields any rows -- GROUP BY produces at least one
+		 * row iff there is at least one input row -- so it is safe to drop the
+		 * aggregation entirely here.  (A bare aggregate with no GROUP BY yields
+		 * exactly one row regardless of input and has already been turned into a
+		 * constant by remove_useless_EXISTS_sublink(), so we must not clear
+		 * hasAggs in that case.)  Clearing hasAggs lets the !hasAggs branch below
+		 * drop the groupClause and the PG18 RTE_GROUP consistently.
+		 */
+		if (query->groupClause)
+			query->hasAggs = false;
+	}
 
 	/*
 	 * Delete GROUP BY if no aggregates.
