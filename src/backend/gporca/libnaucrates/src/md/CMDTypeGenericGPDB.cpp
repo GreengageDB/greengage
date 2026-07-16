@@ -39,7 +39,7 @@ using namespace gpmd;
 // whole anycompatible family) must also count as ambiguous so ORCA falls back to
 // the planner-resolved concrete type; keep in sync with IsPolymorphicType() in
 // pg_type.h.
-#define GPDB_ANYRANGE_OID OID(3831)	// oid of GPDB ANYRANGE type
+#define GPDB_ANYRANGE_OID OID(3831)	 // oid of GPDB ANYRANGE type
 
 #define GPDB_ANYMULTIRANGE_OID OID(4537)  // oid of GPDB ANYMULTIRANGE type
 
