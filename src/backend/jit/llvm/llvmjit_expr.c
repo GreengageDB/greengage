@@ -322,18 +322,17 @@ llvm_compile_expr(ExprState *state)
 						v_slot = v_scanslot;
 
 					/*
-					 * For inner/outer/scan slots where the exact (possibly
-					 * sparse) set of required attnos is known, try
-					 * slot_gettargetattr() first: slot types that support it
-					 * fetch just those attributes and can skip the
-					 * nvalid-prefix based deform below entirely.
+					 * For scan slots where the exact (possibly sparse) set
+					 * of required attnos is known, try slot_gettargetattr()
+					 * first: slot types that support it fetch just those
+					 * attributes and can skip the nvalid-prefix based deform
+					 * below entirely.
 					 * If the slot type doesn't support it,
 					 * slot_gettargetattr() returns false and we fall
 					 * through to the regular check, exactly mirroring the
-					 * EEOP_INNER_FETCHSOME/EEOP_OUTER_FETCHSOME/
 					 * EEOP_SCAN_FETCHSOME handling in ExecInterpExpr().
 					 */
-					if (op->d.fetch.all_vars)
+					if (opcode == EEOP_SCAN_FETCHSOME && op->d.fetch.all_vars)
 					{
 						LLVMBasicBlockRef b_nvalid_check;
 						LLVMValueRef v_params[2];

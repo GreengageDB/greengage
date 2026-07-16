@@ -438,8 +438,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, innerslot);
 
-			if (!slot_gettargetattr(innerslot, op->d.fetch.all_vars))
-				slot_getsomeattrs(innerslot, op->d.fetch.last_var);
+			slot_getsomeattrs(innerslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -448,8 +447,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, outerslot);
 
-			if (!slot_gettargetattr(outerslot, op->d.fetch.all_vars))
-				slot_getsomeattrs(outerslot, op->d.fetch.last_var);
+			slot_getsomeattrs(outerslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
 		}
@@ -474,7 +472,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * directly out of the slot's decomposed-data arrays.  But let's
 			 * have an Assert to check that that did happen.
 			 */
-			Assert(attnum >= 0 && slot_is_attr_valid(innerslot, attnum));
+			Assert(attnum >= 0 && attnum < innerslot->tts_nvalid);
 			*op->resvalue = innerslot->tts_values[attnum];
 			*op->resnull = innerslot->tts_isnull[attnum];
 
@@ -487,7 +485,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 			/* See EEOP_INNER_VAR comments */
 
-			Assert(attnum >= 0 && slot_is_attr_valid(outerslot, attnum));
+			Assert(attnum >= 0 && attnum < outerslot->tts_nvalid);
 			*op->resvalue = outerslot->tts_values[attnum];
 			*op->resnull = outerslot->tts_isnull[attnum];
 
@@ -542,7 +540,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * We do not need CheckVarSlotCompatibility here; that was taken
 			 * care of at compilation time.  But see EEOP_INNER_VAR comments.
 			 */
-			Assert(attnum >= 0 && slot_is_attr_valid(innerslot, attnum));
+			Assert(attnum >= 0 && attnum < innerslot->tts_nvalid);
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = innerslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = innerslot->tts_isnull[attnum];
@@ -559,7 +557,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * We do not need CheckVarSlotCompatibility here; that was taken
 			 * care of at compilation time.  But see EEOP_INNER_VAR comments.
 			 */
-			Assert(attnum >= 0 && slot_is_attr_valid(outerslot, attnum));
+			Assert(attnum >= 0 && attnum < outerslot->tts_nvalid);
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = outerslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = outerslot->tts_isnull[attnum];
@@ -2137,15 +2135,8 @@ ExecJustScanVar(ExprState *state, ExprContext *econtext, bool *isnull)
 
 	CheckOpSlotCompatibility(&state->steps[0], slot);
 
-	/*
-	 * Try the sparse fetch path first, mirroring EEOP_SCAN_FETCHSOME, so
-	 * this fast path doesn't silently bypass lazy-fetch slot types.
-	 */
-	if (!slot_gettargetattr(slot, state->steps[0].d.fetch.all_vars))
-		slot_getsomeattrs(slot, attnum);
-
-	*isnull = slot->tts_isnull[attnum - 1];
-	return slot->tts_values[attnum - 1];
+	/* See comments in ExecJustInnerVar */
+	return slot_getattr(slot, attnum, isnull);
 }
 
 /* Simple Const expression */
@@ -2216,16 +2207,10 @@ ExecJustAssignScanVar(ExprState *state, ExprContext *econtext, bool *isnull)
 
 	CheckOpSlotCompatibility(&state->steps[0], inslot);
 
-	/*
-	 * Try the sparse fetch path first, mirroring EEOP_SCAN_FETCHSOME, so
-	 * this fast path doesn't silently bypass lazy-fetch slot types.
-	 */
-	if (!slot_gettargetattr(inslot, state->steps[0].d.fetch.all_vars))
-		slot_getsomeattrs(inslot, attnum);
-
+	/* See comments in ExecJustAssignInnerVar */
 	Assert(resultnum >= 0 && resultnum < outslot->tts_tupleDescriptor->natts);
-	outslot->tts_values[resultnum] = inslot->tts_values[attnum - 1];
-	outslot->tts_isnull[resultnum] = inslot->tts_isnull[attnum - 1];
+	outslot->tts_values[resultnum] =
+		slot_getattr(inslot, attnum, &outslot->tts_isnull[resultnum]);
 	return 0;
 }
 
