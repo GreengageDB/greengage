@@ -68,6 +68,7 @@ InstrAlloc(int n, int instrument_options, bool async_mode)
 			instr[i].need_bufusage = need_buffers;
 			instr[i].need_walusage = need_wal;
 			instr[i].need_timer = need_timer;
+			instr[i].need_cdb = need_cdb;
 			instr[i].async_mode = async_mode;
 		}
 	}
