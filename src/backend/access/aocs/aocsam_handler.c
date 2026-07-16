@@ -722,8 +722,7 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 		ExecStoreVirtualTuple(slot);
 
 		/*
-		 * In aocs_getnext() we set tts_nvalid to 0, and
-		 * ExecStoreVirtualTuple() in this case sets tts_nvalid to the
+		 * ExecStoreVirtualTuple() sets tts_nvalid to the
 		 * full attribute count, which is the generic TupleTableSlot
 		 * convention for "attributes 0..tts_nvalid-1 are all valid". That
 		 * does not hold for our lazy AOCS slot (TTSOpsVirtualAOCS): only the
