@@ -558,8 +558,16 @@ aocs_beginscan_internal(Relation relation,
 								 &scan->checksum,
 								 NULL);
 
+	/*
+	 * GPDB: pass NULL (not the meta-data snapshot) so systable_beginscan()
+	 * registers a catalog snapshot itself.  The raw meta-data snapshot may be
+	 * an unregistered GetTransactionSnapshot(), which trips PG18's assertion
+	 * (snapshot->regd_count > 0 || snapshot->active_count > 0) in
+	 * HeapTupleSatisfiesMVCC() during the pg_appendonly index scan.  This
+	 * mirrors the append-only (row) path, which already passes NULL here.
+	 */
 	GetAppendOnlyEntryAuxOids(RelationGetRelid(relation),
-							  scan->appendOnlyMetaDataSnapshot,
+							  NULL,
 							  NULL, NULL, NULL,
 							  &visimaprelid, &visimapidxid);
 
@@ -933,8 +941,10 @@ aocs_insert_init(Relation rel, int segno, int64 num_rows)
                                  &nd);
     desc->compType = NameStr(nd);
 
+    /* GPDB: NULL -> catalog snapshot (see aocs_beginscan); avoids PG18's
+     * registered/active-snapshot assert on the pg_appendonly index scan. */
     GetAppendOnlyEntryAuxOids(rel->rd_id,
-                              desc->appendOnlyMetaDataSnapshot,
+                              NULL,
                               &desc->segrelid, &desc->blkdirrelid, NULL,
                               &desc->visimaprelid, &desc->visimapidxid);
 
@@ -1347,6 +1357,26 @@ aocs_fetch_init(Relation relation,
 	aocsFetchDesc = (AOCSFetchDesc) palloc0(sizeof(AOCSFetchDescData));
 	aocsFetchDesc->relation = relation;
 
+	/*
+	 * GPDB/PG18: the meta-data data scans below (aoseg via
+	 * GetAllAOCSFileSegInfo, block directory, visimap) read heaps with MVCC
+	 * visibility, and PG18 asserts the snapshot is registered or active in
+	 * HeapTupleSatisfiesMVCC().  A SnapshotAny bitmap/index scan threads in an
+	 * unregistered GetTransactionSnapshot() (raw &CurrentSnapshotData); in that
+	 * case register a copy for the fetch's lifetime and release it in
+	 * aocs_fetch_finish.  We must keep the transaction snapshot's *content*
+	 * (using the active or a catalog snapshot instead gives the aoseg scan a
+	 * different view than the driving index bitmap -> "out of scanning scope").
+	 */
+	if (appendOnlyMetaDataSnapshot != NULL &&
+		IsMVCCSnapshot(appendOnlyMetaDataSnapshot) &&
+		appendOnlyMetaDataSnapshot->regd_count == 0 &&
+		appendOnlyMetaDataSnapshot->active_count == 0)
+	{
+		appendOnlyMetaDataSnapshot = RegisterSnapshot(appendOnlyMetaDataSnapshot);
+		aocsFetchDesc->ownMetaDataSnapshot = true;
+	}
+
 	aocsFetchDesc->appendOnlyMetaDataSnapshot = appendOnlyMetaDataSnapshot;
 	aocsFetchDesc->snapshot = snapshot;
 
@@ -1364,8 +1394,10 @@ aocs_fetch_init(Relation relation,
     bool checksum;
     Oid visimaprelid;
     Oid visimapidxid;
+    /* GPDB: NULL -> catalog snapshot (see aocs_beginscan); avoids PG18's
+     * registered/active-snapshot assert on the pg_appendonly index scan. */
     GetAppendOnlyEntryAuxOids(relation->rd_id,
-                              appendOnlyMetaDataSnapshot,
+                              NULL,
                               &aocsFetchDesc->segrelid, NULL, NULL,
                               &visimaprelid, &visimapidxid);
 
@@ -1713,6 +1745,14 @@ aocs_fetch_finish(AOCSFetchDesc aocsFetchDesc)
 	pfree(aocsFetchDesc->basepath);
 
 	AppendOnlyVisimap_Finish(&aocsFetchDesc->visibilityMap, AccessShareLock);
+
+	/* GPDB/PG18: release the snapshot registered in aocs_fetch_init. */
+	if (aocsFetchDesc->ownMetaDataSnapshot)
+	{
+		UnregisterSnapshot(aocsFetchDesc->appendOnlyMetaDataSnapshot);
+		aocsFetchDesc->appendOnlyMetaDataSnapshot = NULL;
+		aocsFetchDesc->ownMetaDataSnapshot = false;
+	}
 }
 
 

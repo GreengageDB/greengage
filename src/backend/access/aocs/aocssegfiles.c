@@ -157,8 +157,10 @@ GetAOCSFileSegInfo(Relation prel,
 	bool		isNull;
 
     Oid         segrelid;
+    /* GPDB: NULL -> catalog snapshot; avoids PG18's registered/active-snapshot
+     * assert on the pg_appendonly index scan (see GetAllAOCSFileSegInfo). */
     GetAppendOnlyEntryAuxOids(prel->rd_id,
-                              appendOnlyMetaDataSnapshot,
+                              NULL,
                               &segrelid, NULL, NULL,
                               NULL, NULL);
 
@@ -271,8 +273,11 @@ GetAllAOCSFileSegInfo(Relation prel,
 
 	Assert(RelationIsAoCols(prel));
 
+	/* GPDB: NULL -> catalog snapshot; avoids PG18's registered/active-snapshot
+	 * assert on the pg_appendonly index scan.  The aoseg data scan below still
+	 * uses the (registered active) appendOnlyMetaDataSnapshot. */
 	GetAppendOnlyEntryAuxOids(prel->rd_id,
-							  appendOnlyMetaDataSnapshot,
+							  NULL,
 							  &segrelid, NULL, NULL,
 							  NULL, NULL);
 

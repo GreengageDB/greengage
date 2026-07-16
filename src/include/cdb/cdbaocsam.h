@@ -192,6 +192,13 @@ typedef struct AOCSFetchDescData
 {
 	Relation		relation;
 	Snapshot		appendOnlyMetaDataSnapshot;
+	/*
+	 * GPDB/PG18: true if aocs_fetch_init registered a copy of
+	 * appendOnlyMetaDataSnapshot (an unregistered GetTransactionSnapshot()
+	 * threaded in from a SnapshotAny bitmap/index scan) and therefore must
+	 * UnregisterSnapshot it in aocs_fetch_finish.
+	 */
+	bool			ownMetaDataSnapshot;
 
 	/*
 	 * Snapshot to use for non-metadata operations.
