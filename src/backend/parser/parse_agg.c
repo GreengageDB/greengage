@@ -1455,7 +1455,7 @@ substitute_grouped_columns_mutator(Node *node,
 		/* handled GroupId separately, no need to recheck at this level */
 
 		if ((int) grp->agglevelsup >= context->sublevels_up)
-			return false;
+			return node;
 	}
 
 	/*
