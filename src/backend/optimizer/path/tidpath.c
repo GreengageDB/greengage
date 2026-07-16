@@ -520,18 +520,33 @@ create_tidscan_paths(PlannerInfo *root, RelOptInfo *rel)
 		 * parameterization due to LATERAL refs in its tlist.
 		 */
 		Relids		required_outer = rel->lateral_relids;
-
-		add_path(rel, (Path *) create_tidscan_path(root, rel, tidquals,
-												   required_outer));
+		Path	   *tidpath = (Path *) create_tidscan_path(root, rel, tidquals,
+														   required_outer);
 
 		/*
-		 * When the qual is CurrentOfExpr, the path that we just added is the
-		 * only one the executor can handle, so we should return before adding
-		 * any others. Returning true lets the caller know not to add any
-		 * others, either.
+		 * GPDB: create_tidscan_path() returns NULL for AO/AOCO relations,
+		 * which do not support TID scans, and add_path() ignores a NULL path.
+		 * For a WHERE CURRENT OF qual on an AO/AOCO (child) relation we must
+		 * therefore NOT short-circuit-return here -- otherwise the rel is left
+		 * with an empty pathlist and set_cheapest() aborts with "could not
+		 * devise a query plan".  Fall through so set_plain_rel_pathlist() adds
+		 * the sequential-scan path; the tailored "cursor ... is not a simply
+		 * updatable scan" error is then raised later at execution
+		 * (execCurrent.c).
 		 */
-		if (isCurrentOf)
-			return true;
+		if (tidpath != NULL)
+		{
+			add_path(rel, tidpath);
+
+			/*
+			 * When the qual is CurrentOfExpr, the path that we just added is
+			 * the only one the executor can handle, so we should return before
+			 * adding any others. Returning true lets the caller know not to
+			 * add any others, either.
+			 */
+			if (isCurrentOf)
+				return true;
+		}
 	}
 
 	/* Skip the rest if TID scans are disabled. */
