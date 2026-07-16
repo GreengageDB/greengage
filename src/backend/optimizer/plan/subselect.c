@@ -1617,7 +1617,7 @@ convert_ANY_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 	 * order-by causes here.
 	*/
 	cdbsubselect_drop_orderby(subselect);
-	cdbsubselect_drop_distinct(subselect);
+	cdbsubselect_drop_distinct(root, subselect);
 
 	/*
 	 * If uncorrelated, and no Var nodes on lhs, the subquery will be executed

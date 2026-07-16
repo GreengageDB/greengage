@@ -468,7 +468,7 @@ SubqueryToJoinWalker(Node *node, ConvertSubqueryToJoinContext *context)
  * cdbsubselect_drop_distinct
  */
 void
-cdbsubselect_drop_distinct(Query *subselect)
+cdbsubselect_drop_distinct(PlannerInfo *root, Query *subselect)
 {
 	if (subselect->limitCount == NULL &&
 		subselect->limitOffset == NULL)
@@ -481,7 +481,45 @@ cdbsubselect_drop_distinct(Query *subselect)
 		/* Delete GROUP BY if subquery has no aggregates and no HAVING. */
 		if (!subselect->hasAggs &&
 			subselect->havingQual == NULL)
+		{
 			subselect->groupClause = NIL;
+
+			/*
+			 * PG18: we just dropped the GROUP BY, so this subquery no longer
+			 * groups.  We keep its targetlist, because the caller is about to
+			 * pull this subquery up into the parent query as a join input; but
+			 * that targetlist may still contain Vars that reference the
+			 * grouping step's RTE_GROUP RTE (e.g. the plain "a, b" of
+			 * "... NOT IN (SELECT a, b ... GROUP BY a, b)", which the parser
+			 * turned into Vars over the RTE_GROUP).  Replace those with their
+			 * underlying grouping expressions, then drop the now-useless
+			 * RTE_GROUP RTE and clear hasGroupRTE.  Otherwise the RTE_GROUP
+			 * rides along into the parent's range table during pull-up while
+			 * the parent's hasGroupRTE stays false, tripping the
+			 * Assert(parse->hasGroupRTE) in subquery_planner(), and any
+			 * surviving group Vars are left dangling.
+			 */
+			if (subselect->hasGroupRTE)
+			{
+				ListCell   *lc;
+
+				subselect->targetList = (List *)
+					flatten_group_exprs(root, subselect,
+										(Node *) subselect->targetList);
+
+				foreach(lc, subselect->rtable)
+				{
+					RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+					if (rte->rtekind == RTE_GROUP)
+					{
+						subselect->rtable = list_delete_cell(subselect->rtable, lc);
+						subselect->hasGroupRTE = false;
+						break;
+					}
+				}
+			}
+		}
 	}
 }	/* cdbsubselect_drop_distinct */
 
@@ -1525,7 +1563,7 @@ convert_IN_to_antijoin(PlannerInfo *root, SubLink *sublink,
 		 * order-by causes here.
 		 */
 		cdbsubselect_drop_orderby(subselect);
-		cdbsubselect_drop_distinct(subselect);
+		cdbsubselect_drop_distinct(root, subselect);
 
 		int			subq_indx      = add_notin_subquery_rte(parse, subselect);
 		List       *inner_exprs    = NIL;
