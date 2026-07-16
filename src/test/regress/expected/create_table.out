@@ -53,9 +53,13 @@ ERROR:  cannot create temporary relation in non-temporary schema
 LINE 1: CREATE TEMP TABLE public.temp_to_perm (a int primary key);
                           ^
 DROP TABLE unlogged1, public.unlogged2;
-CREATE UNLOGGED TABLE unlogged1 (a int) PARTITION BY RANGE (a); -- fail
-ERROR:  partitioned tables cannot be unlogged
+CREATE UNLOGGED TABLE unlogged1 (a int) PARTITION BY RANGE (a); -- GPDB: OK (Greengage supports unlogged partitioned tables)
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+DROP TABLE unlogged1;
 CREATE TABLE unlogged1 (a int) PARTITION BY RANGE (a); -- ok
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE unlogged1 SET LOGGED; -- fails
 ERROR:  ALTER action SET LOGGED cannot be performed on relation "unlogged1"
 DETAIL:  This operation is not supported for partitioned tables.
@@ -374,7 +378,7 @@ Number of partitions: 0
 Distributed by: (a)
 
 INSERT INTO partitioned2 VALUES (1, 'hello');
-ERROR:  no partition of relation "partitioned2" found for row  (seg1 172.17.0.4:7003 pid=1159519)
+ERROR:  no partition of relation "partitioned2" found for row  (seg1 172.17.0.2:7003 pid=134877)
 DETAIL:  Partition key of the failing row contains ((a + 1), substr(b, 1, 5)) = (2, hello).
 CREATE TABLE part2_1 PARTITION OF partitioned2 FOR VALUES FROM (-1, 'aaaaa') TO (100, 'ccccc');
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -802,7 +806,7 @@ LINE 1: ...ail_part PARTITION OF list_parted2 FOR VALUES IN ('b', 'c');
 INSERT INTO list_parted2 VALUES('X');
 CREATE TABLE fail_part PARTITION OF list_parted2 FOR VALUES IN ('W', 'X', 'Y');
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row  (seg1 172.17.0.4:7003 pid=1159519)
+ERROR:  updated partition constraint for default partition "list_parted2_def" would be violated by some row  (seg1 172.17.0.2:7003 pid=134877)
 CREATE TABLE range_parted2 (
 	a int
 ) PARTITION BY RANGE (a);
@@ -868,7 +872,7 @@ LINE 1: ... TABLE fail_default_part PARTITION OF range_parted2 DEFAULT;
 INSERT INTO range_parted2 VALUES (85);
 CREATE TABLE fail_part PARTITION OF range_parted2 FOR VALUES FROM (80) TO (90);
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row  (seg2 172.17.0.4:7004 pid=1159521)
+ERROR:  updated partition constraint for default partition "range2_default" would be violated by some row  (seg2 172.17.0.2:7004 pid=134878)
 CREATE TABLE part4 PARTITION OF range_parted2 FOR VALUES FROM (90) TO (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 -- now check for multi-column range partition key
@@ -1024,7 +1028,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 create table parted_notnull_inh_test1 partition of parted_notnull_inh_test (a not null, b default 1) for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into parted_notnull_inh_test (b) values (null);
-ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint  (seg1 172.17.0.4:7003 pid=1159519)
+ERROR:  null value in column "b" of relation "parted_notnull_inh_test1" violates not-null constraint  (seg1 172.17.0.2:7003 pid=134877)
 DETAIL:  Failing row contains (1, null).
 -- note that while b's default is overridden, a's default is preserved
 \d parted_notnull_inh_test1
@@ -1318,7 +1322,7 @@ create trigger trig_part_create before insert on tab_part_create
   for each statement execute procedure func_part_create();
 ERROR:  Triggers for statements are not yet supported
 insert into tab_part_create values (1);
-ERROR:  no partition of relation "tab_part_create" found for row  (seg1 172.17.0.4:7003 pid=1159519)
+ERROR:  no partition of relation "tab_part_create" found for row  (seg1 172.17.0.2:7003 pid=134877)
 DETAIL:  Partition key of the failing row contains (a) = (1).
 drop table tab_part_create;
 drop function func_part_create();
@@ -1356,7 +1360,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 insert into defcheck_def values (0, 0);
 create table defcheck_0 partition of defcheck for values in (0);
 NOTICE:  table has parent, setting distribution columns to match parent table
-ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row  (seg1 172.17.0.4:7003 pid=1159519)
+ERROR:  updated partition constraint for default partition "defcheck_def" would be violated by some row  (seg1 172.17.0.2:7003 pid=134877)
 drop table defcheck;
 -- Test github issue #7340. truncating a toast unlogged table fails.
 -- Leave the table on purpose for pg_dump and gp_replica_check tests.
