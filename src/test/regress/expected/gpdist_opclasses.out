@@ -71,11 +71,11 @@ EXPLAIN (COSTS OFF) SELECT a, b FROM abstab_a, abstab_b WHERE a |=| b;
 SELECT a, b FROM abstab_a, abstab_b WHERE a |=| b;
  a  | b  
 ----+----
+ -1 | -1
+ -1 |  1
   0 |  0
   1 | -1
   1 |  1
- -1 | -1
- -1 |  1
 (5 rows)
 
 -- Change distribution key of abstab_a to use our fancy opclass.
@@ -102,11 +102,11 @@ EXPLAIN (COSTS OFF) SELECT a, b FROM abstab_a, abstab_b WHERE a |=| b;
 SELECT a, b FROM abstab_a, abstab_b WHERE a |=| b;
  a  | b  
 ----+----
- -1 |  1
  -1 | -1
+ -1 |  1
   0 |  0
-  1 |  1
   1 | -1
+  1 |  1
 (5 rows)
 
 -- Change distribution policy on abstab_a to match. (Drop and recreate, rather
@@ -157,9 +157,9 @@ EXPLAIN (COSTS OFF) SELECT a, b FROM abstab_a, abstab_b WHERE a = b;
 SELECT a, b FROM abstab_a, abstab_b WHERE a = b;
  a  | b  
 ----+----
- -1 | -1
   0 |  0
   1 |  1
+ -1 | -1
 (3 rows)
 
 -- Check dependency. The table should be marked as dependent on the operator
@@ -206,10 +206,10 @@ Distributed by: (i abs_int_hash_ops, t, j abs_int_hash_ops)
 -- should fail, because the default index opclass is not compatible with the |=| operator
 CREATE UNIQUE INDEX ON abs_opclass_test (i, j, t);
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
-DETAIL:  Operator class abs_int_hash_ops of distribution key column "i" is not compatible with operator class int4_ops used in the constraint.
+DETAIL:  Operator class public.abs_int_hash_ops of distribution key column "i" is not compatible with operator class int4_ops used in the constraint.
 ALTER TABLE abs_opclass_test ADD PRIMARY KEY (i, j, t);
 ERROR:  PRIMARY KEY definition must contain all columns in the table's distribution key
-DETAIL:  Operator class abs_int_hash_ops of distribution key column "i" is not compatible with operator class int4_ops used in the constraint.
+DETAIL:  Operator class public.abs_int_hash_ops of distribution key column "i" is not compatible with operator class int4_ops used in the constraint.
 -- but this is allowed. (There is no syntax to specify the opclasses with ADD PRIMARY KEY)
 CREATE UNIQUE INDEX ON abs_opclass_test (i abs_int_btree_ops, j abs_int_btree_ops, t);
 -- ALTER TABLE should perform the same tests

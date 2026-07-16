@@ -21,6 +21,8 @@ Create table delta_all(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_all'  and c.oid=e.attrelid  order by relname, attnum;
   relname  | attnum |                       attoptions                        
 -----------+--------+---------------------------------------------------------
@@ -45,6 +47,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -123,6 +126,8 @@ Create table delta_alter(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_alter'  and c.oid=e.attrelid  order by relname, attnum;
    relname   | attnum |                       attoptions                        
 -------------+--------+---------------------------------------------------------
@@ -149,6 +154,9 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a6     | timestamp with time zone    |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Not-null constraints:
+    "delta_alter_id_not_null" NOT NULL "id"
+Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -197,6 +205,9 @@ Alter table delta_alter Alter column a4 Type interval;
  a6     | timestamp with time zone    |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Not-null constraints:
+    "delta_alter_id_not_null" NOT NULL "id"
+Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -238,6 +249,9 @@ Alter table delta_alter Alter column a5 Type timestamp with time zone;
  a6     | timestamp without time zone |           |          |                                         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |                                         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Not-null constraints:
+    "delta_alter_id_not_null" NOT NULL "id"
+Distributed by: (id)
 Access method: ao_column
 Options: checksum=false
 
@@ -274,6 +288,8 @@ Create table delta_bitmap_ins(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_ix_bt on  delta_bitmap_ins using bitmap(a1);
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_bitmap_ins'  and c.oid=e.attrelid  order by relname, attnum;
      relname      | attnum |                       attoptions                        
@@ -301,6 +317,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 Checksum: f
 Indexes:
     "dl_ix_bt" bitmap (a1)
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -352,6 +369,8 @@ Create table delta_btree_ins(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_ix_br on  delta_btree_ins(a1);
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_btree_ins'  and c.oid=e.attrelid  order by relname, attnum;
      relname     | attnum |                       attoptions                        
@@ -379,6 +398,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
 Checksum: f
 Indexes:
     "dl_ix_br" btree (a1)
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -430,6 +450,8 @@ Create table delta_ins_bitmap(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_ins_bitmap'  and c.oid=e.attrelid  order by relname, attnum;
      relname      | attnum |                       attoptions                        
 ------------------+--------+---------------------------------------------------------
@@ -454,6 +476,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -488,6 +511,7 @@ Create index dl_ins_bt_ix on  delta_ins_bitmap using bitmap(a3);
 Checksum: f
 Indexes:
     "dl_ins_bt_ix" bitmap (a3)
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -523,6 +547,8 @@ Create table delta_ins_btree(
     a6 timestamp with time zone ENCODING (compresstype=rle_type, compresslevel=1),
     a7 text ENCODING (compresstype=rle_type,compresslevel=4)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_ins_btree'  and c.oid=e.attrelid  order by relname, attnum;
      relname     | attnum |                       attoptions                        
 -----------------+--------+---------------------------------------------------------
@@ -547,6 +573,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a6     | timestamp with time zone    |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
  a7     | text                        |           |          |         | extended |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -581,6 +608,7 @@ Create index dl_br_ix on  delta_ins_btree(a3);
 Checksum: f
 Indexes:
     "dl_br_ix" btree (a3)
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -615,6 +643,8 @@ Create table delta_blocks(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1,blocksize=8192);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Create index dl_bt_ix on delta_blocks using bitmap(a1);
 Create index dl_ix on delta_blocks(a3);
 Insert into delta_blocks select
@@ -652,6 +682,7 @@ Checksum: f
 Indexes:
     "dl_bt_ix" bitmap (a1)
     "dl_ix" btree (a3)
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192, checksum=false
 
@@ -687,6 +718,8 @@ Create table delta_none(
     a8 bigint,
     a9 text ENCODING (compresstype=rle_type,compresslevel=2)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_none'  and c.oid=e.attrelid  order by relname, attnum;
   relname   | attnum |                       attoptions                        
 ------------+--------+---------------------------------------------------------
@@ -715,6 +748,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a8     | bigint                      |           |          |         | plain    |              | none             | 0                 | 32768      | 
  a9     | text                        |           |          |         | extended |              | rle_type         | 2                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -784,6 +818,7 @@ DISTRIBUTED BY (b);
  b      | integer        |           |          |         | plain    |              | rle_type         | 1                 | 32768      | 
  c      | character(100) |           |          |         | extended |              | rle_type         | 1                 | 32768      | 
 Checksum: f
+Distributed by: (b)
 Access method: ao_column
 Options: compresstype=rle_type, checksum=false
 
@@ -865,6 +900,8 @@ Create table delta_update_t1(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Insert into delta_update_t1 values
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
@@ -892,6 +929,8 @@ Create table delta_update_t2(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 Insert into delta_update_t2 values
     (1, 2147483648, '2014-07-29', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776892-07'),
     (1, 2147483648, '2014-07-28', '14:22:23.776890', '2014-07-30 14:22:58.356229', '2014-07-30 14:22:23.776893-07'),
@@ -1044,6 +1083,8 @@ Create table delta_zlib(
     a8 bigint ENCODING (compresstype=zlib,compresslevel=7),
     a9 text ENCODING (compresstype=rle_type,compresslevel=2)
     ) with(appendonly=true, orientation=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'delta_zlib'  and c.oid=e.attrelid  order by relname, attnum;
   relname   | attnum |                       attoptions                        
 ------------+--------+---------------------------------------------------------
@@ -1072,6 +1113,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a8     | bigint                      |           |          |         | plain    |              | zlib             | 7                 | 32768      | 
  a9     | text                        |           |          |         | extended |              | rle_type         | 2                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: checksum=false
 
@@ -1145,6 +1187,8 @@ Create table rle_type_1_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_1_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1167,6 +1211,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 1                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, checksum=false
 
@@ -1241,6 +1286,8 @@ Create table rle_type_2_delta_chkt(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2, checksum=true);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_chkt'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1263,6 +1310,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: t
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=true
 
@@ -1304,6 +1352,8 @@ Create table rle_type_2_delta_chkf(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2, checksum=false);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_chkf'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1326,6 +1376,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=false
 
@@ -1370,6 +1421,8 @@ Create table rle_type_2_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=2);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_2_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1392,6 +1445,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 2                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=2, checksum=false
 
@@ -1490,6 +1544,8 @@ Create table rle_type_3_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=3);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_3_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1512,6 +1568,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 3                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=3, checksum=false
 
@@ -1586,6 +1643,8 @@ Create table rle_type_4_delta_null(
     a5 timestamp,
     a6 timestamp with time zone
     ) with(appendonly=true, orientation=column, compresstype=rle_type, compresslevel=4);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_attribute_encoding e  where c.relname = 'rle_type_4_delta_null'  and c.oid=e.attrelid  order by relname, attnum;
         relname        | attnum |                       attoptions                        
 -----------------------+--------+---------------------------------------------------------
@@ -1608,6 +1667,7 @@ select attrelid::regclass as relname, attnum, attoptions from pg_class c, pg_att
  a5     | timestamp without time zone |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
  a6     | timestamp with time zone    |           |          |         | plain   |              | rle_type         | 4                 | 32768      | 
 Checksum: f
+Distributed by: (a1)
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=4, checksum=false
 

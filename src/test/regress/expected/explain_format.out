@@ -96,29 +96,29 @@ select explain_filter('EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id
 
 --- Check Explain Analyze Text output that include the slices information
 select explain_filter('EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
-                                                                explain_filter                                                                
-----------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-   ->  Hash Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+                                                                 explain_filter                                                                 
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+   ->  Hash Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
          Hash Cond: (boxes.location_id = box_locations.id)
-         ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+         ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
                Hash Key: boxes.location_id
-               ->  Hash Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+               ->  Hash Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
                      Hash Cond: (boxes.apple_id = apples.id)
-                     ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+                     ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
                            Hash Key: boxes.apple_id
-                           ->  Seq Scan on boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-                     ->  Hash  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+                           ->  Seq Scan on boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+                     ->  Hash  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
                            Buckets: N  Batches: N  Memory Usage: NkB
-                           ->  Seq Scan on apples  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-         ->  Hash  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+                           ->  Seq Scan on apples  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+         ->  Hash  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
                Buckets: N  Batches: N  Memory Usage: NkB
-               ->  Seq Scan on box_locations  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+               ->  Seq Scan on box_locations  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Postgres query optimizer
  Planning Time: N.N ms
    (sliceN)    Executor memory: NK bytes.
-   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
-   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
+   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
+   (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
    (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
  Memory used:  NkB
  Execution Time: N.N ms
@@ -146,6 +146,7 @@ explain_filter
     Total Cost: N.N
     Plan Rows: N
     Plan Width: N
+    Disabled: false
     Plans: 
       - Node Type: "Hash Join"
         Parent Relationship: "Outer"
@@ -159,6 +160,7 @@ explain_filter
         Total Cost: N.N
         Plan Rows: N
         Plan Width: N
+        Disabled: false
         Inner Unique: true
         Hash Cond: "(boxes.location_id = box_locations.id)"
         Plans: 
@@ -175,6 +177,7 @@ explain_filter
             Total Cost: N.N
             Plan Rows: N
             Plan Width: N
+            Disabled: false
             Hash Key: "boxes.location_id"
             Plans: 
               - Node Type: "Hash Join"
@@ -189,6 +192,7 @@ explain_filter
                 Total Cost: N.N
                 Plan Rows: N
                 Plan Width: N
+                Disabled: false
                 Inner Unique: true
                 Hash Cond: "(boxes.apple_id = apples.id)"
                 Plans: 
@@ -205,6 +209,7 @@ explain_filter
                     Total Cost: N.N
                     Plan Rows: N
                     Plan Width: N
+                    Disabled: false
                     Hash Key: "boxes.apple_id"
                     Plans: 
                       - Node Type: "Seq Scan"
@@ -220,6 +225,7 @@ explain_filter
                         Total Cost: N.N
                         Plan Rows: N
                         Plan Width: N
+                        Disabled: false
                   - Node Type: "Hash"
                     Parent Relationship: "Inner"
                     Slice: N
@@ -231,6 +237,7 @@ explain_filter
                     Total Cost: N.N
                     Plan Rows: N
                     Plan Width: N
+                    Disabled: false
                     Plans: 
                       - Node Type: "Seq Scan"
                         Parent Relationship: "Outer"
@@ -245,6 +252,7 @@ explain_filter
                         Total Cost: N.N
                         Plan Rows: N
                         Plan Width: N
+                        Disabled: false
           - Node Type: "Hash"
             Parent Relationship: "Inner"
             Slice: N
@@ -256,6 +264,7 @@ explain_filter
             Total Cost: N.N
             Plan Rows: N
             Plan Width: N
+            Disabled: false
             Plans: 
               - Node Type: "Seq Scan"
                 Parent Relationship: "Outer"
@@ -270,6 +279,7 @@ explain_filter
                 Total Cost: N.N
                 Plan Rows: N
                 Plan Width: N
+                Disabled: false
   Optimizer: "Postgres query optimizer"
 (1 row)
 SET random_page_cost = 1;
@@ -289,6 +299,7 @@ explain_filter
     Total Cost: N.N
     Plan Rows: N
     Plan Width: N
+    Disabled: false
     Output: 
       - "id"
       - "apple_id"
@@ -308,13 +319,13 @@ explain_filter
         Total Cost: N.N
         Plan Rows: N
         Plan Width: N
+        Disabled: false
         Output: 
           - "id"
           - "apple_id"
           - "location_id"
   Optimizer: "Postgres query optimizer"
   Settings: 
-    optimizer: "off"
     random_page_cost: "N"
     cpu_index_tuple_cost: "N.N"
 (1 row)
@@ -333,6 +344,7 @@ explain_filter
     Total Cost: N.N
     Plan Rows: N
     Plan Width: N
+    Disabled: false
     Output: 
       - "id"
       - "apple_id"
@@ -352,6 +364,7 @@ explain_filter
         Total Cost: N.N
         Plan Rows: N
         Plan Width: N
+        Disabled: false
         Output: 
           - "id"
           - "apple_id"
@@ -360,7 +373,6 @@ explain_filter
   Settings: 
     random_page_cost: "N"
     cpu_index_tuple_cost: "N.N"
-    optimizer: "off"
 (1 row)
 --- Check Explain Analyze YAML output that include the slices information
 select explain_filter('EXPLAIN (ANALYZE, FORMAT YAML) SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
@@ -380,8 +392,19 @@ explain_filter
     Plan Width: N
     Actual Startup Time: N.N
     Actual Total Time: N.N
-    Actual Rows: N
+    Actual Rows: N.N
     Actual Loops: N
+    Disabled: false
+    Shared Hit Blocks: N
+    Shared Read Blocks: N
+    Shared Dirtied Blocks: N
+    Shared Written Blocks: N
+    Local Hit Blocks: N
+    Local Read Blocks: N
+    Local Dirtied Blocks: N
+    Local Written Blocks: N
+    Temp Read Blocks: N
+    Temp Written Blocks: N
     Plans: 
       - Node Type: "Hash Join"
         Parent Relationship: "Outer"
@@ -397,10 +420,21 @@ explain_filter
         Plan Width: N
         Actual Startup Time: N.N
         Actual Total Time: N.N
-        Actual Rows: N
+        Actual Rows: N.N
         Actual Loops: N
+        Disabled: false
         Inner Unique: true
         Hash Cond: "(boxes.location_id = box_locations.id)"
+        Shared Hit Blocks: N
+        Shared Read Blocks: N
+        Shared Dirtied Blocks: N
+        Shared Written Blocks: N
+        Local Hit Blocks: N
+        Local Read Blocks: N
+        Local Dirtied Blocks: N
+        Local Written Blocks: N
+        Temp Read Blocks: N
+        Temp Written Blocks: N
         Plans: 
           - Node Type: "Redistribute Motion"
             Senders: N
@@ -417,9 +451,20 @@ explain_filter
             Plan Width: N
             Actual Startup Time: N.N
             Actual Total Time: N.N
-            Actual Rows: N
+            Actual Rows: N.N
             Actual Loops: N
+            Disabled: false
             Hash Key: "boxes.location_id"
+            Shared Hit Blocks: N
+            Shared Read Blocks: N
+            Shared Dirtied Blocks: N
+            Shared Written Blocks: N
+            Local Hit Blocks: N
+            Local Read Blocks: N
+            Local Dirtied Blocks: N
+            Local Written Blocks: N
+            Temp Read Blocks: N
+            Temp Written Blocks: N
             Plans: 
               - Node Type: "Hash Join"
                 Parent Relationship: "Outer"
@@ -435,10 +480,21 @@ explain_filter
                 Plan Width: N
                 Actual Startup Time: N.N
                 Actual Total Time: N.N
-                Actual Rows: N
+                Actual Rows: N.N
                 Actual Loops: N
+                Disabled: false
                 Inner Unique: true
                 Hash Cond: "(boxes.apple_id = apples.id)"
+                Shared Hit Blocks: N
+                Shared Read Blocks: N
+                Shared Dirtied Blocks: N
+                Shared Written Blocks: N
+                Local Hit Blocks: N
+                Local Read Blocks: N
+                Local Dirtied Blocks: N
+                Local Written Blocks: N
+                Temp Read Blocks: N
+                Temp Written Blocks: N
                 Plans: 
                   - Node Type: "Redistribute Motion"
                     Senders: N
@@ -455,9 +511,20 @@ explain_filter
                     Plan Width: N
                     Actual Startup Time: N.N
                     Actual Total Time: N.N
-                    Actual Rows: N
+                    Actual Rows: N.N
                     Actual Loops: N
+                    Disabled: false
                     Hash Key: "boxes.apple_id"
+                    Shared Hit Blocks: N
+                    Shared Read Blocks: N
+                    Shared Dirtied Blocks: N
+                    Shared Written Blocks: N
+                    Local Hit Blocks: N
+                    Local Read Blocks: N
+                    Local Dirtied Blocks: N
+                    Local Written Blocks: N
+                    Temp Read Blocks: N
+                    Temp Written Blocks: N
                     Plans: 
                       - Node Type: "Seq Scan"
                         Parent Relationship: "Outer"
@@ -474,8 +541,19 @@ explain_filter
                         Plan Width: N
                         Actual Startup Time: N.N
                         Actual Total Time: N.N
-                        Actual Rows: N
+                        Actual Rows: N.N
                         Actual Loops: N
+                        Disabled: false
+                        Shared Hit Blocks: N
+                        Shared Read Blocks: N
+                        Shared Dirtied Blocks: N
+                        Shared Written Blocks: N
+                        Local Hit Blocks: N
+                        Local Read Blocks: N
+                        Local Dirtied Blocks: N
+                        Local Written Blocks: N
+                        Temp Read Blocks: N
+                        Temp Written Blocks: N
                   - Node Type: "Hash"
                     Parent Relationship: "Inner"
                     Slice: N
@@ -489,13 +567,24 @@ explain_filter
                     Plan Width: N
                     Actual Startup Time: N.N
                     Actual Total Time: N.N
-                    Actual Rows: N
+                    Actual Rows: N.N
                     Actual Loops: N
+                    Disabled: false
                     Hash Buckets: N
                     Original Hash Buckets: N
                     Hash Batches: N
                     Original Hash Batches: N
                     Peak Memory Usage: N
+                    Shared Hit Blocks: N
+                    Shared Read Blocks: N
+                    Shared Dirtied Blocks: N
+                    Shared Written Blocks: N
+                    Local Hit Blocks: N
+                    Local Read Blocks: N
+                    Local Dirtied Blocks: N
+                    Local Written Blocks: N
+                    Temp Read Blocks: N
+                    Temp Written Blocks: N
                     Plans: 
                       - Node Type: "Seq Scan"
                         Parent Relationship: "Outer"
@@ -512,8 +601,19 @@ explain_filter
                         Plan Width: N
                         Actual Startup Time: N.N
                         Actual Total Time: N.N
-                        Actual Rows: N
+                        Actual Rows: N.N
                         Actual Loops: N
+                        Disabled: false
+                        Shared Hit Blocks: N
+                        Shared Read Blocks: N
+                        Shared Dirtied Blocks: N
+                        Shared Written Blocks: N
+                        Local Hit Blocks: N
+                        Local Read Blocks: N
+                        Local Dirtied Blocks: N
+                        Local Written Blocks: N
+                        Temp Read Blocks: N
+                        Temp Written Blocks: N
           - Node Type: "Hash"
             Parent Relationship: "Inner"
             Slice: N
@@ -527,13 +627,24 @@ explain_filter
             Plan Width: N
             Actual Startup Time: N.N
             Actual Total Time: N.N
-            Actual Rows: N
+            Actual Rows: N.N
             Actual Loops: N
+            Disabled: false
             Hash Buckets: N
             Original Hash Buckets: N
             Hash Batches: N
             Original Hash Batches: N
             Peak Memory Usage: N
+            Shared Hit Blocks: N
+            Shared Read Blocks: N
+            Shared Dirtied Blocks: N
+            Shared Written Blocks: N
+            Local Hit Blocks: N
+            Local Read Blocks: N
+            Local Dirtied Blocks: N
+            Local Written Blocks: N
+            Temp Read Blocks: N
+            Temp Written Blocks: N
             Plans: 
               - Node Type: "Seq Scan"
                 Parent Relationship: "Outer"
@@ -550,9 +661,31 @@ explain_filter
                 Plan Width: N
                 Actual Startup Time: N.N
                 Actual Total Time: N.N
-                Actual Rows: N
+                Actual Rows: N.N
                 Actual Loops: N
+                Disabled: false
+                Shared Hit Blocks: N
+                Shared Read Blocks: N
+                Shared Dirtied Blocks: N
+                Shared Written Blocks: N
+                Local Hit Blocks: N
+                Local Read Blocks: N
+                Local Dirtied Blocks: N
+                Local Written Blocks: N
+                Temp Read Blocks: N
+                Temp Written Blocks: N
   Optimizer: "Postgres query optimizer"
+  Planning: 
+    Shared Hit Blocks: N
+    Shared Read Blocks: N
+    Shared Dirtied Blocks: N
+    Shared Written Blocks: N
+    Local Hit Blocks: N
+    Local Read Blocks: N
+    Local Dirtied Blocks: N
+    Local Written Blocks: N
+    Temp Read Blocks: N
+    Temp Written Blocks: N
   Planning Time: N.N
   Triggers: 
   Slice statistics: 
@@ -563,13 +696,11 @@ explain_filter
         Average: N
         Workers: N
         Maximum Memory Used: N
-      Work Maximum Memory: N
     - Slice: N
       Executor Memory: 
         Average: N
         Workers: N
         Maximum Memory Used: N
-      Work Maximum Memory: N
     - Slice: N
       Executor Memory: 
         Average: N
@@ -582,25 +713,23 @@ explain_filter
 --- Check explain analyze sort information in verbose mode
 select explain_filter('EXPLAIN (ANALYZE, VERBOSE) SELECT * from boxes ORDER BY apple_id;');
 explain_filter
-Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
   Output: id, apple_id, location_id
   Merge Key: apple_id
-  ->  Sort  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+  ->  Sort  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
         Output: id, apple_id, location_id
         Sort Key: boxes.apple_id
         Sort Method:  quicksort  Memory: NkB  Max Memory: NkB  Avg Memory: NkB (N segments)
-        Executor Memory: NkB  Segments: N  Max: NkB (segment N)
-        work_mem: NkB  Segments: N  Max: NkB (segment N)  Workfile: (N spilling)
-        ->  Seq Scan on public.boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+        ->  Seq Scan on public.boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
               Output: id, apple_id, location_id
 Optimizer: Postgres query optimizer
-Settings: optimizer = 'off', random_page_cost = 'N', cpu_index_tuple_cost = 'N.N'
+Settings: random_page_cost = 'N', cpu_index_tuple_cost = 'N.N'
 Planning Time: N.N ms
   (sliceN)    Executor memory: NK bytes.
-  (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).  Work_mem: NK bytes max.
+  (sliceN)    Executor memory: NK bytes avg x N workers, NK bytes max (segN).
 Memory used:  NkB
 Execution Time: N.N ms
-(18 rows)
+(16 rows)
 RESET random_page_cost;
 RESET cpu_index_tuple_cost;
 --
@@ -611,7 +740,7 @@ RESET cpu_index_tuple_cost;
 -- Check JSON format
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM generate_series(1, 10);');
 explain_filter_to_json
-[{"Plan": {"Alias": "generate_series", "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Function Scan", "Async Capable": false, "Function Name": "generate_series", "Parallel Aware": false}, "Optimizer": "Postgres query optimizer"}]
+[{"Plan": {"Alias": "generate_series", "Slice": 0, "Disabled": false, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Function Scan", "Async Capable": false, "Function Name": "generate_series", "Parallel Aware": false}, "Optimizer": "Postgres query optimizer"}]
 (1 row)
 select explain_filter('EXPLAIN (FORMAT XML, COSTS OFF) SELECT * FROM generate_series(1, 10);');
 explain_filter
@@ -626,6 +755,7 @@ explain_filter
       <Async-Capable>false</Async-Capable>
       <Function-Name>generate_series</Function-Name>
       <Alias>generate_series</Alias>
+      <Disabled>false</Disabled>
     </Plan>
     <Optimizer>Postgres query optimizer</Optimizer>
   </Query>
@@ -638,7 +768,7 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select explain_filter_to_json('EXPLAIN (FORMAT JSON, COSTS OFF) SELECT * FROM jsonexplaintest WHERE i = 2;');
 explain_filter_to_json
-[{"Plan": {"Plans": [{"Alias": "jsonexplaintest", "Slice": 0, "Filter": "(i = 0)", "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Async Capable": false, "Relation Name": "jsonexplaintest_1_prt_2", "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Receivers": 0, "Async Capable": false, "Parallel Aware": false}, "Optimizer": "Postgres query optimizer"}]
+[{"Plan": {"Plans": [{"Alias": "jsonexplaintest", "Slice": 0, "Filter": "(i = 0)", "Disabled": false, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Async Capable": false, "Relation Name": "jsonexplaintest_1_prt_2", "Parallel Aware": false, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Disabled": false, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Receivers": 0, "Async Capable": false, "Parallel Aware": false}, "Optimizer": "Postgres query optimizer"}]
 (1 row)
 -- Check Explain Text format output with jit enable
 CREATE TABLE jit_explain_output(c1 int);
@@ -665,10 +795,10 @@ JIT:
 -- Check explain anlyze text format output with jit enable
 select explain_filter('EXPLAIN (ANALYZE) SELECT * FROM jit_explain_output LIMIT 10;');
 explain_filter
-Limit  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-  ->  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-        ->  Limit  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-              ->  Seq Scan on jit_explain_output  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
+Limit  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+  ->  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+        ->  Limit  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
+              ->  Seq Scan on jit_explain_output  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
 Optimizer: Postgres query optimizer
 Planning Time: N.N ms
   (sliceN)    Executor memory: NK bytes.
@@ -683,7 +813,7 @@ Execution Time: N.N ms
 -- Check explain analyze json format output with jit enable
 select explain_filter_to_json('EXPLAIN (ANALYZE, FORMAT json) SELECT * FROM jit_explain_output LIMIT 10;');
 explain_filter_to_json
-[{"JIT": {"slice": {"slice": 0, "Timing": {"avg": 0.0, "max": 0.0, "segid": 0, "nworker": 0}, "Functions": {"avg": 0.0, "max": 0.0, "segid": 0, "nworker": 0}}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Senders": 0, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer"}], "Slice": 0, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Actual Total Time": 0.0, "Actual Startup Time": 0.0}, "Triggers": [], "Optimizer": "Postgres query optimizer", "Planning Time": 0.0, "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
+[{"JIT": {"slice": {"slice": 0, "Timing": {"avg": 0.0, "max": 0.0, "segid": 0, "nworker": 0}, "Functions": {"avg": 0.0, "max": 0.0, "segid": 0, "nworker": 0}}, "Options": {"Inlining": false, "Deforming": true, "Expressions": true, "Optimization": false}}, "Plan": {"Plans": [{"Plans": [{"Plans": [{"Alias": "jit_explain_output", "Slice": 0, "Disabled": false, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Seq Scan", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0.0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Relation Name": "jit_explain_output", "Parallel Aware": false, "Local Hit Blocks": 0, "Temp Read Blocks": 0, "Actual Total Time": 0.0, "Local Read Blocks": 0, "Shared Hit Blocks": 0, "Shared Read Blocks": 0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer", "Temp Written Blocks": 0, "Local Dirtied Blocks": 0, "Local Written Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0}], "Slice": 0, "Disabled": false, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0.0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Local Hit Blocks": 0, "Temp Read Blocks": 0, "Actual Total Time": 0.0, "Local Read Blocks": 0, "Shared Hit Blocks": 0, "Shared Read Blocks": 0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer", "Temp Written Blocks": 0, "Local Dirtied Blocks": 0, "Local Written Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0}], "Slice": 0, "Senders": 0, "Disabled": false, "Segments": 0, "Gang Type": "primary reader", "Node Type": "Gather Motion", "Plan Rows": 0, "Receivers": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0.0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Local Hit Blocks": 0, "Temp Read Blocks": 0, "Actual Total Time": 0.0, "Local Read Blocks": 0, "Shared Hit Blocks": 0, "Shared Read Blocks": 0, "Actual Startup Time": 0.0, "Parent Relationship": "Outer", "Temp Written Blocks": 0, "Local Dirtied Blocks": 0, "Local Written Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0}], "Slice": 0, "Disabled": false, "Segments": 0, "Gang Type": "unallocated", "Node Type": "Limit", "Plan Rows": 0, "Plan Width": 0, "Total Cost": 0.0, "Actual Rows": 0.0, "Actual Loops": 0, "Startup Cost": 0.0, "Async Capable": false, "Parallel Aware": false, "Local Hit Blocks": 0, "Temp Read Blocks": 0, "Actual Total Time": 0.0, "Local Read Blocks": 0, "Shared Hit Blocks": 0, "Shared Read Blocks": 0, "Actual Startup Time": 0.0, "Temp Written Blocks": 0, "Local Dirtied Blocks": 0, "Local Written Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0}, "Planning": {"Local Hit Blocks": 0, "Temp Read Blocks": 0, "Local Read Blocks": 0, "Shared Hit Blocks": 0, "Shared Read Blocks": 0, "Temp Written Blocks": 0, "Local Dirtied Blocks": 0, "Local Written Blocks": 0, "Shared Dirtied Blocks": 0, "Shared Written Blocks": 0}, "Triggers": [], "Optimizer": "Postgres query optimizer", "Planning Time": 0.0, "Execution Time": 0.0, "Slice statistics": [{"Slice": 0, "Executor Memory": 0}, {"Slice": 0, "Executor Memory": {"Average": 0, "Workers": 0, "Maximum Memory Used": 0}}], "Statement statistics": {"Memory used": 0}}]
 (1 row)
 RESET jit;
 RESET jit_above_cost;

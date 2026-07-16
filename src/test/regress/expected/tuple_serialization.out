@@ -10,6 +10,8 @@ CREATE FUNCTION incomplete_type_out(incomplete_type)
    AS 'textout'
    LANGUAGE internal IMMUTABLE STRICT;
 NOTICE:  argument type incomplete_type is only a shell
+LINE 1: CREATE FUNCTION incomplete_type_out(incomplete_type)
+                                            ^
 CREATE TYPE incomplete_type (
    internallength = variable,
    input = incomplete_type_in,

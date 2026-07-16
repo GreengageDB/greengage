@@ -3,6 +3,7 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
 --------------------------------+---------
  enable_async_append            | on
  enable_bitmapscan              | on
+ enable_distinct_reordering     | on
  enable_gathermerge             | on
  enable_group_by_reordering     | on
  enable_groupagg                | on
@@ -21,10 +22,11 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
  enable_presorted_aggregate     | off
+ enable_self_join_elimination   | on
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(23 rows)
+(25 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;
@@ -885,5 +887,5 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- end_matchsubs
 CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
 INSERT INTO srfdest select * FROM notice_srf();
-NOTICE:  notice_srf called in segment 1  (seg1 slice1 172.17.0.4:7003 pid=1832539)
+NOTICE:  notice_srf called in segment 1  (seg1 slice1 172.17.0.2:7003 pid=3753734)
 reset optimizer_segments;

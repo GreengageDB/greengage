@@ -194,14 +194,11 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 1
          ->  BitmapAnd
                ->  Bitmap Index Scan on rp_multi_inds_part2_b_idx
                      Index Cond: (rp_multi_inds.b = 11)
-               ->  BitmapOr
-                     ->  Bitmap Index Scan on rp_multi_inds_part2_c_idx
-                           Index Cond: (rp_multi_inds.c = 11)
-                     ->  Bitmap Index Scan on rp_multi_inds_part2_c_idx
-                           Index Cond: (rp_multi_inds.c = 4201)
+               ->  Bitmap Index Scan on rp_multi_inds_part2_c_idx
+                     Index Cond: (rp_multi_inds.c = ANY ('{11,4201}'::integer[]))
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(15 rows)
+ Settings: optimizer_enable_dynamictablescan = 'off'
+(12 rows)
 
 SELECT * FROM rp_multi_inds WHERE b = 11 AND (c = 11 OR c = 4201);
  a  | b  | c  
@@ -229,8 +226,8 @@ SET enable_hashjoin TO off;
 SET enable_mergejoin TO off;
 SET enable_nestloop TO on;
 EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo.b = 11;
-                                  QUERY PLAN                                  
-------------------------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Output: foo.a, foo.b, bar.a
    ->  Nested Loop
@@ -244,7 +241,7 @@ EXPLAIN (COSTS OFF, VERBOSE) SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo
                      Output: foo.a, foo.b
                      Filter: (foo.b = 11)
  Optimizer: Postgres query optimizer
- Settings: enable_hashjoin=off, enable_mergejoin=off, enable_nestloop=on, optimizer=off
+ Settings: enable_nestloop = 'on', enable_hashjoin = 'off'
 (14 rows)
 
 SELECT * FROM foo JOIN bar on foo.a = bar.a AND foo.b = 11;
@@ -274,8 +271,7 @@ EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert VALUES (1, 1), (3, 3);
          ->  Values Scan on "*VALUES*"
                Output: "*VALUES*".column1, "*VALUES*".column2
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(8 rows)
+(7 rows)
 
 INSERT INTO rp_insert VALUES (1, 1), (3, 3);
 EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert SELECT * FROM rp_insert;
@@ -288,8 +284,7 @@ EXPLAIN (COSTS OFF, VERBOSE) INSERT INTO rp_insert SELECT * FROM rp_insert;
          ->  Seq Scan on orca_static_pruning.rp_insert_part_2 rp_insert_3
                Output: rp_insert_3.a, rp_insert_3.b
  Optimizer: Postgres query optimizer
- Settings: optimizer=off
-(8 rows)
+(7 rows)
 
 INSERT INTO rp_insert SELECT * FROM rp_insert;
 SELECT * FROM rp_insert;

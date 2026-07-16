@@ -64,6 +64,8 @@ CREATE FUNCTION nohash_int_in(cstring) RETURNS nohash_int IMMUTABLE STRICT LANGU
 NOTICE:  return type nohash_int is only a shell
 CREATE FUNCTION nohash_int_out(nohash_int) RETURNS cstring IMMUTABLE STRICT LANGUAGE INTERNAL AS 'int4out';
 NOTICE:  argument type nohash_int is only a shell
+LINE 1: CREATE FUNCTION nohash_int_out(nohash_int) RETURNS cstring I...
+                                       ^
 CREATE TYPE nohash_int (INPUT = nohash_int_in, OUTPUT=nohash_int_out, INTERNALLENGTH=4, PASSEDBYVALUE, ALIGNMENT=int4);
 -- Create comparison operators and opclass.
 CREATE FUNCTION nohash_int_cmp(nohash_int, nohash_int) RETURNS integer AS 'btint4cmp' LANGUAGE 'internal' IMMUTABLE STRICT;
@@ -95,16 +97,16 @@ set enable_sort=off;
 select normal_int from hashagg_test2 group by normal_int;
  normal_int 
 ------------
-          0
-          1
-          2
-          3
-          4
           5
           6
+          9
+          1
+          0
+          4
+          2
           7
           8
-          9
+          3
 (10 rows)
 
 select nohash_int from hashagg_test2 group by nohash_int;
@@ -153,15 +155,15 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          Filter: (max(test_combinefn_null.c) = '31'::bpchar)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL sum(a) FILTER (WHERE false)), (PARTIAL max(c))
-               Hash Key: b
+               Hash Key: test_combinefn_null.b
                ->  Partial HashAggregate
                      Output: b, PARTIAL sum(a) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
                            Output: a, b, c
  Optimizer: Postgres query optimizer
- Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
-(13 rows)
+ Settings: enable_sort = 'off', enable_indexscan = 'off'
+(16 rows)
 
 :qry;
  sum 
@@ -188,15 +190,15 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          Filter: (max(test_combinefn_null.c) = '31'::bpchar)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL var_pop((a)::integer) FILTER (WHERE false)), (PARTIAL max(c))
-               Hash Key: b
+               Hash Key: test_combinefn_null.b
                ->  Partial HashAggregate
                      Output: b, PARTIAL var_pop((a)::integer) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
                            Output: a, b, c
  Optimizer: Postgres query optimizer
- Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
-(13 rows)
+ Settings: enable_sort = 'off', enable_indexscan = 'off'
+(16 rows)
 
 :qry;
  var_pop 
@@ -223,15 +225,15 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          Filter: (max(test_combinefn_null.c) = '31'::bpchar)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL sum((a)::numeric) FILTER (WHERE false)), (PARTIAL max(c))
-               Hash Key: b
+               Hash Key: test_combinefn_null.b
                ->  Partial HashAggregate
                      Output: b, PARTIAL sum((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
                            Output: a, b, c
  Optimizer: Postgres query optimizer
- Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
-(13 rows)
+ Settings: enable_sort = 'off', enable_indexscan = 'off'
+(16 rows)
 
 :qry;
  sum 
@@ -258,15 +260,15 @@ EXPLAIN (COSTS OFF, VERBOSE) :qry;
          Filter: (max(test_combinefn_null.c) = '31'::bpchar)
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Output: b, (PARTIAL var_pop((a)::numeric) FILTER (WHERE false)), (PARTIAL max(c))
-               Hash Key: b
+               Hash Key: test_combinefn_null.b
                ->  Partial HashAggregate
                      Output: b, PARTIAL var_pop((a)::numeric) FILTER (WHERE false), PARTIAL max(c)
                      Group Key: test_combinefn_null.b
                      ->  Seq Scan on public.test_combinefn_null
                            Output: a, b, c
  Optimizer: Postgres query optimizer
- Settings: enable_indexscan=off, enable_seqscan=on, enable_sort=off, optimizer=off
-(13 rows)
+ Settings: enable_sort = 'off', enable_indexscan = 'off'
+(16 rows)
 
 :qry;
  var_pop 

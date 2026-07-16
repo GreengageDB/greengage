@@ -21,7 +21,7 @@ explain select avg(b) from cost_agg_t1 group by c;
    ->  Finalize HashAggregate  (cost=5519.00..5527.33 rows=667 width=36)
          Group Key: c
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=5449.00..5509.00 rows=2000 width=36)
-               Hash Key: c
+               Hash Key: cost_agg_t1.c
                ->  Partial HashAggregate  (cost=5449.00..5469.00 rows=2000 width=36)
                      Group Key: c
                      ->  Seq Scan on cost_agg_t1  (cost=0.00..3782.33 rows=333333 width=8)
@@ -38,12 +38,12 @@ explain select avg(b) from cost_agg_t1 group by c;
 explain select avg(b) from cost_agg_t2 group by c;
                                               QUERY PLAN                                               
 -------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=12115.67..17309.12 rows=296769 width=36)
-   ->  HashAggregate  (cost=12115.67..13352.20 rows=98923 width=36)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=12115.67..17248.56 rows=293308 width=36)
+   ->  HashAggregate  (cost=12115.67..13337.78 rows=97769 width=36)
          Group Key: c
-         Planned Partitions: 8
+         Planned Partitions: 16
          ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..10449.00 rows=333333 width=8)
-               Hash Key: c
+               Hash Key: cost_agg_t2.c
                ->  Seq Scan on cost_agg_t2  (cost=0.00..3782.33 rows=333333 width=8)
  Optimizer: Postgres query optimizer
 (8 rows)
@@ -55,13 +55,13 @@ analyze cost_agg_t2;
 explain select avg(b) from cost_agg_t2 group by c;
                                                 QUERY PLAN                                                
 ----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10113.08..11916.68 rows=103063 width=36)
-   ->  Finalize HashAggregate  (cost=10113.08..10542.51 rows=34354 width=36)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=10084.22..11872.63 rows=102195 width=36)
+   ->  Finalize HashAggregate  (cost=10084.22..10510.03 rows=34065 width=36)
          Group Key: c
          Planned Partitions: 8
-         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=6538.00..9602.35 rows=102145 width=36)
-               Hash Key: c
-               ->  Partial HashAggregate  (cost=6538.00..7559.45 rows=102145 width=36)
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=6538.00..9577.62 rows=101321 width=36)
+               Hash Key: cost_agg_t2.c
+               ->  Partial HashAggregate  (cost=6538.00..7551.21 rows=101321 width=36)
                      Group Key: c
                      Planned Partitions: 8
                      ->  Seq Scan on cost_agg_t2  (cost=0.00..4538.00 rows=400000 width=8)
@@ -90,7 +90,7 @@ explain (costs off) select b, sum(a) from t_planner_force_multi_stage group by b
    ->  HashAggregate
          Group Key: b
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
-               Hash Key: b
+               Hash Key: t_planner_force_multi_stage.b
                ->  Seq Scan on t_planner_force_multi_stage
  Optimizer: Postgres query optimizer
 (7 rows)

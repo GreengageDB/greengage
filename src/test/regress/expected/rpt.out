@@ -205,10 +205,10 @@ insert into foo values (1,'aaa');
 insert into foo values (2,'bbb');
 -- fail
 insert into foo values (1,'ccc');
-ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg1 172.17.0.4:7003 pid=1859523)
+ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg2 172.17.0.2:7004 pid=3777221)
 DETAIL:  Key (id)=(1) already exists.
 insert into foo values (3,'aaa');
-ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg2 172.17.0.4:7004 pid=1859525)
+ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg1 172.17.0.2:7003 pid=3777220)
 DETAIL:  Key (name)=(aaa) already exists.
 drop table if exists foo;
 --
@@ -224,6 +224,7 @@ CREATE TABLE parent (
 CREATE TABLE child (like parent) distributed replicated;
 CREATE TABLE child1 (like parent) DISTRIBUTED BY (name);
 CREATE TABLE child2 (like parent);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 -- should be replicated table
 \d child
                   Table "rpt.child"
@@ -242,6 +243,7 @@ Distributed Replicated
  name     | text    |           |          | 
  age      | integer |           |          | 
  location | point   |           |          | 
+Distributed by: (name)
 
 -- should be replicated table
 \d child2
@@ -306,13 +308,15 @@ drop table if exists bar;
 -- CTAS from partition table table
 create table foo as select i as c1, i as c2
 from generate_series(1,3) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bar as select * from foo distributed replicated;
 select * from bar;
  c1 | c2 
 ----+----
-  1 |  1
   2 |  2
   3 |  3
+  1 |  1
 (3 rows)
 
 drop table if exists foo;
@@ -320,6 +324,8 @@ drop table if exists bar;
 -- CTAS from singleQE 
 create table foo as select i as c1, i as c2
 from generate_series(1,3) i;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from foo;
  c1 | c2 
 ----+----
@@ -390,6 +396,7 @@ alter table bar1 set distributed replicated;
 --------+---------+-----------+----------+---------
  x      | integer |           |          | 
  y      | integer |           |          | 
+Distributed by: (x)
 
 \d foo1
                  Table "rpt.foo1"
@@ -419,30 +426,30 @@ Distributed Replicated
 select * from foo;
  x  | y  
 ----+----
-  5 |  5
-  6 |  6
-  9 |  9
- 10 | 10
   2 |  2
   3 |  3
   4 |  4
   7 |  7
   8 |  8
   1 |  1
+  5 |  5
+  6 |  6
+  9 |  9
+ 10 | 10
 (10 rows)
 
 select * from foo1;
  x  | y  
 ----+----
-  5 |  5
-  7 |  7
   1 |  1
   2 |  2
+  7 |  7
+  8 |  8
   4 |  4
   6 |  6
-  3 |  3
-  8 |  8
   9 |  9
+  3 |  3
+  5 |  5
  10 | 10
 (10 rows)
 
@@ -464,15 +471,15 @@ select * from bar;
 select * from bar1;
  x  | y  
 ----+----
+  8 |  8
+  5 |  5
+  9 |  9
+  1 |  1
+  2 |  2
   3 |  3
+  4 |  4
   6 |  6
   7 |  7
-  1 |  1
-  4 |  4
-  9 |  9
-  2 |  2
-  5 |  5
-  8 |  8
  10 | 10
 (10 rows)
 
@@ -504,6 +511,7 @@ Distributed Replicated
 --------+---------+-----------+----------+---------
  x      | integer |           |          | 
  y      | integer |           |          | 
+Distributed by: (x)
 
 \d bar1
                  Table "rpt.bar1"
@@ -532,22 +540,21 @@ select * from foo;
 select * from foo1;
  x  | y  
 ----+----
-  5 |  5
-  7 |  7
   3 |  3
-  8 |  8
-  9 |  9
+  5 |  5
  10 | 10
   1 |  1
   2 |  2
+  7 |  7
+  8 |  8
   4 |  4
   6 |  6
+  9 |  9
 (10 rows)
 
 select * from bar;
  x  | y  
 ----+----
-  1 |  1
   2 |  2
   3 |  3
   4 |  4
@@ -557,21 +564,22 @@ select * from bar;
   6 |  6
   9 |  9
  10 | 10
+  1 |  1
 (10 rows)
 
 select * from bar1;
  x  | y  
 ----+----
-  1 |  1
-  5 |  5
-  3 |  3
-  4 |  4
-  2 |  2
-  6 |  6
-  7 |  7
-  9 |  9
   8 |  8
+  2 |  2
+  3 |  3
+  7 |  7
  10 | 10
+  5 |  5
+  9 |  9
+  1 |  1
+  4 |  4
+  6 |  6
 (10 rows)
 
 drop table if exists foo;
@@ -583,6 +591,8 @@ drop table if exists bar1;
 ---------
 create table foo(x int, y int) distributed replicated;
 create table bar(x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into foo values (1, 1), (2, 1);
 insert into bar values (1, 2), (2, 2);
 update foo set y = 2 where y = 1;
@@ -680,6 +690,8 @@ select * from gp_dist_random('foo');
 -- gp_segment_id is ambiguous for replicated table, it's been disabled now.
 create table baz (c1 int, c2 int) distributed replicated;
 create table qux (c1 int, c2 int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select gp_segment_id from baz;
 ERROR:  column "gp_segment_id" does not exist
 LINE 1: select gp_segment_id from baz;
@@ -754,6 +766,8 @@ select min(x) from minmaxtest;
 CREATE TABLE foopart (a int4, b int4) DISTRIBUTED REPLICATED PARTITION BY RANGE (a) (START (1) END (10));
 ERROR:  PARTITION BY clause cannot be used with DISTRIBUTED REPLICATED clause
 CREATE TABLE foopart (a int4, b int4) PARTITION BY RANGE (a) (START (1) END (10)) ;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- should fail
 ALTER TABLE foopart SET DISTRIBUTED REPLICATED;
 ERROR:  can't set the distribution policy of a partition table to REPLICATED
@@ -802,52 +816,62 @@ create table t_hashdist(a int, b int, c int) distributed by (a);
 create table t_replicate_volatile(a int, b int, c int) distributed replicated;
 ---- pushed down filter
 explain (costs off) select * from t_replicate_volatile, t_hashdist where t_replicate_volatile.a > random();
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                           QUERY PLAN                           
+----------------------------------------------------------------
  Nested Loop
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on t_hashdist
+   Disabled: true
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Seq Scan on t_replicate_volatile
+                     Disabled: true
+                     Filter: ((a)::double precision > random())
    ->  Materialize
-         ->  Result
-               ->  Gather Motion 1:1  (slice2; segments: 1)
-                     ->  Seq Scan on t_replicate_volatile
-                           Filter: ((a)::double precision > random())
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Seq Scan on t_hashdist
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 -- join qual
 explain (costs off) select * from t_hashdist, t_replicate_volatile x, t_replicate_volatile y where x.a + y.a > random();
-                                     QUERY PLAN                                      
--------------------------------------------------------------------------------------
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
  Nested Loop
-   ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Seq Scan on t_hashdist
+   Disabled: true
+   ->  Result
+         ->  Gather Motion 1:1  (slice1; segments: 1)
+               ->  Nested Loop
+                     Disabled: true
+                     Join Filter: (((x.a + y.a))::double precision > random())
+                     ->  Seq Scan on t_replicate_volatile x
+                           Disabled: true
+                     ->  Seq Scan on t_replicate_volatile y
+                           Disabled: true
    ->  Materialize
-         ->  Result
-               ->  Gather Motion 1:1  (slice2; segments: 1)
-                     ->  Nested Loop
-                           Join Filter: (((x.a + y.a))::double precision > random())
-                           ->  Seq Scan on t_replicate_volatile x
-                           ->  Materialize
-                                 ->  Seq Scan on t_replicate_volatile y
+         ->  Gather Motion 3:1  (slice2; segments: 3)
+               ->  Seq Scan on t_hashdist
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(12 rows)
+(16 rows)
 
 -- sublink & subquery
 explain (costs off) select * from t_hashdist where a > All (select random() from t_replicate_volatile);
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Nested Loop Left Anti Semi (Not-In) Join
+   Disabled: true
    Join Filter: ((t_hashdist.a)::double precision <= "NotIn_SUBQUERY".random)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on t_hashdist
+               Disabled: true
    ->  Materialize
          ->  Result
                ->  Gather Motion 1:1  (slice2; segments: 1)
                      ->  Subquery Scan on "NotIn_SUBQUERY"
                            ->  Seq Scan on t_replicate_volatile
+                                 Disabled: true
  Optimizer: Postgres query optimizer
-(10 rows)
+(13 rows)
 
 explain (costs off) select * from t_hashdist where a in (select random()::int from t_replicate_volatile);
                               QUERY PLAN                              
@@ -856,6 +880,7 @@ explain (costs off) select * from t_hashdist where a in (select random()::int fr
    ->  Hash Join
          Hash Cond: (t_hashdist.a = ((random())::integer))
          ->  Seq Scan on t_hashdist
+               Disabled: true
          ->  Hash
                ->  Redistribute Motion 1:3  (slice2; segments: 1)
                      Hash Key: ((random())::integer)
@@ -863,8 +888,9 @@ explain (costs off) select * from t_hashdist where a in (select random()::int fr
                            Group Key: ((random())::integer)
                            ->  Result
                                  ->  Seq Scan on t_replicate_volatile
+                                       Disabled: true
  Optimizer: Postgres query optimizer
-(12 rows)
+(14 rows)
 
 -- subplan
 explain (costs off, verbose) select * from t_hashdist left join t_replicate_volatile on t_hashdist.a > any (select random() from t_replicate_volatile);
@@ -873,9 +899,11 @@ explain (costs off, verbose) select * from t_hashdist left join t_replicate_vola
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
    ->  Nested Loop Left Join
+         Disabled: true
          Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
          Join Filter: ((ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1)))
          ->  Seq Scan on rpt.t_hashdist
+               Disabled: true
                Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, (ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1))
                SubPlan 1
                  ->  Materialize
@@ -883,80 +911,90 @@ explain (costs off, verbose) select * from t_hashdist left join t_replicate_vola
                        ->  Broadcast Motion 1:3  (slice2; segments: 1)
                              Output: (random())
                              ->  Seq Scan on rpt.t_replicate_volatile t_replicate_volatile_1
+                                   Disabled: true
                                    Output: random()
          ->  Materialize
                Output: t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
                ->  Seq Scan on rpt.t_replicate_volatile
+                     Disabled: true
                      Output: t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
  Optimizer: Postgres query optimizer
  Settings: enable_seqscan = 'off'
-(20 rows)
+(24 rows)
 
 -- targetlist
 explain (costs off) select * from t_hashdist cross join (select random () from t_replicate_volatile)x;
                          QUERY PLAN                         
 ------------------------------------------------------------
  Nested Loop
+   Disabled: true
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on t_hashdist
+               Disabled: true
    ->  Materialize
          ->  Result
                ->  Gather Motion 1:1  (slice2; segments: 1)
                      ->  Seq Scan on t_replicate_volatile
+                           Disabled: true
  Optimizer: Postgres query optimizer
-(8 rows)
+(11 rows)
 
 explain (costs off) select * from t_hashdist cross join (select a, sum(random()) from t_replicate_volatile group by a) x;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                           QUERY PLAN                           
+----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Disabled: true
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
                ->  Result
-                     ->  GroupAggregate
+                     ->  HashAggregate
                            Group Key: t_replicate_volatile.a
-                           ->  Sort
-                                 Sort Key: t_replicate_volatile.a
-                                 ->  Seq Scan on t_replicate_volatile
+                           ->  Seq Scan on t_replicate_volatile
+                                 Disabled: true
          ->  Materialize
                ->  Seq Scan on t_hashdist
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(12 rows)
+(13 rows)
 
 explain (costs off) select * from t_hashdist cross join (select random() as k, sum(a) from t_replicate_volatile group by k) x;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
+                           QUERY PLAN                           
+----------------------------------------------------------------
  Nested Loop
+   Disabled: true
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on t_hashdist
+               Disabled: true
    ->  Materialize
          ->  Result
                ->  Gather Motion 1:1  (slice2; segments: 1)
-                     ->  GroupAggregate
-                           Group Key: (random())
-                           ->  Sort
-                                 Sort Key: (random())
-                                 ->  Seq Scan on t_replicate_volatile
- Optimizer: Postgres query optimizer
-(12 rows)
-
-explain (costs off) select * from t_hashdist cross join (select a, sum(b) as s from t_replicate_volatile group by a having sum(b) > random() order by a) x ;
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
-   ->  Nested Loop
-         ->  Broadcast Motion 1:3  (slice2; segments: 1)
-               ->  Result
-                     ->  GroupAggregate
-                           Group Key: t_replicate_volatile.a
-                           Filter: ((sum(t_replicate_volatile.b))::double precision > random())
-                           ->  Sort
-                                 Sort Key: t_replicate_volatile.a
-                                 ->  Seq Scan on t_replicate_volatile
-         ->  Materialize
-               ->  Seq Scan on t_hashdist
+                     ->  HashAggregate
+                           Group Key: random()
+                           ->  Seq Scan on t_replicate_volatile
+                                 Disabled: true
  Optimizer: Postgres query optimizer
 (13 rows)
+
+explain (costs off) select * from t_hashdist cross join (select a, sum(b) as s from t_replicate_volatile group by a having sum(b) > random() order by a) x ;
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Nested Loop
+         Disabled: true
+         ->  Broadcast Motion 1:3  (slice2; segments: 1)
+               ->  Result
+                     ->  Sort
+                           Sort Key: t_replicate_volatile.a
+                           ->  HashAggregate
+                                 Group Key: t_replicate_volatile.a
+                                 Filter: ((sum(t_replicate_volatile.b))::double precision > random())
+                                 ->  Seq Scan on t_replicate_volatile
+                                       Disabled: true
+         ->  Materialize
+               ->  Seq Scan on t_hashdist
+                     Disabled: true
+ Optimizer: Postgres query optimizer
+(16 rows)
 
 -- insert
 explain (costs off) insert into t_replicate_volatile select random() from t_replicate_volatile;
@@ -966,8 +1004,9 @@ explain (costs off) insert into t_replicate_volatile select random() from t_repl
    ->  Broadcast Motion 1:3  (slice1; segments: 1)
          ->  Result
                ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(5 rows)
+(6 rows)
 
 explain (costs off) insert into t_replicate_volatile select random(), a, a from generate_series(1, 10) a;
                       QUERY PLAN                      
@@ -997,9 +1036,10 @@ explain (costs off) select a from t_replicate_volatile union all select * from n
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Subquery Scan on "*SELECT* 1"
                ->  Seq Scan on t_replicate_volatile
+                     Disabled: true
    ->  Function Scan on nextval
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 -- CTAS
 explain (costs off) create table rpt_ctas as select random() from generate_series(1, 10) distributed replicated;
@@ -1023,17 +1063,17 @@ explain (costs off) create table rpt_ctas as select a from generate_series(1, 10
 
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
-ERROR:  could not devise a plan (cdbpath.c:2776)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = 1 from t_replicate_volatile x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2776)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = 1 from t_hashdist x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2776)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) delete from t_replicate_volatile where a < random();
-ERROR:  could not devise a plan (cdbpath.c:2776)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) delete from t_replicate_volatile using t_replicate_volatile x where t_replicate_volatile.a + x.b < random();
-ERROR:  could not devise a plan (cdbpath.c:2776)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = random();
-ERROR:  could not devise a plan. (cdbpath.c:2573)
+ERROR:  could not devise a plan. (cdbpath.c:2574)
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
                                    QUERY PLAN                                    
@@ -1043,22 +1083,26 @@ explain (costs off) insert into t_replicate_volatile select * from t_replicate_v
          ->  Result
                ->  Limit
                      ->  Seq Scan on t_replicate_volatile t_replicate_volatile_1
+                           Disabled: true
  Optimizer: Postgres query optimizer
-(6 rows)
+(7 rows)
 
 explain (costs off) select * from t_hashdist cross join (select * from t_replicate_volatile limit random()) x;
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop
+         Disabled: true
          ->  Broadcast Motion 1:3  (slice2; segments: 1)
                ->  Result
                      ->  Limit
                            ->  Seq Scan on t_replicate_volatile
+                                 Disabled: true
          ->  Materialize
                ->  Seq Scan on t_hashdist
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(9 rows)
+(12 rows)
 
 -- ORCA
 -- verify that JOIN derives the inner child distribution if the outer is tainted replicated (in this
@@ -1076,17 +1120,18 @@ set optimizer_enable_hashjoin=off;
 set enable_hashjoin=off;
 set enable_nestloop=on;
 explain select b from dist_tab where b in (select distinct c from rep_tab);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000001.15..10000000021.42 rows=4 width=4)
-   ->  Nested Loop  (cost=10000000001.15..10000000021.36 rows=1 width=4)
-         ->  HashAggregate  (cost=10000000001.02..10000000001.03 rows=2 width=4)
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.15..21.42 rows=4 width=4)
+   ->  Nested Loop  (cost=1.15..21.37 rows=1 width=4)
+         ->  HashAggregate  (cost=1.02..1.03 rows=2 width=4)
                Group Key: rep_tab.c
-               ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
+               ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+                     Disabled: true
          ->  Index Only Scan using idx on dist_tab  (cost=0.13..10.16 rows=1 width=4)
                Index Cond: (b = rep_tab.c)
  Optimizer: Postgres query optimizer
-(8 rows)
+(9 rows)
 
 select b from dist_tab where b in (select distinct c from rep_tab);
  b 
@@ -1109,16 +1154,18 @@ analyze rand_tab;
 --
 -- join derives EdtHashed
 explain select c from rep_tab where c in (select distinct c from rep_tab);
-                                              QUERY PLAN                                               
--------------------------------------------------------------------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)  (cost=20000000002.11..20000000002.11 rows=3 width=4)
-   ->  Hash Semi Join  (cost=20000000001.05..20000000002.11 rows=3 width=4)
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Gather Motion 1:1  (slice1; segments: 1)  (cost=2.11..2.11 rows=3 width=4)
+   ->  Hash Semi Join  (cost=1.04..2.11 rows=3 width=4)
          Hash Cond: (rep_tab.c = rep_tab_1.c)
-         ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
-         ->  Hash  (cost=10000000001.02..10000000001.02 rows=2 width=4)
-               ->  Seq Scan on rep_tab rep_tab_1  (cost=10000000000.00..10000000001.02 rows=2 width=4)
+         ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+               Disabled: true
+         ->  Hash  (cost=1.02..1.02 rows=2 width=4)
+               ->  Seq Scan on rep_tab rep_tab_1  (cost=0.00..1.02 rows=2 width=4)
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 select c from rep_tab where c in (select distinct c from rep_tab);
  c 
@@ -1133,24 +1180,26 @@ select c from rep_tab where c in (select distinct c from rep_tab);
 --
 -- join derives EdtHashed
 explain select a from dist_tab where a in (select distinct c from rep_tab);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000001.05..20000000002.13 rows=4 width=4)
-   ->  Hash Semi Join  (cost=20000000001.05..20000000002.08 rows=1 width=4)
-         Hash Cond: (dist_tab.a = rep_tab.c)
-         ->  Seq Scan on dist_tab  (cost=10000000000.00..10000000001.01 rows=1 width=4)
-         ->  Hash  (cost=10000000001.02..10000000001.02 rows=2 width=4)
-               ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.03..2.12 rows=4 width=4)
+   ->  Hash Right Semi Join  (cost=1.03..2.07 rows=1 width=4)
+         Hash Cond: (rep_tab.c = dist_tab.a)
+         ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+               Disabled: true
+         ->  Hash  (cost=1.01..1.01 rows=1 width=4)
+               ->  Seq Scan on dist_tab  (cost=0.00..1.01 rows=1 width=4)
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 select a from dist_tab where a in (select distinct c from rep_tab);
  a 
 ---
- 1
- 1
  2
  2
+ 1
+ 1
 (4 rows)
 
 -- Table	Side		Derives
@@ -1159,22 +1208,24 @@ select a from dist_tab where a in (select distinct c from rep_tab);
 --
 -- join derives EdtRandom
 explain select d from rand_tab where d in (select distinct c from rep_tab);
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000001.05..20000000002.11 rows=3 width=4)
-   ->  Hash Semi Join  (cost=20000000001.05..20000000002.07 rows=1 width=4)
-         Hash Cond: (rand_tab.d = rep_tab.c)
-         ->  Seq Scan on rand_tab  (cost=10000000000.00..10000000001.01 rows=1 width=4)
-         ->  Hash  (cost=10000000001.02..10000000001.02 rows=2 width=4)
-               ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.02..2.11 rows=3 width=4)
+   ->  Hash Right Semi Join  (cost=1.02..2.06 rows=1 width=4)
+         Hash Cond: (rep_tab.c = rand_tab.d)
+         ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+               Disabled: true
+         ->  Hash  (cost=1.01..1.01 rows=1 width=4)
+               ->  Seq Scan on rand_tab  (cost=0.00..1.01 rows=1 width=4)
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(7 rows)
+(9 rows)
 
 select d from rand_tab where d in (select distinct c from rep_tab);
  d 
 ---
- 1
  2
+ 1
 (2 rows)
 
 -- Table	Side		Derives
@@ -1183,24 +1234,26 @@ select d from rand_tab where d in (select distinct c from rep_tab);
 --
 -- join derives EdtHashed
 explain select c from rep_tab where c in (select distinct a from dist_tab);
-                                                    QUERY PLAN                                                    
-------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000001.03..20000000002.14 rows=3 width=4)
-   ->  Hash Semi Join  (cost=20000000001.03..20000000002.09 rows=1 width=4)
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.03..2.14 rows=3 width=4)
+   ->  Hash Semi Join  (cost=1.03..2.09 rows=1 width=4)
          Hash Cond: (rep_tab.c = dist_tab.a)
-         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=10000000000.00..10000000001.05 rows=1 width=4)
+         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=0.00..1.05 rows=1 width=4)
                Hash Key: rep_tab.c
-               ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
-         ->  Hash  (cost=10000000001.01..10000000001.01 rows=1 width=4)
-               ->  Seq Scan on dist_tab  (cost=10000000000.00..10000000001.01 rows=1 width=4)
+               ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+                     Disabled: true
+         ->  Hash  (cost=1.01..1.01 rows=1 width=4)
+               ->  Seq Scan on dist_tab  (cost=0.00..1.01 rows=1 width=4)
+                     Disabled: true
  Optimizer: Postgres query optimizer
-(9 rows)
+(11 rows)
 
 select c from rep_tab where c in (select distinct a from dist_tab);
  c 
 ---
- 1
  2
+ 1
 (2 rows)
 
 -- Table	Side		Derives
@@ -1209,20 +1262,22 @@ select c from rep_tab where c in (select distinct a from dist_tab);
 --
 -- join derives EdtHashed
 explain select c from rep_tab where c in (select distinct d from rand_tab);
-                                                       QUERY PLAN                                                       
-------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=20000000001.04..20000000002.15 rows=3 width=4)
-   ->  Hash Semi Join  (cost=20000000001.04..20000000002.11 rows=1 width=4)
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.07..2.15 rows=3 width=4)
+   ->  Hash Join  (cost=1.07..2.11 rows=1 width=4)
          Hash Cond: (rep_tab.c = rand_tab.d)
-         ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=10000000000.00..10000000001.05 rows=1 width=4)
-               Hash Key: rep_tab.c
-               ->  Seq Scan on rep_tab  (cost=10000000000.00..10000000001.02 rows=2 width=4)
-         ->  Hash  (cost=10000000001.03..10000000001.03 rows=1 width=4)
-               ->  Redistribute Motion 3:3  (slice3; segments: 3)  (cost=10000000000.00..10000000001.03 rows=1 width=4)
-                     Hash Key: rand_tab.d
-                     ->  Seq Scan on rand_tab  (cost=10000000000.00..10000000001.01 rows=1 width=4)
+         ->  Seq Scan on rep_tab  (cost=0.00..1.02 rows=2 width=4)
+               Disabled: true
+         ->  Hash  (cost=1.04..1.04 rows=2 width=4)
+               ->  HashAggregate  (cost=1.03..1.04 rows=2 width=4)
+                     Group Key: rand_tab.d
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
+                           Hash Key: rand_tab.d
+                           ->  Seq Scan on rand_tab  (cost=0.00..1.01 rows=1 width=4)
+                                 Disabled: true
  Optimizer: Postgres query optimizer
-(11 rows)
+(13 rows)
 
 select c from rep_tab where c in (select distinct d from rand_tab);
  c 
@@ -1242,13 +1297,14 @@ explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() an
    Hash Cond: (x.b = y.b)
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Seq Scan on t1_13532 x
+               Disabled: true
    ->  Hash
          ->  Result
                ->  Gather Motion 1:1  (slice2; segments: 1)
                      ->  Index Scan using idx_t2_13532 on t2_13532 y
                            Filter: ((a)::double precision < random())
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 set enable_bitmapscan = off;
 explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() and x.b = y.b;
@@ -1258,13 +1314,14 @@ explain (costs off) select * from t1_13532 x, t2_13532 y where y.a < random() an
    Hash Cond: (x.b = y.b)
    ->  Gather Motion 1:1  (slice1; segments: 1)
          ->  Seq Scan on t1_13532 x
+               Disabled: true
    ->  Hash
          ->  Result
                ->  Gather Motion 1:1  (slice2; segments: 1)
                      ->  Index Scan using idx_t2_13532 on t2_13532 y
                            Filter: ((a)::double precision < random())
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 -- test for optimizer_enable_replicated_table
 explain (costs off) select * from rep_tab;
@@ -1272,8 +1329,9 @@ explain (costs off) select * from rep_tab;
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on rep_tab
+         Disabled: true
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 set optimizer_enable_replicated_table=off;
 set optimizer_trace_fallback=on;
@@ -1282,8 +1340,9 @@ explain (costs off) select * from rep_tab;
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on rep_tab
+         Disabled: true
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 reset optimizer_trace_fallback;
 reset optimizer_enable_replicated_table;
