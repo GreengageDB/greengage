@@ -1423,6 +1423,21 @@ ResCheckSelfDeadLock(LOCK *lock, PROCLOCK *proclock, ResPortalIncrement *increme
 			pgstat_report_wait_end();
 			ResGrantLock(lock, proclock);
 			ResLockUpdateLimit(lock, proclock, incrementSet, true, true);
+
+			/*
+			 * GPDB/PG18: we self-granted the lock above so that the ERROR our
+			 * caller is about to throw releases it through the normal
+			 * lock-release path.  But ResProcSleep() placed us on the lock's
+			 * wait queue before this self-deadlock check, and ResGrantLock()
+			 * does not dequeue us -- so remove ourselves now.  Otherwise the
+			 * error unwind's ResLockWaitCancel() still sees us queued
+			 * (MyProc->links.next != NULL) and calls ResRemoveFromWaitQueue(),
+			 * which decrements the request we already converted into a grant
+			 * and trips the (PG18-stricter) assertion
+			 * "waitLock->nRequested > proc->waitLock->nGranted".
+			 */
+			if (MyProc->links.next != NULL)
+				dclist_delete_from_thoroughly(&lock->waitProcs, &MyProc->links);
 		}
 		/* our caller will throw an ERROR. */
 	}
