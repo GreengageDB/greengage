@@ -5,6 +5,7 @@ create schema qp_gist_indexes2;
 set search_path to qp_gist_indexes2;
  -- start_ignore
 create language plpython3u;
+ERROR:  extension "plpython3u" already exists
 -- end_ignore
 create or replace function count_index_scans(explain_query text) returns int as
 $$
@@ -72,8 +73,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 EXPLAIN (COSTS OFF)
@@ -117,8 +118,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 EXPLAIN (COSTS OFF)
@@ -402,10 +403,10 @@ SELECT owner, property FROM GistTable1
  WHERE property IS NULL;
             owner            | property 
 -----------------------------+----------
- A. Gent                     | 
  Neil, Nell, and Noel Newall | 
- FelDon Adams                | 
  S. T. "Rip" Sunset          | 
+ FelDon Adams                | 
+ A. Gent                     | 
 (4 rows)
 
 SELECT count_index_scans('EXPLAIN SELECT owner, property FROM GistTable1 WHERE property IS NULL ORDER BY id;');
@@ -420,17 +421,16 @@ SELECT owner, property FROM GistTable1
  WHERE property IS NULL
  ORDER BY id
  ;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=700.38..700.38 rows=2 width=51)
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=28.29..28.33 rows=3 width=51)
    Merge Key: id
-   ->  Sort  (cost=700.38..700.38 rows=1 width=51)
+   ->  Sort  (cost=28.29..28.29 rows=1 width=51)
          Sort Key: id
-         ->  Index Scan using propertyisnullindex on gisttable1  (cost=0.00..700.37 rows=1 width=51)
+         ->  Index Scan using propertyboxindex on gisttable1  (cost=0.26..28.28 rows=1 width=51)
                Index Cond: (property IS NULL)
- Settings:  enable_seqscan=off; optimizer=off
- Optimizer status: Postgres query optimizer
-(8 rows)
+ Optimizer: Postgres query optimizer
+(7 rows)
 
 --end_ignore
 -- Alter the table and see if we get the same results.
@@ -459,13 +459,13 @@ SELECT id, property FROM GistTable1
  WHERE property IS NULL 
  ORDER BY id
  ;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=701.28..701.28 rows=2 width=36)
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=28.29..28.33 rows=3 width=36)
    Merge Key: id
-   ->  Sort  (cost=701.28..701.28 rows=1 width=36)
+   ->  Sort  (cost=28.29..28.29 rows=1 width=36)
          Sort Key: id
-         ->  Index Scan using propertyisnullindex on gisttable1  (cost=0.00..701.27 rows=1 width=36)
+         ->  Index Scan using propertyboxindex on gisttable1  (cost=0.26..28.28 rows=1 width=36)
                Index Cond: (property IS NULL)
  Optimizer: Postgres query optimizer
 (7 rows)
@@ -700,19 +700,23 @@ EXPLAIN (COSTS OFF) SELECT id FROM GistTable1
    ->  Sort
          Sort Key: id
          ->  Seq Scan on gisttable1
+               Disabled: true
                Filter: (property ~= '(3,4),(1,2)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema qp_gist_indexes2 cascade;
-NOTICE:  drop cascades to function insertmanyintogisttable13(integer,integer)
-NOTICE:  drop cascades to function insertintogisttable13(integer)
-NOTICE:  drop cascades to function to_box(text)
-NOTICE:  drop cascades to table gisttable1
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to function count_index_scans(text)
+drop cascades to table gisttable1
+drop cascades to table gisttable13
+drop cascades to function to_box(text)
+drop cascades to function insertintogisttable13(integer)
+drop cascades to function insertmanyintogisttable13(integer,integer)
 -- end_ignore
 -- ----------------------------------------------------------------------
 -- Test: setup.sql
@@ -759,16 +763,16 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '((7052,250),(6050,20))';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1 
  WHERE property ~= ' ( ( 7052, 250 ) , (6050, 20) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1
@@ -782,7 +786,7 @@ SELECT owner, property FROM GistTable1
 EXPLAIN (COSTS OFF)
 SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
-                              QUERY PLAN                             
+                             QUERY PLAN                              
 ---------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Bitmap Heap Scan on gisttable1
@@ -1013,8 +1017,8 @@ SELECT id FROM GistTable1
  WHERE bullseye ~= '( (100,100), 212 )';
  id  
 -----
- 100
  212
+ 100
 (2 rows)
 
 -- This should return 1 row.
@@ -1060,9 +1064,9 @@ SELECT owner, property FROM GistTable1
  WHERE property IS NULL;
             owner            | property 
 -----------------------------+----------
- S. T. "Rip" Sunset          | 
  A. Gent                     | 
  Neil, Nell, and Noel Newall | 
+ S. T. "Rip" Sunset          | 
  FelDon Adams                | 
 (4 rows)
 
@@ -1322,19 +1326,22 @@ EXPLAIN (COSTS OFF) SELECT id FROM GistTable1
    ->  Sort
          Sort Key: id
          ->  Seq Scan on gisttable1
+               Disabled: true
                Filter: (property ~= '(3,4),(1,2)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema qp_gist_indexes2 cascade;
-NOTICE:  drop cascades to function insertmanyintogisttable13(integer,integer)
-NOTICE:  drop cascades to function insertintogisttable13(integer)
-NOTICE:  drop cascades to function to_box(text)
-NOTICE:  drop cascades to table gisttable1
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table gisttable1
+drop cascades to table gisttable13
+drop cascades to function to_box(text)
+drop cascades to function insertintogisttable13(integer)
+drop cascades to function insertmanyintogisttable13(integer,integer)
 -- end_ignore
 -- ----------------------------------------------------------------------
 -- Test: setup.sql
@@ -1381,8 +1388,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '((7052,250),(6050,20))';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1 
@@ -1397,8 +1404,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 EXPLAIN (COSTS OFF)
@@ -1682,10 +1689,10 @@ SELECT owner, property FROM GistTable1
  WHERE property IS NULL;
             owner            | property 
 -----------------------------+----------
- S. T. "Rip" Sunset          | 
- A. Gent                     | 
  Neil, Nell, and Noel Newall | 
+ S. T. "Rip" Sunset          | 
  FelDon Adams                | 
+ A. Gent                     | 
 (4 rows)
 
 EXPLAIN (COSTS OFF)
@@ -1937,26 +1944,29 @@ SELECT id FROM GistTable1
 EXPLAIN (COSTS OFF) SELECT id FROM GistTable1 
  WHERE property ~= '( (1,2), (3,4) )'
  ORDER BY id;
-                        QUERY PLAN                      
+                       QUERY PLAN                       
 --------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: id
    ->  Sort
          Sort Key: id
          ->  Seq Scan on gisttable1
+               Disabled: true
                Filter: (property ~= '(3,4),(1,2)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema qp_gist_indexes2 cascade;
-NOTICE:  drop cascades to function insertmanyintogisttable13(integer,integer)
-NOTICE:  drop cascades to function insertintogisttable13(integer)
-NOTICE:  drop cascades to function to_box(text)
-NOTICE:  drop cascades to table gisttable1
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table gisttable1
+drop cascades to table gisttable13
+drop cascades to function to_box(text)
+drop cascades to function insertintogisttable13(integer)
+drop cascades to function insertmanyintogisttable13(integer,integer)
 -- end_ignore
 -- ----------------------------------------------------------------------
 -- Test: setup.sql
@@ -2003,8 +2013,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '((7052,250),(6050,20))';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1 
@@ -2019,8 +2029,8 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 EXPLAIN (COSTS OFF)
@@ -2257,8 +2267,8 @@ SELECT id FROM GistTable1
  WHERE bullseye ~= '( (100,100), 212 )';
  id  
 -----
- 100
  212
+ 100
 (2 rows)
 
 -- This should return 1 row.
@@ -2304,10 +2314,10 @@ SELECT owner, property FROM GistTable1
  WHERE property IS NULL;
             owner            | property 
 -----------------------------+----------
- S. T. "Rip" Sunset          | 
- A. Gent                     | 
  Neil, Nell, and Noel Newall | 
+ S. T. "Rip" Sunset          | 
  FelDon Adams                | 
+ A. Gent                     | 
 (4 rows)
 
 EXPLAIN (COSTS OFF)
@@ -2566,19 +2576,22 @@ EXPLAIN (COSTS OFF) SELECT id FROM GistTable1
    ->  Sort
          Sort Key: id
          ->  Seq Scan on gisttable1
+               Disabled: true
                Filter: (property ~= '(3,4),(1,2)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema qp_gist_indexes2 cascade;
-NOTICE:  drop cascades to function insertmanyintogisttable13(integer,integer)
-NOTICE:  drop cascades to function insertintogisttable13(integer)
-NOTICE:  drop cascades to function to_box(text)
-NOTICE:  drop cascades to table gisttable1
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table gisttable1
+drop cascades to table gisttable13
+drop cascades to function to_box(text)
+drop cascades to function insertintogisttable13(integer)
+drop cascades to function insertmanyintogisttable13(integer,integer)
 -- end_ignore
 -- ----------------------------------------------------------------------
 -- Test: setup.sql
@@ -2625,24 +2638,24 @@ SELECT owner, property FROM GistTable1
  WHERE property ~= '((7052,250),(6050,20))';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1 
  WHERE property ~= ' ( ( 7052, 250 ) , (6050, 20) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 SELECT owner, property FROM GistTable1
  WHERE property ~= '( (6050, 20), (7052, 250) )';
   owner  |       property       
 ---------+----------------------
-  Patty  | (7052,250),(6050,20)
  Hypatia | (7052,250),(6050,20)
+  Patty  | (7052,250),(6050,20)
 (2 rows)
 
 EXPLAIN (COSTS OFF)
@@ -2927,8 +2940,8 @@ SELECT owner, property FROM GistTable1
             owner            | property 
 -----------------------------+----------
  A. Gent                     | 
- S. T. "Rip" Sunset          | 
  Neil, Nell, and Noel Newall | 
+ S. T. "Rip" Sunset          | 
  FelDon Adams                | 
 (4 rows)
 
@@ -3188,17 +3201,20 @@ EXPLAIN (COSTS OFF) SELECT id FROM GistTable1
    ->  Sort
          Sort Key: id
          ->  Seq Scan on gisttable1
+               Disabled: true
                Filter: (property ~= '(3,4),(1,2)'::box)
  Optimizer: Postgres query optimizer
-(7 rows)
+(8 rows)
 
 -- ----------------------------------------------------------------------
 -- Test: teardown.sql
 -- ----------------------------------------------------------------------
 -- start_ignore
 drop schema qp_gist_indexes2 cascade;
-NOTICE:  drop cascades to function insertmanyintogisttable13(integer,integer)
-NOTICE:  drop cascades to function insertintogisttable13(integer)
-NOTICE:  drop cascades to function to_box(text)
-NOTICE:  drop cascades to table gisttable1
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table gisttable1
+drop cascades to table gisttable13
+drop cascades to function to_box(text)
+drop cascades to function insertintogisttable13(integer)
+drop cascades to function insertmanyintogisttable13(integer,integer)
 -- end_ignore
