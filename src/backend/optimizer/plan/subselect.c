@@ -2036,7 +2036,52 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	 * if there are no input rows).
 	 */
 	if (!query->hasAggs)
+	{
 		query->groupClause = NIL;
+
+		/*
+		 * PG18: we just dropped the GROUP BY, so the grouping step is gone.
+		 * But for an uncorrelated sublink we keep the targetlist, and a
+		 * demoted HAVING clause may have been pushed into the jointree quals
+		 * above; either of those may still contain Vars that reference the
+		 * grouping step's RTE_GROUP RTE (e.g. "SELECT a ... GROUP BY a", whose
+		 * resjunk grouping column is a Var over the RTE_GROUP).  Replace those
+		 * Vars with their underlying grouping expressions before we drop the
+		 * now-useless RTE_GROUP RTE and clear hasGroupRTE.  Otherwise later
+		 * planning of this subquery would trip over "no relation entry for
+		 * relid N": subquery_planner() only runs flatten_group_exprs() when
+		 * hasGroupRTE is set, so once we clear it nobody would flatten these
+		 * dangling group Vars.
+		 *
+		 * (In the hasAggs case below we keep the grouping, so we must instead
+		 * leave the RTE_GROUP in place and let subquery_planner() do the
+		 * flattening for us.)
+		 */
+		if (query->hasGroupRTE)
+		{
+			query->targetList = (List *)
+				flatten_group_exprs(root, query, (Node *) query->targetList);
+			query->jointree->quals =
+				flatten_group_exprs(root, query, query->jointree->quals);
+
+			foreach(lc, query->rtable)
+			{
+				RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+				/*
+				 * Remove the RTE_GROUP RTE and clear the hasGroupRTE flag.
+				 * (Since we'll exit the foreach loop immediately, we don't
+				 * bother with foreach_delete_current.)
+				 */
+				if (rte->rtekind == RTE_GROUP)
+				{
+					query->rtable = list_delete_cell(query->rtable, lc);
+					query->hasGroupRTE = false;
+					break;
+				}
+			}
+		}
+	}
 
 	/*
 	 * Those clauses could be throwed in correlated and uncorrelated sublinks,
@@ -2051,28 +2096,6 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 	query->distinctClause = NIL;
 	query->sortClause = NIL;
 	query->hasDistinctOn = false;
-
-	/*
-	 * Since we have thrown away the GROUP BY clauses, we'd better remove the
-	 * RTE_GROUP RTE and clear the hasGroupRTE flag.
-	 */
-	foreach(lc, query->rtable)
-	{
-		RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
-
-		/*
-		 * Remove the RTE_GROUP RTE and clear the hasGroupRTE flag.  (Since
-		 * we'll exit the foreach loop immediately, we don't bother with
-		 * foreach_delete_current.)
-		 */
-		if (rte->rtekind == RTE_GROUP)
-		{
-			Assert(query->hasGroupRTE);
-			query->rtable = list_delete_cell(query->rtable, lc);
-			query->hasGroupRTE = false;
-			break;
-		}
-	}
 
 	return true;
 }
