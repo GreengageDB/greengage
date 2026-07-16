@@ -821,11 +821,14 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	else
 		partitioned = false;
 
-	if (relkind == RELKIND_PARTITIONED_TABLE &&
-		stmt->relation->relpersistence == RELPERSISTENCE_UNLOGGED)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("partitioned tables cannot be unlogged")));
+	/*
+	 * GPDB: unlike upstream PostgreSQL, Greengage supports UNLOGGED
+	 * partitioned tables -- the UNLOGGED persistence set on the root simply
+	 * propagates to the leaf partitions (which are the ones that actually
+	 * hold storage), and SPLIT/EXCHANGE PARTITION preserve it.  So we do NOT
+	 * re-impose upstream's "partitioned tables cannot be unlogged" error here;
+	 * see the partition_unlogged regression test.
+	 */
 
 	/*
 	 * Look up the namespace in which we are supposed to create the relation,
