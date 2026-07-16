@@ -1049,6 +1049,10 @@ PQCreateMetadataQueue(ggMetadataQueueId queue_id)
 {
 	Assert(TopTransactionContext != NULL);
 
+	if (Gp_role != GP_ROLE_DISPATCH)
+		ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
+						errmsg("Metadata queue can only be created on QD")));
+
 	MemoryContext oldcontext = MemoryContextSwitchTo(TopTransactionContext);
 
 	ggMetadataQueue *queue = palloc0(sizeof(ggMetadataQueue));
