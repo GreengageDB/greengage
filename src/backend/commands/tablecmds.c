@@ -6243,6 +6243,22 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_PartTruncate:
 		case AT_PartExchange:
 		case AT_PartSetTemplate:
+			/*
+			 * GPDB: these legacy partition subcommands may be attempted on a
+			 * leaf partition or an ordinary table (RELKIND_RELATION -> ATT_TABLE)
+			 * as well as on a partitioned root; accept ATT_TABLE too so the
+			 * command reaches its exec phase (ATExecGPPartCmds), which raises
+			 * the tailored "table \"%s\" is not partitioned" error.  Before PG18
+			 * RELKIND_PARTITIONED_TABLE mapped to ATT_TABLE so ATT_TABLE alone
+			 * sufficed; PG18 split off ATT_PARTITIONED_TABLE, so restricting to
+			 * it made ATPrepCmd reject leaf partitions with the internal
+			 * "invalid ALTER action attempted" elog instead.
+			 */
+			ATSimplePermissions(cmd->subtype, rel,
+								ATT_TABLE | ATT_PARTITIONED_TABLE);
+			/* No command-specific prep needed */
+			pass = AT_PASS_MISC;
+			break;
 		case AT_DetachPartitionFinalize:
 			ATSimplePermissions(cmd->subtype, rel, ATT_PARTITIONED_TABLE);
 			/* No command-specific prep needed */
