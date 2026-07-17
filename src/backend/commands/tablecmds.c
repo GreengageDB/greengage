@@ -118,6 +118,7 @@
 #include "utils/memutils.h"
 #include "utils/metrics_utils.h"
 #include "utils/relcache.h"
+#include "utils/guc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
@@ -15051,6 +15052,20 @@ ATExecExpandTable(List **wqueue, Relation rel, AlterTableCmd *cmd)
 			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("permission denied: \"%s\" is a system catalog", RelationGetRelationName(rel))));
 
+	/*
+	 * synchronous_commit can be "off" at the session or cluster level for
+	 * reasons unrelated to this command. With it off, a segment's commit never
+	 * waits for its mirror to acknowledge the redistributed data, so a primary
+	 * crash immediately followed by an automatic mirror promotion can silently
+	 * lose/duplicate the rows this command just moved, if not all WAL was sent
+	 * to the mirror.
+	 * Therefore, forbid operation if synchronous_commit is not fully enabled.
+	 */
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during EXPAND")));
+
 	oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(rel));
 	newPolicy = GpPolicyCopy(policy);
 	MemoryContextSwitchTo(oldContext);
@@ -15393,6 +15408,17 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		ereport(ERROR,
 			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("permission denied: \"%s\" is a system catalog", RelationGetRelationName(rel))));
+
+	/*
+	 * Like ATExecExpandTable, this command can rewrite and redistribute the
+	 * table's data via an internal CTAS. See the comment there.
+	 * And, forbid operation if synchronous_commit is not fully enabled here
+	 * as well.
+	 */
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during SET DISTRIBUTED BY")));
 
 	Assert(PointerIsValid(node));
 	Assert(IsA(node, List));
