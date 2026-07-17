@@ -102,12 +102,12 @@ SELECT '' AS six, f1 AS "Correlated Field", f2 AS "Second Field"
                                 WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL1 WHERE f1 = upper.f1);
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                1 |            2
      |                2 |            3
-     |                1 |            1
-     |                2 |            2
      |                3 |            4
+     |                2 |            2
      |                3 |            3
+     |                1 |            2
+     |                1 |            1
 (6 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -117,10 +117,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
  six | Correlated Field | Second Field 
 -----+------------------+--------------
      |                2 |            4
-     |                1 |            1
-     |                2 |            2
      |                3 |            5
+     |                2 |            2
      |                3 |            3
+     |                1 |            1
 (5 rows)
 
 SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
@@ -129,10 +129,10 @@ SELECT '' AS six, f1 AS "Correlated Field", f3 AS "Second Field"
                                 WHERE f2 = CAST(f3 AS integer));
  six | Correlated Field | Second Field 
 -----+------------------+--------------
-     |                1 |            3
+     |                6 |            8
      |                2 |            4
      |                3 |            5
-     |                6 |            8
+     |                1 |            3
 (4 rows)
 
 SELECT '' AS five, f1 AS "Correlated Field"
@@ -141,11 +141,11 @@ SELECT '' AS five, f1 AS "Correlated Field"
                                 WHERE f3 IS NOT NULL);
  five | Correlated Field 
 ------+------------------
-      |                3
+      |                2
       |                3
       |                2
+      |                3
       |                1
-      |                2
 (5 rows)
 
 begin;
@@ -182,49 +182,49 @@ select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx)A;
  col | i | j |   t   
 -----+---+---+-------
      | 1 | 4 | one
-     | 2 | 3 | two
      | 0 |   | zero
-     | 3 | 2 | three
-     | 4 | 1 | four
      | 5 | 0 | five
      | 6 | 6 | six
+     | 2 | 3 | two
+     | 3 | 2 | three
+     | 4 | 1 | four
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
-     | 8 | 8 | eight
 (11 rows)
 
                          
 select * from ( SELECT '' AS "col", * FROM join_tab1 AS tx) AS A;
  col | i | j |   t   
 -----+---+---+-------
-     | 8 | 8 | eight
-     | 1 | 4 | one
-     | 2 | 3 | two
-     | 0 |   | zero
-     | 3 | 2 | three
-     | 4 | 1 | four
      | 5 | 0 | five
      | 6 | 6 | six
+     | 2 | 3 | two
+     | 3 | 2 | three
+     | 4 | 1 | four
      | 7 | 7 | seven
+     | 8 | 8 | eight
      |   |   | null
      |   | 0 | zero
+     | 1 | 4 | one
+     | 0 |   | zero
 (11 rows)
 
                          
 select * from(SELECT '' AS "col", * FROM join_tab1 AS tx) as A(a,b,c);
  a | b | c |   t   
 ---+---+---+-------
+   | 2 | 3 | two
    | 3 | 2 | three
    | 4 | 1 | four
-   | 5 | 0 | five
-   | 6 | 6 | six
    | 7 | 7 | seven
+   | 8 | 8 | eight
    |   |   | null
    |   | 0 | zero
-   | 8 | 8 | eight
+   | 5 | 0 | five
+   | 6 | 6 | six
    | 1 | 4 | one
-   | 2 | 3 | two
    | 0 |   | zero
 (11 rows)
 
@@ -233,23 +233,23 @@ select * from(SELECT '' AS "col", t1.a, t2.e FROM join_tab1 t1 (a, b, c), join_t
 				WHERE t1.a = t2.d)as A;
  col | a | e  
 -----+---+----
-     | 3 | -3
-     | 5 | -5
-     | 5 | -5
-     | 1 | -1
      | 2 |  2
+     | 3 | -3
      | 2 |  4
+     | 1 | -1
      | 0 |   
+     | 5 | -5
+     | 5 | -5
 (7 rows)
 
                          
 select * from join_tab1 where exists(select * from join_tab2 where join_tab1.i=join_tab2.i);
  i | j |   t   
 ---+---+-------
+ 2 | 3 | two
  3 | 2 | three
  5 | 0 | five
  1 | 4 | one
- 2 | 3 | two
  0 |   | zero
 (5 rows)
 
@@ -404,17 +404,17 @@ select name from emp_list where sal=(select min(sal) from emp_list);
 select name from emp_list where sal>(select avg(sal) from emp_list);
          name         
 ----------------------
+ empfive             
  empthree            
  empfour             
- empfive             
 (3 rows)
 
                        
 select name from emp_list where sal<(select avg(sal) from emp_list);
          name         
 ----------------------
- empone              
  emptwo              
+ empone              
 (2 rows)
 
                       
@@ -444,8 +444,8 @@ select to_char(Avg(sum_col1),'9999999.9999999') from (select sum(s1) as sum_col1
 select g2,count(*) from (select I, count(*) as g2 from join_tab1 group by I) as vtable group by g2;
  g2 | count 
 ----+-------
-  1 |     9
   2 |     1
+  1 |     9
 (2 rows)
 
 begin;
@@ -464,23 +464,23 @@ select i,j,t from (select * from (select i,j,t from join_tab1)as dtab1
 				UNION select * from(select i,j,t from join_tab4) as dtab2 )as mtab; 	
  i | j |   t    
 ---+---+--------
- 1 | 7 | sunday
- 3 | 5 | tueday
- 4 | 1 | four
- 6 | 2 | friday
-   |   | null
+ 0 |   | zero
  1 | 4 | one
+ 2 | 3 | two
  2 | 6 | monday
- 5 | 0 | five
+ 4 | 1 | four
  5 | 3 | thuday
  6 | 6 | six
+   |   | null
+ 4 | 4 | wedday
+ 5 | 0 | five
+ 6 | 2 | friday
  7 | 7 | seven
  8 | 8 | eight
    | 0 | zero
- 0 |   | zero
- 2 | 3 | two
+ 1 | 7 | sunday
  3 | 2 | three
- 4 | 4 | wedday
+ 3 | 5 | tueday
  7 | 1 | satday
 (18 rows)
 
@@ -576,11 +576,6 @@ FROM join_tab1 out1, join_tab2 out2;
 ---
   
   
- 0
- 0
-  
-  
-  
   
   
   
@@ -598,29 +593,12 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
  0
-  
-  
-  
-  
-  
-  
-  
-  
-  
  0
-  
-  
-  
-  
   
   
  0
   
  0
-  
-  
-  
-  
   
   
   
@@ -669,6 +647,28 @@ FROM join_tab1 out1, join_tab2 out2;
   
   
   
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+ 0
+  
+  
+ 0
   
   
   
@@ -947,11 +947,12 @@ select t1.a, t2.b from t1 inner join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) not i
 
 -- unsupported case
 explain select t1.a, t2.b from t1, t2 where t1.a=t2.a or ((t1.a,t2.b) not in (select i1.a,i1.b from i1));
-                                           QUERY PLAN                                           
-------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=10000000000.00..10000000002.10 rows=3 width=8)
-   ->  Nested Loop  (cost=10000000000.00..10000000002.05 rows=1 width=8)
-         Join Filter: ((t1.a = t2.a) OR (NOT (hashed SubPlan 1)))
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..2.10 rows=3 width=8)
+   ->  Nested Loop  (cost=0.00..2.05 rows=1 width=8)
+         Disabled: true
+         Join Filter: ((t1.a = t2.a) OR (NOT (ANY ((t1.a = (hashed SubPlan 1).col1) AND (t2.b = (hashed SubPlan 1).col2)))))
          ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
                ->  Seq Scan on t1  (cost=0.00..1.01 rows=1 width=4)
          ->  Seq Scan on t2  (cost=0.00..1.01 rows=1 width=8)
@@ -959,7 +960,7 @@ explain select t1.a, t2.b from t1, t2 where t1.a=t2.a or ((t1.a,t2.b) not in (se
            ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.01 rows=1 width=8)
                  ->  Seq Scan on i1  (cost=0.00..1.01 rows=1 width=8)
  Optimizer: Postgres query optimizer
-(10 rows)
+(11 rows)
 
 --
 -- not in subquery involving vars from different rels with left join. 
@@ -974,9 +975,9 @@ select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) not in
 select t1.a, t2.b from t1 left join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1)));
  a | b 
 ---+---
- 1 |  
- 3 | 4
  5 |  
+ 3 | 4
+ 1 |  
 (3 rows)
 
 --
@@ -986,16 +987,16 @@ select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a) where ((t1.a,t2.b) 
  a | b 
 ---+---
  3 | 4
- 5 |  
    | 8
+ 5 |  
 (3 rows)
 
 -- not in subquery with a row var in FULL JOIN condition
 select t1.a, t2.b from t1 full outer join t2 on  (t1.a=t2.a and ((t1.a,t2.b) not in (select i1.a,i1.b from i1))); 
  a | b 
 ---+---
- 3 | 4
  5 |  
+ 3 | 4
    | 8
  1 |  
    | 2
@@ -1033,10 +1034,10 @@ commit;
 select Tbl01.*,foo(Tbl01.a) as foo from Tbl01; -- showing foo values
  a | b  | c  | foo 
 ---+----+----+-----
- 1 |  2 |  3 |    
  4 |  5 |  6 |    
  7 |  8 |  9 |    
    | 11 | 12 |  13
+ 1 |  2 |  3 |    
 (4 rows)
 
 select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
@@ -1046,8 +1047,7 @@ select Tbl01.* from Tbl01 where foo(Tbl01.a) not in (select a from Tbl03);
 (1 row)
 
 create table Tbl02 as select Tbl01.*,foo(Tbl01.a) as foo from Tbl01;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 select Tbl02.* from Tbl02 where foo not in (select a from Tbl03);
  a | b  | c  | foo 
 ---+----+----+-----
@@ -1056,18 +1056,32 @@ select Tbl02.* from Tbl02 where foo not in (select a from Tbl03);
 
 begin;
 create table Tbl04(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl04 values(1,2),(3,4),(5,6);
 create table Tbl05(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl05 values(1,2);
 create table Tbl06(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl06 values(1,2),(3,4);
 create table i3(a int not null, b int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i3 values(1,2);
 create table Tbl07(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl07 values(1,2),(3,4),(null,null);
 create table Tbl08(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl08 values(1,2),(3,4),(null,null);
 create table Tbl09(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl09 values(1,2),(5,null),(null,8);
 analyze Tbl04;
 analyze Tbl05;
@@ -1084,8 +1098,8 @@ commit;
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,Tbl06 where Tbl05.a=Tbl06.a and Tbl05.b < 10); -- expected: (3,4),(5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b from Tbl07 inner join Tbl08 on (Tbl07.a=Tbl08.a and Tbl07.b=Tbl08.b) inner join i3 on (i3.a=Tbl08.a and i3.b=Tbl08.b)); -- expected:(3,4), (5,6)
@@ -1106,8 +1120,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b from Tbl07 left join Tbl08 on (Tbl07.a=Tbl08.a) where Tbl07.a = 1 and Tbl07.b = 2); -- expected: (3,4),(5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- not null condition in the where clause
@@ -1127,31 +1141,31 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl07.a,Tbl07.b
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05 where (Tbl05.a < 2 or Tbl05.a > 100) AND (Tbl05.b < 4 or Tbl05.b > 100)); -- expected: (3,4), (5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- base-table constraints
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,i3.b from i3); -- expected: (3,4),(5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where	Tbl05.a = i3.a and	Tbl05.b = i3.b);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b from Tbl05,i3 where Tbl05.a < i3.a and Tbl05.b > i3.b);
  a | b 
 ---+---
  3 | 4
- 5 | 6
  1 | 2
+ 5 | 6
 (3 rows)
 
 -- non-null constant values
@@ -1182,8 +1196,10 @@ select Tbl04.* from Tbl04 where not ((Tbl04.a,Tbl04.b) in (select Tbl06.a,Tbl06.
 --------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Nested Loop Left Anti Semi (Not-In) Join
+         Disabled: true
          Join Filter: ((tbl04.a = i3.a) AND (tbl04.b = i3.b))
          ->  Nested Loop Left Anti Semi (Not-In) Join
+               Disabled: true
                Join Filter: ((tbl04.a = tbl06.a) AND (tbl04.b = tbl06.b))
                ->  Seq Scan on tbl04
                ->  Materialize
@@ -1193,7 +1209,7 @@ select Tbl04.* from Tbl04 where not ((Tbl04.a,Tbl04.b) in (select Tbl06.a,Tbl06.
                ->  Broadcast Motion 3:3  (slice3; segments: 3)
                      ->  Seq Scan on i3
  Optimizer: Postgres query optimizer
-(13 rows)
+(15 rows)
 
 select Tbl04.* from Tbl04 where not ((Tbl04.a,Tbl04.b) in (select Tbl06.a,Tbl06.b from Tbl06) or (Tbl04.a,Tbl04.b) in (select i3.a, i3.b from i3)); -- expected: (5,6)
  a | b 
@@ -1205,22 +1221,22 @@ select Tbl04.* from Tbl04 where not ((Tbl04.a,Tbl04.b) in (select Tbl06.a,Tbl06.
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl09.a from Tbl09 where Tbl09.b is null); -- (1,2) (3,4)
  a | b 
 ---+---
- 3 | 4
  1 | 2
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select i3.a from i3);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where Tbl04.a NOT IN (select Tbl05.a from	Tbl05 left	join i3	on (Tbl05.a=i3.a));
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 --
@@ -1268,8 +1284,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (values(1,2),(3,4)); --
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a+2,i3.b+2 from i3); -- expected: (5,6)
  a | b 
 ---+---
- 1 | 2
  5 | 6
+ 1 | 2
 (2 rows)
 
 -- group by does not guarantee removal of nulls. 
@@ -1277,8 +1293,8 @@ select Tbl09.a, Tbl09.b from Tbl09;
  a | b 
 ---+---
  1 | 2
- 5 |  
    | 8
+ 5 |  
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b from Tbl09); -- expected: (3,4)
@@ -1290,9 +1306,9 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a,Tbl09.b
 select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b;
  a | b 
 ---+---
- 5 |  
-   | 8
  1 | 2
+   | 8
+ 5 |  
 (3 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a, Tbl09.b from Tbl09 group by Tbl09.a, Tbl09.b); -- expected: (3,4)
@@ -1304,24 +1320,24 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl09.a, Tbl09.
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select sum(i3.b),i3.a from i3 group by i3.a); -- (1,2),(3,4),(5,6)
  a | b 
 ---+---
- 1 | 2
- 3 | 4
  5 | 6
+ 3 | 4
+ 1 | 2
 (3 rows)
 
 -- infering not-nullability for only one of the columns
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,Tbl05.b from i3,Tbl05 where	i3.a=Tbl05.a); -- (3,4),(5,6)
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) NOT IN (select i3.a,i3.b from Tbl07 left join i3 on (i3.a=Tbl07.a and i3.b=Tbl07.b) where i3.a > 2);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
  1 | 2
 (3 rows)
 
@@ -1348,8 +1364,8 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select 1,2 union selec
 select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select i3.a,i3.b from i3) or (Tbl04.a,Tbl04.b) not in (select Tbl07.a, Tbl07.b from Tbl07);
  a | b 
 ---+---
- 3 | 4
  5 | 6
+ 3 | 4
 (2 rows)
 
 -- Cases where the planner "should have" determined not-nullabitlity
@@ -1370,9 +1386,13 @@ select Tbl04.* from Tbl04 where (Tbl04.a,Tbl04.b) not in (select Tbl05.a,Tbl05.b
 -- additional queries
 drop table if exists Tbl04;
 create table Tbl04(x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl04 values(1,2);
 insert into Tbl04 values(3,4);
 create table Tbl10(x int, y int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into Tbl10 values(1,null);
 select * from Tbl04 where (x,y) not in (select x,y from Tbl10);
  x | y 
@@ -1420,15 +1440,15 @@ commit;
 SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblText2.a WHERE ((NOT (TblText1.a, TblText2.b) IN (SELECT TblText3.a, TblText3.b FROM TblText3)));
    a    |    b     
 --------+----------
- tushar | pednekar
  rob    | klopp
+ tushar | pednekar
 (2 rows)
 
 SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblText2.a WHERE (( (TblText1.a, TblText2.b) IN (SELECT TblText3.a, TblText3.b FROM TblText3)));
     a    |    b    
 ---------+---------
- florian | waas
  oak     | barrett
+ florian | waas
 (2 rows)
 
 --
@@ -1436,24 +1456,31 @@ SELECT TblText1.a, TblText2.b FROM TblText1 JOIN TblText2 ON TblText1.a = TblTex
 --
 begin;
 create table TabDel1(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel1 values(1,2),(3,4),(5,6);
 create table TabDel2 as select * from TabDel1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
 create table TabDel3(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel3 values(1,2);
 create table TabDel4(a int not null, b int not null);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into TabDel4 values(1,2);
 commit;
 explain delete from TabDel1 where TabDel1.a not in (select a from TabDel3); -- do not support this because we produce NLASJ
                                             QUERY PLAN                                             
 ---------------------------------------------------------------------------------------------------
- Delete on tabdel1  (cost=0.00..862.04 rows=1 width=1)
+ Delete on tabdel1  (cost=0.00..862.03 rows=1 width=1)
    ->  Hash Left Anti Semi (Not-In) Join  (cost=0.00..862.00 rows=1 width=18)
          Hash Cond: (tabdel1_1.a = tabdel3.a)
          ->  Seq Scan on tabdel1 tabdel1_1  (cost=0.00..431.00 rows=1 width=18)
-         ->  Hash  (cost=431.00..431.00 rows=1 width=4)
-               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=1 width=4)
+         ->  Hash  (cost=431.00..431.00 rows=3 width=4)
+               ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=3 width=4)
                      ->  Seq Scan on tabdel3  (cost=0.00..431.00 rows=1 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (8 rows)
 
 explain delete from TabDel2 where TabDel2.a not in (select a from TabDel4); -- support this
@@ -1500,18 +1527,18 @@ update TblUp1 set a=100 where a not in (select a from TblUp3);
 select * from TblUp1;
   a  | b 
 -----+---
- 100 | 4
- 100 | 6
    1 | 2
+ 100 | 6
+ 100 | 4
 (3 rows)
 
 update TblUp2 set a=100 where a not in (select a from TblUp4);
 select * from TblUp2;
   a  | b 
 -----+---
- 100 | 4
    1 | 2
  100 | 6
+ 100 | 4
 (3 rows)
 
 --
@@ -1542,8 +1569,8 @@ select * from subselect_tab1 where (select b from subselect_tab2) is null;
 select * from subselect_tab1 where b::bool = ( c = any(select c from subselect_tab2));
   a  |   b   | c 
 -----+-------+---
- 200 | true  | 2
  100 | false | 1
+ 200 | true  | 2
 (2 rows)
 
 -- ALL subquery deeply nested in a scalar expression
@@ -1599,38 +1626,36 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 insert into append_rel values(1,10),(2,20),(3,30);
 analyze append_rel;
 explain with test as (select * from (select * from append_rel) p where att1 in (select att1 from append_rel where att2 >= 19) ) select att2 from append_rel where att1 in (select att1 from test where att2 <= 21);
-                                                          QUERY PLAN                                                          
-------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=2296.15..4165.55 rows=51935 width=4)
-   ->  Hash Join  (cost=2296.15..3473.08 rows=17312 width=4)
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=6.18..9.32 rows=5 width=4)
+   ->  Hash Semi Join  (cost=6.18..9.25 rows=2 width=4)
          Hash Cond: (append_rel.att1 = test.att1)
-         ->  Append  (cost=0.00..848.02 rows=51934 width=8)
+         ->  Append  (cost=0.00..3.05 rows=3 width=8)
                ->  Seq Scan on append_rel append_rel_1  (cost=0.00..1.01 rows=1 width=8)
-               ->  Seq Scan on append_rel1 append_rel_2  (cost=0.00..293.67 rows=25967 width=8)
-               ->  Seq Scan on append_rel2 append_rel_3  (cost=0.00..293.67 rows=25967 width=8)
-         ->  Hash  (cost=2283.65..2283.65 rows=1000 width=4)
-               ->  HashAggregate  (cost=2280.31..2283.65 rows=1000 width=4)
-                     Group Key: test.att1
-                     ->  Subquery Scan on test  (cost=1021.14..2063.92 rows=17312 width=4)
-                           ->  Hash Semi Join  (cost=1021.14..2063.92 rows=17312 width=8)
-                                 Hash Cond: (append_rel_4.att1 = append_rel_5.att1)
-                                 ->  Append  (cost=0.00..804.74 rows=17312 width=8)
-                                       ->  Seq Scan on append_rel append_rel_6  (cost=0.00..1.01 rows=1 width=8)
-                                             Filter: (att2 <= 21)
-                                       ->  Seq Scan on append_rel1 append_rel_7  (cost=0.00..358.58 rows=8656 width=8)
-                                             Filter: (att2 <= 21)
-                                       ->  Seq Scan on append_rel2 append_rel_8  (cost=0.00..358.58 rows=8656 width=8)
-                                             Filter: (att2 <= 21)
-                                 ->  Hash  (cost=804.74..804.74 rows=17312 width=4)
-                                       ->  Append  (cost=0.00..804.74 rows=17312 width=4)
-                                             ->  Seq Scan on append_rel append_rel_9  (cost=0.00..1.01 rows=1 width=4)
-                                                   Filter: (att2 >= 19)
-                                             ->  Seq Scan on append_rel1 append_rel_10  (cost=0.00..358.58 rows=8656 width=4)
-                                                   Filter: (att2 >= 19)
-                                             ->  Seq Scan on append_rel2 append_rel_11  (cost=0.00..358.58 rows=8656 width=4)
-                                                   Filter: (att2 >= 19)
+               ->  Seq Scan on append_rel1 append_rel_2  (cost=0.00..1.01 rows=1 width=8)
+               ->  Seq Scan on append_rel2 append_rel_3  (cost=0.00..1.01 rows=1 width=8)
+         ->  Hash  (cost=6.17..6.17 rows=1 width=4)
+               ->  Subquery Scan on test  (cost=3.09..6.17 rows=1 width=4)
+                     ->  Hash Semi Join  (cost=3.09..6.17 rows=1 width=8)
+                           Hash Cond: (append_rel_4.att1 = append_rel_5.att1)
+                           ->  Append  (cost=0.00..3.05 rows=3 width=8)
+                                 ->  Seq Scan on append_rel append_rel_6  (cost=0.00..1.01 rows=1 width=8)
+                                       Filter: (att2 <= 21)
+                                 ->  Seq Scan on append_rel1 append_rel_7  (cost=0.00..1.01 rows=1 width=8)
+                                       Filter: (att2 <= 21)
+                                 ->  Seq Scan on append_rel2 append_rel_8  (cost=0.00..1.01 rows=1 width=8)
+                                       Filter: (att2 <= 21)
+                           ->  Hash  (cost=3.05..3.05 rows=3 width=4)
+                                 ->  Append  (cost=0.00..3.05 rows=3 width=4)
+                                       ->  Seq Scan on append_rel append_rel_9  (cost=0.00..1.01 rows=1 width=4)
+                                             Filter: (att2 >= 19)
+                                       ->  Seq Scan on append_rel1 append_rel_10  (cost=0.00..1.01 rows=1 width=4)
+                                             Filter: (att2 >= 19)
+                                       ->  Seq Scan on append_rel2 append_rel_11  (cost=0.00..1.01 rows=1 width=4)
+                                             Filter: (att2 >= 19)
  Optimizer: Postgres query optimizer
-(29 rows)
+(27 rows)
 
 with test as (select * from (select * from append_rel) p where att1 in (select att1 from append_rel where att2 >= 19) ) select att2 from append_rel where att1 in (select att1 from test where att2 <= 21);
  att2 
@@ -1730,7 +1755,7 @@ where xx='dd';
 -----------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Result
-         Filter: ((text((SubPlan 1))) = 'dd'::text)
+         Filter: ((text((ANY (subquery_nonpush_through_1.a = (SubPlan 1).col1)))) = 'dd'::text)
          ->  Nested Loop
                Join Filter: true
                ->  Seq Scan on subquery_nonpush_through_1

@@ -39,15 +39,6 @@ INSERT INTO d(aa) VALUES('dddddddd');
 SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
- a       | aaaa
- a       | aaaaa
- a       | aaaaaaa
- b       | bbbbbbbb
- c       | ccc
- c       | cccccccc
- d       | ddd
- d       | ddddd
- d       | dddddd
  a       | aaa
  b       | bbb
  b       | bbbb
@@ -58,6 +49,15 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  c       | cccccc
  c       | ccccccc
  d       | ddddddd
+ a       | aaaa
+ a       | aaaaa
+ a       | aaaaaaa
+ b       | bbbbbbbb
+ c       | ccc
+ c       | cccccccc
+ d       | ddd
+ d       | ddddd
+ d       | dddddd
  a       | aaaaaa
  a       | aaaaaaaa
  c       | ccccc
@@ -68,12 +68,12 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ d       | dddd     | 
+ d       | dddddddd | 
  b       | bbbbbbbb | 
  d       | ddd      | 
  d       | ddddd    | 
  d       | dddddd   | 
- d       | dddd     | 
- d       | dddddddd | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
@@ -90,21 +90,21 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  d       | ddd      | 
  d       | ddddd    | 
  d       | dddddd   | 
+ c       | ccccc    | 
+ d       | dddd     | 
+ d       | dddddddd | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
  d       | ddddddd  | 
- c       | ccccc    | 
- d       | dddd     | 
- d       | dddddddd | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | ddddddd  |    |    | 
  d       | dddd     |    |    | 
  d       | dddddddd |    |    | 
- d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
@@ -113,10 +113,10 @@ SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
- a       | aaa
  a       | aaaa
  a       | aaaaa
  a       | aaaaaaa
+ a       | aaa
  a       | aaaaaa
  a       | aaaaaaaa
 (6 rows)
@@ -124,34 +124,34 @@ SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ b       | bbbbbbbb | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
- b       | bbbbbbbb | 
 (6 rows)
 
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
+ c       | ccc      | 
+ c       | cccccccc | 
  c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
- c       | ccc      | 
- c       | cccccccc | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
  d       | ddddddd  |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
 (6 rows)
 
 UPDATE a SET aa='zzzz' WHERE aa='aaaa';
@@ -167,6 +167,12 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  c       | ccccc
  d       | dddd
  d       | dddddddd
+ b       | bbbbbbbb
+ c       | ccc
+ c       | cccccccc
+ d       | ddd
+ d       | ddddd
+ d       | dddddd
  a       | zzzzzz
  a       | zzzzzz
  a       | zzzzzz
@@ -180,25 +186,19 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  c       | cccccc
  c       | ccccccc
  d       | ddddddd
- b       | bbbbbbbb
- c       | ccc
- c       | cccccccc
- d       | ddd
- d       | ddddd
- d       | dddddd
 (24 rows)
 
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
- d       | dddd     | 
- d       | dddddddd | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
  d       | ddddddd  | 
+ d       | dddd     | 
+ d       | dddddddd | 
  b       | bbbbbbbb | 
  d       | ddd      | 
  d       | ddddd    | 
@@ -208,10 +208,6 @@ SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | cccc     | 
- c       | cccccc   | 
- c       | ccccccc  | 
- d       | ddddddd  | 
  c       | ccccc    | 
  d       | dddd     | 
  d       | dddddddd | 
@@ -220,17 +216,21 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  d       | ddd      | 
  d       | ddddd    | 
  d       | dddddd   | 
+ c       | cccc     | 
+ c       | cccccc   | 
+ c       | ccccccc  | 
+ d       | ddddddd  | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
- d       | ddddddd  |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
+ d       | ddddddd  |    |    | 
 (6 rows)
 
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
@@ -247,12 +247,12 @@ SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
  relname |    aa    | bb 
 ---------+----------+----
+ b       | bbbbbbbb | 
  b       | bbb      | 
  b       | bbbb     | 
  b       | bbbbb    | 
  b       | bbbbbb   | 
  b       | bbbbbbb  | 
- b       | bbbbbbbb | 
 (6 rows)
 
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
@@ -269,11 +269,11 @@ SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
  relname |    aa    | bb | cc | dd 
 ---------+----------+----+----+----
+ d       | dddd     |    |    | 
+ d       | dddddddd |    |    | 
  d       | ddd      |    |    | 
  d       | ddddd    |    |    | 
  d       | dddddd   |    |    | 
- d       | dddd     |    |    | 
- d       | dddddddd |    |    | 
  d       | ddddddd  |    |    | 
 (6 rows)
 
@@ -281,11 +281,6 @@ UPDATE b SET aa='new';
 SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  relname |    aa    
 ---------+----------
- a       | zzzz
- a       | zzzzz
- c       | ccccc
- c       | ccc
- c       | cccccccc
  a       | zzzzzz
  a       | zzzzzz
  a       | zzzzzz
@@ -305,6 +300,11 @@ SELECT relname, a.* FROM a, pg_class where a.tableoid = pg_class.oid;
  d       | new
  d       | new
  d       | new
+ a       | zzzz
+ a       | zzzzz
+ c       | ccccc
+ c       | ccc
+ c       | cccccccc
 (24 rows)
 
 SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
@@ -327,9 +327,6 @@ SELECT relname, b.* FROM b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
- c       | ccc      | 
- c       | cccccccc | 
- c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
@@ -339,6 +336,9 @@ SELECT relname, c.* FROM c, pg_class where c.tableoid = pg_class.oid;
  d       | new      | 
  d       | new      | 
  d       | new      | 
+ c       | ccccc    | 
+ c       | ccc      | 
+ c       | cccccccc | 
 (12 rows)
 
 SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
@@ -355,12 +355,12 @@ SELECT relname, d.* FROM d, pg_class where d.tableoid = pg_class.oid;
 SELECT relname, a.* FROM ONLY a, pg_class where a.tableoid = pg_class.oid;
  relname |   aa   
 ---------+--------
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
+ a       | zzzzzz
  a       | zzzz
  a       | zzzzz
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
- a       | zzzzzz
 (6 rows)
 
 SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
@@ -377,12 +377,12 @@ SELECT relname, b.* FROM ONLY b, pg_class where b.tableoid = pg_class.oid;
 SELECT relname, c.* FROM ONLY c, pg_class where c.tableoid = pg_class.oid;
  relname |    aa    | cc 
 ---------+----------+----
+ c       | ccccc    | 
  c       | cccc     | 
  c       | cccccc   | 
  c       | ccccccc  | 
  c       | ccc      | 
  c       | cccccccc | 
- c       | ccccc    | 
 (6 rows)
 
 SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
@@ -542,7 +542,7 @@ SELECT relname, d.* FROM ONLY d, pg_class where d.tableoid = pg_class.oid;
 -- Confirm PRIMARY KEY adds NOT NULL constraint to child table
 CREATE TEMP TABLE z (b TEXT, PRIMARY KEY(aa, b)) inherits (a);
 INSERT INTO z VALUES (NULL, 'text'); -- should fail
-ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  null value in column "aa" of relation "z" violates not-null constraint  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (null, text).
 -- ... but not UNIQUE.
 CREATE TEMP TABLE z2 (b TEXT, UNIQUE(aa, b)) inherits (a);
@@ -946,10 +946,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  new row for relation "ac" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=747139)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  new row for relation "bc" violates check constraint "ac_check"  (seg0 172.17.0.2:7002 pid=747139)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_check" of relation "bc"
@@ -969,10 +969,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 (2 rows)
 
 insert into ac (aa) values (NULL);
-ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  new row for relation "ac" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=747139)
 DETAIL:  Failing row contains (null).
 insert into bc (aa) values (NULL);
-ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  new row for relation "bc" violates check constraint "ac_aa_check"  (seg0 172.17.0.2:7002 pid=747139)
 DETAIL:  Failing row contains (null, null).
 alter table bc drop constraint ac_aa_check;  -- fail, disallowed
 ERROR:  cannot drop inherited constraint "ac_aa_check" of relation "bc"
@@ -1065,14 +1065,14 @@ create table c1(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into c1 values(1,-1,2);
 alter table p2 add constraint cc check (f2>0);  -- fail
-ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  check constraint "cc" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=747145)
 alter table p2 add check (f2>0);  -- check it without a name, too
-ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  check constraint "p2_f2_check" of relation "c1" is violated by some row  (seg1 172.17.0.2:7003 pid=747145)
 delete from c1;
 insert into c1 values(1,1,2);
 alter table p2 add check (f2>0);
 insert into c1 values(1,-1,2);  -- fail
-ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "c1" violates check constraint "p2_f2_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (1, -1, 2).
 create table c2(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1725,7 +1725,7 @@ alter table p1 drop constraint f1_pos;
 alter table p1_c1c2 drop constraint f1_pos;
 ERROR:  cannot drop inherited constraint "f1_pos" of relation "p1_c1c2"
 alter table p1_c2 drop constraint f1_pos;
-ERROR:  constraint "f1_pos" of relation "p1_c2" does not exist  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  constraint "f1_pos" of relation "p1_c2" does not exist  (seg2 172.17.0.2:7004 pid=747146)
 \d p1_c1c2
               Table "public.p1_c1c2"
  Column |  Type   | Collation | Nullable | Default 
@@ -1758,10 +1758,10 @@ alter table invalid_check_con_child add constraint inh_check_constraint check(f1
 alter table invalid_check_con add constraint inh_check_constraint check(f1 > 0) not valid;
 NOTICE:  merging constraint "inh_check_constraint" with inherited definition
 insert into invalid_check_con values(0); -- fail
-ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "invalid_check_con" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0).
 insert into invalid_check_con_child values(0); -- fail
-ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "invalid_check_con_child" violates check constraint "inh_check_constraint"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0).
 select conrelid::regclass::text as relname, conname,
        convalidated, conislocal, coninhcount, connoinherit
@@ -2369,16 +2369,16 @@ update inhpar i set (f1, f2) = (select i.f1, i.f2 || '-' from int4_tbl limit 1);
 select * from inhpar;
  f1 | f2  
 ----+-----
-  5 | 5-
-  6 | 6-
-  9 | 9-
- 10 | 10-
   2 | 2-
   3 | 3-
   4 | 4-
   8 | 8-
   7 | 7-
   1 | 1-
+  5 | 5-
+  9 | 9-
+ 10 | 10-
+  6 | 6-
 (10 rows)
 
 drop table inhpar cascade;
@@ -2441,11 +2441,11 @@ select * from inhpar;
   4 | 4-
   7 | 7-
   8 | 8-
+  1 | 1-
   5 | 5-
   6 | 6-
   9 | 9-
  10 | 10-
-  1 | 1-
 (10 rows)
 
 -- Also check ON CONFLICT
@@ -3282,7 +3282,7 @@ create table inh_nn2 (f2 text, f3 int) inherits (inh_nn1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into inh_nn2 values(NULL, 'sample', 1);
 alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit;
-ERROR:  column "f1" of relation "inh_nn2" contains null values  (seg0 172.17.0.2:7002 pid=2621775)
+ERROR:  column "f1" of relation "inh_nn2" contains null values  (seg0 172.17.0.2:7002 pid=747139)
 delete from inh_nn2;
 create table inh_nn3 () inherits (inh_nn2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4458,33 +4458,33 @@ INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '5');
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '5');
 -- insert with child check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', '10');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', '10');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 1, 10).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', '10');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 1, 10).
 -- insert with child not null constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  null value in column "data" of relation "errtst_child_fastdef" violates not-null constraint  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  null value in column "data" of relation "errtst_child_plaindef" violates not-null constraint  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 1, null).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '1', NULL);
-ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  null value in column "data" of relation "errtst_child_reorder" violates not-null constraint  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 1, null).
 -- insert with shared check constraint error
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ( '0', '5', '5');
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('10', '5', '5');
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "shdata_small"  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 5, 5).
 INSERT INTO errtst_parent(partid, shdata, data) VALUES ('20', '5', '5');
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "shdata_small"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 5, 5).
 -- within partition update without child check constraint violation
 BEGIN;
@@ -4494,13 +4494,13 @@ UPDATE errtst_parent SET data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- within partition update with child check constraint violation
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 1, 15).
 -- direct leaf partition update, without partition id violation
 BEGIN;
@@ -4510,13 +4510,13 @@ UPDATE errtst_child_reorder SET partid = 21 WHERE partid = 20;
 ROLLBACK;
 -- direct leaf partition update, with partition id violation
 UPDATE errtst_child_fastdef SET partid = partid + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  new row for relation "errtst_child_fastdef" violates partition constraint  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 1, 5).
 UPDATE errtst_child_plaindef SET partid = partid + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_plaindef" violates partition constraint  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 1, 5).
 UPDATE errtst_child_reorder SET partid = partid + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_reorder" violates partition constraint  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (5, 1, 30).
 -- partition move, without child check constraint violation
 BEGIN;
@@ -4526,17 +4526,17 @@ UPDATE errtst_parent SET partid = 0, data = data + 1 WHERE partid = 20;
 ROLLBACK;
 -- partition move, with child check constraint violation
 UPDATE errtst_parent SET partid = 10, data = data + 10 WHERE partid = 0;
-ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=2621778)
+ERROR:  new row for relation "errtst_child_plaindef" violates check constraint "errtst_child_plaindef_data_check"  (seg2 172.17.0.2:7004 pid=747146)
 DETAIL:  Failing row contains (10, 1, 15).
 UPDATE errtst_parent SET partid = 20, data = data + 10 WHERE partid = 10;
-ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_reorder" violates check constraint "errtst_child_reorder_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (20, 1, 15).
 UPDATE errtst_parent SET partid = 0, data = data + 10 WHERE partid = 20;
-ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  new row for relation "errtst_child_fastdef" violates check constraint "errtest_child_fastdef_data_check"  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Failing row contains (0, 1, 15).
 -- partition move, without target partition
 UPDATE errtst_parent SET partid = 30, data = data + 10 WHERE partid = 20;
-ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.2:7003 pid=2621777)
+ERROR:  no partition of relation "errtst_parent" found for row  (seg1 172.17.0.2:7003 pid=747145)
 DETAIL:  Partition key of the failing row contains (partid) = (30).
 DROP TABLE errtst_parent;
 -- Check that we have the correct tuples estimate for an appendrel
@@ -4558,24 +4558,22 @@ explain (costs off)
 select * from tuplesest_tab join
   (select b from tuplesest_parted where c < 100 group by b) sub
   on tuplesest_tab.a = sub.b;
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: (tuplesest_parted.b = tuplesest_tab.a)
-         ->  HashAggregate
-               Group Key: tuplesest_parted.b
-               ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: tuplesest_parted.b
-                     ->  Append
-                           ->  Seq Scan on tuplesest_parted1 tuplesest_parted_1
-                                 Filter: (c < '100'::double precision)
-                           ->  Seq Scan on tuplesest_parted2 tuplesest_parted_2
-                                 Filter: (c < '100'::double precision)
+         Hash Cond: (tuplesest_tab.a = tuplesest_parted.b)
+         ->  Seq Scan on tuplesest_tab
          ->  Hash
-               ->  Seq Scan on tuplesest_tab
- Optimizer: Postgres query optimizer
-(15 rows)
+               ->  HashAggregate
+                     Group Key: tuplesest_parted.b
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: tuplesest_parted.b
+                           ->  Dynamic Seq Scan on tuplesest_parted
+                                 Number of partitions to scan: 2 (out of 2)
+                                 Filter: (c < '100'::double precision)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
 
 drop table tuplesest_parted;
 drop table tuplesest_tab;

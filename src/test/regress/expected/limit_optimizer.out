@@ -113,21 +113,21 @@ SELECT ''::text AS five, unique1, unique2, stringu1
 select * from int8_tbl limit (case when random() < 0.5 then null::bigint end);
         q1        |        q2         
 ------------------+-------------------
-              123 |               456
-              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
+              123 |               456
+              123 |  4567890123456789
 (5 rows)
 
 select * from int8_tbl offset (case when random() < 0.5 then null::bigint end);
         q1        |        q2         
 ------------------+-------------------
+              123 |               456
+              123 |  4567890123456789
  4567890123456789 |               123
  4567890123456789 |  4567890123456789
  4567890123456789 | -4567890123456789
-              123 |               456
-              123 |  4567890123456789
 (5 rows)
 
 -- Test assorted cases involving backwards fetch from a LIMIT plan node
@@ -362,23 +362,33 @@ order by s2 desc;
 explain (verbose, costs off)
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;
-                                                    QUERY PLAN                                                     
--------------------------------------------------------------------------------------------------------------------
- Limit
-   Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
-   ->  Finalize GroupAggregate
-         Output: sum(tenthous), ((sum(tenthous))::double precision + (random() * '0'::double precision)), thousand
-         Group Key: tenk1.thousand
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Result
+   Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision)))
+   ->  Limit
+         Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
          ->  Gather Motion 3:1  (slice1; segments: 3)
-               Output: thousand, (PARTIAL sum(tenthous))
-               Merge Key: tenk1.thousand
-               ->  Partial GroupAggregate
-                     Output: thousand, PARTIAL sum(tenthous)
-                     Group Key: tenk1.thousand
-                     ->  Index Only Scan using tenk1_thous_tenthous on public.tenk1
-                           Output: thousand, tenthous
- Optimizer: Postgres query optimizer
-(14 rows)
+               Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
+               Merge Key: thousand
+               ->  Limit
+                     Output: (sum(tenthous)), (((sum(tenthous))::double precision + (random() * '0'::double precision))), thousand
+                     ->  Finalize GroupAggregate
+                           Output: sum(tenthous), ((sum(tenthous))::double precision + (random() * '0'::double precision)), thousand
+                           Group Key: tenk1.thousand
+                           ->  Sort
+                                 Output: thousand, (PARTIAL sum(tenthous)), (PARTIAL sum(tenthous))
+                                 Sort Key: tenk1.thousand
+                                 ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                       Output: thousand, (PARTIAL sum(tenthous)), (PARTIAL sum(tenthous))
+                                       Hash Key: thousand
+                                       ->  Streaming Partial HashAggregate
+                                             Output: thousand, PARTIAL sum(tenthous), PARTIAL sum(tenthous)
+                                             Group Key: tenk1.thousand
+                                             ->  Seq Scan on public.tenk1
+                                                   Output: thousand, tenthous
+ Optimizer: Pivotal Optimizer (GPORCA)
+(24 rows)
 
 select sum(tenthous) as s1, sum(tenthous) + random()*0 as s2
   from tenk1 group by thousand order by thousand limit 3;

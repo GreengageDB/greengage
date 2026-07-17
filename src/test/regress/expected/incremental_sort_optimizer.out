@@ -37,6 +37,8 @@ select * from (select * from tenk1 order by four) t order by four, ten;
 
 reset planner_work_mem;
 create table t(a integer, b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create or replace function explain_analyze_without_memory(query text)
 returns table (out_line text) language plpgsql
 as
@@ -1390,6 +1392,8 @@ set parallel_setup_cost = 0;
 set parallel_tuple_cost = 0;
 set max_parallel_workers_per_gather = 2;
 create table t (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select mod(i,30),mod(i,30),i from generate_series(1,30000) s(i);
 create index on t (a);
 analyze t;
@@ -1399,35 +1403,31 @@ explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1
 ------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: t.a, t.b, (sum(t.c))
+         Merge Key: a, b, (sum(c))
          ->  Limit
                ->  Sort
                      Sort Key: a, b, (sum(c))
                      ->  HashAggregate
                            Group Key: a, b
                            ->  Seq Scan on t
- Optimizer: Postgres query optimizer
+ Optimizer: Pivotal Optimizer (GPORCA)
 (10 rows)
 
 set enable_incremental_sort = on;
 explain (costs off) select a,b,sum(c) from t group by 1,2 order by 1,2,3 limit 1;
-                            QUERY PLAN                             
--------------------------------------------------------------------
+                   QUERY PLAN                   
+------------------------------------------------
  Limit
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         Merge Key: t.a, t.b, (sum(t.c))
+         Merge Key: a, b, (sum(c))
          ->  Limit
-               ->  Incremental Sort
+               ->  Sort
                      Sort Key: a, b, (sum(c))
-                     Presorted Key: a, b
-                     ->  GroupAggregate
+                     ->  HashAggregate
                            Group Key: a, b
-                           ->  Incremental Sort
-                                 Sort Key: a, b
-                                 Presorted Key: a
-                                 ->  Index Scan using t_a_idx on t
- Optimizer: Postgres query optimizer
-(14 rows)
+                           ->  Seq Scan on t
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
 
 -- Incremental sort vs. set operations with varno 0
 set enable_hashagg to off;
@@ -1467,23 +1467,24 @@ insert into t1 select a, a from generate_series(1, 10000) cross join generate_se
 analyze t1;
 set enable_hashagg = off;
 explain select a, b, count(*) as res from t1 group by a, b;
-                                        QUERY PLAN                                         
--------------------------------------------------------------------------------------------
- Finalize GroupAggregate  (cost=2874.45..3216.03 rows=100 width=16)
-   Group Key: a, b
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2874.45..3212.78 rows=300 width=16)
-         Merge Key: t1.a, t1.b
-         ->  Partial GroupAggregate  (cost=2874.45..3208.78 rows=100 width=16)
-               Group Key: a, b
-               ->  Sort  (cost=2874.45..2957.78 rows=33333 width=8)
-                     Sort Key: a, b
-                     ->  Seq Scan on t1  (cost=0.00..370.33 rows=33333 width=8)
- Optimizer: Postgres query optimizer
-(10 rows)
+                                            QUERY PLAN                                            
+--------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..440.47 rows=57 width=16)
+   ->  Finalize HashAggregate  (cost=0.00..440.47 rows=19 width=16)
+         Group Key: a, b
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..440.46 rows=19 width=16)
+               Hash Key: a, b
+               ->  Streaming Partial HashAggregate  (cost=0.00..440.46 rows=19 width=16)
+                     Group Key: a, b
+                     ->  Seq Scan on t1  (cost=0.00..431.70 rows=33334 width=8)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(9 rows)
 
 drop table t1;
 -- Rescan over incremental sort
 create table t (a int, b int, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into t select mod(i,30),mod(i,30),i from generate_series(1,30000) s(i);
 create index on t (a);
 analyze t;
@@ -1732,6 +1733,8 @@ reset min_parallel_table_scan_size;
 reset min_parallel_index_scan_size;
 -- Ensure incremental sorts work for amcanorderbyop type indexes
 create table point_table (a point, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index point_table_a_idx on point_table using gist(a);
 -- Ensure we get an incremental sort plan for both of the following queries
 explain (costs off) select a, b, a <-> point(5, 5) dist from point_table order by dist, b limit 1;
