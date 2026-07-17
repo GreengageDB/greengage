@@ -75,6 +75,17 @@ CPartPruneStepsBuilder::CreatePartPruneInfoForOneLevel(CDXLNode *filterNode)
 	pinfo->subpart_map = (int *) palloc(sizeof(int) * pinfo->nparts);
 	pinfo->subplan_map = (int *) palloc(sizeof(int) * pinfo->nparts);
 	pinfo->relid_map = (Oid *) palloc(sizeof(int) * pinfo->nparts);
+	/*
+	 * GPDB/PG18: leafpart_rti_map is a newer PartitionedRelPruneInfo field
+	 * (leaf-partition RT index by partition index) that this ORCA builder never
+	 * populated, leaving the pointer uninitialized while nparts>0.  Any deep
+	 * copy of the resulting PartitionSelector plan (gpdb::CopyObject of the ORCA
+	 * PlannedStmt) then memcpy'd from that dangling pointer and SIGSEGV'd the QD.
+	 * Allocate it zeroed, matching the planner's palloc0 base init; 0 means "no
+	 * RT index", which execPartition.c treats as absent (ORCA prunes via
+	 * subplan_map, not leaf RT indexes).
+	 */
+	pinfo->leafpart_rti_map = (int *) palloc0(sizeof(int) * pinfo->nparts);
 
 	// m_part_indexes contains the indexes (into m_relation->rd_pardesc) of the
 	// partitions that survived static partition pruning; iterate over this list
