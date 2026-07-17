@@ -3,7 +3,9 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
 --------------------------------+---------
  enable_async_append            | on
  enable_bitmapscan              | on
+ enable_distinct_reordering     | on
  enable_gathermerge             | on
+ enable_group_by_reordering     | on
  enable_groupagg                | on
  enable_hashagg                 | on
  enable_hashjoin                | on
@@ -20,10 +22,11 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
  enable_presorted_aggregate     | off
+ enable_self_join_elimination   | on
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(22 rows)
+(25 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;
@@ -99,12 +102,12 @@ select foost(fooid), * from foost(3);
 select foost(fooid), * from foo2;
  foost  | fooid | f2  
 --------+-------+-----
+ (2,11) |     2 |  22
+ (2,33) |     2 |  22
  (1,11) |     1 |  11
  (1,33) |     1 |  11
  (1,11) |     1 | 111
  (1,33) |     1 | 111
- (2,11) |     2 |  22
- (2,33) |     2 |  22
 (6 rows)
 
 -- Joining with a table
@@ -888,5 +891,5 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 -- end_matchsubs
 CREATE TEMPORARY TABLE srfdest (t text) DISTRIBUTED RANDOMLY;
 INSERT INTO srfdest select * FROM notice_srf();
-NOTICE:  notice_srf called in segment 0  (seg0 slice1 172.17.0.4:7002 pid=344840)
+NOTICE:  notice_srf called in segment 1  (seg1 slice1 172.17.0.2:7003 pid=458745)
 reset optimizer_segments;

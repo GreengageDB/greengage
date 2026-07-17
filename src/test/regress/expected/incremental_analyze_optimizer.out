@@ -12,7 +12,6 @@
 -- end_matchsubs
 -- start_ignore
 DROP DATABASE IF EXISTS incrementalanalyze;
-NOTICE:  database "incrementalanalyze" does not exist, skipping
 CREATE DATABASE incrementalanalyze;
 ALTER DATABASE incrementalanalyze SET lc_monetary TO 'C';
 \c incrementalanalyze
@@ -1548,11 +1547,11 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO foo select i, i%6, repeat('aaaa', 100000) FROM generate_series(1, 100)i;
 ANALYZE foo;
 SELECT * FROM pg_stats WHERE tablename like 'foo%' and attname = 'c' ORDER BY attname,tablename;
- schemaname |  tablename  | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram 
-------------+-------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------
- public     | foo         | c       | t         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        | 
- public     | foo_1_prt_1 | c       | f         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        | 
- public     | foo_1_prt_2 | c       | f         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        | 
+ schemaname |  tablename  | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
+------------+-------------+---------+-----------+-----------+-----------+------------+------------------+-------------------+------------------+-------------+-------------------+------------------------+----------------------+------------------------+------------------+------------------------
+ public     | foo         | c       | t         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        |                      |                        |                  | 
+ public     | foo_1_prt_1 | c       | f         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        |                      |                        |                  | 
+ public     | foo_1_prt_2 | c       | f         |         0 |      4591 |          0 |                  |                   |                  |             |                   |                        |                      |                        |                  | 
 (3 rows)
 
 -- Test ANALYZE full scan HLL
@@ -1668,7 +1667,7 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO FOO SELECT i,i%6 FROM generate_series(1,1000)i;
 ANALYZE foo_1_prt_1;
 ANALYZE FULLSCAN foo_1_prt_2;
-ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4450)
+ERROR:  ANALYZE cannot merge since not all non-empty leaf partitions have consistent hyperloglog statistics for merge (analyze.c:4527)
 HINT:  Re-run ANALYZE or ANALYZE FULLSCAN
 -- Test merging of stats for a newly added partition
 -- Do not collect samples while merging stats
@@ -1697,7 +1696,12 @@ INSERT INTO foo SELECT i, i%9, i%100 FROM generate_series(1,500)i;
 ANALYZE VERBOSE rootpartition foo;
 INFO:  analyzing "public.foo" inheritance tree
 INFO:  column c of partition foo_1_prt_1 is not analyzed, so ANALYZE will collect sample for stats calculation
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69591, 400, 't');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117386, 400, 't');
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 442 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 675 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 -- Testing auto merging root statistics for all columns
 -- where column attnums are differents due to dropped columns
 -- and split partitions.
@@ -1932,6 +1936,11 @@ UPDATE pg_class set relpages=3 WHERE relname='foo_1_prt_2';
 RESET allow_system_table_mods;
 analyze verbose rootpartition foo;
 INFO:  analyzing "public.foo" inheritance tree
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 283 hits, 0 reads, 0 dirtied
+WAL usage: 2 records, 0 full page images, 152 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 -- ensure relpages is correctly set after analyzing
 analyze foo_1_prt_2;
 select reltuples, relpages from pg_class where relname ='foo_1_prt_2';
@@ -1980,9 +1989,19 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO foo values (5),(15);
 ANALYZE (verbose, rootpartition off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117572, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_2"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 82 hits, 0 reads, 0 dirtied
+WAL usage: 3 records, 0 full page images, 1187 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117569, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_1"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 82 hits, 0 reads, 0 dirtied
+WAL usage: 3 records, 0 full page images, 1184 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 -- root should not have stats
 SELECT count(*) from pg_statistic where starelid='foo'::regclass;
  count 
@@ -1993,6 +2012,11 @@ SELECT count(*) from pg_statistic where starelid='foo'::regclass;
 -- root should have stats
 ANALYZE (verbose, rootpartition on) foo;
 INFO:  analyzing "public.foo" inheritance tree
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 220 hits, 0 reads, 0 dirtied
+WAL usage: 3 records, 0 full page images, 457 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 SELECT count(*) from pg_statistic where starelid='foo'::regclass;
  count 
 -------
@@ -2004,16 +2028,36 @@ ANALYZE (verbose, fullscan on) foo;
 INFO:  analyzing "public.foo_1_prt_2"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_2 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117572, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_2"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 95 hits, 0 reads, 0 dirtied
+WAL usage: 1 records, 0 full page images, 420 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo_1_prt_1"
 INFO:  Executing SQL: select pg_catalog.gp_hyperloglog_accum(a) from public.foo_1_prt_1 as Ta
 INFO:  HLL FULL SCAN
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117569, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_1"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 95 hits, 0 reads, 0 dirtied
+WAL usage: 1 records, 0 full page images, 420 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 ANALYZE (verbose, fullscan off) foo;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69777, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117572, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_2"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 70 hits, 0 reads, 0 dirtied
+WAL usage: 2 records, 0 full page images, 370 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69774, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117569, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_1"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 70 hits, 0 reads, 0 dirtied
+WAL usage: 2 records, 0 full page images, 368 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 reset optimizer_analyze_root_partition;
 -- Test merging of stats after the last partition is analyzed. Merging should
 -- be done for root without taking a sample from root if one of the column
@@ -2027,11 +2071,26 @@ ALTER TABLE foo ALTER COLUMN c SET STATISTICS 0;
 INSERT INTO foo SELECT i,i%2+1, NULL FROM generate_series(1,100)i;
 ANALYZE VERBOSE foo_1_prt_1;
 INFO:  analyzing "public.foo_1_prt_1"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69783, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117578, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_1"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 91 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1892 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 ANALYZE VERBOSE foo_1_prt_2;
 INFO:  analyzing "public.foo_1_prt_2"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69788, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117583, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_2"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 91 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1893 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo" inheritance tree
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 331 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 755 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 SELECT tablename, attname, null_frac, n_distinct, most_common_vals, most_common_freqs, histogram_bounds FROM pg_stats WHERE tablename like 'foo%' ORDER BY attname,tablename;
   tablename  | attname | null_frac | n_distinct | most_common_vals | most_common_freqs | histogram_bounds 
 -------------+---------+-----------+------------+------------------+-------------------+------------------
@@ -2050,20 +2109,50 @@ create table foo (a int, b date) distributed by (a) partition by range(b) (parti
 insert into foo select a, '20210101'::date+a from (select generate_series(1,80) a) t1;
 analyze verbose foo;
 INFO:  analyzing "public.foo_1_prt_20210301"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69802, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117597, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_20210301"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 88 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1917 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69799, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117594, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_20210201"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 88 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1933 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo_1_prt_20210101"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69796, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117591, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_20210101"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 88 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1955 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo" inheritance tree
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 429 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 738 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 -- we should see "analyzing "public.foo" inheritance tree" in the output below
 begin;
 truncate foo_1_prt_20210201;
 insert into foo select a, '20210101'::date+a from (select generate_series(31,40) a) t1;
 analyze verbose foo_1_prt_20210201;
 INFO:  analyzing "public.foo_1_prt_20210201"
-INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(69799, 400, 'f');
+INFO:  Executing SQL: select pg_catalog.gp_acquire_sample_rows(117594, 400, 'f');
+INFO:  finished analyzing table "incrementalanalyze.public.foo_1_prt_20210201"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 69 hits, 0 reads, 0 dirtied
+WAL usage: 5 records, 0 full page images, 1636 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  analyzing "public.foo" inheritance tree
+INFO:  finished analyzing table "incrementalanalyze.public.foo"
+avg read rate: 0.000 MB/s, avg write rate: 0.000 MB/s
+buffer usage: 411 hits, 0 reads, 0 dirtied
+WAL usage: 3 records, 0 full page images, 424 bytes, 0 buffers full
+system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 rollback;
 -- test behavior of "analyze_hll_non_part_table" create table option
 create table hll_part (i int, j int) distributed by (i)

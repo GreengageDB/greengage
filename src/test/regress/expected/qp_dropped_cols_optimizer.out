@@ -14709,7 +14709,7 @@ EXPLAIN SELECT * FROM table_with_leaf_partition_containing_dropped_column WHERE 
    ->  Dynamic Index Scan on table_with_leaf_partition_containing_dropped_column_index on table_with_leaf_partition_containing_dropped_column  (cost=0.00..6.00 rows=1 width=12)
          Index Cond: (a > 42)
          Filter: ((a > 42) AND (z < 42))
-         Number of partitions to scan: 2 
+         Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -14774,7 +14774,7 @@ EXPLAIN SELECT * FROM table_with_leaf_containing_dropped_column_between_index_co
    ->  Dynamic Index Scan on table_with_leaf_partition_dropped_col_between_index_cols_index on table_with_leaf_containing_dropped_column_between_index_columns  (cost=0.00..6.00 rows=1 width=12)
          Index Cond: (a > 42)
          Filter: ((a > 42) AND (z < 42))
-         Number of partitions to scan: 2 
+         Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -14839,7 +14839,7 @@ EXPLAIN SELECT * FROM table_with_root_containing_dropped_columns WHERE a>42 and 
    ->  Dynamic Index Scan on table_with_root_containing_dropped_columns_index on table_with_root_containing_dropped_columns  (cost=0.00..6.00 rows=1 width=12)
          Index Cond: (a > 42)
          Filter: ((a > 42) AND (z < 42))
-         Number of partitions to scan: 2 
+         Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -14905,7 +14905,7 @@ EXPLAIN SELECT * FROM table_with_both_containing_dropped_column WHERE a>42 and z
    ->  Dynamic Index Scan on table_with_both_containing_dropped_column_index on table_with_both_containing_dropped_column  (cost=0.00..6.00 rows=1 width=12)
          Index Cond: (a > 42)
          Filter: ((a > 42) AND (z < 42))
-         Number of partitions to scan: 2 
+         Number of partitions to scan: 2 (out of 2)
  Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
@@ -14988,7 +14988,7 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
                Hash Cond: (ds_main.c = non_part2.e)
                ->  Dynamic Seq Scan on ds_main
                      Number of partitions to scan: 6 (out of 6)
-                     Filter: ((a = a) AND (SubPlan 1))
+                     Filter: ((a = a) AND EXISTS(SubPlan 1))
                      SubPlan 1
                        ->  Materialize
                              ->  Broadcast Motion 1:3  (slice2)

@@ -56,7 +56,7 @@ select a from group_by_sublink where exists (select avg(a) from group_by_sublink
                                       QUERY PLAN                                       
 ---------------------------------------------------------------------------------------
  Result
-   Filter: (SubPlan 1)
+   Filter: EXISTS(SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on group_by_sublink
    SubPlan 1
@@ -150,7 +150,7 @@ select a from group_by_sublink where exists (select sum(a) over (order by a) fro
                                    QUERY PLAN                                    
 ---------------------------------------------------------------------------------
  Result
-   Filter: (SubPlan 1)
+   Filter: EXISTS(SubPlan 1)
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Seq Scan on group_by_sublink
    SubPlan 1

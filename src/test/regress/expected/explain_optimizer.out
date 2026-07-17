@@ -26,6 +26,10 @@ begin
         ln := regexp_replace(ln, '-?\m\d+\M', 'N', 'g');
         -- In sort output, the above won't match units-suffixed numbers
         ln := regexp_replace(ln, '\m\d+kB', 'NkB', 'g');
+        -- GPDB: mask the executor/work_mem "NNNK bytes" summary values in the
+        -- per-slice memory line, which vary with catalog size and concurrent
+        -- memory pressure (the trailing 'K' defeats the \m\d+\M rule above).
+        ln := regexp_replace(ln, '\m\d+K bytes', 'NK bytes', 'g');
         -- Ignore text-mode buffers output because it varies depending
         -- on the system state
         CONTINUE WHEN (ln ~ ' +Buffers: .*');
@@ -84,8 +88,8 @@ select explain_filter('explain (analyze, buffers off) select * from int8_tbl i8'
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -99,8 +103,8 @@ select explain_filter('explain (analyze, buffers off, verbose) select * from int
          Output: q1, q2
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (10 rows)
@@ -112,8 +116,8 @@ select explain_filter('explain (analyze, buffers, format text) select * from int
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -643,8 +647,8 @@ select explain_filter('explain (memory, analyze, buffers off) select * from int8
  Optimizer: Pivotal Optimizer (GPORCA)
    Memory: used=NkB  allocated=NkB
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Execution Time: N.N ms
 (9 rows)
@@ -811,6 +815,8 @@ create table gen_part (
   key1 integer not null,
   key2 integer not null
 ) partition by list (key1);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'key1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table gen_part_1
   partition of gen_part for values in (1)
   partition by range (key2);
@@ -1083,6 +1089,8 @@ select jsonb_pretty(
 rollback;
 -- Test display of temporary objects
 create temp table t1(f1 float8);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function pg_temp.mysin(float8) returns float8 language plpgsql
 as 'begin return sin($1); end';
 select explain_filter('explain (verbose) select * from t1 where pg_temp.mysin(f1) < 0.5');
@@ -1120,6 +1128,7 @@ select explain_filter('explain (verbose) declare test_cur cursor for select * fr
 (5 rows)
 
 select explain_filter('explain (verbose) create table test_ctas as select 1');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                                     explain_filter                                    
 --------------------------------------------------------------------------------------
  Result  (cost=N.N..N.N rows=N width=N)
@@ -1141,8 +1150,8 @@ select explain_filter('explain (analyze,buffers off,serialize) select * from int
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Serialization: time=N.N ms  output=NkB  format=text
  Execution Time: N.N ms
@@ -1155,8 +1164,8 @@ select explain_filter('explain (analyze,serialize text,buffers,timing off) selec
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Serialization: output=NkB  format=text
  Execution Time: N.N ms
@@ -1169,8 +1178,8 @@ select explain_filter('explain (analyze,serialize binary,buffers,timing) select 
    ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 111K bytes.
-   (slice1)    Executor memory: 111K bytes avg x N workers, 111K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes.
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Serialization: time=N.N ms  output=NkB  format=binary
  Execution Time: N.N ms
@@ -1178,6 +1187,7 @@ select explain_filter('explain (analyze,serialize binary,buffers,timing) select 
 
 -- this tests an edge case where we have no data to return
 select explain_filter('explain (analyze,buffers off,serialize) create temp table explain_temp as select * from int8_tbl i8');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entry.
                                                         explain_filter                                                        
 ------------------------------------------------------------------------------------------------------------------------------
  Result  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
@@ -1185,8 +1195,8 @@ select explain_filter('explain (analyze,buffers off,serialize) create temp table
          ->  Seq Scan on int8_tbl  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 122K bytes avg x N workers, 122K bytes max (seg0).
-   (slice1)    Executor memory: 118K bytes avg x N workers, 118K bytes max (seg0).
+   (slice0)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
+   (slice1)    Executor memory: NK bytes avg x N workers, NK bytes max (seg0).
  Memory used:  NkB
  Serialization: time=N.N ms  output=NkB  format=text
  Execution Time: N.N ms
@@ -1201,7 +1211,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 62K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1217,7 +1227,7 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Function Scan on generate_series (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 214K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
 (8 rows)
@@ -1232,13 +1242,14 @@ select explain_filter('explain (analyze,buffers off,costs off) select sum(n) ove
    ->  Sort (actual time=N.N..N.N rows=N.N loops=N)
          Sort Key: ((generate_series < N))
          Sort Method:  quicksort  Memory: NkB
+         Executor Memory: NkB  Segments: N  Max: NkB (segment N)
          ->  Function Scan on generate_series (actual time=N.N..N.N rows=N.N loops=N)
  Optimizer: Pivotal Optimizer (GPORCA)
  Planning Time: N.N ms
-   (slice0)    Executor memory: 270K bytes.
+   (slice0)    Executor memory: NK bytes.  Work_mem: NK bytes max.
  Memory used:  NkB
  Execution Time: N.N ms
-(12 rows)
+(13 rows)
 
 reset work_mem;
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.

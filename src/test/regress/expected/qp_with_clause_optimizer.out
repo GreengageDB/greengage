@@ -384,18 +384,18 @@ with diversecountries as
  from diversecountries,city where city.id = diversecountries.capital;
         name        |       name       | cnt 
 --------------------+------------------+-----
- Austria            | Wien             |   8
- Russian Federation | Moscow           |  12
- Italy              | Roma             |   8
- Myanmar            | Rangoon (Yangon) |   8
- China              | Peking           |  12
- Denmark            | Kobenhavn        |   7
  Canada             | Ottawa           |  12
- United States      | Washington       |  12
- South Africa       | Pretoria         |  11
- Iran               | Teheran          |  10
- Australia          | Canberra         |   8
+ Italy              | Roma             |   8
  India              | New Delhi        |  12
+ United States      | Washington       |  12
+ Austria            | Wien             |   8
+ Denmark            | Kobenhavn        |   7
+ China              | Peking           |  12
+ Myanmar            | Rangoon (Yangon) |   8
+ Iran               | Teheran          |  10
+ Russian Federation | Moscow           |  12
+ South Africa       | Pretoria         |  11
+ Australia          | Canberra         |   8
 (12 rows)
 
 --query5 -Using a CTE in the select list
@@ -430,18 +430,18 @@ select
 from country,city where country.capital = city.id) FOO where FOO.CNT is not null;
  cnt |      country       |     capital      
 -----+--------------------+------------------
-   8 | Austria            | Wien
+  11 | South Africa       | Pretoria
   12 | Russian Federation | Moscow
   12 | China              | Peking
    8 | Myanmar            | Rangoon (Yangon)
-  10 | Iran               | Teheran
-  11 | South Africa       | Pretoria
-  12 | United States      | Washington
    8 | Italy              | Roma
   12 | Canada             | Ottawa
-   7 | Denmark            | Kobenhavn
    8 | Australia          | Canberra
+  10 | Iran               | Teheran
   12 | India              | New Delhi
+   8 | Austria            | Wien
+   7 | Denmark            | Kobenhavn
+  12 | United States      | Washington
 (12 rows)
 
 --queries Using a CTE in the HAVING clause
@@ -820,17 +820,17 @@ with capitals as
 select * from capitals where id < 100;
  code | id |       name       | code 
 ------+----+------------------+------
- NLD  |  5 | Amsterdam        | NLD
  ALB  | 34 | Tirana           | ALB
- DZA  | 35 | Alger            | DZA
- AND  | 55 | Andorra la Vella | AND
- AIA  | 62 | The Valley       | AIA
  ATG  | 63 | Saint Johns      | ATG
- AFG  |  1 | Kabul            | AFG
  ARE  | 65 | Abu Dhabi        | ARE
+ DZA  | 35 | Alger            | DZA
  ARG  | 69 | Buenos Aires     | ARG
+ NLD  |  5 | Amsterdam        | NLD
  ANT  | 33 | Willemstad       | ANT
+ AIA  | 62 | The Valley       | AIA
  ASM  | 54 | Fagatogo         | ASM
+ AND  | 55 | Andorra la Vella | AND
+ AFG  |  1 | Kabul            | AFG
  AGO  | 56 | Luanda           | AGO
 (12 rows)
 
@@ -845,217 +845,121 @@ select * from allofficiallanguages where language like 'A%';
  DZA         | DZA         | Arabic
  DZA         | DZA         | Arabic
  DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ ARE         | ARE         | Arabic
+ ARE         | ARE         | Arabic
  ARM         | ARM         | Armenian
- AZE         | AZE         | Azerbaijani
+ ARM         | ARM         | Armenian
  IRQ         | IRQ         | Arabic
  IRQ         | IRQ         | Arabic
  IRQ         | IRQ         | Arabic
  IRQ         | IRQ         | Arabic
  IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- KWT         | KWT         | Arabic
- KWT         | KWT         | Arabic
- SOM         | SOM         | Arabic
+ JOR         | JOR         | Arabic
+ LBN         | LBN         | Arabic
+ LBN         | LBN         | Arabic
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ ARE         | ARE         | Arabic
+ ARE         | ARE         | Arabic
  DJI         | DJI         | Arabic
- BHR         | BHR         | Arabic
- JOR         | JOR         | Arabic
- JOR         | JOR         | Arabic
- JOR         | JOR         | Arabic
- JOR         | JOR         | Arabic
- OMN         | OMN         | Arabic
- OMN         | OMN         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SDN         | SDN         | Arabic
- SDN         | SDN         | Arabic
- SDN         | SDN         | Arabic
- TCD         | TCD         | Arabic
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ARE         | ARE         | Arabic
- ARE         | ARE         | Arabic
- ARE         | ARE         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- YEM         | YEM         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- TUN         | TUN         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- BOL         | BOL         | Aimara
- BOL         | BOL         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- ARM         | ARM         | Armenian
  IRQ         | IRQ         | Arabic
- LBY         | LBY         | Arabic
- LBY         | LBY         | Arabic
- OMN         | OMN         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SAU         | SAU         | Arabic
- SDN         | SDN         | Arabic
- SDN         | SDN         | Arabic
- SDN         | SDN         | Arabic
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ALB         | ALB         | Albaniana
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
  YEM         | YEM         | Arabic
  YEM         | YEM         | Arabic
- LBN         | LBN         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- MAR         | MAR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- TUN         | TUN         | Arabic
- TUN         | TUN         | Arabic
- TUN         | TUN         | Arabic
- TUN         | TUN         | Arabic
- TUN         | TUN         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- BOL         | BOL         | Aimara
- BOL         | BOL         | Aimara
- BOL         | BOL         | Aimara
- BOL         | BOL         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- DZA         | DZA         | Arabic
- ARM         | ARM         | Armenian
- AZE         | AZE         | Azerbaijani
- AZE         | AZE         | Azerbaijani
- AZE         | AZE         | Azerbaijani
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
- IRQ         | IRQ         | Arabic
+ JOR         | JOR         | Arabic
  KWT         | KWT         | Arabic
- ESH         | ESH         | Arabic
- SOM         | SOM         | Arabic
- SOM         | SOM         | Arabic
+ OMN         | OMN         | Arabic
+ OMN         | OMN         | Arabic
+ OMN         | OMN         | Arabic
+ OMN         | OMN         | Arabic
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ DZA         | DZA         | Arabic
+ DZA         | DZA         | Arabic
+ ARE         | ARE         | Arabic
+ ARM         | ARM         | Armenian
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ IRQ         | IRQ         | Arabic
+ YEM         | YEM         | Arabic
+ YEM         | YEM         | Arabic
+ YEM         | YEM         | Arabic
+ YEM         | YEM         | Arabic
  JOR         | JOR         | Arabic
- LBY         | LBY         | Arabic
- LBY         | LBY         | Arabic
+ JOR         | JOR         | Arabic
+ JOR         | JOR         | Arabic
+ KWT         | KWT         | Arabic
+ KWT         | KWT         | Arabic
  OMN         | OMN         | Arabic
- OMN         | OMN         | Arabic
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ PER         | PER         | Aimara
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ SYR         | SYR         | Arabic
+ ALB         | ALB         | Albaniana
+ AZE         | AZE         | Azerbaijani
+ AZE         | AZE         | Azerbaijani
+ BOL         | BOL         | Aimara
+ BOL         | BOL         | Aimara
+ ISR         | ISR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
  SAU         | SAU         | Arabic
  SAU         | SAU         | Arabic
  SAU         | SAU         | Arabic
  SAU         | SAU         | Arabic
  SAU         | SAU         | Arabic
  SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SOM         | SOM         | Arabic
+ SOM         | SOM         | Arabic
  SDN         | SDN         | Arabic
  SDN         | SDN         | Arabic
  SDN         | SDN         | Arabic
@@ -1063,65 +967,161 @@ select * from allofficiallanguages where language like 'A%';
  SDN         | SDN         | Arabic
  SDN         | SDN         | Arabic
  TCD         | TCD         | Arabic
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ZAF         | ZAF         | Afrikaans
- ARE         | ARE         | Arabic
- ARE         | ARE         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- EGY         | EGY         | Arabic
- YEM         | YEM         | Arabic
- YEM         | YEM         | Arabic
- YEM         | YEM         | Arabic
- LBN         | LBN         | Arabic
+ TUN         | TUN         | Arabic
+ TUN         | TUN         | Arabic
+ BOL         | BOL         | Aimara
+ BOL         | BOL         | Aimara
+ BOL         | BOL         | Aimara
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SOM         | SOM         | Arabic
+ SDN         | SDN         | Arabic
+ SDN         | SDN         | Arabic
+ SDN         | SDN         | Arabic
+ SDN         | SDN         | Arabic
+ SDN         | SDN         | Arabic
+ TCD         | TCD         | Arabic
+ TUN         | TUN         | Arabic
+ TUN         | TUN         | Arabic
+ TUN         | TUN         | Arabic
+ AZE         | AZE         | Azerbaijani
+ AZE         | AZE         | Azerbaijani
+ BOL         | BOL         | Aimara
+ BOL         | BOL         | Aimara
+ BOL         | BOL         | Aimara
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ ISR         | ISR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
+ MAR         | MAR         | Arabic
  MAR         | MAR         | Arabic
  MAR         | MAR         | Arabic
  MAR         | MAR         | Arabic
  MAR         | MAR         | Arabic
  QAT         | QAT         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
- SYR         | SYR         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SAU         | SAU         | Arabic
+ SDN         | SDN         | Arabic
  TUN         | TUN         | Arabic
  TUN         | TUN         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- ISR         | ISR         | Arabic
- BOL         | BOL         | Aimara
- BOL         | BOL         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
- PER         | PER         | Aimara
+ TUN         | TUN         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ LBY         | LBY         | Arabic
+ BHR         | BHR         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ LBY         | LBY         | Arabic
+ ESH         | ESH         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ EGY         | EGY         | Arabic
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ ZAF         | ZAF         | Afrikaans
+ LBY         | LBY         | Arabic
+ LBY         | LBY         | Arabic
 (282 rows)
 
 with capitals(code,id,name,code) as 
@@ -1130,17 +1130,17 @@ with capitals(code,id,name,code) as
 select * from capitals where id < 100;
  code | id |       name       | code 
 ------+----+------------------+------
- NLD  |  5 | Amsterdam        | NLD
- ALB  | 34 | Tirana           | ALB
- DZA  | 35 | Alger            | DZA
- AND  | 55 | Andorra la Vella | AND
- AIA  | 62 | The Valley       | AIA
  ATG  | 63 | Saint Johns      | ATG
- AFG  |  1 | Kabul            | AFG
+ ALB  | 34 | Tirana           | ALB
  ARE  | 65 | Abu Dhabi        | ARE
+ DZA  | 35 | Alger            | DZA
  ARG  | 69 | Buenos Aires     | ARG
+ NLD  |  5 | Amsterdam        | NLD
  ANT  | 33 | Willemstad       | ANT
+ AIA  | 62 | The Valley       | AIA
  ASM  | 54 | Fagatogo         | ASM
+ AND  | 55 | Andorra la Vella | AND
+ AFG  |  1 | Kabul            | AFG
  AGO  | 56 | Luanda           | AGO
 (12 rows)
 
@@ -1156,7 +1156,7 @@ ERROR:  relation "lang_total" does not exist
 LINE 5:   HAVING count(*) > (select max(lang_count) from lang_total)
                                                          ^
 DETAIL:  There is a WITH item named "lang_total", but it cannot be referenced from this part of the query.
-HINT:  Re-order the WITH items to remove forward references.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
 --query2 CTE forward referencing another CTE
 with capitals as 
 (select country.code,id,city.name from city,country 
@@ -1176,7 +1176,7 @@ ERROR:  relation "alleuropeanlanguages" does not exist
 LINE 6:   from country join alleuropeanlanguages on (country.code=al...
                             ^
 DETAIL:  There is a WITH item named "alleuropeanlanguages", but it cannot be referenced from this part of the query.
-HINT:  Re-order the WITH items to remove forward references.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
 --query1
 with capitals(code,id) as 
 (select country.code,id,city.name from city,country 
@@ -1184,237 +1184,237 @@ with capitals(code,id) as
 select * from capitals;
  code |  id  |               name                
 ------+------+-----------------------------------
+ NLD  |    5 | Amsterdam
+ ANT  |   33 | Willemstad
+ AGO  |   56 | Luanda
  AIA  |   62 | The Valley
- ARE  |   65 | Abu Dhabi
+ ATG  |   63 | Saint Johns
  AUS  |  135 | Canberra
+ AZE  |  144 | Baku
+ BEL  |  179 | Bruxelles [Brussel]
+ BWA  |  204 | Gaborone
+ VGB  |  537 | Road Town
+ BGR  |  539 | Sofija
+ BFA  |  549 | Ouagadougou
+ BDI  |  552 | Bujumbura
+ CYM  |  553 | George Town
+ CRI  |  584 | San Jose
+ DOM  |  587 | Santo Domingo de Guzman
+ ECU  |  594 | Quito
+ FRO  |  901 | Torshavn
+ GEO  |  905 | Tbilisi
+ GRD  |  916 | Saint Georges
+ GIN  |  926 | Conakry
+ GUY  |  928 | Georgetown
+ HTI  |  929 | Port-au-Prince
+ HKG  |  937 | Victoria
+ SJM  |  938 | Longyearbyen
+ IRL  | 1447 | Dublin
+ ISL  | 1449 | Reykjavik
+ ISR  | 1450 | Jerusalem
+ TMP  | 1522 | Dili
+ YEM  | 1780 | Sanaa
+ JOR  | 1786 | Amman
+ CXR  | 1791 | Flying Fish Cove
+ CPV  | 1859 | Praia
+ CCK  | 2317 | West Island
+ KOR  | 2331 | Seoul
+ KWT  | 2429 | Kuwait
+ LVA  | 2434 | Riga
+ LSO  | 2437 | Maseru
+ LIE  | 2446 | Vaduz
+ MAC  | 2454 | Macao
+ MDV  | 2463 | Male
+ MYS  | 2464 | Kuala Lumpur
+ MHL  | 2507 | Dalap-Uliga-Darrit
+ FSM  | 2689 | Palikir
+ MDA  | 2690 | Chisinau
+ MOZ  | 2698 | Maputo
+ NRU  | 2728 | Yaren
+ NGA  | 2754 | Abuja
+ OMN  | 2821 | Masqat
+ QAT  | 2973 | Doha
+ SWE  | 3048 | Stockholm
+ SHN  | 3063 | Jamestown
+ SLB  | 3161 | Honiara
+ STP  | 3172 | Sao Tome
+ SEN  | 3198 | Dakar
+ FIN  | 3236 | Helsinki [Helsingfors]
+ SUR  | 3243 | Paramaribo
+ TGO  | 3332 | Lome
+ TON  | 3334 | Nukualofa
+ TTO  | 3336 | Port-of-Spain
+ HUN  | 3483 | Budapest
+ URY  | 3492 | Montevideo
+ NCL  | 3493 | Noumea
+ NZL  | 3499 | Wellington
+ BLR  | 3520 | Minsk
+ WLF  | 3536 | Mata-Utu
+ VEN  | 3539 | Caracas
+ EST  | 3791 | Tallinn
+ AFG  |    1 | Kabul
+ DZA  |   35 | Alger
+ ARG  |   69 | Buenos Aires
  BHS  |  148 | Nassau
  BHR  |  149 | al-Manama
  BGD  |  150 | Dhaka
- BLZ  |  185 | Belmopan
- BWA  |  204 | Gaborone
- CYM  |  553 | George Town
+ BRB  |  174 | Bridgetown
+ BMU  |  191 | Hamilton
+ BOL  |  194 | La Paz
+ BIH  |  201 | Sarajevo
+ BRN  |  538 | Bandar Seri Begawan
  CHL  |  554 | Santiago de Chile
  COK  |  583 | Avarua
- CRI  |  584 | San Jose
  DJI  |  585 | Djibouti
- DMA  |  586 | Roseau
- ERI  |  652 | Asmara
- ETH  |  756 | Addis Abeba
- GAB  |  902 | Libreville
- GEO  |  905 | Tbilisi
- GIB  |  915 | Gibraltar
- GLP  |  919 | Basse-Terre
- GUM  |  921 | Agaaa
- HTI  |  929 | Port-au-Prince
- SJM  |  938 | Longyearbyen
- IDN  |  939 | Jakarta
- IND  | 1109 | New Delhi
- IRN  | 1380 | Teheran
- JAM  | 1530 | Kingston
- JPN  | 1532 | Tokyo
- CAF  | 1889 | Bangui
- COM  | 2295 | Moroni
- COD  | 2298 | Kinshasa
- CYP  | 2430 | Nicosia
- LVA  | 2434 | Riga
- LBN  | 2438 | Beirut
- LIE  | 2446 | Vaduz
- MAC  | 2454 | Macao
- MWI  | 2462 | Lilongwe
- MLI  | 2482 | Bamako
- MLT  | 2484 | Valletta
- MAR  | 2486 | Rabat
- MTQ  | 2508 | Fort-de-France
- MRT  | 2509 | Nouakchott
- MCO  | 2695 | Monaco-Ville
- MOZ  | 2698 | Maputo
- NPL  | 2729 | Kathmandu
- NIU  | 2805 | Alofi
- NFK  | 2806 | Kingston
- CIV  | 2814 | Yamoussoukro
- PAK  | 2831 | Islamabad
- PLW  | 2881 | Koror
- PER  | 2890 | Lima
- GNQ  | 2972 | Malabo
- QAT  | 2973 | Doha
- GUF  | 3014 | Cayenne
- SHN  | 3063 | Jamestown
- LCA  | 3065 | Castries
- VCT  | 3066 | Kingstown
- STP  | 3172 | Sao Tome
- SAU  | 3173 | Riyadh
- SEN  | 3198 | Dakar
- SVN  | 3212 | Ljubljana
- SUR  | 3243 | Paramaribo
- SWZ  | 3244 | Mbabane
- SYR  | 3250 | Damascus
- THA  | 3320 | Bangkok
- TKL  | 3333 | Fakaofo
- TON  | 3334 | Nukualofa
- TTO  | 3336 | Port-of-Spain
- TUN  | 3349 | Tunis
- TUR  | 3358 | Ankara
- TKM  | 3419 | Ashgabat
- UKR  | 3426 | Kyiv
- NCL  | 3493 | Noumea
- WLF  | 3536 | Mata-Utu
- EST  | 3791 | Tallinn
- AFG  |    1 | Kabul
- ANT  |   33 | Willemstad
- ALB  |   34 | Tirana
- DZA  |   35 | Alger
- ATG  |   63 | Saint Johns
- ARG  |   69 | Buenos Aires
- BRB  |  174 | Bridgetown
- BEN  |  187 | Porto-Novo
- BTN  |  192 | Thimphu
- BOL  |  194 | La Paz
- GBR  |  456 | London
- VGB  |  537 | Road Town
- BRN  |  538 | Bandar Seri Begawan
- BDI  |  552 | Bujumbura
- DOM  |  587 | Santo Domingo de Guzman
- ECU  |  594 | Quito
  EGY  |  608 | Cairo
  SLV  |  645 | San Salvador
- PHL  |  766 | Manila
- GMB  |  904 | Banjul
- GRD  |  916 | Saint Georges
- GTM  |  922 | Ciudad de Guatemala
- HND  |  933 | Tegucigalpa
- IRQ  | 1365 | Baghdad
- ISR  | 1450 | Jerusalem
- ITA  | 1464 | Roma
- AUT  | 1523 | Wien
- YEM  | 1780 | Sanaa
- CXR  | 1791 | Flying Fish Cove
- YUG  | 1792 | Beograd
- KAZ  | 1864 | Astana
- COG  | 2296 | Brazzaville
- CCK  | 2317 | West Island
- GRC  | 2401 | Athenai
- HRV  | 2409 | Zagreb
- LBR  | 2440 | Monrovia
- LBY  | 2441 | Tripoli
- LUX  | 2452 | Luxembourg [Luxemburg/Letzebuerg]
- MKD  | 2460 | Skopje
- MYS  | 2464 | Kuala Lumpur
- MUS  | 2511 | Port-Louis
- FSM  | 2689 | Palikir
- MSR  | 2697 | Plymouth
- NAM  | 2726 | Windhoek
- NRU  | 2728 | Yaren
- NIC  | 2734 | Managua
- NGA  | 2754 | Abuja
- PNG  | 2884 | Port Moresby
- PRY  | 2885 | Asuncion
- PCN  | 2912 | Adamstown
- POL  | 2928 | Warszawa
- FRA  | 2974 | Paris
- REU  | 3017 | Saint-Denis
- ROM  | 3018 | Bucuresti
- SPM  | 3067 | Saint-Pierre
- WSM  | 3169 | Apia
- SMR  | 3171 | San Marino
- SGP  | 3208 | Singapore
- SVK  | 3209 | Bratislava
- LKA  | 3217 | Colombo
- SDN  | 3225 | Khartum
- CHE  | 3248 | Bern
- TGO  | 3332 | Lome
- TCD  | 3337 | NDjamena
- CZE  | 3339 | Praha
- TCA  | 3423 | Cockburn Town
- TUV  | 3424 | Funafuti
- URY  | 3492 | Montevideo
- NZL  | 3499 | Wellington
- VUT  | 3537 | Port-Vila
- VAT  | 3538 | Citta del Vaticano
- VEN  | 3539 | Caracas
- RUS  | 3580 | Moscow
- VNM  | 3770 | Hanoi
- NLD  |    5 | Amsterdam
- ASM  |   54 | Fagatogo
- AND  |   55 | Andorra la Vella
- AGO  |   56 | Luanda
- ARM  |  126 | Yerevan
- ABW  |  129 | Oranjestad
- AZE  |  144 | Baku
- BEL  |  179 | Bruxelles [Brussel]
- BMU  |  191 | Hamilton
- BIH  |  201 | Sarajevo
- BRA  |  211 | Brasilia
- BGR  |  539 | Sofija
- BFA  |  549 | Ouagadougou
  ESP  |  653 | Madrid
  ZAF  |  716 | Pretoria
  FLK  |  763 | Stanley
  FJI  |  764 | Suva
- FRO  |  901 | Torshavn
- GHA  |  910 | Accra
- GRL  |  917 | Nuuk
- GIN  |  926 | Conakry
+ PHL  |  766 | Manila
+ GMB  |  904 | Banjul
+ GIB  |  915 | Gibraltar
+ GTM  |  922 | Ciudad de Guatemala
  GNB  |  927 | Bissau
- GUY  |  928 | Georgetown
- HKG  |  937 | Victoria
- IRL  | 1447 | Dublin
- ISL  | 1449 | Reykjavik
- TMP  | 1522 | Dili
- JOR  | 1786 | Amman
+ HND  |  933 | Tegucigalpa
+ IDN  |  939 | Jakarta
+ IRQ  | 1365 | Baghdad
+ IRN  | 1380 | Teheran
+ JAM  | 1530 | Kingston
+ JPN  | 1532 | Tokyo
  KHM  | 1800 | Phnom Penh
  CMR  | 1804 | Yaounde
- CAN  | 1822 | Ottawa
- CPV  | 1859 | Praia
+ KAZ  | 1864 | Astana
  KEN  | 1881 | Nairobi
- CHN  | 1891 | Peking
+ CAF  | 1889 | Bangui
  KGZ  | 2253 | Bishkek
- KIR  | 2256 | Bairiki
- COL  | 2257 | Santafe de Bogota
+ COM  | 2295 | Moroni
+ COG  | 2296 | Brazzaville
  PRK  | 2318 | Pyongyang
- KOR  | 2331 | Seoul
+ GRC  | 2401 | Athenai
  CUB  | 2413 | La Habana
- KWT  | 2429 | Kuwait
- LAO  | 2432 | Vientiane
- LSO  | 2437 | Maseru
+ CYP  | 2430 | Nicosia
+ LBR  | 2440 | Monrovia
+ LBY  | 2441 | Tripoli
  LTU  | 2447 | Vilnius
+ LUX  | 2452 | Luxembourg [Luxemburg/Letzebuerg]
  ESH  | 2453 | El-Aaiun
- MDG  | 2455 | Antananarivo
- MDV  | 2463 | Male
- MHL  | 2507 | Dalap-Uliga-Darrit
+ MWI  | 2462 | Lilongwe
+ MAR  | 2486 | Rabat
+ MTQ  | 2508 | Fort-de-France
+ MRT  | 2509 | Nouakchott
+ MUS  | 2511 | Port-Louis
  MYT  | 2514 | Mamoutzou
  MEX  | 2515 | Ciudad de Mexico
- MDA  | 2690 | Chisinau
  MNG  | 2696 | Ulan Bator
+ MSR  | 2697 | Plymouth
  MMR  | 2710 | Rangoon (Yangon)
+ NAM  | 2726 | Windhoek
+ NPL  | 2729 | Kathmandu
+ NIC  | 2734 | Managua
  NER  | 2738 | Niamey
+ NIU  | 2805 | Alofi
+ NFK  | 2806 | Kingston
  NOR  | 2807 | Oslo
- OMN  | 2821 | Masqat
- PAN  | 2882 | Ciudad de Panama
- MNP  | 2913 | Garapan
+ CIV  | 2814 | Yamoussoukro
+ PLW  | 2881 | Koror
+ PNG  | 2884 | Port Moresby
+ PRY  | 2885 | Asuncion
+ PER  | 2890 | Lima
  PRT  | 2914 | Lisboa
  PRI  | 2919 | San Juan
- PYF  | 3016 | Papeete
+ POL  | 2928 | Warszawa
+ FRA  | 2974 | Paris
+ ROM  | 3018 | Bucuresti
  RWA  | 3047 | Kigali
- SWE  | 3048 | Stockholm
  KNA  | 3064 | Basseterre
- DEU  | 3068 | Berlin
- SLB  | 3161 | Honiara
+ SPM  | 3067 | Saint-Pierre
  ZMB  | 3162 | Lusaka
+ WSM  | 3169 | Apia
+ SAU  | 3173 | Riyadh
  SYC  | 3206 | Victoria
  SLE  | 3207 | Freetown
- SOM  | 3214 | Mogadishu
- FIN  | 3236 | Helsinki [Helsingfors]
+ SVN  | 3212 | Ljubljana
+ LKA  | 3217 | Colombo
+ SWZ  | 3244 | Mbabane
  TJK  | 3261 | Dushanbe
  TWN  | 3263 | Taipei
+ TKL  | 3333 | Fakaofo
+ CZE  | 3339 | Praha
+ TUR  | 3358 | Ankara
+ TKM  | 3419 | Ashgabat
+ UGA  | 3425 | Kampala
+ UZB  | 3503 | Toskent
+ RUS  | 3580 | Moscow
+ VNM  | 3770 | Hanoi
+ ZWE  | 4068 | Harare
+ ALB  |   34 | Tirana
+ ASM  |   54 | Fagatogo
+ AND  |   55 | Andorra la Vella
+ ARE  |   65 | Abu Dhabi
+ ARM  |  126 | Yerevan
+ ABW  |  129 | Oranjestad
+ BLZ  |  185 | Belmopan
+ BEN  |  187 | Porto-Novo
+ BTN  |  192 | Thimphu
+ BRA  |  211 | Brasilia
+ GBR  |  456 | London
+ DMA  |  586 | Roseau
+ ERI  |  652 | Asmara
+ ETH  |  756 | Addis Abeba
+ GAB  |  902 | Libreville
+ GHA  |  910 | Accra
+ GRL  |  917 | Nuuk
+ GLP  |  919 | Basse-Terre
+ GUM  |  921 | Agaaa
+ IND  | 1109 | New Delhi
+ ITA  | 1464 | Roma
+ AUT  | 1523 | Wien
+ YUG  | 1792 | Beograd
+ CAN  | 1822 | Ottawa
+ CHN  | 1891 | Peking
+ KIR  | 2256 | Bairiki
+ COL  | 2257 | Santafe de Bogota
+ COD  | 2298 | Kinshasa
+ HRV  | 2409 | Zagreb
+ LAO  | 2432 | Vientiane
+ LBN  | 2438 | Beirut
+ MDG  | 2455 | Antananarivo
+ MKD  | 2460 | Skopje
+ MLI  | 2482 | Bamako
+ MLT  | 2484 | Valletta
+ MCO  | 2695 | Monaco-Ville
+ PAK  | 2831 | Islamabad
+ PAN  | 2882 | Ciudad de Panama
+ PCN  | 2912 | Adamstown
+ MNP  | 2913 | Garapan
+ GNQ  | 2972 | Malabo
+ GUF  | 3014 | Cayenne
+ PYF  | 3016 | Papeete
+ REU  | 3017 | Saint-Denis
+ LCA  | 3065 | Castries
+ VCT  | 3066 | Kingstown
+ DEU  | 3068 | Berlin
+ SMR  | 3171 | San Marino
+ SGP  | 3208 | Singapore
+ SVK  | 3209 | Bratislava
+ SOM  | 3214 | Mogadishu
+ SDN  | 3225 | Khartum
+ CHE  | 3248 | Bern
+ SYR  | 3250 | Damascus
  TZA  | 3306 | Dodoma
  DNK  | 3315 | Kobenhavn
- UGA  | 3425 | Kampala
- HUN  | 3483 | Budapest
- UZB  | 3503 | Toskent
- BLR  | 3520 | Minsk
+ THA  | 3320 | Bangkok
+ TCD  | 3337 | NDjamena
+ TUN  | 3349 | Tunis
+ TCA  | 3423 | Cockburn Town
+ TUV  | 3424 | Funafuti
+ UKR  | 3426 | Kyiv
+ VUT  | 3537 | Port-Vila
+ VAT  | 3538 | Citta del Vaticano
  USA  | 3813 | Washington
  VIR  | 4067 | Charlotte Amalie
- ZWE  | 4068 | Harare
  PSE  | 4074 | Gaza
 (232 rows)
 
@@ -3341,170 +3341,170 @@ select
 ),* from official_languages;
  max | code |          name          |     language     
 -----+------+------------------------+------------------
-  16 | AFG  | Afghanistan            | Dari
-  16 | ARM  | Armenia                | Armenian
-  16 | AUT  | Austria                | German
-  16 | BMU  | Bermuda                | English
-  16 | BRB  | Barbados               | English
-  16 | CHE  | Switzerland            | Romansh
-  16 | CHE  | Switzerland            | German
-  16 | COL  | Colombia               | Spanish
-  16 | CRI  | Costa Rica             | Spanish
-  16 | CZE  | Czech Republic         | Czech
-  16 | ECU  | Ecuador                | Spanish
-  16 | EGY  | Egypt                  | Arabic
-  16 | FIN  | Finland                | Finnish
-  16 | GTM  | Guatemala              | Spanish
-  16 | GUM  | Guam                   | Chamorro
-  16 | HND  | Honduras               | Spanish
-  16 | HRV  | Croatia                | Serbo-Croatian
-  16 | IDN  | Indonesia              | Malay
-  16 | IND  | India                  | Hindi
-  16 | IRQ  | Iraq                   | Arabic
-  16 | ISR  | Israel                 | Arabic
-  16 | KAZ  | Kazakstan              | Kazakh
-  16 | KOR  | South Korea            | Korean
-  16 | LIE  | Liechtenstein          | German
-  16 | LKA  | Sri Lanka              | Tamil
-  16 | LTU  | Lithuania              | Lithuanian
-  16 | MDG  | Madagascar             | French
-  16 | MKD  | Macedonia              | Macedonian
-  16 | MLT  | Malta                  | English
-  16 | MTQ  | Martinique             | French
-  16 | NCL  | New Caledonia          | French
-  16 | NIC  | Nicaragua              | Spanish
-  16 | PAN  | Panama                 | Spanish
-  16 | PHL  | Philippines            | Pilipino
-  16 | PRY  | Paraguay               | Guarani
-  16 | ROM  | Romania                | Romanian
-  16 | ROM  | Romania                | Romani
-  16 | RWA  | Rwanda                 | French
-  16 | SDN  | Sudan                  | Arabic
-  16 | SEN  | Senegal                | Wolof
-  16 | SGP  | Singapore              | Tamil
-  16 | SVK  | Slovakia               | Slovak
-  16 | SYR  | Syria                  | Arabic
-  16 | TUR  | Turkey                 | Turkish
-  16 | TWN  | Taiwan                 | Mandarin Chinese
-  16 | TZA  | Tanzania               | Swahili
-  16 | URY  | Uruguay                | Spanish
-  16 | VNM  | Vietnam                | Vietnamese
-  16 | ZAF  | South Africa           | Afrikaans
+  16 | NLD  | Netherlands            | Dutch
+  16 | ANT  | Netherlands Antilles   | Dutch
   16 | ANT  | Netherlands Antilles   | Papiamento
-  16 | ARE  | United Arab Emirates   | Arabic
-  16 | AZE  | Azerbaijan             | Azerbaijani
-  16 | BEL  | Belgium                | French
-  16 | BIH  | Bosnia and Herzegovina | Serbo-Croatian
-  16 | BLR  | Belarus                | Belorussian
-  16 | BLR  | Belarus                | Russian
-  16 | BOL  | Bolivia                | Spanish
-  16 | BOL  | Bolivia                | Aimara
-  16 | BRA  | Brazil                 | Portuguese
-  16 | CAN  | Canada                 | French
-  16 | CAN  | Canada                 | English
-  16 | CHE  | Switzerland            | French
-  16 | CHL  | Chile                  | Spanish
-  16 | COM  | Comoros                | Comorian
-  16 | CYP  | Cyprus                 | Greek
-  16 | DEU  | Germany                | German
-  16 | DOM  | Dominican Republic     | Spanish
   16 | DZA  | Algeria                | Arabic
+  16 | ARE  | United Arab Emirates   | Arabic
+  16 | ARG  | Argentina              | Spanish
+  16 | ARM  | Armenia                | Armenian
+  16 | BGD  | Bangladesh             | Bengali
+  16 | BRB  | Barbados               | English
+  16 | CHL  | Chile                  | Spanish
+  16 | ECU  | Ecuador                | Spanish
   16 | ESP  | Spain                  | Spanish
-  16 | HKG  | Hong Kong              | English
-  16 | HTI  | Haiti                  | French
-  16 | HUN  | Hungary                | Hungarian
-  16 | IRL  | Ireland                | English
-  16 | IRL  | Ireland                | Irish
-  16 | IRN  | Iran                   | Persian
+  16 | PHL  | Philippines            | Pilipino
+  16 | GLP  | Guadeloupe             | French
+  16 | IRQ  | Iraq                   | Arabic
   16 | ISL  | Iceland                | Icelandic
   16 | ITA  | Italy                  | Italian
-  16 | JOR  | Jordan                 | Arabic
   16 | JPN  | Japan                  | Japanese
-  16 | KGZ  | Kyrgyzstan             | Russian
-  16 | LBY  | Libyan Arab Jamahiriya | Arabic
-  16 | LUX  | Luxembourg             | Luxembourgish
+  16 | YEM  | Yemen                  | Arabic
+  16 | JOR  | Jordan                 | Arabic
+  16 | YUG  | Yugoslavia             | Serbo-Croatian
+  16 | CAN  | Canada                 | English
+  16 | CAN  | Canada                 | French
+  16 | PRK  | North Korea            | Korean
+  16 | KOR  | South Korea            | Korean
+  16 | GRC  | Greece                 | Greek
+  16 | KWT  | Kuwait                 | Arabic
+  16 | LVA  | Latvia                 | Latvian
+  16 | LBN  | Lebanon                | Arabic
+  16 | LIE  | Liechtenstein          | German
   16 | LUX  | Luxembourg             | German
   16 | LUX  | Luxembourg             | French
-  16 | MAR  | Morocco                | Arabic
-  16 | MDG  | Madagascar             | Malagasy
+  16 | LUX  | Luxembourg             | Luxembourgish
   16 | MWI  | Malawi                 | Chichewa
-  16 | MYS  | Malaysia               | Malay
-  16 | NLD  | Netherlands            | Dutch
-  16 | NZL  | New Zealand            | English
+  16 | MMR  | Myanmar                | Burmese
+  16 | PAK  | Pakistan               | Urdu
+  16 | PRY  | Paraguay               | Guarani
+  16 | PRY  | Paraguay               | Spanish
   16 | PER  | Peru                   | Ketdua
   16 | PER  | Peru                   | Aimara
-  16 | PRT  | Portugal               | Portuguese
-  16 | PRY  | Paraguay               | Spanish
-  16 | RUS  | Russian Federation     | Russian
-  16 | RWA  | Rwanda                 | Rwanda
-  16 | SGP  | Singapore              | Malay
-  16 | SGP  | Singapore              | Chinese
-  16 | SLV  | El Salvador            | Spanish
+  16 | PER  | Peru                   | Spanish
   16 | SWE  | Sweden                 | Swedish
-  16 | TCD  | Chad                   | Arabic
+  16 | SEN  | Senegal                | Wolof
+  16 | SVN  | Slovenia               | Slovene
+  16 | SYR  | Syria                  | Arabic
+  16 | TJK  | Tajikistan             | Tadzhik
+  16 | TZA  | Tanzania               | Swahili
+  16 | THA  | Thailand               | Thai
+  16 | CZE  | Czech Republic         | Czech
+  16 | UKR  | Ukraine                | Ukrainian
+  16 | URY  | Uruguay                | Spanish
+  16 | VNM  | Vietnam                | Vietnamese
+  16 | AFG  | Afghanistan            | Dari
+  16 | AFG  | Afghanistan            | Pashto
+  16 | AND  | Andorra                | Catalan
+  16 | BHR  | Bahrain                | Arabic
+  16 | BEL  | Belgium                | German
+  16 | BEL  | Belgium                | French
+  16 | BEL  | Belgium                | Dutch
+  16 | BMU  | Bermuda                | English
+  16 | BRA  | Brazil                 | Portuguese
+  16 | CYM  | Cayman Islands         | English
+  16 | CRI  | Costa Rica             | Spanish
+  16 | EGY  | Egypt                  | Arabic
+  16 | ZAF  | South Africa           | English
+  16 | ZAF  | South Africa           | Xhosa
+  16 | ZAF  | South Africa           | Afrikaans
+  16 | ZAF  | South Africa           | Zulu
+  16 | GEO  | Georgia                | Georgiana
+  16 | GUM  | Guam                   | English
+  16 | GUM  | Guam                   | Chamorro
+  16 | HTI  | Haiti                  | French
+  16 | IDN  | Indonesia              | Malay
+  16 | IRL  | Ireland                | English
+  16 | IRL  | Ireland                | Irish
+  16 | KHM  | Cambodia               | Khmer
+  16 | KAZ  | Kazakstan              | Kazakh
+  16 | CHN  | China                  | Chinese
+  16 | KGZ  | Kyrgyzstan             | Russian
+  16 | KGZ  | Kyrgyzstan             | Kirgiz
+  16 | COL  | Colombia               | Spanish
+  16 | HRV  | Croatia                | Serbo-Croatian
+  16 | CYP  | Cyprus                 | Greek
+  16 | CYP  | Cyprus                 | Turkish
+  16 | LAO  | Laos                   | Lao
+  16 | LBY  | Libyan Arab Jamahiriya | Arabic
+  16 | LTU  | Lithuania              | Lithuanian
+  16 | MTQ  | Martinique             | French
+  16 | MDA  | Moldova                | Romanian
+  16 | NPL  | Nepal                  | Nepali
+  16 | NIC  | Nicaragua              | Spanish
+  16 | ROM  | Romania                | Romani
+  16 | ROM  | Romania                | Romanian
+  16 | DEU  | Germany                | German
+  16 | SGP  | Singapore              | Tamil
+  16 | SGP  | Singapore              | Chinese
+  16 | SGP  | Singapore              | Malay
+  16 | SVK  | Slovakia               | Slovak
+  16 | LKA  | Sri Lanka              | Singali
+  16 | LKA  | Sri Lanka              | Tamil
+  16 | TKM  | Turkmenistan           | Turkmenian
+  16 | BLR  | Belarus                | Russian
+  16 | BLR  | Belarus                | Belorussian
+  16 | RUS  | Russian Federation     | Russian
+  16 | EST  | Estonia                | Estonian
+  16 | ZWE  | Zimbabwe               | English
+  16 | ALB  | Albania                | Albaniana
+  16 | AUS  | Australia              | English
+  16 | AZE  | Azerbaijan             | Azerbaijani
+  16 | BOL  | Bolivia                | Ketdua
+  16 | BOL  | Bolivia                | Spanish
+  16 | BOL  | Bolivia                | Aimara
+  16 | BIH  | Bosnia and Herzegovina | Serbo-Croatian
+  16 | GBR  | United Kingdom         | English
+  16 | BGR  | Bulgaria               | Bulgariana
+  16 | DOM  | Dominican Republic     | Spanish
+  16 | SLV  | El Salvador            | Spanish
+  16 | FJI  | Fiji Islands           | Fijian
+  16 | GTM  | Guatemala              | Spanish
+  16 | HND  | Honduras               | Spanish
+  16 | HKG  | Hong Kong              | English
+  16 | IND  | India                  | Hindi
+  16 | IRN  | Iran                   | Persian
+  16 | ISR  | Israel                 | Arabic
+  16 | ISR  | Israel                 | Hebrew
+  16 | AUT  | Austria                | German
+  16 | COM  | Comoros                | Comorian
+  16 | CUB  | Cuba                   | Spanish
+  16 | MAC  | Macao                  | Portuguese
+  16 | MDG  | Madagascar             | French
+  16 | MDG  | Madagascar             | Malagasy
+  16 | MKD  | Macedonia              | Macedonian
+  16 | MYS  | Malaysia               | Malay
+  16 | MLT  | Malta                  | English
+  16 | MLT  | Malta                  | Maltese
+  16 | MAR  | Morocco                | Arabic
+  16 | MEX  | Mexico                 | Spanish
+  16 | NOR  | Norway                 | Norwegian
+  16 | PAN  | Panama                 | Spanish
+  16 | PRT  | Portugal               | Portuguese
+  16 | POL  | Poland                 | Polish
+  16 | FRA  | France                 | French
+  16 | RWA  | Rwanda                 | Rwanda
+  16 | RWA  | Rwanda                 | French
+  16 | SDN  | Sudan                  | Arabic
+  16 | FIN  | Finland                | Finnish
+  16 | FIN  | Finland                | Swedish
+  16 | CHE  | Switzerland            | Romansh
+  16 | CHE  | Switzerland            | German
+  16 | CHE  | Switzerland            | Italian
+  16 | CHE  | Switzerland            | French
+  16 | TWN  | Taiwan                 | Mandarin Chinese
+  16 | DNK  | Denmark                | Danish
   16 | TGO  | Togo                   | Kabye
   16 | TGO  | Togo                   | Ewe
+  16 | TCD  | Chad                   | Arabic
   16 | TUN  | Tunisia                | Arabic
-  16 | USA  | United States          | English
+  16 | TUR  | Turkey                 | Turkish
+  16 | HUN  | Hungary                | Hungarian
+  16 | NCL  | New Caledonia          | French
+  16 | NZL  | New Zealand            | English
   16 | UZB  | Uzbekistan             | Uzbek
-  16 | ZAF  | South Africa           | English
-  16 | ZAF  | South Africa           | Zulu
-  16 | AFG  | Afghanistan            | Pashto
-  16 | ALB  | Albania                | Albaniana
-  16 | AND  | Andorra                | Catalan
-  16 | ANT  | Netherlands Antilles   | Dutch
-  16 | ARG  | Argentina              | Spanish
-  16 | AUS  | Australia              | English
-  16 | BEL  | Belgium                | German
-  16 | BEL  | Belgium                | Dutch
-  16 | BGD  | Bangladesh             | Bengali
-  16 | BGR  | Bulgaria               | Bulgariana
-  16 | BHR  | Bahrain                | Arabic
-  16 | BOL  | Bolivia                | Ketdua
-  16 | CHE  | Switzerland            | Italian
-  16 | CHN  | China                  | Chinese
-  16 | CUB  | Cuba                   | Spanish
-  16 | CYM  | Cayman Islands         | English
-  16 | CYP  | Cyprus                 | Turkish
-  16 | DNK  | Denmark                | Danish
-  16 | EST  | Estonia                | Estonian
-  16 | FIN  | Finland                | Swedish
-  16 | FJI  | Fiji Islands           | Fijian
-  16 | FRA  | France                 | French
-  16 | GBR  | United Kingdom         | English
-  16 | GEO  | Georgia                | Georgiana
-  16 | GLP  | Guadeloupe             | French
-  16 | GRC  | Greece                 | Greek
-  16 | GUM  | Guam                   | English
-  16 | ISR  | Israel                 | Hebrew
-  16 | KGZ  | Kyrgyzstan             | Kirgiz
-  16 | KHM  | Cambodia               | Khmer
-  16 | KWT  | Kuwait                 | Arabic
-  16 | LAO  | Laos                   | Lao
-  16 | LBN  | Lebanon                | Arabic
-  16 | LKA  | Sri Lanka              | Singali
-  16 | LVA  | Latvia                 | Latvian
-  16 | MAC  | Macao                  | Portuguese
-  16 | MDA  | Moldova                | Romanian
-  16 | MEX  | Mexico                 | Spanish
-  16 | MLT  | Malta                  | Maltese
-  16 | MMR  | Myanmar                | Burmese
-  16 | NOR  | Norway                 | Norwegian
-  16 | NPL  | Nepal                  | Nepali
-  16 | PAK  | Pakistan               | Urdu
-  16 | PER  | Peru                   | Spanish
-  16 | POL  | Poland                 | Polish
-  16 | PRK  | North Korea            | Korean
-  16 | SVN  | Slovenia               | Slovene
-  16 | THA  | Thailand               | Thai
-  16 | TJK  | Tajikistan             | Tadzhik
-  16 | TKM  | Turkmenistan           | Turkmenian
-  16 | UKR  | Ukraine                | Ukrainian
   16 | VEN  | Venezuela              | Spanish
-  16 | YEM  | Yemen                  | Arabic
-  16 | YUG  | Yugoslavia             | Serbo-Croatian
-  16 | ZAF  | South Africa           | Xhosa
-  16 | ZWE  | Zimbabwe               | English
+  16 | USA  | United States          | English
 (164 rows)
 
 --query 6 Use CTE in the main query and subqueries within the main query
@@ -8552,21 +8552,21 @@ where capitals."C" = country.code
 and country.code = lang_total.cc;
               name               |  C  |  ID  |       CAP        | lc 
 ---------------------------------+-----+------+------------------+----
- Austria                         | AUT | 1523 | Wien             |  8
- Venezuela                       | VEN | 3539 | Caracas          |  3
- Russian Federation              | RUS | 3580 | Moscow           | 12
- Bosnia and Herzegovina          | BIH |  201 | Sarajevo         |  1
- Brazil                          | BRA |  211 | Brasilia         |  5
- Madagascar                      | MDG | 2455 | Antananarivo     |  2
+ India                           | IND | 1109 | New Delhi        | 12
  Mexico                          | MEX | 2515 | Ciudad de Mexico |  6
- Argentina                       | ARG |   69 | Buenos Aires     |  3
+ Austria                         | AUT | 1523 | Wien             |  8
  Azerbaijan                      | AZE |  144 | Baku             |  4
+ Madagascar                      | MDG | 2455 | Antananarivo     |  2
+ Nigeria                         | NGA | 2754 | Abuja            | 10
+ Bosnia and Herzegovina          | BIH |  201 | Sarajevo         |  1
  United States                   | USA | 3813 | Washington       | 12
+ Venezuela                       | VEN | 3539 | Caracas          |  3
+ Argentina                       | ARG |   69 | Buenos Aires     |  3
  Yugoslavia                      | YUG | 1792 | Beograd          |  6
  Micronesia, Federated States of | FSM | 2689 | Palikir          |  6
- Nigeria                         | NGA | 2754 | Abuja            | 10
+ Russian Federation              | RUS | 3580 | Moscow           | 12
+ Brazil                          | BRA |  211 | Brasilia         |  5
  Germany                         | DEU | 3068 | Berlin           |  6
- India                           | IND | 1109 | New Delhi        | 12
 (15 rows)
 
 -- query 2 Check case sensitivity for quoted names in column list. This should error out
@@ -8578,6 +8578,7 @@ select LC from lang_total;
 ERROR:  column "lc" does not exist
 LINE 5: select LC from lang_total;
                ^
+HINT:  Perhaps you meant to reference the column "lang_total.cc" or the column "lang_total.clc".
 -- query 3 use column list when there are duplicate names within the CTE
 with capitals("CO_C","C_ID","CAPITAL",country) as 
 (select country.code,id,city.name,country.name from city,country 
@@ -8633,52 +8634,52 @@ select (select min(GNP_IDX) from gnp_index_compare) MIN_COUNTRY_GNP_IDX, (select
  from city,country where city.id = country.capital and country.continent='Europe';
   min_country_gnp_idx   |  max_reg_gnp_idx   |              capital              |            country            
 ------------------------+--------------------+-----------------------------------+-------------------------------
- 0.39526143942847043283 | 1.2055929013175585 | Gibraltar                         | Gibraltar
- 0.39526143942847043283 | 1.2055929013175585 | Longyearbyen                      | Svalbard and Jan Mayen
- 0.39526143942847043283 | 1.2055929013175585 | Tallinn                           | Estonia
- 0.39526143942847043283 | 1.2055929013175585 | Kyiv                              | Ukraine
- 0.39526143942847043283 | 1.2055929013175585 | Riga                              | Latvia
- 0.39526143942847043283 | 1.2055929013175585 | Vaduz                             | Liechtenstein
- 0.39526143942847043283 | 1.2055929013175585 | Valletta                          | Malta
- 0.39526143942847043283 | 1.2055929013175585 | Monaco-Ville                      | Monaco
- 0.39526143942847043283 | 1.2055929013175585 | Ljubljana                         | Slovenia
  0.39526143942847043283 | 1.2055929013175585 | Tirana                            | Albania
- 0.39526143942847043283 | 1.2055929013175585 | Luxembourg [Luxemburg/Letzebuerg] | Luxembourg
- 0.39526143942847043283 | 1.2055929013175585 | Praha                             | Czech Republic
- 0.39526143942847043283 | 1.2055929013175585 | Citta del Vaticano                | Holy See (Vatican City State)
  0.39526143942847043283 | 1.2055929013175585 | London                            | United Kingdom
- 0.39526143942847043283 | 1.2055929013175585 | Roma                              | Italy
- 0.39526143942847043283 | 1.2055929013175585 | Beograd                           | Yugoslavia
- 0.39526143942847043283 | 1.2055929013175585 | Athenai                           | Greece
- 0.39526143942847043283 | 1.2055929013175585 | Zagreb                            | Croatia
- 0.39526143942847043283 | 1.2055929013175585 | Warszawa                          | Poland
- 0.39526143942847043283 | 1.2055929013175585 | Bucuresti                         | Romania
- 0.39526143942847043283 | 1.2055929013175585 | Bratislava                        | Slovakia
  0.39526143942847043283 | 1.2055929013175585 | Wien                              | Austria
  0.39526143942847043283 | 1.2055929013175585 | Skopje                            | Macedonia
- 0.39526143942847043283 | 1.2055929013175585 | Paris                             | France
- 0.39526143942847043283 | 1.2055929013175585 | San Marino                        | San Marino
+ 0.39526143942847043283 | 1.2055929013175585 | Valletta                          | Malta
  0.39526143942847043283 | 1.2055929013175585 | Bern                              | Switzerland
- 0.39526143942847043283 | 1.2055929013175585 | Moscow                            | Russian Federation
- 0.39526143942847043283 | 1.2055929013175585 | Amsterdam                         | Netherlands
+ 0.39526143942847043283 | 1.2055929013175585 | Kobenhavn                         | Denmark
+ 0.39526143942847043283 | 1.2055929013175585 | Roma                              | Italy
+ 0.39526143942847043283 | 1.2055929013175585 | Beograd                           | Yugoslavia
+ 0.39526143942847043283 | 1.2055929013175585 | Monaco-Ville                      | Monaco
+ 0.39526143942847043283 | 1.2055929013175585 | Kyiv                              | Ukraine
+ 0.39526143942847043283 | 1.2055929013175585 | Andorra la Vella                  | Andorra
+ 0.39526143942847043283 | 1.2055929013175585 | Zagreb                            | Croatia
+ 0.39526143942847043283 | 1.2055929013175585 | Berlin                            | Germany
+ 0.39526143942847043283 | 1.2055929013175585 | San Marino                        | San Marino
+ 0.39526143942847043283 | 1.2055929013175585 | Bratislava                        | Slovakia
+ 0.39526143942847043283 | 1.2055929013175585 | Citta del Vaticano                | Holy See (Vatican City State)
  0.39526143942847043283 | 1.2055929013175585 | Sofija                            | Bulgaria
+ 0.39526143942847043283 | 1.2055929013175585 | Torshavn                          | Faroe Islands
+ 0.39526143942847043283 | 1.2055929013175585 | Helsinki [Helsingfors]            | Finland
+ 0.39526143942847043283 | 1.2055929013175585 | Budapest                          | Hungary
+ 0.39526143942847043283 | 1.2055929013175585 | Amsterdam                         | Netherlands
+ 0.39526143942847043283 | 1.2055929013175585 | Longyearbyen                      | Svalbard and Jan Mayen
+ 0.39526143942847043283 | 1.2055929013175585 | Reykjavik                         | Iceland
+ 0.39526143942847043283 | 1.2055929013175585 | Riga                              | Latvia
+ 0.39526143942847043283 | 1.2055929013175585 | Vaduz                             | Liechtenstein
+ 0.39526143942847043283 | 1.2055929013175585 | Stockholm                         | Sweden
+ 0.39526143942847043283 | 1.2055929013175585 | Bruxelles [Brussel]               | Belgium
  0.39526143942847043283 | 1.2055929013175585 | Dublin                            | Ireland
+ 0.39526143942847043283 | 1.2055929013175585 | Chisinau                          | Moldova
+ 0.39526143942847043283 | 1.2055929013175585 | Minsk                             | Belarus
+ 0.39526143942847043283 | 1.2055929013175585 | Tallinn                           | Estonia
+ 0.39526143942847043283 | 1.2055929013175585 | Sarajevo                          | Bosnia and Herzegovina
  0.39526143942847043283 | 1.2055929013175585 | Oslo                              | Norway
  0.39526143942847043283 | 1.2055929013175585 | Lisboa                            | Portugal
- 0.39526143942847043283 | 1.2055929013175585 | Andorra la Vella                  | Andorra
- 0.39526143942847043283 | 1.2055929013175585 | Bruxelles [Brussel]               | Belgium
+ 0.39526143942847043283 | 1.2055929013175585 | Warszawa                          | Poland
+ 0.39526143942847043283 | 1.2055929013175585 | Paris                             | France
  0.39526143942847043283 | 1.2055929013175585 | Madrid                            | Spain
+ 0.39526143942847043283 | 1.2055929013175585 | Gibraltar                         | Gibraltar
+ 0.39526143942847043283 | 1.2055929013175585 | Athenai                           | Greece
+ 0.39526143942847043283 | 1.2055929013175585 | Luxembourg [Luxemburg/Letzebuerg] | Luxembourg
+ 0.39526143942847043283 | 1.2055929013175585 | Ljubljana                         | Slovenia
+ 0.39526143942847043283 | 1.2055929013175585 | Praha                             | Czech Republic
  0.39526143942847043283 | 1.2055929013175585 | Vilnius                           | Lithuania
- 0.39526143942847043283 | 1.2055929013175585 | Stockholm                         | Sweden
- 0.39526143942847043283 | 1.2055929013175585 | Berlin                            | Germany
- 0.39526143942847043283 | 1.2055929013175585 | Helsinki [Helsingfors]            | Finland
- 0.39526143942847043283 | 1.2055929013175585 | Kobenhavn                         | Denmark
- 0.39526143942847043283 | 1.2055929013175585 | Minsk                             | Belarus
- 0.39526143942847043283 | 1.2055929013175585 | Sarajevo                          | Bosnia and Herzegovina
- 0.39526143942847043283 | 1.2055929013175585 | Torshavn                          | Faroe Islands
- 0.39526143942847043283 | 1.2055929013175585 | Reykjavik                         | Iceland
- 0.39526143942847043283 | 1.2055929013175585 | Chisinau                          | Moldova
- 0.39526143942847043283 | 1.2055929013175585 | Budapest                          | Hungary
+ 0.39526143942847043283 | 1.2055929013175585 | Bucuresti                         | Romania
+ 0.39526143942847043283 | 1.2055929013175585 | Moscow                            | Russian Federation
 (46 rows)
 
 --query2 using the CTE in the where clause(initplan) of the main query. One CTE using another CTE in it's where clause as it's initplan
@@ -8704,43 +8705,43 @@ group by country.name,country.code
 where FOO.LANG_CNT between (select min(CNT) from notdiversecountries) AND (select max(CNT) from diversecountries);
  lang_cnt |               name               
 ----------+----------------------------------
-        4 | Aruba
-        2 | El Salvador
-        1 | Saint Pierre and Miquelon
+        6 | Panama
+        6 | Mexico
+        4 | Nicaragua
         2 | Dominica
         2 | Jamaica
-        6 | Panama
-        3 | Virgin Islands, U.S.
-        1 | Anguilla
-        4 | Belize
-        3 | Trinidad and Tobago
-        1 | Cayman Islands
-        2 | Bahamas
-        2 | Dominican Republic
-        2 | Greenland
-        2 | Martinique
-        2 | Saint Vincent and the Grenadines
-        2 | Saint Kitts and Nevis
-        4 | Nicaragua
-        2 | Saint Lucia
-       12 | United States
-       12 | Canada
-        3 | Netherlands Antilles
-        6 | Mexico
-        4 | Costa Rica
         1 | Turks and Caicos Islands
-        2 | Puerto Rico
-        1 | Virgin Islands, British
-        5 | Guatemala
-        1 | Cuba
-        1 | Bermuda
-        1 | Montserrat
-        2 | Barbados
+        3 | Trinidad and Tobago
         2 | Haiti
-        1 | Grenada
+        1 | Anguilla
+        2 | Saint Kitts and Nevis
+        5 | Guatemala
+        4 | Aruba
+        1 | Montserrat
+        3 | Virgin Islands, U.S.
+        4 | Costa Rica
         2 | Guadeloupe
-        4 | Honduras
         2 | Antigua and Barbuda
+        2 | Puerto Rico
+        2 | Bahamas
+        1 | Cuba
+        2 | El Salvador
+        2 | Greenland
+        1 | Bermuda
+        2 | Saint Lucia
+        2 | Saint Vincent and the Grenadines
+        1 | Virgin Islands, British
+        3 | Netherlands Antilles
+        1 | Saint Pierre and Miquelon
+        1 | Cayman Islands
+        1 | Grenada
+        4 | Honduras
+        2 | Martinique
+        4 | Belize
+        2 | Dominican Republic
+       12 | Canada
+        2 | Barbados
+       12 | United States
 (37 rows)
 
 --query3 using CTE more than once in the same initplan and also more than once in the main query
@@ -9528,6 +9529,22 @@ DETAIL:  Feature not supported: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Non-default collation
 INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: Non-default collation
+INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Queries on master-only tables
                            View "qp_with_clause.view_with_shared_scans"
        Column        |       Type       | Collation | Nullable | Default | Storage  | Description 
@@ -9692,16 +9709,16 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Multiple Distinct Qualified Aggregates are disabled in the optimizer
  city_cnt | lang_cnt |        name        | REGION_POP | REGION_GNP |     region     
 ----------+----------+--------------------+------------+------------+----------------
-      189 |       12 | Russian Federation |  307026000 |  659980.00 | Eastern Europe
-        3 |        5 | Slovakia           |  307026000 |  659980.00 | Eastern Europe
        10 |        8 | Czech Republic     |  307026000 |  659980.00 | Eastern Europe
-       44 |        4 | Poland             |  307026000 |  659980.00 | Eastern Europe
-       16 |        4 | Belarus            |  307026000 |  659980.00 | Eastern Europe
-       10 |        4 | Bulgaria           |  307026000 |  659980.00 | Eastern Europe
-       29 |        6 | Romania            |  307026000 |  659980.00 | Eastern Europe
        57 |        7 | Ukraine            |  307026000 |  659980.00 | Eastern Europe
-        9 |        6 | Hungary            |  307026000 |  659980.00 | Eastern Europe
+       29 |        6 | Romania            |  307026000 |  659980.00 | Eastern Europe
         4 |        5 | Moldova            |  307026000 |  659980.00 | Eastern Europe
+        3 |        5 | Slovakia           |  307026000 |  659980.00 | Eastern Europe
+       16 |        4 | Belarus            |  307026000 |  659980.00 | Eastern Europe
+      189 |       12 | Russian Federation |  307026000 |  659980.00 | Eastern Europe
+       10 |        4 | Bulgaria           |  307026000 |  659980.00 | Eastern Europe
+       44 |        4 | Poland             |  307026000 |  659980.00 | Eastern Europe
+        9 |        6 | Hungary            |  307026000 |  659980.00 | Eastern Europe
 (10 rows)
 
 drop view view_with_shared_scans;
@@ -9755,9 +9772,9 @@ with cte as
 select code from tbl87 t where 1= (select count(*) from cte);
  code 
 ------
+ def
  abc
  xyz
- def
 (3 rows)
 
 --start_ignore
@@ -11162,21 +11179,22 @@ SELECT * FROM c as c1, zoo WHERE zoo.c = c1.b;
 
 -- start_ignore
 drop schema qp_with_clause cascade;
-NOTICE:  drop cascades to table zoo
-NOTICE:  drop cascades to table car
-NOTICE:  drop cascades to table manager
-NOTICE:  drop cascades to table emp
-NOTICE:  drop cascades to table bar
-NOTICE:  drop cascades to table foo
-NOTICE:  drop cascades to table tbl87
-NOTICE:  drop cascades to append only columnar table countrylanguage_co
-NOTICE:  drop cascades to append only columnar table country_co
-NOTICE:  drop cascades to append only columnar table city_co
-NOTICE:  drop cascades to append only table countrylanguage_ao
-NOTICE:  drop cascades to append only table country_ao
-NOTICE:  drop cascades to append only table city_ao
-NOTICE:  drop cascades to table countrylanguage
-NOTICE:  drop cascades to table country
-NOTICE:  drop cascades to table city
+NOTICE:  drop cascades to 16 other objects
+DETAIL:  drop cascades to table city
+drop cascades to table country
+drop cascades to table countrylanguage
+drop cascades to table city_ao
+drop cascades to table country_ao
+drop cascades to table countrylanguage_ao
+drop cascades to table city_co
+drop cascades to table country_co
+drop cascades to table countrylanguage_co
+drop cascades to table tbl87
+drop cascades to table foo
+drop cascades to table bar
+drop cascades to table emp
+drop cascades to table manager
+drop cascades to table car
+drop cascades to table zoo
 -- end_ignore
 RESET optimizer_trace_fallback;

@@ -204,10 +204,10 @@ insert into foo values (1,'aaa');
 insert into foo values (2,'bbb');
 -- fail
 insert into foo values (1,'ccc');
-ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg1 172.17.0.3:7003 pid=2905584)
+ERROR:  duplicate key value violates unique constraint "foo_pkey"  (seg0 172.17.0.2:7002 pid=482495)
 DETAIL:  Key (id)=(1) already exists.
 insert into foo values (3,'aaa');
-ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg0 172.17.0.3:7002 pid=2905577)
+ERROR:  duplicate key value violates unique constraint "foo_name_key"  (seg1 172.17.0.2:7003 pid=482494)
 DETAIL:  Key (name)=(aaa) already exists.
 drop table if exists foo;
 --
@@ -312,9 +312,9 @@ create table bar as select * from foo distributed replicated;
 select * from bar;
  c1 | c2 
 ----+----
-  1 |  1
   2 |  2
   3 |  3
+  1 |  1
 (3 rows)
 
 drop table if exists foo;
@@ -326,9 +326,9 @@ NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause. Creating a NULL policy entr
 select * from foo;
  c1 | c2 
 ----+----
-  2 |  2
   1 |  1
   3 |  3
+  2 |  2
 (3 rows)
 
 create table bar as select * from foo order by c1 limit 1 distributed replicated;
@@ -438,44 +438,44 @@ select * from foo;
 select * from foo1;
  x  | y  
 ----+----
-  9 |  9
+  2 |  2
+  5 |  5
+  7 |  7
+ 10 | 10
   1 |  1
   3 |  3
   4 |  4
-  7 |  7
- 10 | 10
-  2 |  2
-  5 |  5
   6 |  6
   8 |  8
+  9 |  9
 (10 rows)
 
 select * from bar;
  x  | y  
 ----+----
+  5 |  5
+  6 |  6
+  9 |  9
+ 10 | 10
+  1 |  1
   2 |  2
   3 |  3
   4 |  4
   7 |  7
   8 |  8
-  1 |  1
-  5 |  5
-  6 |  6
-  9 |  9
- 10 | 10
 (10 rows)
 
 select * from bar1;
  x  | y  
 ----+----
-  1 |  1
-  5 |  5
   2 |  2
-  3 |  3
-  8 |  8
-  4 |  4
   6 |  6
   7 |  7
+  1 |  1
+  3 |  3
+  4 |  4
+  5 |  5
+  8 |  8
   9 |  9
  10 | 10
 (10 rows)
@@ -537,14 +537,14 @@ select * from foo;
 select * from foo1;
  x  | y  
 ----+----
-  2 |  2
-  5 |  5
-  6 |  6
-  8 |  8
-  9 |  9
   1 |  1
   3 |  3
   4 |  4
+  6 |  6
+  8 |  8
+  9 |  9
+  2 |  2
+  5 |  5
   7 |  7
  10 | 10
 (10 rows)
@@ -557,26 +557,26 @@ select * from bar;
   4 |  4
   7 |  7
   8 |  8
-  1 |  1
   5 |  5
   6 |  6
   9 |  9
  10 | 10
+  1 |  1
 (10 rows)
 
 select * from bar1;
  x  | y  
 ----+----
-  5 |  5
-  7 |  7
-  4 |  4
-  6 |  6
-  9 |  9
- 10 | 10
-  8 |  8
-  1 |  1
   2 |  2
+  7 |  7
   3 |  3
+  1 |  1
+  8 |  8
+  9 |  9
+  6 |  6
+  4 |  4
+  5 |  5
+ 10 | 10
 (10 rows)
 
 drop table if exists foo;
@@ -875,24 +875,28 @@ explain (costs off, verbose) select * from t_hashdist left join t_replicate_vola
  Gather Motion 3:1  (slice1; segments: 3)
    Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
    ->  Nested Loop Left Join
+         Disabled: true
          Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
-         Join Filter: ((SubPlan 1))
+         Join Filter: ((ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1)))
          ->  Seq Scan on rpt.t_hashdist
-               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, (SubPlan 1)
+               Disabled: true
+               Output: t_hashdist.a, t_hashdist.b, t_hashdist.c, (ANY ((t_hashdist.a)::double precision > (SubPlan 1).col1))
                SubPlan 1
                  ->  Materialize
                        Output: (random())
                        ->  Broadcast Motion 1:3  (slice2; segments: 1)
                              Output: (random())
                              ->  Seq Scan on rpt.t_replicate_volatile t_replicate_volatile_1
+                                   Disabled: true
                                    Output: random()
          ->  Materialize
                Output: t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
                ->  Seq Scan on rpt.t_replicate_volatile
+                     Disabled: true
                      Output: t_replicate_volatile.a, t_replicate_volatile.b, t_replicate_volatile.c
  Optimizer: Postgres query optimizer
  Settings: enable_seqscan = 'off'
-(20 rows)
+(24 rows)
 
 -- targetlist
 explain (costs off) select * from t_hashdist cross join (select random () from t_replicate_volatile)x;
@@ -1026,17 +1030,17 @@ explain (costs off) create table rpt_ctas as select a from generate_series(1, 10
 
 -- update & delete
 explain (costs off) update t_replicate_volatile set a = 1 where b > random();
-ERROR:  could not devise a plan (cdbpath.c:2579)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = 1 from t_replicate_volatile x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2579)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = 1 from t_hashdist x where x.a + random() = t_replicate_volatile.b;
-ERROR:  could not devise a plan (cdbpath.c:2579)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) delete from t_replicate_volatile where a < random();
-ERROR:  could not devise a plan (cdbpath.c:2579)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) delete from t_replicate_volatile using t_replicate_volatile x where t_replicate_volatile.a + x.b < random();
-ERROR:  could not devise a plan (cdbpath.c:2579)
+ERROR:  could not devise a plan (cdbpath.c:2777)
 explain (costs off) update t_replicate_volatile set a = random();
-ERROR:  could not devise a plan. (cdbpath.c:2442)
+ERROR:  could not devise a plan. (cdbpath.c:2574)
 -- limit
 explain (costs off) insert into t_replicate_volatile select * from t_replicate_volatile limit random();
                                       QUERY PLAN                                       
@@ -1208,8 +1212,8 @@ explain select c from rep_tab where c in (select distinct a from dist_tab);
 select c from rep_tab where c in (select distinct a from dist_tab);
  c 
 ---
- 1
  2
+ 1
 (2 rows)
 
 -- Table	Side		Derives
@@ -1291,8 +1295,9 @@ DETAIL:  Feature not supported: Use optimizer_enable_replicated_table to enable 
 ------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
    ->  Seq Scan on rep_tab
+         Disabled: true
  Optimizer: Postgres query optimizer
-(3 rows)
+(4 rows)
 
 reset optimizer_trace_fallback;
 reset optimizer_enable_replicated_table;
