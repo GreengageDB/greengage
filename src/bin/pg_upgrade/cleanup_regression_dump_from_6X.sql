@@ -179,6 +179,8 @@ DROP TABLE public.incr_analyze_test CASCADE;
 DROP TABLE public.hll_part_def CASCADE;
 
 \c regression
+DROP TABLE "partition_pruning"."date_parts";
+DROP TABLE "public"."constraint_pt3";
 DROP TABLE dpe_multi.fact1 CASCADE;
 DROP TABLE olap_window_seq.window_part_sales CASCADE;
 DROP TABLE partition_ddl2.mpp3256 CASCADE;
