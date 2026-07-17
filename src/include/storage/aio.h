@@ -38,22 +38,8 @@ typedef enum IoMethod
 #endif
 }			IoMethod;
 
-/*
- * Upstream PG18 defaults to worker based execution (io_method=worker), which
- * launches io_workers (default 3) background processes per postmaster.  GPDB is
- * MPP: many postmasters (coordinator, standby, and every primary/mirror
- * segment) run on the same host, so worker mode multiplies the process/memory
- * footprint by the number of colocated segments.  During gpinitsystem's
- * parallel segment bring-up on single-host CI this pressure caused intermittent
- * sshd auth failures ("Total processes marked as failed" in the behave
- * gpinitsystem scenario).  Default to synchronous I/O instead -- this restores
- * the pre-PG18 behaviour and spawns no io workers.  Operators can still opt into
- * worker/io_uring per cluster via the io_method GUC.  NB: this macro is the
- * single source of truth for both the io_method GUC boot_val (guc_tables.c) and
- * the io_method C-variable initializer (aio.c); PG18's check_GUC_init assertion
- * requires the two to match, so change the default here, not in guc_tables.c.
- */
-#define DEFAULT_IO_METHOD IOMETHOD_SYNC
+/* We'll default to worker based execution. */
+#define DEFAULT_IO_METHOD IOMETHOD_WORKER
 
 
 /*
