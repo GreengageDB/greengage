@@ -54,6 +54,7 @@ typedef struct expand_vgc_context
 } expand_vgc_context;
 
 static Node *expand_virtual_generated_columns_mutator(Node *node, void *context);
+static Node *flatten_group_rte_mutator(Node *node, void *context);
 
 static Plan *remove_redundant_results(PlannerInfo *root, Plan *plan);
 static Node *remove_redundant_results_mutator(Node *node, void *);
@@ -179,6 +180,27 @@ optimize_query(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 * away. (We will find dependencies to other objects later, after planning).
 	 */
 	pqueryCopy = fold_constants(root, pqueryCopy, boundParams, GPOPT_MAX_FOLDED_CONSTANT_SIZE);
+
+	/*
+	 * Flatten PG18 RTE_GROUP grouping Vars back into their underlying grouping
+	 * expressions at every Query level, mirroring what subquery_planner() does
+	 * for the Postgres planner (planner.c, via flatten_group_exprs()).  PG18
+	 * gives every GROUP BY query a virtual RTE_GROUP range-table entry and
+	 * rewrites its grouping-column outputs into Vars over that entry; ORCA
+	 * bypasses subquery_planner and has no RTE_GROUP awareness, so without this
+	 * it fails Query-to-DXL translation ("No variable entry found due to
+	 * incorrect normalization of query") and falls back to the Postgres planner
+	 * on every grouped query.  Do this before transformGroupedWindows() so that
+	 * GGDB helper (which predates RTE_GROUP) also sees the pre-PG18 shape.
+	 */
+	{
+		expand_vgc_context ctx;
+
+		ctx.glob = glob;
+		ctx.planner_cxt = CurrentMemoryContext;
+		pqueryCopy = (Query *)
+			flatten_group_rte_mutator((Node *) pqueryCopy, &ctx);
+	}
 
 	/*
 	 * If any Query in the tree mixes window functions and aggregates, we need to
@@ -530,6 +552,72 @@ expand_virtual_generated_columns_mutator(Node *node, void *context)
 	return expression_tree_mutator(node,
 								   expand_virtual_generated_columns_mutator,
 								   context);
+}
+
+/*
+ * flatten_group_rte_mutator
+ *
+ * Replace, at every Query level, the Vars that reference the PG18 grouping-step
+ * RTE_GROUP range-table entry with their underlying grouping expressions, then
+ * drop that RTE_GROUP entry and clear hasGroupRTE -- the pre-PG18 grouped-query
+ * shape that ORCA understands.  This mirrors subquery_planner()'s use of
+ * flatten_group_exprs(); ORCA bypasses subquery_planner, so it must be done
+ * here or ORCA raises "No variable entry found due to incorrect normalization
+ * of query" during Query-to-DXL translation and falls back to the planner on
+ * every GROUP BY / GROUPING SETS / ROLLUP query.
+ */
+static Node *
+flatten_group_rte_mutator(Node *node, void *context)
+{
+	if (node == NULL)
+		return NULL;
+
+	if (IsA(node, Query))
+	{
+		expand_vgc_context *ctx = (expand_vgc_context *) context;
+		Query	   *query = (Query *) node;
+
+		if (query->hasGroupRTE)
+		{
+			PlannerInfo *subroot;
+			ListCell   *lc;
+
+			/*
+			 * Minimal per-level root; flatten_group_exprs() needs it only to
+			 * preserve varnullingrels (mirrors optimize_query()'s root init).
+			 */
+			subroot = makeNode(PlannerInfo);
+			subroot->parse = query;
+			subroot->glob = ctx->glob;
+			subroot->query_level = 1;
+			subroot->planner_cxt = ctx->planner_cxt;
+			subroot->wt_param_id = -1;
+
+			query->targetList = (List *)
+				flatten_group_exprs(subroot, query, (Node *) query->targetList);
+			query->havingQual =
+				flatten_group_exprs(subroot, query, query->havingQual);
+
+			foreach(lc, query->rtable)
+			{
+				RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+				if (rte->rtekind == RTE_GROUP)
+				{
+					query->rtable = list_delete_cell(query->rtable, lc);
+					break;
+				}
+			}
+			query->hasGroupRTE = false;
+		}
+
+		/* Recurse into all sub-Queries (subqueries, CTEs, SubLinks). */
+		return (Node *) query_tree_mutator(query,
+										   flatten_group_rte_mutator,
+										   context, 0);
+	}
+
+	return expression_tree_mutator(node, flatten_group_rte_mutator, context);
 }
 
 /* Context for transformGroupedWindows() which mutates components
