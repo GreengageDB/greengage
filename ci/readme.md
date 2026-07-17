@@ -209,7 +209,7 @@ docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest .
 docker run --rm \
     gpdb7_pgupgrade bash -c \
     "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-     su gpadmin /home/gpadmin/gpdb_src/ci/pg_upgrade_run_6X_to_7X_migration.sh"
+     su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash"
 ```
 
 Note, that the command above will pull the latest Greengage images from the github repository, meaning that they wouldn't have your local changes.
@@ -221,7 +221,7 @@ docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest --build-arg G
 docker run --rm \
     gpdb7_pgupgrade bash -c \
     "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-     su gpadmin /home/gpadmin/gpdb_src/ci/pg_upgrade_run_6X_to_7X_migration.sh"
+     su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash"
 ```
 
 To specify a schema, mount a directory with it into the docker image:
@@ -233,7 +233,7 @@ docker run --rm \
 	gpdb7_pgupgrade bash -c \
 	"export SQL_SCHEMA=/dump_dir/dump.sql; \
 	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-	 su gpadmin /home/gpadmin/gpdb_src/ci/pg_upgrade_run_6X_to_7X_migration.sh;"
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash;"
 ```
 
 To collect execution logs, mount an additional volume:
@@ -245,7 +245,7 @@ docker run --rm \
 	gpdb7_pgupgrade bash -c \
 	"export SQL_SCHEMA=/dump_dir/dump.sql; \
 	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-	 su gpadmin /home/gpadmin/gpdb_src/ci/pg_upgrade_run_6X_to_7X_migration.sh; \
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs;"
@@ -262,7 +262,7 @@ docker run --rm \
 	 export CLEANUP_SCRIPT=/home/gpadmin/gpdb_src/src/bin/pg_upgrade/cleanup_regression_dump_from_6X.sql; \
 	 export DUMP_OPTIONS='--data-only --extra-float-digits=-3'; \
 	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
-	 su gpadmin /home/gpadmin/gpdb_src/ci/pg_upgrade_run_6X_to_7X_migration.sh; \
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs;"
