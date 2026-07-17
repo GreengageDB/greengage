@@ -72,6 +72,39 @@ run_feature() {
     cdw gpdb_src/ci/scripts/behave_gpdb.bash
   status=$?
 
+  # --- DIAGNOSTIC DUMP on behave failure (PG18 io_worker / sshd resource probe) ---
+  # gpinitsystem can fail with "Total processes marked as failed" when the parallel
+  # segment bring-up exhausts a per-host resource and sshd auth to gpadmin@cdw is
+  # rejected ("Permission denied (publickey,password)").  Capture resource state
+  # from every still-running container BEFORE teardown; output lands under
+  # allure-results (uploaded as a CI artifact).  Never mutates $status.
+  if [[ $status -gt 0 ]]; then
+    diagdir="allure-results/diag_${feature}"
+    mkdir -p "$diagdir"
+    echo "behave FAILED status=$status feature=$feature cluster=$cluster; dumping resource state before teardown" | tee "$diagdir/summary.txt"
+    for service in $services; do
+      timeout 120 docker compose -p "$project" -f ci/docker-compose.yaml exec -T "$service" bash -c '
+        echo "===== date / uname ====="; date; uname -a
+        echo "===== free -m ====="; free -m
+        echo "===== ulimit -a (current) ====="; ulimit -a
+        echo "===== ulimit -a (gpadmin) ====="; su - gpadmin -c "ulimit -a" 2>&1
+        echo "===== total procs ====="; ps -e --no-headers 2>/dev/null | wc -l
+        echo "===== total tasks/LWP ====="; ps -eL --no-headers 2>/dev/null | wc -l
+        echo "===== gpadmin procs ====="; ps --no-headers -u gpadmin 2>/dev/null | wc -l
+        echo "===== io worker procs (title-anchored) ====="; ps -eo cmd 2>/dev/null | grep -E "^postgres.*io worker" || echo "(none)"
+        echo "===== io worker count ====="; ps -eo cmd 2>/dev/null | grep -Ec "^postgres.*io worker"
+        echo "===== system open files (file-nr) ====="; cat /proc/sys/fs/file-nr 2>/dev/null
+        echo "===== dmesg tail ====="; dmesg 2>/dev/null | tail -n 80
+        echo "===== dmesg OOM/fork grep ====="; dmesg 2>/dev/null | grep -iE "out of memory|oom-kill|killed process|cannot fork|fork failed|Cannot allocate" | tail -n 40
+        echo "===== effective sshd auth cfg ====="; grep -REi "usepam|passwordauth|pubkeyauth|maxstartups|logingrace|maxsession|strictmodes" /etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null
+        echo "===== sshd / auth log ====="; { cat /var/log/auth.log 2>/dev/null; journalctl -u ssh -u sshd --no-pager 2>/dev/null; } | tail -n 120
+        echo "===== gpinitsystem logs ====="; ls -la /home/gpadmin/gpAdminLogs 2>/dev/null; tail -n 200 /home/gpadmin/gpAdminLogs/gpinitsystem_*.log 2>/dev/null
+        echo "===== one segment startup log ====="; f=$(find /data /home/gpadmin \( -path "*/log/startup.log" -o -path "*/pg_log/*.csv" \) 2>/dev/null | head -1); echo "seglog=$f"; tail -n 120 "$f" 2>/dev/null
+      ' > "$diagdir/${service}.txt" 2>&1 || echo "diag probe for $service failed (container gone?)" | tee -a "$diagdir/summary.txt"
+    done
+  fi
+  # --- END DIAGNOSTIC DUMP ---
+
   docker compose -p $project -f ci/docker-compose.yaml --env-file ci/.env down -v
 
   if [[ $status > 0 ]]; then echo "Feature $feature failed with exit code $status"; fi
