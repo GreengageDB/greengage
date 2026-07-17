@@ -2492,9 +2492,7 @@ expr_setup_walker(Node *node, ExprSetupInfo *info)
 			default:
 				info->last_scan = Max(info->last_scan, attnum);
 				if (attnum > 0)
-				{
 					info->all_scan_attrs = bms_add_member(info->all_scan_attrs, attnum - 1);
-				}
 				break;
 		}
 		return false;
