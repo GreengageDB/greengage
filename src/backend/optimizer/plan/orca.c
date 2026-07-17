@@ -577,7 +577,26 @@ flatten_group_rte_mutator(Node *node, void *context)
 		expand_vgc_context *ctx = (expand_vgc_context *) context;
 		Query	   *query = (Query *) node;
 
-		if (query->hasGroupRTE)
+		/*
+		 * A FROM-less query whose GROUP BY is a grouping set (ROLLUP / CUBE /
+		 * GROUPING SETS) groups by variable-free (constant) expressions that
+		 * are nullable by grouping.  flatten_group_exprs() ->
+		 * mark_nullable_by_grouping() must then wrap the constant in a
+		 * PlaceHolderVar carrying the grouping-set nullingrels, and to build it
+		 * needs a non-empty set of jointree relids (var.c:
+		 * Assert(!bms_is_empty(phrels))).  The core planner guarantees that by
+		 * inserting a dummy RTE_RESULT via replace_empty_jointree() at the top
+		 * of subquery_planner(); optimize_query() bypasses subquery_planner(),
+		 * so the jointree is still empty here and the assertion would fail.  We
+		 * do not inject an RTE_RESULT (ORCA never sees one in normal operation,
+		 * and it would only turn the constant into a PlaceHolderVar ORCA cannot
+		 * translate anyway), so for this rare, trivial case leave the RTE_GROUP
+		 * in place: ORCA cannot map the grouping Vars and falls back cleanly to
+		 * the Postgres planner, which plans FROM-less grouping-set queries
+		 * correctly.
+		 */
+		if (query->hasGroupRTE &&
+			!(query->jointree->fromlist == NIL && query->groupingSets != NIL))
 		{
 			PlannerInfo *subroot;
 			ListCell   *lc;
