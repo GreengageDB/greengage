@@ -3,8 +3,8 @@
 -- The issue: https://github.com/greenplum-db/gpdb/issues/11304
 --
 drop extension if exists gp_debug_numsegments;
-NOTICE:  extension "gp_debug_numsegments" does not exist, skipping
 create extension if not exists gp_inject_fault;
+NOTICE:  extension "gp_inject_fault" already exists, skipping
 select gp_inject_fault('create_function_fail', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 2;
  gp_inject_fault 
 -----------------
@@ -17,7 +17,11 @@ select gp_inject_fault('create_function_fail', 'error', dbid) from gp_segment_co
 -- Previously, QD's error message is confusing, now it should print the direct
 -- failing reason from QE instead of "query plan with multiple segworker groups is not supported".
 create extension gp_debug_numsegments;
-ERROR:  fault triggered, fault name:'create_function_fail' fault type:'error'  (seg2 127.0.1.1:7004 pid=6624)
+ERROR:  fault triggered, fault name:'create_function_fail' fault type:'error'  (seg2 172.17.0.2:7004 pid=103776)
+CONTEXT:  SQL statement "CREATE OR REPLACE FUNCTION gp_debug_set_create_table_default_numsegments(text) RETURNS text
+AS '$libdir/gp_debug_numsegments','gp_debug_set_create_table_default_numsegments'
+LANGUAGE C STRICT"
+extension script file "gp_debug_numsegments--1.0.sql", near line 10
 -- Next we need to test the global state vars of extension creating
 -- is reset correctly in the above error handling. Since we do not
 -- destroy gangs, the next create table statement will reuse the

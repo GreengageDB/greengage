@@ -22,18 +22,18 @@ select pg_relation_size('ivfheap') from gp_dist_random('gp_id') where gp_segment
 select relname, relpages, reltuples, gp_segment_id from gp_dist_random('pg_class') where oid = 'vfheap'::regclass;
  relname | relpages | reltuples | gp_segment_id 
 ---------+----------+-----------+---------------
+ vfheap  |        1 |         0 |             0
  vfheap  |        4 |       100 |             1
- vfheap  |        0 |         0 |             2
- vfheap  |        0 |         0 |             0
+ vfheap  |        1 |         0 |             2
 (3 rows)
 
 vacuum full vfheap;
 select relname, relpages, reltuples, gp_segment_id from gp_dist_random('pg_class') where oid = 'vfheap'::regclass;
  relname | relpages | reltuples | gp_segment_id 
 ---------+----------+-----------+---------------
- vfheap  |        0 |         0 |             0
- vfheap  |        0 |         0 |             2
  vfheap  |        2 |        50 |             1
+ vfheap  |        0 |         0 |             2
+ vfheap  |        0 |         0 |             0
 (3 rows)
 
 select pg_relation_size('vfheap') from gp_dist_random('gp_id') where gp_segment_id = 1;

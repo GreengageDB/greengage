@@ -103,31 +103,35 @@ SELECT count(*) FROM (SELECT 1 FROM gp_instrument_shmem_detail GROUP BY ssid, cc
 EXPLAIN ANALYZE SELECT 1/0;
 ERROR:  division by zero
 EXPLAIN ANALYZE SELECT count(*) FROM a where id < (1/(select count(*) where 1=0));
-ERROR:  division by zero  (seg0 slice1 172.17.0.4:7002 pid=1822410)
+ERROR:  division by zero  (seg0 slice1 172.17.0.2:7002 pid=17058)
 EXPLAIN ANALYZE SELECT count(*) FROM a a1, a a2, a a3;
-                                                                          QUERY PLAN                                                                           
----------------------------------------------------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=20000002088.72..20000002088.73 rows=1 width=8) (actual time=13.384..13.387 rows=1 loops=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000002088.67..20000002088.72 rows=3 width=8) (actual time=10.675..13.372 rows=3 loops=1)
-         ->  Partial Aggregate  (cost=20000002088.67..20000002088.68 rows=1 width=8) (actual time=12.976..12.978 rows=1 loops=1)
-               ->  Nested Loop  (cost=20000000000.00..20000001984.50 rows=41667 width=0) (actual time=1.280..10.133 rows=45000 loops=1)
-                     ->  Nested Loop  (cost=10000000000.00..10000000040.06 rows=833 width=0) (actual time=0.068..0.273 rows=900 loops=1)
-                           ->  Seq Scan on a a1  (cost=0.00..1.17 rows=17 width=0) (actual time=0.050..0.057 rows=18 loops=1)
-                           ->  Materialize  (cost=0.00..2.08 rows=50 width=0) (actual time=0.001..0.006 rows=50 loops=18)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.83 rows=50 width=0) (actual time=0.012..0.023 rows=50 loops=1)
-                                       ->  Seq Scan on a a2  (cost=0.00..1.17 rows=17 width=0) (actual time=0.257..0.261 rows=18 loops=1)
-                     ->  Materialize  (cost=0.00..2.08 rows=50 width=0) (actual time=0.001..0.005 rows=50 loops=901)
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.83 rows=50 width=0) (actual time=0.837..1.198 rows=50 loops=1)
-                                 ->  Seq Scan on a a3  (cost=0.00..1.17 rows=17 width=0) (actual time=0.237..0.240 rows=18 loops=1)
+                                                                                  QUERY PLAN                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=1745.21..1745.22 rows=1 width=8) (actual time=14.042..14.044 rows=1.00 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1745.15..1745.20 rows=3 width=8) (actual time=11.656..14.030 rows=3.00 loops=1)
+         ->  Partial Aggregate  (cost=1745.15..1745.16 rows=1 width=8) (actual time=12.705..12.706 rows=1.00 loops=1)
+               ->  Nested Loop  (cost=0.00..1640.98 rows=41667 width=0) (actual time=2.170..10.175 rows=45000.00 loops=1)
+                     Disabled: true
+                     ->  Seq Scan on a a3  (cost=0.00..1.17 rows=17 width=0) (actual time=0.047..0.050 rows=18.00 loops=1)
+                     ->  Materialize  (cost=0.00..85.89 rows=2500 width=0) (actual time=0.118..0.312 rows=2500.00 loops=18)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..73.39 rows=2500 width=0) (actual time=2.115..2.454 rows=2500.00 loops=1)
+                                 ->  Nested Loop  (cost=0.00..40.06 rows=833 width=0) (actual time=0.219..1.361 rows=900.00 loops=1)
+                                       Disabled: true
+                                       ->  Seq Scan on a a1  (cost=0.00..1.17 rows=17 width=0) (actual time=0.208..0.213 rows=18.00 loops=1)
+                                       ->  Materialize  (cost=0.00..2.08 rows=50 width=0) (actual time=0.000..0.057 rows=50.00 loops=18)
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.83 rows=50 width=0) (actual time=0.006..0.948 rows=50.00 loops=1)
+                                                   ->  Seq Scan on a a2  (cost=0.00..1.17 rows=17 width=0) (actual time=0.205..0.208 rows=18.00 loops=1)
  Optimizer: Postgres query optimizer
- Planning Time: 0.420 ms
-   (slice0)    Executor memory: 116K bytes.
-   (slice1)    Executor memory: 116K bytes avg x 3 workers, 116K bytes max (seg0).  Work_mem: 18K bytes max.
-   (slice2)    Executor memory: 118K bytes avg x 3 workers, 118K bytes max (seg0).
+ Planning:
+   Buffers: shared hit=150
+ Planning Time: 0.552 ms
+   (slice0)    Executor memory: 117K bytes.
+   (slice1)    Executor memory: 114K bytes avg x 3 workers, 114K bytes max (seg0).  Work_mem: 130K bytes max.
+   (slice2)    Executor memory: 121K bytes avg x 3 workers, 121K bytes max (seg0).  Work_mem: 18K bytes max.
    (slice3)    Executor memory: 118K bytes avg x 3 workers, 118K bytes max (seg0).
  Memory used:  128000kB
- Execution Time: 31.380 ms
-(20 rows)
+ Execution Time: 33.190 ms
+(24 rows)
 
 EXPLAIN SELECT 1/0;
 ERROR:  division by zero
@@ -147,22 +151,24 @@ EXPLAIN SELECT count(*) FROM a where id < (1/(select count(*) where 1=0));
 (10 rows)
 
 EXPLAIN SELECT count(*) FROM a a1, a a2, a a3;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
- Finalize Aggregate  (cost=20000002088.72..20000002088.73 rows=1 width=8)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=20000002088.67..20000002088.72 rows=3 width=8)
-         ->  Partial Aggregate  (cost=20000002088.67..20000002088.68 rows=1 width=8)
-               ->  Nested Loop  (cost=20000000000.00..20000001984.50 rows=41667 width=0)
-                     ->  Nested Loop  (cost=10000000000.00..10000000040.06 rows=833 width=0)
-                           ->  Seq Scan on a a1  (cost=0.00..1.17 rows=17 width=0)
-                           ->  Materialize  (cost=0.00..2.08 rows=50 width=0)
-                                 ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..1.83 rows=50 width=0)
-                                       ->  Seq Scan on a a2  (cost=0.00..1.17 rows=17 width=0)
-                     ->  Materialize  (cost=0.00..2.08 rows=50 width=0)
-                           ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.83 rows=50 width=0)
-                                 ->  Seq Scan on a a3  (cost=0.00..1.17 rows=17 width=0)
+                                                           QUERY PLAN                                                           
+--------------------------------------------------------------------------------------------------------------------------------
+ Finalize Aggregate  (cost=1745.21..1745.22 rows=1 width=8)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1745.15..1745.20 rows=3 width=8)
+         ->  Partial Aggregate  (cost=1745.15..1745.16 rows=1 width=8)
+               ->  Nested Loop  (cost=0.00..1640.98 rows=41667 width=0)
+                     Disabled: true
+                     ->  Seq Scan on a a3  (cost=0.00..1.17 rows=17 width=0)
+                     ->  Materialize  (cost=0.00..85.89 rows=2500 width=0)
+                           ->  Broadcast Motion 3:3  (slice2; segments: 3)  (cost=0.00..73.39 rows=2500 width=0)
+                                 ->  Nested Loop  (cost=0.00..40.06 rows=833 width=0)
+                                       Disabled: true
+                                       ->  Seq Scan on a a1  (cost=0.00..1.17 rows=17 width=0)
+                                       ->  Materialize  (cost=0.00..2.08 rows=50 width=0)
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)  (cost=0.00..1.83 rows=50 width=0)
+                                                   ->  Seq Scan on a a2  (cost=0.00..1.17 rows=17 width=0)
  Optimizer: Postgres query optimizer
-(13 rows)
+(15 rows)
 
 -- Expected result is 1 row, means only current query in instrument slots,
 -- If more than one row returned, means previous test has leaked slots.

@@ -100,6 +100,8 @@ create function breakin_int2_variable_false_true (cstring) returns break_int2_va
 NOTICE:  return type break_int2_variable_false_true is only a shell
 create function breakout_int2_variable_false_true (break_int2_variable_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_variable_false_true is only a shell
+LINE 1: ...reate function breakout_int2_variable_false_true (break_int2...
+                                                             ^
 create type break_int2_variable_false_true (input = breakin_int2_variable_false_true, output = breakout_int2_variable_false_true, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int2_variable_false_true (i int, j break_int2_variable_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_variable_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -108,6 +110,8 @@ create function breakin_int2_variable_false_false (cstring) returns break_int2_v
 NOTICE:  return type break_int2_variable_false_false is only a shell
 create function breakout_int2_variable_false_false (break_int2_variable_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_variable_false_false is only a shell
+LINE 1: ...eate function breakout_int2_variable_false_false (break_int2...
+                                                             ^
 create type break_int2_variable_false_false (input = breakin_int2_variable_false_false, output = breakout_int2_variable_false_false, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int2_variable_false_false (i int, j break_int2_variable_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_variable_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -116,6 +120,8 @@ create function breakin_int2_1_true_true (cstring) returns break_int2_1_true_tru
 NOTICE:  return type break_int2_1_true_true is only a shell
 create function breakout_int2_1_true_true (break_int2_1_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_1_true_true is only a shell
+LINE 1: create function breakout_int2_1_true_true (break_int2_1_true...
+                                                   ^
 create type break_int2_1_true_true (input = breakin_int2_1_true_true, output = breakout_int2_1_true_true, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_int2_1_true_true (i int, j break_int2_1_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_1_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -124,6 +130,8 @@ create function breakin_int2_1_true_false (cstring) returns break_int2_1_true_fa
 NOTICE:  return type break_int2_1_true_false is only a shell
 create function breakout_int2_1_true_false (break_int2_1_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_1_true_false is only a shell
+LINE 1: create function breakout_int2_1_true_false (break_int2_1_tru...
+                                                    ^
 create type break_int2_1_true_false (input = breakin_int2_1_true_false, output = breakout_int2_1_true_false, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_int2_1_true_false (i int, j break_int2_1_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_1_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -132,6 +140,8 @@ create function breakin_int2_1_false_true (cstring) returns break_int2_1_false_t
 NOTICE:  return type break_int2_1_false_true is only a shell
 create function breakout_int2_1_false_true (break_int2_1_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_1_false_true is only a shell
+LINE 1: create function breakout_int2_1_false_true (break_int2_1_fal...
+                                                    ^
 create type break_int2_1_false_true (input = breakin_int2_1_false_true, output = breakout_int2_1_false_true, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_int2_1_false_true (i int, j break_int2_1_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_1_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -140,6 +150,8 @@ create function breakin_int2_1_false_false (cstring) returns break_int2_1_false_
 NOTICE:  return type break_int2_1_false_false is only a shell
 create function breakout_int2_1_false_false (break_int2_1_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_1_false_false is only a shell
+LINE 1: create function breakout_int2_1_false_false (break_int2_1_fa...
+                                                     ^
 create type break_int2_1_false_false (input = breakin_int2_1_false_false, output = breakout_int2_1_false_false, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_int2_1_false_false (i int, j break_int2_1_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_1_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -148,6 +160,8 @@ create function breakin_int2_3_false_true (cstring) returns break_int2_3_false_t
 NOTICE:  return type break_int2_3_false_true is only a shell
 create function breakout_int2_3_false_true (break_int2_3_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_3_false_true is only a shell
+LINE 1: create function breakout_int2_3_false_true (break_int2_3_fal...
+                                                    ^
 create type break_int2_3_false_true (input = breakin_int2_3_false_true, output = breakout_int2_3_false_true, internallength = 3, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_3_false_true (i int, j break_int2_3_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_3_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -156,6 +170,8 @@ create function breakin_int2_3_false_false (cstring) returns break_int2_3_false_
 NOTICE:  return type break_int2_3_false_false is only a shell
 create function breakout_int2_3_false_false (break_int2_3_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_3_false_false is only a shell
+LINE 1: create function breakout_int2_3_false_false (break_int2_3_fa...
+                                                     ^
 create type break_int2_3_false_false (input = breakin_int2_3_false_false, output = breakout_int2_3_false_false, internallength = 3, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_3_false_false (i int, j break_int2_3_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_3_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -164,6 +180,8 @@ create function breakin_int2_4_true_true (cstring) returns break_int2_4_true_tru
 NOTICE:  return type break_int2_4_true_true is only a shell
 create function breakout_int2_4_true_true (break_int2_4_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_4_true_true is only a shell
+LINE 1: create function breakout_int2_4_true_true (break_int2_4_true...
+                                                   ^
 create type break_int2_4_true_true (input = breakin_int2_4_true_true, output = breakout_int2_4_true_true, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_int2_4_true_true (i int, j break_int2_4_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_4_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -172,6 +190,8 @@ create function breakin_int2_4_true_false (cstring) returns break_int2_4_true_fa
 NOTICE:  return type break_int2_4_true_false is only a shell
 create function breakout_int2_4_true_false (break_int2_4_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_4_true_false is only a shell
+LINE 1: create function breakout_int2_4_true_false (break_int2_4_tru...
+                                                    ^
 create type break_int2_4_true_false (input = breakin_int2_4_true_false, output = breakout_int2_4_true_false, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_int2_4_true_false (i int, j break_int2_4_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_4_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -180,6 +200,8 @@ create function breakin_int2_4_false_true (cstring) returns break_int2_4_false_t
 NOTICE:  return type break_int2_4_false_true is only a shell
 create function breakout_int2_4_false_true (break_int2_4_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_4_false_true is only a shell
+LINE 1: create function breakout_int2_4_false_true (break_int2_4_fal...
+                                                    ^
 create type break_int2_4_false_true (input = breakin_int2_4_false_true, output = breakout_int2_4_false_true, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int2_4_false_true (i int, j break_int2_4_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_4_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -188,6 +210,8 @@ create function breakin_int2_4_false_false (cstring) returns break_int2_4_false_
 NOTICE:  return type break_int2_4_false_false is only a shell
 create function breakout_int2_4_false_false (break_int2_4_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_4_false_false is only a shell
+LINE 1: create function breakout_int2_4_false_false (break_int2_4_fa...
+                                                     ^
 create type break_int2_4_false_false (input = breakin_int2_4_false_false, output = breakout_int2_4_false_false, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int2_4_false_false (i int, j break_int2_4_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_4_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -196,6 +220,8 @@ create function breakin_int2_11_false_true (cstring) returns break_int2_11_false
 NOTICE:  return type break_int2_11_false_true is only a shell
 create function breakout_int2_11_false_true (break_int2_11_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_11_false_true is only a shell
+LINE 1: create function breakout_int2_11_false_true (break_int2_11_f...
+                                                     ^
 create type break_int2_11_false_true (input = breakin_int2_11_false_true, output = breakout_int2_11_false_true, internallength = 11, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_11_false_true (i int, j break_int2_11_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_11_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -204,6 +230,8 @@ create function breakin_int2_11_false_false (cstring) returns break_int2_11_fals
 NOTICE:  return type break_int2_11_false_false is only a shell
 create function breakout_int2_11_false_false (break_int2_11_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_11_false_false is only a shell
+LINE 1: create function breakout_int2_11_false_false (break_int2_11_...
+                                                      ^
 create type break_int2_11_false_false (input = breakin_int2_11_false_false, output = breakout_int2_11_false_false, internallength = 11, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_11_false_false (i int, j break_int2_11_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_11_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -212,6 +240,8 @@ create function breakin_int2_17_false_true (cstring) returns break_int2_17_false
 NOTICE:  return type break_int2_17_false_true is only a shell
 create function breakout_int2_17_false_true (break_int2_17_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_17_false_true is only a shell
+LINE 1: create function breakout_int2_17_false_true (break_int2_17_f...
+                                                     ^
 create type break_int2_17_false_true (input = breakin_int2_17_false_true, output = breakout_int2_17_false_true, internallength = 17, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_17_false_true (i int, j break_int2_17_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_17_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -220,6 +250,8 @@ create function breakin_int2_17_false_false (cstring) returns break_int2_17_fals
 NOTICE:  return type break_int2_17_false_false is only a shell
 create function breakout_int2_17_false_false (break_int2_17_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_17_false_false is only a shell
+LINE 1: create function breakout_int2_17_false_false (break_int2_17_...
+                                                      ^
 create type break_int2_17_false_false (input = breakin_int2_17_false_false, output = breakout_int2_17_false_false, internallength = 17, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_17_false_false (i int, j break_int2_17_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_17_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -228,6 +260,8 @@ create function breakin_int2_19_false_true (cstring) returns break_int2_19_false
 NOTICE:  return type break_int2_19_false_true is only a shell
 create function breakout_int2_19_false_true (break_int2_19_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_19_false_true is only a shell
+LINE 1: create function breakout_int2_19_false_true (break_int2_19_f...
+                                                     ^
 create type break_int2_19_false_true (input = breakin_int2_19_false_true, output = breakout_int2_19_false_true, internallength = 19, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_19_false_true (i int, j break_int2_19_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_19_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -236,6 +270,8 @@ create function breakin_int2_19_false_false (cstring) returns break_int2_19_fals
 NOTICE:  return type break_int2_19_false_false is only a shell
 create function breakout_int2_19_false_false (break_int2_19_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_19_false_false is only a shell
+LINE 1: create function breakout_int2_19_false_false (break_int2_19_...
+                                                      ^
 create type break_int2_19_false_false (input = breakin_int2_19_false_false, output = breakout_int2_19_false_false, internallength = 19, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_19_false_false (i int, j break_int2_19_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_19_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -244,6 +280,8 @@ create function breakin_int2_23_false_true (cstring) returns break_int2_23_false
 NOTICE:  return type break_int2_23_false_true is only a shell
 create function breakout_int2_23_false_true (break_int2_23_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_23_false_true is only a shell
+LINE 1: create function breakout_int2_23_false_true (break_int2_23_f...
+                                                     ^
 create type break_int2_23_false_true (input = breakin_int2_23_false_true, output = breakout_int2_23_false_true, internallength = 23, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_23_false_true (i int, j break_int2_23_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_23_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -252,6 +290,8 @@ create function breakin_int2_23_false_false (cstring) returns break_int2_23_fals
 NOTICE:  return type break_int2_23_false_false is only a shell
 create function breakout_int2_23_false_false (break_int2_23_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_23_false_false is only a shell
+LINE 1: create function breakout_int2_23_false_false (break_int2_23_...
+                                                      ^
 create type break_int2_23_false_false (input = breakin_int2_23_false_false, output = breakout_int2_23_false_false, internallength = 23, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_23_false_false (i int, j break_int2_23_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_23_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -260,6 +300,8 @@ create function breakin_int2_32_false_true (cstring) returns break_int2_32_false
 NOTICE:  return type break_int2_32_false_true is only a shell
 create function breakout_int2_32_false_true (break_int2_32_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_32_false_true is only a shell
+LINE 1: create function breakout_int2_32_false_true (break_int2_32_f...
+                                                     ^
 create type break_int2_32_false_true (input = breakin_int2_32_false_true, output = breakout_int2_32_false_true, internallength = 32, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_32_false_true (i int, j break_int2_32_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_32_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -268,6 +310,8 @@ create function breakin_int2_32_false_false (cstring) returns break_int2_32_fals
 NOTICE:  return type break_int2_32_false_false is only a shell
 create function breakout_int2_32_false_false (break_int2_32_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_32_false_false is only a shell
+LINE 1: create function breakout_int2_32_false_false (break_int2_32_...
+                                                      ^
 create type break_int2_32_false_false (input = breakin_int2_32_false_false, output = breakout_int2_32_false_false, internallength = 32, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_32_false_false (i int, j break_int2_32_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_32_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -276,6 +320,8 @@ create function breakin_int2_196_false_true (cstring) returns break_int2_196_fal
 NOTICE:  return type break_int2_196_false_true is only a shell
 create function breakout_int2_196_false_true (break_int2_196_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_196_false_true is only a shell
+LINE 1: create function breakout_int2_196_false_true (break_int2_196...
+                                                      ^
 create type break_int2_196_false_true (input = breakin_int2_196_false_true, output = breakout_int2_196_false_true, internallength = 196, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_196_false_true (i int, j break_int2_196_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int2_196_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -284,6 +330,8 @@ create function breakin_int2_196_false_false (cstring) returns break_int2_196_fa
 NOTICE:  return type break_int2_196_false_false is only a shell
 create function breakout_int2_196_false_false (break_int2_196_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int2_196_false_false is only a shell
+LINE 1: create function breakout_int2_196_false_false (break_int2_19...
+                                                       ^
 create type break_int2_196_false_false (input = breakin_int2_196_false_false, output = breakout_int2_196_false_false, internallength = 196, passedbyvalue = false, alignment = int2);
 create table alter_distpol_g_int2_196_false_false (i int, j break_int2_196_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int2_196_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -292,6 +340,8 @@ create function breakin_int4_variable_false_true (cstring) returns break_int4_va
 NOTICE:  return type break_int4_variable_false_true is only a shell
 create function breakout_int4_variable_false_true (break_int4_variable_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_variable_false_true is only a shell
+LINE 1: ...reate function breakout_int4_variable_false_true (break_int4...
+                                                             ^
 create type break_int4_variable_false_true (input = breakin_int4_variable_false_true, output = breakout_int4_variable_false_true, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_variable_false_true (i int, j break_int4_variable_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_variable_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -300,6 +350,8 @@ create function breakin_int4_variable_false_false (cstring) returns break_int4_v
 NOTICE:  return type break_int4_variable_false_false is only a shell
 create function breakout_int4_variable_false_false (break_int4_variable_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_variable_false_false is only a shell
+LINE 1: ...eate function breakout_int4_variable_false_false (break_int4...
+                                                             ^
 create type break_int4_variable_false_false (input = breakin_int4_variable_false_false, output = breakout_int4_variable_false_false, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_variable_false_false (i int, j break_int4_variable_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_variable_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -308,6 +360,8 @@ create function breakin_int4_1_true_true (cstring) returns break_int4_1_true_tru
 NOTICE:  return type break_int4_1_true_true is only a shell
 create function breakout_int4_1_true_true (break_int4_1_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_1_true_true is only a shell
+LINE 1: create function breakout_int4_1_true_true (break_int4_1_true...
+                                                   ^
 create type break_int4_1_true_true (input = breakin_int4_1_true_true, output = breakout_int4_1_true_true, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_int4_1_true_true (i int, j break_int4_1_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_1_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -316,6 +370,8 @@ create function breakin_int4_1_true_false (cstring) returns break_int4_1_true_fa
 NOTICE:  return type break_int4_1_true_false is only a shell
 create function breakout_int4_1_true_false (break_int4_1_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_1_true_false is only a shell
+LINE 1: create function breakout_int4_1_true_false (break_int4_1_tru...
+                                                    ^
 create type break_int4_1_true_false (input = breakin_int4_1_true_false, output = breakout_int4_1_true_false, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_int4_1_true_false (i int, j break_int4_1_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_1_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -324,6 +380,8 @@ create function breakin_int4_1_false_true (cstring) returns break_int4_1_false_t
 NOTICE:  return type break_int4_1_false_true is only a shell
 create function breakout_int4_1_false_true (break_int4_1_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_1_false_true is only a shell
+LINE 1: create function breakout_int4_1_false_true (break_int4_1_fal...
+                                                    ^
 create type break_int4_1_false_true (input = breakin_int4_1_false_true, output = breakout_int4_1_false_true, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_int4_1_false_true (i int, j break_int4_1_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_1_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -332,6 +390,8 @@ create function breakin_int4_1_false_false (cstring) returns break_int4_1_false_
 NOTICE:  return type break_int4_1_false_false is only a shell
 create function breakout_int4_1_false_false (break_int4_1_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_1_false_false is only a shell
+LINE 1: create function breakout_int4_1_false_false (break_int4_1_fa...
+                                                     ^
 create type break_int4_1_false_false (input = breakin_int4_1_false_false, output = breakout_int4_1_false_false, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_int4_1_false_false (i int, j break_int4_1_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_1_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -340,6 +400,8 @@ create function breakin_int4_3_false_true (cstring) returns break_int4_3_false_t
 NOTICE:  return type break_int4_3_false_true is only a shell
 create function breakout_int4_3_false_true (break_int4_3_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_3_false_true is only a shell
+LINE 1: create function breakout_int4_3_false_true (break_int4_3_fal...
+                                                    ^
 create type break_int4_3_false_true (input = breakin_int4_3_false_true, output = breakout_int4_3_false_true, internallength = 3, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_3_false_true (i int, j break_int4_3_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_3_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -348,6 +410,8 @@ create function breakin_int4_3_false_false (cstring) returns break_int4_3_false_
 NOTICE:  return type break_int4_3_false_false is only a shell
 create function breakout_int4_3_false_false (break_int4_3_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_3_false_false is only a shell
+LINE 1: create function breakout_int4_3_false_false (break_int4_3_fa...
+                                                     ^
 create type break_int4_3_false_false (input = breakin_int4_3_false_false, output = breakout_int4_3_false_false, internallength = 3, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_3_false_false (i int, j break_int4_3_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_3_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -356,6 +420,8 @@ create function breakin_int4_4_true_true (cstring) returns break_int4_4_true_tru
 NOTICE:  return type break_int4_4_true_true is only a shell
 create function breakout_int4_4_true_true (break_int4_4_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_4_true_true is only a shell
+LINE 1: create function breakout_int4_4_true_true (break_int4_4_true...
+                                                   ^
 create type break_int4_4_true_true (input = breakin_int4_4_true_true, output = breakout_int4_4_true_true, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_int4_4_true_true (i int, j break_int4_4_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_4_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -364,6 +430,8 @@ create function breakin_int4_4_true_false (cstring) returns break_int4_4_true_fa
 NOTICE:  return type break_int4_4_true_false is only a shell
 create function breakout_int4_4_true_false (break_int4_4_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_4_true_false is only a shell
+LINE 1: create function breakout_int4_4_true_false (break_int4_4_tru...
+                                                    ^
 create type break_int4_4_true_false (input = breakin_int4_4_true_false, output = breakout_int4_4_true_false, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_int4_4_true_false (i int, j break_int4_4_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_4_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -372,6 +440,8 @@ create function breakin_int4_4_false_true (cstring) returns break_int4_4_false_t
 NOTICE:  return type break_int4_4_false_true is only a shell
 create function breakout_int4_4_false_true (break_int4_4_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_4_false_true is only a shell
+LINE 1: create function breakout_int4_4_false_true (break_int4_4_fal...
+                                                    ^
 create type break_int4_4_false_true (input = breakin_int4_4_false_true, output = breakout_int4_4_false_true, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_4_false_true (i int, j break_int4_4_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_4_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -380,6 +450,8 @@ create function breakin_int4_4_false_false (cstring) returns break_int4_4_false_
 NOTICE:  return type break_int4_4_false_false is only a shell
 create function breakout_int4_4_false_false (break_int4_4_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_4_false_false is only a shell
+LINE 1: create function breakout_int4_4_false_false (break_int4_4_fa...
+                                                     ^
 create type break_int4_4_false_false (input = breakin_int4_4_false_false, output = breakout_int4_4_false_false, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_4_false_false (i int, j break_int4_4_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_4_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -388,6 +460,8 @@ create function breakin_int4_11_false_true (cstring) returns break_int4_11_false
 NOTICE:  return type break_int4_11_false_true is only a shell
 create function breakout_int4_11_false_true (break_int4_11_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_11_false_true is only a shell
+LINE 1: create function breakout_int4_11_false_true (break_int4_11_f...
+                                                     ^
 create type break_int4_11_false_true (input = breakin_int4_11_false_true, output = breakout_int4_11_false_true, internallength = 11, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_11_false_true (i int, j break_int4_11_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_11_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -396,6 +470,8 @@ create function breakin_int4_11_false_false (cstring) returns break_int4_11_fals
 NOTICE:  return type break_int4_11_false_false is only a shell
 create function breakout_int4_11_false_false (break_int4_11_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_11_false_false is only a shell
+LINE 1: create function breakout_int4_11_false_false (break_int4_11_...
+                                                      ^
 create type break_int4_11_false_false (input = breakin_int4_11_false_false, output = breakout_int4_11_false_false, internallength = 11, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_11_false_false (i int, j break_int4_11_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_11_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -404,6 +480,8 @@ create function breakin_int4_17_false_true (cstring) returns break_int4_17_false
 NOTICE:  return type break_int4_17_false_true is only a shell
 create function breakout_int4_17_false_true (break_int4_17_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_17_false_true is only a shell
+LINE 1: create function breakout_int4_17_false_true (break_int4_17_f...
+                                                     ^
 create type break_int4_17_false_true (input = breakin_int4_17_false_true, output = breakout_int4_17_false_true, internallength = 17, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_17_false_true (i int, j break_int4_17_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_17_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -412,6 +490,8 @@ create function breakin_int4_17_false_false (cstring) returns break_int4_17_fals
 NOTICE:  return type break_int4_17_false_false is only a shell
 create function breakout_int4_17_false_false (break_int4_17_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_17_false_false is only a shell
+LINE 1: create function breakout_int4_17_false_false (break_int4_17_...
+                                                      ^
 create type break_int4_17_false_false (input = breakin_int4_17_false_false, output = breakout_int4_17_false_false, internallength = 17, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_17_false_false (i int, j break_int4_17_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_17_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -420,6 +500,8 @@ create function breakin_int4_19_false_true (cstring) returns break_int4_19_false
 NOTICE:  return type break_int4_19_false_true is only a shell
 create function breakout_int4_19_false_true (break_int4_19_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_19_false_true is only a shell
+LINE 1: create function breakout_int4_19_false_true (break_int4_19_f...
+                                                     ^
 create type break_int4_19_false_true (input = breakin_int4_19_false_true, output = breakout_int4_19_false_true, internallength = 19, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_19_false_true (i int, j break_int4_19_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_19_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -428,6 +510,8 @@ create function breakin_int4_19_false_false (cstring) returns break_int4_19_fals
 NOTICE:  return type break_int4_19_false_false is only a shell
 create function breakout_int4_19_false_false (break_int4_19_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_19_false_false is only a shell
+LINE 1: create function breakout_int4_19_false_false (break_int4_19_...
+                                                      ^
 create type break_int4_19_false_false (input = breakin_int4_19_false_false, output = breakout_int4_19_false_false, internallength = 19, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_19_false_false (i int, j break_int4_19_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_19_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -436,6 +520,8 @@ create function breakin_int4_23_false_true (cstring) returns break_int4_23_false
 NOTICE:  return type break_int4_23_false_true is only a shell
 create function breakout_int4_23_false_true (break_int4_23_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_23_false_true is only a shell
+LINE 1: create function breakout_int4_23_false_true (break_int4_23_f...
+                                                     ^
 create type break_int4_23_false_true (input = breakin_int4_23_false_true, output = breakout_int4_23_false_true, internallength = 23, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_23_false_true (i int, j break_int4_23_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_23_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -444,6 +530,8 @@ create function breakin_int4_23_false_false (cstring) returns break_int4_23_fals
 NOTICE:  return type break_int4_23_false_false is only a shell
 create function breakout_int4_23_false_false (break_int4_23_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_23_false_false is only a shell
+LINE 1: create function breakout_int4_23_false_false (break_int4_23_...
+                                                      ^
 create type break_int4_23_false_false (input = breakin_int4_23_false_false, output = breakout_int4_23_false_false, internallength = 23, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_23_false_false (i int, j break_int4_23_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_23_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -452,6 +540,8 @@ create function breakin_int4_32_false_true (cstring) returns break_int4_32_false
 NOTICE:  return type break_int4_32_false_true is only a shell
 create function breakout_int4_32_false_true (break_int4_32_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_32_false_true is only a shell
+LINE 1: create function breakout_int4_32_false_true (break_int4_32_f...
+                                                     ^
 create type break_int4_32_false_true (input = breakin_int4_32_false_true, output = breakout_int4_32_false_true, internallength = 32, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_32_false_true (i int, j break_int4_32_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_32_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -460,6 +550,8 @@ create function breakin_int4_32_false_false (cstring) returns break_int4_32_fals
 NOTICE:  return type break_int4_32_false_false is only a shell
 create function breakout_int4_32_false_false (break_int4_32_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_32_false_false is only a shell
+LINE 1: create function breakout_int4_32_false_false (break_int4_32_...
+                                                      ^
 create type break_int4_32_false_false (input = breakin_int4_32_false_false, output = breakout_int4_32_false_false, internallength = 32, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_32_false_false (i int, j break_int4_32_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_32_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -468,6 +560,8 @@ create function breakin_int4_196_false_true (cstring) returns break_int4_196_fal
 NOTICE:  return type break_int4_196_false_true is only a shell
 create function breakout_int4_196_false_true (break_int4_196_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_196_false_true is only a shell
+LINE 1: create function breakout_int4_196_false_true (break_int4_196...
+                                                      ^
 create type break_int4_196_false_true (input = breakin_int4_196_false_true, output = breakout_int4_196_false_true, internallength = 196, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_196_false_true (i int, j break_int4_196_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_int4_196_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -476,6 +570,8 @@ create function breakin_int4_196_false_false (cstring) returns break_int4_196_fa
 NOTICE:  return type break_int4_196_false_false is only a shell
 create function breakout_int4_196_false_false (break_int4_196_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_int4_196_false_false is only a shell
+LINE 1: create function breakout_int4_196_false_false (break_int4_19...
+                                                       ^
 create type break_int4_196_false_false (input = breakin_int4_196_false_false, output = breakout_int4_196_false_false, internallength = 196, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_int4_196_false_false (i int, j break_int4_196_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_int4_196_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -484,6 +580,8 @@ create function breakin_char_variable_false_true (cstring) returns break_char_va
 NOTICE:  return type break_char_variable_false_true is only a shell
 create function breakout_char_variable_false_true (break_char_variable_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_variable_false_true is only a shell
+LINE 1: ...reate function breakout_char_variable_false_true (break_char...
+                                                             ^
 create type break_char_variable_false_true (input = breakin_char_variable_false_true, output = breakout_char_variable_false_true, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_variable_false_true (i int, j break_char_variable_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_variable_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -492,6 +590,8 @@ create function breakin_char_variable_false_false (cstring) returns break_char_v
 NOTICE:  return type break_char_variable_false_false is only a shell
 create function breakout_char_variable_false_false (break_char_variable_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_variable_false_false is only a shell
+LINE 1: ...eate function breakout_char_variable_false_false (break_char...
+                                                             ^
 create type break_char_variable_false_false (input = breakin_char_variable_false_false, output = breakout_char_variable_false_false, internallength = variable, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_variable_false_false (i int, j break_char_variable_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_variable_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -500,6 +600,8 @@ create function breakin_char_1_true_true (cstring) returns break_char_1_true_tru
 NOTICE:  return type break_char_1_true_true is only a shell
 create function breakout_char_1_true_true (break_char_1_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_1_true_true is only a shell
+LINE 1: create function breakout_char_1_true_true (break_char_1_true...
+                                                   ^
 create type break_char_1_true_true (input = breakin_char_1_true_true, output = breakout_char_1_true_true, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_char_1_true_true (i int, j break_char_1_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_1_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -508,6 +610,8 @@ create function breakin_char_1_true_false (cstring) returns break_char_1_true_fa
 NOTICE:  return type break_char_1_true_false is only a shell
 create function breakout_char_1_true_false (break_char_1_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_1_true_false is only a shell
+LINE 1: create function breakout_char_1_true_false (break_char_1_tru...
+                                                    ^
 create type break_char_1_true_false (input = breakin_char_1_true_false, output = breakout_char_1_true_false, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_char_1_true_false (i int, j break_char_1_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_1_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -516,6 +620,8 @@ create function breakin_char_1_false_true (cstring) returns break_char_1_false_t
 NOTICE:  return type break_char_1_false_true is only a shell
 create function breakout_char_1_false_true (break_char_1_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_1_false_true is only a shell
+LINE 1: create function breakout_char_1_false_true (break_char_1_fal...
+                                                    ^
 create type break_char_1_false_true (input = breakin_char_1_false_true, output = breakout_char_1_false_true, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_char_1_false_true (i int, j break_char_1_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_1_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -524,6 +630,8 @@ create function breakin_char_1_false_false (cstring) returns break_char_1_false_
 NOTICE:  return type break_char_1_false_false is only a shell
 create function breakout_char_1_false_false (break_char_1_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_1_false_false is only a shell
+LINE 1: create function breakout_char_1_false_false (break_char_1_fa...
+                                                     ^
 create type break_char_1_false_false (input = breakin_char_1_false_false, output = breakout_char_1_false_false, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_char_1_false_false (i int, j break_char_1_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_1_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -532,6 +640,8 @@ create function breakin_char_3_false_true (cstring) returns break_char_3_false_t
 NOTICE:  return type break_char_3_false_true is only a shell
 create function breakout_char_3_false_true (break_char_3_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_3_false_true is only a shell
+LINE 1: create function breakout_char_3_false_true (break_char_3_fal...
+                                                    ^
 create type break_char_3_false_true (input = breakin_char_3_false_true, output = breakout_char_3_false_true, internallength = 3, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_char_3_false_true (i int, j break_char_3_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_3_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -540,6 +650,8 @@ create function breakin_char_3_false_false (cstring) returns break_char_3_false_
 NOTICE:  return type break_char_3_false_false is only a shell
 create function breakout_char_3_false_false (break_char_3_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_3_false_false is only a shell
+LINE 1: create function breakout_char_3_false_false (break_char_3_fa...
+                                                     ^
 create type break_char_3_false_false (input = breakin_char_3_false_false, output = breakout_char_3_false_false, internallength = 3, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_char_3_false_false (i int, j break_char_3_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_3_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -548,6 +660,8 @@ create function breakin_char_4_true_true (cstring) returns break_char_4_true_tru
 NOTICE:  return type break_char_4_true_true is only a shell
 create function breakout_char_4_true_true (break_char_4_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_4_true_true is only a shell
+LINE 1: create function breakout_char_4_true_true (break_char_4_true...
+                                                   ^
 create type break_char_4_true_true (input = breakin_char_4_true_true, output = breakout_char_4_true_true, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_char_4_true_true (i int, j break_char_4_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_4_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -556,6 +670,8 @@ create function breakin_char_4_true_false (cstring) returns break_char_4_true_fa
 NOTICE:  return type break_char_4_true_false is only a shell
 create function breakout_char_4_true_false (break_char_4_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_4_true_false is only a shell
+LINE 1: create function breakout_char_4_true_false (break_char_4_tru...
+                                                    ^
 create type break_char_4_true_false (input = breakin_char_4_true_false, output = breakout_char_4_true_false, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_char_4_true_false (i int, j break_char_4_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_4_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -564,6 +680,8 @@ create function breakin_char_4_false_true (cstring) returns break_char_4_false_t
 NOTICE:  return type break_char_4_false_true is only a shell
 create function breakout_char_4_false_true (break_char_4_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_4_false_true is only a shell
+LINE 1: create function breakout_char_4_false_true (break_char_4_fal...
+                                                    ^
 create type break_char_4_false_true (input = breakin_char_4_false_true, output = breakout_char_4_false_true, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_4_false_true (i int, j break_char_4_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_4_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -572,6 +690,8 @@ create function breakin_char_4_false_false (cstring) returns break_char_4_false_
 NOTICE:  return type break_char_4_false_false is only a shell
 create function breakout_char_4_false_false (break_char_4_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_4_false_false is only a shell
+LINE 1: create function breakout_char_4_false_false (break_char_4_fa...
+                                                     ^
 create type break_char_4_false_false (input = breakin_char_4_false_false, output = breakout_char_4_false_false, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_4_false_false (i int, j break_char_4_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_4_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -580,6 +700,8 @@ create function breakin_char_11_false_true (cstring) returns break_char_11_false
 NOTICE:  return type break_char_11_false_true is only a shell
 create function breakout_char_11_false_true (break_char_11_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_11_false_true is only a shell
+LINE 1: create function breakout_char_11_false_true (break_char_11_f...
+                                                     ^
 create type break_char_11_false_true (input = breakin_char_11_false_true, output = breakout_char_11_false_true, internallength = 11, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_11_false_true (i int, j break_char_11_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_11_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -588,6 +710,8 @@ create function breakin_char_11_false_false (cstring) returns break_char_11_fals
 NOTICE:  return type break_char_11_false_false is only a shell
 create function breakout_char_11_false_false (break_char_11_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_11_false_false is only a shell
+LINE 1: create function breakout_char_11_false_false (break_char_11_...
+                                                      ^
 create type break_char_11_false_false (input = breakin_char_11_false_false, output = breakout_char_11_false_false, internallength = 11, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_11_false_false (i int, j break_char_11_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_11_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -596,6 +720,8 @@ create function breakin_char_17_false_true (cstring) returns break_char_17_false
 NOTICE:  return type break_char_17_false_true is only a shell
 create function breakout_char_17_false_true (break_char_17_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_17_false_true is only a shell
+LINE 1: create function breakout_char_17_false_true (break_char_17_f...
+                                                     ^
 create type break_char_17_false_true (input = breakin_char_17_false_true, output = breakout_char_17_false_true, internallength = 17, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_17_false_true (i int, j break_char_17_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_17_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -604,6 +730,8 @@ create function breakin_char_17_false_false (cstring) returns break_char_17_fals
 NOTICE:  return type break_char_17_false_false is only a shell
 create function breakout_char_17_false_false (break_char_17_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_17_false_false is only a shell
+LINE 1: create function breakout_char_17_false_false (break_char_17_...
+                                                      ^
 create type break_char_17_false_false (input = breakin_char_17_false_false, output = breakout_char_17_false_false, internallength = 17, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_17_false_false (i int, j break_char_17_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_17_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -612,6 +740,8 @@ create function breakin_char_19_false_true (cstring) returns break_char_19_false
 NOTICE:  return type break_char_19_false_true is only a shell
 create function breakout_char_19_false_true (break_char_19_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_19_false_true is only a shell
+LINE 1: create function breakout_char_19_false_true (break_char_19_f...
+                                                     ^
 create type break_char_19_false_true (input = breakin_char_19_false_true, output = breakout_char_19_false_true, internallength = 19, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_19_false_true (i int, j break_char_19_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_19_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -620,6 +750,8 @@ create function breakin_char_19_false_false (cstring) returns break_char_19_fals
 NOTICE:  return type break_char_19_false_false is only a shell
 create function breakout_char_19_false_false (break_char_19_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_19_false_false is only a shell
+LINE 1: create function breakout_char_19_false_false (break_char_19_...
+                                                      ^
 create type break_char_19_false_false (input = breakin_char_19_false_false, output = breakout_char_19_false_false, internallength = 19, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_19_false_false (i int, j break_char_19_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_19_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -628,6 +760,8 @@ create function breakin_char_23_false_true (cstring) returns break_char_23_false
 NOTICE:  return type break_char_23_false_true is only a shell
 create function breakout_char_23_false_true (break_char_23_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_23_false_true is only a shell
+LINE 1: create function breakout_char_23_false_true (break_char_23_f...
+                                                     ^
 create type break_char_23_false_true (input = breakin_char_23_false_true, output = breakout_char_23_false_true, internallength = 23, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_23_false_true (i int, j break_char_23_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_23_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -636,6 +770,8 @@ create function breakin_char_23_false_false (cstring) returns break_char_23_fals
 NOTICE:  return type break_char_23_false_false is only a shell
 create function breakout_char_23_false_false (break_char_23_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_23_false_false is only a shell
+LINE 1: create function breakout_char_23_false_false (break_char_23_...
+                                                      ^
 create type break_char_23_false_false (input = breakin_char_23_false_false, output = breakout_char_23_false_false, internallength = 23, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_23_false_false (i int, j break_char_23_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_23_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -644,6 +780,8 @@ create function breakin_char_32_false_true (cstring) returns break_char_32_false
 NOTICE:  return type break_char_32_false_true is only a shell
 create function breakout_char_32_false_true (break_char_32_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_32_false_true is only a shell
+LINE 1: create function breakout_char_32_false_true (break_char_32_f...
+                                                     ^
 create type break_char_32_false_true (input = breakin_char_32_false_true, output = breakout_char_32_false_true, internallength = 32, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_32_false_true (i int, j break_char_32_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_32_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -652,6 +790,8 @@ create function breakin_char_32_false_false (cstring) returns break_char_32_fals
 NOTICE:  return type break_char_32_false_false is only a shell
 create function breakout_char_32_false_false (break_char_32_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_32_false_false is only a shell
+LINE 1: create function breakout_char_32_false_false (break_char_32_...
+                                                      ^
 create type break_char_32_false_false (input = breakin_char_32_false_false, output = breakout_char_32_false_false, internallength = 32, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_32_false_false (i int, j break_char_32_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_32_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -660,6 +800,8 @@ create function breakin_char_196_false_true (cstring) returns break_char_196_fal
 NOTICE:  return type break_char_196_false_true is only a shell
 create function breakout_char_196_false_true (break_char_196_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_196_false_true is only a shell
+LINE 1: create function breakout_char_196_false_true (break_char_196...
+                                                      ^
 create type break_char_196_false_true (input = breakin_char_196_false_true, output = breakout_char_196_false_true, internallength = 196, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_196_false_true (i int, j break_char_196_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_char_196_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -668,6 +810,8 @@ create function breakin_char_196_false_false (cstring) returns break_char_196_fa
 NOTICE:  return type break_char_196_false_false is only a shell
 create function breakout_char_196_false_false (break_char_196_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_char_196_false_false is only a shell
+LINE 1: create function breakout_char_196_false_false (break_char_19...
+                                                       ^
 create type break_char_196_false_false (input = breakin_char_196_false_false, output = breakout_char_196_false_false, internallength = 196, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_char_196_false_false (i int, j break_char_196_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_char_196_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -676,6 +820,8 @@ create function breakin_double_variable_false_true (cstring) returns break_doubl
 NOTICE:  return type break_double_variable_false_true is only a shell
 create function breakout_double_variable_false_true (break_double_variable_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_variable_false_true is only a shell
+LINE 1: ...ate function breakout_double_variable_false_true (break_doub...
+                                                             ^
 create type break_double_variable_false_true (input = breakin_double_variable_false_true, output = breakout_double_variable_false_true, internallength = variable, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_variable_false_true (i int, j break_double_variable_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_variable_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -684,6 +830,8 @@ create function breakin_double_variable_false_false (cstring) returns break_doub
 NOTICE:  return type break_double_variable_false_false is only a shell
 create function breakout_double_variable_false_false (break_double_variable_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_variable_false_false is only a shell
+LINE 1: ...te function breakout_double_variable_false_false (break_doub...
+                                                             ^
 create type break_double_variable_false_false (input = breakin_double_variable_false_false, output = breakout_double_variable_false_false, internallength = variable, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_variable_false_false (i int, j break_double_variable_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_variable_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -692,6 +840,8 @@ create function breakin_double_1_true_true (cstring) returns break_double_1_true
 NOTICE:  return type break_double_1_true_true is only a shell
 create function breakout_double_1_true_true (break_double_1_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_1_true_true is only a shell
+LINE 1: create function breakout_double_1_true_true (break_double_1_...
+                                                     ^
 create type break_double_1_true_true (input = breakin_double_1_true_true, output = breakout_double_1_true_true, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_double_1_true_true (i int, j break_double_1_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_1_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -700,6 +850,8 @@ create function breakin_double_1_true_false (cstring) returns break_double_1_tru
 NOTICE:  return type break_double_1_true_false is only a shell
 create function breakout_double_1_true_false (break_double_1_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_1_true_false is only a shell
+LINE 1: create function breakout_double_1_true_false (break_double_1...
+                                                      ^
 create type break_double_1_true_false (input = breakin_double_1_true_false, output = breakout_double_1_true_false, internallength = 1, passedbyvalue = true, alignment = char);
 create table alter_distpol_g_double_1_true_false (i int, j break_double_1_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_1_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -708,6 +860,8 @@ create function breakin_double_1_false_true (cstring) returns break_double_1_fal
 NOTICE:  return type break_double_1_false_true is only a shell
 create function breakout_double_1_false_true (break_double_1_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_1_false_true is only a shell
+LINE 1: create function breakout_double_1_false_true (break_double_1...
+                                                      ^
 create type break_double_1_false_true (input = breakin_double_1_false_true, output = breakout_double_1_false_true, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_double_1_false_true (i int, j break_double_1_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_1_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -716,6 +870,8 @@ create function breakin_double_1_false_false (cstring) returns break_double_1_fa
 NOTICE:  return type break_double_1_false_false is only a shell
 create function breakout_double_1_false_false (break_double_1_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_1_false_false is only a shell
+LINE 1: create function breakout_double_1_false_false (break_double_...
+                                                       ^
 create type break_double_1_false_false (input = breakin_double_1_false_false, output = breakout_double_1_false_false, internallength = 1, passedbyvalue = false, alignment = char);
 create table alter_distpol_g_double_1_false_false (i int, j break_double_1_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_1_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -724,6 +880,8 @@ create function breakin_double_3_false_true (cstring) returns break_double_3_fal
 NOTICE:  return type break_double_3_false_true is only a shell
 create function breakout_double_3_false_true (break_double_3_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_3_false_true is only a shell
+LINE 1: create function breakout_double_3_false_true (break_double_3...
+                                                      ^
 create type break_double_3_false_true (input = breakin_double_3_false_true, output = breakout_double_3_false_true, internallength = 3, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_3_false_true (i int, j break_double_3_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_3_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -732,6 +890,8 @@ create function breakin_double_3_false_false (cstring) returns break_double_3_fa
 NOTICE:  return type break_double_3_false_false is only a shell
 create function breakout_double_3_false_false (break_double_3_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_3_false_false is only a shell
+LINE 1: create function breakout_double_3_false_false (break_double_...
+                                                       ^
 create type break_double_3_false_false (input = breakin_double_3_false_false, output = breakout_double_3_false_false, internallength = 3, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_3_false_false (i int, j break_double_3_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_3_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -740,6 +900,8 @@ create function breakin_double_4_true_true (cstring) returns break_double_4_true
 NOTICE:  return type break_double_4_true_true is only a shell
 create function breakout_double_4_true_true (break_double_4_true_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_4_true_true is only a shell
+LINE 1: create function breakout_double_4_true_true (break_double_4_...
+                                                     ^
 create type break_double_4_true_true (input = breakin_double_4_true_true, output = breakout_double_4_true_true, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_double_4_true_true (i int, j break_double_4_true_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_4_true_true (i, k) select i, i from generate_series(1, 10) i;
@@ -748,6 +910,8 @@ create function breakin_double_4_true_false (cstring) returns break_double_4_tru
 NOTICE:  return type break_double_4_true_false is only a shell
 create function breakout_double_4_true_false (break_double_4_true_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_4_true_false is only a shell
+LINE 1: create function breakout_double_4_true_false (break_double_4...
+                                                      ^
 create type break_double_4_true_false (input = breakin_double_4_true_false, output = breakout_double_4_true_false, internallength = 4, passedbyvalue = true, alignment = int4);
 create table alter_distpol_g_double_4_true_false (i int, j break_double_4_true_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_4_true_false (i, k) select i, i from generate_series(1, 10) i;
@@ -756,6 +920,8 @@ create function breakin_double_4_false_true (cstring) returns break_double_4_fal
 NOTICE:  return type break_double_4_false_true is only a shell
 create function breakout_double_4_false_true (break_double_4_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_4_false_true is only a shell
+LINE 1: create function breakout_double_4_false_true (break_double_4...
+                                                      ^
 create type break_double_4_false_true (input = breakin_double_4_false_true, output = breakout_double_4_false_true, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_double_4_false_true (i int, j break_double_4_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_4_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -764,6 +930,8 @@ create function breakin_double_4_false_false (cstring) returns break_double_4_fa
 NOTICE:  return type break_double_4_false_false is only a shell
 create function breakout_double_4_false_false (break_double_4_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_4_false_false is only a shell
+LINE 1: create function breakout_double_4_false_false (break_double_...
+                                                       ^
 create type break_double_4_false_false (input = breakin_double_4_false_false, output = breakout_double_4_false_false, internallength = 4, passedbyvalue = false, alignment = int4);
 create table alter_distpol_g_double_4_false_false (i int, j break_double_4_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_4_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -772,6 +940,8 @@ create function breakin_double_11_false_true (cstring) returns break_double_11_f
 NOTICE:  return type break_double_11_false_true is only a shell
 create function breakout_double_11_false_true (break_double_11_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_11_false_true is only a shell
+LINE 1: create function breakout_double_11_false_true (break_double_...
+                                                       ^
 create type break_double_11_false_true (input = breakin_double_11_false_true, output = breakout_double_11_false_true, internallength = 11, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_11_false_true (i int, j break_double_11_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_11_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -780,6 +950,8 @@ create function breakin_double_11_false_false (cstring) returns break_double_11_
 NOTICE:  return type break_double_11_false_false is only a shell
 create function breakout_double_11_false_false (break_double_11_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_11_false_false is only a shell
+LINE 1: create function breakout_double_11_false_false (break_double...
+                                                        ^
 create type break_double_11_false_false (input = breakin_double_11_false_false, output = breakout_double_11_false_false, internallength = 11, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_11_false_false (i int, j break_double_11_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_11_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -788,6 +960,8 @@ create function breakin_double_17_false_true (cstring) returns break_double_17_f
 NOTICE:  return type break_double_17_false_true is only a shell
 create function breakout_double_17_false_true (break_double_17_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_17_false_true is only a shell
+LINE 1: create function breakout_double_17_false_true (break_double_...
+                                                       ^
 create type break_double_17_false_true (input = breakin_double_17_false_true, output = breakout_double_17_false_true, internallength = 17, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_17_false_true (i int, j break_double_17_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_17_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -796,6 +970,8 @@ create function breakin_double_17_false_false (cstring) returns break_double_17_
 NOTICE:  return type break_double_17_false_false is only a shell
 create function breakout_double_17_false_false (break_double_17_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_17_false_false is only a shell
+LINE 1: create function breakout_double_17_false_false (break_double...
+                                                        ^
 create type break_double_17_false_false (input = breakin_double_17_false_false, output = breakout_double_17_false_false, internallength = 17, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_17_false_false (i int, j break_double_17_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_17_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -804,6 +980,8 @@ create function breakin_double_19_false_true (cstring) returns break_double_19_f
 NOTICE:  return type break_double_19_false_true is only a shell
 create function breakout_double_19_false_true (break_double_19_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_19_false_true is only a shell
+LINE 1: create function breakout_double_19_false_true (break_double_...
+                                                       ^
 create type break_double_19_false_true (input = breakin_double_19_false_true, output = breakout_double_19_false_true, internallength = 19, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_19_false_true (i int, j break_double_19_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_19_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -812,6 +990,8 @@ create function breakin_double_19_false_false (cstring) returns break_double_19_
 NOTICE:  return type break_double_19_false_false is only a shell
 create function breakout_double_19_false_false (break_double_19_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_19_false_false is only a shell
+LINE 1: create function breakout_double_19_false_false (break_double...
+                                                        ^
 create type break_double_19_false_false (input = breakin_double_19_false_false, output = breakout_double_19_false_false, internallength = 19, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_19_false_false (i int, j break_double_19_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_19_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -820,6 +1000,8 @@ create function breakin_double_23_false_true (cstring) returns break_double_23_f
 NOTICE:  return type break_double_23_false_true is only a shell
 create function breakout_double_23_false_true (break_double_23_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_23_false_true is only a shell
+LINE 1: create function breakout_double_23_false_true (break_double_...
+                                                       ^
 create type break_double_23_false_true (input = breakin_double_23_false_true, output = breakout_double_23_false_true, internallength = 23, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_23_false_true (i int, j break_double_23_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_23_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -828,6 +1010,8 @@ create function breakin_double_23_false_false (cstring) returns break_double_23_
 NOTICE:  return type break_double_23_false_false is only a shell
 create function breakout_double_23_false_false (break_double_23_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_23_false_false is only a shell
+LINE 1: create function breakout_double_23_false_false (break_double...
+                                                        ^
 create type break_double_23_false_false (input = breakin_double_23_false_false, output = breakout_double_23_false_false, internallength = 23, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_23_false_false (i int, j break_double_23_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_23_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -836,6 +1020,8 @@ create function breakin_double_32_false_true (cstring) returns break_double_32_f
 NOTICE:  return type break_double_32_false_true is only a shell
 create function breakout_double_32_false_true (break_double_32_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_32_false_true is only a shell
+LINE 1: create function breakout_double_32_false_true (break_double_...
+                                                       ^
 create type break_double_32_false_true (input = breakin_double_32_false_true, output = breakout_double_32_false_true, internallength = 32, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_32_false_true (i int, j break_double_32_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_32_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -844,6 +1030,8 @@ create function breakin_double_32_false_false (cstring) returns break_double_32_
 NOTICE:  return type break_double_32_false_false is only a shell
 create function breakout_double_32_false_false (break_double_32_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_32_false_false is only a shell
+LINE 1: create function breakout_double_32_false_false (break_double...
+                                                        ^
 create type break_double_32_false_false (input = breakin_double_32_false_false, output = breakout_double_32_false_false, internallength = 32, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_32_false_false (i int, j break_double_32_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_32_false_false (i, k) select i, i from generate_series(1, 10) i;
@@ -852,6 +1040,8 @@ create function breakin_double_196_false_true (cstring) returns break_double_196
 NOTICE:  return type break_double_196_false_true is only a shell
 create function breakout_double_196_false_true (break_double_196_false_true) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_196_false_true is only a shell
+LINE 1: create function breakout_double_196_false_true (break_double...
+                                                        ^
 create type break_double_196_false_true (input = breakin_double_196_false_true, output = breakout_double_196_false_true, internallength = 196, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_196_false_true (i int, j break_double_196_false_true, k text) with (appendonly = true) distributed by (i);
 insert into alter_distpol_g_double_196_false_true (i, k) select i, i from generate_series(1, 10) i;
@@ -860,6 +1050,8 @@ create function breakin_double_196_false_false (cstring) returns break_double_19
 NOTICE:  return type break_double_196_false_false is only a shell
 create function breakout_double_196_false_false (break_double_196_false_false) returns cstring as 'textout' language internal strict immutable;
 NOTICE:  argument type break_double_196_false_false is only a shell
+LINE 1: create function breakout_double_196_false_false (break_doubl...
+                                                         ^
 create type break_double_196_false_false (input = breakin_double_196_false_false, output = breakout_double_196_false_false, internallength = 196, passedbyvalue = false, alignment = double);
 create table alter_distpol_g_double_196_false_false (i int, j break_double_196_false_false, k text) with (appendonly = false) distributed by (i);
 insert into alter_distpol_g_double_196_false_false (i, k) select i, i from generate_series(1, 10) i;

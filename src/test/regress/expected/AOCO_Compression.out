@@ -342,6 +342,8 @@ Checksum: t
 Indexes:
     "co_crtb_with_strg_dir_and_col_ref_1_idx_bitmap" bitmap (a1)
     "co_crtb_with_strg_dir_and_col_ref_1_idx_btree" btree (a9)
+Not-null constraints:
+    "co_crtb_with_strg_dir_and_col_ref_1_id_not_null" NOT NULL "id"
 Distributed randomly
 Access method: ao_column
 
@@ -545,6 +547,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_1_prt_1_2_prt_sp2_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_1_prt_1_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -655,6 +659,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_1_prt_new_p_2_prt_sp1_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_1_prt_new_p_2_prt_sp1_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -713,6 +719,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_1_prt_df_p_2_prt_sp2_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_1_prt_df_p_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -786,6 +794,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_exch_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib
@@ -935,6 +945,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_2_1_prt_p1_2_prt_2_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_2_1_prt_p1_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -1045,6 +1057,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_2_1_prt_new_p_2_prt_3_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_2_1_prt_new_p_2_prt_3_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -1103,6 +1117,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_2_1_prt_df_p_2_prt_2_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_2_1_prt_df_p_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -1176,6 +1192,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_2_exch_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_2_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_2_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib
@@ -1235,6 +1253,8 @@ Checksum: t
 Indexes:
     "co_cr_sub_partzlib8192_1_2_1_prt_p1_2_prt_splita_a1_idx" bitmap (a1)
     "co_cr_sub_partzlib8192_1_2_1_prt_p1_2_prt_splita_a9_idx" btree (a9)
+Not-null constraints:
+    "co_cr_sub_partzlib8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 
@@ -1387,6 +1407,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_1_prt_1_2_prt_sp2_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_1_prt_1_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -1498,6 +1520,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_1_prt_new_p_2_prt_sp1_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_1_prt_new_p_2_prt_sp1_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib, compresslevel=1
@@ -1557,6 +1581,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_1_prt_df_p_2_prt_sp2_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_1_prt_df_p_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -1631,6 +1657,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_exch_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib
@@ -1777,6 +1805,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_2_1_prt_p1_2_prt_2_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_2_1_prt_p1_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -1888,6 +1918,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_2_1_prt_new_p_2_prt_3_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_2_1_prt_new_p_2_prt_3_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -1947,6 +1979,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_2_1_prt_df_p_2_prt_2_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_2_1_prt_df_p_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -2021,6 +2055,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_2_exch_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_2_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_2_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib
@@ -2080,6 +2116,8 @@ Checksum: t
 Indexes:
     "co_wt_sub_partrle_type8192_1_2_1_prt_p2_2_prt_splita_a1_idx" bitmap (a1)
     "co_wt_sub_partrle_type8192_1_2_1_prt_p2_2_prt_splita_a9_idx" btree (a9)
+Not-null constraints:
+    "co_wt_sub_partrle_type8192_1_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=rle_type, compresslevel=1, blocksize=8192
@@ -2230,6 +2268,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_1_prt_1_2_prt_sp2_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_1_prt_1_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -2341,6 +2381,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_1_prt_new_p_2_prt_sp1_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_1_prt_new_p_2_prt_sp1_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_column
 Options: compresstype=zlib, compresslevel=1
@@ -2403,6 +2445,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_1_prt_df_p_2_prt_sp2_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_1_prt_df_p_2_prt_sp2_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -2480,6 +2524,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_exch_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib
@@ -2629,6 +2675,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_2_1_prt_p1_2_prt_2_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_2_1_prt_p1_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -2743,6 +2791,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_2_1_prt_new_p_2_prt_3_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_2_1_prt_new_p_2_prt_3_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -2805,6 +2855,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_2_1_prt_df_p_2_prt_2_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_2_1_prt_df_p_2_prt_2_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -2882,6 +2934,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_2_exch_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_2_exch_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_2_exch_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib
@@ -2944,6 +2998,8 @@ Checksum: t
 Indexes:
     "ao_wt_sub_partzlib8192_5_2_1_prt_p2_2_prt_splita_a1_idx" bitmap (a1)
     "ao_wt_sub_partzlib8192_5_2_1_prt_p2_2_prt_splita_a9_idx" btree (a9)
+Not-null constraints:
+    "ao_wt_sub_partzlib8192_5_2_id_not_null" NOT NULL "id" (inherited)
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=5, blocksize=8192
@@ -3083,6 +3139,8 @@ Checksum: t
 Indexes:
     "ao_crtb_with_row_zlib_8192_1_idx_bitmap" bitmap (a1)
     "ao_crtb_with_row_zlib_8192_1_idx_btree" btree (a9)
+Not-null constraints:
+    "ao_crtb_with_row_zlib_8192_1_id_not_null" NOT NULL "id"
 Distributed randomly
 Access method: ao_row
 Options: compresstype=zlib, compresslevel=1, blocksize=8192
@@ -3189,6 +3247,8 @@ Alter table ao_crtb_with_row_zlib_8192_1 Drop column a12;
 NOTICE:  table "ao_crtb_with_row_zlib_8192_1_ctas" does not exist, skipping
 --Create a CTAS table 
 CREATE TABLE ao_crtb_with_row_zlib_8192_1_ctas  WITH (appendonly=true, orientation=column) AS Select * from ao_crtb_with_row_zlib_8192_1;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP type if exists int_rle_type cascade ; 
 NOTICE:  type "int_rle_type" does not exist, skipping
 CREATE type int_rle_type;
@@ -3202,6 +3262,8 @@ CREATE FUNCTION int_rle_type_out(int_rle_type)
  AS 'int4out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type int_rle_type is only a shell
+LINE 1: CREATE FUNCTION int_rle_type_out(int_rle_type) 
+                                         ^
 CREATE TYPE int_rle_type( 
  input = int_rle_type_in ,
  output = int_rle_type_out ,
@@ -3227,6 +3289,8 @@ CREATE FUNCTION int_rle_type_out(int_rle_type)
  AS 'int4out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type int_rle_type is only a shell
+LINE 1: CREATE FUNCTION int_rle_type_out(int_rle_type) 
+                                         ^
 CREATE TYPE int_rle_type( 
  input = int_rle_type_in ,
  output = int_rle_type_out ,
@@ -3255,6 +3319,8 @@ CREATE FUNCTION char_rle_type_out(char_rle_type)
  AS 'charout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type char_rle_type is only a shell
+LINE 1: CREATE FUNCTION char_rle_type_out(char_rle_type) 
+                                          ^
 CREATE TYPE char_rle_type( 
  input = char_rle_type_in ,
  output = char_rle_type_out ,
@@ -3280,6 +3346,8 @@ CREATE FUNCTION char_rle_type_out(char_rle_type)
  AS 'charout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type char_rle_type is only a shell
+LINE 1: CREATE FUNCTION char_rle_type_out(char_rle_type) 
+                                          ^
 CREATE TYPE char_rle_type( 
  input = char_rle_type_in ,
  output = char_rle_type_out ,
@@ -3308,6 +3376,8 @@ CREATE FUNCTION text_rle_type_out(text_rle_type)
  AS 'textout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type text_rle_type is only a shell
+LINE 1: CREATE FUNCTION text_rle_type_out(text_rle_type) 
+                                          ^
 CREATE TYPE text_rle_type( 
  input = text_rle_type_in ,
  output = text_rle_type_out ,
@@ -3332,6 +3402,8 @@ CREATE FUNCTION text_rle_type_out(text_rle_type)
  AS 'textout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type text_rle_type is only a shell
+LINE 1: CREATE FUNCTION text_rle_type_out(text_rle_type) 
+                                          ^
 CREATE TYPE text_rle_type( 
  input = text_rle_type_in ,
  output = text_rle_type_out ,
@@ -3359,6 +3431,8 @@ CREATE FUNCTION varchar_rle_type_out(varchar_rle_type)
  AS 'varcharout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type varchar_rle_type is only a shell
+LINE 1: CREATE FUNCTION varchar_rle_type_out(varchar_rle_type) 
+                                             ^
 CREATE TYPE varchar_rle_type( 
  input = varchar_rle_type_in ,
  output = varchar_rle_type_out ,
@@ -3383,6 +3457,8 @@ CREATE FUNCTION varchar_rle_type_out(varchar_rle_type)
  AS 'varcharout' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type varchar_rle_type is only a shell
+LINE 1: CREATE FUNCTION varchar_rle_type_out(varchar_rle_type) 
+                                             ^
 CREATE TYPE varchar_rle_type( 
  input = varchar_rle_type_in ,
  output = varchar_rle_type_out ,
@@ -3410,6 +3486,8 @@ CREATE FUNCTION date_rle_type_out(date_rle_type)
  AS 'date_out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type date_rle_type is only a shell
+LINE 1: CREATE FUNCTION date_rle_type_out(date_rle_type) 
+                                          ^
 CREATE TYPE date_rle_type( 
  input = date_rle_type_in ,
  output = date_rle_type_out ,
@@ -3435,6 +3513,8 @@ CREATE FUNCTION date_rle_type_out(date_rle_type)
  AS 'date_out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type date_rle_type is only a shell
+LINE 1: CREATE FUNCTION date_rle_type_out(date_rle_type) 
+                                          ^
 CREATE TYPE date_rle_type( 
  input = date_rle_type_in ,
  output = date_rle_type_out ,
@@ -3463,6 +3543,8 @@ CREATE FUNCTION timestamp_rle_type_out(timestamp_rle_type)
  AS 'timestamp_out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type timestamp_rle_type is only a shell
+LINE 1: CREATE FUNCTION timestamp_rle_type_out(timestamp_rle_type) 
+                                               ^
 CREATE TYPE timestamp_rle_type( 
  input = timestamp_rle_type_in ,
  output = timestamp_rle_type_out ,
@@ -3488,6 +3570,8 @@ CREATE FUNCTION timestamp_rle_type_out(timestamp_rle_type)
  AS 'timestamp_out' 
  LANGUAGE internal IMMUTABLE STRICT; 
 NOTICE:  argument type timestamp_rle_type is only a shell
+LINE 1: CREATE FUNCTION timestamp_rle_type_out(timestamp_rle_type) 
+                                               ^
 CREATE TYPE timestamp_rle_type( 
  input = timestamp_rle_type_in ,
  output = timestamp_rle_type_out ,
@@ -3520,6 +3604,8 @@ CREATE TABLE co_create_type_rle_type_8192_4
  a5     | varchar_rle_type   |           |          |                                                            | plain   |              | rle_type         | 4                 | 8192       | 
  a6     | timestamp_rle_type |           |          |                                                            | plain   |              | rle_type         | 4                 | 8192       | 
 Checksum: t
+Not-null constraints:
+    "co_create_type_rle_type_8192_4_id_not_null" NOT NULL "id"
 Distributed randomly
 Access method: ao_column
 
@@ -3574,6 +3660,8 @@ Alter type int_rle_type set default encoding (compresstype=zlib,compresslevel=1)
  a6              | timestamp_rle_type |           |          |                                                            | plain   |              | rle_type         | 4                 | 8192       | 
  new_cl          | int_rle_type       |           |          | '5'::int_rle_type                                          | plain   |              | zlib             | 1                 | 32768      | 
 Checksum: t
+Not-null constraints:
+    "co_create_type_rle_type_8192_4_id_not_null" NOT NULL "id"
 Distributed randomly
 Access method: ao_column
 
@@ -3612,6 +3700,7 @@ get_ao_compression_ratio('mpp17012_compress_test2');
  col3   | character varying |           |          |         | extended |              | zlib             | 5                 | 32768      | 
  col4   | character(44)     |           |          |         | extended |              | zlib             | 5                 | 32768      | 
 Checksum: t
+Distributed by: (col1)
 Access method: ao_column
 
 -- When I insert data
@@ -3626,6 +3715,8 @@ get_ao_compression_ratio('mpp17012_compress_test2');
 
 -- Test that an AO/CO table with compresstype zlib and invalid compress level will error at create
 create table a_aoco_table_with_zlib_and_invalid_compression_level(col text) WITH (APPENDONLY=true, COMPRESSTYPE=zlib, compresslevel=-1, ORIENTATION=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -1 out of bounds for option "compresslevel"
 DETAIL:  Valid values are between "0" and "19".
 -- Check that callbacks are registered
@@ -3637,6 +3728,8 @@ SELECT * FROM pg_compression WHERE compname='zlib';
 
 -- Given an AO/CO with RLE type compression
 create table a_aoco_table_with_rle_type_compression(col int) WITH (APPENDONLY=true, COMPRESSTYPE=rle_type, compresslevel=1, ORIENTATION=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select pg_size_pretty(pg_relation_size('a_aoco_table_with_rle_type_compression')),
        get_ao_compression_ratio('a_aoco_table_with_rle_type_compression');
  pg_size_pretty | get_ao_compression_ratio 
@@ -3656,6 +3749,8 @@ select pg_size_pretty(pg_relation_size('a_aoco_table_with_rle_type_compression')
 
 -- Test that an AO/CO table with compresstype rle and invalid compress level will error at create
 create table a_aoco_table_with_rle_type_and_invalid_compression_level(col int) WITH (APPENDONLY=true, COMPRESSTYPE=rle_type, compresslevel=-1, ORIENTATION=column);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -1 out of bounds for option "compresslevel"
 DETAIL:  Valid values are between "0" and "19".
 -- Check that callbacks are registered

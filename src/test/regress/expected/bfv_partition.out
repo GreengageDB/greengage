@@ -11,6 +11,8 @@ partition by range (f2)
   end (date '2001-01-01'::timestamp) EXCLUSIVE
   every ('1 month'::interval)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE TIMESTAMP_MONTH_rangep_STARTEXCL (i1 int, f2 timestamp)
 partition by range (f2)
 (
@@ -18,6 +20,8 @@ partition by range (f2)
   end (date '2001-01-01'::timestamp) INCLUSIVE
   every ('1 month'::interval)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE TIMESTAMP_MONTH_listp (i1 int, f2 timestamp)
 partition by list (f2)
 (
@@ -27,6 +31,8 @@ partition by list (f2)
   partition jan4 values ('2000-01-04'::timestamp),
   partition jan5 values ('2000-01-05'::timestamp)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- TEST
 -- Middle of a middle range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (1, '2000-07-16');
@@ -108,7 +114,7 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = TO_DATE('2000-12-31', 
 (1 row)
 
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTINCL values (5, '2001-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.4:7004 pid=1850627)
+ERROR:  no partition of relation "timestamp_month_rangep_startincl" found for row  (seg2 172.17.0.2:7004 pid=44924)
 DETAIL:  Partition key of the failing row contains (f2) = (Mon Jan 01 00:00:00 2001).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTINCL WHERE f2 = '2001-01-01';
  i1 | f2 
@@ -148,7 +154,7 @@ SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = TO_DATE('2000-07-16', 
 
 -- Beginning of the first range
 INSERT INTO TIMESTAMP_MONTH_rangep_STARTEXCL values (2, '2000-01-01'); -- should fail, no such partition
-ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.4:7002 pid=1850625)
+ERROR:  no partition of relation "timestamp_month_rangep_startexcl" found for row  (seg0 172.17.0.2:7002 pid=44920)
 DETAIL:  Partition key of the failing row contains (f2) = (Sat Jan 01 00:00:00 2000).
 SELECT * FROM TIMESTAMP_MONTH_rangep_STARTEXCL WHERE f2 = '2000-01-01';
  i1 | f2 
@@ -270,6 +276,7 @@ DISTRIBUTED BY (empid)
  region       | character varying(20) |           |          | 
 Partition key: RANGE (year)
 Number of partitions: 2 (Use \d+ to list them.)
+Distributed by: (empid)
 
 \d t26002_t1_1_prt_2;
           Partitioned table "bfv_partition.t26002_t1_1_prt_2"
@@ -282,6 +289,7 @@ Number of partitions: 2 (Use \d+ to list them.)
 Partition of: t26002_t1 FOR VALUES FROM (2012) TO (2015)
 Partition key: LIST (region)
 Number of partitions: 4 (Use \d+ to list them.)
+Distributed by: (empid)
 
 \d t26002_t1_1_prt_2_2_prt_asia;
           Table "bfv_partition.t26002_t1_1_prt_2_2_prt_asia"
@@ -292,6 +300,7 @@ Number of partitions: 4 (Use \d+ to list them.)
  year         | integer               |           |          | 
  region       | character varying(20) |           |          | 
 Partition of: t26002_t1_1_prt_2 FOR VALUES IN ('asia')
+Distributed by: (empid)
 
 \d+ T26002_T1;
                                   Partitioned table "bfv_partition.t26002_t1"
@@ -304,6 +313,7 @@ Partition of: t26002_t1_1_prt_2 FOR VALUES IN ('asia')
 Partition key: RANGE (year)
 Partitions: t26002_t1_1_prt_2 FOR VALUES FROM (2012) TO (2015), PARTITIONED,
             t26002_t1_1_prt_outlying_years DEFAULT, PARTITIONED
+Distributed by: (empid)
 
 \d+ t26002_t1_1_prt_2;
                               Partitioned table "bfv_partition.t26002_t1_1_prt_2"
@@ -320,6 +330,7 @@ Partitions: t26002_t1_1_prt_2_2_prt_asia FOR VALUES IN ('asia'),
             t26002_t1_1_prt_2_2_prt_europe FOR VALUES IN ('europe'),
             t26002_t1_1_prt_2_2_prt_usa FOR VALUES IN ('usa'),
             t26002_t1_1_prt_2_2_prt_other_regions DEFAULT
+Distributed by: (empid)
 
 \d+ t26002_t1_1_prt_2_2_prt_asia;
                               Table "bfv_partition.t26002_t1_1_prt_2_2_prt_asia"
@@ -331,6 +342,7 @@ Partitions: t26002_t1_1_prt_2_2_prt_asia FOR VALUES IN ('asia'),
  region       | character varying(20) |           |          |         | extended |              | 
 Partition of: t26002_t1_1_prt_2 FOR VALUES IN ('asia')
 Partition constraint: ((year IS NOT NULL) AND (year >= 2012) AND (year < 2015) AND (region IS NOT NULL) AND ((region)::text = 'asia'::character varying(20)))
+Distributed by: (empid)
 
 /*
 -- test 2: Data Engineer won't see partition key for non-partitioned table
@@ -348,6 +360,7 @@ DISTRIBUTED BY (empid);
  departmentid | integer               |           |          | 
  year         | integer               |           |          | 
  region       | character varying(20) |           |          | 
+Distributed by: (empid)
 
 \d+ T26002_T2;
                                         Table "bfv_partition.t26002_t2"
@@ -357,6 +370,7 @@ DISTRIBUTED BY (empid);
  departmentid | integer               |           |          |         | plain    |              | 
  year         | integer               |           |          |         | plain    |              | 
  region       | character varying(20) |           |          |         | extended |              | 
+Distributed by: (empid)
 
 --
 -- Test whether test gives wrong results with partition tables when
@@ -368,6 +382,8 @@ alter table pt_1_prt_1 set distributed randomly;
 ERROR:  can't set the distribution policy of "pt_1_prt_1"
 HINT:  Distribution policy of a partition can only be the same as its parent's.
 create table t(a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into pt select g%10, g%2 + 1, g*2 from generate_series(1,20) g;
 insert into pt values(1,1,3);
 insert into t select g%10, g%2 + 1 from generate_series(1,20) g;
@@ -390,16 +406,16 @@ SELECT COUNT(*) FROM pt, t WHERE pt.a = t.a and pt.c=4;
 select a, count(*) from pt group by a; 
  a | count 
 ---+-------
- 0 |     2
- 1 |     3
- 9 |     2
- 6 |     2
- 5 |     2
  4 |     2
  2 |     2
  8 |     2
  7 |     2
  3 |     2
+ 0 |     2
+ 1 |     3
+ 9 |     2
+ 6 |     2
+ 5 |     2
 (10 rows)
 
 select b, count(*) from pt group by b;
@@ -421,6 +437,8 @@ select a, count(*) from pt where a<2 group by a;
 --
 -- SETUP
 CREATE TABLE foo (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
   SUBPARTITION BY RANGE (c) SUBPARTITION TEMPLATE 
@@ -432,6 +450,8 @@ PARTITION BY RANGE (b)
   START (1) END (10) ,
   START (10) END (20)
 ); 
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
@@ -448,6 +468,8 @@ DROP TABLE IF EXISTS foo, bar;
 --
 -- SETUP
 CREATE TABLE foo (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int)
 PARTITION BY RANGE (b)
   SUBPARTITION BY RANGE (c) SUBPARTITION TEMPLATE 
@@ -459,13 +481,15 @@ PARTITION BY RANGE (b)
   START (1) END (10) WITH (appendonly=true),
   START (10) END (20)
 ); 
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
- 1 |   |  
    | 2 | 3
+ 1 |   |  
 (2 rows)
 
 -- CLEANUP
@@ -475,6 +499,8 @@ DROP TABLE IF EXISTS foo, bar;
 --
 -- SETUP
 CREATE TABLE foo (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bar (b int, c int) WITH (appendonly=true)
 PARTITION BY RANGE (b)
   SUBPARTITION BY RANGE (c) SUBPARTITION TEMPLATE 
@@ -486,13 +512,15 @@ PARTITION BY RANGE (b)
   START (1) END (10),
   START (10) END (20)
 ); 
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (2,3);
 SELECT * FROM foo FULL JOIN bar ON foo.a = bar.b;
  a | b | c 
 ---+---+---
- 1 |   |  
    | 2 | 3
+ 1 |   |  
 (2 rows)
 
 CREATE TABLE mpp3263 (
@@ -514,6 +542,8 @@ CREATE TABLE mpp3263 (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (1000) every (500), default partition default_part );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- These are OK
 alter table mpp3263 add column AAA int;
 alter table mpp3263 add column BBB int;
@@ -532,6 +562,8 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid boundary specification for RANGE partition
 LINE 5:   subpartition male values ('Male','M'),
           ^
@@ -545,6 +577,8 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid boundary specification for RANGE partition
 LINE 8: ( partition pst values ('PST'),
           ^
@@ -558,6 +592,8 @@ subpartition template (
 ( partition pst values ('PST'),
   partition est values ('EST')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid boundary specification for RANGE partition
 LINE 8: ( partition pst values ('PST'),
           ^
@@ -568,6 +604,8 @@ partition by range (f1)
   partition "New York" start (time with time zone '00:00 EST') end (time with time zone '23:00 EST') EVERY (INTERVAL '1 hour')
 );
 NOTICE:  identifier "mpp3542_000000000011111111112222222222333333333344444444445555555555556666666666777777777788888888889999999999" will be truncated to "mpp3542_0000000000111111111122222222223333333333444444444455555"
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "mpp3542_00000000001111111111222222222233333333_1_prt_New York_4" would overlap partition "mpp3542_00000000001111111111222222222233333_1_prt_Los Angeles_1"
 -- Truncates the table name to mpp3542_0000000000111111111122222222223333333333444444444455555, but partition name is too long, so ERROR
 alter table mpp3542_000000000011111111112222222222333333333344444444445555555555556666666666777777777788888888889999999999 rename partition "Los Angeles_1" to "123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
@@ -585,6 +623,8 @@ ERROR:  relation "mpp3542_000000000011111111112222222222333333333344444444445555
 alter table  mpp3542_0000000000111111111122222222223333333333444444444455555 rename to m; 
 ERROR:  relation "mpp3542_0000000000111111111122222222223333333333444444444455555" does not exist
 create table mpp3466 (i int) partition by range(i) (start(1) end(10) every(2), default partition f);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3466 split partition f at (3) into (partition f, partition new1);
 ERROR:  AT clause cannot be used when splitting a default RANGE partition
 drop table mpp3466;
@@ -690,6 +730,8 @@ drop table mpp3058;
 ERROR:  table "mpp3058" does not exist
 create table mpp3607 (aa int, bb int) partition by range (bb)
 (partition foo start(2));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3607 add partition baz end (3); -- Expected Overlaps
 ERROR:  partition "mpp3607_1_prt_baz" would overlap partition "mpp3607_1_prt_foo"
 alter table mpp3607 add partition baz end (4); -- Expected Overlaps
@@ -727,6 +769,8 @@ drop table mpp3607;
 CREATE TABLE mpp3632(a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
 partition by range (a)
 ( partition aa start (1) end (10) every (1) );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3632 add partition a1 start (30);
 alter table mpp3632 add partition a2 start (25) end (30);
 alter table mpp3632 add partition a3 start (10) end (20);
@@ -737,10 +781,14 @@ alter table mpp3632 add partition a6 start (21) end (22);
 drop table mpp3632;
 create table mpp3671 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3671 select i from generate_series(1, 10) i;
 alter table mpp3671 split partition for(1) at (1,2) into (partition f1a, partition f1b);
 drop table mpp3671;
 create table mpp3639 (i int) partition by range(i) (start(1) end(100) inclusive every(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3639 select i from generate_series(1, 100) i;
 insert into mpp3639 select i from generate_series(1, 100) i;
 insert into mpp3639 select i from generate_series(1, 100) i;
@@ -1052,6 +1100,8 @@ select * from mpp3639 order by i;
 drop table mpp3639;
 create table mpp3588 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3588 select i from generate_series(1, 8) i;
 alter table mpp3588 split partition for(1) at (1,2) into (partition fa, partition fb);
 alter table mpp3588 split partition for(1) at (1,2) into (partition f1a, partition f1b); -- This has partition rules that overlaps
@@ -1076,6 +1126,8 @@ alter table mpp3681 split default partition start('2008-04-01') inclusive end('2
 drop table mpp3681;
 -- MPP-3593
 create table mpp3593 (i int) partition by range(i) (start(1) end(100) every(10));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3593 select i from generate_series(1, 99) i;
 alter table mpp3593 split partition for(1) at (5) into (partition aa, partition bb);
 alter table mpp3593 split partition for(15) at (20) into (partition a1, partition b1);
@@ -1099,6 +1151,8 @@ alter table mpp3742 split default partition start ('2009-01-01') end ('2009-02-0
 drop table mpp3742;
 create table mpp3597 (i int) partition by list(i) (partition a values(1, 2, 3, 4),
 partition b values(5, 6, 7, 8), default partition default_part);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3597 select i from generate_series(1, 100) i;
 insert into mpp3597 values (NULL);
 alter table mpp3597 split default partition at (NULL);
@@ -1110,13 +1164,17 @@ select * from mpp3597_1_prt_default_part where i=NULL; -- No NULL values
 
 drop table mpp3597;
 create table mpp3594 (i date) partition by range(i) (start('2008-07-01') end('2009-01-01') every(interval '1 month'), default partition default_part);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3594 split default partition start ('2009-01-01') end ('2009-02-01') into (partition aa, partition nodate);
 ERROR:  default partition name missing from INTO clause
 drop table mpp3594;
 CREATE TABLE mpp3512 (id int, rank int, year int, gender char(1), count int)
 DISTRIBUTED BY (id);
 create table mpp3512_part (like mpp3512) partition by range (year) ( start (2001) end (2006) every ('1'));
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 create table mpp3512a (like mpp3512_part);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d mpp3512
              Table "bfv_partition.mpp3512"
  Column |     Type     | Collation | Nullable | Default 
@@ -1126,6 +1184,7 @@ create table mpp3512a (like mpp3512_part);
  year   | integer      |           |          | 
  gender | character(1) |           |          | 
  count  | integer      |           |          | 
+Distributed by: (id)
 
 \d mpp3512a
              Table "bfv_partition.mpp3512a"
@@ -1136,6 +1195,7 @@ create table mpp3512a (like mpp3512_part);
  year   | integer      |           |          | 
  gender | character(1) |           |          | 
  count  | integer      |           |          | 
+Distributed by: (id)
 
 select relid,parentrelid,isleaf,level, pg_catalog.pg_get_expr(relpartbound, oid) from pg_partition_tree('mpp3512_part'), pg_class where relid = oid;
         relid         | parentrelid  | isleaf | level |           pg_get_expr            
@@ -1157,6 +1217,8 @@ ps_supplycost numeric, ps_comment character varying(199) )
 PARTITION BY RANGE(ps_supplycost)
 subpartition by range (ps_supplycost)
 (default partition foo (default subpartition bar));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table mpp3988;
 CREATE TABLE mpp3816 (
         unique1         int4,
@@ -1178,6 +1240,8 @@ CREATE TABLE mpp3816 (
 	startDate       date		
 ) partition by range (startDate)
 ( start ('2007-06-01') end ('2008-01-01') every (interval '1 month'), default partition default_part );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3816 add column AAA int;
 alter table mpp3816 add column BBB int;
 alter table mpp3816 drop column BBB;
@@ -1195,6 +1259,8 @@ CREATE TABLE mpp3762_weather (
         prcp      real,
         date      date
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 CREATE TABLE mpp3762_cities_partition (
         city     varchar(80) primary key,
@@ -1207,6 +1273,8 @@ CREATE TABLE mpp3762_weather_partition (
         prcp      real,
         date      date
 ) partition by range(date) ( start('2008-01-01') end ('2009-01-01') every (interval '1 month'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'city' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
@@ -1271,6 +1339,8 @@ CREATE TABLE mpp3641a (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (500) every (100), default partition default_part );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE mpp3641b (
         unique1         int4,
         unique2         int4,
@@ -1291,6 +1361,8 @@ CREATE TABLE mpp3641b (
 ) partition by range (unique1)
 subpartition by range (unique2) subpartition template ( start (0) end (500) every (100) )
 ( start (0) end (500) every (100));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3641b add default partition default_part;
 CREATE INDEX mpp3641a_unique1 ON mpp3641a USING btree(unique1 int4_ops);
 CREATE INDEX mpp3641a_unique2 ON mpp3641a USING btree(unique2 int4_ops);
@@ -1499,6 +1571,8 @@ create table rgs.mpp4604(
 	partition p1 start (date '2008-10-14') end (date '2008-10-15'),
 	partition p2 end (date '2008-11-01')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE rgs.mpp4604 SPLIT PARTITION p2 AT( '2008-10-20' ) INTO( PARTITION p2_tmp, PARTITION p3 );
 alter table rgs.mpp4604 drop partition p3;
 drop schema rgs cascade;
@@ -1523,6 +1597,8 @@ CREATE TABLE mpp3817 (
 	startDate       date		
 ) partition by range (startDate)
 ( start ('2007-01-01') end ('2008-01-01') every (interval '1 month'), default partition default_part );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mpp3817 drop column unique1; -- Set distribution key to randomly
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
@@ -1618,6 +1694,8 @@ partition by range (n_regionkey)
 (
 partition p1 start('0') end('1') inclusive, partition p2 start('1') end('5') inclusive
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n_nationkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "nation_1_prt_p2" would overlap partition "nation_1_prt_p1"
 CREATE TABLE ORDERS (
                 O_ORDERKEY INT8,
@@ -1697,6 +1775,8 @@ partition by range (f1)
   partition pst start (time with time zone '00:00 PST') end (time with time zone '23:00 PST') EVERY (INTERVAL '1 hour'),
   partition est start (time with time zone '00:00 EST') end (time with time zone '23:00 EST') EVERY (INTERVAL '1 hour')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  partition "mpp3114_1_prt_est_4" would overlap partition "mpp3114_1_prt_pst_1"
 DROP TABLE mpp3114;
 ERROR:  table "mpp3114" does not exist
@@ -2019,11 +2099,15 @@ start (date '2003-01-01'),
 start (date '2004-01-01'),
 start (date '2005-01-01')
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  specified value cannot be cast to type integer for column "i"
 LINE 6: start (date '2001-01-01'),
                ^
 set optimizer_analyze_root_partition=on;
 create table mpp3487 (i int) partition by range (i) (start(1) end(10) every(1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp3487 select i from generate_series(1, 9) i;
 vacuum analyze mpp3487;
 select  schemaname, tablename, attname, null_frac, avg_width, n_distinct, most_common_freqs, histogram_bounds from pg_stats where tablename like 'mpp3487%' order by 2;
@@ -2496,6 +2580,8 @@ select relid, level, pg_get_expr(template, relid) from gp_partition_template whe
 set gp_autostats_mode=on_change;
 set gp_autostats_on_change_threshold=100;
 create table mpp5427 (i int) partition by range (i) (start(1) end(10000000) every(100000));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into mpp5427 select i from generate_series(1, 100) i;
 select * from pg_stats where tablename like 'mpp5427%';
  schemaname | tablename | attname | inherited | null_frac | avg_width | n_distinct | most_common_vals | most_common_freqs | histogram_bounds | correlation | most_common_elems | most_common_elem_freqs | elem_count_histogram | range_length_histogram | range_empty_frac | range_bounds_histogram 
@@ -2543,6 +2629,8 @@ select * from pg_stats where tablename like 'mpp5427%';
 drop table mpp5427;
 -- MPP-5524
 create table mpp5524 (a int, b int, c int, d int) partition by range(d) (start(1) end(20) every(5));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Not allowed
 alter table mpp5524 alter partition for (1) set distributed by (b);
 ERROR:  can't set the distribution policy of "mpp5524_1_prt_1"
@@ -2555,6 +2643,8 @@ insert into mpp5524 select i, i+1, i+2, i+3 from generate_series(1, 10) i;
 drop table mpp5524;
 CREATE TABLE fff_main (id int, rank int, year int, gender char(1), count int)
  partition by range (year) ( start (2001) end (2006) every ('1'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table fff_main_1_prt_1 drop oids;
 ERROR:  column "oids" of relation "fff_main_1_prt_1" does not exist
 alter table fff_main_1_prt_1 no inherit fff_main;
@@ -2568,10 +2658,13 @@ ERROR:  table "fff_main_1_prt_1" is not partitioned
 alter table fff_main_1_prt_1 add column c int;
 ERROR:  cannot add column to a partition
 create table fff_main2 (like fff_main);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table fff_main_1_prt_1 inherit fff_main2;
 ERROR:  cannot change inheritance of a partition
 alter table fff_main_1_prt_1 alter column i type bigint;
 ERROR:  column "i" of relation "fff_main_1_prt_1" does not exist
+LINE 1: alter table fff_main_1_prt_1 alter column i type bigint;
+                                                  ^
 alter table fff_main_1_prt_1 drop constraint fff_main_1_prt_1_check;
 ERROR:  constraint "fff_main_1_prt_1_check" of relation "fff_main_1_prt_1" does not exist
 -- Add default partition
@@ -2600,6 +2693,8 @@ subpartition template
 ( partition aa start (0) end (300) every(100),
   default partition def
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partsupp_def set subpartition template();
 alter table partsupp_def set subpartition template( subpartition aaa start(400) end (600) every(100) );
 -- Note 1: We cannot add subpartition template since we have a default partition
@@ -2628,6 +2723,8 @@ subpartition template
 )
 ( partition aa start (0) end (300) every(100)
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ps_partkey' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table partsupp_def2 set subpartition template();
 alter table partsupp_def2 set subpartition template( subpartition aaa start(400) end (600) every(100) );
 select relid::regclass, level, pg_get_expr(template, relid) from gp_partition_template where relid = 'partsupp_def2'::regclass;
@@ -2672,6 +2769,8 @@ CREATE TABLE mpp6612 (
         string4         name
 ) partition by range (unique1)
 ( partition aa start (0) end (1000) every (500), default partition default_part );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'unique1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Modify any other column
 alter table mpp6612 alter column unique2 type char(15);
 alter table mpp6612 alter column unique2 type char(10);
@@ -2698,6 +2797,7 @@ alter table mpp6612 alter column unique2 type char(10);
  string4     | name          |           |          | 
 Partition key: RANGE (unique1)
 Number of partitions: 3 (Use \d+ to list them.)
+Distributed by: (unique1)
 
            Table "bfv_partition.mpp6612_1_prt_aa_1"
    Column    |     Type      | Collation | Nullable | Default 
@@ -2719,6 +2819,7 @@ Number of partitions: 3 (Use \d+ to list them.)
  stringu2    | name          |           |          | 
  string4     | name          |           |          | 
 Partition of: mpp6612 FOR VALUES FROM (0) TO (500)
+Distributed by: (unique1)
 
            Table "bfv_partition.mpp6612_1_prt_aa_2"
    Column    |     Type      | Collation | Nullable | Default 
@@ -2740,6 +2841,7 @@ Partition of: mpp6612 FOR VALUES FROM (0) TO (500)
  stringu2    | name          |           |          | 
  string4     | name          |           |          | 
 Partition of: mpp6612 FOR VALUES FROM (500) TO (1000)
+Distributed by: (unique1)
 
        Table "bfv_partition.mpp6612_1_prt_default_part"
    Column    |     Type      | Collation | Nullable | Default 
@@ -2761,6 +2863,7 @@ Partition of: mpp6612 FOR VALUES FROM (500) TO (1000)
  stringu2    | name          |           |          | 
  string4     | name          |           |          | 
 Partition of: mpp6612 DEFAULT
+Distributed by: (unique1)
 
 -- Modify the partition definition. MPP-3724
 -- alter table mpp6612 alter column unique1 type char(10); -- This should fail
@@ -2778,6 +2881,8 @@ partition y2008 start (date '2008-01-01') end (date '2008-12-05')
 (
   subpartition dec start (date '2008-12-01') end (date '2008-12-05') (start (date '2008-12-01') end (date '2008-12-05') every (interval '1 day'))
 ));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aaa' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table mpp4048;
 -- This is only for ADD primary key for partition table
 -- DROP primary key is still in progress
@@ -2800,6 +2905,7 @@ Partition key: RANGE (date)
 Indexes:
     "mpp6573_pkey" PRIMARY KEY, btree (id, date)
 Number of partitions: 2 (Use \d+ to list them.)
+Distributed by: (id)
 
           Table "bfv_partition.mpp6573_1_prt_1"
  Column |     Type      | Collation | Nullable | Default 
@@ -2810,6 +2916,7 @@ Number of partitions: 2 (Use \d+ to list them.)
 Partition of: mpp6573 FOR VALUES FROM ('01-01-2008') TO ('01-02-2008')
 Indexes:
     "mpp6573_1_prt_1_pkey" PRIMARY KEY, btree (id, date)
+Distributed by: (id)
 
 Index "bfv_partition.mpp6573_1_prt_1_pkey"
  Column |  Type   | Key? | Definition 
@@ -2828,6 +2935,7 @@ primary key, btree, for table "bfv_partition.mpp6573_1_prt_1"
 Partition of: mpp6573 FOR VALUES FROM ('01-02-2008') TO ('01-03-2008')
 Indexes:
     "mpp6573_1_prt_2_pkey" PRIMARY KEY, btree (id, date)
+Distributed by: (id)
 
 Index "bfv_partition.mpp6573_1_prt_2_pkey"
  Column |  Type   | Key? | Definition 
@@ -2862,22 +2970,22 @@ select 1 as foobar;
 create table mpp6724 ( c1 int, dt DATE, c2 varchar, PRIMARY KEY ( c1,dt ) ) distributed by (c1) partition by range ( dt ) ( start ( date '2009-01-01' ) inclusive end ( date '2009-01-03' ) EXCLUSIVE EVERY ( INTERVAL '1 day' ) );
 insert into mpp6724 values ( 1,'2009-01-01','One'), (2,'2009-01-02','Two'),(3,'2009-01-01','three'), (3,'2009-01-02', 'three`');
 insert into mpp6724 values ( 1,'2009-01-01','One'); -- This violate the primary key, expected to fail
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.4:7003 pid=1850626)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_1_pkey"  (seg1 172.17.0.2:7003 pid=44921)
 DETAIL:  Key (c1, dt)=(1, 01-01-2009) already exists.
 alter table mpp6724 add partition start ( date '2009-01-03' ) inclusive end ( date '2009-01-04' ) ;
 insert into mpp6724 values ( 4,'2009-01-03','Four');
 -- Should fail because violates the primary key
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.4:7002 pid=1850625)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=44920)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.4:7002 pid=1850625)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=44920)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.4:7002 pid=1850625)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=44920)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 insert into mpp6724 values ( 4,'2009-01-03','Four');
-ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.4:7002 pid=1850625)
+ERROR:  duplicate key value violates unique constraint "mpp6724_1_prt_11_pkey"  (seg0 172.17.0.2:7002 pid=44920)
 DETAIL:  Key (c1, dt)=(4, 01-03-2009) already exists.
 select c1, dt, count(*) from mpp6724 group by 1,2 having count(*) > 1;
  c1 | dt | count 
@@ -2891,10 +2999,14 @@ set search_path=bfv_partition,partition_999;
 create table partition_cleanup1 (a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
 partition by range (a)
 ( partition aa start (1) end (5) every (1) );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE partition_999.partition_cleanup2(a int, b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int)
 partition by range (a)
 subpartition by range (b) subpartition template ( start (1) end (5) every (1))
 ( partition aa start (1) end (5) every (1) );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 drop table partition_cleanup1;
 drop schema partition_999 cascade;
 NOTICE:  drop cascades to table partition_cleanup2
@@ -2916,6 +3028,8 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT ALL ON SCHEMA bfv_partition to part_acl_owner;
 SET ROLE part_acl_owner;
 CREATE TABLE part_acl_test (id int4) PARTITION BY LIST (id) (PARTITION p1 VALUES (1));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 GRANT SELECT ON part_acl_test TO part_acl_u1;
 ALTER TABLE part_acl_test ADD PARTITION p2 VALUES (2);
 -- View permissions
@@ -2941,8 +3055,8 @@ where classid = 'pg_class'::regclass and objid::regclass::text like 'part_acl_te
 and datname = current_database();
  classid  |         objid          | refclassid |    rolname     
 ----------+------------------------+------------+----------------
- pg_class | part_acl_test_1_prt_p1 | pg_authid  | part_acl_owner
  pg_class | part_acl_test_1_prt_p2 | pg_authid  | part_acl_owner
+ pg_class | part_acl_test_1_prt_p1 | pg_authid  | part_acl_owner
  pg_class | part_acl_test          | pg_authid  | part_acl_owner
  pg_class | part_acl_test_1_prt_p2 | pg_authid  | part_acl_u1
  pg_class | part_acl_test_1_prt_p1 | pg_authid  | part_acl_u1
@@ -2956,6 +3070,8 @@ and datname = current_database();
 -- to bug where functions cached plan was scribbled during this
 -- process.
 CREATE TABLE grant_test (f1 int) PARTITION BY RANGE (f1) (START (2018) END (2020) EVERY (1), DEFAULT PARTITION extra);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION grant_table_in_function() RETURNS void AS
 $$
 BEGIN
@@ -2984,6 +3100,8 @@ PARTITION BY LIST(c1)
 	PARTITION a_part values(2,3),
 	DEFAULT partition other
 );
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO a_partition_table_used_in_cte_test SELECT 2;
 ANALYZE a_partition_table_used_in_cte_test;
 WITH cte AS (
