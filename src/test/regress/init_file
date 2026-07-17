@@ -16,6 +16,11 @@ m/^ Optimizer status:.*/
 m/^ Optimizer: Pivotal Optimizer \(GPORCA\).*/
 m/^ Optimizer: Postgres query optimizer/
 m/^ Settings:.*/
+# EXPLAIN (FORMAT JSON): the JIT test matrix runs with jit=on and jit_above_cost=0
+# (the ORCA twin also sets optimizer_jit_above_cost=0), so the "Settings" node
+# echoes these non-default GUCs as extra JSON entries that are absent from the
+# base (non-JIT) expected files. Ignore the jit-forcing GUC lines.
+m/^\s*"(jit\w*|optimizer_jit\w*)": "/
 
 # There are a number of NOTICE and HINT messages around table distribution,
 # for example to inform the user that the database will pick a particular
