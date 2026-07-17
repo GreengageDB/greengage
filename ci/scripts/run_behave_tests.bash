@@ -33,6 +33,10 @@ if [ ! -e "ssh_keys/id_rsa" ]
 then
   ssh-keygen -P "" -f ssh_keys/id_rsa
 fi
+# id_rsa is bind-mounted into every container (ci/docker-compose.yaml). OpenSSH
+# ignores a private key readable by group/other, so ensure 0600 on the host copy
+# (a git checkout or some runners can leave it 0644) before it is mounted.
+chmod 600 ssh_keys/id_rsa
 
 run_feature() {
   local feature=$1

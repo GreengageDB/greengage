@@ -15,6 +15,12 @@ setup_ssh_for_user() {
   fi
   cat "${home_dir}/.ssh/id_rsa.pub" >> "${home_dir}/.ssh/authorized_keys"
   chmod 0600 "${home_dir}/.ssh/authorized_keys"
+  # Harden the private key. When id_rsa is bind-mounted into the container
+  # (ci/docker-compose.yaml) it can arrive mode 0644, which OpenSSH refuses
+  # ("Permissions 0644 ... are too open", key ignored) -> gpcreateseg's ssh to
+  # start each segment fails with "Permission denied (publickey,password)" and
+  # gpinitsystem reports "Total processes marked as failed". Force 0600.
+  chmod 0600 "${home_dir}/.ssh/id_rsa"
   cat << 'NOROAMING' >> "${home_dir}/.ssh/config"
 Host *
   UseRoaming no
