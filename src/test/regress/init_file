@@ -245,6 +245,13 @@ s/pg_temp_\d+/pg_temp_NNN/g
 m/actual rows=\d+(\.\d+)? loops=\d+/
 s/actual rows=\d+(\.\d+)? loops=\d+/actual rows=### loops=#/
 
+# In MPP an EXPLAIN ANALYZE node can be "(never executed)" on the coordinator /
+# some segments but reached on others depending on how rows spread across
+# segments and on runtime partition pruning, so it varies from run to run.
+# Normalise it to the masked actual-rows form above.
+m/\(never executed\)/
+s/\(never executed\)/(actual rows=### loops=#)/
+
 # Mask RETURNING ctids in the returning test.  RETURNING old/new.ctid on the
 # randomly-distributed table foo and the partitioned foo_parted emits physical
 # ctids (e.g. "foo | (0,1)", "foo_part_s1 | (0,2)") that vary run to run as
