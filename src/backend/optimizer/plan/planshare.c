@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 
+#include "nodes/makefuncs.h"
+#include "nodes/plannodes.h"
 #include "optimizer/clauses.h"
 #include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
@@ -31,7 +33,45 @@ make_shareinputscan(PlannerInfo *root, Plan *inputplan)
 
 	sisc = makeNode(ShareInputScan);
 
-	sisc->scan.plan.targetlist = copyObject(inputplan->targetlist);
+	/*
+	 * A ShareInputScan is a non-projecting pass-through of its input plan, so
+	 * its targetlist must describe the input's output tuples.  Normally we can
+	 * just copy inputplan->targetlist, but a ModifyTable keeps the output of a
+	 * writable/DML CTE (its RETURNING list) in returningLists and leaves
+	 * plan.targetlist NIL -- the executor derives a ModifyTable's result
+	 * descriptor from RETURNING in ExecInitModifyTable().  Copying that empty
+	 * targetlist would make the ShareInputScan advertise zero output columns
+	 * (natts == 0), so a consumer of the CTE that references its columns reads
+	 * past the end of the tuple descriptor ("attribute number N exceeds number
+	 * of columns 0", or a bogus attribute under JIT tuple deforming).  Build a
+	 * pass-through targetlist matching the RETURNING output instead.  setrefs.c
+	 * (set_dummy_tlist_references) later rewrites the exprs into positional
+	 * OUTER_VAR references, so only the column count and types matter here.
+	 */
+	if (inputplan->targetlist == NIL &&
+		IsA(inputplan, ModifyTable) &&
+		((ModifyTable *) inputplan)->returningLists != NIL)
+	{
+		List	   *returningList = (List *)
+			linitial(((ModifyTable *) inputplan)->returningLists);
+		List	   *newtlist = NIL;
+		ListCell   *lc;
+
+		foreach(lc, returningList)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+			Var		   *var = makeVarFromTargetEntry(OUTER_VAR, tle);
+
+			newtlist = lappend(newtlist,
+							   makeTargetEntry((Expr *) var,
+											   tle->resno,
+											   tle->resname,
+											   tle->resjunk));
+		}
+		sisc->scan.plan.targetlist = newtlist;
+	}
+	else
+		sisc->scan.plan.targetlist = copyObject(inputplan->targetlist);
 	sisc->scan.plan.lefttree = inputplan;
 	sisc->scan.plan.flow = copyObject(inputplan->flow);
 
