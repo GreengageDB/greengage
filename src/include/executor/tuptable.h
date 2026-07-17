@@ -118,7 +118,13 @@ typedef struct TupleTableSlot
 #define FIELDNO_TUPLETABLESLOT_FLAGS 1
 	uint16		tts_flags;		/* Boolean states */
 #define FIELDNO_TUPLETABLESLOT_NVALID 2
-	AttrNumber	tts_nvalid;		/* # of valid values in tts_values */
+	/*
+	 * # of valid values in tts_values. Entry in tts_values with index
+	 * below tts_nvalid is guaranteed to be valid. But other entries in
+	 * tts_values *may* be valid (if fetched via slot_gettargetattr()) and
+	 * their validity can be checked via slot_is_attr_valid().
+	 */
+	AttrNumber	tts_nvalid;
 	const TupleTableSlotOps *const tts_ops; /* implementation of slot */
 #define FIELDNO_TUPLETABLESLOT_TUPLEDESCRIPTOR 4
 	TupleDesc	tts_tupleDescriptor;	/* slot's tuple descriptor */
@@ -214,6 +220,17 @@ struct TupleTableSlotOps
 	 * consumed by the slot.
 	 */
 	MinimalTuple (*copy_minimal_tuple) (TupleTableSlot *slot);
+
+	/*
+	 * Fill up target entries of tts_values and tts_isnull arrays with
+	 * values from the tuple contained in the slot.
+	 */
+	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
+
+	/*
+	 * Check if value for attnum in tts_values and tts_isnull arrays is valid.
+	 */
+	bool		(*is_attr_valid) (TupleTableSlot *slot, int attnum);
 };
 
 /*
@@ -328,6 +345,7 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
+extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);
@@ -358,6 +376,20 @@ slot_getallattrs(TupleTableSlot *slot)
 	slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
 }
 
+/*
+ * This function checks if Datum/isnull array value for attnum is valid.
+ */
+static inline bool
+slot_is_attr_valid(TupleTableSlot *slot, int attnum)
+{
+	if (slot->tts_nvalid > attnum)
+		return true;
+
+	if (slot->tts_ops->is_attr_valid)
+		return slot->tts_ops->is_attr_valid(slot, attnum);
+
+	return false;
+}
 
 /*
  * slot_attisnull
