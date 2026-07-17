@@ -581,33 +581,48 @@ flatten_group_rte_mutator(Node *node, void *context)
 		{
 			PlannerInfo *subroot;
 			ListCell   *lc;
+			int			grp_rti = 0;
+			int			i = 0;
 
 			/*
-			 * Minimal per-level root; flatten_group_exprs() needs it only to
-			 * preserve varnullingrels (mirrors optimize_query()'s root init).
+			 * Find the RTE_GROUP's 1-based range-table index, exactly as
+			 * subquery_planner() records in root->group_rtindex.
+			 * flatten_group_exprs() needs it (via mark_nullable_by_grouping())
+			 * to preserve the grouping-set varnullingrels of the group Vars;
+			 * without it a ROLLUP / GROUPING SETS query trips the assertion in
+			 * mark_nullable_by_grouping().
 			 */
+			foreach(lc, query->rtable)
+			{
+				i++;
+				if (lfirst_node(RangeTblEntry, lc)->rtekind == RTE_GROUP)
+				{
+					grp_rti = i;
+					break;
+				}
+			}
+
+			/* Minimal per-level root; mirrors optimize_query()'s root init. */
 			subroot = makeNode(PlannerInfo);
 			subroot->parse = query;
 			subroot->glob = ctx->glob;
 			subroot->query_level = 1;
 			subroot->planner_cxt = ctx->planner_cxt;
 			subroot->wt_param_id = -1;
+			subroot->group_rtindex = grp_rti;
 
 			query->targetList = (List *)
 				flatten_group_exprs(subroot, query, (Node *) query->targetList);
 			query->havingQual =
 				flatten_group_exprs(subroot, query, query->havingQual);
 
-			foreach(lc, query->rtable)
-			{
-				RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
-
-				if (rte->rtekind == RTE_GROUP)
-				{
-					query->rtable = list_delete_cell(query->rtable, lc);
-					break;
-				}
-			}
+			/*
+			 * Drop the now-unreferenced RTE_GROUP entry.  It is the last rtable
+			 * entry (grouping setup appends it), so deleting it does not shift
+			 * any surviving Var's varno.
+			 */
+			if (grp_rti > 0)
+				query->rtable = list_delete_nth_cell(query->rtable, grp_rti - 1);
 			query->hasGroupRTE = false;
 		}
 
