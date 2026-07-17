@@ -1197,6 +1197,10 @@ CREATE_QD_DB () {
 		cmd="$cmd --shared_buffers=$COORDINATOR_SHARED_BUFFERS"
 		if [ x"$HEAP_CHECKSUM" == x"on" ]; then
 			cmd="$cmd --data-checksums"
+		else
+			# PG18 initdb enables data page checksums by default, so relying on
+			# the default no longer honors HEAP_CHECKSUM=off.  Disable explicitly.
+			cmd="$cmd --no-data-checksums"
 		fi
 		LOG_MSG "[INFO]:-Commencing local $cmd"
 		$cmd >> $LOG_FILE 2>&1

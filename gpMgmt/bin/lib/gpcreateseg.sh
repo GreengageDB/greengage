@@ -102,8 +102,12 @@ CREATE_QES_PRIMARY () {
     cmd="$cmd --shared_buffers=$QE_SHARED_BUFFERS"
     if [ x"$HEAP_CHECKSUM" == x"on" ]; then
         cmd="$cmd --data-checksums"
+    else
+        # PG18 initdb enables data page checksums by default, so relying on the
+        # default no longer honors HEAP_CHECKSUM=off.  Disable them explicitly.
+        cmd="$cmd --no-data-checksums"
     fi
-    
+
     $TRUSTED_SHELL ${GP_HOSTADDRESS} $cmd >> $LOG_FILE 2>&1
     RETVAL=$?
 
