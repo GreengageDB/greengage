@@ -119,6 +119,15 @@ m/^system usage: CPU: user: .* system: .* elapsed: .*/
 # retries the broadcast; it is timing-dependent, so ignore it.
 m/^NOTICE:  Releasing segworker groups to retry broadcast\./
 
+# f_leak() (rowsecurity/select_views/xml) RAISEs a NOTICE per row it is
+# evaluated on, to prove RLS/view quals run before the non-leakproof qual.
+# Under MPP those rows are scanned concurrently across segments, so the NOTICEs
+# interleave in a nondeterministic order (the *set* of leaked values is stable,
+# only their ordering flaps run-to-run). atmsort cannot reorder interleaved
+# NOTICE lines, so ignore them; the RLS behaviour itself is still checked via
+# the query result sets and the row-security ERRORs.
+m/^NOTICE:  f_leak => /
+
 -- end_matchignore
 
 -- start_matchsubs
