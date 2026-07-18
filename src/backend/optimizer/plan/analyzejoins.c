@@ -2346,10 +2346,20 @@ remove_self_joins_recurse(PlannerInfo *root, List *joinlist, Relids toRemove)
 			 * could potentially change the syntax of the query. Because of
 			 * UPDATE/DELETE EPQ mechanism, currently Query->resultRelation or
 			 * Query->mergeTargetRelation associated rel cannot be eliminated.
+			 *
+			 * GPDB: a gp_dist_random() scan reads the relation on every
+			 * segment, so it is not interchangeable with a plain scan of the
+			 * same relation (e.g. "gp_dist_random(pg_class) JOIN pg_class ON
+			 * oid"), even though both share the same relid.  Eliminating such a
+			 * "self join" collapses the distributed scan into the coordinator
+			 * scan and silently defeats cross-segment consistency checks such
+			 * as gpcheckcat's owner check, so never treat a forceDistRandom RTE
+			 * as a self-join candidate.
 			 */
 			if (rte->rtekind == RTE_RELATION &&
 				rte->relkind == RELKIND_RELATION &&
 				rte->tablesample == NULL &&
+				!rte->forceDistRandom &&
 				varno != root->parse->resultRelation &&
 				varno != root->parse->mergeTargetRelation)
 			{
