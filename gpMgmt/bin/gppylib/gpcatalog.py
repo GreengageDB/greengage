@@ -300,12 +300,12 @@ class GPCatalog():
         
         # pg_class:
         #   - relfilenode is not consistent across nodes
-        #   - relpages/reltuples/relfrozenxid/relminmxid are all vacumm/analyze related
+        #   - relpages/reltuples/relallvisible/relallfrozen/relfrozenxid/relminmxid are all vacumm/analyze related
         #   - relhasindex/relhasrules/relhastriggers are only cleared when vacuum completes
         #   - relowner has its own checks:
         #       => may want to separate out "owner" columns like acl and oid
         self._tables['pg_class']._setKnownDifferences(
-            "relowner relfilenode relpages reltuples relallvisible relhasindex relhasrules relhastriggers relfrozenxid relminmxid")
+            "relowner relfilenode relpages reltuples relallvisible relallfrozen relhasindex relhasrules relhastriggers relfrozenxid relminmxid")
 
         # pg_extension:
         #   - postgis has extra entry for extconfig and extcondition column
