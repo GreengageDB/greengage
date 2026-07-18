@@ -964,6 +964,7 @@ explain (verbose on, costs off) select * from foo where a = any(null::int[]);
  Gather Motion 3:1  (slice1; segments: 3)
    Output: a
    ->  Bitmap Heap Scan on public.foo
+         Disabled: true
          Output: a
          Recheck Cond: (foo.a = ANY (NULL::integer[]))
          ->  Bitmap Index Scan on foo_i
