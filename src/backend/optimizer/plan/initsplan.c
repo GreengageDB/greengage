@@ -627,6 +627,24 @@ remove_useless_groupby_columns(PlannerInfo *root)
 
 			/* Remember the attnos of the removable columns */
 			surplusvars[relid] = bms_difference(relattnos, best_keycolumns);
+
+			/*
+			 * GPDB: never treat gp_segment_id as a redundant/functionally-
+			 * dependent GROUP BY column.  A relation's unique index only makes
+			 * the key unique WITHIN a single segment; the same key value can
+			 * appear on every segment (e.g. a gp_dist_random() scan, or a
+			 * replicated/catalog table read per-segment), distinguished only by
+			 * gp_segment_id.  Dropping gp_segment_id from the grouping key would
+			 * let a later Redistribute Motion on the remaining key merge those
+			 * per-segment rows into a single group and count them together --
+			 * unsound.  (This is exactly how gpcheckcat's per-segment duplicate
+			 * and unique-index-violation checks produced false positives on a
+			 * healthy cluster.)
+			 */
+			surplusvars[relid] =
+				bms_del_member(surplusvars[relid],
+							   GpSegmentIdAttributeNumber -
+							   FirstLowInvalidHeapAttributeNumber);
 		}
 	}
 
