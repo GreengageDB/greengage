@@ -373,6 +373,25 @@ ResLockAcquire(LOCKTAG *locktag, ResPortalIncrement *incrementSet)
 		 */
 		lock->nRequested--;
 		lock->requested[lockmode]--;
+		Assert((lock->nRequested >= 0) && (lock->requested[lockmode] >= 0));
+
+		/*
+		 * Clean up the locallock and the lock object, mirroring the
+		 * ignore-cost path above and the check-limit error path below.  This
+		 * OOSM / duplicate-portal case historically skipped the cleanup,
+		 * leaving the proclock linked in lock->procLocks after nRequested had
+		 * already been rolled back and both LWLocks released -- a stale
+		 * half-released-lock window.  Since a single locallock can represent
+		 * multiple locked portals in the same backend, only remove it if this
+		 * is the last portal.  Do NOT call ResIncrementRemove here: on OOSM the
+		 * increment was never added, and for a duplicate portal ResIncrementAdd
+		 * has already removed it.
+		 */
+		if (proclock->nLocks == 0)
+			RemoveLocalLock(locallock);
+
+		ResCleanUpLock(lock, proclock, hashcode, false);
+
 		LWLockRelease(ResQueueLock);
 		LWLockRelease(partitionLock);
 		if (addStatus == RES_INCREMENT_ADD_OOSM)
