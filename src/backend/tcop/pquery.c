@@ -704,12 +704,25 @@ PortalStart(Portal portal, ParamListInfo params,
 				portal->status = PORTAL_ACTIVE;
 
 				/*
-				 * If it's a scrollable cursor, executor needs to support
-				 * REWIND and backwards scan, as well as whatever the caller
-				 * might've asked for.
+				 * If it's a scrollable cursor, the executor needs to support
+				 * REWIND, as well as whatever the caller might've asked for.
+				 *
+				 * GPDB: upstream would also request EXEC_FLAG_BACKWARD here,
+				 * but Greengage does not support backward scanning at all -- a
+				 * backward FETCH/MOVE is rejected unconditionally in
+				 * DoPortalRunFetch(), and standard_planner's step that wraps a
+				 * scrollable plan in a Material node is disabled (see the
+				 * #if 0'd block in standard_planner()).  Requesting
+				 * EXEC_FLAG_BACKWARD is therefore purely vestigial: it never
+				 * enables any real backward execution, and it makes a plan whose
+				 * top node cannot run backwards (e.g. a childless Result from
+				 * "OPEN c SCROLL FOR SELECT <const>", reachable via the SPI/PL
+				 * cursor path that bypasses PerformCursorOpen's SCROLL downgrade)
+				 * trip the ExecInitResult assert.  So keep REWIND but drop
+				 * BACKWARD.
 				 */
 				if (portal->cursorOptions & CURSOR_OPT_SCROLL)
-					myeflags = eflags | EXEC_FLAG_REWIND | EXEC_FLAG_BACKWARD;
+					myeflags = eflags | EXEC_FLAG_REWIND;
 				else
 					myeflags = eflags;
 
