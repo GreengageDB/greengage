@@ -93,6 +93,7 @@
 #include "utils/workfile_mgr.h"
 #include "utils/vmem_tracker.h"
 #include "cdb/cdbdisp.h"
+#include "cdb/cdbconn.h"
 #include "postmaster/autovacuum.h"
 
 /*
@@ -2978,6 +2979,8 @@ CommitTransaction(void)
 	if(Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 		MoveDbSessionLockRelease();
 
+	AtCommit_MetadataQueues();
+
 	AtCommit_TablespaceStorage();
 
 	AtCommit_Notify();
@@ -3587,6 +3590,8 @@ AbortTransaction(void)
 
 		DoPendingDbDeletes(false);
 		DatabaseStorageResetSessionLock();
+
+		AtAbort_MetadataQueues();
 
 		AtAbort_TablespaceStorage();
 		gp_guc_need_restore = true;
