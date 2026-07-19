@@ -21,10 +21,13 @@ set extra_float_digits=0; -- the last decimal digits are somewhat random
 -- to disk.
 SELECT gp_inject_fault('winagg_after_spool_tuples', 'skip', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
-ERROR:  function gp_inject_fault(unknown, unknown, smallint) does not exist
-LINE 1: SELECT gp_inject_fault('winagg_after_spool_tuples', 'skip', ...
-               ^
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
 select sum(cc) from (
     select c1
          , c2
@@ -36,6 +39,9 @@ select sum(cc) from (
       from misc_jiras.t1
      group by 1, 2
 ) tt;
+NOTICE:  winagg: tuplestore spilled to disk  (seg1 slice1 172.17.0.2:7003 pid=34434)
+NOTICE:  winagg: tuplestore spilled to disk  (seg0 slice1 172.17.0.2:7002 pid=34433)
+NOTICE:  winagg: tuplestore spilled to disk  (seg2 slice1 172.17.0.2:7004 pid=34435)
    sum   
 ---------
  30006.5
@@ -43,10 +49,13 @@ select sum(cc) from (
 
 SELECT gp_inject_fault('winagg_after_spool_tuples', 'reset', dbid)
   FROM gp_segment_configuration WHERE role='p' AND content>=0;
-ERROR:  function gp_inject_fault(unknown, unknown, smallint) does not exist
-LINE 1: SELECT gp_inject_fault('winagg_after_spool_tuples', 'reset',...
-               ^
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+ gp_inject_fault 
+-----------------
+ Success:
+ Success:
+ Success:
+(3 rows)
+
 reset statement_mem;
 -- non-ASCII multibyte character should show up correctly in error messages.
 select '溋' || (B'1');
