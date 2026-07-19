@@ -119,6 +119,15 @@ m/^system usage: CPU: user: .* system: .* elapsed: .*/
 # retries the broadcast; it is timing-dependent, so ignore it.
 m/^NOTICE:  Releasing segworker groups to retry broadcast\./
 
+# Same race, from the dispatcher side: when a fault-injection test (e.g.
+# gp_tablespace_with_faults) makes a distributed-transaction broadcast fail
+# until the faulted primary restarts, the retry loop emits one of these
+# WARNINGs per attempt. How many attempts it takes before the segment is back
+# is purely timing-dependent, so the "try N" count flaps run-to-run; ignore the
+# line entirely (the DETAIL/state and the post-recovery assertions still check
+# the fault behaviour). Covers every DTX phase (Commit/Abort/Prepare Prepared).
+m/^WARNING:  the distributed transaction '.*' broadcast failed to one or more segments\. Retrying \.\.\. try \d+/
+
 # f_leak() (rowsecurity/select_views/xml) RAISEs a NOTICE per row it is
 # evaluated on, to prove RLS/view quals run before the non-leakproof qual.
 # Under MPP those rows are scanned concurrently across segments, so the NOTICEs
