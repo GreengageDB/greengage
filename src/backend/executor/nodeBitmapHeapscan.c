@@ -333,7 +333,7 @@ ExecEndBitmapHeapScan(BitmapHeapScanState *node)
 	{
 		BitmapHeapScanInstrumentation *si;
 
-		Assert(ParallelWorkerNumber <= node->sinstrument->num_workers);
+		Assert(ParallelWorkerNumber < node->sinstrument->num_workers);
 		si = &node->sinstrument->sinstrument[ParallelWorkerNumber];
 
 		/*

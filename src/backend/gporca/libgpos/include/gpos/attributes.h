@@ -5,7 +5,13 @@
 #define GPOS_FORMAT_ARCHETYPE printf
 #else
 #include "pg_config.h"
-#define GPOS_FORMAT_ARCHETYPE PG_PRINTF_ATTRIBUTE
+/*
+ * GPDB: PG18.4 (PGAC_CXX_PRINTF_ARCHETYPE) split the printf archetype into
+ * separate C / C++ variants and moved the language-selecting PG_PRINTF_ATTRIBUTE
+ * out of pg_config.h into c.h.  ORCA is C++ and includes only pg_config.h here,
+ * so use the C++ archetype directly.
+ */
+#define GPOS_FORMAT_ARCHETYPE PG_CXX_PRINTF_ATTRIBUTE
 #endif
 
 #define GPOS_ATTRIBUTE_PRINTF(f, a) \

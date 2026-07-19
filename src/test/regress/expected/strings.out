@@ -470,10 +470,10 @@ SELECT CAST(f1 AS char(20)) AS "char(text)" FROM TEXT_STRINGS_TBL;
 SELECT CAST(f1 AS char(10)) AS "char(varchar)" FROM VARCHAR_STRINGS_TBL;
  char(varchar) 
 ---------------
- a         
  ab        
  abcd      
  abcd      
+ a         
 (4 rows)
 
 SELECT CAST(name 'namefield' AS char(10)) AS "char(name)";
@@ -485,8 +485,8 @@ SELECT CAST(name 'namefield' AS char(10)) AS "char(name)";
 SELECT CAST(f1 AS varchar) AS "varchar(text)" FROM TEXT_STRINGS_TBL;
    varchar(text)   
 -------------------
- hi de ho neighbor
  doh!
+ hi de ho neighbor
 (2 rows)
 
 SELECT CAST(f1 AS varchar) AS "varchar(char)" FROM CHAR_STRINGS_TBL;
@@ -786,6 +786,17 @@ EXPLAIN (COSTS OFF) SELECT * FROM TEXT_TBL WHERE f1 SIMILAR TO '[^^]^';
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Seq Scan on text_tbl
          Filter: (f1 ~ '^(?:[^^]\^)$'::text)
+ Optimizer: Postgres query optimizer
+(4 rows)
+
+-- Closing square bracket after an escape sequence at the beginning of
+-- a character closes the character class
+EXPLAIN (COSTS OFF) SELECT * FROM TEXT_TBL WHERE f1 SIMILAR TO '[|a]%' ESCAPE '|';
+                 QUERY PLAN                  
+---------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Seq Scan on text_tbl
+         Filter: (f1 ~ '^(?:[\a].*)$'::text)
  Optimizer: Postgres query optimizer
 (4 rows)
 
@@ -2018,7 +2029,7 @@ SELECT substr(f1, -1, 5) from toasttest;
 
 -- If the length is less than zero, an ERROR is thrown.
 SELECT substr(f1, 5, -1) from toasttest;
-ERROR:  negative substring length not allowed  (seg2 slice1 172.17.0.2:7004 pid=2089972)
+ERROR:  negative substring length not allowed  (seg2 slice1 172.17.0.2:7004 pid=1530970)
 -- If no third argument (length) is provided, the length to the end of the
 -- string is assumed.
 SELECT substr(f1, 99995) from toasttest;
@@ -2098,7 +2109,7 @@ SELECT substr(f1, -1, 5) from toasttest;
 
 -- If the length is less than zero, an ERROR is thrown.
 SELECT substr(f1, 5, -1) from toasttest;
-ERROR:  negative substring length not allowed  (seg2 slice1 172.17.0.2:7004 pid=2089972)
+ERROR:  negative substring length not allowed  (seg2 slice1 172.17.0.2:7004 pid=1530970)
 -- If no third argument (length) is provided, the length to the end of the
 -- string is assumed.
 SELECT substr(f1, 99995) from toasttest;

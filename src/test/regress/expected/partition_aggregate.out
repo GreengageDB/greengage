@@ -20,8 +20,11 @@ SET enable_incremental_sort TO off;
 --
 CREATE TABLE pagg_tab (a int, b int, c text, d int) PARTITION BY LIST(c);
 CREATE TABLE pagg_tab_p1 PARTITION OF pagg_tab FOR VALUES IN ('0000', '0001', '0002', '0003', '0004');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p2 PARTITION OF pagg_tab FOR VALUES IN ('0005', '0006', '0007', '0008');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_p3 PARTITION OF pagg_tab FOR VALUES IN ('0009', '0010', '0011');
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab SELECT i % 20, i % 30, to_char(i % 12, 'FM0000'), i % 30 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.
@@ -397,6 +400,50 @@ SELECT a FROM pagg_tab WHERE a < 3 GROUP BY a ORDER BY 1;
  2
 (3 rows)
 
+-- Test partitionwise aggregation with ordered append path built from fractional paths
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM pagg_tab GROUP BY c ORDER BY c LIMIT 1;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Limit
+   ->  Merge Append
+         Sort Key: pagg_tab.c
+         ->  Finalize GroupAggregate
+               Group Key: pagg_tab.c
+               ->  Gather Motion 3:1  (slice1; segments: 3)
+                     Merge Key: pagg_tab.c
+                     ->  Partial GroupAggregate
+                           Group Key: pagg_tab.c
+                           ->  Sort
+                                 Sort Key: pagg_tab.c
+                                 ->  Seq Scan on pagg_tab_p1 pagg_tab
+         ->  Finalize GroupAggregate
+               Group Key: pagg_tab_1.c
+               ->  Gather Motion 3:1  (slice2; segments: 3)
+                     Merge Key: pagg_tab_1.c
+                     ->  Partial GroupAggregate
+                           Group Key: pagg_tab_1.c
+                           ->  Sort
+                                 Sort Key: pagg_tab_1.c
+                                 ->  Seq Scan on pagg_tab_p2 pagg_tab_1
+         ->  Finalize GroupAggregate
+               Group Key: pagg_tab_2.c
+               ->  Gather Motion 3:1  (slice3; segments: 3)
+                     Merge Key: pagg_tab_2.c
+                     ->  Partial GroupAggregate
+                           Group Key: pagg_tab_2.c
+                           ->  Sort
+                                 Sort Key: pagg_tab_2.c
+                                 ->  Seq Scan on pagg_tab_p3 pagg_tab_2
+ Optimizer: Postgres query optimizer
+(31 rows)
+
+SELECT count(*) FROM pagg_tab GROUP BY c ORDER BY c LIMIT 1;
+ count 
+-------
+   250
+(1 row)
+
 RESET enable_hashagg;
 -- ROLLUP, partitionwise aggregation does not apply
 EXPLAIN (COSTS OFF)
@@ -483,12 +530,18 @@ SELECT a, sum(b order by a) FROM pagg_tab GROUP BY a ORDER BY 1, 2;
 -- JOIN query
 CREATE TABLE pagg_tab1(x int, y int) PARTITION BY RANGE(x);
 CREATE TABLE pagg_tab1_p1 PARTITION OF pagg_tab1 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p2 PARTITION OF pagg_tab1 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab1_p3 PARTITION OF pagg_tab1 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2(x int, y int) PARTITION BY RANGE(y);
 CREATE TABLE pagg_tab2_p1 PARTITION OF pagg_tab2 FOR VALUES FROM (0) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p2 PARTITION OF pagg_tab2 FOR VALUES FROM (10) TO (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab2_p3 PARTITION OF pagg_tab2 FOR VALUES FROM (20) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab1 SELECT i % 30, i % 20 FROM generate_series(0, 299, 2) i;
 INSERT INTO pagg_tab2 SELECT i % 20, i % 30 FROM generate_series(0, 299, 3) i;
 ANALYZE pagg_tab1;
@@ -982,8 +1035,11 @@ SELECT a.x, a.y, count(*) FROM (SELECT * FROM pagg_tab1 WHERE x = 1 AND x = 2) a
 -- Partition by multiple columns
 CREATE TABLE pagg_tab_m (a int, b int, c int) PARTITION BY RANGE(a, ((a+b)/2));
 CREATE TABLE pagg_tab_m_p1 PARTITION OF pagg_tab_m FOR VALUES FROM (0, 0) TO (12, 12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p2 PARTITION OF pagg_tab_m FOR VALUES FROM (12, 12) TO (22, 22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_m_p3 PARTITION OF pagg_tab_m FOR VALUES FROM (22, 22) TO (30, 30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_m SELECT i % 30, i % 40, i % 50 FROM generate_series(0, 2999) i;
 ANALYZE pagg_tab_m;
 -- Partial aggregation as GROUP BY clause does not match with PARTITION KEY
@@ -1097,15 +1153,20 @@ SELECT a, c, sum(b), avg(c), count(*) FROM pagg_tab_m GROUP BY (a+b)/2, 2, 1 HAV
 -- Test with multi-level partitioning scheme
 CREATE TABLE pagg_tab_ml (a int, b int, c text) PARTITION BY RANGE(a);
 CREATE TABLE pagg_tab_ml_p1 PARTITION OF pagg_tab_ml FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2 PARTITION OF pagg_tab_ml FOR VALUES FROM (12) TO (20) PARTITION BY LIST (c);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s1 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0000', '0001', '0002');
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_ml_p2_s2 PARTITION OF pagg_tab_ml_p2 FOR VALUES IN ('0003');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- This level of partitioning has different column positions than the parent
 CREATE TABLE pagg_tab_ml_p3(b int, c text, a int) PARTITION BY RANGE (b);
 ALTER TABLE pagg_tab_ml_p3 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s1(c text, a int, b int);
 ALTER TABLE pagg_tab_ml_p3_s1 SET DISTRIBUTED BY (a);
 CREATE TABLE pagg_tab_ml_p3_s2 PARTITION OF pagg_tab_ml_p3 FOR VALUES FROM (7) TO (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE pagg_tab_ml_p3 ATTACH PARTITION pagg_tab_ml_p3_s1 FOR VALUES FROM (0) TO (7);
 ALTER TABLE pagg_tab_ml ATTACH PARTITION pagg_tab_ml_p3 FOR VALUES FROM (20) TO (30);
 INSERT INTO pagg_tab_ml SELECT i % 30, i % 10, to_char(i % 4, 'FM0000') FROM generate_series(0, 29999) i;
@@ -1516,8 +1577,11 @@ SELECT a, sum(b), count(*) FROM pagg_tab_ml GROUP BY a, b, c HAVING avg(b) > 7 O
 SET parallel_setup_cost TO 10;
 CREATE TABLE pagg_tab_para(x int, y int) PARTITION BY RANGE(x);
 CREATE TABLE pagg_tab_para_p1 PARTITION OF pagg_tab_para FOR VALUES FROM (0) TO (12);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p2 PARTITION OF pagg_tab_para FOR VALUES FROM (12) TO (22);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE pagg_tab_para_p3 PARTITION OF pagg_tab_para FOR VALUES FROM (22) TO (30);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO pagg_tab_para SELECT i % 30, i % 20 FROM generate_series(0, 29999) i;
 ANALYZE pagg_tab_para;
 -- When GROUP BY clause matches; full aggregation is performed for each partition.

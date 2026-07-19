@@ -140,6 +140,7 @@ PQcancelCreate(PGconn *conn)
 		goto oom_error;
 
 	originalHost = conn->connhost[conn->whichhost];
+	cancelConn->connhost[0].type = originalHost.type;
 	if (originalHost.host)
 	{
 		cancelConn->connhost[0].host = strdup(originalHost.host);
@@ -381,7 +382,24 @@ PQgetCancel(PGconn *conn)
 
 	/* Check that we have received a cancellation key */
 	if (conn->be_cancel_key_len == 0)
-		return NULL;
+	{
+		/*
+		 * In case there is no cancel key, return an all-zero PGcancel object.
+		 * Actually calling PQcancel on this will fail, but we allow creating
+		 * the PGcancel object anyway. Arguably it would be better return NULL
+		 * to indicate that cancellation is not possible, but there'd be no
+		 * way for the caller to distinguish "out of memory" from "server did
+		 * not send a cancel key". Also, this is how PGgetCancel() has always
+		 * behaved, and if we changed it, some clients would stop working
+		 * altogether with servers that don't support cancellation. (The
+		 * modern PQcancelCreate() function returns a failed connection object
+		 * instead.)
+		 *
+		 * The returned dummy object has cancel_pkt_len == 0; we check for
+		 * that in PQcancel() to identify it as a dummy.
+		 */
+		return calloc(1, sizeof(PGcancel));
+	}
 
 	cancel_req_len = offsetof(CancelRequestPacket, cancelAuthCode) + conn->be_cancel_key_len;
 	cancel = malloc(offsetof(PGcancel, cancel_req) + cancel_req_len);
@@ -548,6 +566,15 @@ internal_cancel(PGcancel *cancel, char *errbuf, int errbufsize,
 
 retry2:
 #endif
+
+	if (cancel->cancel_pkt_len == 0)
+	{
+		/* This is a dummy PGcancel object, see PQgetCancel */
+		strlcpy(errbuf, "PQcancel() -- no cancellation key received", errbufsize);
+		/* strlcpy probably doesn't change errno, but be paranoid */
+		SOCK_ERRNO_SET(save_errno);
+		return false;
+	}
 
 	/*
 	 * We need to open a temporary connection to the postmaster. Do this with

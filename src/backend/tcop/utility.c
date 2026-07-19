@@ -2322,7 +2322,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					if (!IsA(rel, RangeVar))
 						ereport(ERROR,
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("only a single relation is allowed in CREATE STATISTICS")));
+								 errmsg("CREATE STATISTICS only supports relation names in the FROM clause")));
 
 					/*
 					 * CREATE STATISTICS will influence future execution plans
@@ -2340,7 +2340,7 @@ ProcessUtilitySlow(ParseState *pstate,
 					/* Run parse analysis ... */
 					stmt = transformStatsStmt(relid, stmt, queryString);
 
-					address = CreateStatistics(stmt);
+					address = CreateStatistics(stmt, true);
 				}
 				break;
 

@@ -3537,12 +3537,12 @@ log_status_format(StringInfo buf, const char *format, ErrorData *edata)
 				{
 					char		strfbuf[128];
 
-					snprintf(strfbuf, sizeof(strfbuf) - 1, INT64_HEX_FORMAT ".%x",
+					snprintf(strfbuf, sizeof(strfbuf) - 1, "%" PRIx64 ".%x",
 							 MyStartTime, MyProcPid);
 					appendStringInfo(buf, "%*s", padding, strfbuf);
 				}
 				else
-					appendStringInfo(buf, INT64_HEX_FORMAT ".%x", MyStartTime, MyProcPid);
+					appendStringInfo(buf, "%" PRIx64 ".%x", MyStartTime, MyProcPid);
 				break;
 			case 'p':
 				if (padding != 0)
@@ -5232,13 +5232,24 @@ write_stderr(const char *fmt,...)
 {
 	va_list		ap;
 
+	va_start(ap, fmt);
+	vwrite_stderr(fmt, ap);
+	va_end(ap);
+}
+
+
+/*
+ * Write errors to stderr (or by equal means when stderr is
+ * not available) - va_list version
+ */
+void
+vwrite_stderr(const char *fmt, va_list ap)
+{
 #ifdef WIN32
 	char		errbuf[2048];	/* Arbitrary size? */
 #endif
 
 	fmt = _(fmt);
-
-	va_start(ap, fmt);
 
 	if (Logging_collector && gp_log_format == 1)
 	{
@@ -5281,7 +5292,6 @@ write_stderr(const char *fmt,...)
 				write_syslogger_in_csv(&edata, false);
 		}
 
-		va_end(ap);
 		return;
 	}
 
@@ -5307,7 +5317,6 @@ write_stderr(const char *fmt,...)
 		fflush(stderr);
 	}
 #endif
-	va_end(ap);
 }
 
 

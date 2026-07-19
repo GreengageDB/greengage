@@ -91,8 +91,6 @@ CREATE TABLE SUBSELECT_TBL (
   f2 integer,
   f3 float
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO SUBSELECT_TBL VALUES (1, 2, 3);
 INSERT INTO SUBSELECT_TBL VALUES (2, 3, 4);
 INSERT INTO SUBSELECT_TBL VALUES (3, 4, 5);
@@ -109,9 +107,9 @@ SELECT * FROM SUBSELECT_TBL;
   2 |  2 |  2
   3 |  3 |  3
   8 |  9 |   
+  6 |  7 |  8
   1 |  2 |  3
   1 |  1 |  1
-  6 |  7 |  8
 (8 rows)
 
 -- Uncorrelated subselects
@@ -127,12 +125,12 @@ SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
   WHERE f1 IN (SELECT f2 FROM SUBSELECT_TBL);
  Uncorrelated Field 
 --------------------
+                  1
+                  1
                   2
                   3
                   2
                   3
-                  1
-                  1
 (6 rows)
 
 SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
@@ -140,12 +138,12 @@ SELECT f1 AS "Uncorrelated Field" FROM SUBSELECT_TBL
     f2 IN (SELECT f1 FROM SUBSELECT_TBL));
  Uncorrelated Field 
 --------------------
+                  1
+                  1
                   2
                   3
                   2
                   3
-                  1
-                  1
 (6 rows)
 
 SELECT f1, f2
@@ -204,11 +202,11 @@ SELECT f1 AS "Correlated Field"
                      WHERE f3 IS NOT NULL);
  Correlated Field 
 ------------------
+                2
+                3
+                2
+                3
                 1
-                2
-                3
-                2
-                3
 (5 rows)
 
 -- Check ROWCOMPARE cases, both correlated and not
@@ -294,11 +292,11 @@ SELECT * FROM (SELECT * FROM (SELECT abs(f1) AS a1 FROM int4_tbl)),
 SELECT * FROM view_unnamed_ss;
  a1 |        q1        |        q2         
 ----+------------------+-------------------
+  0 |              123 |               456
+  0 |              123 |  4567890123456789
   0 | 4567890123456789 | -4567890123456789
   0 | 4567890123456789 |               123
   0 | 4567890123456789 |  4567890123456789
-  0 |              123 |               456
-  0 |              123 |  4567890123456789
 (5 rows)
 
 \sv view_unnamed_ss
@@ -496,11 +494,7 @@ select count(distinct ss.ten) from
 -- Luca Pireddu and Michael Fuhr.
 --
 CREATE TEMP TABLE foo (id integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TEMP TABLE bar (id1 integer, id2 integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO foo VALUES (1);
 INSERT INTO bar VALUES (1, 1);
 INSERT INTO bar VALUES (2, 2);
@@ -560,8 +554,6 @@ CREATE TABLE orderstest (
     po_ref integer,
     ordercanceled boolean
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'approver_ref' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO orderstest VALUES (1, 1, false);
 INSERT INTO orderstest VALUES (66, 5, false);
 INSERT INTO orderstest VALUES (66, 6, false);
@@ -612,9 +604,6 @@ FROM orderstest ord;
 SELECT * FROM orders_view;
  approver_ref | po_ref | ordercanceled | Approved |  Status  | Status_OK 
 --------------+--------+---------------+----------+----------+-----------
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
-            1 |      1 | f             | ---      | ---      | ---
            66 |      5 | f             | Approved | PO       | PO
            66 |      6 | f             | Approved | PO       | PO
            66 |      7 | f             | Approved | PO       | PO
@@ -623,6 +612,9 @@ SELECT * FROM orders_view;
            66 |      1 | f             | Approved | Approved | Approved
            77 |      1 | f             | Approved | Approved | Approved
            66 |      1 | f             | Approved | Approved | Approved
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
+            1 |      1 | f             | ---      | ---      | ---
 (11 rows)
 
 DROP TABLE orderstest cascade;
@@ -635,16 +627,12 @@ create temp table parts (
     partnum     text,
     cost        float8
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'partnum' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table shipped (
     ttype       char(2),
     ordnum      int4,
     partnum     text,
     value       float8
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ttype' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp view shipped_view as
     select * from shipped where ttype = 'wt';
 create rule shipped_view_insert as on insert to shipped_view do instead
@@ -706,6 +694,23 @@ select * from (
 (1 row)
 
 --
+-- Test cases for interactions between PARAM_EXEC, subplans and array
+-- subscripts
+--
+-- check that array subscription doesn't conflict with PARAM_EXEC (see #19370)
+SELECT (array[1,2])[(SELECT g.i)] FROM generate_series(1, 1) g(i);
+ array 
+-------
+     1
+(1 row)
+
+SELECT (array[1,2])[(SELECT g.i):(SELECT g.i + 1)] FROM generate_series(1, 1) g(i);
+ array 
+-------
+ {1,2}
+(1 row)
+
+--
 -- Test that an IN implemented using a UniquePath does unique-ification
 -- with the right semantics, as per bug #4113.  (Unfortunately we have
 -- no simple way to ensure that this test case actually chooses that type
@@ -714,20 +719,16 @@ select * from (
 -- pointless.)
 --
 create temp table numeric_table (num_col numeric);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num_col' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into numeric_table values (1), (1.000000000000000000001), (2), (3);
 create temp table float_table (float_col float8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'float_col' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into float_table values (1), (2), (3);
 select * from float_table
   where float_col in (select num_col from numeric_table);
  float_col 
 -----------
-         2
          1
          3
+         2
 (3 rows)
 
 select * from numeric_table
@@ -763,8 +764,6 @@ ERROR:  correlated subquery with skip-level correlations is not supported
 -- Test case for 8.3 "failed to locate grouping columns" bug
 --
 create temp table t1 (f1 numeric(14,0), f2 varchar(30));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select * from
   (select distinct f1, f2, (select f2 from t1 x where x.f1 = up.f1) as fs
    from t1 up) ss
@@ -777,8 +776,6 @@ group by f1,f2,fs;
 -- Test case for bug #5514 (mishandling of whole-row Vars in subselects)
 --
 create temp table table_a(id integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into table_a values (42);
 create temp view view_a as select * from table_a;
 select view_a from view_a;
@@ -803,6 +800,28 @@ select (select (a.*)::text) from view_a a;
   a   
 ------
  (42)
+(1 row)
+
+--
+-- Test case for bug #19037: no relation entry for relid N
+--
+explain (costs off)
+select (1 = any(array_agg(f1))) = any (select false) from int4_tbl;
+                   QUERY PLAN                   
+------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  Seq Scan on int4_tbl
+   SubPlan 1
+     ->  Result
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select (1 = any(array_agg(f1))) = any (select false) from int4_tbl;
+ ?column? 
+----------
+ t
 (1 row)
 
 --
@@ -888,15 +907,11 @@ returning *;
 -- Test case for cross-type partial matching in hashed subplan (bug #7597)
 --
 create temp table outer_7597 (f1 int4, f2 int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into outer_7597 values (0, 0);
 insert into outer_7597 values (1, 0);
 insert into outer_7597 values (0, null);
 insert into outer_7597 values (1, null);
 create temp table inner_7597(c1 int8, c2 int8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inner_7597 values(0, null);
 select * from outer_7597 where (f1, f2) not in (select * from inner_7597);
  f1 | f2 
@@ -911,15 +926,11 @@ select * from outer_7597 where (f1, f2) not in (select * from inner_7597);
 -- (otherwise it would error in texteq())
 --
 create temp table outer_text (f1 text, f2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into outer_text values ('a', 'a');
 insert into outer_text values ('b', 'a');
 insert into outer_text values ('a', null);
 insert into outer_text values ('b', null);
 create temp table inner_text (c1 text, c2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inner_text values ('a', null);
 insert into inner_text values ('123', '456');
 select * from outer_text where (f1, f2) not in (select * from inner_text);
@@ -1134,8 +1145,6 @@ where (exists(select 1 from tenk1 k where k.unique1 = t.unique2) or ten < 0)
 
 -- It's possible for the same EXISTS to get resolved both ways
 create temp table exists_tbl (c1 int, c2 int, c3 int) partition by list (c1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table exists_tbl_null partition of exists_tbl for values in (null);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table exists_tbl_def partition of exists_tbl default;
@@ -1179,9 +1188,9 @@ select * from exists_tbl t1
   2 |  1 |  3
   3 |  1 |  4
   4 |  2 |  5
-  5 |  2 |  6
   0 |  0 |  1
   1 |  0 |  2
+  5 |  2 |  6
 (6 rows)
 
 --
@@ -1440,24 +1449,19 @@ where o.ten = 1;
 -- Check we don't misoptimize a NOT IN where the subquery returns no rows.
 --
 create temp table notinouter (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table notininner (b int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into notinouter values (null), (1);
 select * from notinouter where a not in (select b from notininner);
  a 
 ---
-  
  1
+  
 (2 rows)
 
 --
 -- Check we behave sanely in corner case of empty SELECT list (bug #8648)
 --
 create temp table nocolumns();
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 select exists(select * from nocolumns);
  exists 
 --------
@@ -1814,6 +1818,127 @@ NOTICE:  x = 9, y = 13
  9 | 3
 (3 rows)
 
+--
+-- check that an upper-level qual is not pushed down if it references a grouped
+-- Var whose underlying expression contains SRFs
+--
+explain (verbose, costs off)
+select * from
+  (select generate_series(1, ten) as g, count(*) from tenk1 group by 1) ss
+  where ss.g = 1;
+                                                                                                                                     QUERY PLAN                                                                                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ss.g, ss.count
+   ->  Subquery Scan on ss
+         Output: ss.g, ss.count
+         Filter: (ss.g = 1)
+         ->  Finalize HashAggregate
+               Output: (generate_series(1, tenk1.ten)), count(*)
+               Group Key: (generate_series(1, tenk1.ten))
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: (generate_series(1, tenk1.ten)), (PARTIAL count(*))
+                     Hash Key: (generate_series(1, tenk1.ten))
+                     ->  Partial HashAggregate
+                           Output: (generate_series(1, tenk1.ten)), PARTIAL count(*)
+                           Group Key: generate_series(1, tenk1.ten)
+                           ->  ProjectSet
+                                 Output: generate_series(1, tenk1.ten)
+                                 ->  Seq Scan on public.tenk1
+                                       Output: tenk1.unique1, tenk1.unique2, tenk1.two, tenk1.four, tenk1.ten, tenk1.twenty, tenk1.hundred, tenk1.thousand, tenk1.twothousand, tenk1.fivethous, tenk1.tenthous, tenk1.odd, tenk1.even, tenk1.stringu1, tenk1.stringu2, tenk1.string4
+ Optimizer: Postgres query optimizer
+(19 rows)
+
+select * from
+  (select generate_series(1, ten) as g, count(*) from tenk1 group by 1) ss
+  where ss.g = 1;
+ g | count 
+---+-------
+ 1 |  9000
+(1 row)
+
+--
+-- check that an upper-level qual is not pushed down if it references a grouped
+-- Var whose underlying expression contains volatile functions
+--
+alter function tattle(x int, y int) volatile;
+explain (verbose, costs off)
+select * from
+  (select tattle(3, ten) as v, count(*) from tenk1 where unique1 < 3 group by 1) ss
+  where ss.v;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: ss.v, ss.count
+   ->  Subquery Scan on ss
+         Output: ss.v, ss.count
+         Filter: ss.v
+         ->  GroupAggregate
+               Output: (tattle(3, tenk1.ten)), count(*)
+               Group Key: (tattle(3, tenk1.ten))
+               ->  Sort
+                     Output: (tattle(3, tenk1.ten))
+                     Sort Key: (tattle(3, tenk1.ten))
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Output: (tattle(3, tenk1.ten))
+                           Hash Key: (tattle(3, tenk1.ten))
+                           ->  Index Scan using tenk1_unique1 on public.tenk1
+                                 Output: tattle(3, tenk1.ten)
+                                 Index Cond: (tenk1.unique1 < 3)
+ Optimizer: Postgres query optimizer
+(18 rows)
+
+select * from
+  (select tattle(3, ten) as v, count(*) from tenk1 where unique1 < 3 group by 1) ss
+  where ss.v;
+NOTICE:  x = 3, y = 2  (seg0 slice2 172.17.0.2:7002 pid=1536341)
+NOTICE:  x = 3, y = 0  (seg1 slice2 172.17.0.2:7003 pid=1536342)
+NOTICE:  x = 3, y = 1  (seg1 slice2 172.17.0.2:7003 pid=1536342)
+ v | count 
+---+-------
+ t |     3
+(1 row)
+
+-- if we pretend it's stable, we get different results:
+alter function tattle(x int, y int) stable;
+explain (verbose, costs off)
+select * from
+  (select tattle(3, ten) as v, count(*) from tenk1 where unique1 < 3 group by 1) ss
+  where ss.v;
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (tattle(3, tenk1.ten)), (count(*))
+   ->  GroupAggregate
+         Output: (tattle(3, tenk1.ten)), count(*)
+         Group Key: (tattle(3, tenk1.ten))
+         ->  Sort
+               Output: (tattle(3, tenk1.ten))
+               Sort Key: (tattle(3, tenk1.ten))
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: (tattle(3, tenk1.ten))
+                     Hash Key: (tattle(3, tenk1.ten))
+                     ->  Index Scan using tenk1_unique1 on public.tenk1
+                           Output: tattle(3, tenk1.ten)
+                           Index Cond: (tenk1.unique1 < 3)
+                           Filter: tattle(3, tenk1.ten)
+ Optimizer: Postgres query optimizer
+(16 rows)
+
+select * from
+  (select tattle(3, ten) as v, count(*) from tenk1 where unique1 < 3 group by 1) ss
+  where ss.v;
+NOTICE:  x = 3, y = 2  (seg0 slice2 172.17.0.2:7002 pid=1536354)
+NOTICE:  x = 3, y = 2  (seg0 slice2 172.17.0.2:7002 pid=1536354)
+NOTICE:  x = 3, y = 0  (seg1 slice2 172.17.0.2:7003 pid=1536355)
+NOTICE:  x = 3, y = 0  (seg1 slice2 172.17.0.2:7003 pid=1536355)
+NOTICE:  x = 3, y = 1  (seg1 slice2 172.17.0.2:7003 pid=1536355)
+NOTICE:  x = 3, y = 1  (seg1 slice2 172.17.0.2:7003 pid=1536355)
+ v | count 
+---+-------
+ t |     3
+(1 row)
+
 drop function tattle(x int, y int);
 set optimizer to off;
 --
@@ -1895,6 +2020,38 @@ ERROR:  backward scan is not supported in this version of Greenplum Database
 commit;
 --end_ignore
 --
+-- Check that JsonConstructorExpr is treated as non-strict, and thus can be
+-- wrapped in a PlaceHolderVar
+--
+begin;
+create temp table json_tab (a int);
+insert into json_tab values (1);
+explain (verbose, costs off)
+select * from json_tab t1 left join (select json_array(1, a) from json_tab t2) s on false;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: t1.a, (JSON_ARRAY(1, a RETURNING json))
+   ->  Nested Loop Left Join
+         Disabled: true
+         Output: t1.a, (JSON_ARRAY(1, a RETURNING json))
+         Join Filter: false
+         ->  Seq Scan on pg_temp.json_tab t1
+               Output: t1.a
+         ->  Result
+               Output: JSON_ARRAY(1, a RETURNING json)
+               One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(12 rows)
+
+select * from json_tab t1 left join (select json_array(1, a) from json_tab t2) s on false;
+ a | json_array 
+---+------------
+ 1 | 
+(1 row)
+
+rollback;
+--
 -- Verify that we correctly flatten cases involving a subquery output
 -- expression that doesn't need to be wrapped in a PlaceHolderVar
 --
@@ -1911,13 +2068,15 @@ where tname = 'tenk1' and attnum = 1;
 -----------------------------------------------------------------------
  Hash Join
    Hash Cond: (a.attrelid = c.oid)
-   ->  Seq Scan on pg_attribute a
-         Filter: (attnum = 1)
+   ->  Bitmap Heap Scan on pg_attribute a
+         Recheck Cond: (attnum = 1)
+         ->  Bitmap Index Scan on pg_attribute_relid_attnum_index
+               Index Cond: (attnum = 1)
    ->  Hash
          ->  Index Scan using pg_class_relname_nsp_index on pg_class c
                Index Cond: (relname = 'tenk1'::name)
  Optimizer: Postgres query optimizer
-(8 rows)
+(10 rows)
 
 -- end_ignore
 -- GPDB: copy.sql leaves a second relation named tenk1 in schema singleseg, so
@@ -2133,14 +2292,14 @@ select t1.q1, x from
    lateral (select t2.q1+1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
   on t1.q2 = t2.q2
 order by 1, 2;
-ERROR:  could not devise a query plan for the given query (pathnode.c:302)
+ERROR:  could not devise a query plan for the given query (pathnode.c:305)
 select t1.q1, x from
   int8_tbl t1 left join
   (int8_tbl t2 left join
    lateral (select t2.q1+1 as x, * from int8_tbl t3) t3 on t2.q2 = t3.q2)
   on t1.q2 = t2.q2
 order by 1, 2;
-ERROR:  could not devise a query plan for the given query (pathnode.c:302)
+ERROR:  could not devise a query plan for the given query (pathnode.c:305)
 -- end_ignore
 -- lateral references for simple Vars can escape being wrapped if the
 -- referenced rel is under the same lowest nulling outer join
@@ -2541,8 +2700,6 @@ select * from x where f1 = 1;
 
 create temporary sequence ts;
 create table vol_test(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 explain (verbose, costs off)
 with x as (select * from (select a, nextval('ts') from vol_test) ss)
 select * from x where a = 1;

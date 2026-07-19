@@ -48,6 +48,8 @@ typedef enum
 	PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK,
 	PROCSIG_RECOVERY_CONFLICT_LAST = PROCSIG_RECOVERY_CONFLICT_STARTUP_DEADLOCK,
 
+	PROCSIG_SLOTSYNC_MESSAGE,	/* ask slot synchronization to stop */
+
 	PROCSIG_QUERY_FINISH,		/* query finish */
 	PROCSIG_RESOURCE_GROUP_MOVE_QUERY,	/* move query to a new resource group */
 } ProcSignalReason;

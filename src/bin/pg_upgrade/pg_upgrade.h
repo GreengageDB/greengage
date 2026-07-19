@@ -631,6 +631,7 @@ void 		gp_fatal_log(const char *fmt,...) pg_attribute_printf(1, 2);
 void		new_9_0_populate_pg_largeobject_metadata(ClusterInfo *cluster,
 													 bool check_mode);
 bool		jsonb_9_4_check_applicable(ClusterInfo *cluster);
+bool		protocol_negotiation_supported(const ClusterInfo *cluster);
 void		old_9_6_invalidate_hash_indexes(ClusterInfo *cluster,
 											bool check_mode);
 

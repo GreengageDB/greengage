@@ -146,6 +146,8 @@ UNION ALL
 SELECT f1 FROM FLOAT8_TBL;
           ten          
 -----------------------
+ -1.2345678901234e+200
+ -1.2345678901234e+200
                      0
                 -34.84
                -1004.3
@@ -154,8 +156,6 @@ SELECT f1 FROM FLOAT8_TBL;
                 -34.84
                -1004.3
  -1.2345678901234e-200
- -1.2345678901234e+200
- -1.2345678901234e+200
 (10 rows)
 
 SELECT f1 AS nine FROM FLOAT8_TBL
@@ -234,14 +234,14 @@ UNION ALL
 SELECT f1 FROM CHAR_TBL;
  eight 
 -------
+ a
+ a
  ab
  abcd
  abcd
  ab
  abcd
  abcd
- a
- a
 (8 rows)
 
 SELECT f1 AS five FROM TEXT_TBL
@@ -985,13 +985,13 @@ SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM 
 SELECT q1 FROM int8_tbl UNION ALL (((SELECT q2 FROM int8_tbl EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1))); --order none
         q1         
 -------------------
-               123
-               123
   4567890123456789
   4567890123456789
   4567890123456789
  -4567890123456789
                456
+               123
+               123
 (7 rows)
 
 (((SELECT q1 FROM int8_tbl UNION ALL SELECT q2 FROM int8_tbl))) EXCEPT SELECT q1 FROM int8_tbl ORDER BY 1;
@@ -1614,7 +1614,7 @@ inner join tenk2 t2 on t1.tenthous = t2.tenthous and t2.thousand = 0
                                        ->  Seq Scan on tenk2 t2
                                              Filter: (thousand = 0)
                      ->  Result
-                           One-Time Filter: (gp_execution_segment() = 0)
+                           One-Time Filter: (gp_execution_segment() = 2)
                            ->  Result
  Optimizer: Postgres query optimizer
 (15 rows)
@@ -1625,4 +1625,23 @@ select * from tenk1 t1
 left join lateral
   (select t1.tenthous from tenk2 t2 union all (values(1)))
 on true limit 1;
-ERROR:  could not devise a query plan for the given query (pathnode.c:302)
+ERROR:  could not devise a query plan for the given query (pathnode.c:305)
+-- Test handling of Vars with varno 0 in estimate_array_length
+explain (verbose, costs off)
+select null::int[] union all select null::int[] union all select null::bigint[];
+              QUERY PLAN               
+---------------------------------------
+ Append
+   ->  Subquery Scan on "*SELECT* 1"
+         Output: NULL::integer[]
+         ->  Result
+               Output: NULL::integer[]
+   ->  Subquery Scan on "*SELECT* 2"
+         Output: NULL::integer[]
+         ->  Result
+               Output: NULL::integer[]
+   ->  Result
+         Output: NULL::bigint[]
+ Optimizer: Postgres query optimizer
+(12 rows)
+

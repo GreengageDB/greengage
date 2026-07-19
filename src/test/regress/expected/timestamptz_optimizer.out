@@ -460,6 +460,16 @@ SELECT '' AS "48", d1 FROM TIMESTAMPTZ_TBL
     | Sat Feb 15 17:32:01 1997 PST
     | Sat Feb 16 17:32:01 2097 PST
     | Sun Dec 31 17:32:01 2000 PST
+    | Mon Feb 10 17:32:01.5 1997 PST
+    | Tue Jun 10 17:32:01 1997 PDT
+    | Wed Mar 15 03:14:04 2000 PST
+    | Tue Feb 11 17:32:01 1997 PST
+    | Fri Feb 14 17:32:01 1997 PST
+    | Sun Feb 16 17:32:01 1997 PST
+    | Sun Feb 16 17:32:01 1997 PST
+    | Tue Dec 30 17:32:01 1997 PST
+    | Fri Dec 31 17:32:01 1999 PST
+    | Mon Jan 01 17:32:01 2001 PST
     | Mon Feb 10 17:32:01 1997 PST
     | Mon Feb 10 17:32:01 1997 PST
     | Mon Feb 10 17:32:01 1997 PST
@@ -483,30 +493,12 @@ SELECT '' AS "48", d1 FROM TIMESTAMPTZ_TBL
     | Sat Mar 01 17:32:01 1997 PST
     | Wed Dec 31 17:32:01 1997 PST
     | Sat Jan 01 17:32:01 2000 PST
-    | Mon Feb 10 17:32:01.5 1997 PST
-    | Tue Jun 10 17:32:01 1997 PDT
-    | Wed Mar 15 03:14:04 2000 PST
-    | Tue Feb 11 17:32:01 1997 PST
-    | Fri Feb 14 17:32:01 1997 PST
-    | Sun Feb 16 17:32:01 1997 PST
-    | Sun Feb 16 17:32:01 1997 PST
-    | Tue Dec 30 17:32:01 1997 PST
-    | Fri Dec 31 17:32:01 1999 PST
-    | Mon Jan 01 17:32:01 2001 PST
 (50 rows)
 
 SELECT '' AS "15", d1 FROM TIMESTAMPTZ_TBL
    WHERE d1 < timestamp with time zone '1997-01-02';
  15 |               d1                
 ----+---------------------------------
-    | Tue Feb 16 17:32:01 0097 LMT BC
-    | Sat Feb 16 17:32:01 0097 LMT
-    | Tue Feb 16 17:32:01 1897 PST
-    | Thu Feb 29 17:32:01 1996 PST
-    | Thu Feb 16 17:32:01 1797 LMT
-    | Wed Feb 28 17:32:01 1996 PST
-    | Fri Mar 01 17:32:01 1996 PST
-    | Wed Jan 01 17:32:01 1997 PST
     | -infinity
     | Wed Dec 31 16:00:00 1969 PST
     | Thu Feb 16 17:32:01 0597 LMT
@@ -514,6 +506,14 @@ SELECT '' AS "15", d1 FROM TIMESTAMPTZ_TBL
     | Sat Feb 16 17:32:01 1697 LMT
     | Mon Dec 30 17:32:01 1996 PST
     | Tue Dec 31 17:32:01 1996 PST
+    | Thu Feb 16 17:32:01 1797 LMT
+    | Wed Feb 28 17:32:01 1996 PST
+    | Fri Mar 01 17:32:01 1996 PST
+    | Wed Jan 01 17:32:01 1997 PST
+    | Tue Feb 16 17:32:01 0097 LMT BC
+    | Sat Feb 16 17:32:01 0097 LMT
+    | Tue Feb 16 17:32:01 1897 PST
+    | Thu Feb 29 17:32:01 1996 PST
 (15 rows)
 
 SELECT '' AS one, d1 FROM TIMESTAMPTZ_TBL
@@ -605,15 +605,15 @@ SELECT '' AS "16", d1 FROM TIMESTAMPTZ_TBL
     | Sat Feb 16 17:32:01 1697 LMT
     | Mon Dec 30 17:32:01 1996 PST
     | Tue Dec 31 17:32:01 1996 PST
-    | Thu Feb 16 17:32:01 1797 LMT
-    | Wed Feb 28 17:32:01 1996 PST
-    | Fri Mar 01 17:32:01 1996 PST
-    | Wed Jan 01 17:32:01 1997 PST
     | Thu Jan 02 00:00:00 1997 PST
     | Tue Feb 16 17:32:01 0097 LMT BC
     | Sat Feb 16 17:32:01 0097 LMT
     | Tue Feb 16 17:32:01 1897 PST
     | Thu Feb 29 17:32:01 1996 PST
+    | Thu Feb 16 17:32:01 1797 LMT
+    | Wed Feb 28 17:32:01 1996 PST
+    | Fri Mar 01 17:32:01 1996 PST
+    | Wed Jan 01 17:32:01 1997 PST
 (16 rows)
 
 SELECT '' AS "49", d1 FROM TIMESTAMPTZ_TBL
@@ -703,6 +703,18 @@ SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
     | @ 58 days 17 hours 32 mins 1 sec
     | @ 363 days 17 hours 32 mins 1 sec
     | @ 1094 days 17 hours 32 mins 1 sec
+    | @ 39 days 17 hours 32 mins 1.5 secs
+    | @ 0
+    | @ 159 days 16 hours 32 mins 1 sec
+    | @ 1168 days 3 hours 14 mins 4 secs
+    | @ 40 days 17 hours 32 mins 1 sec
+    | @ 43 days 17 hours 32 mins 1 sec
+    | @ 45 days 17 hours 32 mins 1 sec
+    | @ 45 days 17 hours 32 mins 1 sec
+    | @ 307 days 6 hours 27 mins 59 secs ago
+    | @ 362 days 17 hours 32 mins 1 sec
+    | @ 1093 days 17 hours 32 mins 1 sec
+    | @ 1460 days 17 hours 32 mins 1 sec
     | @ 9863 days 8 hours ago
     | @ 39 days 17 hours 32 mins 2 secs
     | @ 39 days 17 hours 32 mins 1.4 secs
@@ -721,18 +733,6 @@ SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
     | @ 2 days 6 hours 27 mins 59 secs ago
     | @ 1 day 6 hours 27 mins 59 secs ago
     | @ 1459 days 17 hours 32 mins 1 sec
-    | @ 39 days 17 hours 32 mins 1.5 secs
-    | @ 0
-    | @ 159 days 16 hours 32 mins 1 sec
-    | @ 1168 days 3 hours 14 mins 4 secs
-    | @ 40 days 17 hours 32 mins 1 sec
-    | @ 43 days 17 hours 32 mins 1 sec
-    | @ 45 days 17 hours 32 mins 1 sec
-    | @ 45 days 17 hours 32 mins 1 sec
-    | @ 307 days 6 hours 27 mins 59 secs ago
-    | @ 362 days 17 hours 32 mins 1 sec
-    | @ 1093 days 17 hours 32 mins 1 sec
-    | @ 1460 days 17 hours 32 mins 1 sec
 (56 rows)
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone '2004-02-29 15:44:17.71393' ) AS week_trunc;
@@ -741,6 +741,16 @@ SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone '2004
                  | Mon Feb 23 00:00:00 2004 PST
 (1 row)
 
+SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone 'infinity' ) AS inf_trunc;
+ date_trunc_week | inf_trunc 
+-----------------+-----------
+                 | infinity
+(1 row)
+
+SELECT date_trunc( 'timezone', timestamp with time zone '2004-02-29 15:44:17.71393' ) AS notsupp_trunc;
+ERROR:  unit "timezone" not supported for type timestamp with time zone
+SELECT date_trunc( 'timezone', timestamp with time zone 'infinity' ) AS notsupp_inf_trunc;
+ERROR:  unit "timezone" not supported for type timestamp with time zone
 SELECT date_trunc( 'ago', timestamp with time zone 'infinity' ) AS invalid_trunc;
 ERROR:  unit "ago" not recognized for type timestamp with time zone
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'Australia/Sydney') as sydney_trunc;  -- zone name
@@ -759,6 +769,14 @@ SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-
  date_trunc_at_tz |          vet_trunc           
 ------------------+------------------------------
                   | Thu Feb 15 20:00:00 2001 PST
+(1 row)
+
+SELECT date_trunc('timezone', timestamp with time zone 'infinity', 'GMT') AS notsupp_zone_trunc;
+ERROR:  unit "timezone" not supported for type timestamp with time zone
+SELECT '' AS date_trunc_at_tz, date_trunc( 'week', timestamp with time zone 'infinity', 'GMT') AS inf_zone_trunc;
+ date_trunc_at_tz | inf_zone_trunc 
+------------------+----------------
+                  | infinity
 (1 row)
 
 SELECT date_trunc('ago', timestamp with time zone 'infinity', 'GMT') AS invalid_zone_trunc;
@@ -855,24 +873,6 @@ SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
   WHERE d1 BETWEEN timestamp with time zone '1902-01-01' AND timestamp with time zone '2038-01-01';
  54 |                  diff                  
 ----+----------------------------------------
-    | @ 9863 days 8 hours ago
-    | @ 39 days 17 hours 32 mins 2 secs
-    | @ 39 days 17 hours 32 mins 1.4 secs
-    | @ 39 days 17 hours 32 mins 1.6 secs
-    | @ 3 hours 4 mins 5 secs
-    | @ 1168 days 8 hours 14 mins 1 sec
-    | @ 1168 days 4 hours 14 mins 2 secs
-    | @ 1168 days 1 hour 14 mins 5 secs
-    | @ 39 days 9 hours 32 mins 1 sec
-    | @ 39 days 9 hours 32 mins 1 sec
-    | @ 39 days 9 hours 32 mins 1 sec
-    | @ 39 days 14 hours 32 mins 1 sec
-    | @ 159 days 17 hours 32 mins 1 sec
-    | @ 42 days 17 hours 32 mins 1 sec
-    | @ 44 days 17 hours 32 mins 1 sec
-    | @ 2 days 6 hours 27 mins 59 secs ago
-    | @ 1 day 6 hours 27 mins 59 secs ago
-    | @ 1459 days 17 hours 32 mins 1 sec
     | @ 39 days 17 hours 32 mins 1 sec
     | @ 39 days 17 hours 32 mins 1 sec
     | @ 39 days 17 hours 32 mins 1 sec
@@ -899,6 +899,24 @@ SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
     | @ 58 days 17 hours 32 mins 1 sec
     | @ 363 days 17 hours 32 mins 1 sec
     | @ 1094 days 17 hours 32 mins 1 sec
+    | @ 9863 days 8 hours ago
+    | @ 39 days 17 hours 32 mins 2 secs
+    | @ 39 days 17 hours 32 mins 1.4 secs
+    | @ 39 days 17 hours 32 mins 1.6 secs
+    | @ 3 hours 4 mins 5 secs
+    | @ 1168 days 8 hours 14 mins 1 sec
+    | @ 1168 days 4 hours 14 mins 2 secs
+    | @ 1168 days 1 hour 14 mins 5 secs
+    | @ 39 days 9 hours 32 mins 1 sec
+    | @ 39 days 9 hours 32 mins 1 sec
+    | @ 39 days 9 hours 32 mins 1 sec
+    | @ 39 days 14 hours 32 mins 1 sec
+    | @ 159 days 17 hours 32 mins 1 sec
+    | @ 42 days 17 hours 32 mins 1 sec
+    | @ 44 days 17 hours 32 mins 1 sec
+    | @ 2 days 6 hours 27 mins 59 secs ago
+    | @ 1 day 6 hours 27 mins 59 secs ago
+    | @ 1459 days 17 hours 32 mins 1 sec
     | @ 39 days 17 hours 32 mins 1.5 secs
     | @ 0
     | @ 159 days 16 hours 32 mins 1 sec
@@ -921,6 +939,33 @@ SELECT d1 as timestamptz,
    FROM TIMESTAMPTZ_TBL;
            timestamptz           |   year    | month | day | hour | minute | second 
 ---------------------------------+-----------+-------+-----+------+--------+--------
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Sat Sep 22 18:19:20 2001 PDT    |      2001 |     9 |  22 |   18 |     19 |     20
+ Wed Mar 15 02:14:03 2000 PST    |      2000 |     3 |  15 |    2 |     14 |      3
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:00 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      0
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Thu Jul 10 14:32:01 1997 PDT    |      1997 |     7 |  10 |   14 |     32 |      1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
+ Wed Feb 12 17:32:01 1997 PST    |      1997 |     2 |  12 |   17 |     32 |      1
+ Thu Feb 16 17:32:01 1797 LMT    |      1797 |     2 |  16 |   17 |     32 |      1
+ Wed Feb 28 17:32:01 1996 PST    |      1996 |     2 |  28 |   17 |     32 |      1
+ Fri Mar 01 17:32:01 1996 PST    |      1996 |     3 |   1 |   17 |     32 |      1
+ Wed Jan 01 17:32:01 1997 PST    |      1997 |     1 |   1 |   17 |     32 |      1
+ Fri Feb 28 17:32:01 1997 PST    |      1997 |     2 |  28 |   17 |     32 |      1
+ Sat Mar 01 17:32:01 1997 PST    |      1997 |     3 |   1 |   17 |     32 |      1
+ Wed Dec 31 17:32:01 1997 PST    |      1997 |    12 |  31 |   17 |     32 |      1
+ Sat Jan 01 17:32:01 2000 PST    |      2000 |     1 |   1 |   17 |     32 |      1
  -infinity                       | -Infinity |       |     |      |        |       
  infinity                        |  Infinity |       |     |      |        |       
  Wed Dec 31 16:00:00 1969 PST    |      1969 |    12 |  31 |   16 |      0 |      0
@@ -960,33 +1005,6 @@ SELECT d1 as timestamptz,
  Tue Dec 30 17:32:01 1997 PST    |      1997 |    12 |  30 |   17 |     32 |      1
  Fri Dec 31 17:32:01 1999 PST    |      1999 |    12 |  31 |   17 |     32 |      1
  Mon Jan 01 17:32:01 2001 PST    |      2001 |     1 |   1 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Sat Sep 22 18:19:20 2001 PDT    |      2001 |     9 |  22 |   18 |     19 |     20
- Wed Mar 15 02:14:03 2000 PST    |      2000 |     3 |  15 |    2 |     14 |      3
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:00 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      0
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Thu Jul 10 14:32:01 1997 PDT    |      1997 |     7 |  10 |   14 |     32 |      1
- Mon Feb 10 17:32:01 1997 PST    |      1997 |     2 |  10 |   17 |     32 |      1
- Wed Feb 12 17:32:01 1997 PST    |      1997 |     2 |  12 |   17 |     32 |      1
- Thu Feb 16 17:32:01 1797 LMT    |      1797 |     2 |  16 |   17 |     32 |      1
- Wed Feb 28 17:32:01 1996 PST    |      1996 |     2 |  28 |   17 |     32 |      1
- Fri Mar 01 17:32:01 1996 PST    |      1996 |     3 |   1 |   17 |     32 |      1
- Wed Jan 01 17:32:01 1997 PST    |      1997 |     1 |   1 |   17 |     32 |      1
- Fri Feb 28 17:32:01 1997 PST    |      1997 |     2 |  28 |   17 |     32 |      1
- Sat Mar 01 17:32:01 1997 PST    |      1997 |     3 |   1 |   17 |     32 |      1
- Wed Dec 31 17:32:01 1997 PST    |      1997 |    12 |  31 |   17 |     32 |      1
- Sat Jan 01 17:32:01 2000 PST    |      2000 |     1 |   1 |   17 |     32 |      1
 (66 rows)
 
 SELECT d1 as timestamptz,
@@ -995,30 +1013,21 @@ SELECT d1 as timestamptz,
    FROM TIMESTAMPTZ_TBL;
            timestamptz           | quarter | msec  |   usec   
 ---------------------------------+---------+-------+----------
- -infinity                       |         |       |         
- infinity                        |         |       |         
- Wed Dec 31 16:00:00 1969 PST    |       4 |     0 |        0
- Mon Feb 10 17:32:02 1997 PST    |       1 |  2000 |  2000000
- Mon Feb 10 17:32:01.4 1997 PST  |       1 |  1400 |  1400000
- Mon Feb 10 17:32:01.6 1997 PST  |       1 |  1600 |  1600000
- Thu Jan 02 03:04:05 1997 PST    |       1 |  5000 |  5000000
- Wed Mar 15 08:14:01 2000 PST    |       1 |  1000 |  1000000
- Wed Mar 15 04:14:02 2000 PST    |       1 |  2000 |  2000000
- Wed Mar 15 01:14:05 2000 PST    |       1 |  5000 |  5000000
- Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
- Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
- Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
- Mon Feb 10 14:32:01 1997 PST    |       1 |  1000 |  1000000
- Tue Jun 10 18:32:01 1997 PDT    |       2 |  1000 |  1000000
- Thu Feb 13 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Sat Feb 15 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Thu Feb 16 17:32:01 0597 LMT    |       1 |  1000 |  1000000
- Tue Feb 16 17:32:01 1097 LMT    |       1 |  1000 |  1000000
- Sat Feb 16 17:32:01 1697 LMT    |       1 |  1000 |  1000000
- Sat Feb 16 17:32:01 2097 PST    |       1 |  1000 |  1000000
- Mon Dec 30 17:32:01 1996 PST    |       4 |  1000 |  1000000
- Tue Dec 31 17:32:01 1996 PST    |       4 |  1000 |  1000000
- Sun Dec 31 17:32:01 2000 PST    |       4 |  1000 |  1000000
+ Mon Feb 10 17:32:01.5 1997 PST  |       1 |  1500 |  1500000
+ Thu Jan 02 00:00:00 1997 PST    |       1 |     0 |        0
+ Tue Jun 10 17:32:01 1997 PDT    |       2 |  1000 |  1000000
+ Wed Mar 15 03:14:04 2000 PST    |       1 |  4000 |  4000000
+ Tue Feb 11 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Fri Feb 14 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Sun Feb 16 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Tue Feb 16 17:32:01 0097 LMT BC |       1 |  1000 |  1000000
+ Sat Feb 16 17:32:01 0097 LMT    |       1 |  1000 |  1000000
+ Tue Feb 16 17:32:01 1897 PST    |       1 |  1000 |  1000000
+ Sun Feb 16 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Thu Feb 29 17:32:01 1996 PST    |       1 |  1000 |  1000000
+ Tue Dec 30 17:32:01 1997 PST    |       4 |  1000 |  1000000
+ Fri Dec 31 17:32:01 1999 PST    |       4 |  1000 |  1000000
+ Mon Jan 01 17:32:01 2001 PST    |       1 |  1000 |  1000000
  Mon Feb 10 17:32:01 1997 PST    |       1 |  1000 |  1000000
  Mon Feb 10 17:32:01 1997 PST    |       1 |  1000 |  1000000
  Mon Feb 10 17:32:01 1997 PST    |       1 |  1000 |  1000000
@@ -1046,21 +1055,30 @@ SELECT d1 as timestamptz,
  Sat Mar 01 17:32:01 1997 PST    |       1 |  1000 |  1000000
  Wed Dec 31 17:32:01 1997 PST    |       4 |  1000 |  1000000
  Sat Jan 01 17:32:01 2000 PST    |       1 |  1000 |  1000000
- Mon Feb 10 17:32:01.5 1997 PST  |       1 |  1500 |  1500000
- Thu Jan 02 00:00:00 1997 PST    |       1 |     0 |        0
- Tue Jun 10 17:32:01 1997 PDT    |       2 |  1000 |  1000000
- Wed Mar 15 03:14:04 2000 PST    |       1 |  4000 |  4000000
- Tue Feb 11 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Fri Feb 14 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Sun Feb 16 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Tue Feb 16 17:32:01 0097 LMT BC |       1 |  1000 |  1000000
- Sat Feb 16 17:32:01 0097 LMT    |       1 |  1000 |  1000000
- Tue Feb 16 17:32:01 1897 PST    |       1 |  1000 |  1000000
- Sun Feb 16 17:32:01 1997 PST    |       1 |  1000 |  1000000
- Thu Feb 29 17:32:01 1996 PST    |       1 |  1000 |  1000000
- Tue Dec 30 17:32:01 1997 PST    |       4 |  1000 |  1000000
- Fri Dec 31 17:32:01 1999 PST    |       4 |  1000 |  1000000
- Mon Jan 01 17:32:01 2001 PST    |       1 |  1000 |  1000000
+ -infinity                       |         |       |         
+ infinity                        |         |       |         
+ Wed Dec 31 16:00:00 1969 PST    |       4 |     0 |        0
+ Mon Feb 10 17:32:02 1997 PST    |       1 |  2000 |  2000000
+ Mon Feb 10 17:32:01.4 1997 PST  |       1 |  1400 |  1400000
+ Mon Feb 10 17:32:01.6 1997 PST  |       1 |  1600 |  1600000
+ Thu Jan 02 03:04:05 1997 PST    |       1 |  5000 |  5000000
+ Wed Mar 15 08:14:01 2000 PST    |       1 |  1000 |  1000000
+ Wed Mar 15 04:14:02 2000 PST    |       1 |  2000 |  2000000
+ Wed Mar 15 01:14:05 2000 PST    |       1 |  5000 |  5000000
+ Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
+ Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
+ Mon Feb 10 09:32:01 1997 PST    |       1 |  1000 |  1000000
+ Mon Feb 10 14:32:01 1997 PST    |       1 |  1000 |  1000000
+ Tue Jun 10 18:32:01 1997 PDT    |       2 |  1000 |  1000000
+ Thu Feb 13 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Sat Feb 15 17:32:01 1997 PST    |       1 |  1000 |  1000000
+ Thu Feb 16 17:32:01 0597 LMT    |       1 |  1000 |  1000000
+ Tue Feb 16 17:32:01 1097 LMT    |       1 |  1000 |  1000000
+ Sat Feb 16 17:32:01 1697 LMT    |       1 |  1000 |  1000000
+ Sat Feb 16 17:32:01 2097 PST    |       1 |  1000 |  1000000
+ Mon Dec 30 17:32:01 1996 PST    |       4 |  1000 |  1000000
+ Tue Dec 31 17:32:01 1996 PST    |       4 |  1000 |  1000000
+ Sun Dec 31 17:32:01 2000 PST    |       4 |  1000 |  1000000
 (66 rows)
 
 SELECT d1 as timestamptz,
@@ -1070,33 +1088,6 @@ SELECT d1 as timestamptz,
    FROM TIMESTAMPTZ_TBL;
            timestamptz           |  isoyear  | week | isodow | dow | doy 
 ---------------------------------+-----------+------+--------+-----+-----
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Sat Sep 22 18:19:20 2001 PDT    |      2001 |   38 |      6 |   6 | 265
- Wed Mar 15 02:14:03 2000 PST    |      2000 |   11 |      3 |   3 |  75
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:00 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Thu Jul 10 14:32:01 1997 PDT    |      1997 |   28 |      4 |   4 | 191
- Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
- Wed Feb 12 17:32:01 1997 PST    |      1997 |    7 |      3 |   3 |  43
- Thu Feb 16 17:32:01 1797 LMT    |      1797 |    7 |      4 |   4 |  47
- Wed Feb 28 17:32:01 1996 PST    |      1996 |    9 |      3 |   3 |  59
- Fri Mar 01 17:32:01 1996 PST    |      1996 |    9 |      5 |   5 |  61
- Wed Jan 01 17:32:01 1997 PST    |      1997 |    1 |      3 |   3 |   1
- Fri Feb 28 17:32:01 1997 PST    |      1997 |    9 |      5 |   5 |  59
- Sat Mar 01 17:32:01 1997 PST    |      1997 |    9 |      6 |   6 |  60
- Wed Dec 31 17:32:01 1997 PST    |      1998 |    1 |      3 |   3 | 365
- Sat Jan 01 17:32:01 2000 PST    |      1999 |   52 |      6 |   6 |   1
  -infinity                       | -Infinity |      |        |     |    
  infinity                        |  Infinity |      |        |     |    
  Wed Dec 31 16:00:00 1969 PST    |      1970 |    1 |      3 |   3 | 365
@@ -1136,6 +1127,33 @@ SELECT d1 as timestamptz,
  Tue Dec 30 17:32:01 1997 PST    |      1998 |    1 |      2 |   2 | 364
  Fri Dec 31 17:32:01 1999 PST    |      1999 |   52 |      5 |   5 | 365
  Mon Jan 01 17:32:01 2001 PST    |      2001 |    1 |      1 |   1 |   1
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Sat Sep 22 18:19:20 2001 PDT    |      2001 |   38 |      6 |   6 | 265
+ Wed Mar 15 02:14:03 2000 PST    |      2000 |   11 |      3 |   3 |  75
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:00 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Thu Jul 10 14:32:01 1997 PDT    |      1997 |   28 |      4 |   4 | 191
+ Mon Feb 10 17:32:01 1997 PST    |      1997 |    7 |      1 |   1 |  41
+ Wed Feb 12 17:32:01 1997 PST    |      1997 |    7 |      3 |   3 |  43
+ Thu Feb 16 17:32:01 1797 LMT    |      1797 |    7 |      4 |   4 |  47
+ Wed Feb 28 17:32:01 1996 PST    |      1996 |    9 |      3 |   3 |  59
+ Fri Mar 01 17:32:01 1996 PST    |      1996 |    9 |      5 |   5 |  61
+ Wed Jan 01 17:32:01 1997 PST    |      1997 |    1 |      3 |   3 |   1
+ Fri Feb 28 17:32:01 1997 PST    |      1997 |    9 |      5 |   5 |  59
+ Sat Mar 01 17:32:01 1997 PST    |      1997 |    9 |      6 |   6 |  60
+ Wed Dec 31 17:32:01 1997 PST    |      1998 |    1 |      3 |   3 | 365
+ Sat Jan 01 17:32:01 2000 PST    |      1999 |   52 |      6 |   6 |   1
 (66 rows)
 
 SELECT d1 as timestamptz,
@@ -1146,21 +1164,30 @@ SELECT d1 as timestamptz,
    FROM TIMESTAMPTZ_TBL;
            timestamptz           |  decade   |  century  | millennium |  julian   
 ---------------------------------+-----------+-----------+------------+-----------
- Mon Feb 10 17:32:01.5 1997 PST  |       199 |        20 |          2 |   2450491
- Thu Jan 02 00:00:00 1997 PST    |       199 |        20 |          2 |   2450451
- Tue Jun 10 17:32:01 1997 PDT    |       199 |        20 |          2 |   2450611
- Wed Mar 15 03:14:04 2000 PST    |       200 |        20 |          2 |   2451619
- Tue Feb 11 17:32:01 1997 PST    |       199 |        20 |          2 |   2450492
- Fri Feb 14 17:32:01 1997 PST    |       199 |        20 |          2 |   2450495
- Sun Feb 16 17:32:01 1997 PST    |       199 |        20 |          2 |   2450497
- Tue Feb 16 17:32:01 0097 LMT BC |       -10 |        -1 |         -1 |   1686043
- Sat Feb 16 17:32:01 0097 LMT    |         9 |         1 |          1 |   1756537
- Tue Feb 16 17:32:01 1897 PST    |       189 |        19 |          2 |   2413973
- Sun Feb 16 17:32:01 1997 PST    |       199 |        20 |          2 |   2450497
- Thu Feb 29 17:32:01 1996 PST    |       199 |        20 |          2 |   2450144
- Tue Dec 30 17:32:01 1997 PST    |       199 |        20 |          2 |   2450814
- Fri Dec 31 17:32:01 1999 PST    |       199 |        20 |          2 |   2451545
- Mon Jan 01 17:32:01 2001 PST    |       200 |        21 |          3 |   2451912
+ -infinity                       | -Infinity | -Infinity |  -Infinity | -Infinity
+ infinity                        |  Infinity |  Infinity |   Infinity |  Infinity
+ Wed Dec 31 16:00:00 1969 PST    |       196 |        20 |          2 |   2440588
+ Mon Feb 10 17:32:02 1997 PST    |       199 |        20 |          2 |   2450491
+ Mon Feb 10 17:32:01.4 1997 PST  |       199 |        20 |          2 |   2450491
+ Mon Feb 10 17:32:01.6 1997 PST  |       199 |        20 |          2 |   2450491
+ Thu Jan 02 03:04:05 1997 PST    |       199 |        20 |          2 |   2450451
+ Wed Mar 15 08:14:01 2000 PST    |       200 |        20 |          2 |   2451619
+ Wed Mar 15 04:14:02 2000 PST    |       200 |        20 |          2 |   2451619
+ Wed Mar 15 01:14:05 2000 PST    |       200 |        20 |          2 |   2451619
+ Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
+ Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
+ Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
+ Mon Feb 10 14:32:01 1997 PST    |       199 |        20 |          2 |   2450491
+ Tue Jun 10 18:32:01 1997 PDT    |       199 |        20 |          2 |   2450611
+ Thu Feb 13 17:32:01 1997 PST    |       199 |        20 |          2 |   2450494
+ Sat Feb 15 17:32:01 1997 PST    |       199 |        20 |          2 |   2450496
+ Thu Feb 16 17:32:01 0597 LMT    |        59 |         6 |          1 |   1939158
+ Tue Feb 16 17:32:01 1097 LMT    |       109 |        11 |          2 |   2121779
+ Sat Feb 16 17:32:01 1697 LMT    |       169 |        17 |          2 |   2340925
+ Sat Feb 16 17:32:01 2097 PST    |       209 |        21 |          3 |   2487022
+ Mon Dec 30 17:32:01 1996 PST    |       199 |        20 |          2 |   2450449
+ Tue Dec 31 17:32:01 1996 PST    |       199 |        20 |          2 |   2450450
+ Sun Dec 31 17:32:01 2000 PST    |       200 |        20 |          2 |   2451911
  Mon Feb 10 17:32:01 1997 PST    |       199 |        20 |          2 |   2450491
  Mon Feb 10 17:32:01 1997 PST    |       199 |        20 |          2 |   2450491
  Mon Feb 10 17:32:01 1997 PST    |       199 |        20 |          2 |   2450491
@@ -1188,30 +1215,21 @@ SELECT d1 as timestamptz,
  Sat Mar 01 17:32:01 1997 PST    |       199 |        20 |          2 |   2450510
  Wed Dec 31 17:32:01 1997 PST    |       199 |        20 |          2 |   2450815
  Sat Jan 01 17:32:01 2000 PST    |       200 |        20 |          2 |   2451546
- -infinity                       | -Infinity | -Infinity |  -Infinity | -Infinity
- infinity                        |  Infinity |  Infinity |   Infinity |  Infinity
- Wed Dec 31 16:00:00 1969 PST    |       196 |        20 |          2 |   2440588
- Mon Feb 10 17:32:02 1997 PST    |       199 |        20 |          2 |   2450491
- Mon Feb 10 17:32:01.4 1997 PST  |       199 |        20 |          2 |   2450491
- Mon Feb 10 17:32:01.6 1997 PST  |       199 |        20 |          2 |   2450491
- Thu Jan 02 03:04:05 1997 PST    |       199 |        20 |          2 |   2450451
- Wed Mar 15 08:14:01 2000 PST    |       200 |        20 |          2 |   2451619
- Wed Mar 15 04:14:02 2000 PST    |       200 |        20 |          2 |   2451619
- Wed Mar 15 01:14:05 2000 PST    |       200 |        20 |          2 |   2451619
- Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
- Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
- Mon Feb 10 09:32:01 1997 PST    |       199 |        20 |          2 |   2450490
- Mon Feb 10 14:32:01 1997 PST    |       199 |        20 |          2 |   2450491
- Tue Jun 10 18:32:01 1997 PDT    |       199 |        20 |          2 |   2450611
- Thu Feb 13 17:32:01 1997 PST    |       199 |        20 |          2 |   2450494
- Sat Feb 15 17:32:01 1997 PST    |       199 |        20 |          2 |   2450496
- Thu Feb 16 17:32:01 0597 LMT    |        59 |         6 |          1 |   1939158
- Tue Feb 16 17:32:01 1097 LMT    |       109 |        11 |          2 |   2121779
- Sat Feb 16 17:32:01 1697 LMT    |       169 |        17 |          2 |   2340925
- Sat Feb 16 17:32:01 2097 PST    |       209 |        21 |          3 |   2487022
- Mon Dec 30 17:32:01 1996 PST    |       199 |        20 |          2 |   2450449
- Tue Dec 31 17:32:01 1996 PST    |       199 |        20 |          2 |   2450450
- Sun Dec 31 17:32:01 2000 PST    |       200 |        20 |          2 |   2451911
+ Mon Feb 10 17:32:01.5 1997 PST  |       199 |        20 |          2 |   2450491
+ Thu Jan 02 00:00:00 1997 PST    |       199 |        20 |          2 |   2450451
+ Tue Jun 10 17:32:01 1997 PDT    |       199 |        20 |          2 |   2450611
+ Wed Mar 15 03:14:04 2000 PST    |       200 |        20 |          2 |   2451619
+ Tue Feb 11 17:32:01 1997 PST    |       199 |        20 |          2 |   2450492
+ Fri Feb 14 17:32:01 1997 PST    |       199 |        20 |          2 |   2450495
+ Sun Feb 16 17:32:01 1997 PST    |       199 |        20 |          2 |   2450497
+ Tue Feb 16 17:32:01 0097 LMT BC |       -10 |        -1 |         -1 |   1686043
+ Sat Feb 16 17:32:01 0097 LMT    |         9 |         1 |          1 |   1756537
+ Tue Feb 16 17:32:01 1897 PST    |       189 |        19 |          2 |   2413973
+ Sun Feb 16 17:32:01 1997 PST    |       199 |        20 |          2 |   2450497
+ Thu Feb 29 17:32:01 1996 PST    |       199 |        20 |          2 |   2450144
+ Tue Dec 30 17:32:01 1997 PST    |       199 |        20 |          2 |   2450814
+ Fri Dec 31 17:32:01 1999 PST    |       199 |        20 |          2 |   2451545
+ Mon Jan 01 17:32:01 2001 PST    |       200 |        21 |          3 |   2451912
 (66 rows)
 
 SELECT d1 as timestamptz,
@@ -1248,6 +1266,21 @@ SELECT d1 as timestamptz,
  Sat Mar 01 17:32:01 1997 PST    |   -28800 |            -8 |               0
  Wed Dec 31 17:32:01 1997 PST    |   -28800 |            -8 |               0
  Sat Jan 01 17:32:01 2000 PST    |   -28800 |            -8 |               0
+ Mon Feb 10 17:32:01.5 1997 PST  |   -28800 |            -8 |               0
+ Thu Jan 02 00:00:00 1997 PST    |   -28800 |            -8 |               0
+ Tue Jun 10 17:32:01 1997 PDT    |   -25200 |            -7 |               0
+ Wed Mar 15 03:14:04 2000 PST    |   -28800 |            -8 |               0
+ Tue Feb 11 17:32:01 1997 PST    |   -28800 |            -8 |               0
+ Fri Feb 14 17:32:01 1997 PST    |   -28800 |            -8 |               0
+ Sun Feb 16 17:32:01 1997 PST    |   -28800 |            -8 |               0
+ Tue Feb 16 17:32:01 0097 LMT BC |   -28378 |            -7 |             -52
+ Sat Feb 16 17:32:01 0097 LMT    |   -28378 |            -7 |             -52
+ Tue Feb 16 17:32:01 1897 PST    |   -28800 |            -8 |               0
+ Sun Feb 16 17:32:01 1997 PST    |   -28800 |            -8 |               0
+ Thu Feb 29 17:32:01 1996 PST    |   -28800 |            -8 |               0
+ Tue Dec 30 17:32:01 1997 PST    |   -28800 |            -8 |               0
+ Fri Dec 31 17:32:01 1999 PST    |   -28800 |            -8 |               0
+ Mon Jan 01 17:32:01 2001 PST    |   -28800 |            -8 |               0
  -infinity                       |          |               |                
  infinity                        |          |               |                
  Wed Dec 31 16:00:00 1969 PST    |   -28800 |            -8 |               0
@@ -1272,21 +1305,6 @@ SELECT d1 as timestamptz,
  Mon Dec 30 17:32:01 1996 PST    |   -28800 |            -8 |               0
  Tue Dec 31 17:32:01 1996 PST    |   -28800 |            -8 |               0
  Sun Dec 31 17:32:01 2000 PST    |   -28800 |            -8 |               0
- Mon Feb 10 17:32:01.5 1997 PST  |   -28800 |            -8 |               0
- Thu Jan 02 00:00:00 1997 PST    |   -28800 |            -8 |               0
- Tue Jun 10 17:32:01 1997 PDT    |   -25200 |            -7 |               0
- Wed Mar 15 03:14:04 2000 PST    |   -28800 |            -8 |               0
- Tue Feb 11 17:32:01 1997 PST    |   -28800 |            -8 |               0
- Fri Feb 14 17:32:01 1997 PST    |   -28800 |            -8 |               0
- Sun Feb 16 17:32:01 1997 PST    |   -28800 |            -8 |               0
- Tue Feb 16 17:32:01 0097 LMT BC |   -28378 |            -7 |             -52
- Sat Feb 16 17:32:01 0097 LMT    |   -28378 |            -7 |             -52
- Tue Feb 16 17:32:01 1897 PST    |   -28800 |            -8 |               0
- Sun Feb 16 17:32:01 1997 PST    |   -28800 |            -8 |               0
- Thu Feb 29 17:32:01 1996 PST    |   -28800 |            -8 |               0
- Tue Dec 30 17:32:01 1997 PST    |   -28800 |            -8 |               0
- Fri Dec 31 17:32:01 1999 PST    |   -28800 |            -8 |               0
- Mon Jan 01 17:32:01 2001 PST    |   -28800 |            -8 |               0
 (66 rows)
 
 -- test edge-case overflow in timestamp subtraction
@@ -1303,30 +1321,6 @@ SELECT '' AS to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM M
    FROM TIMESTAMPTZ_TBL;
  to_char_1 |                                         to_char                                          
 -----------+------------------------------------------------------------------------------------------
-           | 
-           | 
-           | WEDNESDAY Wednesday wednesday WED Wed wed DECEMBER  December  december  XII  DEC Dec dec
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | THURSDAY  Thursday  thursday  THU Thu thu JANUARY   January   january   I    JAN Jan jan
-           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
-           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
-           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
-           | TUESDAY   Tuesday   tuesday   TUE Tue tue JUNE      June      june      VI   JUN Jun jun
-           | THURSDAY  Thursday  thursday  THU Thu thu FEBRUARY  February  february  II   FEB Feb feb
-           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
-           | THURSDAY  Thursday  thursday  THU Thu thu FEBRUARY  February  february  II   FEB Feb feb
-           | TUESDAY   Tuesday   tuesday   TUE Tue tue FEBRUARY  February  february  II   FEB Feb feb
-           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
-           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
-           | MONDAY    Monday    monday    MON Mon mon DECEMBER  December  december  XII  DEC Dec dec
-           | TUESDAY   Tuesday   tuesday   TUE Tue tue DECEMBER  December  december  XII  DEC Dec dec
-           | SUNDAY    Sunday    sunday    SUN Sun sun DECEMBER  December  december  XII  DEC Dec dec
            | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
            | THURSDAY  Thursday  thursday  THU Thu thu JANUARY   January   january   I    JAN Jan jan
            | TUESDAY   Tuesday   tuesday   TUE Tue tue JUNE      June      june      VI   JUN Jun jun
@@ -1369,12 +1363,51 @@ SELECT '' AS to_char_1, to_char(d1, 'DAY Day day DY Dy dy MONTH Month month RM M
            | SATURDAY  Saturday  saturday  SAT Sat sat MARCH     March     march     III  MAR Mar mar
            | WEDNESDAY Wednesday wednesday WED Wed wed DECEMBER  December  december  XII  DEC Dec dec
            | SATURDAY  Saturday  saturday  SAT Sat sat JANUARY   January   january   I    JAN Jan jan
+           | 
+           | 
+           | WEDNESDAY Wednesday wednesday WED Wed wed DECEMBER  December  december  XII  DEC Dec dec
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | THURSDAY  Thursday  thursday  THU Thu thu JANUARY   January   january   I    JAN Jan jan
+           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
+           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
+           | WEDNESDAY Wednesday wednesday WED Wed wed MARCH     March     march     III  MAR Mar mar
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon FEBRUARY  February  february  II   FEB Feb feb
+           | TUESDAY   Tuesday   tuesday   TUE Tue tue JUNE      June      june      VI   JUN Jun jun
+           | THURSDAY  Thursday  thursday  THU Thu thu FEBRUARY  February  february  II   FEB Feb feb
+           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
+           | THURSDAY  Thursday  thursday  THU Thu thu FEBRUARY  February  february  II   FEB Feb feb
+           | TUESDAY   Tuesday   tuesday   TUE Tue tue FEBRUARY  February  february  II   FEB Feb feb
+           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
+           | SATURDAY  Saturday  saturday  SAT Sat sat FEBRUARY  February  february  II   FEB Feb feb
+           | MONDAY    Monday    monday    MON Mon mon DECEMBER  December  december  XII  DEC Dec dec
+           | TUESDAY   Tuesday   tuesday   TUE Tue tue DECEMBER  December  december  XII  DEC Dec dec
+           | SUNDAY    Sunday    sunday    SUN Sun sun DECEMBER  December  december  XII  DEC Dec dec
 (66 rows)
 
 SELECT '' AS to_char_2, to_char(d1, 'FMDAY FMDay FMday FMMONTH FMMonth FMmonth FMRM')
    FROM TIMESTAMPTZ_TBL;
  to_char_2 |                           to_char                            
 -----------+--------------------------------------------------------------
+           | MONDAY Monday monday FEBRUARY February february II
+           | THURSDAY Thursday thursday JANUARY January january I
+           | TUESDAY Tuesday tuesday JUNE June june VI
+           | WEDNESDAY Wednesday wednesday MARCH March march III
+           | TUESDAY Tuesday tuesday FEBRUARY February february II
+           | FRIDAY Friday friday FEBRUARY February february II
+           | SUNDAY Sunday sunday FEBRUARY February february II
+           | TUESDAY Tuesday tuesday FEBRUARY February february II
+           | SATURDAY Saturday saturday FEBRUARY February february II
+           | TUESDAY Tuesday tuesday FEBRUARY February february II
+           | SUNDAY Sunday sunday FEBRUARY February february II
+           | THURSDAY Thursday thursday FEBRUARY February february II
+           | TUESDAY Tuesday tuesday DECEMBER December december XII
+           | FRIDAY Friday friday DECEMBER December december XII
+           | MONDAY Monday monday JANUARY January january I
            | MONDAY Monday monday FEBRUARY February february II
            | MONDAY Monday monday FEBRUARY February february II
            | MONDAY Monday monday FEBRUARY February february II
@@ -1426,27 +1459,36 @@ SELECT '' AS to_char_2, to_char(d1, 'FMDAY FMDay FMday FMMONTH FMMonth FMmonth F
            | MONDAY Monday monday DECEMBER December december XII
            | TUESDAY Tuesday tuesday DECEMBER December december XII
            | SUNDAY Sunday sunday DECEMBER December december XII
-           | MONDAY Monday monday FEBRUARY February february II
-           | THURSDAY Thursday thursday JANUARY January january I
-           | TUESDAY Tuesday tuesday JUNE June june VI
-           | WEDNESDAY Wednesday wednesday MARCH March march III
-           | TUESDAY Tuesday tuesday FEBRUARY February february II
-           | FRIDAY Friday friday FEBRUARY February february II
-           | SUNDAY Sunday sunday FEBRUARY February february II
-           | TUESDAY Tuesday tuesday FEBRUARY February february II
-           | SATURDAY Saturday saturday FEBRUARY February february II
-           | TUESDAY Tuesday tuesday FEBRUARY February february II
-           | SUNDAY Sunday sunday FEBRUARY February february II
-           | THURSDAY Thursday thursday FEBRUARY February february II
-           | TUESDAY Tuesday tuesday DECEMBER December december XII
-           | FRIDAY Friday friday DECEMBER December december XII
-           | MONDAY Monday monday JANUARY January january I
 (66 rows)
 
 SELECT '' AS to_char_3, to_char(d1, 'Y,YYY YYYY YYY YY Y CC Q MM WW DDD DD D J')
    FROM TIMESTAMPTZ_TBL;
  to_char_3 |                     to_char                      
 -----------+--------------------------------------------------
+           | 
+           | 
+           | 1,969 1969 969 69 9 20 4 12 53 365 31 4 2440587
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 01 01 002 02 5 2450451
+           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
+           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
+           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
+           | 1,997 1997 997 97 7 20 2 06 23 161 10 3 2450610
+           | 1,997 1997 997 97 7 20 1 02 07 044 13 5 2450493
+           | 1,997 1997 997 97 7 20 1 02 07 046 15 7 2450495
+           | 0,597 0597 597 97 7 06 1 02 07 047 16 5 1939157
+           | 1,097 1097 097 97 7 11 1 02 07 047 16 3 2121778
+           | 1,697 1697 697 97 7 17 1 02 07 047 16 7 2340924
+           | 2,097 2097 097 97 7 21 1 02 07 047 16 7 2487021
+           | 1,996 1996 996 96 6 20 4 12 53 365 30 2 2450448
+           | 1,996 1996 996 96 6 20 4 12 53 366 31 3 2450449
+           | 2,000 2000 000 00 0 20 4 12 53 366 31 1 2451910
            | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
            | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
            | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
@@ -1474,30 +1516,6 @@ SELECT '' AS to_char_3, to_char(d1, 'Y,YYY YYYY YYY YY Y CC Q MM WW DDD DD D J')
            | 1,997 1997 997 97 7 20 1 03 09 060 01 7 2450509
            | 1,997 1997 997 97 7 20 4 12 53 365 31 4 2450814
            | 2,000 2000 000 00 0 20 1 01 01 001 01 7 2451545
-           | 
-           | 
-           | 1,969 1969 969 69 9 20 4 12 53 365 31 4 2440587
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 01 01 002 02 5 2450451
-           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
-           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
-           | 2,000 2000 000 00 0 20 1 03 11 075 15 4 2451619
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
-           | 1,997 1997 997 97 7 20 2 06 23 161 10 3 2450610
-           | 1,997 1997 997 97 7 20 1 02 07 044 13 5 2450493
-           | 1,997 1997 997 97 7 20 1 02 07 046 15 7 2450495
-           | 0,597 0597 597 97 7 06 1 02 07 047 16 5 1939157
-           | 1,097 1097 097 97 7 11 1 02 07 047 16 3 2121778
-           | 1,697 1697 697 97 7 17 1 02 07 047 16 7 2340924
-           | 2,097 2097 097 97 7 21 1 02 07 047 16 7 2487021
-           | 1,996 1996 996 96 6 20 4 12 53 365 30 2 2450448
-           | 1,996 1996 996 96 6 20 4 12 53 366 31 3 2450449
-           | 2,000 2000 000 00 0 20 4 12 53 366 31 1 2451910
            | 1,997 1997 997 97 7 20 1 02 06 041 10 2 2450490
            | 1,997 1997 997 97 7 20 1 01 01 002 02 5 2450451
            | 1,997 1997 997 97 7 20 2 06 23 161 10 3 2450610
@@ -1519,30 +1537,6 @@ SELECT '' AS to_char_4, to_char(d1, 'FMY,YYY FMYYYY FMYYY FMYY FMY FMCC FMQ FMMM
    FROM TIMESTAMPTZ_TBL;
  to_char_4 |                     to_char                     
 -----------+-------------------------------------------------
-           | 
-           | 
-           | 1,969 1969 969 69 9 20 4 12 53 365 31 4 2440587
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 1 1 2 2 5 2450451
-           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
-           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
-           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
-           | 1,997 1997 997 97 7 20 2 6 23 161 10 3 2450610
-           | 1,997 1997 997 97 7 20 1 2 7 44 13 5 2450493
-           | 1,997 1997 997 97 7 20 1 2 7 46 15 7 2450495
-           | 0,597 597 597 97 7 6 1 2 7 47 16 5 1939157
-           | 1,097 1097 97 97 7 11 1 2 7 47 16 3 2121778
-           | 1,697 1697 697 97 7 17 1 2 7 47 16 7 2340924
-           | 2,097 2097 97 97 7 21 1 2 7 47 16 7 2487021
-           | 1,996 1996 996 96 6 20 4 12 53 365 30 2 2450448
-           | 1,996 1996 996 96 6 20 4 12 53 366 31 3 2450449
-           | 2,000 2000 0 0 0 20 4 12 53 366 31 1 2451910
            | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
            | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
            | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
@@ -1585,12 +1579,63 @@ SELECT '' AS to_char_4, to_char(d1, 'FMY,YYY FMYYYY FMYYY FMYY FMY FMCC FMQ FMMM
            | 1,997 1997 997 97 7 20 4 12 52 364 30 3 2450813
            | 1,999 1999 999 99 9 20 4 12 53 365 31 6 2451544
            | 2,001 2001 1 1 1 21 1 1 1 1 1 2 2451911
+           | 
+           | 
+           | 1,969 1969 969 69 9 20 4 12 53 365 31 4 2440587
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 1 1 2 2 5 2450451
+           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
+           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
+           | 2,000 2000 0 0 0 20 1 3 11 75 15 4 2451619
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 1 2 6 41 10 2 2450490
+           | 1,997 1997 997 97 7 20 2 6 23 161 10 3 2450610
+           | 1,997 1997 997 97 7 20 1 2 7 44 13 5 2450493
+           | 1,997 1997 997 97 7 20 1 2 7 46 15 7 2450495
+           | 0,597 597 597 97 7 6 1 2 7 47 16 5 1939157
+           | 1,097 1097 97 97 7 11 1 2 7 47 16 3 2121778
+           | 1,697 1697 697 97 7 17 1 2 7 47 16 7 2340924
+           | 2,097 2097 97 97 7 21 1 2 7 47 16 7 2487021
+           | 1,996 1996 996 96 6 20 4 12 53 365 30 2 2450448
+           | 1,996 1996 996 96 6 20 4 12 53 366 31 3 2450449
+           | 2,000 2000 0 0 0 20 4 12 53 366 31 1 2451910
 (66 rows)
 
 SELECT '' AS to_char_5, to_char(d1, 'HH HH12 HH24 MI SS SSSS')
    FROM TIMESTAMPTZ_TBL;
  to_char_5 |       to_char        
 -----------+----------------------
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 06 06 18 19 20 65960
+           | 02 02 02 14 03 8043
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 00 63120
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 02 02 14 32 01 52321
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
+           | 05 05 17 32 01 63121
            | 
            | 
            | 04 04 16 00 00 57600
@@ -1630,45 +1675,27 @@ SELECT '' AS to_char_5, to_char(d1, 'HH HH12 HH24 MI SS SSSS')
            | 05 05 17 32 01 63121
            | 05 05 17 32 01 63121
            | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 06 06 18 19 20 65960
-           | 02 02 02 14 03 8043
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 00 63120
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 02 02 14 32 01 52321
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
-           | 05 05 17 32 01 63121
 (66 rows)
 
 SELECT '' AS to_char_6, to_char(d1, E'"HH:MI:SS is" HH:MI:SS "\\"text between quote marks\\""')
    FROM TIMESTAMPTZ_TBL;
  to_char_6 |                     to_char                     
 -----------+-------------------------------------------------
+           | 
+           | 
+           | HH:MI:SS is 04:00:00 "text between quote marks"
+           | HH:MI:SS is 05:32:02 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
-           | HH:MI:SS is 12:00:00 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
-           | HH:MI:SS is 03:14:04 "text between quote marks"
-           | HH:MI:SS is 05:32:01 "text between quote marks"
-           | HH:MI:SS is 05:32:01 "text between quote marks"
+           | HH:MI:SS is 03:04:05 "text between quote marks"
+           | HH:MI:SS is 08:14:01 "text between quote marks"
+           | HH:MI:SS is 04:14:02 "text between quote marks"
+           | HH:MI:SS is 01:14:05 "text between quote marks"
+           | HH:MI:SS is 09:32:01 "text between quote marks"
+           | HH:MI:SS is 09:32:01 "text between quote marks"
+           | HH:MI:SS is 09:32:01 "text between quote marks"
+           | HH:MI:SS is 02:32:01 "text between quote marks"
+           | HH:MI:SS is 06:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
@@ -1705,21 +1732,12 @@ SELECT '' AS to_char_6, to_char(d1, E'"HH:MI:SS is" HH:MI:SS "\\"text between qu
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
-           | 
-           | 
-           | HH:MI:SS is 04:00:00 "text between quote marks"
-           | HH:MI:SS is 05:32:02 "text between quote marks"
+           | HH:MI:SS is 05:32:01 "text between quote marks"
+           | HH:MI:SS is 12:00:00 "text between quote marks"
+           | HH:MI:SS is 05:32:01 "text between quote marks"
+           | HH:MI:SS is 03:14:04 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
-           | HH:MI:SS is 03:04:05 "text between quote marks"
-           | HH:MI:SS is 08:14:01 "text between quote marks"
-           | HH:MI:SS is 04:14:02 "text between quote marks"
-           | HH:MI:SS is 01:14:05 "text between quote marks"
-           | HH:MI:SS is 09:32:01 "text between quote marks"
-           | HH:MI:SS is 09:32:01 "text between quote marks"
-           | HH:MI:SS is 09:32:01 "text between quote marks"
-           | HH:MI:SS is 02:32:01 "text between quote marks"
-           | HH:MI:SS is 06:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
            | HH:MI:SS is 05:32:01 "text between quote marks"
@@ -1735,33 +1753,6 @@ SELECT '' AS to_char_7, to_char(d1, 'HH24--text--MI--text--SS')
    FROM TIMESTAMPTZ_TBL;
  to_char_7 |        to_char         
 -----------+------------------------
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 18--text--19--text--20
-           | 02--text--14--text--03
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--00
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 14--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
-           | 17--text--32--text--01
            | 
            | 
            | 16--text--00--text--00
@@ -1801,39 +1792,39 @@ SELECT '' AS to_char_7, to_char(d1, 'HH24--text--MI--text--SS')
            | 17--text--32--text--01
            | 17--text--32--text--01
            | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 18--text--19--text--20
+           | 02--text--14--text--03
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--00
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 14--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
+           | 17--text--32--text--01
 (66 rows)
 
 SELECT '' AS to_char_8, to_char(d1, 'YYYYTH YYYYth Jth')
    FROM TIMESTAMPTZ_TBL;
  to_char_8 |         to_char         
 -----------+-------------------------
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 2001ST 2001st 2452175th
-           | 2000TH 2000th 2451619th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450640th
-           | 1997TH 1997th 2450490th
-           | 1997TH 1997th 2450492nd
-           | 1797TH 1797th 2377448th
-           | 1996TH 1996th 2450142nd
-           | 1996TH 1996th 2450144th
-           | 1997TH 1997th 2450450th
-           | 1997TH 1997th 2450508th
-           | 1997TH 1997th 2450509th
-           | 1997TH 1997th 2450814th
-           | 2000TH 2000th 2451545th
            | 
            | 
            | 1969TH 1969th 2440587th
@@ -1873,39 +1864,39 @@ SELECT '' AS to_char_8, to_char(d1, 'YYYYTH YYYYth Jth')
            | 1997TH 1997th 2450813th
            | 1999TH 1999th 2451544th
            | 2001ST 2001st 2451911th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 2001ST 2001st 2452175th
+           | 2000TH 2000th 2451619th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450640th
+           | 1997TH 1997th 2450490th
+           | 1997TH 1997th 2450492nd
+           | 1797TH 1797th 2377448th
+           | 1996TH 1996th 2450142nd
+           | 1996TH 1996th 2450144th
+           | 1997TH 1997th 2450450th
+           | 1997TH 1997th 2450508th
+           | 1997TH 1997th 2450509th
+           | 1997TH 1997th 2450814th
+           | 2000TH 2000th 2451545th
 (66 rows)
 
 SELECT '' AS to_char_9, to_char(d1, 'YYYY A.D. YYYY a.d. YYYY bc HH:MI:SS P.M. HH:MI:SS p.m. HH:MI:SS pm')
    FROM TIMESTAMPTZ_TBL;
  to_char_9 |                               to_char                               
 -----------+---------------------------------------------------------------------
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 2001 A.D. 2001 a.d. 2001 ad 06:19:20 P.M. 06:19:20 p.m. 06:19:20 pm
-           | 2000 A.D. 2000 a.d. 2000 ad 02:14:03 A.M. 02:14:03 a.m. 02:14:03 am
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:00 P.M. 05:32:00 p.m. 05:32:00 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 02:32:01 P.M. 02:32:01 p.m. 02:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1797 A.D. 1797 a.d. 1797 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1996 A.D. 1996 a.d. 1996 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1996 A.D. 1996 a.d. 1996 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
-           | 2000 A.D. 2000 a.d. 2000 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
            | 
            | 
            | 1969 A.D. 1969 a.d. 1969 ad 04:00:00 P.M. 04:00:00 p.m. 04:00:00 pm
@@ -1945,6 +1936,33 @@ SELECT '' AS to_char_9, to_char(d1, 'YYYY A.D. YYYY a.d. YYYY bc HH:MI:SS P.M. H
            | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
            | 1999 A.D. 1999 a.d. 1999 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
            | 2001 A.D. 2001 a.d. 2001 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 2001 A.D. 2001 a.d. 2001 ad 06:19:20 P.M. 06:19:20 p.m. 06:19:20 pm
+           | 2000 A.D. 2000 a.d. 2000 ad 02:14:03 A.M. 02:14:03 a.m. 02:14:03 am
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:00 P.M. 05:32:00 p.m. 05:32:00 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 02:32:01 P.M. 02:32:01 p.m. 02:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1797 A.D. 1797 a.d. 1797 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1996 A.D. 1996 a.d. 1996 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1996 A.D. 1996 a.d. 1996 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 1997 A.D. 1997 a.d. 1997 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
+           | 2000 A.D. 2000 a.d. 2000 ad 05:32:01 P.M. 05:32:01 p.m. 05:32:01 pm
 (66 rows)
 
 SELECT '' AS to_char_10, to_char(d1, 'YYYY WW IYYY IYY IY I IW') 
@@ -1978,6 +1996,21 @@ SELECT '' AS to_char_10, to_char(d1, 'YYYY WW IYYY IYY IY I IW')
             | 1997 09 1997 997 97 7 09
             | 1997 53 1998 998 98 8 01
             | 2000 01 1999 999 99 9 52
+            | 1997 06 1997 997 97 7 07
+            | 1997 01 1997 997 97 7 01
+            | 1997 23 1997 997 97 7 24
+            | 2000 11 2000 000 00 0 11
+            | 1997 06 1997 997 97 7 07
+            | 1997 07 1997 997 97 7 07
+            | 1997 07 1997 997 97 7 07
+            | 0097 07 0097 097 97 7 07
+            | 0097 07 0097 097 97 7 07
+            | 1897 07 1897 897 97 7 07
+            | 1997 07 1997 997 97 7 07
+            | 1996 09 1996 996 96 6 09
+            | 1997 52 1998 998 98 8 01
+            | 1999 53 1999 999 99 9 52
+            | 2001 01 2001 001 01 1 01
             | 
             | 
             | 1969 53 1970 970 70 0 01
@@ -2002,42 +2035,12 @@ SELECT '' AS to_char_10, to_char(d1, 'YYYY WW IYYY IYY IY I IW')
             | 1996 53 1997 997 97 7 01
             | 1996 53 1997 997 97 7 01
             | 2000 53 2000 000 00 0 52
-            | 1997 06 1997 997 97 7 07
-            | 1997 01 1997 997 97 7 01
-            | 1997 23 1997 997 97 7 24
-            | 2000 11 2000 000 00 0 11
-            | 1997 06 1997 997 97 7 07
-            | 1997 07 1997 997 97 7 07
-            | 1997 07 1997 997 97 7 07
-            | 0097 07 0097 097 97 7 07
-            | 0097 07 0097 097 97 7 07
-            | 1897 07 1897 897 97 7 07
-            | 1997 07 1997 997 97 7 07
-            | 1996 09 1996 996 96 6 09
-            | 1997 52 1998 998 98 8 01
-            | 1999 53 1999 999 99 9 52
-            | 2001 01 2001 001 01 1 01
 (66 rows)
 
 SELECT '' AS to_char_10, to_char(d1, 'IYYY IYY IY I IW IDDD ID')
    FROM TIMESTAMPTZ_TBL;
  to_char_10 |        to_char         
 ------------+------------------------
-            | 1997 997 97 7 07 043 1
-            | 1997 997 97 7 01 004 4
-            | 1997 997 97 7 24 163 2
-            | 2000 000 00 0 11 073 3
-            | 1997 997 97 7 07 044 2
-            | 1997 997 97 7 07 047 5
-            | 1997 997 97 7 07 049 7
-            | 0097 097 97 7 07 044 2
-            | 0097 097 97 7 07 048 6
-            | 1897 897 97 7 07 044 2
-            | 1997 997 97 7 07 049 7
-            | 1996 996 96 6 09 060 4
-            | 1998 998 98 8 01 002 2
-            | 1999 999 99 9 52 362 5
-            | 2001 001 01 1 01 001 1
             | 1997 997 97 7 07 043 1
             | 1997 997 97 7 07 043 1
             | 1997 997 97 7 07 043 1
@@ -2089,6 +2092,21 @@ SELECT '' AS to_char_10, to_char(d1, 'IYYY IYY IY I IW IDDD ID')
             | 1997 997 97 7 01 001 1
             | 1997 997 97 7 01 002 2
             | 2000 000 00 0 52 364 7
+            | 1997 997 97 7 07 043 1
+            | 1997 997 97 7 01 004 4
+            | 1997 997 97 7 24 163 2
+            | 2000 000 00 0 11 073 3
+            | 1997 997 97 7 07 044 2
+            | 1997 997 97 7 07 047 5
+            | 1997 997 97 7 07 049 7
+            | 0097 097 97 7 07 044 2
+            | 0097 097 97 7 07 048 6
+            | 1897 897 97 7 07 044 2
+            | 1997 997 97 7 07 049 7
+            | 1996 996 96 6 09 060 4
+            | 1998 998 98 8 01 002 2
+            | 1999 999 99 9 52 362 5
+            | 2001 001 01 1 01 001 1
 (66 rows)
 
 SELECT '' AS to_char_11, to_char(d1, 'FMIYYY FMIYY FMIY FMI FMIW FMIDDD FMID')
@@ -2122,6 +2140,21 @@ SELECT '' AS to_char_11, to_char(d1, 'FMIYYY FMIYY FMIY FMI FMIW FMIDDD FMID')
             | 1997 997 97 7 9 62 6
             | 1998 998 98 8 1 3 3
             | 1999 999 99 9 52 363 6
+            | 1997 997 97 7 7 43 1
+            | 1997 997 97 7 1 4 4
+            | 1997 997 97 7 24 163 2
+            | 2000 0 0 0 11 73 3
+            | 1997 997 97 7 7 44 2
+            | 1997 997 97 7 7 47 5
+            | 1997 997 97 7 7 49 7
+            | 97 97 97 7 7 44 2
+            | 97 97 97 7 7 48 6
+            | 1897 897 97 7 7 44 2
+            | 1997 997 97 7 7 49 7
+            | 1996 996 96 6 9 60 4
+            | 1998 998 98 8 1 2 2
+            | 1999 999 99 9 52 362 5
+            | 2001 1 1 1 1 1 1
             | 
             | 
             | 1970 970 70 0 1 3 3
@@ -2146,21 +2179,6 @@ SELECT '' AS to_char_11, to_char(d1, 'FMIYYY FMIYY FMIY FMI FMIW FMIDDD FMID')
             | 1997 997 97 7 1 1 1
             | 1997 997 97 7 1 2 2
             | 2000 0 0 0 52 364 7
-            | 1997 997 97 7 7 43 1
-            | 1997 997 97 7 1 4 4
-            | 1997 997 97 7 24 163 2
-            | 2000 0 0 0 11 73 3
-            | 1997 997 97 7 7 44 2
-            | 1997 997 97 7 7 47 5
-            | 1997 997 97 7 7 49 7
-            | 97 97 97 7 7 44 2
-            | 97 97 97 7 7 48 6
-            | 1897 897 97 7 7 44 2
-            | 1997 997 97 7 7 49 7
-            | 1996 996 96 6 9 60 4
-            | 1998 998 98 8 1 2 2
-            | 1999 999 99 9 52 362 5
-            | 2001 1 1 1 1 1 1
 (66 rows)
 
 SELECT '' AS to_char_12, to_char(d, 'FF1 FF2 FF3 FF4 FF5 FF6  ff1 ff2 ff3 ff4 ff5 ff6  MS US')

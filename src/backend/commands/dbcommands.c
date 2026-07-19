@@ -1111,7 +1111,7 @@ createdb(ParseState *pstate, const CreatedbStmt *stmt)
 		dbctype = src_ctype;
 	if (dblocprovider == '\0')
 		dblocprovider = src_locprovider;
-	if (dblocale == NULL)
+	if (dblocale == NULL && dblocprovider == src_locprovider)
 		dblocale = src_locale;
 	if (dbicurules == NULL)
 		dbicurules = src_icurules;
@@ -2508,7 +2508,8 @@ DropDatabase(ParseState *pstate, DropdbStmt *stmt)
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("unrecognized DROP DATABASE option \"%s\"", opt->defname),
+					 errmsg("unrecognized %s option \"%s\"",
+							"DROP DATABASE", opt->defname),
 					 parser_errposition(pstate, opt->location)));
 	}
 
@@ -3604,6 +3605,7 @@ dbase_redo(XLogReaderState *record)
 		parent_path = pstrdup(dbpath);
 		get_parent_directory(parent_path);
 		recovery_create_dbdir(parent_path, true);
+		pfree(parent_path);
 
 		/* Create the database directory with the version file. */
 		CreateDirAndVersionFile(dbpath, xlrec->db_id, xlrec->tablespace_id,

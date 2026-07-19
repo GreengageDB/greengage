@@ -214,11 +214,16 @@ SELECT '' AS "54", d1 - timestamp with time zone '1997-01-02' AS diff
    FROM TIMESTAMPTZ_TBL WHERE d1 BETWEEN '1902-01-01' AND '2038-01-01';
 
 SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone '2004-02-29 15:44:17.71393' ) AS week_trunc;
+SELECT '' AS date_trunc_week, date_trunc( 'week', timestamp with time zone 'infinity' ) AS inf_trunc;
+SELECT date_trunc( 'timezone', timestamp with time zone '2004-02-29 15:44:17.71393' ) AS notsupp_trunc;
+SELECT date_trunc( 'timezone', timestamp with time zone 'infinity' ) AS notsupp_inf_trunc;
 SELECT date_trunc( 'ago', timestamp with time zone 'infinity' ) AS invalid_trunc;
 
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'Australia/Sydney') as sydney_trunc;  -- zone name
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'GMT') as gmt_trunc;  -- fixed-offset abbreviation
 SELECT '' AS date_trunc_at_tz, date_trunc('day', timestamp with time zone '2001-02-16 20:38:40+00', 'VET') as vet_trunc;  -- variable-offset abbreviation
+SELECT date_trunc('timezone', timestamp with time zone 'infinity', 'GMT') AS notsupp_zone_trunc;
+SELECT '' AS date_trunc_at_tz, date_trunc( 'week', timestamp with time zone 'infinity', 'GMT') AS inf_zone_trunc;
 SELECT date_trunc('ago', timestamp with time zone 'infinity', 'GMT') AS invalid_zone_trunc;
 
 -- verify date_bin behaves the same as date_trunc for relevant intervals

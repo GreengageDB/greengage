@@ -64,6 +64,7 @@
 #include "postmaster/postmaster.h"
 #include "replication/logicallauncher.h"
 #include "replication/logicalworker.h"
+#include "replication/slotsync.h"
 #include "replication/slot.h"
 #include "replication/walsender.h"
 #include "rewrite/rewriteHandler.h"
@@ -4427,6 +4428,9 @@ ProcessInterrupts(const char* filename, int lineno)
 
 	if (ParallelApplyMessagePending)
 		ProcessParallelApplyMessages();
+
+	if (SlotSyncShutdownPending)
+		ProcessSlotSyncMessage();
 }
 
 /*

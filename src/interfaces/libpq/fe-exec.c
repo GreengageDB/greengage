@@ -33,6 +33,7 @@
 #include <unistd.h>
 #endif
 
+#include "common/int.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
 #include "mb/pg_wchar.h"
@@ -531,7 +532,7 @@ PQsetvalue(PGresult *res, int tup_num, int field_num, char *value, int len)
 	}
 	else
 	{
-		attval->value = (char *) pqResultAlloc(res, len + 1, true);
+		attval->value = (char *) pqResultAlloc(res, (size_t) len + 1, true);
 		if (!attval->value)
 			goto fail;
 		attval->len = len;
@@ -623,8 +624,13 @@ pqResultAlloc(PGresult *res, size_t nBytes, bool isBinary)
 	 */
 	if (nBytes >= PGRESULT_SEP_ALLOC_THRESHOLD)
 	{
-		size_t		alloc_size = nBytes + PGRESULT_BLOCK_OVERHEAD;
+		size_t		alloc_size;
 
+		/* Don't wrap around with overly large requests. */
+		if (nBytes > SIZE_MAX - PGRESULT_BLOCK_OVERHEAD)
+			return NULL;
+
+		alloc_size = nBytes + PGRESULT_BLOCK_OVERHEAD;
 		block = (PGresult_data *) malloc(alloc_size);
 		if (!block)
 			return NULL;
@@ -1107,8 +1113,12 @@ pqSaveMessageField(PGresult *res, char code, const char *value)
 
 /*
  * pqSaveParameterStatus - remember parameter status sent by backend
+ *
+ * Returns 1 on success, 0 on out-of-memory.  (Note that on out-of-memory, we
+ * have already released the old value of the parameter, if any.  The only
+ * really safe way to recover is to terminate the connection.)
  */
-void
+int
 pqSaveParameterStatus(PGconn *conn, const char *name, const char *value)
 {
 	pgParameterStatus *pstatus;
@@ -1149,6 +1159,11 @@ pqSaveParameterStatus(PGconn *conn, const char *name, const char *value)
 		strcpy(ptr, value);
 		pstatus->next = conn->pstatus;
 		conn->pstatus = pstatus;
+	}
+	else
+	{
+		/* out of memory */
+		return 0;
 	}
 
 	/*
@@ -1221,6 +1236,8 @@ pqSaveParameterStatus(PGconn *conn, const char *name, const char *value)
 	{
 		conn->scram_sha_256_iterations = atoi(value);
 	}
+
+	return 1;
 }
 
 
@@ -1294,7 +1311,7 @@ pqRowProcessor(PGconn *conn, const char **errmsgp)
 			bool		isbinary = (res->attDescs[i].format != 0);
 			char	   *val;
 
-			val = (char *) pqResultAlloc(res, clen + 1, isbinary);
+			val = (char *) pqResultAlloc(res, (size_t) clen + 1, isbinary);
 			if (val == NULL)
 				return 0;
 
@@ -3015,6 +3032,20 @@ PQfn(PGconn *conn,
 	 const PQArgBlock *args,
 	 int nargs)
 {
+	return PQnfn(conn, fnid, result_buf, -1, result_len,
+				 result_is_int, args, nargs);
+}
+
+/*
+ * PQnfn
+ *		Private version of PQfn() with verification that returned data fits in
+ *		result_buf when result_is_int == 0.  Setting buf_size to -1 disables
+ *		this verification.
+ */
+PGresult *
+PQnfn(PGconn *conn, int fnid, int *result_buf, int buf_size, int *result_len,
+	  int result_is_int, const PQArgBlock *args, int nargs)
+{
 	*result_len = 0;
 
 	if (!conn)
@@ -3042,7 +3073,7 @@ PQfn(PGconn *conn,
 	}
 
 	return pqFunctionCall3(conn, fnid,
-						   result_buf, result_len,
+						   result_buf, buf_size, result_len,
 						   result_is_int,
 						   args, nargs);
 }
@@ -4246,8 +4277,8 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 	const char *s;
 	char	   *result;
 	char	   *rp;
-	int			num_quotes = 0; /* single or double, depending on as_ident */
-	int			num_backslashes = 0;
+	size_t		num_quotes = 0; /* single or double, depending on as_ident */
+	size_t		num_backslashes = 0;
 	size_t		input_len = strnlen(str, len);
 	size_t		result_size;
 	char		quote_char = as_ident ? '"' : '\'';
@@ -4313,10 +4344,21 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 		}
 	}
 
-	/* Allocate output buffer. */
-	result_size = input_len + num_quotes + 3;	/* two quotes, plus a NUL */
+	/*
+	 * Allocate output buffer. Protect against overflow, in case the caller
+	 * has allocated a large fraction of the available size_t.
+	 */
+	if (pg_add_size_overflow(input_len, num_quotes, &result_size) ||
+		pg_add_size_overflow(result_size, 3, &result_size)) /* two quotes plus a NUL */
+		goto overflow;
+
 	if (!as_ident && num_backslashes > 0)
-		result_size += num_backslashes + 2;
+	{
+		if (pg_add_size_overflow(result_size, num_backslashes, &result_size) ||
+			pg_add_size_overflow(result_size, 2, &result_size)) /* for " E" prefix */
+			goto overflow;
+	}
+
 	result = rp = (char *) malloc(result_size);
 	if (rp == NULL)
 	{
@@ -4389,6 +4431,12 @@ PQescapeInternal(PGconn *conn, const char *str, size_t len, bool as_ident)
 	*rp = '\0';
 
 	return result;
+
+overflow:
+	libpq_append_conn_error(conn,
+							"escaped string size exceeds the maximum allowed (%zu)",
+							SIZE_MAX);
+	return NULL;
 }
 
 char *
@@ -4454,16 +4502,25 @@ PQescapeByteaInternal(PGconn *conn,
 	unsigned char *result;
 	size_t		i;
 	size_t		len;
-	size_t		bslash_len = (std_strings ? 1 : 2);
+	const size_t bslash_len = (std_strings ? 1 : 2);
 
 	/*
-	 * empty string has 1 char ('\0')
+	 * Calculate the escaped length, watching for overflow as we do with
+	 * PQescapeInternal(). The following code relies on a small constant
+	 * bslash_len so that small additions and multiplications don't need their
+	 * own overflow checks.
+	 *
+	 * Start with the empty string, which has 1 char ('\0').
 	 */
 	len = 1;
 
 	if (use_hex)
 	{
-		len += bslash_len + 1 + 2 * from_length;
+		/* We prepend "\x" and double each input character. */
+		if (pg_add_size_overflow(len, bslash_len + 1, &len) ||
+			pg_add_size_overflow(len, from_length, &len) ||
+			pg_add_size_overflow(len, from_length, &len))
+			goto overflow;
 	}
 	else
 	{
@@ -4471,13 +4528,25 @@ PQescapeByteaInternal(PGconn *conn,
 		for (i = from_length; i > 0; i--, vp++)
 		{
 			if (*vp < 0x20 || *vp > 0x7e)
-				len += bslash_len + 3;
+			{
+				if (pg_add_size_overflow(len, bslash_len + 3, &len))	/* octal "\ooo" */
+					goto overflow;
+			}
 			else if (*vp == '\'')
-				len += 2;
+			{
+				if (pg_add_size_overflow(len, 2, &len)) /* double each quote */
+					goto overflow;
+			}
 			else if (*vp == '\\')
-				len += bslash_len + bslash_len;
+			{
+				if (pg_add_size_overflow(len, bslash_len * 2, &len))	/* double each backslash */
+					goto overflow;
+			}
 			else
-				len++;
+			{
+				if (pg_add_size_overflow(len, 1, &len))
+					goto overflow;
+			}
 		}
 	}
 
@@ -4538,6 +4607,13 @@ PQescapeByteaInternal(PGconn *conn,
 	*rp = '\0';
 
 	return result;
+
+overflow:
+	if (conn)
+		libpq_append_conn_error(conn,
+								"escaped bytea size exceeds the maximum allowed (%zu)",
+								SIZE_MAX);
+	return NULL;
 }
 
 unsigned char *

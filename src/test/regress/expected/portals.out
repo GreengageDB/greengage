@@ -883,6 +883,7 @@ SELECT f1, f2 FROM uctest;
 
 -- Check inheritance cases
 CREATE TEMP TABLE ucchild () inherits (uctest);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO ucchild values(100, 'hundred');
 SELECT f1, f2 FROM uctest;
  f1  |   f2    
@@ -1016,6 +1017,17 @@ FETCH FROM c1;
 DELETE FROM ucview WHERE CURRENT OF c1; -- fail, views not supported
 ERROR:  WHERE CURRENT OF on a view is not implemented
 ROLLBACK;
+BEGIN;
+DECLARE c1 CURSOR FOR SELECT * FROM ucview;
+FETCH FROM c1;
+ f1 |  f2   
+----+-------
+ 13 | three
+(1 row)
+
+UPDATE ucview SET f1 = f1 + 10 WHERE CURRENT OF c1; -- fail, views not supported
+ERROR:  WHERE CURRENT OF on a view is not implemented
+ROLLBACK;
 -- Check cursors for functions.
 BEGIN;
 DECLARE c1 CURSOR FOR SELECT * FROM LOWER('TEST');
@@ -1059,7 +1071,9 @@ ROLLBACK;
 BEGIN;
 CREATE TABLE current_check (currentid int, payload text);
 CREATE TABLE current_check_1 () INHERITS (current_check);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE current_check_2 () INHERITS (current_check);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO current_check_1 SELECT i, 'p' || i FROM generate_series(1,9) i;
 INSERT INTO current_check_2 SELECT i, 'P' || i FROM generate_series(10,19) i;
 DECLARE c1 SCROLL CURSOR FOR SELECT * FROM current_check;
@@ -1067,7 +1081,7 @@ DECLARE c1 SCROLL CURSOR FOR SELECT * FROM current_check;
 FETCH ABSOLUTE 12 FROM c1;
  currentid | payload 
 -----------+---------
-         2 | p2
+         5 | p5
 (1 row)
 
 FETCH ABSOLUTE 8 FROM c1;
@@ -1130,11 +1144,11 @@ create function nochange(int) returns int
 declare c cursor for select * from int8_tbl limit nochange(3);
 -- start_ignore
 fetch all from c;
-        q1        |        q2         
-------------------+-------------------
- 4567890123456789 |               123
- 4567890123456789 |  4567890123456789
- 4567890123456789 | -4567890123456789
+        q1        |        q2        
+------------------+------------------
+              123 |              456
+              123 | 4567890123456789
+ 4567890123456789 |              123
 (3 rows)
 
 -- end_ignore

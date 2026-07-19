@@ -14,8 +14,8 @@ endif
 override python_libspec := -L${python_configdir}/../.. ${python_libspec}
 
 # do not fail build due to warnings in this code
-#override CPPFLAGS := -Wno-error -I. -I$(srcdir) $(python_includespec) $(CPPFLAGS) -DPLPYTHON_SHOW_DEBUG_INFO
-override CPPFLAGS := -Wno-error -I. -I$(srcdir) $(python_includespec) $(CPPFLAGS)
+#override CPPFLAGS := -Wno-error -I. -I$(srcdir) $(CPPFLAGS) $(python_includespec) -DPLPYTHON_SHOW_DEBUG_INFO
+override CPPFLAGS := -Wno-error -I. -I$(srcdir) $(CPPFLAGS) $(python_includespec)
 
 rpathdir = $(python_libdir):$(INSTLOC)/ext/python/lib
 

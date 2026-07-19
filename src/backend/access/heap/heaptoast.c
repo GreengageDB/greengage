@@ -976,7 +976,7 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 			chcpyend = (sliceoffset + slicelength - 1) % actual_max_chunk_size;
 
 		memcpy(VARDATA(result) +
-			   (curchunk * actual_max_chunk_size - sliceoffset) + chcpystrt,
+			   curchunk * actual_max_chunk_size - sliceoffset + chcpystrt,
 			   chunkdata + chcpystrt,
 			   (chcpyend - chcpystrt) + 1);
 

@@ -388,9 +388,9 @@ select t1.a, t2.b, grouping(t1.a, t2.b), sum(t1.v), max(t2.a)
  group by grouping sets ((t1.a, t2.b), ());
  a | b | grouping | sum  | max 
 ---+---+----------+------+-----
+ 1 | 1 |        0 |  420 |   1
    |   |        3 | 1305 |   2
  1 | 2 |        0 |  120 |   2
- 1 | 1 |        0 |  420 |   1
  2 | 1 |        0 |  105 |   1
  3 | 1 |        0 |  231 |   1
  3 | 2 |        0 |   66 |   2
@@ -404,10 +404,10 @@ select t1.a, t2.b, grouping(t1.a, t2.b), sum(t1.v), max(t2.a)
  group by grouping sets ((t1.a, t2.b), ());
  a | b | grouping | sum | max 
 ---+---+----------+-----+-----
+ 2 | 2 |        0 |  15 |   2
+   |   |        3 | 495 |   2
  1 | 2 |        0 |  60 |   1
  1 | 1 |        0 | 420 |   1
-   |   |        3 | 495 |   2
- 2 | 2 |        0 |  15 |   2
 (4 rows)
 
 select a, b, grouping(a, b), sum(t1.v), max(t2.c)
@@ -426,10 +426,10 @@ select a, d, grouping(a,b,c)
  group by grouping sets ((a,b), (a,c));
  a | d | grouping 
 ---+---+----------
- 2 | 2 |        1
- 2 | 2 |        2
  1 | 1 |        1
  1 | 1 |        2
+ 2 | 2 |        1
+ 2 | 2 |        2
 (4 rows)
 
 -- check that distinct grouping columns are kept separate
@@ -536,6 +536,118 @@ select x, y || 'y'
    | 3y
 (8 rows)
 
+-- check that operands wrapped in PlaceHolderVars are capable of index matching
+begin;
+set local enable_bitmapscan = off;
+explain (costs off)
+select x, y
+  from (select unique1 as x, unique2 as y from tenk1) as t
+  where x = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+                        QUERY PLAN                         
+-----------------------------------------------------------
+ Sort
+   Sort Key: tenk1.unique1, tenk1.unique2
+   ->  GroupAggregate
+         Group Key: tenk1.unique1
+         Sort Key: tenk1.unique2
+           Group Key: tenk1.unique2
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               ->  Index Scan using tenk1_unique1 on tenk1
+                     Index Cond: (unique1 = 1)
+ Optimizer: Postgres query optimizer
+(10 rows)
+
+select x, y
+  from (select unique1 as x, unique2 as y from tenk1) as t
+  where x = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+ x |  y   
+---+------
+ 1 |     
+   | 2838
+(2 rows)
+
+explain (costs off)
+select x, y
+  from (select unique1::oid as x, unique2 as y from tenk1) as t
+  where x::integer = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Sort
+   Sort Key: ((tenk1.unique1)::oid), tenk1.unique2
+   ->  GroupAggregate
+         Group Key: ((tenk1.unique1)::oid)
+         Sort Key: tenk1.unique2
+           Group Key: tenk1.unique2
+         ->  Gather Motion 3:1  (slice1; segments: 3)
+               Merge Key: ((tenk1.unique1)::oid)
+               ->  Sort
+                     Sort Key: ((tenk1.unique1)::oid)
+                     ->  Index Scan using tenk1_unique1 on tenk1
+                           Index Cond: (((unique1)::oid)::integer = 1)
+ Optimizer: Postgres query optimizer
+(13 rows)
+
+select x, y
+  from (select unique1::oid as x, unique2 as y from tenk1) as t
+  where x::integer = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+ x |  y   
+---+------
+ 1 |     
+   | 2838
+(2 rows)
+
+explain (costs off)
+select x, y
+  from (select t1.unique1 as x, t1.unique2 as y from tenk1 t1, tenk1 t2) as t
+  where x = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+                                         QUERY PLAN                                          
+---------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Merge Key: t1.unique1, t1.unique2
+   ->  Sort
+         Sort Key: t1.unique1, t1.unique2
+         ->  GroupAggregate
+               Group Key: t1.unique1, t1.unique2, (GROUPINGSET_ID())
+               ->  Sort
+                     Sort Key: t1.unique1, t1.unique2, (GROUPINGSET_ID())
+                     ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                           Hash Key: t1.unique1, t1.unique2, (GROUPINGSET_ID())
+                           ->  Partial GroupAggregate
+                                 Group Key: t1.unique1
+                                 Sort Key: t1.unique2
+                                   Group Key: t1.unique2
+                                 ->  Nested Loop
+                                       Disabled: true
+                                       ->  Index Scan using tenk1_unique1 on tenk1 t1
+                                             Index Cond: (unique1 = 1)
+                                       ->  Materialize
+                                             ->  Broadcast Motion 3:3  (slice3; segments: 3)
+                                                   ->  Seq Scan on tenk1 t2
+ Optimizer: Postgres query optimizer
+(22 rows)
+
+select x, y
+  from (select t1.unique1 as x, t1.unique2 as y from tenk1 t1, tenk1 t2) as t
+  where x = 1
+  group by grouping sets (x, y)
+  order by 1, 2;
+ x |  y   
+---+------
+ 1 |     
+   | 2838
+(2 rows)
+
+rollback;
 -- check qual push-down rules for a subquery with grouping sets
 explain (verbose, costs off)
 select * from (
@@ -916,13 +1028,6 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
    0 |   2
    1 |   1
    1 |   3
-   5 |   1
-   5 |   3
-   6 |   0
-   6 |   2
-   6 |   2
-   9 |   1
-   9 |   3
    2 |   0
    2 |   2
    2 |   2
@@ -936,6 +1041,13 @@ having exists (select 1 from onek b where sum(distinct a.four) = b.four);
    8 |   0
    8 |   2
    8 |   2
+   5 |   1
+   5 |   3
+   6 |   0
+   6 |   2
+   6 |   2
+   9 |   1
+   9 |   3
 (25 rows)
 
 -- Tests around pushdown of HAVING clauses, partially testing against previous bugs
@@ -1004,7 +1116,8 @@ explain (costs off)
  Optimizer: Postgres query optimizer
 (13 rows)
 
--- test pushdown of HAVING clause that does not reference any columns that are nullable by grouping sets
+-- test pushdown of non-degenerate HAVING clause that does not reference any
+-- columns that are nullable by grouping sets
 explain (costs off)
 select a, b, count(*) from gstest2 group by grouping sets ((a, b), (a)) having a > 1 and b > 1;
                 QUERY PLAN                
@@ -1026,6 +1139,89 @@ select a, b, count(*) from gstest2 group by grouping sets ((a, b), (a)) having a
 ---+---+-------
  2 | 2 |     1
 (1 row)
+
+explain (costs off)
+select a, b, count(*) from gstest2 group by rollup(a), b having b > 1;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  GroupAggregate
+         Group Key: b, a
+         Group Key: b
+         ->  Sort
+               Sort Key: b, a
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Hash Key: gstest2.b
+                     ->  Seq Scan on gstest2
+                           Filter: (b > 1)
+ Optimizer: Postgres query optimizer
+(11 rows)
+
+select a, b, count(*) from gstest2 group by rollup(a), b having b > 1;
+ a | b | count 
+---+---+-------
+ 1 | 2 |     1
+ 2 | 2 |     1
+   | 2 |     2
+(3 rows)
+
+-- test pushdown of degenerate HAVING clause
+explain (costs off)
+select count(*) from gstest2 group by grouping sets (()) having false;
+             QUERY PLAN              
+-------------------------------------
+ Aggregate
+   Group Key: ()
+   Filter: false
+   ->  Result
+         One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select count(*) from gstest2 group by grouping sets (()) having false;
+ count 
+-------
+(0 rows)
+
+explain (costs off)
+select a, count(*) from gstest2 group by grouping sets ((a), ()) having false;
+              QUERY PLAN              
+--------------------------------------
+ GroupAggregate
+   Group Key: a
+   Group Key: ()
+   Filter: false
+   ->  Sort
+         Sort Key: a
+         ->  Result
+               One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select a, count(*) from gstest2 group by grouping sets ((a), ()) having false;
+ a | count 
+---+-------
+(0 rows)
+
+explain (costs off)
+select a, b, count(*) from gstest2 group by grouping sets ((a), (b)) having false;
+              QUERY PLAN              
+--------------------------------------
+ GroupAggregate
+   Group Key: a
+   Sort Key: b
+     Group Key: b
+   ->  Sort
+         Sort Key: a
+         ->  Result
+               One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select a, b, count(*) from gstest2 group by grouping sets ((a), (b)) having false;
+ a | b | count 
+---+---+-------
+(0 rows)
 
 -- HAVING with GROUPING queries
 select ten, grouping(ten) from onek
@@ -1561,10 +1757,10 @@ select a, d, grouping(a,b,c)
  group by grouping sets ((a,b), (a,c));
  a | d | grouping 
 ---+---+----------
- 2 | 2 |        1
- 2 | 2 |        2
  1 | 1 |        1
  1 | 1 |        2
+ 2 | 2 |        1
+ 2 | 2 |        2
 (4 rows)
 
 explain (costs off)
@@ -2547,6 +2743,77 @@ group by grouping sets((a, b), (a));
  2 |   |          3
  2 | 2 |          4
 (4 rows)
+
+-- test handling of SRFs with grouping sets
+explain (verbose, costs off)
+select generate_series(1, a) as g
+from (values (1, 1), (2, 2)) as t (a, b)
+group by rollup(g)
+order by 1;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Sort
+   Output: (generate_series(1, "*VALUES*".column1))
+   Sort Key: (generate_series(1, "*VALUES*".column1))
+   ->  MixedAggregate
+         Output: (generate_series(1, "*VALUES*".column1))
+         Hash Key: generate_series(1, "*VALUES*".column1)
+         Group Key: ()
+         ->  ProjectSet
+               Output: generate_series(1, "*VALUES*".column1)
+               ->  Values Scan on "*VALUES*"
+                     Output: "*VALUES*".column1
+ Optimizer: Postgres query optimizer
+ Settings: enable_indexscan = 'off', jit_above_cost = '0'
+(13 rows)
+
+select generate_series(1, a) as g
+from (values (1, 1), (2, 2)) as t (a, b)
+group by rollup(g)
+order by 1;
+ g 
+---
+ 1
+ 2
+  
+(3 rows)
+
+explain (verbose, costs off)
+select generate_series(1, a) as g, a+b as ab
+from (values (1, 1), (2, 2)) as t (a, b)
+group by rollup(a, ab)
+order by 1, 2;
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Output: (generate_series(1, "*VALUES*".column1)), (("*VALUES*".column1 + "*VALUES*".column2)), "*VALUES*".column1
+   Sort Key: (generate_series(1, "*VALUES*".column1)), (("*VALUES*".column1 + "*VALUES*".column2))
+   ->  ProjectSet
+         Output: generate_series(1, "*VALUES*".column1), (("*VALUES*".column1 + "*VALUES*".column2)), "*VALUES*".column1
+         ->  MixedAggregate
+               Output: "*VALUES*".column1, (("*VALUES*".column1 + "*VALUES*".column2))
+               Hash Key: "*VALUES*".column1, ("*VALUES*".column1 + "*VALUES*".column2)
+               Hash Key: "*VALUES*".column1
+               Group Key: ()
+               ->  Values Scan on "*VALUES*"
+                     Output: ("*VALUES*".column1 + "*VALUES*".column2), "*VALUES*".column1
+ Optimizer: Postgres query optimizer
+ Settings: enable_indexscan = 'off', jit_above_cost = '0'
+(14 rows)
+
+select generate_series(1, a) as g, a+b as ab
+from (values (1, 1), (2, 2)) as t (a, b)
+group by rollup(a, ab)
+order by 1, 2;
+ g | ab 
+---+----
+ 1 |  2
+ 1 |  4
+ 1 |   
+ 1 |   
+ 2 |  4
+ 2 |   
+(6 rows)
 
 -- end
 reset optimizer_trace_fallback;

@@ -156,6 +156,7 @@
 		"exit_on_error",
 		"external_pid_file",
 		"extra_float_digits",
+		"file_extend_method",
 		"from_collapse_limit",
 		"fsync",
 		"full_page_writes",

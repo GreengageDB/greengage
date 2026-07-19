@@ -1915,8 +1915,6 @@ convert_EXISTS_sublink_to_join(PlannerInfo *root, SubLink *sublink,
 static bool
 simplify_EXISTS_query(PlannerInfo *root, Query *query)
 {
-	ListCell   *lc;
-
 	/*
 	 * PostgreSQL:
 	 *
@@ -2082,22 +2080,25 @@ simplify_EXISTS_query(PlannerInfo *root, Query *query)
 			query->jointree->quals =
 				flatten_group_exprs(root, query, query->jointree->quals);
 
-			foreach(lc, query->rtable)
+			/*
+			 * Remove the RTE_GROUP RTE and clear the hasGroupRTE flag.  To
+			 * safely get rid of the RTE_GROUP RTE without shifting the index of
+			 * any subsequent RTE in the rtable, we convert the RTE to be
+			 * RTE_RESULT type in-place, and zero out RTE_GROUP-specific fields.
+			 */
+			foreach_node(RangeTblEntry, rte, query->rtable)
 			{
-				RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
-
-				/*
-				 * Remove the RTE_GROUP RTE and clear the hasGroupRTE flag.
-				 * (Since we'll exit the foreach loop immediately, we don't
-				 * bother with foreach_delete_current.)
-				 */
 				if (rte->rtekind == RTE_GROUP)
 				{
-					query->rtable = list_delete_cell(query->rtable, lc);
-					query->hasGroupRTE = false;
+					rte->rtekind = RTE_RESULT;
+					rte->groupexprs = NIL;
+
+					/* A query should only have one RTE_GROUP, so we can stop. */
 					break;
 				}
 			}
+
+			query->hasGroupRTE = false;
 		}
 	}
 

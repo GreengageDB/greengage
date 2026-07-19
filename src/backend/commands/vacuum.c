@@ -43,6 +43,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace_d.h"
+#include "commands/async.h"
 #include "commands/cluster.h"
 #include "commands/defrem.h"
 #include "commands/progress.h"
@@ -282,7 +283,8 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		else if (!vacstmt->is_vacuumcmd)
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("unrecognized ANALYZE option \"%s\"", opt->defname),
+					 errmsg("unrecognized %s option \"%s\"",
+							"ANALYZE", opt->defname),
 					 parser_errposition(pstate, opt->location)));
 
 		/* Parse options available on VACUUM */
@@ -371,7 +373,8 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
-					 errmsg("unrecognized VACUUM option \"%s\"", opt->defname),
+					 errmsg("unrecognized %s option \"%s\"",
+							"VACUUM", opt->defname),
 					 parser_errposition(pstate, opt->location)));
 	}
 
@@ -2318,6 +2321,12 @@ vac_truncate_clog(TransactionId frozenXID,
 		LWLockRelease(WrapLimitsVacuumLock);
 		return;
 	}
+
+	/*
+	 * Freeze any old transaction IDs in the async notification queue before
+	 * CLOG truncation.
+	 */
+	AsyncNotifyFreezeXids(frozenXID);
 
 	/*
 	 * Advance the oldest value for commit timestamps before truncating, so

@@ -64,14 +64,14 @@ CREATE
 SELECT role, preferred_role, content, mode, status FROM gp_segment_configuration;
  role | preferred_role | content | mode | status 
 ------+----------------+---------+------+--------
- m    | m              | -1      | s    | u      
- m    | m              | 0       | s    | u      
- m    | m              | 1       | s    | u      
- m    | m              | 2       | s    | u      
  p    | p              | -1      | n    | u      
- p    | p              | 0       | s    | u      
+ m    | m              | -1      | s    | u      
  p    | p              | 1       | s    | u      
+ m    | m              | 1       | s    | u      
+ p    | p              | 0       | s    | u      
+ m    | m              | 0       | s    | u      
  p    | p              | 2       | s    | u      
+ m    | m              | 2       | s    | u      
 (8 rows)
 SET debug_dtm_action_segment=0;
 SET
@@ -86,7 +86,7 @@ SET
 DROP TABLE IF EXISTS employees;
 DROP
 select test_protocol_allseg(1, 2,'f');
-ERROR:  PANIC for debug_dtm_action = 4, debug_dtm_action_protocol =  Begin Internal Subtransaction (postgres.c:1490)  (seg1 127.0.1.1:25433 pid=27784)
+ERROR:  PANIC for debug_dtm_action = 4, debug_dtm_action_protocol =  Begin Internal Subtransaction (postgres.c:1609)  (seg0 172.17.0.2:7002 pid=1962863) (postgres.c:1609)
 CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 9 during statement block entry
 -- make sure segment recovery is complete after panic.
 0U: select 1;
@@ -114,8 +114,11 @@ SET
 DROP TABLE IF EXISTS employees;
 DROP
 select test_protocol_allseg(1, 2,'f');
-ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
-CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 19 during exception cleanup
+ERROR:  Error on receive from seg0 172.17.0.2:7002 pid=1962876: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  SQL statement "CREATE TABLE employees(id int, shop_id int, gender character) DISTRIBUTED BY (id)"
+PL/pgSQL function test_protocol_allseg(integer,integer,character) line 5 at SQL statement
 -- make sure segment recovery is complete after panic.
 0U: select 1;
  ?column? 
@@ -170,8 +173,11 @@ SET
 DROP TABLE IF EXISTS employees;
 DROP
 select test_protocol_allseg(1, 2,'f');
-ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
-CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
+ERROR:  Error on receive from seg0 172.17.0.2:7002 pid=1962923: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  SQL statement "CREATE TABLE employees(id int, shop_id int, gender character) DISTRIBUTED BY (id)"
+PL/pgSQL function test_protocol_allseg(integer,integer,character) line 5 at SQL statement
 -- make sure segment recovery is complete after panic.
 0U: select 1;
  ?column? 
@@ -226,8 +232,11 @@ SET
 DROP TABLE IF EXISTS employees;
 DROP
 select test_protocol_allseg(1, 2,'f');
-ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed
-CONTEXT:  PL/pgSQL function test_protocol_allseg(integer,integer,character) line 18 during exception cleanup
+ERROR:  Error on receive from seg0 172.17.0.2:7002 pid=1962968: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  SQL statement "CREATE TABLE employees(id int, shop_id int, gender character) DISTRIBUTED BY (id)"
+PL/pgSQL function test_protocol_allseg(integer,integer,character) line 5 at SQL statement
 -- make sure segment recovery is complete after panic.
 0U: select 1;
  ?column? 

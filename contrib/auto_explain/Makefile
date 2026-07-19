@@ -6,7 +6,7 @@ OBJS = \
 	auto_explain.o
 PGFILEDESC = "auto_explain - logging facility for execution plans"
 
-REGRESS = auto_explain bfv_preload_auto_explain
+REGRESS = auto_explain bfv_preload_auto_explain alter_reset
 REGRESS_OPTS = --init-file=init_file
 
 ifdef USE_PGXS

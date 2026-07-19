@@ -7,26 +7,18 @@ CREATE TABLE bt_i4_heap (
 	seqno 		int4,
 	random 		int4
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_name_heap (
 	seqno 		name,
 	random 		int4
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_txt_heap (
 	seqno 		text,
 	random 		int4
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE bt_f8_heap (
 	seqno 		float8,
 	random 		int4
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'seqno' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/desc.data'
 COPY bt_i4_heap FROM :'filename';
 \set filename :abs_srcdir '/data/hash.data'
@@ -209,47 +201,71 @@ ORDER BY proname DESC, proargtypes DESC, pronamespace DESC LIMIT 1;
 (1 row)
 
 --
--- Add coverage for RowCompare quals whose rhs row has a NULL that ends scan
+-- Forwards scan RowCompare qual whose row arg has a NULL that affects our
+-- initial positioning strategy
 --
 explain (costs off)
 SELECT proname, proargtypes, pronamespace
    FROM pg_proc
-   WHERE proname = 'abs' AND (proname, proargtypes) < ('abs', NULL)
+   WHERE (proname, proargtypes) >= ('abs', NULL) AND proname <= 'abs'
 ORDER BY proname, proargtypes, pronamespace;
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
  Index Only Scan using pg_proc_proname_args_nsp_index on pg_proc
-   Index Cond: ((ROW(proname, proargtypes) < ROW('abs'::name, NULL::oidvector)) AND (proname = 'abs'::name))
+   Index Cond: ((ROW(proname, proargtypes) >= ROW('abs'::name, NULL::oidvector)) AND (proname <= 'abs'::name))
  Optimizer: Postgres query optimizer
 (3 rows)
 
 SELECT proname, proargtypes, pronamespace
    FROM pg_proc
-   WHERE proname = 'abs' AND (proname, proargtypes) < ('abs', NULL)
+   WHERE (proname, proargtypes) >= ('abs', NULL) AND proname <= 'abs'
 ORDER BY proname, proargtypes, pronamespace;
  proname | proargtypes | pronamespace 
 ---------+-------------+--------------
 (0 rows)
 
 --
--- Add coverage for backwards scan RowCompare quals whose rhs row has a NULL
--- that ends scan
+-- Forwards scan RowCompare quals whose row arg has a NULL that ends scan
 --
 explain (costs off)
 SELECT proname, proargtypes, pronamespace
    FROM pg_proc
-   WHERE proname = 'abs' AND (proname, proargtypes) > ('abs', NULL)
-ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
-                                                 QUERY PLAN                                                  
--------------------------------------------------------------------------------------------------------------
- Index Only Scan Backward using pg_proc_proname_args_nsp_index on pg_proc
-   Index Cond: ((ROW(proname, proargtypes) > ROW('abs'::name, NULL::oidvector)) AND (proname = 'abs'::name))
+   WHERE proname >= 'abs' AND (proname, proargtypes) < ('abs', NULL)
+ORDER BY proname, proargtypes, pronamespace;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Index Only Scan using pg_proc_proname_args_nsp_index on pg_proc
+   Index Cond: ((proname >= 'abs'::name) AND (ROW(proname, proargtypes) < ROW('abs'::name, NULL::oidvector)))
  Optimizer: Postgres query optimizer
 (3 rows)
 
 SELECT proname, proargtypes, pronamespace
    FROM pg_proc
-   WHERE proname = 'abs' AND (proname, proargtypes) > ('abs', NULL)
+   WHERE proname >= 'abs' AND (proname, proargtypes) < ('abs', NULL)
+ORDER BY proname, proargtypes, pronamespace;
+ proname | proargtypes | pronamespace 
+---------+-------------+--------------
+(0 rows)
+
+--
+-- Backwards scan RowCompare qual whose row arg has a NULL that affects our
+-- initial positioning strategy
+--
+explain (costs off)
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE proname >= 'abs' AND (proname, proargtypes) <= ('abs', NULL)
+ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Index Only Scan Backward using pg_proc_proname_args_nsp_index on pg_proc
+   Index Cond: ((proname >= 'abs'::name) AND (ROW(proname, proargtypes) <= ROW('abs'::name, NULL::oidvector)))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE proname >= 'abs' AND (proname, proargtypes) <= ('abs', NULL)
 ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
  proname | proargtypes | pronamespace 
 ---------+-------------+--------------
@@ -257,9 +273,57 @@ ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
 
 -- end_ignore
 --
--- Add coverage for recheck of > key following array advancement on previous
--- (left sibling) page that used a high key whose attribute value corresponding
--- to the > key was -inf (due to being truncated when the high key was created).
+-- Backwards scan RowCompare qual whose row arg has a NULL that ends scan
+--
+explain (costs off)
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE (proname, proargtypes) > ('abs', NULL) AND proname <= 'abs'
+ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Index Only Scan Backward using pg_proc_proname_args_nsp_index on pg_proc
+   Index Cond: ((ROW(proname, proargtypes) > ROW('abs'::name, NULL::oidvector)) AND (proname <= 'abs'::name))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE (proname, proargtypes) > ('abs', NULL) AND proname <= 'abs'
+ORDER BY proname DESC, proargtypes DESC, pronamespace DESC;
+ proname | proargtypes | pronamespace 
+---------+-------------+--------------
+(0 rows)
+
+-- Makes B-Tree preprocessing deal with unmarking redundant keys that were
+-- initially marked required (test case relies on current row compare
+-- preprocessing limitations)
+explain (costs off)
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE proname = 'zzzzzz' AND (proname, proargtypes) > ('abs', NULL)
+   AND pronamespace IN (1, 2, 3) AND proargtypes IN ('26 23', '5077')
+ORDER BY proname, proargtypes, pronamespace;
+                                                                                                     QUERY PLAN                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Index Only Scan using pg_proc_proname_args_nsp_index on pg_proc
+   Index Cond: ((ROW(proname, proargtypes) > ROW('abs'::name, NULL::oidvector)) AND (proname = 'zzzzzz'::name) AND (proargtypes = ANY ('{"26 23",5077}'::oidvector[])) AND (pronamespace = ANY ('{1,2,3}'::oid[])))
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+SELECT proname, proargtypes, pronamespace
+   FROM pg_proc
+   WHERE proname = 'zzzzzz' AND (proname, proargtypes) > ('abs', NULL)
+   AND pronamespace IN (1, 2, 3) AND proargtypes IN ('26 23', '5077')
+ORDER BY proname, proargtypes, pronamespace;
+ proname | proargtypes | pronamespace 
+---------+-------------+--------------
+(0 rows)
+
+--
+-- Performs a recheck of > key following array advancement on previous (left
+-- sibling) page that used a high key whose attribute value corresponding to
+-- the > key was -inf (due to being truncated when the high key was created).
 --
 -- XXX This relies on the assumption that tenk1_thous_tenthous has a truncated
 -- high key "(183, -inf)" on the first page that we'll scan.  The test will only
@@ -283,10 +347,10 @@ SELECT thousand, tenthous
   WHERE thousand IN (182, 183) AND tenthous > 7550;
  thousand | tenthous 
 ----------+----------
-      182 |     9182
-      183 |     8183
       183 |     9183
       182 |     8182
+      182 |     9182
+      183 |     8183
 (4 rows)
 
 --
@@ -540,8 +604,6 @@ reset enable_bitmapscan;
 reset enable_sort;
 -- Also check LIKE optimization with binary-compatible cases
 create temp table btree_bpchar (f1 text collate "C");
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index on btree_bpchar(f1 bpchar_ops) WITH (deduplicate_items=on);
 insert into btree_bpchar values ('foo'), ('fool'), ('bar'), ('quux');
 -- doesn't match index:
@@ -622,8 +684,6 @@ insert into btree_bpchar select 'foo' from generate_series(1,1500);
 -- Perform unique checking, with and without the use of deduplication
 --
 CREATE TABLE dedup_unique_test_table (a int) WITH (autovacuum_enabled=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE UNIQUE INDEX dedup_unique ON dedup_unique_test_table (a) WITH (deduplicate_items=on);
 CREATE UNIQUE INDEX plain_unique ON dedup_unique_test_table (a) WITH (deduplicate_items=off);
 -- Generate enough garbage tuples in index to ensure that even the unique index
@@ -656,8 +716,6 @@ INSERT INTO dedup_unique_test_table SELECT i FROM generate_series(0,450) i;
 -- truncation would otherwise truncate tuples on internal pages, leaving us
 -- with a short tree.
 create table btree_tall_tbl(id int4, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table btree_tall_tbl alter COLUMN t set storage plain;
 create index btree_tall_idx on btree_tall_tbl (t, id) with (fillfactor = 10);
 insert into btree_tall_tbl select g, repeat('x', 250)
@@ -717,8 +775,6 @@ reset enable_bitmapscan;
 -- Test for multilevel page deletion
 --
 CREATE TABLE delete_test_table (a bigint, b bigint, c bigint, d bigint);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO delete_test_table SELECT i, 1, 2, 3 FROM generate_series(1,80000) i;
 ALTER TABLE delete_test_table ADD PRIMARY KEY (a,b,c,d);
 -- Delete most entries, and vacuum, deleting internal pages and creating "fast
@@ -749,8 +805,8 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             1 | btree_stats_idx |         0
              0 | btree_stats_idx |         0
+             1 | btree_stats_idx |         0
              2 | btree_stats_idx |         0
 (3 rows)
 
@@ -772,9 +828,9 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | btree_stats_idx |         0
-             1 | btree_stats_idx |         0
              2 | btree_stats_idx |         0
+             1 | btree_stats_idx |         0
+             0 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -795,9 +851,9 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | btree_stats_idx |         0
-             2 | btree_stats_idx |         0
              1 | btree_stats_idx |         0
+             2 | btree_stats_idx |         0
+             0 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -831,9 +887,9 @@ SELECT reltuples FROM pg_class WHERE relname='btree_stats_tbl';
 SELECT gp_segment_id, relname, reltuples FROM gp_dist_random('pg_class') WHERE relname = 'btree_stats_idx';
  gp_segment_id |     relname     | reltuples 
 ---------------+-----------------+-----------
-             0 | btree_stats_idx |         0
              1 | btree_stats_idx |         0
              2 | btree_stats_idx |         0
+             0 | btree_stats_idx |         0
 (3 rows)
 
 SELECT reltuples FROM pg_class WHERE relname='btree_stats_idx';
@@ -847,8 +903,6 @@ create index on btree_tall_tbl (id int4_ops(foo=1));
 ERROR:  operator class int4_ops has no options
 -- test parallel build with immutable function.
 CREATE TABLE btree_test_expr (n int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'n' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION btree_test_func() RETURNS int LANGUAGE sql IMMUTABLE RETURN 0;
 BEGIN;
 SET LOCAL min_parallel_table_scan_size = 0;
@@ -866,8 +920,6 @@ DETAIL:  This operation is not supported for indexes.
 DROP INDEX btree_tall_idx2;
 -- Partitioned index
 CREATE TABLE btree_part (id int4) PARTITION BY RANGE (id);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX btree_part_idx ON btree_part(id);
 ALTER INDEX btree_part_idx ALTER COLUMN id SET (n_distinct=100);
 ERROR:  ALTER action ALTER COLUMN ... SET cannot be performed on relation "btree_part_idx"

@@ -27,7 +27,6 @@ SELECT table_name, column_name, dependent_column FROM information_schema.column_
  b      | integer |           |          | generated always as (a * 2)
 Indexes:
     "gtest1_pkey" PRIMARY KEY, btree (a)
-Distributed by: (a)
 
 -- duplicate generated
 CREATE TABLE gtest_err_1 (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) VIRTUAL GENERATED ALWAYS AS (a * 3) VIRTUAL);
@@ -62,8 +61,6 @@ CREATE TABLE gtest_err_4 (a int PRIMARY KEY, b double precision GENERATED ALWAYS
 ERROR:  generation expression is not immutable
 -- ... but be sure that the immutability test is accurate
 CREATE TABLE gtest2 (a int, b text GENERATED ALWAYS AS (a || ' sec') VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 DROP TABLE gtest2;
 -- cannot have default/identity and generated
 CREATE TABLE gtest_err_5a (a int PRIMARY KEY, b int DEFAULT 5 GENERATED ALWAYS AS (a * 2) VIRTUAL);
@@ -172,18 +169,16 @@ SELECT a, b FROM gtest1 WHERE b = 4 ORDER BY a;
 -- test that overflow error happens on read
 INSERT INTO gtest1 VALUES (2000000000);
 SELECT * FROM gtest1;
-ERROR:  integer out of range  (seg1 slice1 172.17.0.2:7003 pid=2580652)
+ERROR:  integer out of range  (seg1 slice1 172.17.0.2:7003 pid=1538908)
 DELETE FROM gtest1 WHERE a = 2000000000;
 -- test with joins
 CREATE TABLE gtestx (x int, y int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtestx VALUES (11, 1), (22, 2), (33, 3);
 SELECT * FROM gtestx, gtest1 WHERE gtestx.y = gtest1.a;
  x  | y | a | b 
 ----+---+---+---
- 11 | 1 | 1 | 2
  22 | 2 | 2 | 4
+ 11 | 1 | 1 | 2
 (2 rows)
 
 DROP TABLE gtestx;
@@ -280,10 +275,10 @@ DETAIL:  Column "b" is a generated column.
 SELECT * FROM gtest1v;
  a | b  
 ---+----
- 5 | 10
- 6 | 12
  2 |  4
  7 | 14
+ 5 | 10
+ 6 | 12
 (4 rows)
 
 DELETE FROM gtest1v WHERE a >= 5;
@@ -310,7 +305,6 @@ SELECT * FROM gtest1_1;
  a      | integer |           | not null | 
  b      | integer |           |          | generated always as (a * 2)
 Inherits: gtest1
-Distributed by: (a)
 
 INSERT INTO gtest1_1 VALUES (4);
 SELECT * FROM gtest1_1;
@@ -328,8 +322,6 @@ SELECT * FROM gtest1;
 
 -- can't have generated column that is a child of normal column
 CREATE TABLE gtest_normal (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest_normal_child (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL) INHERITS (gtest_normal);  -- error
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging column "a" with inherited definition
@@ -337,8 +329,6 @@ NOTICE:  merging column "b" with inherited definition
 ERROR:  child column "b" specifies generation expression
 HINT:  A child table column cannot be generated unless its parent column is.
 CREATE TABLE gtest_normal_child (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_normal_child INHERIT gtest_normal;  -- error
 ERROR:  column "b" in child table must not be a generated column
 DROP TABLE gtest_normal, gtest_normal_child;
@@ -369,7 +359,6 @@ NOTICE:  merging column "b" with inherited definition
 Not-null constraints:
     "gtest1_a_not_null" NOT NULL "a" (inherited)
 Inherits: gtest1
-Distributed by: (a)
 
 INSERT INTO gtestx (a, x) VALUES (11, 22);
 SELECT * FROM gtest1;
@@ -387,38 +376,26 @@ SELECT * FROM gtestx;
 (1 row)
 
 CREATE TABLE gtestxx_1 (a int NOT NULL, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtestxx_1 INHERIT gtest1;  -- error
 ERROR:  column "b" in child table must be a generated column
 CREATE TABLE gtestxx_3 (a int NOT NULL, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtestxx_3 INHERIT gtest1;  -- ok
 CREATE TABLE gtestxx_4 (b int GENERATED ALWAYS AS (a * 2) VIRTUAL, a int NOT NULL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtestxx_4 INHERIT gtest1;  -- ok
 -- test multiple inheritance mismatches
 CREATE TABLE gtesty (x int, b int DEFAULT 55);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest1_y () INHERITS (gtest0, gtesty);  -- error
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "b"
 ERROR:  inherited column "b" has a generation conflict
 DROP TABLE gtesty;
 CREATE TABLE gtesty (x int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest1_y () INHERITS (gtest1, gtesty);  -- error
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "b"
 ERROR:  inherited column "b" has a generation conflict
 DROP TABLE gtesty;
 CREATE TABLE gtesty (x int, b int GENERATED ALWAYS AS (x * 22) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest1_y () INHERITS (gtest1, gtesty);  -- error
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "b"
@@ -438,12 +415,9 @@ DETAIL:  User-specified column moved to the position of the inherited column.
  x      | integer |           |          | 
 Inherits: gtest1,
           gtesty
-Distributed by: (a)
 
 -- test correct handling of GENERATED column that's only in child
 CREATE TABLE gtestp (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtestc (f2 int GENERATED ALWAYS AS (f1+1) VIRTUAL) INHERITS(gtestp);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO gtestc values(42);
@@ -464,8 +438,6 @@ DROP TABLE gtestp CASCADE;
 NOTICE:  drop cascades to table gtestc
 -- test update
 CREATE TABLE gtest3 (a int, b int GENERATED ALWAYS AS (a * 3) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest3 (a) VALUES (1), (2), (3), (NULL);
 SELECT * FROM gtest3 ORDER BY a;
  a | b 
@@ -487,8 +459,6 @@ SELECT * FROM gtest3 ORDER BY a;
 (4 rows)
 
 CREATE TABLE gtest3a (a text, b text GENERATED ALWAYS AS (a || '+' || a) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest3a (a) VALUES ('a'), ('b'), ('c'), (NULL);
 SELECT * FROM gtest3a ORDER BY a;
  a |  b  
@@ -522,6 +492,12 @@ COPY gtest1 FROM stdin;
 COPY gtest1 (a, b) FROM stdin;
 ERROR:  column "b" is a generated column
 DETAIL:  Generated columns cannot be used in COPY.
+COPY gtest1 FROM stdin WHERE b <> 10;
+ERROR:  generated columns are not supported in COPY FROM WHERE conditions
+DETAIL:  Column "b" is a generated column.
+COPY gtest1 FROM stdin WHERE gtest1 IS NULL;
+ERROR:  generated columns are not supported in COPY FROM WHERE conditions
+DETAIL:  Column "b" is a generated column.
 SELECT * FROM gtest1 ORDER BY a;
  a | b 
 ---+---
@@ -563,8 +539,6 @@ SELECT * FROM gtest2;
 
 -- simple column reference for varlena types
 CREATE TABLE gtest_varlena (a varchar, b varchar GENERATED ALWAYS AS (a) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest_varlena (a) VALUES('01234567890123456789');
 INSERT INTO gtest_varlena (a) VALUES(NULL);
 SELECT * FROM gtest_varlena ORDER BY a;
@@ -581,8 +555,6 @@ CREATE TABLE gtest4 (
     a int,
     b double_int GENERATED ALWAYS AS ((a * 2, a * 3)) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  virtual generated column "b" cannot have a user-defined type
 DETAIL:  Virtual generated columns that make use of user-defined types are not yet supported.
 --INSERT INTO gtest4 VALUES (1), (6);
@@ -600,8 +572,8 @@ ALTER TABLE gtest_tableoid ADD COLUMN
 SELECT * FROM gtest_tableoid;
  a | b |       c        
 ---+---+----------------
- 2 | t | gtest_tableoid
  1 | t | gtest_tableoid
+ 2 | t | gtest_tableoid
 (2 rows)
 
 -- drop column behavior
@@ -619,7 +591,6 @@ NOTICE:  drop cascades to column c of table gtest10
  a      | integer |           | not null | 
 Indexes:
     "gtest10_pkey" PRIMARY KEY, btree (a)
-Distributed by: (a)
 
 CREATE TABLE gtest10a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
 ALTER TABLE gtest10a DROP COLUMN b;
@@ -663,7 +634,7 @@ DROP USER regress_user11;
 CREATE TABLE gtest20 (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) VIRTUAL CHECK (b < 50));
 INSERT INTO gtest20 (a) VALUES (10);  -- ok
 INSERT INTO gtest20 (a) VALUES (30);  -- violates constraint
-ERROR:  new row for relation "gtest20" violates check constraint "gtest20_b_check"  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  new row for relation "gtest20" violates check constraint "gtest20_b_check"  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (30, virtual).
 ALTER TABLE gtest20 ALTER COLUMN b SET EXPRESSION AS (a * 100);  -- violates constraint (currently not supported)
 ERROR:  ALTER TABLE / SET EXPRESSION is not supported for virtual generated columns in tables with check constraints
@@ -675,58 +646,54 @@ CREATE TABLE gtest20a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) VIRT
 INSERT INTO gtest20a (a) VALUES (10);
 INSERT INTO gtest20a (a) VALUES (30);
 ALTER TABLE gtest20a ADD CHECK (b < 50);  -- fails on existing row
-ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=1538908)
 -- table rewrite cases
 ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 50); -- fails on existing row
-ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  check constraint "gtest20a_b_check" of relation "gtest20a" is violated by some row  (seg1 172.17.0.2:7003 pid=1538908)
 ALTER TABLE gtest20a ADD COLUMN c float8 DEFAULT random() CHECK (b < 61); -- ok
 CREATE TABLE gtest20b (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
 INSERT INTO gtest20b (a) VALUES (10);
 INSERT INTO gtest20b (a) VALUES (30);
 ALTER TABLE gtest20b ADD CONSTRAINT chk CHECK (b < 50) NOT VALID;
 ALTER TABLE gtest20b VALIDATE CONSTRAINT chk;  -- fails on existing row
-ERROR:  check constraint "chk" of relation "gtest20b" is violated by some row  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  check constraint "chk" of relation "gtest20b" is violated by some row  (seg1 172.17.0.2:7003 pid=1538908)
 -- check with whole-row reference
 CREATE TABLE gtest20c (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest20c ADD CONSTRAINT whole_row_check CHECK (gtest20c IS NOT NULL);
 INSERT INTO gtest20c VALUES (1);  -- ok
 INSERT INTO gtest20c VALUES (NULL);  -- fails
-ERROR:  new row for relation "gtest20c" violates check constraint "whole_row_check"  (seg0 172.17.0.2:7002 pid=2580649)
+ERROR:  new row for relation "gtest20c" violates check constraint "whole_row_check"  (seg0 172.17.0.2:7002 pid=1538903)
 DETAIL:  Failing row contains (null, virtual).
 -- not-null constraints
 CREATE TABLE gtest21a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) VIRTUAL NOT NULL);
 INSERT INTO gtest21a (a) VALUES (1);  -- ok
 INSERT INTO gtest21a (a) VALUES (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21a" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  null value in column "b" of relation "gtest21a" violates not-null constraint  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (0, virtual).
 -- also check with table constraint syntax
 CREATE TABLE gtest21ax (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) VIRTUAL, CONSTRAINT cc NOT NULL b);
 INSERT INTO gtest21ax (a) VALUES (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21ax" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  null value in column "b" of relation "gtest21ax" violates not-null constraint  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (0, virtual).
 INSERT INTO gtest21ax (a) VALUES (1);  --ok
 -- SET EXPRESSION supports not null constraint
 ALTER TABLE gtest21ax ALTER COLUMN b SET EXPRESSION AS (nullif(a, 1)); --error
-ERROR:  column "b" of relation "gtest21ax" contains null values  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  column "b" of relation "gtest21ax" contains null values  (seg1 172.17.0.2:7003 pid=1538908)
 DROP TABLE gtest21ax;
 CREATE TABLE gtest21ax (a int PRIMARY KEY, b int GENERATED ALWAYS AS (nullif(a, 0)) VIRTUAL);
 ALTER TABLE gtest21ax ADD CONSTRAINT cc NOT NULL b;
 INSERT INTO gtest21ax (a) VALUES (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21ax" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  null value in column "b" of relation "gtest21ax" violates not-null constraint  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (0, virtual).
 DROP TABLE gtest21ax;
 CREATE TABLE gtest21b (a int, b int GENERATED ALWAYS AS (nullif(a, 0)) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest21b ALTER COLUMN b SET NOT NULL;
 INSERT INTO gtest21b (a) VALUES (1);  -- ok
 INSERT INTO gtest21b (a) VALUES (2), (0);  -- violates constraint
-ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (0, virtual).
 INSERT INTO gtest21b (a) VALUES (NULL);  -- error
-ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2580649)
+ERROR:  null value in column "b" of relation "gtest21b" violates not-null constraint  (seg0 172.17.0.2:7002 pid=1538903)
 DETAIL:  Failing row contains (null, virtual).
 ALTER TABLE gtest21b ALTER COLUMN b DROP NOT NULL;
 INSERT INTO gtest21b (a) VALUES (0);  -- ok now
@@ -736,8 +703,6 @@ CREATE TABLE gtestnn_parent (
     f2 bigint,
     f3 bigint GENERATED ALWAYS AS (nullif(f1, 1) + nullif(f2, 10)) VIRTUAL NOT NULL
 ) PARTITION BY RANGE (f1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtestnn_child PARTITION OF gtestnn_parent FOR VALUES FROM (1) TO (5);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE gtestnn_childdef PARTITION OF gtestnn_parent default;
@@ -745,13 +710,13 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 -- check the error messages
 INSERT INTO gtestnn_parent VALUES (2, 2, default), (3, 5, default), (14, 12, default);  -- ok
 INSERT INTO gtestnn_parent VALUES (1, 2, default);  -- error
-ERROR:  null value in column "f3" of relation "gtestnn_child" violates not-null constraint  (seg1 172.17.0.2:7003 pid=2580652)
+ERROR:  null value in column "f3" of relation "gtestnn_child" violates not-null constraint  (seg1 172.17.0.2:7003 pid=1538908)
 DETAIL:  Failing row contains (1, 2, virtual).
 INSERT INTO gtestnn_parent VALUES (2, 10, default);  -- error
-ERROR:  null value in column "f3" of relation "gtestnn_child" violates not-null constraint  (seg0 172.17.0.2:7002 pid=2580649)
+ERROR:  null value in column "f3" of relation "gtestnn_child" violates not-null constraint  (seg0 172.17.0.2:7002 pid=1538903)
 DETAIL:  Failing row contains (2, 10, virtual).
 ALTER TABLE gtestnn_parent ALTER COLUMN f3 SET EXPRESSION AS (nullif(f1, 2) + nullif(f2, 11));  -- error
-ERROR:  column "f3" of relation "gtestnn_child" contains null values  (seg0 172.17.0.2:7002 pid=2580649)
+ERROR:  column "f3" of relation "gtestnn_child" contains null values  (seg0 172.17.0.2:7002 pid=1538903)
 INSERT INTO gtestnn_parent VALUES (10, 11, default);  -- ok
 SELECT * FROM gtestnn_parent ORDER BY f1, f2, f3;
  f1 | f2 | f3 
@@ -764,9 +729,9 @@ SELECT * FROM gtestnn_parent ORDER BY f1, f2, f3;
 
 -- test ALTER TABLE ADD COLUMN
 ALTER TABLE gtestnn_parent ADD COLUMN c int NOT NULL GENERATED ALWAYS AS (nullif(f1, 14) + nullif(f2, 10)) VIRTUAL;  -- error
-ERROR:  column "c" of relation "gtestnn_childdef" contains null values  (seg2 172.17.0.2:7004 pid=2580653)
+ERROR:  column "c" of relation "gtestnn_childdef" contains null values  (seg2 172.17.0.2:7004 pid=1538909)
 ALTER TABLE gtestnn_parent ADD COLUMN c int NOT NULL GENERATED ALWAYS AS (nullif(f1, 13) + nullif(f2, 5)) VIRTUAL;  -- error
-ERROR:  column "c" of relation "gtestnn_child" contains null values  (seg0 172.17.0.2:7002 pid=2580649)
+ERROR:  column "c" of relation "gtestnn_child" contains null values  (seg0 172.17.0.2:7002 pid=1538903)
 ALTER TABLE gtestnn_parent ADD COLUMN c int NOT NULL GENERATED ALWAYS AS (nullif(f1, 4) + nullif(f2, 6)) VIRTUAL;  -- ok
 -- index constraints
 CREATE TABLE gtest22a (a int PRIMARY KEY, b int GENERATED ALWAYS AS (a / 2) VIRTUAL UNIQUE) distributed replicated;
@@ -780,8 +745,6 @@ ERROR:  primary keys on virtual generated columns are not supported
 --INSERT INTO gtest22b VALUES (2);
 -- indexes
 CREATE TABLE gtest22c (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 --CREATE INDEX gtest22c_b_idx ON gtest22c (b);
 --CREATE INDEX gtest22c_expr_idx ON gtest22c ((b * 3));
 --CREATE INDEX gtest22c_pred_idx ON gtest22c (a) WHERE b > 0;
@@ -847,15 +810,11 @@ ALTER TABLE gtest24ata ALTER COLUMN b TYPE gtestdomain1;  -- error
 ERROR:  virtual generated column "b" cannot have a domain type
 CREATE DOMAIN gtestdomainnn AS int CHECK (VALUE IS NOT NULL);
 CREATE TABLE gtest24nn (a int, b gtestdomainnn GENERATED ALWAYS AS (a * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  virtual generated column "b" cannot have a domain type
 --INSERT INTO gtest24nn (a) VALUES (4);  -- ok
 --INSERT INTO gtest24nn (a) VALUES (NULL);  -- error
 -- using user-defined type not yet supported
 CREATE TABLE gtest24xxx (a gtestdomain1, b gtestdomain1, c int GENERATED ALWAYS AS (greatest(a, b)) VIRTUAL);  -- error
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  generation expression uses user-defined type
 LINE 1: ...main1, b gtestdomain1, c int GENERATED ALWAYS AS (greatest(a...
                                                              ^
@@ -867,8 +826,6 @@ ERROR:  generated columns are not supported on typed tables
 DROP TYPE gtest_type CASCADE;
 -- partitioning cases
 CREATE TABLE gtest_parent (f1 date NOT NULL, f2 bigint, f3 bigint) PARTITION BY RANGE (f1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest_child PARTITION OF gtest_parent (
     f3 WITH OPTIONS GENERATED ALWAYS AS (f2 * 2) VIRTUAL
 ) FOR VALUES FROM ('2016-07-01') TO ('2016-08-01'); -- error
@@ -876,14 +833,10 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  child column "f3" specifies generation expression
 HINT:  A child table column cannot be generated unless its parent column is.
 CREATE TABLE gtest_child (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child FOR VALUES FROM ('2016-07-01') TO ('2016-08-01'); -- error
 ERROR:  column "f3" in child table must not be a generated column
 DROP TABLE gtest_parent, gtest_child;
 CREATE TABLE gtest_parent (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE (f1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest_child PARTITION OF gtest_parent
   FOR VALUES FROM ('2016-07-01') TO ('2016-08-01');  -- inherits gen expr
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -907,34 +860,24 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  column "f3" inherits from generated column of different kind
 DETAIL:  Parent column is VIRTUAL, child column is STORED.
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01'); -- error
 ERROR:  column "f3" in child table must be a generated column
 DROP TABLE gtest_child3;
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint DEFAULT 42);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01'); -- error
 ERROR:  column "f3" in child table must be a generated column
 DROP TABLE gtest_child3;
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS IDENTITY);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01'); -- error
 ERROR:  table "gtest_child3" being attached contains an identity column "f3"
 DETAIL:  The new partition may not contain an identity column.
 DROP TABLE gtest_child3;
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 33) STORED);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01'); -- error
 ERROR:  column "f3" inherits from generated column of different kind
 DETAIL:  Parent column is VIRTUAL, child column is STORED.
 DROP TABLE gtest_child3;
 CREATE TABLE gtest_child3 (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 33) VIRTUAL);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09-01') TO ('2016-10-01');
 \d gtest_child
               Table "generated_virtual_tests.gtest_child"
@@ -944,7 +887,6 @@ ALTER TABLE gtest_parent ATTACH PARTITION gtest_child3 FOR VALUES FROM ('2016-09
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 2)
 Partition of: gtest_parent FOR VALUES FROM ('07-01-2016') TO ('08-01-2016')
-Distributed by: (f1)
 
 \d gtest_child2
               Table "generated_virtual_tests.gtest_child2"
@@ -954,7 +896,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 22)
 Partition of: gtest_parent FOR VALUES FROM ('08-01-2016') TO ('09-01-2016')
-Distributed by: (f1)
 
 \d gtest_child3
               Table "generated_virtual_tests.gtest_child3"
@@ -964,7 +905,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 33)
 Partition of: gtest_parent FOR VALUES FROM ('09-01-2016') TO ('10-01-2016')
-Distributed by: (f1)
 
 INSERT INTO gtest_parent (f1, f2) VALUES ('2016-07-15', 1);
 INSERT INTO gtest_parent (f1, f2) VALUES ('2016-07-15', 2);
@@ -1016,7 +956,6 @@ ALTER TABLE gtest_child ALTER COLUMN f3 SET EXPRESSION AS (f2 * 10);
  f3     | bigint |           |          | generated always as (f2 * 4)
 Partition key: RANGE (f1)
 Number of partitions: 3 (Use \d+ to list them.)
-Distributed by: (f1)
 
 \d gtest_child
               Table "generated_virtual_tests.gtest_child"
@@ -1026,7 +965,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 10)
 Partition of: gtest_parent FOR VALUES FROM ('07-01-2016') TO ('08-01-2016')
-Distributed by: (f1)
 
 \d gtest_child2
               Table "generated_virtual_tests.gtest_child2"
@@ -1036,7 +974,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 22)
 Partition of: gtest_parent FOR VALUES FROM ('08-01-2016') TO ('09-01-2016')
-Distributed by: (f1)
 
 \d gtest_child3
               Table "generated_virtual_tests.gtest_child3"
@@ -1046,7 +983,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 33)
 Partition of: gtest_parent FOR VALUES FROM ('09-01-2016') TO ('10-01-2016')
-Distributed by: (f1)
 
 SELECT tableoid::regclass, * FROM gtest_parent ORDER BY 1, 2, 3;
    tableoid   |     f1     | f2 | f3 
@@ -1067,7 +1003,6 @@ ALTER TABLE gtest_parent ALTER COLUMN f3 SET EXPRESSION AS (f2 * 2);
  f3     | bigint |           |          | generated always as (f2 * 2)
 Partition key: RANGE (f1)
 Number of partitions: 3 (Use \d+ to list them.)
-Distributed by: (f1)
 
 \d gtest_child
               Table "generated_virtual_tests.gtest_child"
@@ -1077,7 +1012,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 2)
 Partition of: gtest_parent FOR VALUES FROM ('07-01-2016') TO ('08-01-2016')
-Distributed by: (f1)
 
 \d gtest_child2
              Table "generated_virtual_tests.gtest_child2"
@@ -1087,7 +1021,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 2)
 Partition of: gtest_parent FOR VALUES FROM ('08-01-2016') TO ('09-01-2016')
-Distributed by: (f1)
 
 \d gtest_child3
              Table "generated_virtual_tests.gtest_child3"
@@ -1097,7 +1030,6 @@ Distributed by: (f1)
  f2     | bigint |           |          | 
  f3     | bigint |           |          | generated always as (f2 * 2)
 Partition of: gtest_parent FOR VALUES FROM ('09-01-2016') TO ('10-01-2016')
-Distributed by: (f1)
 
 SELECT tableoid::regclass, * FROM gtest_parent ORDER BY 1, 2, 3;
    tableoid   |     f1     | f2 | f3 
@@ -1110,17 +1042,28 @@ SELECT tableoid::regclass, * FROM gtest_parent ORDER BY 1, 2, 3;
 -- we leave these tables around for purposes of testing dump/reload/upgrade
 -- generated columns in partition key (not allowed)
 CREATE TABLE gtest_part_key (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE (f3);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use generated column in partition key
 LINE 1: ...NERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE (f3);
                                                                    ^
 DETAIL:  Column "f3" is a generated column.
+CREATE TABLE gtest_part_key (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((f3));
+ERROR:  cannot use generated column in partition key
+LINE 1: ...RATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((f3));
+                                                                 ^
+DETAIL:  Column "f3" is a generated column.
 CREATE TABLE gtest_part_key (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((f3 * 3));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  cannot use generated column in partition key
 LINE 1: ...D ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((f3 * 3));
+                                                             ^
+DETAIL:  Column "f3" is a generated column.
+CREATE TABLE gtest_part_key (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((gtest_part_key));
+ERROR:  cannot use generated column in partition key
+LINE 1: ...D ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((gtest_par...
+                                                             ^
+DETAIL:  Column "f3" is a generated column.
+CREATE TABLE gtest_part_key (f1 date NOT NULL, f2 bigint, f3 bigint GENERATED ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((gtest_part_key is not null));
+ERROR:  cannot use generated column in partition key
+LINE 1: ...D ALWAYS AS (f2 * 2) VIRTUAL) PARTITION BY RANGE ((gtest_par...
                                                              ^
 DETAIL:  Column "f3" is a generated column.
 -- ALTER TABLE ... ADD COLUMN
@@ -1163,7 +1106,6 @@ SELECT * FROM gtest25 ORDER BY a;
  y      | double precision |           |          | generated always as (d * 4::double precision)
 Indexes:
     "gtest25_pkey" PRIMARY KEY, btree (a)
-Distributed by: (a)
 
 -- ALTER TABLE ... ALTER COLUMN
 CREATE TABLE gtest27 (
@@ -1171,8 +1113,6 @@ CREATE TABLE gtest27 (
     b int,
     x int GENERATED ALWAYS AS ((a + b) * 2) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest27 SET DISTRIBUTED RANDOMLY;
 INSERT INTO gtest27 (a, b) VALUES (3, 7), (4, 11);
 ALTER TABLE gtest27 ALTER COLUMN a TYPE text;  -- error
@@ -1209,7 +1149,7 @@ ALTER TABLE gtest27
   ALTER COLUMN a TYPE bigint,
   ALTER COLUMN b TYPE bigint,
   ADD COLUMN x bigint GENERATED ALWAYS AS ((a + b) * 2) VIRTUAL NOT NULL;  -- error
-ERROR:  column "x" of relation "gtest27" contains null values  (seg2 172.17.0.2:7004 pid=2580653)
+ERROR:  column "x" of relation "gtest27" contains null values  (seg2 172.17.0.2:7004 pid=1538909)
 DELETE FROM gtest27 WHERE a IS NULL AND b IS NULL;
 -- It's possible to alter the column types this way:
 ALTER TABLE gtest27
@@ -1244,8 +1184,8 @@ Distributed randomly
 SELECT * FROM gtest27;
  a | b  | x  
 ---+----+----
- 4 | 11 | 30
  3 |  7 | 20
+ 4 | 11 | 30
 (2 rows)
 
 -- ALTER TABLE ... ALTER COLUMN ... DROP EXPRESSION
@@ -1253,8 +1193,6 @@ CREATE TABLE gtest29 (
     a int,
     b int GENERATED ALWAYS AS (a * 2) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO gtest29 (a) VALUES (3), (4);
 SELECT * FROM gtest29;
  a | b 
@@ -1269,7 +1207,6 @@ SELECT * FROM gtest29;
 --------+---------+-----------+----------+-----------------------------
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2)
-Distributed by: (a)
 
 ALTER TABLE gtest29 ALTER COLUMN a SET EXPRESSION AS (a * 3);  -- error
 ERROR:  column "a" of relation "gtest29" is not a generated column
@@ -1277,9 +1214,9 @@ ALTER TABLE gtest29 ALTER COLUMN a DROP EXPRESSION;  -- error
 ERROR:  column "a" of relation "gtest29" is not a generated column
 ALTER TABLE gtest29 ALTER COLUMN a DROP EXPRESSION IF EXISTS;  -- notice
 NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg0 172.17.0.2:7002 pid=2580649)
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg2 172.17.0.2:7004 pid=2580653)
-NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg1 172.17.0.2:7003 pid=2580652)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg1 172.17.0.2:7003 pid=1538908)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg0 172.17.0.2:7002 pid=1538903)
+NOTICE:  column "a" of relation "gtest29" is not a generated column, skipping  (seg2 172.17.0.2:7004 pid=1538909)
 -- Change the expression
 ALTER TABLE gtest29 ALTER COLUMN b SET EXPRESSION AS (a * 3);
 SELECT * FROM gtest29;
@@ -1295,7 +1232,6 @@ SELECT * FROM gtest29;
 --------+---------+-----------+----------+-----------------------------
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 3)
-Distributed by: (a)
 
 ALTER TABLE gtest29 ALTER COLUMN b DROP EXPRESSION;  -- not supported
 ERROR:  ALTER TABLE / DROP EXPRESSION is not supported for virtual generated columns
@@ -1318,7 +1254,6 @@ SELECT * FROM gtest29;
 --------+---------+-----------+----------+-----------------------------
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 3)
-Distributed by: (a)
 
 -- check that dependencies between columns have also been removed
 --ALTER TABLE gtest29 DROP COLUMN a;  -- should not drop b
@@ -1328,8 +1263,6 @@ CREATE TABLE gtest30 (
     a int,
     b int GENERATED ALWAYS AS (a * 2) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest30_1 () INHERITS (gtest30);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE gtest30 ALTER COLUMN b DROP EXPRESSION;
@@ -1342,7 +1275,6 @@ DETAIL:  Column "b" of relation "gtest30" is a virtual generated column.
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2)
 Number of child tables: 1 (Use \d+ to list them.)
-Distributed by: (a)
 
 \d gtest30_1
                Table "generated_virtual_tests.gtest30_1"
@@ -1351,7 +1283,6 @@ Distributed by: (a)
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2)
 Inherits: gtest30
-Distributed by: (a)
 
 DROP TABLE gtest30 CASCADE;
 NOTICE:  drop cascades to table gtest30_1
@@ -1359,8 +1290,6 @@ CREATE TABLE gtest30 (
     a int,
     b int GENERATED ALWAYS AS (a * 2) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest30_1 () INHERITS (gtest30);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ONLY gtest30 ALTER COLUMN b DROP EXPRESSION;  -- error
@@ -1372,7 +1301,6 @@ ERROR:  ALTER TABLE / DROP EXPRESSION must be applied to child tables too
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2)
 Number of child tables: 1 (Use \d+ to list them.)
-Distributed by: (a)
 
 \d gtest30_1
                Table "generated_virtual_tests.gtest30_1"
@@ -1381,27 +1309,27 @@ Distributed by: (a)
  a      | integer |           |          | 
  b      | integer |           |          | generated always as (a * 2)
 Inherits: gtest30
-Distributed by: (a)
 
 ALTER TABLE gtest30_1 ALTER COLUMN b DROP EXPRESSION;  -- error
 ERROR:  cannot drop generation expression from inherited column
 -- composite type dependencies
 CREATE TABLE gtest31_1 (a int, b text GENERATED ALWAYS AS ('hello') VIRTUAL, c text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest31_2 (x int, y gtest31_1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest31_1 ALTER COLUMN b TYPE varchar;  -- fails
 ERROR:  cannot alter table "gtest31_1" because column "gtest31_2.y" uses its row type
+-- bug #18970
+ALTER TABLE gtest31_2 ADD CONSTRAINT cc CHECK ((y).b IS NOT NULL);
+ALTER TABLE gtest31_1 ALTER COLUMN b SET EXPRESSION AS ('hello1');
+ALTER TABLE gtest31_2 DROP CONSTRAINT cc;
+CREATE STATISTICS gtest31_2_stat ON ((y).b is not null) FROM gtest31_2;
+ALTER TABLE gtest31_1 ALTER COLUMN b SET EXPRESSION AS ('hello2');
+DROP STATISTICS gtest31_2_stat;
+CREATE INDEX gtest31_2_y_idx ON gtest31_2(((y).b));
+ALTER TABLE gtest31_1 ALTER COLUMN b SET EXPRESSION AS ('hello3');
 DROP TABLE gtest31_1, gtest31_2;
 -- Check it for a partitioned table, too
 CREATE TABLE gtest31_1 (a int, b text GENERATED ALWAYS AS ('hello') VIRTUAL, c text) PARTITION BY LIST (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE gtest31_2 (x int, y gtest31_1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest31_1 ALTER COLUMN b TYPE varchar;  -- fails
 ERROR:  cannot alter table "gtest31_1" because column "gtest31_2.y" uses its row type
 DROP TABLE gtest31_1, gtest31_2;
@@ -1460,8 +1388,8 @@ CREATE TRIGGER gtest4 AFTER INSERT OR UPDATE ON gtest26
   WHEN (NEW.b < 0)  -- ok
   EXECUTE PROCEDURE gtest_trigger_func();
 INSERT INTO gtest26 (a) VALUES (-2), (0), (3);
-INFO:  gtest2: BEFORE: new = (-2,)  (seg1 172.17.0.2:7003 pid=2580652)
-INFO:  gtest4: AFTER: new = (-2,)  (seg1 172.17.0.2:7003 pid=2580652)
+INFO:  gtest2: BEFORE: new = (-2,)  (seg1 172.17.0.2:7003 pid=1538908)
+INFO:  gtest4: AFTER: new = (-2,)  (seg1 172.17.0.2:7003 pid=1538908)
 SELECT * FROM gtest26 ORDER BY a;
  a  | b  
 ----+----
@@ -1485,17 +1413,17 @@ alter table gtest26 add column distkey integer;
 alter table gtest26 set distributed by (distkey);
 truncate gtest26;
 INSERT INTO gtest26 (a) VALUES (-2), (0), (3);
-INFO:  gtest2: BEFORE: new = (-2,,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest4: AFTER: new = (-2,,)  (seg0 172.17.0.2:7002 pid=2580649)
+INFO:  gtest2: BEFORE: new = (-2,,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest4: AFTER: new = (-2,,)  (seg0 172.17.0.2:7002 pid=1538903)
 alter table gtest26 drop column distkey;
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 UPDATE gtest26 SET a = a * -2;
-INFO:  gtest1: BEFORE: old = (-2,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest1: BEFORE: new = (4,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest3: AFTER: old = (-2,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest3: AFTER: new = (4,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest4: AFTER: old = (3,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest4: AFTER: new = (-6,)  (seg0 172.17.0.2:7002 pid=2580649)
+INFO:  gtest1: BEFORE: old = (-2,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest1: BEFORE: new = (4,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest3: AFTER: old = (-2,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest3: AFTER: new = (4,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest4: AFTER: old = (3,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest4: AFTER: new = (-6,)  (seg0 172.17.0.2:7002 pid=1538903)
 SELECT * FROM gtest26 ORDER BY a;
  a  |  b  
 ----+-----
@@ -1505,8 +1433,8 @@ SELECT * FROM gtest26 ORDER BY a;
 (3 rows)
 
 DELETE FROM gtest26 WHERE a = -6;
-INFO:  gtest1: BEFORE: old = (-6,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest3: AFTER: old = (-6,)  (seg0 172.17.0.2:7002 pid=2580649)
+INFO:  gtest1: BEFORE: old = (-6,)  (seg0 172.17.0.2:7002 pid=1538903)
+INFO:  gtest3: AFTER: old = (-6,)  (seg0 172.17.0.2:7002 pid=1538903)
 SELECT * FROM gtest26 ORDER BY a;
  a | b 
 ---+---
@@ -1531,7 +1459,7 @@ CREATE TRIGGER gtest11 BEFORE UPDATE OF b ON gtest26
   FOR EACH ROW
   EXECUTE PROCEDURE gtest_trigger_func3();
 UPDATE gtest26 SET a = 1 WHERE a = 0;
-NOTICE:  OK  (seg0 172.17.0.2:7002 pid=2580649)
+NOTICE:  OK  (seg0 172.17.0.2:7002 pid=1538903)
 DROP TRIGGER gtest11 ON gtest26;
 TRUNCATE gtest26;
 -- check that modifications of generated columns in triggers do
@@ -1555,8 +1483,8 @@ CREATE TRIGGER gtest12_03 BEFORE INSERT OR UPDATE ON gtest26
   FOR EACH ROW
   EXECUTE PROCEDURE gtest_trigger_func();
 INSERT INTO gtest26 (a) VALUES (1);
-INFO:  gtest12_01: BEFORE: new = (1,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest12_03: BEFORE: new = (10,)  (seg0 172.17.0.2:7002 pid=2580649)
+INFO:  gtest12_01: BEFORE: new = (1,)  (seg2 172.17.0.2:7004 pid=1538909)
+INFO:  gtest12_03: BEFORE: new = (10,)  (seg2 172.17.0.2:7004 pid=1538909)
 SELECT * FROM gtest26 ORDER BY a;
  a  | b  
 ----+----
@@ -1564,10 +1492,10 @@ SELECT * FROM gtest26 ORDER BY a;
 (1 row)
 
 UPDATE gtest26 SET a = 11 WHERE a = 10;
-INFO:  gtest12_01: BEFORE: old = (10,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest12_01: BEFORE: new = (11,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest12_03: BEFORE: old = (10,)  (seg0 172.17.0.2:7002 pid=2580649)
-INFO:  gtest12_03: BEFORE: new = (10,)  (seg0 172.17.0.2:7002 pid=2580649)
+INFO:  gtest12_01: BEFORE: old = (10,)  (seg2 172.17.0.2:7004 pid=1538909)
+INFO:  gtest12_01: BEFORE: new = (11,)  (seg2 172.17.0.2:7004 pid=1538909)
+INFO:  gtest12_03: BEFORE: old = (10,)  (seg2 172.17.0.2:7004 pid=1538909)
+INFO:  gtest12_03: BEFORE: new = (10,)  (seg2 172.17.0.2:7004 pid=1538909)
 SELECT * FROM gtest26 ORDER BY a;
  a  | b  
 ----+----
@@ -1581,12 +1509,9 @@ CREATE TABLE gtest28a (
   c int,
   x int GENERATED ALWAYS AS (b * 2) VIRTUAL
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE gtest28a DROP COLUMN a;
 NOTICE:  dropping a column that is part of the distribution policy forces a NULL distribution policy
 CREATE TABLE gtest28b (LIKE gtest28a INCLUDING GENERATED);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 \d gtest28*
                Table "generated_virtual_tests.gtest28a"
  Column |  Type   | Collation | Nullable |           Default           
@@ -1604,6 +1529,40 @@ Distributed randomly
  x      | integer |           |          | generated always as (b * 2)
 Distributed randomly
 
+-- rule actions referring to generated columns:
+-- NEW.b in a rule action should reflect the generated column's new value
+CREATE TABLE gtest_rule (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL);
+CREATE TABLE gtest_rule_log (op text, old_b int, new_b int);
+CREATE RULE gtest_rule_upd AS ON UPDATE TO gtest_rule
+  DO ALSO INSERT INTO gtest_rule_log VALUES ('UPD', OLD.b, NEW.b);
+CREATE RULE gtest_rule_ins AS ON INSERT TO gtest_rule
+  DO ALSO INSERT INTO gtest_rule_log VALUES ('INS', NULL, NEW.b);
+INSERT INTO gtest_rule (a) VALUES (1);
+UPDATE gtest_rule SET a = 10;
+UPDATE gtest_rule SET a = (SELECT max(b) FROM gtest_rule);
+SELECT * FROM gtest_rule_log;
+ op  | old_b | new_b 
+-----+-------+-------
+ INS |       |     2
+ UPD |     2 |    20
+ UPD |    20 |    40
+(3 rows)
+
+DROP RULE gtest_rule_upd ON gtest_rule;
+DROP RULE gtest_rule_ins ON gtest_rule;
+DROP TABLE gtest_rule_log;
+-- rule quals referring to generated columns:
+-- NEW.b in the rule qual should reflect the generated column's new value
+CREATE RULE gtest_rule_qual AS ON UPDATE TO gtest_rule WHERE NEW.b > 100
+  DO INSTEAD NOTHING;
+UPDATE gtest_rule SET a = 100;
+SELECT * FROM gtest_rule;
+ a  | b  
+----+----
+ 20 | 40
+(1 row)
+
+DROP TABLE gtest_rule;
 -- sanity check of system catalog
 SELECT attrelid, attname, attgenerated FROM pg_attribute WHERE attgenerated NOT IN ('', 's', 'v');
  attrelid | attname | attgenerated 
@@ -1761,3 +1720,98 @@ select * from gtest32 t group by grouping sets (a, b, c, d, e) having c = 20;
 -- Ensure that the virtual generated columns in ALTER COLUMN TYPE USING expression are expanded
 alter table gtest32 alter column e type bigint using b;
 drop table gtest32;
+-- Ensure that virtual generated columns in constraint expressions are expanded
+create table gtest33 (a int, b int generated always as (a * 2) virtual not null, check (b > 10));
+set constraint_exclusion to on;
+-- should get a dummy Result, not a seq scan
+explain (costs off)
+select * from gtest33 where b < 10;
+             QUERY PLAN              
+-------------------------------------
+ Result
+   One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+-- should get a dummy Result, not a seq scan
+explain (costs off)
+select * from gtest33 where b is null;
+             QUERY PLAN              
+-------------------------------------
+ Result
+   One-Time Filter: false
+ Optimizer: Postgres query optimizer
+(3 rows)
+
+reset constraint_exclusion;
+drop table gtest33;
+-- Ensure that EXCLUDED.<virtual-generated-column> in INSERT ... ON CONFLICT
+-- DO UPDATE is expanded to the generation expression, both for plain and
+-- partitioned target relations.
+create table gtest34 (id int primary key, a int,
+                      c int generated always as (a * 10) virtual);
+insert into gtest34 values (1, 5);
+insert into gtest34 values (1, 7)
+    on conflict (id) do update set a = excluded.c returning *;
+ id | a  |  c  
+----+----+-----
+  1 | 70 | 700
+(1 row)
+
+insert into gtest34 values (1, 2)
+    on conflict (id) do update set a = gtest34.c + excluded.c returning *;
+ id |  a  |  c   
+----+-----+------
+  1 | 720 | 7200
+(1 row)
+
+insert into gtest34 values (1, 3)
+    on conflict (id) do update set a = 999 where excluded.c > 20 returning *;
+ id |  a  |  c   
+----+-----+------
+  1 | 999 | 9990
+(1 row)
+
+drop table gtest34;
+create table gtest34p (id int primary key, a int,
+                       c int generated always as (a * 10) virtual)
+    partition by range (id);
+create table gtest34p_1 partition of gtest34p for values from (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
+insert into gtest34p values (1, 5);
+insert into gtest34p values (1, 7)
+    on conflict (id) do update set a = excluded.c returning *;
+ id | a  |  c  
+----+----+-----
+  1 | 70 | 700
+(1 row)
+
+insert into gtest34p values (1, 2)
+    on conflict (id) do update set a = gtest34p.c + excluded.c returning *;
+ id |  a  |  c   
+----+-----+------
+  1 | 720 | 7200
+(1 row)
+
+drop table gtest34p;
+-- Ensure that virtual generated columns work with WHERE CURRENT OF
+create table gtest_cursor (id int primary key, a int, b int generated always as (a * 2) virtual);
+insert into gtest_cursor values (1, 10), (2, 20), (3, 30);
+begin;
+declare curs cursor for select * from gtest_cursor order by id for update;
+fetch 1 from curs;
+ id | a  | b  
+----+----+----
+  1 | 10 | 20
+(1 row)
+
+update gtest_cursor set a = 99 where current of curs;
+ERROR:  cursor "curs" is not a simply updatable scan of table "gtest_cursor"
+select * from gtest_cursor order by id;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+delete from gtest_cursor where current of curs;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+select * from gtest_cursor order by id;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+commit;
+drop table gtest_cursor;

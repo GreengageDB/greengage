@@ -25,9 +25,12 @@ select indexdef from pg_indexes where indexname like 'idxpart_idx%';
 
 drop index idxpart_idx;
 create table idxpart1 partition of idxpart for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 partition of idxpart for values from (10) to (100)
 	partition by range (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart21 partition of idxpart2 for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- Even with partitions, relhassubclass should not be set if a partitioned
 -- index is created only on the parent.
 create index idxpart_idx on only idxpart(a);
@@ -59,6 +62,7 @@ drop table idxpart;
 -- Some unsupported features
 create table idxpart (a int, b int, c text) partition by range (a);
 create table idxpart1 partition of idxpart for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index concurrently on idxpart (a);
 ERROR:  CREATE INDEX CONCURRENTLY is not supported
 drop table idxpart;
@@ -77,6 +81,7 @@ DROP table idxpart, idxpart_two;
 -- https://postgr.es/m/CAKcux6mxNCGsgATwf5CGMF8g4WSupCXicCVMeKUTuWbyxHOMsQ@mail.gmail.com
 CREATE TABLE idxpart (a INT, b TEXT, c INT) PARTITION BY RANGE(a);
 CREATE TABLE idxpart1 PARTITION OF idxpart FOR VALUES FROM (MINVALUE) TO (MAXVALUE);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE INDEX partidx_abc_idx ON idxpart (a, b, c);
 INSERT INTO idxpart (a, b, c) SELECT i, i, i FROM generate_series(1, 50) i;
 ALTER TABLE idxpart ALTER COLUMN c TYPE numeric;
@@ -94,7 +99,6 @@ create table idxpart1 (like idxpart);
  a      | integer |           |          | 
  b      | integer |           |          | 
  c      | text    |           |          | 
-Distributed by: (a)
 
 alter table idxpart attach partition idxpart1 for values from (0) to (10);
 \d idxpart1
@@ -108,7 +112,6 @@ Partition of: idxpart FOR VALUES FROM (0) TO (10)
 Indexes:
     "idxpart1_a_idx" btree (a)
     "idxpart1_b_c_idx" btree (b, c)
-Distributed by: (a)
 
 \d+ idxpart1_a_idx
                  Index "public.idxpart1_a_idx"
@@ -151,6 +154,7 @@ drop table idxpart;
 -- If a partition already has an index, don't create a duplicative one
 create table idxpart (a int, b int) partition by range (a, b);
 create table idxpart1 partition of idxpart for values from (0, 0) to (10, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on idxpart1 (a, b);
 create index on idxpart (a, b);
 \d idxpart1
@@ -162,7 +166,6 @@ create index on idxpart (a, b);
 Partition of: idxpart FOR VALUES FROM (0, 0) TO (10, 10)
 Indexes:
     "idxpart1_a_b_idx" btree (a, b)
-Distributed by: (a)
 
 select relname, relkind, relhassubclass, inhparent::regclass
     from pg_class left join pg_index ix on (indexrelid = oid)
@@ -181,6 +184,7 @@ drop table idxpart;
 create table idxpart (a int) partition by range (a);
 create index on idxpart (a);
 create table idxpart1 partition of idxpart for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop index idxpart1_a_idx;	-- no way
 ERROR:  cannot drop index idxpart1_a_idx because index idxpart_a_idx requires it
 HINT:  You can drop index idxpart_a_idx instead.
@@ -211,6 +215,7 @@ create temp table idxpart_temp (a int) partition by range (a);
 create index on idxpart_temp(a);
 create temp table idxpart1_temp partition of idxpart_temp
   for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 drop index idxpart1_temp_a_idx; -- error
 ERROR:  cannot drop index idxpart1_temp_a_idx because index idxpart_temp_a_idx requires it
 HINT:  You can drop index idxpart_temp_a_idx instead.
@@ -227,6 +232,7 @@ drop table idxpart_temp;
 -- ALTER INDEX .. ATTACH, error cases
 create table idxpart (a int, b int) partition by range (a, b);
 create table idxpart1 partition of idxpart for values from (0, 0) to (10, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index idxpart_a_b_idx on only idxpart (a, b);
 create index idxpart1_a_b_idx on idxpart1 (a, b);
 create index idxpart1_tst1 on idxpart1 (b, a);
@@ -288,7 +294,6 @@ Indexes:
     "idxpart1_a_idx1" btree (a) WHERE b > 1
     "idxpart1_a_idx2" btree (a)
     "idxpart1_expr_idx" btree ((a + 0))
-Distributed by: (a)
 
 drop table idxpart;
 -- If CREATE INDEX ONLY, don't create indexes on partitions; and existing
@@ -296,10 +301,14 @@ drop table idxpart;
 -- the parent after the fact.
 create table idxpart (a int) partition by range (a);
 create table idxpart1 partition of idxpart for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 partition of idxpart for values from (100) to (1000)
   partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart21 partition of idxpart2 for values from (100) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart22 partition of idxpart2 for values from (200) to (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on idxpart22 (a);
 create index on only idxpart2 (a);
 create index on idxpart (a);
@@ -313,7 +322,6 @@ create index on idxpart (a);
 Partition of: idxpart FOR VALUES FROM (0) TO (100)
 Indexes:
     "idxpart1_a_idx" btree (a)
-Distributed by: (a)
 
 \d idxpart2
         Partitioned table "public.idxpart2"
@@ -325,7 +333,6 @@ Partition key: RANGE (a)
 Indexes:
     "idxpart2_a_idx" btree (a) INVALID
 Number of partitions: 2 (Use \d+ to list them.)
-Distributed by: (a)
 
 \d idxpart21
              Table "public.idxpart21"
@@ -333,7 +340,6 @@ Distributed by: (a)
 --------+---------+-----------+----------+---------
  a      | integer |           |          | 
 Partition of: idxpart2 FOR VALUES FROM (100) TO (200)
-Distributed by: (a)
 
 select indexrelid::regclass, indrelid::regclass, inhparent::regclass
   from pg_index idx left join pg_inherits inh on (idx.indexrelid = inh.inhrelid)
@@ -372,7 +378,6 @@ Partition key: RANGE (a)
 Indexes:
     "idxpart2_a_idx" btree (a) INVALID
 Number of partitions: 2 (Use \d+ to list them.)
-Distributed by: (a)
 
 -- ... but this one is.
 create index on idxpart21 (a);
@@ -387,7 +392,6 @@ Partition key: RANGE (a)
 Indexes:
     "idxpart2_a_idx" btree (a)
 Number of partitions: 2 (Use \d+ to list them.)
-Distributed by: (a)
 
 drop table idxpart;
 -- When a table is attached a partition and it already has an index, a
@@ -408,7 +412,6 @@ create table idxpart1 (like idxpart including indexes);
 Indexes:
     "idxpart1_a_idx" btree (a)
     "idxpart1_b_c_idx" btree (b, c)
-Distributed by: (a)
 
 select relname, relkind, inhparent::regclass
     from pg_class left join pg_index ix on (indexrelid = oid)
@@ -437,7 +440,6 @@ Partition of: idxpart FOR VALUES FROM (0) TO (10)
 Indexes:
     "idxpart1_a_idx" btree (a)
     "idxpart1_b_c_idx" btree (b, c)
-Distributed by: (a)
 
 select relname, relkind, inhparent::regclass
     from pg_class left join pg_index ix on (indexrelid = oid)
@@ -468,7 +470,6 @@ Indexes:
     "idxpart1_a_idx" btree (a)
     "idxpart1_b_c_idx" btree (b, c)
     "idxpart1_expr_idx" btree ((a + b)) WHERE d = true
-Distributed by: (a)
 
 select relname, relkind, inhparent::regclass
     from pg_class left join pg_index ix on (indexrelid = oid)
@@ -499,7 +500,6 @@ Indexes:
     "idxpart1_a_idx" btree (a)
     "idxpart1_b_c_idx" btree (b, c)
     "idxpart1_expr_idx" btree ((a + b)) WHERE d = true
-Distributed by: (a)
 
 select relname, relkind, inhparent::regclass
     from pg_class left join pg_index ix on (indexrelid = oid)
@@ -524,7 +524,9 @@ drop table idxpart;
 -- that was just made valid
 create table idxpart (a int, b int) partition by range (a);
 create table idxpart1 partition of idxpart for values from (1) to (1000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart11 partition of idxpart1 for values from (1) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on only idxpart1 (a);
 create index on only idxpart (a);
 -- this results in two invalid indexes:
@@ -560,6 +562,114 @@ select relname, indisvalid from pg_class join pg_index on indexrelid = oid
 (3 rows)
 
 drop table idxpart;
+-- Verify that re-attaching an already-attached partition index can
+-- validate the parent index if it was still invalid, including
+-- indirect ancestors in subpartitions.
+create table idxpart (a int, b int) partition by range (a);
+create table idxpart1 partition of idxpart for values from (0) to (1000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table idxpart11 partition of idxpart1 for values from (0) to (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- Partitioned table with no partitions
+create table idxpart2 partition of idxpart for values from (1000) to (2000) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
+-- create parent indexes
+create index on only idxpart ((a/b));
+create index on only idxpart1 ((a/b));
+create index on only idxpart2 ((a/b));
+-- fail, leaves behind an invalid index on the leaf partition
+insert into idxpart11 values (1, 0);
+create index concurrently on idxpart11 ((a/b));
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+      relname      | indisvalid 
+-------------------+------------
+ idxpart1_expr_idx | f
+ idxpart2_expr_idx | t
+ idxpart_expr_idx  | f
+(3 rows)
+
+-- attach the indexes; parents stay invalid
+alter index idxpart1_expr_idx attach partition idxpart11_expr_idx;
+ERROR:  relation "idxpart11_expr_idx" does not exist
+alter index idxpart_expr_idx attach partition idxpart1_expr_idx;
+alter index idxpart_expr_idx attach partition idxpart2_expr_idx;
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+      relname      | indisvalid 
+-------------------+------------
+ idxpart1_expr_idx | f
+ idxpart2_expr_idx | t
+ idxpart_expr_idx  | f
+(3 rows)
+
+-- fix the index on the leaf partition
+delete from idxpart11 where b = 0;
+reindex index concurrently idxpart11_expr_idx;
+ERROR:  relation "idxpart11_expr_idx" does not exist
+-- reattach the leaf partition index; parents should now be valid
+alter index idxpart1_expr_idx attach partition idxpart11_expr_idx;
+ERROR:  relation "idxpart11_expr_idx" does not exist
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+      relname      | indisvalid 
+-------------------+------------
+ idxpart1_expr_idx | f
+ idxpart2_expr_idx | t
+ idxpart_expr_idx  | f
+(3 rows)
+
+drop table idxpart;
+-- Verify that re-attaching does not validate the parent when another
+-- child index is still invalid.
+create table idxpart (a int, b int) partition by range (a);
+create table idxpart1 partition of idxpart for values from (0) to (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create table idxpart2 partition of idxpart for values from (500) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
+create index on only idxpart ((a/b));
+-- create invalid indexes on both children
+insert into idxpart1 values (1, 0);
+insert into idxpart2 values (501, 0);
+create index concurrently on idxpart1 ((a/b));
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+create index concurrently on idxpart2 ((a/b));
+ERROR:  CREATE INDEX CONCURRENTLY is not supported
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+     relname      | indisvalid 
+------------------+------------
+ idxpart_expr_idx | f
+(1 row)
+
+-- attach both; parent stays invalid
+alter index idxpart_expr_idx attach partition idxpart1_expr_idx;
+ERROR:  relation "idxpart1_expr_idx" does not exist
+alter index idxpart_expr_idx attach partition idxpart2_expr_idx;
+ERROR:  relation "idxpart2_expr_idx" does not exist
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+     relname      | indisvalid 
+------------------+------------
+ idxpart_expr_idx | f
+(1 row)
+
+-- fix only idxpart1's index, leave idxpart2's still invalid
+delete from idxpart1 where b = 0;
+reindex index concurrently idxpart1_expr_idx;
+ERROR:  relation "idxpart1_expr_idx" does not exist
+-- re-attach the fixed child; parent should stay invalid
+alter index idxpart_expr_idx attach partition idxpart1_expr_idx;
+ERROR:  relation "idxpart1_expr_idx" does not exist
+select relname, indisvalid from pg_class join pg_index on indexrelid = oid
+   where relname like 'idxpart%' order by relname;
+     relname      | indisvalid 
+------------------+------------
+ idxpart_expr_idx | f
+(1 row)
+
+drop table idxpart;
 -- verify dependency handling during ALTER TABLE DETACH PARTITION
 create table idxpart (a int) partition by range (a);
 create table idxpart1 (like idxpart);
@@ -569,6 +679,7 @@ create table idxpart2 (like idxpart);
 alter table idxpart attach partition idxpart1 for values from (0000) to (1000);
 alter table idxpart attach partition idxpart2 for values from (1000) to (2000);
 create table idxpart3 partition of idxpart for values from (2000) to (3000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select relname, relkind from pg_class where relname like 'idxpart%' order by relname;
     relname     | relkind 
 ----------------+---------
@@ -613,6 +724,7 @@ create table idxpart2 (like idxpart);
 alter table idxpart attach partition idxpart1 for values from (0000) to (1000);
 alter table idxpart attach partition idxpart2 for values from (1000) to (2000);
 create table idxpart3 partition of idxpart for values from (2000) to (3000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- b) after detaching, dropping the index on parent does not remove the others
 select relname, relkind from pg_class where relname like 'idxpart%' order by relname;
     relname     | relkind 
@@ -652,7 +764,9 @@ select relname, relkind from pg_class where relname like 'idxpart%' order by rel
 create table idxpart (a int, b int, c int) partition by range(a);
 create index on idxpart(c);
 create table idxpart1 partition of idxpart for values from (0) to (250);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 partition of idxpart for values from (250) to (500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table idxpart detach partition idxpart2;
 \d idxpart2
               Table "public.idxpart2"
@@ -663,7 +777,6 @@ alter table idxpart detach partition idxpart2;
  c      | integer |           |          | 
 Indexes:
     "idxpart2_c_idx" btree (c)
-Distributed by: (a)
 
 alter table idxpart2 drop column c;
 \d idxpart2
@@ -672,7 +785,6 @@ alter table idxpart2 drop column c;
 --------+---------+-----------+----------+---------
  a      | integer |           |          | 
  b      | integer |           |          | 
-Distributed by: (a)
 
 drop table idxpart, idxpart2;
 -- Verify that expression indexes inherit correctly
@@ -684,6 +796,7 @@ create table idxpart2 (like idxpart);
 alter table idxpart attach partition idxpart1 for values from (0000) to (1000);
 alter table idxpart attach partition idxpart2 for values from (1000) to (2000);
 create table idxpart3 partition of idxpart for values from (2000) to (3000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select relname as child, inhparent::regclass as parent, pg_get_indexdef as childdef
   from pg_class join pg_inherits on inhrelid = oid,
   lateral pg_get_indexdef(pg_class.oid)
@@ -706,8 +819,10 @@ create index on idxpart2 (a collate "C");
 alter table idxpart attach partition idxpart1 for values from ('aaa') to ('bbb');
 alter table idxpart attach partition idxpart2 for values from ('bbb') to ('ccc');
 create table idxpart3 partition of idxpart for values from ('ccc') to ('ddd');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on idxpart (a collate "C");
 create table idxpart4 partition of idxpart for values from ('ddd') to ('eee');
+NOTICE:  table has parent, setting distribution columns to match parent table
 select relname as child, inhparent::regclass as parent, pg_get_indexdef as childdef
   from pg_class left join pg_inherits on inhrelid = oid,
   lateral pg_get_indexdef(pg_class.oid)
@@ -732,8 +847,10 @@ create index on idxpart2 (a);
 alter table idxpart attach partition idxpart1 for values from ('aaa') to ('bbb');
 alter table idxpart attach partition idxpart2 for values from ('bbb') to ('ccc');
 create table idxpart3 partition of idxpart for values from ('ccc') to ('ddd');
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on idxpart (a text_pattern_ops);
 create table idxpart4 partition of idxpart for values from ('ddd') to ('eee');
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- must *not* have attached the index we created on idxpart2
 select relname as child, inhparent::regclass as parent, pg_get_indexdef as childdef
   from pg_class left join pg_inherits on inhrelid = oid,
@@ -901,7 +1018,6 @@ Partition key: RANGE (col_keep)
 Indexes:
     "idxpart_col_keep_idx" btree (col_keep)
 Number of partitions: 1 (Use \d+ to list them.)
-Distributed by: (col_keep)
 
 \d idxpart1
                Table "public.idxpart1"
@@ -911,7 +1027,6 @@ Distributed by: (col_keep)
 Partition of: idxpart FOR VALUES FROM (0) TO (1000)
 Indexes:
     "idxpart1_col_keep_idx" btree (col_keep)
-Distributed by: (col_keep)
 
 select attrelid::regclass, attname, attnum from pg_attribute
   where attrelid::regclass::text like 'idxpart%' and attnum > 0
@@ -990,7 +1105,6 @@ Partition key: RANGE (a)
 Indexes:
     "idxpart_pkey" PRIMARY KEY, btree (a)
 Number of partitions: 0
-Distributed by: (a)
 
 -- multiple primary key on child should fail
 -- GPDB: the error mesage is a bit surprising. It's complaing because "b" is not
@@ -1011,7 +1125,6 @@ create table idxpart1pk partition of idxpart (a primary key) for values from (0)
 Partition of: idxpart FOR VALUES FROM (0) TO (100)
 Indexes:
     "idxpart1pk_pkey" PRIMARY KEY, btree (a)
-Distributed by: (a)
 
 drop table idxpart;
 -- Failing to use the full partition key is not allowed
@@ -1083,9 +1196,9 @@ Partition key: RANGE (a, b)
 Indexes:
     "idxpart_pkey" PRIMARY KEY, btree (a, b)
 Number of partitions: 0
-Distributed by: (a)
 
 create table idxpart1 partition of idxpart for values from (0, 0) to (1000, 1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 \d idxpart1
               Table "public.idxpart1"
  Column |  Type   | Collation | Nullable | Default 
@@ -1096,7 +1209,6 @@ create table idxpart1 partition of idxpart for values from (0, 0) to (1000, 1000
 Partition of: idxpart FOR VALUES FROM (0, 0) TO (1000, 1000)
 Indexes:
     "idxpart1_pkey" PRIMARY KEY, btree (a, b)
-Distributed by: (a)
 
 drop table idxpart;
 -- use ALTER TABLE to add a unique constraint
@@ -1115,7 +1227,6 @@ Partition key: RANGE (a, b)
 Indexes:
     "idxpart_b_a_key" UNIQUE CONSTRAINT, btree (b, a)
 Number of partitions: 0
-Distributed by: (a)
 
 drop table idxpart;
 -- Exclusion constraints can be added if partitioning by their equal column
@@ -1161,10 +1272,14 @@ drop table idxpart;
 -- When (sub)partitions are created, they also contain the constraint
 create table idxpart (a int, b int, primary key (a, b)) partition by range (a, b);
 create table idxpart1 partition of idxpart for values from (1, 1) to (10, 10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 partition of idxpart for values from (10, 10) to (20, 20)
   partition by range (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart21 partition of idxpart2 for values from (10) to (15);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart22 partition of idxpart2 for values from (15) to (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart3 (b int not null, a int not null);
 alter table idxpart3 set distributed by (a, b); -- GPDB: distribution key must match parent
 alter table idxpart attach partition idxpart3 for values from (20, 20) to (30, 30);
@@ -1199,6 +1314,7 @@ drop table idxpart;
 create table idxpart (a int, b int, primary key (a)) partition by range (a);
 create table idxpart2 partition of idxpart
 for values from (0) to (1000) partition by range (b); -- fail
+NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  PRIMARY KEY constraint on table "idxpart2" lacks column "b" which is part of the partition key.
 drop table idxpart;
@@ -1214,7 +1330,9 @@ DROP TABLE idxpart, idxpart1;
 -- Multi-layer partitioning works correctly in this case:
 create table idxpart (a int, b int, primary key (a, b)) partition by range (a);
 create table idxpart2 partition of idxpart for values from (0) to (1000) partition by range (b);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart21 partition of idxpart2 for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 select conname, contype, conrelid::regclass, conindid::regclass, conkey
   from pg_constraint where conrelid::regclass::text like 'idxpart%'
   order by conrelid::regclass::text, conname;
@@ -1238,7 +1356,9 @@ drop table idxpart;
 -- gets rid of the lot.
 create table idxpart (i int) partition by hash (i);
 create table idxpart0 partition of idxpart (i) for values with (modulus 2, remainder 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart1 partition of idxpart (i) for values with (modulus 2, remainder 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table idxpart0 add primary key(i);
 alter table idxpart add primary key(i);
 select indrelid::regclass, indexrelid::regclass, inhparent::regclass, indisvalid,
@@ -1373,6 +1493,7 @@ drop table idxpart;
 create table idxpart (a int, b text, primary key (a, b)) partition by range (a);
 alter table idxpart set distributed by (a);
 create table idxpart1 partition of idxpart for values from (0) to (100000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 (c int, like idxpart);
 alter table idxpart2 set distributed by (a);
 insert into idxpart2 (c, a, b) values (42, 572814, 'inserted first');
@@ -1381,15 +1502,15 @@ create unique index on idxpart (a);
 alter table idxpart attach partition idxpart2 for values from (100000) to (1000000);
 insert into idxpart values (0, 'zero'), (42, 'life'), (2^16, 'sixteen');
 insert into idxpart select 2^g, format('two to power of %s', g) from generate_series(15, 17) g;
-ERROR:  duplicate key value violates unique constraint "idxpart1_a_idx"  (seg1 172.17.0.4:7003 pid=1283673)
+ERROR:  duplicate key value violates unique constraint "idxpart1_a_idx"  (seg1 172.17.0.2:7003 pid=1543165)
 DETAIL:  Key (a)=(65536) already exists.
 insert into idxpart values (16, 'sixteen');
 insert into idxpart (b, a) values ('one', 142857), ('two', 285714);
 insert into idxpart select a * 2, b || b from idxpart where a between 2^16 and 2^19;
-ERROR:  duplicate key value violates unique constraint "idxpart2_a_idx"  (seg2 172.17.0.4:7004 pid=1283679)
+ERROR:  duplicate key value violates unique constraint "idxpart2_a_idx"  (seg2 172.17.0.2:7004 pid=1543164)
 DETAIL:  Key (a)=(285714) already exists.
 insert into idxpart values (572814, 'five');
-ERROR:  duplicate key value violates unique constraint "idxpart2_a_idx"  (seg1 172.17.0.4:7003 pid=1283673)
+ERROR:  duplicate key value violates unique constraint "idxpart2_a_idx"  (seg1 172.17.0.2:7003 pid=1543165)
 DETAIL:  Key (a)=(572814) already exists.
 insert into idxpart values (857142, 'six');
 select tableoid::regclass, * from idxpart order by a;
@@ -1409,6 +1530,7 @@ drop table idxpart;
 -- Test some other non-btree index types
 create table idxpart (a int, b text, c int[]) partition by range (a);
 create table idxpart1 partition of idxpart for values from (0) to (100000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 set enable_seqscan to off;
 create index idxpart_brin on idxpart using brin(b);
 explain (costs off) select * from idxpart where b = 'abcd';
@@ -1454,21 +1576,28 @@ drop table idxpart;
 -- intentionally leave some objects around
 create table idxpart (a int) partition by range (a);
 create table idxpart1 partition of idxpart for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart2 partition of idxpart for values from (100) to (1000)
   partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart21 partition of idxpart2 for values from (100) to (200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart22 partition of idxpart2 for values from (200) to (300);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on idxpart22 (a);
 create index on only idxpart2 (a);
 alter index idxpart2_a_idx attach partition idxpart22_a_idx;
 create index on idxpart (a);
 create table idxpart_another (a int, b int, primary key (a, b)) partition by range (a);
 create table idxpart_another_1 partition of idxpart_another for values from (0) to (100);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart3 (c int, b int, a int) partition by range (a);
 alter table idxpart3 set distributed by (a); -- GPDB: distribution key must match parent
 alter table idxpart3 drop column b, drop column c;
 create table idxpart31 partition of idxpart3 for values from (1000) to (1200);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table idxpart32 partition of idxpart3 for values from (1200) to (1400);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table idxpart attach partition idxpart3 for values from (1000) to (2000);
 -- More objects intentionally left behind, to verify some pg_dump/pg_upgrade
 -- behavior; see https://postgr.es/m/20190321204928.GA17535@alvherre.pgsql
@@ -1476,27 +1605,33 @@ create schema regress_indexing;
 set search_path to regress_indexing;
 create table pk (a int primary key) partition by range (a);
 create table pk1 partition of pk for values from (0) to (1000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pk2 (b int, a int);
 alter table pk2 set distributed by (a); -- GPDB: distribution key must match parent
 alter table pk2 drop column b;
 alter table pk2 alter a set not null;
 alter table pk attach partition pk2 for values from (1000) to (2000);
 create table pk3 partition of pk for values from (2000) to (3000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pk4 (like pk);
 alter table pk attach partition pk4 for values from (3000) to (4000);
 create table pk5 (like pk) partition by range (a);
 create table pk51 partition of pk5 for values from (4000) to (4500);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table pk52 partition of pk5 for values from (4500) to (5000);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table pk attach partition pk5 for values from (4000) to (5000);
 reset search_path;
 -- Test that covering partitioned indexes work in various cases
 create table covidxpart (a int, b int) partition by list (a);
 create unique index on covidxpart (a) include (b);
 create table covidxpart1 partition of covidxpart for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table covidxpart2 partition of covidxpart for values in (2);
+NOTICE:  table has parent, setting distribution columns to match parent table
 insert into covidxpart values (1, 1);
 insert into covidxpart values (1, 1);
-ERROR:  duplicate key value violates unique constraint "covidxpart1_a_b_idx"  (seg1 172.17.0.4:7003 pid=1283673)
+ERROR:  duplicate key value violates unique constraint "covidxpart1_a_b_idx"  (seg1 172.17.0.2:7003 pid=1543165)
 DETAIL:  Key (a)=(1) already exists.
 create table covidxpart3 (b int, c int, a int);
 alter table covidxpart3 set distributed by (a); -- GPDB: distribution key must match parent
@@ -1504,7 +1639,7 @@ alter table covidxpart3 drop c;
 alter table covidxpart attach partition covidxpart3 for values in (3);
 insert into covidxpart values (3, 1);
 insert into covidxpart values (3, 1);
-ERROR:  duplicate key value violates unique constraint "covidxpart3_a_b_idx"  (seg0 172.17.0.4:7002 pid=1283674)
+ERROR:  duplicate key value violates unique constraint "covidxpart3_a_b_idx"  (seg0 172.17.0.2:7002 pid=1543160)
 DETAIL:  Key (a)=(3) already exists.
 create table covidxpart4 (b int, a int);
 alter table covidxpart4 set distributed by (a);
@@ -1513,7 +1648,7 @@ create unique index on covidxpart4 (a);
 alter table covidxpart attach partition covidxpart4 for values in (4);
 insert into covidxpart values (4, 1);
 insert into covidxpart values (4, 1);
-ERROR:  duplicate key value violates unique constraint "covidxpart4_a_b_idx"  (seg0 172.17.0.4:7002 pid=1283674)
+ERROR:  duplicate key value violates unique constraint "covidxpart4_a_b_idx"  (seg0 172.17.0.2:7002 pid=1543160)
 DETAIL:  Key (a)=(4) already exists.
 create unique index on covidxpart (b) include (a); -- should fail
 ERROR:  UNIQUE index must contain all columns in the table's distribution key
@@ -1528,6 +1663,7 @@ DETAIL:  UNIQUE constraint on table "covidxpart_x" lacks column "a" which is par
 -- check that detaching a partition also detaches the primary key constraint
 create table parted_pk_detach_test (a int primary key) partition by list (a);
 create table parted_pk_detach_test1 partition of parted_pk_detach_test for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table parted_pk_detach_test1 drop constraint parted_pk_detach_test1_pkey;	-- should fail
 ERROR:  cannot drop inherited constraint "parted_pk_detach_test1_pkey" of relation "parted_pk_detach_test1"
 alter table parted_pk_detach_test detach partition parted_pk_detach_test1;
@@ -1535,6 +1671,7 @@ alter table parted_pk_detach_test1 drop constraint parted_pk_detach_test1_pkey;
 drop table parted_pk_detach_test, parted_pk_detach_test1;
 create table parted_uniq_detach_test (a int unique) partition by list (a);
 create table parted_uniq_detach_test1 partition of parted_uniq_detach_test for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 alter table parted_uniq_detach_test1 drop constraint parted_uniq_detach_test1_a_key;	-- should fail
 ERROR:  cannot drop inherited constraint "parted_uniq_detach_test1_a_key" of relation "parted_uniq_detach_test1"
 alter table parted_uniq_detach_test detach partition parted_uniq_detach_test1;
@@ -1546,11 +1683,14 @@ create table parted_index_col_drop(a int, b int, c int)
   partition by list (a);
 create table parted_index_col_drop1 partition of parted_index_col_drop
   for values in (1) partition by list (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- leave this partition without children.
 create table parted_index_col_drop2 partition of parted_index_col_drop
   for values in (2) partition by list (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_index_col_drop11 partition of parted_index_col_drop1
   for values in (1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create index on parted_index_col_drop (b);
 create index on parted_index_col_drop (c);
 create index on parted_index_col_drop (b, c);
@@ -1565,7 +1705,6 @@ Partition key: LIST (a)
 Indexes:
     "parted_index_col_drop_b_idx" btree (b)
 Number of partitions: 2 (Use \d+ to list them.)
-Distributed by: (a)
 
 \d parted_index_col_drop1
  Partitioned table "public.parted_index_col_drop1"
@@ -1578,7 +1717,6 @@ Partition key: LIST (a)
 Indexes:
     "parted_index_col_drop1_b_idx" btree (b)
 Number of partitions: 1 (Use \d+ to list them.)
-Distributed by: (a)
 
 \d parted_index_col_drop2
  Partitioned table "public.parted_index_col_drop2"
@@ -1591,7 +1729,6 @@ Partition key: LIST (a)
 Indexes:
     "parted_index_col_drop2_b_idx" btree (b)
 Number of partitions: 0
-Distributed by: (a)
 
 \d parted_index_col_drop11
       Table "public.parted_index_col_drop11"
@@ -1602,7 +1739,6 @@ Distributed by: (a)
 Partition of: parted_index_col_drop1 FOR VALUES IN (1)
 Indexes:
     "parted_index_col_drop11_b_idx" btree (b)
-Distributed by: (a)
 
 drop table parted_index_col_drop;
 -- Check that invalid indexes are not selected when attaching a partition.
@@ -1611,8 +1747,10 @@ create index parted_inval_idx on parted_inval_tab (a);
 create table parted_inval_tab_1 (a int) partition by range (a);
 create table parted_inval_tab_1_1 partition of parted_inval_tab_1
   for values from (0) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_inval_tab_1_2 partition of parted_inval_tab_1
   for values from (10) to (20);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- this creates an invalid index.
 create index parted_inval_ixd_1 on only parted_inval_tab_1 (a);
 -- this creates new indexes for all the partitions of parted_inval_tab_1,
@@ -1641,12 +1779,16 @@ drop table parted_inval_tab;
 create table parted_isvalid_tab (a int, b int) partition by range (a);
 create table parted_isvalid_tab_1 partition of parted_isvalid_tab
   for values from (1) to (10) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_isvalid_tab_2 partition of parted_isvalid_tab
   for values from (10) to (20) partition by range (a);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_isvalid_tab_11 partition of parted_isvalid_tab_1
   for values from (1) to (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_isvalid_tab_12 partition of parted_isvalid_tab_1
   for values from (5) to (10);
+NOTICE:  table has parent, setting distribution columns to match parent table
 -- create an invalid index on one of the partitions.
 insert into parted_isvalid_tab_11 values (1, 0);
 create index concurrently parted_isvalid_idx_11 on parted_isvalid_tab_11 ((a/b));
@@ -1654,7 +1796,7 @@ ERROR:  CREATE INDEX CONCURRENTLY is not supported
 -- The previous invalid index is selected, invalidating all the indexes up to
 -- the top-most parent.
 create index parted_isvalid_idx on parted_isvalid_tab ((a/b));
-ERROR:  division by zero  (seg1 172.17.0.4:7003 pid=1283673)
+ERROR:  division by zero  (seg1 172.17.0.2:7003 pid=1543165)
 select indexrelid::regclass, indisvalid,
        indrelid::regclass, inhparent::regclass
   from pg_index idx left join
@@ -1671,8 +1813,10 @@ begin;
 create table parted_replica_tab (id int not null) partition by range (id);
 create table parted_replica_tab_1 partition of parted_replica_tab
   for values from (1) to (10) partition by range (id);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create table parted_replica_tab_11 partition of parted_replica_tab_1
   for values from (1) to (5);
+NOTICE:  table has parent, setting distribution columns to match parent table
 create unique index parted_replica_idx
   on only parted_replica_tab using btree (id);
 create unique index parted_replica_idx_1

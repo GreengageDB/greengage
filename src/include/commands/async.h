@@ -47,4 +47,7 @@ extern void HandleNotifyInterrupt(void);
 extern void ProcessNotifyInterrupt(bool flush);
 extern void NotifyMyFrontEnd(const char *channel, const char *payload, int32 srcPid);
 
+/* freeze old transaction IDs in notify queue (called by VACUUM) */
+extern void AsyncNotifyFreezeXids(TransactionId newFrozenXid);
+
 #endif							/* ASYNC_H */
