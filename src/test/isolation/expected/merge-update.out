@@ -77,24 +77,22 @@ step explain_merge2a:
   RETURNING merge_action(), old, new, t.*
   $$);
 
-explain_filter                                             
------------------------------------------------------------
-Merge on target t (actual rows=2.00 loops=1)               
-  Tuples: inserted=1 updated=1                             
-  ->  Hash Full Join (actual rows=2.00 loops=1)            
-        Hash Cond: (t.key = (1))                           
+explain_filter 
+
+Merge on target t (actual rows=2.00 loops=1)
+  Tuples: inserted=1 updated=1
+  ->  Hash Full Join (actual rows=2.00 loops=1)
+        Hash Cond: (t.key = (1))
+        Extra Text: Hash chain length 1.0 avg, 1 max, using 1 of 32768 buckets.
         ->  Seq Scan on target t (actual rows=1.00 loops=1)
-        ->  Hash (actual rows=1.00 loops=1)                
-              ->  Result (actual rows=1.00 loops=1)        
-(7 rows)
-
+        ->  Hash (actual rows=1.00 loops=1)
+              ->  Result (actual rows=1.00 loops=1)
+Optimizer: Postgres query optimizer
 step select2: SELECT * FROM target;
-key|val                                                   
----+------------------------------------------------------
-  3|setup1 updated by merge1 source not matched by merge2a
-  1|merge2a                                               
-(2 rows)
+key            val            
 
+3              setup1 updated by merge1 source not matched by merge2a
+1              merge2a        
 step c2: COMMIT;
 
 starting permutation: pa_merge1 c1 pa_merge2c_dup a2
@@ -180,24 +178,22 @@ step explain_merge2a:
  <waiting ...>
 step c1: COMMIT;
 step explain_merge2a: <... completed>
-explain_filter                                             
------------------------------------------------------------
-Merge on target t (actual rows=2.00 loops=1)               
-  Tuples: inserted=1 updated=1                             
-  ->  Hash Full Join (actual rows=2.00 loops=1)            
-        Hash Cond: (t.key = (1))                           
+explain_filter 
+
+Merge on target t (actual rows=2.00 loops=1)
+  Tuples: inserted=1 updated=1
+  ->  Hash Full Join (actual rows=2.00 loops=1)
+        Hash Cond: (t.key = (1))
+        Extra Text: Hash chain length 1.0 avg, 1 max, using 1 of 32768 buckets.
         ->  Seq Scan on target t (actual rows=1.00 loops=1)
-        ->  Hash (actual rows=1.00 loops=1)                
-              ->  Result (actual rows=1.00 loops=1)        
-(7 rows)
-
+        ->  Hash (actual rows=1.00 loops=1)
+              ->  Result (actual rows=1.00 loops=1)
+Optimizer: Postgres query optimizer
 step select2: SELECT * FROM target;
-key|val                                                   
----+------------------------------------------------------
-  3|setup1 updated by merge1 source not matched by merge2a
-  1|merge2a                                               
-(2 rows)
+key            val            
 
+3              setup1 updated by merge1 source not matched by merge2a
+1              merge2a        
 step c2: COMMIT;
 
 starting permutation: merge1 merge2a a1 select2 c2
@@ -351,30 +347,28 @@ step explain_pa_merge2a:
  <waiting ...>
 step c1: COMMIT;
 step explain_pa_merge2a: <... completed>
-explain_filter                                                    
-------------------------------------------------------------------
-Merge on pa_target t (actual rows=2.00 loops=1)                   
-  Merge on part1 t_1                                              
-  Merge on part2 t_2                                              
-  Merge on part3 t_3                                              
-  Tuples: updated=2                                               
-  ->  Hash Full Join (actual rows=2.00 loops=1)                   
-        Hash Cond: (t.key = (1))                                  
-        ->  Append (actual rows=2.00 loops=1)                     
+explain_filter 
+
+Merge on pa_target t (actual rows=2.00 loops=1)
+  Merge on part1 t_1
+  Merge on part2 t_2
+  Merge on part3 t_3
+  Tuples: updated=2
+  ->  Hash Full Join (actual rows=2.00 loops=1)
+        Hash Cond: (t.key = (1))
+        Extra Text: Hash chain length 1.0 avg, 1 max, using 1 of 32768 buckets.
+        ->  Append (actual rows=2.00 loops=1)
               ->  Seq Scan on part1 t_1 (actual rows=1.00 loops=1)
               ->  Seq Scan on part2 t_2 (actual rows=1.00 loops=1)
               ->  Seq Scan on part3 t_3 (actual rows=0.00 loops=1)
-        ->  Hash (actual rows=1.00 loops=1)                       
-              ->  Result (actual rows=1.00 loops=1)               
-(13 rows)
-
+        ->  Hash (actual rows=1.00 loops=1)
+              ->  Result (actual rows=1.00 loops=1)
+Optimizer: Postgres query optimizer
 step pa_select2: SELECT * FROM pa_target;
-key|val                                               
----+--------------------------------------------------
-  2|initial updated by pa_merge1 updated by pa_merge2a
-  3|initial source not matched by pa_merge2a          
-(2 rows)
+key            val            
 
+2              initial updated by pa_merge1 updated by pa_merge2a
+3              initial source not matched by pa_merge2a
 step c2: COMMIT;
 
 starting permutation: pa_merge2 pa_merge2a c1 pa_select2 c2
@@ -533,11 +527,9 @@ step merge2a:
 	UPDATE set key = t.key + 1, val = t.val || ' source not matched by merge2a'
   RETURNING merge_action(), old, new, t.*;
 
-merge_action|old       |new                            |key|val                      
-------------+----------+-------------------------------+---+-------------------------
-UPDATE      |(1,setup1)|(2,"setup1 updated by merge2a")|  2|setup1 updated by merge2a
-(1 row)
+merge_action   old            new            key            val            
 
+UPDATE         (1,setup1)     (2,"setup1 updated by merge2a")2              setup1 updated by merge2a
 step c1: COMMIT;
 step s1beginrr: BEGIN ISOLATION LEVEL REPEATABLE READ;
 step merge1: 

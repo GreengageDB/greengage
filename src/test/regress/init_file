@@ -231,6 +231,16 @@ s/\(dbsize\.c:\d+\)/\(dbsize\.c:XXX\)/
 m/\(shmem\.c\:\d+\)/
 s/\(shmem\.c:\d+\)/\(shmem\.c:XXX\)/
 
+# identity: ALTER TABLE ... ADD COLUMN GENERATED ALWAYS AS IDENTITY assigns
+# identity values to the pre-existing pitest2 rows during the table rewrite in
+# MPP segment-scan order, so the two initial rows ('2016-07-2'/'2016-08-2',
+# f2 'from pitest2') can receive identity values 1 and 2 in either order (all
+# later inserts are deterministic). Normalise those two f3 values.
+m/pitest2_p1 \| 07-02-2016 \| from pitest2 +\| +[12]$/
+s/pitest2_p1 \| 07-02-2016 \| from pitest2 +\| +[12]$/pitest2_p1 | 07-02-2016 | from pitest2 | <identity_id>/
+m/pitest2_p2 \| 08-02-2016 \| from pitest2 +\| +[12]$/
+s/pitest2_p2 \| 08-02-2016 \| from pitest2 +\| +[12]$/pitest2_p2 | 08-02-2016 | from pitest2 | <identity_id>/
+
 # remove the cdbdisp_async suffix of some ERROR messages
 m/ \(cdbdisp_async\.c.*\)/
 s/ \(cdbdisp_async\.c.*\)//
