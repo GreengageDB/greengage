@@ -214,6 +214,17 @@ struct TupleTableSlotOps
 	 * consumed by the slot.
 	 */
 	MinimalTuple (*copy_minimal_tuple) (TupleTableSlot *slot);
+
+	/*
+	 * Fill up target entries of tts_values and tts_isnull arrays with
+	 * values from the tuple contained in the slot.
+	 */
+	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
+
+	/*
+	 * Check if value for attnum in tts_values and tts_isnull arrays is valid.
+	 */
+	bool		(*is_attr_valid) (TupleTableSlot *slot, int attnum);
 };
 
 /*
@@ -221,11 +232,13 @@ struct TupleTableSlotOps
  * same are used to identify the type of a given slot.
  */
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsVirtual;
+extern PGDLLIMPORT const TupleTableSlotOps TTSOpsVirtualAOCS;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
 
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
+#define TTS_IS_VIRTUAL_AOCS(slot) ((slot)->tts_ops == &TTSOpsVirtualAOCS)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
@@ -240,6 +253,14 @@ typedef struct VirtualTupleTableSlot
 
 	char	   *data;			/* data for materialized slots */
 } VirtualTupleTableSlot;
+
+typedef struct VirtualTupleTableSlotAOCS
+{
+	VirtualTupleTableSlot base;
+
+	void * current_scan;			 /* scan for this tuple */
+	Bitmapset *tts_is_valid;		 /* per-attribute valid flag */
+} VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
 {
@@ -328,6 +349,7 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
+extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);
@@ -358,6 +380,20 @@ slot_getallattrs(TupleTableSlot *slot)
 	slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
 }
 
+/*
+ * This function checks if Datum/isnull array value for attnum is valid.
+ */
+static inline bool
+slot_is_attr_valid(TupleTableSlot *slot, int attnum)
+{
+	if (slot->tts_nvalid > attnum)
+		return true;
+
+	if (slot->tts_ops->is_attr_valid)
+		return slot->tts_ops->is_attr_valid(slot, attnum);
+
+	return false;
+}
 
 /*
  * slot_attisnull

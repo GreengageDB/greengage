@@ -849,6 +849,8 @@ datumstreamread_open_file(DatumStreamRead * ds, char *fn, int64 eof, int64 eofUn
 	AppendOnlyStorageRead_OpenFile(&ds->ao_read, fn, version, ds->eof);
 
 	ds->need_close_file = true;
+
+	ds->noBlocksRead = true;
 }
 
 void
@@ -1175,6 +1177,7 @@ datumstreamread_block_content(DatumStreamRead * acc)
 {
 	Assert(acc);
 
+	acc->noBlocksRead = false;
 	/*
 	 * Clear out state from previous block.
 	 */

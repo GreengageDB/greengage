@@ -69,6 +69,9 @@
 #include "utils/typcache.h"
 
 #include "cdb/cdbvars.h"
+#include "cdb/cdbaocsam.h"
+#include "cdb/cdbappendonlyam.h"
+#include "pgstat.h"
 
 static TupleDesc ExecTypeFromTLInternal(List *targetList,
 										bool skipjunk);
@@ -82,6 +85,7 @@ static void tts_heap_store_tuple(TupleTableSlot *slot, HeapTuple tuple, bool sho
 
 
 const TupleTableSlotOps TTSOpsVirtual;
+const TupleTableSlotOps TTSOpsVirtualAOCS;
 const TupleTableSlotOps TTSOpsHeapTuple;
 const TupleTableSlotOps TTSOpsMinimalTuple;
 const TupleTableSlotOps TTSOpsBufferHeapTuple;
@@ -122,6 +126,19 @@ tts_virtual_clear(TupleTableSlot *slot)
 	ItemPointerSetInvalid(&slot->tts_tid);
 }
 
+static void
+tts_virtual_aocs_clear(TupleTableSlot *slot)
+{
+	VirtualTupleTableSlotAOCS *vslot_aocs = (VirtualTupleTableSlotAOCS *) slot;
+
+	tts_virtual_clear(slot);
+
+	vslot_aocs->current_scan = NULL;
+
+	bms_free(vslot_aocs->tts_is_valid);
+	vslot_aocs->tts_is_valid = NULL;
+}
+
 /*
  * VirtualTupleTableSlots always have fully populated tts_values and
  * tts_isnull arrays.  So this function should never be called.
@@ -130,6 +147,193 @@ static void
 tts_virtual_getsomeattrs(TupleTableSlot *slot, int natts)
 {
 	elog(ERROR, "getsomeattrs is not required to be called on a virtual tuple table slot");
+}
+
+/*
+ * Fetch a single AOCS column's value for the tuple identified by 'tid'/
+ * 'rowNum' into d[attno]/null[attno], advancing (and if needed
+ * repositioning) that column's DatumStreamRead as necessary, and marking
+ * the attribute valid in slotAocs->tts_is_valid.
+ */
+static pg_attribute_always_inline void
+tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
+							 AOCSScanDesc scan,
+							 AOCSFileSegInfo *curseginfo,
+							 AOTupleId *tid,
+							 int64 rowNum,
+							 AttrNumber attno,
+							 Datum *d,
+							 bool *null)
+{
+	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
+	int			err PG_USED_FOR_ASSERTS_ONLY;
+	MemoryContext oldContext;
+
+	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
+							attno,
+							curseginfo->segno,
+							scan->columnScanInfo.attnum_to_rownum)))
+	{
+		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+
+		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+		MemoryContextSwitchTo(oldContext);
+
+		return;
+	}
+
+	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+	Assert(ds);
+
+	if (unlikely(ds->noBlocksRead || rowNum > ds->blockFirstRowNum + ds->blockRowCount - 1))
+	{
+		if (!scan->blockDirectory && scan->aocsfetch)
+		{
+			AppendOnlyBlockDirectoryEntry dirEntry;
+			bool res PG_USED_FOR_ASSERTS_ONLY;
+			res = AppendOnlyBlockDirectory_GetEntry(
+								  &scan->aocsfetch->blockDirectory,
+								  tid,
+								  attno,
+								  &dirEntry,
+								  scan->columnScanInfo.attnum_to_rownum);
+			Assert(res);
+
+			Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
+			AppendOnlyStorageRead_SetTemporaryStart(&ds->ao_read,
+													dirEntry.range.fileOffset,
+													dirEntry.range.afterFileOffset);
+		}
+
+		while (true)
+		{
+			bool read_ok PG_USED_FOR_ASSERTS_ONLY;
+			read_ok = datumstreamread_block_info(ds);
+			Assert(read_ok);
+
+			if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
+			{
+				int64 blocksRead;
+				/* read a new buffer to consume */
+				datumstreamread_block_content(ds);
+
+				if (scan->blockDirectory)
+				{
+					AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
+														 attno,
+														 ds->blockFirstRowNum,
+														 ds->blockFileOffset,
+														 ds->blockRowCount);
+				}
+
+				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+				blocksRead =
+					RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
+				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+											blocksRead);
+
+				break;
+			}
+			else
+			{
+				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+				gp_appendonly_verify_block_checksums = false;
+				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+			}
+		}
+	}
+
+	err = datumstreamread_advance(ds);
+	Assert(err >= 0);
+
+	int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
+	while (rowNumInBlock > datumstreamread_nth(ds))
+	{
+		err = datumstreamread_advance(ds);
+		Assert(err > 0);
+	}
+
+	datumstreamread_get(ds, &d[attno], &null[attno]);
+
+	oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+	slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+	MemoryContextSwitchTo(oldContext);
+}
+
+static bool
+tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
+	if (unlikely(scan == NULL))
+		return false;
+
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
+
+ 	AttrNumber	attno = -1;
+	while ((attno = bms_next_member(attrs, attno)) >= 0)
+	{
+		if (unlikely(bms_is_member(attno, slotAocs->tts_is_valid)))
+			continue;
+
+		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
+									 attno, d, null);
+	}
+	return true;
+}
+
+static bool
+tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
+{
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	return bms_is_member(attnum, slotAocs->tts_is_valid);
+}
+
+static void
+tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
+	if (unlikely(scan == NULL))
+		return;
+
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
+	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
+
+	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+		if (unlikely((attno < slot->tts_nvalid) ||
+					bms_is_member(attno, slotAocs->tts_is_valid)))
+			continue;
+
+		if (unlikely(attno >= natts))
+		{
+			if (attno < anchor_attr)
+				continue;
+			break;
+		}
+
+		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
+									 attno, d, null);
+	}
+
+	slot->tts_nvalid = natts;
 }
 
 /*
@@ -285,6 +489,41 @@ tts_virtual_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	tts_virtual_materialize(dstslot);
 }
 
+static void
+tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
+{
+	TupleDesc	srcdesc = srcslot->tts_tupleDescriptor;
+
+	Assert(srcdesc->natts <= dstslot->tts_tupleDescriptor->natts);
+
+	tts_virtual_aocs_clear(dstslot);
+
+	slot_getallattrs(srcslot);
+
+	for (int natt = 0; natt < srcdesc->natts; natt++)
+	{
+		dstslot->tts_values[natt] = srcslot->tts_values[natt];
+		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
+	}
+
+	if (TTS_IS_VIRTUAL_AOCS(srcslot))
+	{
+		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
+		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
+		MemoryContext oldContext;
+
+		oldContext = MemoryContextSwitchTo(dstslot->tts_mcxt);
+		dstslot_aocs->tts_is_valid = bms_copy(srcslot_aocs->tts_is_valid);
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	dstslot->tts_nvalid = srcdesc->natts;
+	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
+
+	/* make sure storage doesn't depend on external memory */
+	tts_virtual_materialize(dstslot);
+}
+
 static HeapTuple
 tts_virtual_copy_heap_tuple(TupleTableSlot *slot)
 {
@@ -303,6 +542,38 @@ tts_virtual_copy_minimal_tuple(TupleTableSlot *slot)
 	return heap_form_minimal_tuple(slot->tts_tupleDescriptor,
 								   slot->tts_values,
 								   slot->tts_isnull);
+}
+
+/*
+ * tts_virtual_materialize(), tts_virtual_copy_heap_tuple() and
+ * tts_virtual_copy_minimal_tuple() all read tts_values/tts_isnull directly,
+ * for every attribute, with no regard for how many of them are actually
+ * valid. That's fine for a plain virtual slot, which is documented to
+ * always be fully populated, but not for our lazy AOCS slot
+ * (TTSOpsVirtualAOCS), where only a sparse subset of attributes may have
+ * been fetched. Wrap each callback so it forces a full deform first,
+ * mirroring what tts_virtual_aocs_copyslot() already does for the copyslot
+ * callback.
+ */
+static void
+tts_virtual_aocs_materialize(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	tts_virtual_materialize(slot);
+}
+
+static HeapTuple
+tts_virtual_aocs_copy_heap_tuple(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	return tts_virtual_copy_heap_tuple(slot);
+}
+
+static MinimalTuple
+tts_virtual_aocs_copy_minimal_tuple(TupleTableSlot *slot)
+{
+	slot_getallattrs(slot);
+	return tts_virtual_copy_minimal_tuple(slot);
 }
 
 
@@ -1052,7 +1323,33 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.get_heap_tuple = NULL,
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
-	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple
+	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
+};
+
+const TupleTableSlotOps TTSOpsVirtualAOCS = {
+	.base_slot_size = sizeof(VirtualTupleTableSlotAOCS),
+	.init = tts_virtual_init,
+	.release = tts_virtual_release,
+	.clear = tts_virtual_aocs_clear,
+	.getsomeattrs = tts_virtual_aocs_getsomeattrs,
+	.getsysattr = tts_virtual_getsysattr,
+	.materialize = tts_virtual_aocs_materialize,
+	.copyslot = tts_virtual_aocs_copyslot,
+
+	/*
+	 * A virtual tuple table slot can not "own" a heap tuple or a minimal
+	 * tuple.
+	 */
+	.get_heap_tuple = NULL,
+	.get_minimal_tuple = NULL,
+	.copy_heap_tuple = tts_virtual_aocs_copy_heap_tuple,
+	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
+
+	.gettargetattr = tts_virtual_aocs_gettargetattr,
+	.is_attr_valid = tts_virtual_aocs_is_attr_valid
 };
 
 const TupleTableSlotOps TTSOpsHeapTuple = {
@@ -1069,7 +1366,10 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	/* A heap tuple table slot can not "own" a minimal tuple. */
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_heap_copy_heap_tuple,
-	.copy_minimal_tuple = tts_heap_copy_minimal_tuple
+	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsMinimalTuple = {
@@ -1086,7 +1386,10 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.get_heap_tuple = NULL,
 	.get_minimal_tuple = tts_minimal_get_minimal_tuple,
 	.copy_heap_tuple = tts_minimal_copy_heap_tuple,
-	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple
+	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsBufferHeapTuple = {
@@ -1103,7 +1406,10 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	/* A buffer heap tuple table slot can not "own" a minimal tuple. */
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_buffer_heap_copy_heap_tuple,
-	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple
+	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 
@@ -1933,6 +2239,22 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 		slot_getmissingattrs(slot, slot->tts_nvalid, attnum);
 		slot->tts_nvalid = attnum;
 	}
+}
+
+/*
+ * slot_gettargetattr - fetch exactly the given (possibly sparse) set of
+ * attributes, for slot types that support it (see TupleTableSlotOps).
+ *
+ * Returns false, doing nothing, if the slot type has no gettargetattr
+ * callback, so the caller can fall back to slot_getsomeattrs().
+ */
+bool
+slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	if (NULL == slot->tts_ops->gettargetattr)
+		return false;
+
+	return slot->tts_ops->gettargetattr(slot, attrs);
 }
 
 /* ----------------------------------------------------------------

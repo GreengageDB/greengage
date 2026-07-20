@@ -663,6 +663,8 @@ extern bool     gp_eager_two_phase_agg;
 /* Force redistribution of insert into randomly-distributed table */
 extern bool     gp_force_random_redistribution;
 
+extern bool     gp_aocs_scan_shortpass;
+
 /* Analyze tools */
 extern int gp_motion_slice_noop;
 

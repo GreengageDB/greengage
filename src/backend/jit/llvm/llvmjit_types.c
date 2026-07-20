@@ -68,6 +68,7 @@ MinimalTupleTableSlot StructMinimalTupleTableSlot;
 TupleDescData StructTupleDescData;
 PlanState	StructPlanState;
 MinimalTupleData StructMinimalTupleData;
+Bitmapset	StructBitmapset;
 
 
 /*
@@ -125,6 +126,7 @@ void	   *referenced_functions[] =
 	strlen,
 	varsize_any,
 	slot_getsomeattrs_int,
+	slot_gettargetattr,
 	slot_getmissingattrs,
 	MakeExpandedObjectReadOnlyInternal,
 	ExecEvalSubscriptingRef,

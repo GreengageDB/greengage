@@ -24,6 +24,7 @@
 #include "access/hio.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
+#include "catalog/aoblkdir.h"
 #include "catalog/catalog.h"
 #include "catalog/gp_fastsequence.h"
 #include "catalog/index.h"
@@ -48,6 +49,7 @@
 #include "utils/builtins.h"
 #include "utils/datumstream.h"
 #include "utils/faultinjector.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -344,6 +346,17 @@ int aoco_proj_move_anchor_first(AttrNumber *proj_atts,
 	return num_proj_atts;
 }
 
+static void
+aocs_sole_rowid_scan_finish(AOCSScanDesc scan)
+{
+	if (scan->soleRowIdScan.scan_blkdir != NULL)
+	{
+		systable_endscan(scan->soleRowIdScan.scan_blkdir);
+		pfree(scan->soleRowIdScan.curr_minipage.minipage);
+		scan->soleRowIdScan.scan_blkdir = NULL;
+	}
+}
+
 void
 initscan_with_colinfo(AOCSScanDesc scan)
 {
@@ -412,6 +425,31 @@ initscan_with_colinfo(AOCSScanDesc scan)
 				 scan->columnScanInfo.relationTupleDesc,
 				 scan->columnScanInfo.proj_atts, scan->columnScanInfo.num_proj_atts,
 				 scan->checksum);
+
+	if (gp_aocs_scan_shortpass &&
+	   !gp_select_invisible &&
+	   scan->columnScanInfo.projKind == AOCS_PROJ_ANY &&
+	   !scan->blockDirectory && scan->aocsfetch)
+	{
+		aocs_sole_rowid_scan_finish(scan);
+
+		ScanKeyData scanKey;
+		ScanKeyInit(&scanKey,
+					Anum_pg_aoblkdir_columngroupno,
+					BTEqualStrategyNumber,
+					F_INT4EQ,
+					Int32GetDatum(anchor_colno));
+
+		scan->soleRowIdScan.scan_blkdir = systable_beginscan(scan->aocsfetch->blockDirectory.blkdirRel,
+										   InvalidOid,
+										   true,
+										   scan->rs_base.rs_snapshot,
+										   1,
+										   &scanKey);
+		scan->soleRowIdScan.curr_minipage.minipage = palloc0(minipage_size(NUM_MINIPAGE_ENTRIES));
+		scan->soleRowIdScan.curr_minipage_valid = false;
+		scan->soleRowIdScan.minipage_entry = NULL;
+	}
 
 	MemoryContextSwitchTo(oldCtx);
 
@@ -731,6 +769,12 @@ aocs_beginscan_internal(Relation relation,
 
 	scan->blkdirscan = NULL;
 
+	scan->soleRowIdScan.scan_blkdir = NULL;
+	scan->soleRowIdScan.minipage_entry = NULL;
+	scan->soleRowIdScan.curr_minipage_valid = false;
+	scan->soleRowIdScan.curr_minipage_entry_idx = 0;
+	scan->soleRowIdScan.segno = -1;
+
 	if (scan->total_seg != 0)
 	{
 		AppendOnlyVisimap_Init(&scan->visibilityMap,
@@ -742,7 +786,9 @@ aocs_beginscan_internal(Relation relation,
 		 * Initialize a AOBlkdirScan only if we are doing sampling and if we
 		 * have a blkdir relation.
 		 */
-		if ((flags & SO_TYPE_ANALYZE) != 0 || (flags & SO_TYPE_SAMPLESCAN) != 0)
+		if ((flags & SO_TYPE_ANALYZE) != 0 ||
+			(flags & SO_TYPE_SAMPLESCAN) != 0 ||
+			(flags & SO_TYPE_SEQSCAN) != 0)
 		{
 			if (OidIsValid(blkdirrelid) && gp_enable_blkdir_sampling)
 				aocs_blkdirscan_init(scan);
@@ -882,6 +928,8 @@ aocs_endscan(AOCSScanDesc scan)
 		aocs_blkdirscan_finish(scan);
 
 	RelationDecrementReferenceCount(scan->rs_base.rs_rd);
+
+	aocs_sole_rowid_scan_finish(scan);
 
 	pfree(scan);
 }
@@ -1369,7 +1417,8 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int64		nthInBlock;
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
-	AttrNumber	natts;
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	MemoryContext oldContext;
 
 	Assert(ScanDirectionIsForward(direction));
 
@@ -1385,13 +1434,80 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		initscan_with_colinfo(scan);
 	}
 
-	natts = slot->tts_tupleDescriptor->natts;
-	Assert(natts <= scan->columnScanInfo.relationTupleDesc->natts);
+	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 
-	while (1)
+	if (unlikely(scan->soleRowIdScan.scan_blkdir))
+	{
+		/*
+		 * Short pass via visibility map and block directory for cases when
+		 * there is no actual need to access tables data, for ex. for queries
+		 * like "SELECT COUNT(*) FROM some_table;".
+		 */
+		while(1)
+		{
+			if (likely(scan->soleRowIdScan.minipage_entry &&
+					  scan->segrowsprocessed < scan->soleRowIdScan.minipage_entry->rowCount))
+			{
+				Assert(scan->soleRowIdScan.segno >= 0);
+				scan->segrowsprocessed++;
+				AOTupleIdInit(&aoTupleId, scan->soleRowIdScan.segno, scan->soleRowIdScan.minipage_entry->firstRowNum + scan->segrowsprocessed-1);
+				if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
+				{
+					/* The tuple is invisible */
+					continue;
+				}
+				slot->tts_nvalid = 0;
+				slot->tts_tid = *((ItemPointer) &aoTupleId);
+				return true;
+			}
+
+			if (likely(scan->soleRowIdScan.curr_minipage_valid))
+			{
+				Assert(scan->soleRowIdScan.curr_minipage_entry_idx < scan->soleRowIdScan.curr_minipage.numMinipageEntries);
+
+				scan->soleRowIdScan.minipage_entry = &scan->soleRowIdScan.curr_minipage.minipage->entry[scan->soleRowIdScan.curr_minipage_entry_idx];
+				scan->segrowsprocessed = 0;
+
+				scan->soleRowIdScan.curr_minipage_entry_idx++;
+				scan->soleRowIdScan.curr_minipage_valid =
+					(scan->soleRowIdScan.curr_minipage_entry_idx != scan->soleRowIdScan.curr_minipage.numMinipageEntries);
+				continue;
+			}
+
+			if (!scan->soleRowIdScan.curr_minipage_valid)
+			{
+				Datum	minipage_datum;
+				bool	minipageNull;
+				bool	segnoNull;
+
+				if (!HeapTupleIsValid(systable_getnext(scan->soleRowIdScan.scan_blkdir)))
+				{
+					/* No more seg, we are at the end */
+					ExecClearTuple(slot);
+					scan->cur_seg = -1;
+					slotAocs->current_scan = NULL;
+					return false;
+				}
+
+				TupleTableSlot *blkdir_slot = scan->soleRowIdScan.scan_blkdir->slot;
+
+				slot_getallattrs(blkdir_slot);
+
+				scan->soleRowIdScan.segno = DatumGetInt32(slot_getattr(blkdir_slot, Anum_pg_aoblkdir_segno, &segnoNull));
+
+				minipage_datum = slot_getattr(blkdir_slot, Anum_pg_aoblkdir_minipage, &minipageNull);
+				scan->soleRowIdScan.curr_minipage_valid = !minipageNull;
+				if (scan->soleRowIdScan.curr_minipage_valid)
+				{
+					copy_out_minipage(&scan->soleRowIdScan.curr_minipage, minipage_datum, false);
+					scan->soleRowIdScan.curr_minipage_entry_idx = 0;
+				}
+			}
+		}
+	}
+	else
 	{
 		AOCSFileSegInfo *curseginfo;
-
 ReadNext:
 		/* If necessary, open next seg */
 		if (scan->cur_seg < 0 || err < 0)
@@ -1401,7 +1517,10 @@ ReadNext:
 			 * Placing here in order to have less impact on the hot path. 
 			 */
 			if (scan->columnScanInfo.num_proj_atts == 0)
+			{
+				slotAocs->current_scan = NULL;
 				return false;
+			}
 
 			err = open_next_scan_seg(scan);
 			if (err < 0)
@@ -1409,6 +1528,7 @@ ReadNext:
 				/* No more seg, we are at the end */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
+				slotAocs->current_scan = NULL;
 				return false;
 			}
 			scan->segrowsprocessed = 0;
@@ -1421,82 +1541,46 @@ ReadNext:
 		curseginfo = scan->seginfo[scan->cur_seg];
 
 		/* Read from cur_seg */
-		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		AttrNumber	attno = anchor_attr;
+
+		err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+		Assert(err >= 0);
+		if (err == 0)
 		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-			/*
-			 * Check missing value before reading from data files.
-			 * 
-			 * We don't need to check the missing value for the anchor column.
-			 * In fact, we cannot do that either because we don't have the
-			 * row number until we've scanned the anchor column.
-			 */
-			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+			if (err < 0)
 			{
-				Assert(rowNum > 0);
-				if (AO_ATTR_VAL_IS_MISSING(rowNum,
-															attno,
-															curseginfo->segno,
-															scan->columnScanInfo.attnum_to_rownum))
-				{
-					/*
-					 * XXX: should we temporarily store the missing value to avoid repeatedly calling
-					 * getmissingattr? The performance gain seems not much though. 
-					 */
-					d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-					continue;
-				}
+				/*
+				 * Ha, cannot read next block, we need to go to next seg
+				 */
+				close_cur_scan_seg(scan);
+				goto ReadNext;
 			}
 
-			/* otherwise, read from data file */
+			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+
 			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-			Assert(err >= 0);
-			if (err == 0)
-			{
-				err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
-				if (err < 0)
-				{
-					/*
-					 * Ha, cannot read next block, we need to go to next seg
-					 */
-					close_cur_scan_seg(scan);
-					goto ReadNext;
-				}
+			Assert(err > 0);
+		}
 
-				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
-				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
-											RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+		/*
+		 * Get the column's datum right here since the data structures
+		 * should still be hot in CPU data cache memory.
+		 */
+		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-				err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
-				Assert(err > 0);
-			}
+		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
+		MemoryContextSwitchTo(oldContext);
 
-			/*
-			 * Get the column's datum right here since the data structures
-			 * should still be hot in CPU data cache memory.
-			 */
-			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
-
-			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
-			if (rowNum == InvalidAORowNum &&
-				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
-			}
-#ifdef USE_ASSERT_CHECKING
-			/*
-			 * the row number from every column should match
-			 * XXX: the first assert is repeated code, we should move it outside of
-			 * the if/else block if we can be sure blockFirstRowNum cannot be -1 here.
-			 */
-			else if (scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
-			{
-				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-				Assert(rowNum == scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock);
-			}
-#endif
+		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+		if (rowNum == InvalidAORowNum &&
+			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+		{
+			Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+			rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
 		}
 
 		scan->segrowsprocessed++;
@@ -1517,8 +1601,22 @@ ReadNext:
 		}
 		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
 
-		slot->tts_nvalid = natts;
+		/*
+		 * Only the anchor column (attno above, not necessarily attribute 0)
+		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
+		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
+		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
+		 * hold here since the anchor column can be any attribute. Keep
+		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
+		 * a stale count from a previous tuple and instead always go through
+		 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
+		 * which consults tts_is_valid per attribute.
+		 */
+		slot->tts_nvalid = 0;
+
 		slot->tts_tid = scan->cdb_fake_ctid;
+
+		slotAocs->current_scan = (void*)scan;
 		return true;
 	}
 
@@ -2206,6 +2304,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	bool		found = true;
 	bool		isSnapshotAny = (aocsFetchDesc->snapshot == SnapshotAny);
 	bool 		valmissing;
+	int 		tts_nvalid = 0;
 
 	Assert(aocsFetchDesc->relation->rd_att->natts > 0);
 
@@ -2237,6 +2336,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	for (int i = 0; i < aocsFetchDesc->blockDirectory.num_proj_atts; i++)
 	{
 		colno = aocsFetchDesc->blockDirectory.proj_atts[i];
+		tts_nvalid = Max(tts_nvalid, colno + 1);
 
 		DatumStreamFetchDesc datumStreamFetchDesc = aocsFetchDesc->datumStreamFetchDesc[colno];
 
@@ -2424,7 +2524,7 @@ aocs_fetch(AOCSFetchDesc aocsFetchDesc,
 	{
 		if (slot != NULL)
 		{
-			slot->tts_nvalid = colno;
+			slot->tts_nvalid = tts_nvalid;
 			slot->tts_tid = *(ItemPointer)(aoTupleId);
 		}
 	}
@@ -3399,7 +3499,7 @@ aocs_writecol_add(Oid relid, List *newvals, List *constraints, TupleDesc oldDesc
 	 */
 	if (Gp_role != GP_ROLE_DISPATCH && scancol != -1)
 	{
-		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		slot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * Initialize expression context for evaluating values and
@@ -3493,6 +3593,7 @@ aocs_writecol_rewritesegfiles(
 	/* Loop over each row in the segment. */
 	while (aocs_getnext(scanDesc, ForwardScanDirection, oldslot))
 	{
+		slot_getallattrs(oldslot);
 		if (scanDesc->columnScanInfo.ds[colno]->ao_read.current.hasFirstRowNum)
 		{
 			if (expectedFRN == -1)
@@ -3581,6 +3682,8 @@ aocs_writecol_rewritesegfiles(
 		ResetExprContext(econtext);
 		CHECK_FOR_INTERRUPTS();
 		expectedFRN++;
+
+		ExecClearTuple(oldslot);
 	}
 }
 
@@ -3673,8 +3776,8 @@ aocs_writecol_rewrite(Oid relid, List *newvals, TupleDesc oldDesc)
 			/* expr already planned */
 			ex->exprstate = ExecInitExpr((Expr *) ex->expr, NULL);
 		}
-		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtual);
-		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtual);
+		oldslot = MakeSingleTupleTableSlot(oldDesc, &TTSOpsVirtualAOCS);
+		newslot = MakeSingleTupleTableSlot(RelationGetDescr(rel), &TTSOpsVirtualAOCS);
 
 		/*
 		 * GENERATED expressions might reference the

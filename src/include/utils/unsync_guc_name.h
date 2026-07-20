@@ -256,6 +256,7 @@
 		"gp_vmem_protect_segworker_cache_limit",
 		"gp_workfile_limit_per_segment",
 		"gp_workfile_max_entries",
+		"gp_aocs_scan_shortpass",
 		"hba_file",
 		"hot_standby",
 		"hot_standby_feedback",

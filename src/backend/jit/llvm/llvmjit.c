@@ -98,6 +98,7 @@ LLVMTypeRef StructAggState;
 LLVMTypeRef StructAggStatePerGroupData;
 LLVMTypeRef StructAggStatePerTransData;
 LLVMTypeRef StructPlanState;
+LLVMTypeRef StructBitmapset;
 
 LLVMValueRef AttributeTemplate;
 LLVMValueRef ExecEvalSubroutineTemplate;
@@ -1179,6 +1180,7 @@ llvm_create_types(void)
 	StructAggStatePerTransData = llvm_pg_var_type("StructAggStatePerTransData");
 	StructPlanState = llvm_pg_var_type("StructPlanState");
 	StructMinimalTupleData = llvm_pg_var_type("StructMinimalTupleData");
+	StructBitmapset = llvm_pg_var_type("StructBitmapset");
 
 	AttributeTemplate = LLVMGetNamedFunction(llvm_types_module, "AttributeTemplate");
 	ExecEvalSubroutineTemplate = LLVMGetNamedFunction(llvm_types_module, "ExecEvalSubroutineTemplate");

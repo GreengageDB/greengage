@@ -255,6 +255,8 @@ bool		gp_recursive_cte = true;
 bool		gp_eager_two_phase_agg = false;
 bool		gp_force_random_redistribution = false;
 
+bool		gp_aocs_scan_shortpass = true;
+
 /* Optimizer related gucs */
 bool		optimizer;
 bool		optimizer_log;
@@ -1474,7 +1476,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 		false,
 		NULL, NULL, NULL
 	},
-
 	{
 		{"gp_disable_tuple_hints", PGC_USERSET, DEVELOPER_OPTIONS,
 			gettext_noop("Specify if hint bits on tuples should be deferred."),
@@ -1820,6 +1821,16 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_force_random_redistribution,
 		false, NULL, NULL
+	},
+
+	{
+		{"gp_aocs_scan_shortpass", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Enable shortpass at seq scan for AOCS tables if no projection needed."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_aocs_scan_shortpass,
+		true, NULL, NULL
 	},
 
 	{

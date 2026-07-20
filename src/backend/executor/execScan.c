@@ -186,7 +186,8 @@ ExecScan(ScanState *node,
 	if (!qual && !projInfo)
 	{
 		ResetExprContext(econtext);
-		return ExecScanFetch(node, accessMtd, recheckMtd);
+		TupleTableSlot *slot = ExecScanFetch(node, accessMtd, recheckMtd);
+		return slot;
 	}
 
 	/*
