@@ -493,17 +493,17 @@ SELECT a.amname FROM pg_class c, pg_am a
 -- Reset to default
 ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 205694
+ relam 
+-------
+ 20569
 (1 row)
 
 -- Upon ALTER TABLE SET ACCESS METHOD on a partitioned table, new partitions
 -- will inherit the AM set.  Existing partitioned are unchanged.
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 205694
+ relam 
+-------
+ 20569
 (1 row)
 
 SET LOCAL default_table_access_method = 'heap';
@@ -521,9 +521,9 @@ CREATE TABLE am_partitioned_2 PARTITION OF am_partitioned
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE am_partitioned SET ACCESS METHOD DEFAULT;
 SELECT relam FROM pg_class WHERE relname = 'am_partitioned';
- relam  
---------
- 205694
+ relam 
+-------
+ 20569
 (1 row)
 
 CREATE TABLE am_partitioned_3 PARTITION OF am_partitioned

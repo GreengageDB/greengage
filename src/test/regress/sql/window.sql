@@ -341,7 +341,7 @@ CREATE TEMP VIEW v_window AS
 SELECT pg_get_viewdef('v_window');
 
 -- test overflow frame specifications
-SELECT sum(unique1) over (rows between current row and 9223372036854775807 following exclude current row),
+SELECT sum(unique1) over (ORDER BY unique1 rows between current row and 9223372036854775807 following exclude current row),
 	unique1, four
 FROM tenk1 WHERE unique1 < 10;
 
@@ -349,7 +349,7 @@ SELECT sum(unique1) over (rows between 9223372036854775807 following and 1 follo
 	unique1, four
 FROM tenk1 WHERE unique1 < 10;
 
-SELECT last_value(unique1) over (ORDER BY four rows between current row and 9223372036854775807 following exclude current row),
+SELECT last_value(unique1) over (ORDER BY four, unique1 rows between current row and 9223372036854775807 following exclude current row),
 	unique1, four
 FROM tenk1 WHERE unique1 < 10;
 

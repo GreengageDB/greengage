@@ -227,6 +227,10 @@ s/.//gs
 m/\(dbsize\.c\:\d+\)/
 s/\(dbsize\.c:\d+\)/\(dbsize\.c:XXX\)/
 
+# Mask out linenumber of the erroring file (shifts whenever shmem.c changes)
+m/\(shmem\.c\:\d+\)/
+s/\(shmem\.c:\d+\)/\(shmem\.c:XXX\)/
+
 # remove the cdbdisp_async suffix of some ERROR messages
 m/ \(cdbdisp_async\.c.*\)/
 s/ \(cdbdisp_async\.c.*\)//

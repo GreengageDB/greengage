@@ -818,6 +818,7 @@ FaultInjector_SetFaultInjection(
 				   entryLocal->numTimesTriggered - entryLocal->startOccurrence < entry->extraArg - 1)
 			{
 				pg_usleep(200000);  /* 0.2 sec */
+				CHECK_FOR_INTERRUPTS();
 				retry_count--;
 				if (!retry_count)
 				{

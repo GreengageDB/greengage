@@ -338,9 +338,27 @@ static MultiXactId *OldestMemberMXactId;
 static MultiXactId *OldestVisibleMXactId;
 
 
+/*
+ * Greengage: the startup process runs a catalog-updating transaction while
+ * activating a promoted standby coordinator (gp_activate_standby(), reached from
+ * UpdateCatalogForStandbyPromotion() in xlog.c).  As an auxiliary process its
+ * MyProcNumber lies outside the regular-backend range [0, MaxBackends), so it has
+ * no OldestMember/OldestVisible slot of its own.  That transaction runs
+ * single-threaded under an AccessExclusiveLock and creates no multixacts, so it
+ * has nothing to record and nothing to protect from truncation.  Hand such a
+ * process a private throwaway slot (never scanned by GetOldestMultiXactId) instead
+ * of tripping the regular-backend slot assertions.  Upstream never reaches the
+ * per-backend multixact machinery from a non-backend process.
+ */
+static MultiXactId dummyOldestMemberMXactId = InvalidMultiXactId;
+static MultiXactId dummyOldestVisibleMXactId = InvalidMultiXactId;
+
 static inline MultiXactId *
 MyOldestMemberMXactIdSlot(void)
 {
+	if (MyProcNumber < 0 || MyProcNumber >= MaxBackends)
+		return &dummyOldestMemberMXactId;
+
 	/*
 	 * The first MaxBackends entries in the OldestMemberMXactId array are
 	 * reserved for regular backends.  MyProcNumber should index into one of
@@ -369,6 +387,10 @@ PreparedXactOldestMemberMXactIdSlot(ProcNumber procno)
 static inline MultiXactId *
 MyOldestVisibleMXactIdSlot(void)
 {
+	/* See MyOldestMemberMXactIdSlot() for the Greengage standby-promotion case. */
+	if (MyProcNumber < 0 || MyProcNumber >= NumVisibleSlots)
+		return &dummyOldestVisibleMXactId;
+
 	Assert(MyProcNumber >= 0 && MyProcNumber < NumVisibleSlots);
 	return &OldestVisibleMXactId[MyProcNumber];
 }

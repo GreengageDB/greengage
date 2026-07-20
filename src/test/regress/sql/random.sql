@@ -197,7 +197,7 @@ BEGIN
     WITH samples AS (
       SELECT random(0, 999999) / 1000000.0 r FROM generate_series(1, n) ORDER BY 1
     ), indexed_samples AS (
-      SELECT (row_number() OVER())-1.0 i, r FROM samples
+      SELECT (row_number() OVER(ORDER BY r))-1.0 i, r FROM samples
     )
     SELECT max(abs(i/n-r)) < c / sqrt(n) FROM indexed_samples
   );
@@ -222,7 +222,7 @@ BEGIN
     WITH samples AS (
       SELECT random(0, 999999999999) / 1000000000000.0 r FROM generate_series(1, n) ORDER BY 1
     ), indexed_samples AS (
-      SELECT (row_number() OVER())-1.0 i, r FROM samples
+      SELECT (row_number() OVER(ORDER BY r))-1.0 i, r FROM samples
     )
     SELECT max(abs(i/n-r)) < c / sqrt(n) FROM indexed_samples
   );
@@ -247,7 +247,7 @@ BEGIN
     WITH samples AS (
       SELECT random(0, 0.999999) r FROM generate_series(1, n) ORDER BY 1
     ), indexed_samples AS (
-      SELECT (row_number() OVER())-1.0 i, r FROM samples
+      SELECT (row_number() OVER(ORDER BY r))-1.0 i, r FROM samples
     )
     SELECT max(abs(i/n-r)) < c / sqrt(n) FROM indexed_samples
   );
