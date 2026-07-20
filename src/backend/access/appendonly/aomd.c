@@ -294,6 +294,19 @@ mdunlink_ao_base_relfile(void *ctx)
 					 SYNC_HANDLER_AO);
 		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
 
+		/*
+		 * During crash recovery the generic smgr CREATE record for the AO
+		 * base relfile is replayed via mdcreate(), which registers a dirty
+		 * segment under the regular md sync handler (register_dirty_segment,
+		 * SYNC_HANDLER_MD).  Since the AO unlink path only issues the
+		 * SYNC_HANDLER_AO forget above, that stale md fsync request would
+		 * survive the unlink below and make the end-of-recovery checkpoint
+		 * PANIC while fsync'ing the now-removed file.  Forget it too.
+		 */
+		INIT_FILETAG(tag, unlinkFiles->rnode, MAIN_FORKNUM, 0,
+					 SYNC_HANDLER_MD);
+		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
+
 		if (unlink(baserel) != 0)
 		{
 			/* ENOENT is expected after the end of the extensions */
