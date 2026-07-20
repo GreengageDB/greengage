@@ -11,7 +11,7 @@
  * Because temporary tables are visible only within a single session, there
  * is no need for shared memory, locks, or MVCC bookkeeping (xmin/xmax).
  * Transaction support uses a simple snapshot stack: each transaction or
- * savepoint pushes a copy of the current state, and commit/abort pops or
+ * subtransaction pushes a copy of the current state, and commit/abort pops or
  * discards it.
  *
  * This solves the pg_catalog bloating problem caused by applications that
@@ -103,14 +103,12 @@ struct TempCatScanData
 
 /*
  * Snapshot represents state of virtual heap for current transaction or
- * savepoint.
+ * subtransaction.
  */
 struct TempcatSnapshotData
 {
 	/* Previous snapshot to rollback to. */
 	struct TempcatSnapshotData *prev;
-	/* Optional name of a savepoint. Can be NULL. */
-	char	   *name;
 	/* State of relations that can contain virtual tuples */
 	dlist_head relationData; /* TempcatSnapshotRelationData::node */
 }	TempcatSnapshotData;
@@ -119,9 +117,6 @@ typedef struct TempcatSnapshotData *TempcatSnapshot;
 
 /* Determine whether given snapshot is a root snapshot. */
 #define TempcatSnapshotIsRoot(sn) ( !PointerIsValid((sn)->prev) )
-
-/* Determine whether given snapshot is anonymous. */
-#define TempcatSnapshotIsAnonymous(sn) ( !PointerIsValid((sn)->name) )
 
 /* Determine whether there is a transaction in progress. */
 #define TempcatTransactionInProgress() \
@@ -254,14 +249,13 @@ TempcatSnapshotCreateEmpty(void)
  * Create a snapshot copy.
  */
 static TempcatSnapshot
-TempcatSnapshotCopy(TempcatSnapshot src, const char *dst_name)
+TempcatSnapshotCopy(TempcatSnapshot src)
 {
 	dlist_iter	iter;
 	MemoryContext oldctx;
 	TempcatSnapshot dst = TempcatSnapshotCreateEmpty();
 
 	oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
-	dst->name = dst_name ? pstrdup(dst_name) : NULL;
 
 	dlist_foreach(iter, &src->relationData)
 	{
@@ -302,9 +296,6 @@ TempcatSnapshotFree(TempcatSnapshot tempcat_snapshot)
 		TempcatSnapshotRelationData *rel_entry = dlist_container(TempcatSnapshotRelationData, node, iter.cur);
 		TempcatDListFree(&rel_entry->tuples);
 	}
-
-	if (PointerIsValid(tempcat_snapshot->name))
-		pfree(tempcat_snapshot->name);
 
 	pfree(tempcat_snapshot);
 }
@@ -368,14 +359,14 @@ TempcatSnapshotPopBack(void)
 }
 
 /*
- * Creates a copy of current snapshot with given name (can be NULL) and places
- * it on top of snapshots stack. This copy becomes current snapshot.
+ * Creates a copy of current snapshot and places it on top of snapshots stack.
+ * This copy becomes current snapshot.
  */
 static void
-TempcatSnapshotCreate(const char *name)
+TempcatSnapshotCreate(void)
 {
 	TempcatSnapshot src = TempcatSnapshotGetCurrent();
-	TempcatSnapshot dst = TempcatSnapshotCopy(src, name);
+	TempcatSnapshot dst = TempcatSnapshotCopy(src);
 
 	TempcatSnapshotPushBack(dst);
 }
@@ -416,9 +407,8 @@ tempcat_begin_transaction(void)
 		return;
 
 	/* begin transaction */
-	TempcatSnapshotCreate(NULL);
+	TempcatSnapshotCreate();
 	Assert(TempcatTransactionInProgress());
-	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
 }
 
 /*
@@ -434,8 +424,6 @@ tempcat_end_transaction(void)
 
 	if (!TempcatTransactionInProgress())
 		return;
-
-	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
 
 	/* Commit transaction. 1) Save top snapshot to the bottom of the stack. */
 	TempcatSnapshotPushFront(TempcatSnapshotPopBack());
@@ -472,127 +460,15 @@ tempcat_abort_transaction(void)
 }
 
 /*
- * Perform actions related to virtual catalog on savepoint creation.
- */
-void
-tempcat_define_savepoint(const char *name)
-{
-	Assert(TempcatTransactionInProgress());
-	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
-
-	/*
-	 * Value of `name` argument can be NULL in 'rollback to savepoint' case.
-	 * This case is already handled by tempcat_rollback_to_savepoint.
-	 */
-	if (!PointerIsValid(name))
-		return;
-
-#ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_define_safepoint, name = '%s'", name);
-#endif
-
-	/* Rename current anonymous snapshot to serve as the savepoint rollback target. */
-	{
-		MemoryContext oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
-		TempcatSnapshotGetCurrent()->name = pstrdup(name);
-		MemoryContextSwitchTo(oldctx);
-	}
-	TempcatSnapshotCreate(NULL);	/* current snapshot to store changes */
-
-	Assert(TempcatTransactionInProgress());
-}
-
-/*
- * Perform actions related to virtual catalog on `rollback to savepoint`.
+ * Perform actions related to virtual catalog on subtransaction begin
+ * (StartSubTransaction).  Push a snapshot copy so that we have a rollback
+ * boundary for the subtransaction.
  *
- * NB: There is no need to re-check case of savepoint name (upper / lower) or
- * that savepoint exists.
- */
-void
-tempcat_rollback_to_savepoint(const char *name)
-{
-	Assert(PointerIsValid(name));
-	Assert(TempcatTransactionInProgress());
-	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
-
-#ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_rollback_to_savepoint, name = '%s'", name);
-#endif
-
-	/*
-	 * Pop snapshots from the stack and free them until a snapshot with given
-	 * name will be reached.
-	 */
-	for (;;)
-	{
-		TempcatSnapshot tempcat_snapshot = TempcatSnapshotGetCurrent();
-
-		Assert(!TempcatSnapshotIsRoot(tempcat_snapshot));
-
-		if ((!TempcatSnapshotIsAnonymous(tempcat_snapshot)) &&
-			(strcmp(tempcat_snapshot->name, name) == 0))
-			break;
-
-		TempcatSnapshotFree(TempcatSnapshotPopBack());
-	}
-
-	/* Create a new current snapshot to store changes. */
-	TempcatSnapshotCreate(NULL);
-	TempcatDirtyFlag = true;
-}
-
-/*
- * Perform actions related to virtual catalog on `release savepoint`.
- *
- * Pop the current anonymous working snapshot, then pop and free all snapshots
- * down to and including the named savepoint, and finally restore the working
- * snapshot on top.  This mirrors what RELEASE SAVEPOINT does: the savepoint
- * is no longer a rollback target, but its effects are kept.
- */
-void
-tempcat_release_savepoint(const char *name)
-{
-	TempcatSnapshot working;
-
-	Assert(PointerIsValid(name));
-	Assert(TempcatTransactionInProgress());
-	Assert(TempcatSnapshotIsAnonymous(TempcatSnapshotGetCurrent()));
-
-#ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_release_savepoint, name = '%s'", name);
-#endif
-
-	/* Detach the current working snapshot from the stack. */
-	working = TempcatSnapshotPopBack();
-	Assert(PointerIsValid(working));
-
-	/*
-	 * Pop and free snapshots until the named savepoint is found and freed.
-	 */
-	for (;;)
-	{
-		TempcatSnapshot tempcat_snapshot = TempcatSnapshotGetCurrent();
-		bool		is_target;
-
-		Assert(!TempcatSnapshotIsRoot(tempcat_snapshot));
-
-		is_target = (!TempcatSnapshotIsAnonymous(tempcat_snapshot)) &&
-			(strcmp(tempcat_snapshot->name, name) == 0);
-
-		TempcatSnapshotFree(TempcatSnapshotPopBack());
-
-		if (is_target)
-			break;
-	}
-
-	/* Restore the working snapshot on top of the stack. */
-	TempcatSnapshotPushBack(working);
-}
-
-/*
- * Perform actions related to virtual catalog on implicit subtransaction begin
- * (BeginInternalSubTransaction).  Push a snapshot copy so that we have a
- * rollback boundary for the subtransaction.
+ * Both user savepoints (SAVEPOINT) and internal subtransactions
+ * (BeginInternalSubTransaction) reach StartSubTransaction, so this single
+ * hook covers both.  Savepoint names are irrelevant: ROLLBACK TO / RELEASE
+ * unwind the subtransaction stack one level at a time through
+ * tempcat_abort_subtransaction / tempcat_commit_subtransaction.
  */
 void
 tempcat_begin_subtransaction(void)
@@ -604,13 +480,13 @@ tempcat_begin_subtransaction(void)
 	elog(NOTICE, "TEMPCAT: tempcat_begin_subtransaction");
 #endif
 
-	TempcatSnapshotCreate(NULL);
+	TempcatSnapshotCreate();
 }
 
 /*
- * Perform actions related to virtual catalog on implicit subtransaction commit
- * (ReleaseCurrentSubTransaction).  Keep the current (committed) changes and
- * remove the rollback boundary snapshot underneath.
+ * Perform actions related to virtual catalog on subtransaction commit
+ * (CommitSubTransaction).  Keep the current (committed) changes and remove the
+ * rollback boundary snapshot underneath.
  */
 void
 tempcat_commit_subtransaction(void)
@@ -636,10 +512,9 @@ tempcat_commit_subtransaction(void)
 }
 
 /*
- * Perform actions related to virtual catalog on implicit subtransaction abort
- * (RollbackAndReleaseCurrentSubTransaction).  Discard changes made in the
- * subtransaction by freeing the current snapshot; the previous snapshot
- * becomes current again.
+ * Perform actions related to virtual catalog on subtransaction abort
+ * (AbortSubTransaction).  Discard changes made in the subtransaction by
+ * freeing the current snapshot; the previous snapshot becomes current again.
  */
 void
 tempcat_abort_subtransaction(void)

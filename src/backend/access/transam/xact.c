@@ -5255,9 +5255,6 @@ DefineSavepoint(const char *name)
 				 BlockStateAsString(s->blockState));
 			break;
 	}
-
-	/* Create a virtual catalog savepoint */
-	tempcat_define_savepoint(name);
 }
 
 /*
@@ -5383,9 +5380,6 @@ ReleaseSavepoint(const char *name)
 		xact = xact->parent;
 		Assert(PointerIsValid(xact));
 	}
-
-	/* Release virtual catalog savepoint */
-	tempcat_release_savepoint(name);
 }
 
 /*
@@ -5509,9 +5503,6 @@ RollbackToSavepoint(const char *name)
 	else
 		elog(FATAL, "RollbackToSavepoint: unexpected state %s",
 			 BlockStateAsString(xact->blockState));
-
-	/* Roll back virtual catalog to the named savepoint */
-	tempcat_rollback_to_savepoint(name);
 }
 
 static void
@@ -5618,9 +5609,6 @@ BeginInternalSubTransaction(const char *name)
 
 	CommitTransactionCommand();
 	StartTransactionCommand();
-
-	/* Push a tempcat snapshot boundary for the implicit subtransaction */
-	tempcat_begin_subtransaction();
 }
 
 /*
@@ -5661,9 +5649,6 @@ ReleaseCurrentSubTransaction(void)
 				"Could not ReleaseCurrentSubTransaction dispatch failed");
 		}
 	}
-
-	/* Commit tempcat changes for the implicit subtransaction */
-	tempcat_commit_subtransaction();
 
 	MemoryContextSwitchTo(CurTransactionContext);
 	CommitSubTransaction();
@@ -5721,9 +5706,6 @@ RollbackAndReleaseCurrentSubTransaction(void)
 				 BlockStateAsString(s->blockState));
 			break;
 	}
-
-	/* Abort tempcat changes for the implicit subtransaction */
-	tempcat_abort_subtransaction();
 
 	/*
 	 * Abort the current subtransaction, if needed.
@@ -6026,6 +6008,8 @@ StartSubTransaction(void)
 	CallSubXactCallbacks(SUBXACT_EVENT_START_SUB, s->subTransactionId,
 						 s->parent->subTransactionId);
 
+	tempcat_begin_subtransaction();
+
 	ShowTransactionState("StartSubTransaction");
 }
 
@@ -6045,6 +6029,9 @@ CommitSubTransaction(void)
 	if (s->state != TRANS_INPROGRESS)
 		elog(WARNING, "CommitSubTransaction while in %s state",
 			 TransStateAsString(s->state));
+
+	/* Merge this subtransaction's tempcat changes into the parent snapshot */
+	tempcat_commit_subtransaction();
 
 	/* Pre-commit processing goes here */
 
@@ -6239,6 +6226,14 @@ AbortSubTransaction(void)
 	 */
 	if (s->curTransactionOwner)
 	{
+		/*
+		 * Discard this subtransaction's tempcat changes.  Done inside the
+		 * curTransactionOwner guard so it fires only when StartSubTransaction
+		 * actually ran (and thus pushed a snapshot); a subtransaction aborted
+		 * from TBLOCK_SUBBEGIN never started, so there is nothing to pop.
+		 */
+		tempcat_abort_subtransaction();
+
 		AfterTriggerEndSubXact(false);
 		AtSubAbort_Portals(s->subTransactionId,
 						   s->parent->subTransactionId,

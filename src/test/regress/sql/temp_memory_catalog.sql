@@ -148,6 +148,105 @@ SELECT * FROM tempcat_test_exc_ok;
 DROP TABLE tempcat_test_exc_ok;
 
 -- ============================================================
+-- Nested savepoints: ROLLBACK TO an outer savepoint must discard the
+-- catalog rows created in every inner subtransaction level at once
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcn_base (x int);       -- top level, survives
+    SAVEPOINT s1;
+        CREATE TEMP TABLE tcn_l1 (x int);
+        SAVEPOINT s2;
+            CREATE TEMP TABLE tcn_l2 (x int);
+            SAVEPOINT s3;
+                CREATE TEMP TABLE tcn_l3 (x int);
+    -- unwinds s3, s2 and the work done under s1 in one statement
+    ROLLBACK TO s1;
+    -- s1 is still active: base is visible, keep working under it
+    SELECT * FROM tcn_base;
+    CREATE TEMP TABLE tcn_after (x int);
+COMMIT;
+-- Committed catalog: tcn_base and tcn_after exist ...
+SELECT * FROM tcn_base;
+SELECT * FROM tcn_after;
+-- ... tcn_l1 / tcn_l2 / tcn_l3 were discarded by ROLLBACK TO s1
+SELECT * FROM tcn_l1;
+SELECT * FROM tcn_l2;
+SELECT * FROM tcn_l3;
+DROP TABLE tcn_base, tcn_after;
+
+-- ============================================================
+-- Repeated ROLLBACK TO the same savepoint
+-- (each rollback re-enters via TBLOCK_SUBRESTART -> StartSubTransaction)
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcr_base (x int);
+    SAVEPOINT sp;
+        CREATE TEMP TABLE tcr_a (x int);
+    ROLLBACK TO sp;
+        CREATE TEMP TABLE tcr_b (x int);
+    ROLLBACK TO sp;
+        CREATE TEMP TABLE tcr_c (x int);
+    ROLLBACK TO sp;
+    CREATE TEMP TABLE tcr_final (x int);
+COMMIT;
+-- Only the pre-savepoint table and the final one survive
+SELECT * FROM tcr_base;
+SELECT * FROM tcr_final;
+SELECT * FROM tcr_a;
+SELECT * FROM tcr_b;
+SELECT * FROM tcr_c;
+DROP TABLE tcr_base, tcr_final;
+
+-- ============================================================
+-- RELEASE a nested savepoint (merge into parent), then ROLLBACK TO the
+-- outer one (the merged catalog rows must be discarded too)
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcm_base (x int);
+    SAVEPOINT a;
+        CREATE TEMP TABLE tcm_a (x int);
+        SAVEPOINT b;
+            CREATE TEMP TABLE tcm_b (x int);
+        RELEASE SAVEPOINT b;    -- tcm_b merges up into a's level
+        -- after the merge both tables are visible
+        SELECT * FROM tcm_a;
+        SELECT * FROM tcm_b;
+    ROLLBACK TO a;             -- discards tcm_a and the merged tcm_b
+    SELECT * FROM tcm_base;    -- base survives
+    CREATE TEMP TABLE tcm_after (x int);
+COMMIT;
+SELECT * FROM tcm_base;
+SELECT * FROM tcm_after;
+SELECT * FROM tcm_a;
+SELECT * FROM tcm_b;
+DROP TABLE tcm_base, tcm_after;
+
+-- ============================================================
+-- PL/pgSQL EXCEPTION subtransaction nested inside a user savepoint
+-- ============================================================
+BEGIN;
+    CREATE TEMP TABLE tcp_base (x int);
+    SAVEPOINT outer_sp;
+        CREATE TEMP TABLE tcp_s1 (x int);
+        DO $$
+        BEGIN
+            CREATE TEMP TABLE tcp_pl (y int);
+            RAISE EXCEPTION 'boom';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'caught: %', SQLERRM;
+        END;
+        $$;
+        -- implicit subxact rolled back tcp_pl; tcp_s1 still visible
+        SELECT * FROM tcp_s1;
+    ROLLBACK TO outer_sp;
+    SELECT * FROM tcp_base;    -- base survives
+COMMIT;
+SELECT * FROM tcp_base;
+SELECT * FROM tcp_s1;
+SELECT * FROM tcp_pl;
+DROP TABLE tcp_base;
+
+-- ============================================================
 -- DROP TEMP TABLE
 -- ============================================================
 DROP TABLE tempcat_test1;
