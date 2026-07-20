@@ -201,7 +201,7 @@ export DUMP_OPTIONS="--data-only"
 bash   ${GREENGAGE7_SRC}/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash
 ```
 
-## Running pg_upgrade test from the image
+## Running pg_upgrade test from the docker image
 
 Docker image already has all the necessary environment variables set to run the test WITHOUT a schema. The only thing left is to setup gpadmin user:
 ```bash
