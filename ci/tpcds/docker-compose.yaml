@@ -17,8 +17,8 @@
 services:
   tpcds:
     build:
-      context: ../..                 # repo root, so the Dockerfile can COPY ci/tpcds/*
-      dockerfile: ci/tpcds/Dockerfile
+      context: .                     # ci/tpcds — the Dockerfile only needs these files
+      dockerfile: Dockerfile
       args:
         GREENGAGE_IMAGE: "${GREENGAGE_IMAGE}"
         TPCDS_REF: "${TPCDS_REF:-master}"

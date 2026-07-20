@@ -23,11 +23,11 @@ RUN set -eux; \
 # Clone the harness and apply the GreengageDB-8 compatibility overlay.
 RUN git clone "${TPCDS_REPO}" /opt/TPC-DS && \
     git -C /opt/TPC-DS checkout "${TPCDS_REF}"
-COPY ci/tpcds/patches/ /opt/tpcds-patches/
+COPY patches/ /opt/tpcds-patches/
 RUN bash /opt/tpcds-patches/apply.sh /opt/TPC-DS
 
 # Driver scripts (bring up cluster, run harness, aggregate results).
-COPY ci/tpcds/scripts/ /opt/tpcds-scripts/
+COPY scripts/ /opt/tpcds-scripts/
 
 RUN chmod -R +x /opt/tpcds-scripts /opt/tpcds-patches && \
     find /opt/TPC-DS -name '*.sh' -exec chmod +x {} + && \

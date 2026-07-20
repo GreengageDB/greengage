@@ -35,10 +35,31 @@ removed `pg_filespace_entry`). `patches/apply.sh` (applied at image build):
    incompatible knob (e.g. `gpconfig --masteronly`, or `admin_group` resource-
    group ALTERs on a resource-*queue* cluster) can't abort the whole run.
 
-> **First-run note:** the `gpdb_6` path is close but not guaranteed 1:1 on GG8.
-> Likely shake-out points on the first real run: `gpconfig` flag names,
-> `pg_compression`/`quicklz` probe, resource-group vs resource-queue defaults,
-> and any GP6-only SQL in individual query templates. Check
+### Validated (1 GB, GreengageDB-8 demo cluster)
+
+A full 1 GB run has been exercised end-to-end: compile → gen_data → init → ddl →
+load → single-user (all 99 queries timed) → report → markdown. Confirmed working:
+the `gpdb_6` overlay path, AO column-store DDL, distributed `dsdgen`, `gpfdist`
+load (~19.5 M rows), `analyzedb`, and the results aggregation.
+
+Known behaviours (not scaffold bugs — documented so they aren't a surprise):
+- **`-fcommon`** is required to build the old TPC-DS C tools on gcc 10+ (applied by
+  `patches/apply.sh`).
+- **`pg_partitions`** (a GP6 catalog view removed in GG7/8) is queried by
+  `04_load/analyze.sh` for a partitioned-table leaf-analyze step. TPC-DS tables
+  here are not partitioned, so it prints a *non-fatal* `ERROR: relation
+  "pg_partitions" does not exist` after the main `analyzedb` already succeeded.
+- **`q90` divides by zero at 1 GB** (an am/pm ratio with an empty bucket at this
+  "QUALIFICATION ONLY" scale). It is tolerated in the single-user phase, but a
+  failed session makes the **multi-user** phase abort (`set -e`), so `08_reports`
+  and `09_score` don't run → **no official Score at 1 GB**. For a scored run and a
+  throughput comparison use a larger scale (≥ 10 GB); for a quick
+  single-user-only comparison set `RUN_MULTI_USER=false` (the aggregator then
+  reports single-user timings + per-query TSV, which `compare.sh` uses).
+
+> The `gpdb_6` path is close but not guaranteed 1:1 on every GG8 build. Other
+> possible shake-out points: `gpconfig` flag names and resource-group vs
+> resource-queue defaults (both already made best-effort in `02_init`). Check
 > `logs/tpcds_<LABEL>_run.log`; extend `patches/apply.sh` as needed.
 
 ## Prerequisites

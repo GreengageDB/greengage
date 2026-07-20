@@ -27,4 +27,14 @@ for f in check_gucs set_memory_limit set_concurrency set_cpu_rate_limit set_memo
   sed -i "s/^\([[:space:]]*\)${f}\$/\1${f} || true/" "$init"
 done
 
+# 3) The TPC-DS tools (dsdgen/dsqgen) are old C that declares globals in headers
+#    included by multiple .c files. GCC 10+ defaults to -fno-common, turning
+#    those into "multiple definition" link errors (fails on Ubuntu 22.04 / gcc 11).
+#    Build the tools with -fcommon.
+mk="$REPO/00_compile_tpcds/tools/makefile"
+if [ -f "$mk" ] && ! grep -q 'fcommon' "$mk"; then
+  sed -i -E 's/^(LINUX_CFLAGS[[:space:]]*=.*)$/\1 -fcommon/' "$mk"
+fi
+[ -f "$mk" ] && { grep -q 'fcommon' "$mk" || { echo "FATAL: -fcommon patch did not apply to $mk"; exit 1; }; }
+
 echo "GreengageDB-8 TPC-DS overlay applied to $REPO"
