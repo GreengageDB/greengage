@@ -198,7 +198,7 @@ export GREENGAGE7_INSTALLATION=/usr/local/greengage-db-7X
 export SQL_SCHEMA=/home/gpadmin/dump.sql
 export CLEANUP_SCRIPT=/home/gpadmin/cleanup.sql
 export DUMP_OPTIONS="--data-only"
-bash   ${GREENGAGE7_SRC}/src/bin/pg_upgrade/pg_upgrade_run_6X_to_7X_migration.sh
+bash   ${GREENGAGE7_SRC}/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash
 ```
 
 ## Running pg_upgrade test from the image
