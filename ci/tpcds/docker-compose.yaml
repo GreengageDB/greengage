@@ -1,0 +1,48 @@
+# TPC-DS benchmark environment for GreengageDB.
+#
+# A single container plays two roles (see ci/tpcds/README.md for why):
+#   * the Greengage cluster  — a demo cluster (coordinator + N primary segments)
+#   * the TPC-DS "utility"    — the benchmark driver (dsdgen/dsqgen + harness)
+#
+# The harness (github.com/dimoffon/TPC-DS) must run *on the coordinator host*
+# (it calls gpconfig/gpstop/gpstate and local psql, and ssh's to segment hosts),
+# so the driver lives in the same container as the coordinator. The segment host
+# is the container itself (segment_hosts.txt == this container's hostname), so
+# data generation and gpfdist happen over ssh-to-self.
+#
+# The container IMAGE (built from ci/Dockerfile.ubuntu on the branch under test)
+# is the only thing that differs between versions — that is how we compare
+# adb-8.x vs claude-merge-7.
+
+services:
+  tpcds:
+    build:
+      context: ../..                 # repo root, so the Dockerfile can COPY ci/tpcds/*
+      dockerfile: ci/tpcds/Dockerfile
+      args:
+        GREENGAGE_IMAGE: "${GREENGAGE_IMAGE}"
+        TPCDS_REF: "${TPCDS_REF:-master}"
+    image: "tpcds-runner:${LABEL:-local}"
+    hostname: tpcds
+    privileged: true                 # demo cluster + cgroups (resource groups)
+    init: true
+    sysctls:
+      kernel.sem: 500 1024000 200 4096
+    ulimits:
+      nofile: 65535
+    shm_size: "2gb"
+    working_dir: /home/gpadmin
+    environment:
+      SCALE: "${SCALE:-1}"
+      LABEL: "${LABEL:-local}"
+      NUM_PRIMARY_MIRROR_PAIRS: "${NUM_PRIMARY_MIRROR_PAIRS:-3}"
+      WITH_MIRRORS: "${WITH_MIRRORS:-false}"
+      EXPLAIN_ANALYZE: "${EXPLAIN_ANALYZE:-false}"
+      RANDOM_DISTRIBUTION: "${RANDOM_DISTRIBUTION:-false}"
+      MULTI_USER_COUNT: "${MULTI_USER_COUNT:-3}"
+      SINGLE_USER_ITERATIONS: "${SINGLE_USER_ITERATIONS:-1}"
+      RUN_MULTI_USER: "${RUN_MULTI_USER:-true}"
+    volumes:
+      - "./results:/results"         # markdown reports + per-query TSVs land here
+      - "./logs:/logs"               # full harness run logs
+    entrypoint: ["sleep", "infinity"]

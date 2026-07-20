@@ -1,0 +1,3 @@
+# Benchmark outputs are generated per run — don't commit them.
+/results/
+/logs/

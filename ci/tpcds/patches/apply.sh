@@ -1,0 +1,30 @@
+#!/bin/bash
+# Apply the GreengageDB-8 compatibility overlay to the dimoffon/TPC-DS harness.
+# Idempotent; run at image-build time (see ci/tpcds/Dockerfile).
+set -euo pipefail
+REPO="${1:?usage: apply.sh <TPC-DS repo dir>}"
+fn="$REPO/functions.sh"
+init="$REPO/02_init/rollout.sh"
+
+# 1) get_version(): recognise GreengageDB 7 and 8 as the gpdb_6 code path.
+#    The stock harness only matches "Greenplum Database 4.3/5/6"; GG8 reports
+#    "PostgreSQL 18.4 (Greenplum Database 8.0.0...)" and would fall through to
+#    single-node PostgreSQL mode (heap tables, no segment distribution, and the
+#    removed pg_filespace_entry). The gpdb_6 path uses
+#    gp_segment_configuration.datadir and AO column storage, which GG7/8 support.
+if ! grep -q "Greenplum Database 8" "$fn"; then
+  sed -i "s/WHEN POSITION ('Greenplum Database 6' IN version) > 0 THEN 'gpdb_6' ELSE 'postgresql'/WHEN POSITION ('Greenplum Database 6' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greenplum Database 7' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greenplum Database 8' IN version) > 0 THEN 'gpdb_6' ELSE 'postgresql'/" "$fn"
+fi
+grep -q "Greenplum Database 8" "$fn" || { echo "FATAL: get_version patch did not apply (functions.sh layout changed?)"; exit 1; }
+
+# 2) 02_init: GP6-era GUC / resource-group tuning does not always map 1:1 onto
+#    GG8 (e.g. gpconfig's --masteronly flag, or admin_group resource-group ALTERs
+#    when the demo cluster runs resource *queues*). Make that tuning best-effort
+#    so one incompatible knob cannot abort the benchmark. The GUCs that actually
+#    matter for the run (optimizer, search_path) are set explicitly in
+#    bringup_cluster.sh / by the harness's set_search_path.
+for f in check_gucs set_memory_limit set_concurrency set_cpu_rate_limit set_memory_shared_quota set_memory_spill_ratio; do
+  sed -i "s/^\([[:space:]]*\)${f}\$/\1${f} || true/" "$init"
+done
+
+echo "GreengageDB-8 TPC-DS overlay applied to $REPO"
