@@ -341,7 +341,7 @@ main() {
 				realpath cleanup_script "${OPTARG}"
 				;;
 			d )
-				DUMP_OPTS+="${OPTARG}"
+				DUMP_OPTS+=" ${OPTARG}"
 				;;
 			s )
 				smoketest=1
