@@ -69,7 +69,7 @@ DROP FUNCTION sort_schema.has_sortmethod(explain_analyze_query text);
 
 
 -- Views with removed functions
-\c regression;
+\c regression
 DROP VIEW mpp7164.partagain;
 DROP VIEW mpp7164.partrank;
 
