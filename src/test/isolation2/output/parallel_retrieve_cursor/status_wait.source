@@ -664,7 +664,11 @@ DECLARE
  senderpid41| t        | ATTACHED
 (1 row)
 -- run 'kill -s QUIT senderpid' to cancel the endpoint execution backend, retrieve session still can work
-42: @pre_run 'kill -s QUIT ${PID41} && echo "${RAW_STR}" ': SELECT 1;
+-- PG18: the QUIT-crashed segment does a crash-recovery reset; sleep so it is back
+-- accepting connections before a later session rebuilds a gang (else the reconnect
+-- races recovery and fails with "the database system is not accepting connections").
+-- Matches the existing recovery wait used by the QD-kill case below.
+42: @pre_run 'kill -s QUIT ${PID41} && sleep 5 && echo "${RAW_STR}" ': SELECT 1;
  ?column? 
 ----------
  1        

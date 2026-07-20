@@ -101,7 +101,11 @@ insert into t1 select generate_series(1,100);
 -- get senderpid which is endpoint execution backend
 0U: @post_run 'get_tuple_cell PID41 1 1 ; create_sub "${PID41}[ \t]*" senderpid41': SELECT senderpid, receiverpid<>-1, state FROM gp_get_segment_endpoints();
 -- run 'kill -s QUIT senderpid' to cancel the endpoint execution backend, retrieve session still can work
-42: @pre_run 'kill -s QUIT ${PID41} && echo "${RAW_STR}" ': SELECT 1;
+-- PG18: the QUIT-crashed segment does a crash-recovery reset; sleep so it is back
+-- accepting connections before a later session rebuilds a gang (else the reconnect
+-- races recovery and fails with "the database system is not accepting connections").
+-- Matches the existing recovery wait used by the QD-kill case below.
+42: @pre_run 'kill -s QUIT ${PID41} && sleep 5 && echo "${RAW_STR}" ': SELECT 1;
 -- exit this session because the connection closed, so that it will re-connect next time use this session.
 0Rq:
 0Uq:
