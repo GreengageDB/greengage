@@ -24,7 +24,10 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 
 -- make the test faster.
 !\retcode gpconfig -c wal_keep_size -v 128;
-!\retcode gpstop -ari;
+-- Retry the restart: the coordinator can still be in startup (CAC_STARTUP) when
+-- gpstop's internal gpstart reconnects, intermittently failing with "not
+-- accepting connections". Retry until it comes up cleanly.
+!\retcode for i in $(seq 1 10); do gpstop -ari && break; echo "retry gpstop -ari ($i)"; sleep 5; done;
 
 -- Test 1: primary was marked down by the master but acetually it keeps running
 -- and previously, checkpoints could recycle/remove the checkpoint.redo wal

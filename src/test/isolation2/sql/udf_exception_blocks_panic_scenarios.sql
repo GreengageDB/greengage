@@ -174,3 +174,9 @@ select test_protocol_allseg(1, 2,'f');
 select * from employees;
 
 SELECT gp_inject_fault('fts_probe', 'reset', 1);
+-- Wait for the panicked segment to finish recovering and its mirror to resync
+-- before yielding to the next test (ao_same_trans_truncate_crash), so a still-
+-- recovering segment cannot cascade into it. FTS was skipped during the panic so
+-- the segment recovers in place (no gprecoverseg needed); this barrier just waits
+-- for synchronization.
+select wait_until_all_segments_synchronized();

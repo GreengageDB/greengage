@@ -2,6 +2,11 @@
 -- Set fsync on since we need to test the fsync code logic.
 !\retcode gpconfig -c fsync -v on --skipvalidation;
 !\retcode gpstop -u;
+-- The preceding crash-recovery test (udf_exception_blocks_panic_scenarios) can
+-- leave a segment still completing recovery / resync; wait for a synchronized
+-- cluster before disabling FTS so this test starts from a healthy state and does
+-- not cascade-fail on its first CHECKPOINT.
+select wait_until_all_segments_synchronized();
 -- skip FTS probes to avoid segment being marked down on restart
 SELECT gp_inject_fault_infinite('fts_probe', 'skip', dbid)
     FROM gp_segment_configuration WHERE role='p' AND content=-1;
