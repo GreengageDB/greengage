@@ -36,7 +36,7 @@ def num(x):
     except: return None
 
 out = ['# TPC-DS comparison', '', 'Labels: ' + ', '.join(f'`{l}`' for l in labels), '']
-header = ['Query'] + labels + (['Δ% (%s vs %s)' % (labels[1], labels[0])] if len(labels) == 2 else [])
+header = ['Query'] + labels + (['Δ%% (%s vs %s)' % (labels[1], labels[0])] if len(labels) == 2 else [])
 out.append('| ' + ' | '.join(header) + ' |')
 out.append('|' + '|'.join(['---'] + ['---:'] * (len(header) - 1)) + '|')
 
