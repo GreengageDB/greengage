@@ -735,21 +735,34 @@ static void upgrade_datum_fetch(AOCSFetchDesc fetch, int attno, Datum values[],
 bool
 aocs_analyze_can_seek(AOCSScanDesc scan)
 {
-	TupleDesc	tupdesc = RelationGetDescr(scan->rs_base.rs_rd);
+	Relation	rel = scan->rs_base.rs_rd;
+	TupleDesc	tupdesc = RelationGetDescr(rel);
+	StdRdOptions **opts = RelationGetAttributeOptions(rel);
 
-	/*
-	 * A column added later via ALTER TABLE ADD COLUMN with a default carries a
-	 * "missing" value (atthasmissing / attmissingval) for the rows that existed
-	 * before the ALTER, so its physical row numbering no longer matches the
-	 * other columns.  The seek path assumes all columns share one row numbering,
-	 * so fall back to the sequential skip whenever any live column has missing
-	 * values.
-	 */
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 
-		if (attr->atthasmissing && !attr->attisdropped)
+		if (attr->attisdropped)
+			continue;
+
+		/*
+		 * A column added later via ALTER TABLE ADD COLUMN with a default carries
+		 * a "missing" value (atthasmissing / attmissingval) for the rows that
+		 * existed before the ALTER, so its physical row numbering no longer
+		 * matches the other columns.  The seek assumes all columns share one row
+		 * numbering, so fall back to the sequential skip.
+		 */
+		if (attr->atthasmissing)
+			return false;
+
+		/*
+		 * RLE_TYPE columns (and the delta sub-encoding applied to some types
+		 * under RLE) use a varblock layout that the header-skip seek does not
+		 * decode; fall back to the sequential skip for them.
+		 */
+		if (opts && opts[i] &&
+			pg_strcasecmp(opts[i]->compresstype, "rle_type") == 0)
 			return false;
 	}
 
@@ -794,7 +807,7 @@ aocs_locate_target_segment(AOCSScanDesc scan, int64 targrow)
  * physrow and decompressing only the block that does.  physrow must be
  * non-decreasing across calls within a segfile.
  */
-static void
+static bool
 aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 physrow,
 						 TupleTableSlot *slot)
 {
@@ -809,11 +822,14 @@ aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 physrow,
 			 physrow < ds->blockFirstRowNum + ds->blockRowCount))
 	{
 		if (!datumstreamread_block_info(ds))
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unexpected end of append-optimized column segment "
-							"while sampling relation \"%s\" for ANALYZE",
-							RelationGetRelationName(scan->rs_base.rs_rd))));
+			/*
+			 * physrow is past the end of this column's data.  The sampled row
+			 * ordinal came from an estimate (table_relation_estimate_size) that
+			 * can exceed the real physical row count, so this is not an error --
+			 * the caller treats it as a non-existent/dead row (matching the
+			 * sequential-skip path, which sees EOF the same way).
+			 */
+			return false;
 
 		if (physrow >= ds->blockFirstRowNum &&
 			physrow < ds->blockFirstRowNum + ds->blockRowCount)
@@ -829,6 +845,7 @@ aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 physrow,
 
 	datumstreamread_find(ds, (int32) (physrow - ds->blockFirstRowNum));
 	datumstreamread_get(ds, &slot->tts_values[attno], &slot->tts_isnull[attno]);
+	return true;
 }
 
 /*
@@ -891,7 +908,9 @@ aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
-		aocs_analyze_seek_column(scan, attno, physrow, slot);
+		/* physrow past the segfile's data (estimate overshoot) -> not a row */
+		if (!aocs_analyze_seek_column(scan, attno, physrow, slot))
+			return false;
 	}
 
 	slot->tts_nvalid = slot->tts_tupleDescriptor->natts;

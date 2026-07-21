@@ -1824,11 +1824,13 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 			 physrow < varblock->blockFirstRowNum + varblock->rowCount))
 	{
 		if (!AppendOnlyExecutorReadBlock_GetBlockInfo(&scan->storageRead, varblock))
-			ereport(ERROR,
-					(errcode(ERRCODE_INTERNAL_ERROR),
-					 errmsg("unexpected end of append-optimized segment while "
-							"sampling relation \"%s\" for ANALYZE",
-							RelationGetRelationName(scan->aos_rd))));
+			/*
+			 * physrow is past the end of this segfile's data.  The sampled row
+			 * ordinal came from an estimate that can exceed the real physical
+			 * row count, so treat it as a non-existent/dead row (matching the
+			 * sequential-skip path), not an error.
+			 */
+			return false;
 
 		if (physrow >= varblock->blockFirstRowNum &&
 			physrow < varblock->blockFirstRowNum + varblock->rowCount)
