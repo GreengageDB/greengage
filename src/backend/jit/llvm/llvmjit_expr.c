@@ -343,7 +343,7 @@ llvm_compile_expr(ExprState *state)
 
 						v_params[0] = v_slot;
 						v_params[1] = l_ptr_const(op->d.fetch.all_vars,
-												   l_ptr(StructBitmapset));
+												  l_ptr(StructBitmapset));
 
 						v_ret = l_call(b,
 									   llvm_pg_var_func_type("slot_gettargetattr"),
