@@ -12,10 +12,15 @@ init="$REPO/02_init/rollout.sh"
 #    single-node PostgreSQL mode (heap tables, no segment distribution, and the
 #    removed pg_filespace_entry). The gpdb_6 path uses
 #    gp_segment_configuration.datadir and AO column storage, which GG7/8 support.
-if ! grep -q "Greenplum Database 8" "$fn"; then
-  sed -i "s/WHEN POSITION ('Greenplum Database 6' IN version) > 0 THEN 'gpdb_6' ELSE 'postgresql'/WHEN POSITION ('Greenplum Database 6' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greenplum Database 7' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greenplum Database 8' IN version) > 0 THEN 'gpdb_6' ELSE 'postgresql'/" "$fn"
+# Match BOTH product names: GreengageDB 8 (PG14/PG18) reports "Greenplum
+# Database 8.0.0-alpha", but GreengageDB 7 reports "Greengage Database 7.0.0-beta"
+# (rebranded), so we map Greenplum 7/8 AND Greengage 7/8 to the gpdb_6 path.
+# Anchor on `ELSE 'postgresql' END FROM version()` (always present) and insert the
+# four WHEN clauses before it; idempotent via the "Greengage Database 8" guard.
+if ! grep -q "Greengage Database 8" "$fn"; then
+  sed -i "s/ELSE 'postgresql' END FROM version()/WHEN POSITION ('Greenplum Database 7' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greenplum Database 8' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greengage Database 7' IN version) > 0 THEN 'gpdb_6' WHEN POSITION ('Greengage Database 8' IN version) > 0 THEN 'gpdb_6' ELSE 'postgresql' END FROM version()/" "$fn"
 fi
-grep -q "Greenplum Database 8" "$fn" || { echo "FATAL: get_version patch did not apply (functions.sh layout changed?)"; exit 1; }
+grep -q "Greengage Database 8" "$fn" || { echo "FATAL: get_version patch did not apply (functions.sh layout changed?)"; exit 1; }
 
 # 2) 02_init: GP6-era GUC / resource-group tuning does not always map 1:1 onto
 #    GG8 (e.g. gpconfig's --masteronly flag, or admin_group resource-group ALTERs

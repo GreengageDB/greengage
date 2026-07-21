@@ -8,8 +8,35 @@ set -euo pipefail
 export NUM_PRIMARY_MIRROR_PAIRS WITH_MIRRORS
 export WITH_STANDBY=false          # no standby needed for a benchmark
 
-GPHOME=/usr/local/greenplum-db-devel
+# GPHOME + path script differ by version: Greengage 7 installs to
+# /usr/local/greengage-db-devel with greengage_path.sh; Greengage 8 (PG14/PG18)
+# uses /usr/local/greenplum-db-devel with greenplum_path.sh. Detect after install.
+GPHOME=/usr/local/greenplum-db-devel        # provisional; re-detected post-install
+PATH_SH="$GPHOME/greenplum_path.sh"
 DEMO=/home/gpadmin/gpdb_src/gpAux/gpdemo
+detect_gphome() {
+  for d in /usr/local/greengage-db-devel /usr/local/greenplum-db-devel; do
+    [ -d "$d" ] || continue
+    GPHOME="$d"
+    for p in greengage_path.sh greenplum_path.sh; do
+      [ -f "$d/$p" ] && { PATH_SH="$d/$p"; break; }
+    done
+    break
+  done
+  # The TPC-DS harness (functions.sh) requires gpadmin's startup file to contain
+  # the literal "greenplum_path" and hardcodes greenplum-named paths. GG7 ships
+  # greengage-db-devel/greengage_path.sh, so expose greenplum-named aliases and
+  # source the greenplum_path.sh symlink (so the harness's profile grep matches).
+  # All guarded → no-op for GG8/GG9 (already greenplum-db-devel/greenplum_path.sh).
+  if [ -n "$GPHOME" ] && [ "$GPHOME" != /usr/local/greenplum-db-devel ] && [ ! -e /usr/local/greenplum-db-devel ]; then
+    ln -sfn "$GPHOME" /usr/local/greenplum-db-devel
+  fi
+  if [ -n "$GPHOME" ] && [ ! -f "$GPHOME/greenplum_path.sh" ]; then
+    ln -sf "$(basename "$PATH_SH")" "$GPHOME/greenplum_path.sh"
+    PATH_SH="$GPHOME/greenplum_path.sh"
+  fi
+  echo "detected GPHOME=$GPHOME  PATH_SH=$PATH_SH"
+}
 
 echo "===== [1/5] sshd (harness ssh-to-self for data-gen / gpfdist) ====="
 ssh-keygen -A
@@ -24,6 +51,7 @@ source gpdb_src/concourse/scripts/common.bash
 # build-time CONFIGURE_FLAGS and is only for building/running the source tests).
 install_gpdb
 gpdb_src/concourse/scripts/setup_gpadmin_user.bash
+detect_gphome
 
 echo "===== [3/5] create demo cluster (${NUM_PRIMARY_MIRROR_PAIRS} primaries, mirrors=${WITH_MIRRORS}) ====="
 # make_cluster (in common.bash) references these unconditionally; bind them so
@@ -42,8 +70,8 @@ su - gpadmin -c '
   # greenplum_path + demo env must be sourced even by non-interactive ssh shells
   # (sshd runs ~/.bashrc, but the stock guard returns early), so prepend them.
   touch ~/.bashrc
-  if ! grep -q greenplum_path ~/.bashrc; then
-    { echo "source '"$GPHOME"'/greenplum_path.sh";
+  if ! grep -q "_path.sh" ~/.bashrc; then
+    { echo "source '"$PATH_SH"'";
       echo "source '"$DEMO"'/gpdemo-env.sh 2>/dev/null || true";
       echo "export PGDATABASE=tpcds";
       cat ~/.bashrc || true; } > ~/.bashrc.new && mv ~/.bashrc.new ~/.bashrc
@@ -53,7 +81,7 @@ su - gpadmin -c '
 echo "===== [5/5] benchmark database + key GUCs ====="
 su - gpadmin -c "
   set -e
-  source $GPHOME/greenplum_path.sh
+  source $PATH_SH
   source $DEMO/gpdemo-env.sh
   createdb tpcds 2>/dev/null || echo 'db tpcds already exists'
   # Consistent optimizer setting for a fair comparison (ORCA on by default).

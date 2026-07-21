@@ -47,10 +47,15 @@ RUN mkdir /home/gpadmin/bin_gpdb
 ENV TARGET_OS_VERSION=22
 ENV TARGET_OS=ubuntu
 ENV OUTPUT_ARTIFACT_DIR=bin_gpdb
-ENV SKIP_UNITTESTS=
+# SKIP_UNITTESTS / CONFIGURE_FLAGS are ARGs so a production benchmark build can
+# override them (e.g. --build-arg SKIP_UNITTESTS=1 and a no-cassert flag set)
+# without changing the default CI (cassert) build, which passes no build-args.
+ARG SKIP_UNITTESTS=
+ENV SKIP_UNITTESTS=${SKIP_UNITTESTS}
 # To set default locale for unittests
 ENV LANG=en_US.UTF-8
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --with-llvm --with-openssl --enable-cassert --enable-debug --enable-depend --with-libxml --with-uuid=ossp --with-perl --enable-mapreduce --enable-orafce"
+ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --with-llvm --with-openssl --enable-cassert --enable-debug --enable-depend --with-libxml --with-uuid=ossp --with-perl --enable-mapreduce --enable-orafce"
+ENV CONFIGURE_FLAGS=${CONFIGURE_FLAGS}
 
 # Compile with running mocking tests
 RUN bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash

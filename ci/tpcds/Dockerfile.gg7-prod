@@ -1,0 +1,32 @@
+# Rebuild GreengageDB 7.4.1 from its published CI source image with PRODUCTION
+# flags (no --enable-cassert / --enable-debug / --enable-debug-extensions), so it
+# can be compared fairly against the production GG8/GG9 builds.
+#
+# The published image ghcr.io/greengagedb/greengage/ggdb7_ubuntu:7.4.1 already
+# ships /home/gpadmin/gpdb_src (full source + vendored gpAux/ext deps) and a
+# cassert bin_gpdb.tar.gz. We re-run the same concourse compile with the release's
+# configure toggles minus the three debug/assert ones, replacing the tarball.
+#
+#   docker build -f Dockerfile.gg7-prod -t greengage-prod:gg7 .
+FROM ghcr.io/greengagedb/greengage/ggdb7_ubuntu:7.4.1
+
+USER root
+WORKDIR /home/gpadmin
+
+ENV TARGET_OS=ubuntu \
+    TARGET_OS_VERSION=22 \
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS=1 \
+    LANG=en_US.UTF-8
+
+# Production toggle set = the 7.4.1 release configure line (captured from the
+# shipped pg_config --configure) with --enable-debug-extensions / --enable-cassert
+# / --enable-debug removed. gpAux `make dist` still auto-adds prefix, ext
+# include/lib paths, CFLAGS(-O3) and rpath LDFLAGS.
+ARG CONFIGURE_FLAGS="--enable-orafce --enable-ic-proxy --enable-orca --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-uuid=e2fs --with-llvm --with-pgport=5432 --with-gssapi --enable-depend --with-perl --with-python PYTHON=python3"
+ENV CONFIGURE_FLAGS=${CONFIGURE_FLAGS}
+
+RUN rm -rf /home/gpadmin/bin_gpdb/* && \
+    bash /home/gpadmin/gpdb_src/concourse/scripts/compile_gpdb.bash
+
+WORKDIR /home/gpadmin

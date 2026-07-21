@@ -4,9 +4,15 @@
 # 15 positional args it expects (same order as tpcds.sh's final line).
 set -uo pipefail
 
-GPHOME=/usr/local/greenplum-db-devel
+# GG7 installs to greengage-db-devel/greengage_path.sh; GG8/9 to
+# greenplum-db-devel/greenplum_path.sh. Detect whichever this image has.
+for d in /usr/local/greengage-db-devel /usr/local/greenplum-db-devel; do
+  [ -d "$d" ] && GPHOME="$d" && break
+done
 DEMO=/home/gpadmin/gpdb_src/gpAux/gpdemo
-source "$GPHOME/greenplum_path.sh"
+for p in "$GPHOME"/greengage_path.sh "$GPHOME"/greenplum_path.sh; do
+  [ -f "$p" ] && source "$p" && break
+done
 source "$DEMO/gpdemo-env.sh"
 export PGDATABASE=tpcds
 

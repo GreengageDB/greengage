@@ -29,6 +29,17 @@ RUN bash /opt/tpcds-patches/apply.sh /opt/TPC-DS
 # Driver scripts (bring up cluster, run harness, aggregate results).
 COPY scripts/ /opt/tpcds-scripts/
 
+# Production base images (built from ci/Dockerfile.ubuntu with no-cassert flags)
+# do not create the gpadmin user — bringup_cluster.sh's setup_gpadmin_user.bash
+# creates it at runtime and is idempotent (it skips creation if gpadmin exists).
+# Create JUST the user now so the build-time chown below works. Do NOT create the
+# `supergroup` group here: the runtime setup runs a bare `groupadd supergroup`
+# under `set -e`, which would fail if it already existed. Leaving it to runtime
+# keeps that path working; gpadmin doesn't need supergroup for the benchmark.
+# No-op if the base already has gpadmin.
+RUN id gpadmin >/dev/null 2>&1 || ( useradd -m -u 1000 -s /bin/bash gpadmin && \
+      echo "gpadmin ALL = NOPASSWD : ALL" >> /etc/sudoers )
+
 RUN chmod -R +x /opt/tpcds-scripts /opt/tpcds-patches && \
     find /opt/TPC-DS -name '*.sh' -exec chmod +x {} + && \
     chown -R gpadmin:gpadmin /opt/TPC-DS
