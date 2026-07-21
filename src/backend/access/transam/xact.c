@@ -229,6 +229,7 @@ typedef struct TransactionStateData
 	Oid			prevUser;		/* previous CurrentUserId setting */
 	int			prevSecContext; /* previous SecurityRestrictionContext */
 	bool		prevXactReadOnly;	/* entry-time xact r/o state */
+	bool		prevTempTableScope; /* entry-time tempcat temp-table scope */
 	bool		startedInRecovery;	/* did we start in recovery? */
 	bool		didLogXid;		/* has xid been included in WAL record? */
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
@@ -6292,6 +6293,20 @@ AbortSubTransaction(void)
 	 */
 	XactReadOnly = s->prevXactReadOnly;
 
+	/*
+	 * Restore the tempcat temp-table scope flag.  BEGIN_TEMP_TABLE_SCOPE does
+	 * not install a catch block of its own, so an error that unwinds out of an
+	 * open scope relies on this (or on AbortTransaction at the top level) to
+	 * put the flag back.
+	 *
+	 * Note this is a save/restore, not a plain reset to false: a subtransaction
+	 * can be started *inside* an open scope -- e.g. an index expression that
+	 * calls a PL/pgSQL function with an EXCEPTION block, evaluated by
+	 * index_build() within index_create()'s scope -- and when such a subxact
+	 * aborts, the enclosing scope is still open and must stay on.
+	 */
+	temp_table_scope = s->prevTempTableScope;
+
 	RESUME_INTERRUPTS();
 }
 
@@ -6385,6 +6400,7 @@ PushTransaction(void)
 	s->blockState = TBLOCK_SUBBEGIN;
 	GetUserIdAndSecContext(&s->prevUser, &s->prevSecContext);
 	s->prevXactReadOnly = XactReadOnly;
+	s->prevTempTableScope = temp_table_scope;
 	s->startedInRecovery = p->startedInRecovery;
 	s->parallelModeLevel = 0;
 	s->executorSaysXactDoesWrites = false;
