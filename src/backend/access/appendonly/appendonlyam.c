@@ -1739,6 +1739,18 @@ appendonly_analyze_can_seek(AppendOnlyScanDesc scan)
 			continue;
 		if (scan->aos_segfile_arr[i]->formatversion != AORelationVersion_GetLatest())
 			return false;
+
+		/*
+		 * A compacted-but-not-yet-dropped segfile still reports its old
+		 * total_tupcount, but SetNextFileSegForRead() skips it.  The seek maps a
+		 * global row ordinal to a (segment, row) pair by accumulating
+		 * total_tupcount over the segments SetNextFileSegForRead() actually
+		 * scans, so an AWAITING_DROP segment would desynchronise that mapping
+		 * (wrong segfirstrow -> wrong sample or a spurious end-of-segment
+		 * error).  Fall back to the sequential skip.
+		 */
+		if (scan->aos_segfile_arr[i]->state == AOSEG_STATE_AWAITING_DROP)
+			return false;
 	}
 	return true;
 }
@@ -1799,6 +1811,8 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 		CloseScannedFileSeg(scan);
 		/* SetNextFileSegForRead() opens aos_segfiles_processed next. */
 		scan->aos_segfiles_processed = segidx;
+		/* Base row number is discovered from the new segfile's first block. */
+		scan->segbaserow = -1;
 	}
 	if (scan->aos_need_new_segfile)
 	{
@@ -1811,8 +1825,14 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 		scan->bufferDone = true;
 	}
 
-	/* 1-based physical row within the current segfile. */
-	physrow = targrow - scan->segfirstrow + 1;
+	/*
+	 * Absolute AO row number of the sampled row: the segfile's base row number
+	 * plus the 0-based physical ordinal within the segfile.  segbaserow is -1
+	 * right after (re)opening the segfile; it is filled in from the first
+	 * block's header inside the loop below (where bufferDone forces a read), so
+	 * the value computed here is only used once the base is known.
+	 */
+	physrow = scan->segbaserow + (targrow - scan->segfirstrow);
 
 	/*
 	 * Advance to the varblock covering physrow.  When a block is already loaded
@@ -1831,6 +1851,13 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 			 * sequential-skip path), not an error.
 			 */
 			return false;
+
+		if (scan->segbaserow < 0)
+		{
+			/* First block of a freshly opened segfile: its header is the base. */
+			scan->segbaserow = varblock->blockFirstRowNum;
+			physrow = scan->segbaserow + (targrow - scan->segfirstrow);
+		}
 
 		if (physrow >= varblock->blockFirstRowNum &&
 			physrow < varblock->blockFirstRowNum + varblock->rowCount)

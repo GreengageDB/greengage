@@ -184,12 +184,17 @@ typedef struct AOCSScanDescData
 	/*
 	 * GPDB: cursor state for the AO-column ANALYZE random-access sampler.
 	 * segfirstrow is the global (0-based) physical row ordinal of the first row
-	 * of cur_seg.  analyzeSeek is 0 until determined on the first
-	 * scan_analyze_next_block(), then 1 = use the direct seek fast path,
-	 * 2 = fall back to the sequential skip (older-format segfiles).  See
-	 * aoco_scan_analyze_next_tuple() / aocs_analyze_get_target_tuple().
+	 * of cur_seg.  segbaserow is the absolute AO row number of that first row
+	 * (AO row numbers come from a per-segno monotonic sequence and need not
+	 * start at 1 -- a compacted-then-reused segfile starts higher), so the
+	 * seek maps a local ordinal to segbaserow + ordinal, not to ordinal + 1.
+	 * analyzeSeek is 0 until determined on the first scan_analyze_next_block(),
+	 * then 1 = use the direct seek fast path, 2 = fall back to the sequential
+	 * skip (older-format segfiles).  See aoco_scan_analyze_next_tuple() /
+	 * aocs_analyze_get_target_tuple().
 	 */
 	int64		segfirstrow;
+	int64		segbaserow;
 	int			analyzeSeek;
 } AOCSScanDescData;
 

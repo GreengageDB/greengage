@@ -772,6 +772,18 @@ aocs_analyze_can_seek(AOCSScanDesc scan)
 			continue;
 		if (scan->seginfo[i]->formatversion != AORelationVersion_GetLatest())
 			return false;
+
+		/*
+		 * A compacted-but-not-yet-dropped segfile still reports its old
+		 * total_tupcount, but open_next_scan_seg() skips it.  The seek maps a
+		 * global row ordinal to a (segment, row) pair by accumulating
+		 * total_tupcount over the segments open_next_scan_seg() actually scans,
+		 * so an AWAITING_DROP segment would desynchronise that mapping (it
+		 * trips the cur_seg == segidx assertion, or silently samples the wrong
+		 * segment in a non-assert build).  Fall back to the sequential skip.
+		 */
+		if (scan->seginfo[i]->state == AOSEG_STATE_AWAITING_DROP)
+			return false;
 	}
 	return true;
 }
@@ -887,10 +899,30 @@ aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *
 							"\"%s\" for ANALYZE",
 							segidx, RelationGetRelationName(scan->rs_base.rs_rd))));
 		Assert(scan->cur_seg == segidx);
+
+		/*
+		 * open_next_scan_seg() (via open_all_datumstreamread_segfiles) already
+		 * read the first varblock of every projected column, so its header row
+		 * number is the segfile's base -- the absolute AO row number of the
+		 * segfile's first physical row.  All columns share one row numbering,
+		 * so any projected column serves as the anchor.
+		 */
+		if (scan->columnScanInfo.num_proj_atts > 0)
+		{
+			AttrNumber	anchor = scan->columnScanInfo.proj_atts[0];
+
+			scan->segbaserow = scan->columnScanInfo.ds[anchor]->blockFirstRowNum;
+		}
+		else
+			scan->segbaserow = 1;
 	}
 
-	/* 1-based physical row within the current segfile. */
-	physrow = targrow - scan->segfirstrow + 1;
+	/*
+	 * Absolute AO row number of the sampled row: the segfile's base plus the
+	 * 0-based physical ordinal within the segfile.  This is what the per-column
+	 * varblock walk and the visimap lookup both key on.
+	 */
+	physrow = scan->segbaserow + (targrow - scan->segfirstrow);
 
 	AOTupleIdInit(&aotid, scan->seginfo[scan->cur_seg]->segno, physrow);
 	scan->cdb_fake_ctid = *((ItemPointer) &aotid);
