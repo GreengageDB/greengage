@@ -1957,7 +1957,7 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 bool
 slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 {
-	if (NULL == slot->tts_ops->gettargetattr)
+	if (slot->tts_ops->gettargetattr == NULL)
 		return false;
 
 	return slot->tts_ops->gettargetattr(slot, attrs);
