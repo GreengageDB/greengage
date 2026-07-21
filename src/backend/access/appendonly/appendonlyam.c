@@ -1705,6 +1705,159 @@ appendonly_endscan(TableScanDesc scan)
 	pfree(aoscan);
 }
 
+/* ----------------------------------------------------------------------------
+ * AO-row ANALYZE random-access sampler.
+ *
+ * Analogous to the AO-column sampler (aocsam.c): reach each sampled row ordinal
+ * by walking varblock headers and decompressing only the block that contains
+ * the target, instead of the generic sequential skip that decompresses every
+ * tuple in between (O(N) per segment).  Restores the O(sample) behaviour the
+ * GreengageDB 7 sampler had before the PG14 table-AM uplift dropped it.
+ *
+ * Used only when every segfile is at the latest AO format and no live column
+ * has missing values (ALTER TABLE ADD COLUMN default); otherwise the caller
+ * keeps the sequential skip.
+ * ----------------------------------------------------------------------------
+ */
+
+bool
+appendonly_analyze_can_seek(AppendOnlyScanDesc scan)
+{
+	TupleDesc	tupdesc = RelationGetDescr(scan->aos_rd);
+
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+
+		if (attr->atthasmissing && !attr->attisdropped)
+			return false;
+	}
+
+	for (int i = 0; i < scan->aos_total_segfiles; i++)
+	{
+		if (scan->aos_segfile_arr[i]->total_tupcount <= 0)
+			continue;
+		if (scan->aos_segfile_arr[i]->formatversion != AORelationVersion_GetLatest())
+			return false;
+	}
+	return true;
+}
+
+/*
+ * Locate the segfile index containing the global (0-based) row ordinal
+ * 'targrow', advancing scan->segfirstrow.  Returns -1 if past the end.
+ * Callers must supply monotonically non-decreasing targrow.
+ */
+static int
+appendonly_locate_target_segment(AppendOnlyScanDesc scan, int64 targrow)
+{
+	for (int i = scan->aos_segfiles_processed - 1; i < scan->aos_total_segfiles; i++)
+	{
+		int64		rowcount;
+
+		if (i < 0)
+			continue;
+
+		rowcount = scan->aos_segfile_arr[i]->total_tupcount;
+		if (rowcount <= 0)
+			continue;
+
+		if (scan->segfirstrow + rowcount - 1 >= targrow)
+			return i;
+
+		scan->segfirstrow += rowcount;
+	}
+	return -1;
+}
+
+/*
+ * Fetch the tuple at global row ordinal 'targrow' into 'slot' by direct seek.
+ * Returns true if live/visible; false if dead or past the end.  Only valid when
+ * appendonly_analyze_can_seek() is true, with non-decreasing targrow.
+ */
+bool
+appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
+									TupleTableSlot *slot)
+{
+	AppendOnlyExecutorReadBlock *varblock = &scan->executorReadBlock;
+	int			segidx;
+	int			segno;
+	int64		physrow;
+	AOTupleId	aotid;
+
+	ExecClearTuple(slot);
+
+	segidx = appendonly_locate_target_segment(scan, targrow);
+	if (segidx < 0)
+		return false;			/* past end of relation */
+
+	segno = scan->aos_segfile_arr[segidx]->segno;
+
+	/* Open the target segfile if it is not the one currently being scanned. */
+	if (segidx + 1 > scan->aos_segfiles_processed)
+	{
+		CloseScannedFileSeg(scan);
+		/* SetNextFileSegForRead() opens aos_segfiles_processed next. */
+		scan->aos_segfiles_processed = segidx;
+	}
+	if (scan->aos_need_new_segfile)
+	{
+		if (!SetNextFileSegForRead(scan))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("failed to open segment %d while sampling relation "
+							"\"%s\" for ANALYZE",
+							segno, RelationGetRelationName(scan->aos_rd))));
+		scan->bufferDone = true;
+	}
+
+	/* 1-based physical row within the current segfile. */
+	physrow = targrow - scan->segfirstrow + 1;
+
+	/*
+	 * Advance to the varblock covering physrow.  When a block is already loaded
+	 * (bufferDone == false) and it covers physrow, the loop is skipped and we go
+	 * straight to the in-block fetch.
+	 */
+	while (scan->bufferDone ||
+		   !(physrow >= varblock->blockFirstRowNum &&
+			 physrow < varblock->blockFirstRowNum + varblock->rowCount))
+	{
+		if (!AppendOnlyExecutorReadBlock_GetBlockInfo(&scan->storageRead, varblock))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unexpected end of append-optimized segment while "
+							"sampling relation \"%s\" for ANALYZE",
+							RelationGetRelationName(scan->aos_rd))));
+
+		if (physrow >= varblock->blockFirstRowNum &&
+			physrow < varblock->blockFirstRowNum + varblock->rowCount)
+		{
+			AppendOnlyExecutorReadBlock_GetContents(varblock);
+			scan->bufferDone = false;
+			break;
+		}
+
+		AppendOnlyExecutionReadBlock_FinishedScanBlock(varblock);
+		AppendOnlyStorageRead_SkipCurrentBlock(&scan->storageRead);
+	}
+
+	AOTupleIdInit(&aotid, segno, physrow);
+
+	if (scan->snapshot != SnapshotAny &&
+		!AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aotid))
+		return false;
+
+	if (AppendOnlyExecutorReadBlock_FetchTuple(varblock, physrow, 0, NULL, slot))
+	{
+		pgstat_count_heap_getnext(scan->aos_rd);
+		return true;
+	}
+
+	ExecClearTuple(slot);
+	return false;
+}
+
 /* ----------------
  *		appendonly_getnextslot - retrieve next tuple in scan
  * ----------------

@@ -1292,9 +1292,14 @@ appendonly_scan_analyze_next_block(TableScanDesc scan, ReadStream *stream)
 	 * GPDB: AO relations have no shared-buffer blocks, so ANALYZE does not use
 	 * the PG17 read stream (it is always NULL here).  acquire_sample_rows()
 	 * hands us the sampled logical row number via rs_sampleTargetBlock; the
-	 * following scan_analyze_next_tuple() call skips forward to it.
+	 * following scan_analyze_next_tuple() reaches it -- by direct seek when
+	 * every segfile is at the latest AO format (appendonly_analyze_can_seek),
+	 * else by the sequential skip below.
 	 */
 	aoscan->targetTupleId = scan->rs_sampleTargetBlock;
+
+	if (aoscan->analyzeSeek == 0)		/* 0 = not yet determined */
+		aoscan->analyzeSeek = appendonly_analyze_can_seek(aoscan) ? 1 : 2;
 
 	return true;
 }
@@ -1306,6 +1311,26 @@ appendonly_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 {
 	AppendOnlyScanDesc aoscan = (AppendOnlyScanDesc) scan;
 	bool		ret = false;
+
+	/*
+	 * Fast path: seek directly to the sampled row.  acquire_sample_rows() calls
+	 * us repeatedly for one sampled block until we return false; there is one
+	 * tuple per sampled ordinal, so return the sought tuple once then report the
+	 * block exhausted.  nextTupleId holds (last returned target + 1).
+	 */
+	if (aoscan->analyzeSeek == 1)
+	{
+		if (aoscan->nextTupleId > aoscan->targetTupleId)
+			return false;			/* already returned this target's tuple */
+		aoscan->nextTupleId = aoscan->targetTupleId + 1;
+
+		ret = appendonly_analyze_get_target_tuple(aoscan, aoscan->targetTupleId, slot);
+		if (ret)
+			*liverows += 1;
+		else
+			*deadrows += 1;
+		return ret;
+	}
 
 	/* skip several tuples if they are not sampling target */
 	while (!aoscan->aos_done_all_segfiles

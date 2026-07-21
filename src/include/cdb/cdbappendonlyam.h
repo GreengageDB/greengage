@@ -232,6 +232,15 @@ typedef struct AppendOnlyScanDescData
 	 */
 	int64		nextTupleId;
 	int64		targetTupleId;
+	/*
+	 * Cursor state for the AO-row ANALYZE random-access sampler.  segfirstrow is
+	 * the global (0-based) physical row ordinal of the first row of the current
+	 * segfile; analyzeSeek is 0 until determined on the first
+	 * scan_analyze_next_block(), then 1 = use the direct seek, 2 = fall back to
+	 * the sequential skip.  See appendonly_scan_analyze_next_tuple().
+	 */
+	int64		segfirstrow;
+	int			analyzeSeek;
 
 	/* For Bitmap scan */
 	int			rs_cindex;		/* current tuple's index in rs_offsets */
@@ -420,6 +429,11 @@ extern void appendonly_rescan(TableScanDesc scan, ScanKey key,
 								bool set_params, bool allow_strat,
 								bool allow_sync, bool allow_pagemode);
 extern void appendonly_endscan(TableScanDesc scan);
+/* AO-row ANALYZE random-access sampler (appendonlyam.c). */
+extern bool appendonly_analyze_can_seek(AppendOnlyScanDesc scan);
+extern bool appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan,
+												int64 targrow, TupleTableSlot *slot);
+
 extern bool appendonly_getnextslot(TableScanDesc scan,
 								   ScanDirection direction,
 								   TupleTableSlot *slot);
