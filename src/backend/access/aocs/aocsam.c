@@ -863,6 +863,42 @@ aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 localord,
 }
 
 /*
+ * Seek the datum stream for column 'attno' to the given absolute AO row number
+ * 'physrow' and read its value into the slot.  Unlike the by-count seek above,
+ * this matches on the block's stored first-row number, so it works for columns
+ * whose varblock boundaries differ from the anchor's (e.g. a wide column that
+ * stores one large value per block while a narrow column packs many rows per
+ * block).  physrow must be non-decreasing across calls within a segfile.
+ * Returns false only if physrow is past the end of this column's data.
+ */
+static bool
+aocs_analyze_seek_column_byrow(AOCSScanDesc scan, AttrNumber attno,
+							   int64 physrow, TupleTableSlot *slot)
+{
+	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+
+	while (!(physrow >= ds->blockFirstRowNum &&
+			 physrow < ds->blockFirstRowNum + ds->blockRowCount))
+	{
+		if (!datumstreamread_block_info(ds))
+			return false;
+
+		if (physrow >= ds->blockFirstRowNum &&
+			physrow < ds->blockFirstRowNum + ds->blockRowCount)
+		{
+			datumstreamread_block_content(ds);
+			break;
+		}
+
+		AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+	}
+
+	datumstreamread_find(ds, (int32) (physrow - ds->blockFirstRowNum));
+	datumstreamread_get(ds, &slot->tts_values[attno], &slot->tts_isnull[attno]);
+	return true;
+}
+
+/*
  * Fetch the tuple at global physical row ordinal 'targrow' into 'slot' by
  * direct seek.  Returns true if the tuple is live/visible; false if it is a
  * dead (invisible) row or targrow is past the end of the relation.  Only valid
@@ -916,32 +952,36 @@ aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *
 	localord = targrow - scan->segfirstrow;
 
 	/*
-	 * Seek every projected column to the localord-th physical row.  Columns are
-	 * row-aligned, so they all land on the same varblock and return the same
-	 * base ordinal; we walk them all (even for a row that turns out to be dead)
-	 * to keep the per-column stream cursors in lockstep.
-	 */
-	newbase = scan->segordbase;
-	for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
-	{
-		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-		int64		b;
-
-		/* localord past the segfile's data (estimate overshoot) -> not a row */
-		b = aocs_analyze_seek_column(scan, attno, localord, scan->segordbase, slot);
-		if (b < 0)
-			return false;
-		newbase = b;
-	}
-	scan->segordbase = newbase;
-
-	/*
-	 * Real AO row number of the target: the covering block's first row number
-	 * plus the in-block offset.  This keys the visimap lookup and the TID.
+	 * Locate the target with the anchor (first projected) column by COUNTING
+	 * physical rows, which yields its varblock and hence the row's real AO row
+	 * number.  Per-column varblock boundaries differ (a wide column may store
+	 * one large value per block while a narrow column packs many rows per
+	 * block), so only the anchor can be walked by ordinal; the row NUMBER it
+	 * produces is shared by every column and is what drives the rest.
 	 */
 	anchor = scan->columnScanInfo.proj_atts[0];
+	newbase = aocs_analyze_seek_column(scan, anchor, localord, scan->segordbase,
+									   slot);
+	if (newbase < 0)
+		return false;			/* estimate overshoot: past end -> not a row */
+	scan->segordbase = newbase;
+
+	/* Real AO row number: covering block's first row number + in-block offset. */
 	physrow = scan->columnScanInfo.ds[anchor]->blockFirstRowNum +
-		(localord - scan->segordbase);
+		(localord - newbase);
+
+	/*
+	 * Seek the remaining projected columns to that row number.  We walk them
+	 * all (even for a row that turns out to be dead) so the per-column stream
+	 * cursors stay in lockstep with the anchor for the next target.
+	 */
+	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+		if (!aocs_analyze_seek_column_byrow(scan, attno, physrow, slot))
+			return false;
+	}
 
 	AOTupleIdInit(&aotid, scan->seginfo[scan->cur_seg]->segno, physrow);
 	scan->cdb_fake_ctid = *((ItemPointer) &aotid);
