@@ -180,9 +180,25 @@ typedef struct AOCSScanDescData
 	 */
 	AppendOnlyBlockDirectory *blockDirectory;
 	AppendOnlyVisimap visibilityMap;
+
+	/*
+	 * GPDB: cursor state for the AO-column ANALYZE random-access sampler.
+	 * segfirstrow is the global (0-based) physical row ordinal of the first row
+	 * of cur_seg.  analyzeSeek is 0 until determined on the first
+	 * scan_analyze_next_block(), then 1 = use the direct seek fast path,
+	 * 2 = fall back to the sequential skip (older-format segfiles).  See
+	 * aoco_scan_analyze_next_tuple() / aocs_analyze_get_target_tuple().
+	 */
+	int64		segfirstrow;
+	int			analyzeSeek;
 } AOCSScanDescData;
 
 typedef AOCSScanDescData *AOCSScanDesc;
+
+/* AO-column ANALYZE random-access sampler (aocsam.c). */
+extern bool aocs_analyze_can_seek(AOCSScanDesc scan);
+extern bool aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow,
+										  TupleTableSlot *slot);
 
 /*
  * Used for fetch individual tuples from specified by TID of append only relations

@@ -309,6 +309,8 @@ extern int64 datumstreamwrite_lob(DatumStreamWrite *ds,
 extern int	datumstreamread_block(DatumStreamRead * ds,
 								  AppendOnlyBlockDirectory *blockDirectory,
 								  int colGroupNo);
+/* Read only the next varblock's header (used by the AO-column ANALYZE seek). */
+extern bool datumstreamread_block_info(DatumStreamRead * acc);
 extern void datumstreamread_find(DatumStreamRead * datumStream,
 					 int32 rowNumInBlock);
 extern void datumstreamread_rewind_block(DatumStreamRead * datumStream);

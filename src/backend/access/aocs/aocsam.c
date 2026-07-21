@@ -709,6 +709,197 @@ static void upgrade_datum_fetch(AOCSFetchDesc fetch, int attno, Datum values[],
 					   values, isnull, formatversion);
 }
 
+/* ----------------------------------------------------------------------------
+ * AO-column ANALYZE random-access sampler.
+ *
+ * ANALYZE samples ~targrows random row ordinals.  The generic table-AM analyze
+ * path (aoco_scan_analyze_next_block/next_tuple) reaches each target ordinal
+ * with a sequential skip that decompresses and forms every tuple in between,
+ * i.e. an O(N) full columnar scan per segment.  These helpers instead seek
+ * directly to the target row by walking varblock *headers* and decompressing
+ * only the block that contains the target, restoring the O(sample) behaviour
+ * GreengageDB 7 had before the PG14 table-AM uplift dropped its sampler.
+ *
+ * The fast path is used only when every segfile is at the latest AO format
+ * version (aocs_analyze_can_seek), i.e. no ALTER TABLE ADD COLUMN produced
+ * "missing" values; then all columns share the same physical row numbering and
+ * can be seeked independently.  Otherwise the caller keeps the sequential skip.
+ * ----------------------------------------------------------------------------
+ */
+
+/*
+ * True if the fast seek sampler can be used for this relation: every non-empty
+ * segfile must be at the latest AO format version so all columns have identical
+ * physical row numbering.
+ */
+bool
+aocs_analyze_can_seek(AOCSScanDesc scan)
+{
+	TupleDesc	tupdesc = RelationGetDescr(scan->rs_base.rs_rd);
+
+	/*
+	 * A column added later via ALTER TABLE ADD COLUMN with a default carries a
+	 * "missing" value (atthasmissing / attmissingval) for the rows that existed
+	 * before the ALTER, so its physical row numbering no longer matches the
+	 * other columns.  The seek path assumes all columns share one row numbering,
+	 * so fall back to the sequential skip whenever any live column has missing
+	 * values.
+	 */
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+
+		if (attr->atthasmissing && !attr->attisdropped)
+			return false;
+	}
+
+	for (int i = 0; i < scan->total_seg; i++)
+	{
+		if (scan->seginfo[i]->total_tupcount <= 0)
+			continue;
+		if (scan->seginfo[i]->formatversion != AORelationVersion_GetLatest())
+			return false;
+	}
+	return true;
+}
+
+/*
+ * Locate the segfile index containing the global (0-based) physical row ordinal
+ * 'targrow', advancing scan->segfirstrow (the global ordinal of the first row
+ * of the returned segment).  Returns -1 if targrow is past the end.  Callers
+ * must supply monotonically non-decreasing targrow.
+ */
+static int
+aocs_locate_target_segment(AOCSScanDesc scan, int64 targrow)
+{
+	for (int i = (scan->cur_seg < 0) ? 0 : scan->cur_seg; i < scan->total_seg; i++)
+	{
+		int64		rowcount = scan->seginfo[i]->total_tupcount;
+
+		if (rowcount <= 0)
+			continue;
+
+		if (scan->segfirstrow + rowcount - 1 >= targrow)
+			return i;
+
+		scan->segfirstrow += rowcount;
+	}
+	return -1;
+}
+
+/*
+ * Seek the datum stream for column 'attno' to 1-based per-segfile physical row
+ * 'physrow' and read its value into the slot.  Advances varblock-by-varblock
+ * using block headers, skipping the content of blocks that do not contain
+ * physrow and decompressing only the block that does.  physrow must be
+ * non-decreasing across calls within a segfile.
+ */
+static void
+aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 physrow,
+						 TupleTableSlot *slot)
+{
+	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+
+	/*
+	 * Advance to the varblock covering physrow.  When the current (already
+	 * decompressed) block covers physrow the while-condition is false and we go
+	 * straight to the in-block find below.
+	 */
+	while (!(physrow >= ds->blockFirstRowNum &&
+			 physrow < ds->blockFirstRowNum + ds->blockRowCount))
+	{
+		if (!datumstreamread_block_info(ds))
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("unexpected end of append-optimized column segment "
+							"while sampling relation \"%s\" for ANALYZE",
+							RelationGetRelationName(scan->rs_base.rs_rd))));
+
+		if (physrow >= ds->blockFirstRowNum &&
+			physrow < ds->blockFirstRowNum + ds->blockRowCount)
+		{
+			/* physrow is in this block: decompress it (also gets it ready) */
+			datumstreamread_block_content(ds);
+			break;
+		}
+
+		/* physrow is beyond this block: skip its content without decompressing */
+		AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+	}
+
+	datumstreamread_find(ds, (int32) (physrow - ds->blockFirstRowNum));
+	datumstreamread_get(ds, &slot->tts_values[attno], &slot->tts_isnull[attno]);
+}
+
+/*
+ * Fetch the tuple at global physical row ordinal 'targrow' into 'slot' by
+ * direct seek.  Returns true if the tuple is live/visible; false if it is a
+ * dead (invisible) row or targrow is past the end of the relation.  Only valid
+ * when aocs_analyze_can_seek() is true, and with non-decreasing targrow.
+ */
+bool
+aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
+{
+	int			segidx;
+	int64		physrow;
+	AOTupleId	aotid;
+
+	/* Lazy column-scan init, mirroring aocs_getnext(). */
+	if (scan->columnScanInfo.relationTupleDesc == NULL)
+	{
+		scan->columnScanInfo.relationTupleDesc = slot->tts_tupleDescriptor;
+		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
+		initscan_with_colinfo(scan);
+	}
+
+	ExecClearTuple(slot);
+
+	segidx = aocs_locate_target_segment(scan, targrow);
+	if (segidx < 0)
+		return false;			/* past end of relation */
+
+	/* Open the target segfile if we are not already scanning it. */
+	if (segidx != scan->cur_seg)
+	{
+		close_cur_scan_seg(scan);
+		scan->cur_seg = segidx - 1;
+		if (open_next_scan_seg(scan) < 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INTERNAL_ERROR),
+					 errmsg("failed to open segment %d while sampling relation "
+							"\"%s\" for ANALYZE",
+							segidx, RelationGetRelationName(scan->rs_base.rs_rd))));
+		Assert(scan->cur_seg == segidx);
+	}
+
+	/* 1-based physical row within the current segfile. */
+	physrow = targrow - scan->segfirstrow + 1;
+
+	AOTupleIdInit(&aotid, scan->seginfo[scan->cur_seg]->segno, physrow);
+	scan->cdb_fake_ctid = *((ItemPointer) &aotid);
+	slot->tts_tid = scan->cdb_fake_ctid;
+
+	/*
+	 * Visibility is decided from the TID alone; dead rows need no column reads
+	 * (the per-column block cursors advance lazily on the next live target).
+	 */
+	if (scan->rs_base.rs_snapshot != SnapshotAny &&
+		!AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aotid))
+		return false;
+
+	for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+		aocs_analyze_seek_column(scan, attno, physrow, slot);
+	}
+
+	slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
+	ExecStoreVirtualTuple(slot);
+	pgstat_count_heap_getnext(scan->rs_base.rs_rd);
+	return true;
+}
+
 bool
 aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
