@@ -1795,6 +1795,7 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 	int			segidx;
 	int			segno;
 	int64		physrow;
+	int64		localord;
 	AOTupleId	aotid;
 
 	ExecClearTuple(slot);
@@ -1811,8 +1812,8 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 		CloseScannedFileSeg(scan);
 		/* SetNextFileSegForRead() opens aos_segfiles_processed next. */
 		scan->aos_segfiles_processed = segidx;
-		/* Base row number is discovered from the new segfile's first block. */
-		scan->segbaserow = -1;
+		/* The new segfile's first loaded block starts at local ordinal 0. */
+		scan->segordbase = 0;
 	}
 	if (scan->aos_need_new_segfile)
 	{
@@ -1825,51 +1826,56 @@ appendonly_analyze_get_target_tuple(AppendOnlyScanDesc scan, int64 targrow,
 		scan->bufferDone = true;
 	}
 
-	/*
-	 * Absolute AO row number of the sampled row: the segfile's base row number
-	 * plus the 0-based physical ordinal within the segfile.  segbaserow is -1
-	 * right after (re)opening the segfile; it is filled in from the first
-	 * block's header inside the loop below (where bufferDone forces a read), so
-	 * the value computed here is only used once the base is known.
-	 */
-	physrow = scan->segbaserow + (targrow - scan->segfirstrow);
+	/* 0-based physical ordinal of the target row within the current segfile. */
+	localord = targrow - scan->segfirstrow;
 
 	/*
-	 * Advance to the varblock covering physrow.  When a block is already loaded
-	 * (bufferDone == false) and it covers physrow, the loop is skipped and we go
-	 * straight to the in-block fetch.
+	 * Advance to the varblock containing the localord-th physical row of the
+	 * segfile by COUNTING physical rows (blockRowCount) -- AO row numbers are
+	 * not dense (see segordbase), so we must not derive the block from the row
+	 * number.  When a block is already loaded (bufferDone == false) and it
+	 * covers localord, the loop is skipped and we go straight to the fetch.
 	 */
 	while (scan->bufferDone ||
-		   !(physrow >= varblock->blockFirstRowNum &&
-			 physrow < varblock->blockFirstRowNum + varblock->rowCount))
+		   !(localord >= scan->segordbase &&
+			 localord < scan->segordbase + varblock->rowCount))
 	{
+		/*
+		 * The currently loaded block (if any) does not cover localord; account
+		 * its rows before reading the next.  bufferDone means no block is
+		 * loaded yet, so there is nothing to account or skip.
+		 */
+		if (!scan->bufferDone)
+			scan->segordbase += varblock->rowCount;
+
 		if (!AppendOnlyExecutorReadBlock_GetBlockInfo(&scan->storageRead, varblock))
 			/*
-			 * physrow is past the end of this segfile's data.  The sampled row
+			 * localord is past the end of this segfile's data.  The sampled row
 			 * ordinal came from an estimate that can exceed the real physical
 			 * row count, so treat it as a non-existent/dead row (matching the
 			 * sequential-skip path), not an error.
 			 */
 			return false;
 
-		if (scan->segbaserow < 0)
-		{
-			/* First block of a freshly opened segfile: its header is the base. */
-			scan->segbaserow = varblock->blockFirstRowNum;
-			physrow = scan->segbaserow + (targrow - scan->segfirstrow);
-		}
+		scan->bufferDone = false;
 
-		if (physrow >= varblock->blockFirstRowNum &&
-			physrow < varblock->blockFirstRowNum + varblock->rowCount)
+		if (localord >= scan->segordbase &&
+			localord < scan->segordbase + varblock->rowCount)
 		{
 			AppendOnlyExecutorReadBlock_GetContents(varblock);
-			scan->bufferDone = false;
 			break;
 		}
 
+		/* Not the covering block: skip its contents and continue. */
 		AppendOnlyExecutionReadBlock_FinishedScanBlock(varblock);
 		AppendOnlyStorageRead_SkipCurrentBlock(&scan->storageRead);
 	}
+
+	/*
+	 * Real AO row number of the target: the covering block's first row number
+	 * plus the in-block offset.  This keys the visimap lookup and FetchTuple.
+	 */
+	physrow = varblock->blockFirstRowNum + (localord - scan->segordbase);
 
 	AOTupleIdInit(&aotid, segno, physrow);
 

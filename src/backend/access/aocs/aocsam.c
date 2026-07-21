@@ -813,51 +813,53 @@ aocs_locate_target_segment(AOCSScanDesc scan, int64 targrow)
 }
 
 /*
- * Seek the datum stream for column 'attno' to 1-based per-segfile physical row
- * 'physrow' and read its value into the slot.  Advances varblock-by-varblock
- * using block headers, skipping the content of blocks that do not contain
- * physrow and decompressing only the block that does.  physrow must be
- * non-decreasing across calls within a segfile.
+ * Seek the datum stream for column 'attno' to the varblock containing the
+ * 'localord'-th (0-based) physical row of the current segfile and read its
+ * value into the slot.  The target block is found by COUNTING physical rows
+ * (blockRowCount), not by row-number arithmetic, because AO row numbers are not
+ * dense (separate inserts leave gaps between varblocks; see AOCSScanDescData.
+ * segordbase).  'ordbase' is the 0-based ordinal of the first row of the block
+ * the stream is currently positioned on (block 0, ordinal 0, is preloaded when
+ * the segfile is opened).  Advances varblock-by-varblock, skipping the content
+ * of non-covering blocks and decompressing only the covering one.  localord
+ * must be non-decreasing across calls within a segfile.  Returns the ordinal of
+ * the covering block's first row (so the caller can compute the in-block offset
+ * and the real row number), or -1 if localord is past the end of the data.
  */
-static bool
-aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 physrow,
-						 TupleTableSlot *slot)
+static int64
+aocs_analyze_seek_column(AOCSScanDesc scan, AttrNumber attno, int64 localord,
+						 int64 ordbase, TupleTableSlot *slot)
 {
 	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
 
 	/*
-	 * Advance to the varblock covering physrow.  When the current (already
-	 * decompressed) block covers physrow the while-condition is false and we go
-	 * straight to the in-block find below.
+	 * Advance to the block covering localord.  When the currently loaded (and
+	 * already decompressed) block covers it the while-condition is false and we
+	 * go straight to the in-block find below.
 	 */
-	while (!(physrow >= ds->blockFirstRowNum &&
-			 physrow < ds->blockFirstRowNum + ds->blockRowCount))
+	while (!(localord >= ordbase &&
+			 localord < ordbase + ds->blockRowCount))
 	{
-		if (!datumstreamread_block_info(ds))
-			/*
-			 * physrow is past the end of this column's data.  The sampled row
-			 * ordinal came from an estimate (table_relation_estimate_size) that
-			 * can exceed the real physical row count, so this is not an error --
-			 * the caller treats it as a non-existent/dead row (matching the
-			 * sequential-skip path, which sees EOF the same way).
-			 */
-			return false;
+		ordbase += ds->blockRowCount;	/* leaving the current block */
 
-		if (physrow >= ds->blockFirstRowNum &&
-			physrow < ds->blockFirstRowNum + ds->blockRowCount)
+		if (!datumstreamread_block_info(ds))
+			return -1;					/* past end of this column's data */
+
+		if (localord >= ordbase &&
+			localord < ordbase + ds->blockRowCount)
 		{
-			/* physrow is in this block: decompress it (also gets it ready) */
+			/* covering block: decompress it (also gets it ready) */
 			datumstreamread_block_content(ds);
 			break;
 		}
 
-		/* physrow is beyond this block: skip its content without decompressing */
+		/* not the covering block: skip its content without decompressing */
 		AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
 	}
 
-	datumstreamread_find(ds, (int32) (physrow - ds->blockFirstRowNum));
+	datumstreamread_find(ds, (int32) (localord - ordbase));
 	datumstreamread_get(ds, &slot->tts_values[attno], &slot->tts_isnull[attno]);
-	return true;
+	return ordbase;
 }
 
 /*
@@ -870,7 +872,10 @@ bool
 aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *slot)
 {
 	int			segidx;
+	int64		localord;
+	int64		newbase;
 	int64		physrow;
+	AttrNumber	anchor;
 	AOTupleId	aotid;
 
 	/* Lazy column-scan init, mirroring aocs_getnext(). */
@@ -900,50 +905,51 @@ aocs_analyze_get_target_tuple(AOCSScanDesc scan, int64 targrow, TupleTableSlot *
 							segidx, RelationGetRelationName(scan->rs_base.rs_rd))));
 		Assert(scan->cur_seg == segidx);
 
-		/*
-		 * open_next_scan_seg() (via open_all_datumstreamread_segfiles) already
-		 * read the first varblock of every projected column, so its header row
-		 * number is the segfile's base -- the absolute AO row number of the
-		 * segfile's first physical row.  All columns share one row numbering,
-		 * so any projected column serves as the anchor.
-		 */
-		if (scan->columnScanInfo.num_proj_atts > 0)
-		{
-			AttrNumber	anchor = scan->columnScanInfo.proj_atts[0];
-
-			scan->segbaserow = scan->columnScanInfo.ds[anchor]->blockFirstRowNum;
-		}
-		else
-			scan->segbaserow = 1;
+		/* The new segfile's preloaded first block starts at local ordinal 0. */
+		scan->segordbase = 0;
 	}
 
+	if (scan->columnScanInfo.num_proj_atts == 0)
+		return false;
+
+	/* 0-based physical ordinal of the target row within the current segfile. */
+	localord = targrow - scan->segfirstrow;
+
 	/*
-	 * Absolute AO row number of the sampled row: the segfile's base plus the
-	 * 0-based physical ordinal within the segfile.  This is what the per-column
-	 * varblock walk and the visimap lookup both key on.
+	 * Seek every projected column to the localord-th physical row.  Columns are
+	 * row-aligned, so they all land on the same varblock and return the same
+	 * base ordinal; we walk them all (even for a row that turns out to be dead)
+	 * to keep the per-column stream cursors in lockstep.
 	 */
-	physrow = scan->segbaserow + (targrow - scan->segfirstrow);
+	newbase = scan->segordbase;
+	for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+	{
+		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+		int64		b;
+
+		/* localord past the segfile's data (estimate overshoot) -> not a row */
+		b = aocs_analyze_seek_column(scan, attno, localord, scan->segordbase, slot);
+		if (b < 0)
+			return false;
+		newbase = b;
+	}
+	scan->segordbase = newbase;
+
+	/*
+	 * Real AO row number of the target: the covering block's first row number
+	 * plus the in-block offset.  This keys the visimap lookup and the TID.
+	 */
+	anchor = scan->columnScanInfo.proj_atts[0];
+	physrow = scan->columnScanInfo.ds[anchor]->blockFirstRowNum +
+		(localord - scan->segordbase);
 
 	AOTupleIdInit(&aotid, scan->seginfo[scan->cur_seg]->segno, physrow);
 	scan->cdb_fake_ctid = *((ItemPointer) &aotid);
 	slot->tts_tid = scan->cdb_fake_ctid;
 
-	/*
-	 * Visibility is decided from the TID alone; dead rows need no column reads
-	 * (the per-column block cursors advance lazily on the next live target).
-	 */
 	if (scan->rs_base.rs_snapshot != SnapshotAny &&
 		!AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aotid))
 		return false;
-
-	for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
-	{
-		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-		/* physrow past the segfile's data (estimate overshoot) -> not a row */
-		if (!aocs_analyze_seek_column(scan, attno, physrow, slot))
-			return false;
-	}
 
 	slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
 	ExecStoreVirtualTuple(slot);

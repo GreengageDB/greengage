@@ -235,17 +235,19 @@ typedef struct AppendOnlyScanDescData
 	/*
 	 * Cursor state for the AO-row ANALYZE random-access sampler.  segfirstrow is
 	 * the global (0-based) physical row ordinal of the first row of the current
-	 * segfile; segbaserow is the absolute AO row number of that first row (AO
-	 * row numbers come from a per-segno monotonic sequence and need not start at
-	 * 1 -- a compacted-then-reused segfile starts higher), so the seek maps a
-	 * local ordinal to segbaserow + ordinal.  segbaserow is -1 until discovered
-	 * from the first block of a freshly opened segfile.  analyzeSeek is 0 until
+	 * segfile; segordbase is the 0-based physical ordinal, within the current
+	 * segfile, of the first row of the currently loaded varblock (0 right after
+	 * opening a segfile).  AO row numbers are not dense -- the per-segno
+	 * fastsequence reserves in batches, so separate inserts leave gaps between
+	 * varblocks -- so the sampler locates a target by COUNTING physical rows
+	 * (blockRowCount), not by arithmetic on the row number, and derives the real
+	 * row number from the covering block's header.  analyzeSeek is 0 until
 	 * determined on the first scan_analyze_next_block(), then 1 = use the direct
 	 * seek, 2 = fall back to the sequential skip.  See
 	 * appendonly_scan_analyze_next_tuple().
 	 */
 	int64		segfirstrow;
-	int64		segbaserow;
+	int64		segordbase;
 	int			analyzeSeek;
 
 	/* For Bitmap scan */
