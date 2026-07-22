@@ -31,8 +31,8 @@ FROM ctest;
 -- check disabling of built in crypto functions
 SET pgcrypto.builtin_crypto_enabled = off;
 UPDATE ctest SET salt = gen_salt('des');
-ERROR:  use of built-in crypto functions is disabled
+ERROR:  use of built-in crypto functions is disabled (openssl.c:992)
 UPDATE ctest SET res = crypt(data, salt);
-ERROR:  use of built-in crypto functions is disabled
+ERROR:  use of built-in crypto functions is disabled (openssl.c:992)
 RESET pgcrypto.builtin_crypto_enabled;
 DROP TABLE ctest;

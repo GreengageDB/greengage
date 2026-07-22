@@ -5,6 +5,7 @@
 --
 SELECT current_database() AS datname \gset
 CREATE ROLE regress_ae_role;
+NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER DATABASE :"datname" SET auto_explain.bogus = 1;
 ALTER ROLE regress_ae_role SET auto_explain.bogus = 1;
 ALTER ROLE regress_ae_role IN DATABASE :"datname" SET auto_explain.bogus = 1;
