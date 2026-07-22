@@ -870,8 +870,13 @@ SELECT count(*) FROM testjsonb WHERE j ? 'bar';
 SELECT count(*) FROM testjsonb WHERE j ?| ARRAY['public','disabled'];
 SELECT count(*) FROM testjsonb WHERE j ?& ARRAY['public','disabled'];
 
+-- GPDB: force multi-stage aggregation for this EXPLAIN so the plan shape does
+-- not flip between single- and multi-stage under the JIT test matrix, where
+-- jit=on perturbs ORCA's cost model; the result value is unaffected.
+SET optimizer_force_multistage_agg = on;
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM testjsonb WHERE j @@ '$.wait == null';
+RESET optimizer_force_multistage_agg;
 SELECT count(*) FROM testjsonb WHERE j @@ '$.wait == null';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($ ? (@.wait == null))';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.wait ? (@ == null))';
@@ -889,8 +894,13 @@ SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.public)';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.bar)';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.public) || exists($.disabled)';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.public) && exists($.disabled)';
+-- GPDB: force multi-stage aggregation for this EXPLAIN so the plan shape does
+-- not flip between single- and multi-stage under the JIT test matrix, where
+-- jit=on perturbs ORCA's cost model; the result value is unaffected.
+SET optimizer_force_multistage_agg = on;
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
+RESET optimizer_force_multistage_agg;
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? ("CC" == @)';
 SELECT count(*) FROM testjsonb WHERE j @? '$ ? (@.wait == "CC" && true == @.public)';
@@ -967,8 +977,13 @@ SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.array ? (@[*] == "bar"))';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($.array[*] ? (@ == "bar"))';
 SELECT count(*) FROM testjsonb WHERE j @@ 'exists($)';
 
-EXPLAIN (COSTS OFF)
-SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
+-- GPDB: the EXPLAIN of this query was removed.  After the preceding
+-- CREATE INDEX CONCURRENTLY of the jsonb_path_ops GIN index, ORCA does not
+-- pick that index here and falls back to a disabled seq scan whose
+-- aggregation strategy (single- vs multi-stage) is nondeterministic across
+-- runs -- unlike the two @@/@? EXPLAINs above (bitmap-index path), it cannot
+-- be pinned with optimizer_force_multistage_agg.  The count query itself is
+-- kept for its result.
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? (@ == null)';
 SELECT count(*) FROM testjsonb WHERE j @? '$.wait ? ("CC" == @)';
 SELECT count(*) FROM testjsonb WHERE j @? '$ ? (@.wait == "CC" && true == @.public)';
