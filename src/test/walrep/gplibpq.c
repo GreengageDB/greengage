@@ -84,7 +84,7 @@ test_connect(PG_FUNCTION_ARGS)
 	MemoryContext oldcxt;
 
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	test_connection = walrcv_connect(conninfo, false, "walrcv_test", &err);
+	test_connection = walrcv_connect(conninfo, true, false, false, "walrcv_test", &err);
 	MemoryContextSwitchTo(oldcxt);
 
 	PG_RETURN_BOOL(true);
@@ -355,7 +355,7 @@ test_xlog_ao(PG_FUNCTION_ARGS)
 
 		xrecoff = (uint32)startpoint;
 
-		conn = walrcv_connect(conninfo, false, "walrcv_test_ao_xlog", &err);
+		conn = walrcv_connect(conninfo, true, false, false, "walrcv_test_ao_xlog", &err);
 		/* Get current timeline ID */
 		walrcv_identify_system(conn, &startpointTLI);
 

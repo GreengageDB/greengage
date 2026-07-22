@@ -67,9 +67,9 @@ dirty_buffers(PG_FUNCTION_ARGS)
 
 		tag = (BufferTag *) linitial(dirty_tags);
 		attno = 0;
-		values[attno++] = tag->rnode.spcNode;
-		values[attno++] = tag->rnode.dbNode;
-		values[attno++] = tag->rnode.relNode;
+		values[attno++] = tag->spcOid;
+		values[attno++] = tag->dbOid;
+		values[attno++] = tag->relNumber;
 		values[attno++] = tag->blockNum;
 		memset(nulls, 0, natts * sizeof(bool));
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);

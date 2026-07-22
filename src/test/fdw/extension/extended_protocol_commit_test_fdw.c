@@ -101,14 +101,16 @@ extended_protocol_commit_test_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo 
 	add_path(baserel, (Path *) create_foreignscan_path(
 													   root,
 													   baserel,
-													   NULL,
-													   0,
-													   0,
-													   0,
-													   NIL,
-													   NULL,
-													   NULL,
-													   NIL
+													   NULL,	/* default pathtarget */
+													   0,		/* rows */
+													   0,		/* disabled_nodes */
+													   0,		/* startup_cost */
+													   0,		/* total_cost */
+													   NIL,		/* pathkeys */
+													   NULL,	/* required_outer */
+													   NULL,	/* fdw_outerpath */
+													   NIL,		/* fdw_restrictinfo */
+													   NIL		/* fdw_private */
 													   ));
 }
 
