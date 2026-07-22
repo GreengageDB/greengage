@@ -17,6 +17,7 @@
 #include "access/htup_details.h"
 #include "access/skey.h"
 #include "catalog/pg_operator.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
@@ -43,6 +44,11 @@ static JoinExpr *make_join_expr(Node *larg, int r_rtindex, int join_type);
 static Node *make_lasj_quals(PlannerInfo *root, SubLink *sublink, int subquery_indx);
 
 static Node *add_null_match_clause(Node *clause);
+static Expr *build_match_flag_case_expr(Var *flagVar, Var *aggVar, Expr *defaultExpr);
+static Expr *build_empty_input_default_expr(Node *expr);
+static Node *replace_agg_with_empty_default_mutator(Node *node, void *context);
+static bool no_match_row_survives(PlannerInfo *root, OpExpr *opexp,
+								  Expr *defaultExpr);
 
 typedef struct NonNullableVarsContext
 {
@@ -522,6 +528,14 @@ safe_to_convert_EXPR(SubLink *sublink, ConvertSubqueryToJoinContext *ctx1)
 	if (list_length(subselect->targetList) != 1)
 		return false;
 
+	/**
+	 * Correlation in the targetlist cannot be handled: the pulled-up
+	 * expression (and the empty-input default derived from it) would carry
+	 * upper-level Vars out of the subquery.
+	 */
+	if (contain_vars_of_level_or_above((Node *) subselect->targetList, 1))
+		return false;
+
 
 	/**
 	 * Walk the quals of the subquery to do a more fine grained check as to whether this subquery
@@ -585,6 +599,51 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 
 		subselect->jointree->quals = ctx1.innerQual;
 
+		/*
+		 * An INNER join drops outer rows that have no matching inner
+		 * rows.  Without the pull-up they are kept: the subquery
+		 * computes its expression over empty input (COUNT = 0, other
+		 * aggregates NULL) and the comparison may still pass.
+		 *
+		 * So plug the empty-input value into the comparison and run
+		 * eval_const_expressions() on it.  FALSE or NULL means no-match
+		 * rows cannot pass and the INNER join is correct; otherwise use
+		 * a LEFT join to keep them.
+		 */
+		Expr	   *defaultExpr;
+		TargetEntry *flagTLE = NULL;
+		bool		use_left_join;
+
+		defaultExpr = build_empty_input_default_expr((Node *) origSubqueryTLE->expr);
+		use_left_join = no_match_row_survives(root, opexp, defaultExpr);
+
+		if (use_left_join)
+		{
+			/*
+			 * After the LEFT join the expression column is NULL both for a
+			 * no-match row and for a matched group whose expression is
+			 * genuinely NULL.  To tell them apart, add a constant-TRUE
+			 * match-flag column to the subquery: it can be NULL only when
+			 * the LEFT join found no match and filled the subquery's
+			 * columns with NULLs.
+			 *
+			 * The flag goes BEFORE the expression column: with this
+			 * order the planner can drop the SubqueryScan node from the
+			 * plan.
+			 */
+			TargetEntry *aggTLE = (TargetEntry *) llast(subselect->targetList);
+
+			flagTLE = makeTargetEntry((Expr *) makeBoolConst(true, false),
+									  aggTLE->resno,
+									  pstrdup("csq_count_flag"),
+									  false);
+			aggTLE->resno++;
+			subselect->targetList = list_truncate(subselect->targetList,
+												  list_length(subselect->targetList) - 1);
+			subselect->targetList = lappend(subselect->targetList, flagTLE);
+			subselect->targetList = lappend(subselect->targetList, aggTLE);
+		}
+
 		/**
 		 * Construct a new range table entry for the new pulled up subquery.
 		 */
@@ -612,7 +671,8 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 
 		join_expr->quals = joinQual;
 
-		TargetEntry *subselectAggTLE = (TargetEntry *) list_nth(subselect->targetList, list_length(subselect->targetList) - 1);
+		/* The pulled-up expression column is last in either layout. */
+		TargetEntry *subselectAggTLE = (TargetEntry *) llast(subselect->targetList);
 
 		/**
 		 *	modify the op expr to involve the column that has the computed aggregate that needs to compared.
@@ -624,12 +684,137 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 											 exprCollation((Node *) subselectAggTLE->expr),
 											 0);
 
-		list_nth_replace(opexp->args, 1, aggVar);
+		if (use_left_join)
+		{
+			Var		   *flagVar;
+
+			join_expr->jointype = JOIN_LEFT;
+			flagVar = (Var *) makeVar(rteIndex, flagTLE->resno, BOOLOID, -1,
+									  InvalidOid, 0);
+			list_nth_replace(opexp->args, 1,
+							 build_match_flag_case_expr(flagVar, aggVar, defaultExpr));
+		}
+		else
+		{
+			list_nth_replace(opexp->args, 1, aggVar);
+		}
 
 		return join_expr;
 	}
 
 	return NULL;
+}
+
+/*
+ * Build "CASE WHEN flagVar THEN aggVar ELSE defaultExpr END".
+ *
+ * flagVar is the subquery's match-flag column: TRUE for a matched group,
+ * NULL for a null-extended no-match row.
+ */
+static Expr *
+build_match_flag_case_expr(Var *flagVar, Var *aggVar, Expr *defaultExpr)
+{
+	CaseWhen   *casewhen;
+	CaseExpr   *caseexpr;
+
+	Assert(flagVar != NULL);
+	Assert(aggVar != NULL);
+	Assert(defaultExpr != NULL);
+
+	casewhen = makeNode(CaseWhen);
+	casewhen->expr = (Expr *) flagVar;
+	casewhen->result = (Expr *) aggVar;
+	casewhen->location = -1;
+
+	caseexpr = makeNode(CaseExpr);
+	caseexpr->casetype = exprType((Node *) aggVar);
+	caseexpr->casecollid = exprCollation((Node *) aggVar);
+	caseexpr->arg = NULL;
+	caseexpr->args = list_make1(casewhen);
+	caseexpr->defresult = defaultExpr;
+	caseexpr->location = -1;
+
+	return (Expr *) caseexpr;
+}
+
+static Expr *
+build_empty_input_default_expr(Node *expr)
+{
+	Node	   *rewritten;
+
+	rewritten = replace_agg_with_empty_default_mutator(copyObject(expr), NULL);
+	return (Expr *) rewritten;
+}
+
+static Node *
+replace_agg_with_empty_default_mutator(Node *node, void *context)
+{
+	Aggref	   *aggref;
+	Oid			default_type;
+	Oid			default_collation;
+	int16		typlen;
+	bool		typbyval;
+
+	if (node == NULL)
+		return NULL;
+
+	if (IsA(node, Aggref))
+	{
+		bool		is_count;
+
+		aggref = (Aggref *) node;
+		is_count = (aggref->aggfnoid == COUNT_ANY_OID ||
+					aggref->aggfnoid == COUNT_STAR_OID);
+		if (is_count)
+		{
+			default_type = INT8OID;
+			default_collation = InvalidOid;
+		}
+		else
+		{
+			default_type = aggref->aggtype;
+			default_collation = exprCollation((Node *) aggref);
+		}
+
+		/*
+		 * COUNT is 0 over empty input; every other aggregate is NULL.  The
+		 * choice must follow the aggregate, not its result type: sum(int4)
+		 * also returns int8 but its empty-input value is NULL.
+		 */
+		get_typlenbyval(default_type, &typlen, &typbyval);
+		return (Node *) makeConst(default_type, -1, default_collation, typlen,
+								  is_count ? Int64GetDatum(0) : (Datum) 0,
+								  !is_count, typbyval);
+	}
+
+	return expression_tree_mutator(node, replace_agg_with_empty_default_mutator,
+								   context);
+}
+
+/*
+ * no_match_row_survives
+ *
+ * Could a no-match row satisfy "outerExpr OP (subquery)"? Plug defaultExpr in
+ * for the subquery and constant-fold: false if it folds to FALSE/NULL, else true.
+ */
+static bool
+no_match_row_survives(PlannerInfo *root, OpExpr *opexp, Expr *defaultExpr)
+{
+	OpExpr	   *testexpr = (OpExpr *) copyObject(opexp);
+	Node	   *folded;
+
+	list_nth_replace(testexpr->args, 1, copyObject(defaultExpr));
+	folded = eval_const_expressions(root, (Node *) testexpr);
+
+	if (IsA(folded, Const))
+	{
+		Const	   *c = (Const *) folded;
+
+		if (c->constisnull || !DatumGetBool(c->constvalue))
+			return false;
+	}
+
+	return true;
 }
 
 /* NOTIN subquery transformation -start */
