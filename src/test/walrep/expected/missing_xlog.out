@@ -36,6 +36,35 @@ begin
 	end loop;
 end;
 $$ language plpgsql;
+-- PG16+ replaced the walsender "walread" error (WalSndCtl->error, surfaced as
+-- gp_stat_replication.sync_error) with replication-slot invalidation
+-- (RS_INVAL_WAL_REMOVED) when a mirror's required WAL has been removed: the
+-- invalidated slot is now rejected at StartReplication before the walsender
+-- ever tries to read the missing segment.  Detect that condition through the
+-- primary slot's pg_replication_slots.invalidation_reason instead.
+create or replace function wait_for_slot_invalidation (expected_reason text, segment_id int, retries int) returns bool as
+$$
+declare
+	i int;
+begin
+	i := 0;
+	loop
+		if exists (select 1 from
+			(select gp_execution_segment() as segid, slot_name, invalidation_reason
+			   from gp_dist_random('pg_replication_slots')) s
+			where s.segid = segment_id
+			  and s.slot_name = 'internal_wal_replication_slot'
+			  and coalesce(s.invalidation_reason, 'none') = expected_reason) then
+			return true;
+		end if;
+		if i >= retries then
+			return false;
+		end if;
+		perform pg_sleep(0.1);
+		i := i + 1;
+	end loop;
+end;
+$$ language plpgsql;
 -- function to wait for mirror to come up in sync (10 minute timeout)
 create or replace function wait_for_mirror_sync(contentid smallint)
 	returns void as $$
@@ -127,18 +156,23 @@ checkpoint;
 -- start_ignore
 \! gprecoverseg -a
 -- end_ignore
--- check the view, we expect to see error, since the WAL files required
--- by mirror are removed on the corresponding primary
-select wait_for_replication_error('walread', 0, 500);
- wait_for_replication_error 
+-- we expect the primary's replication slot to be invalidated with
+-- 'wal_removed', since the WAL files required by the mirror were removed on
+-- the corresponding primary (PG16+ invalidates the slot instead of the
+-- walsender reporting a 'walread' error via gp_stat_replication.sync_error).
+select wait_for_slot_invalidation('wal_removed', 0, 500);
+ wait_for_slot_invalidation 
 ----------------------------
  t
 (1 row)
 
-select sync_error from gp_stat_replication where gp_segment_id = 0;
- sync_error 
-------------
- walread
+select coalesce(invalidation_reason, 'none') from
+	(select gp_execution_segment() as segid, slot_name, invalidation_reason
+	   from gp_dist_random('pg_replication_slots')) s
+	where s.segid = 0 and s.slot_name = 'internal_wal_replication_slot';
+  coalesce   
+-------------
+ wal_removed
 (1 row)
 
 -- do full recovery for the first mirror
@@ -172,16 +206,19 @@ select gp_inject_fault('keep_log_seg', 'reset', dbid)
 -- end_ignore
 -- force the WAL segment to switch over from after previous pg_switch_wal().
 create temp table dummy2 (id int4) distributed randomly;
--- the error should go away
-select wait_for_replication_error('none', 0, 500);
- wait_for_replication_error 
+-- the invalidation should go away after full recovery recreates the slot
+select wait_for_slot_invalidation('none', 0, 500);
+ wait_for_slot_invalidation 
 ----------------------------
  t
 (1 row)
 
-select sync_error from gp_stat_replication where gp_segment_id = 0;
- sync_error 
-------------
+select coalesce(invalidation_reason, 'none') from
+	(select gp_execution_segment() as segid, slot_name, invalidation_reason
+	   from gp_dist_random('pg_replication_slots')) s
+	where s.segid = 0 and s.slot_name = 'internal_wal_replication_slot';
+ coalesce 
+----------
  none
 (1 row)
 
