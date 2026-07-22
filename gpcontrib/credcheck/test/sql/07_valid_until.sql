@@ -47,7 +47,7 @@ SET credcheck.password_valid_until to 60;
 SET credcheck.password_reuse_interval to 15;
 SET credcheck.password_reuse_history to 4;
 CREATE role aaa with login password 'password'; 
-select rolname,age(rolvaliduntil) from pg_roles WHERE rolname='aaa';
+select rolname, rolvaliduntil between now() + '59 days'::interval and now() + '61 days'::interval from pg_roles WHERE rolname='aaa';
 -- History must have one entry
 SELECT count(*), '1' AS "expected" FROM pg_password_history ;
 DROP USER aaa;
