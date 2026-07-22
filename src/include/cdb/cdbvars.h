@@ -607,6 +607,12 @@ extern bool gp_enable_dqa_pruning;
  */
 extern bool gp_enable_preunique;
 
+/*
+ * May Greengage print statistics as average, minimum and maximum rows out
+ * during EXPLAIN ANALYZE?
+ */
+extern bool gp_enable_explain_rows_out;
+
 /* May Greengage dump statistics for all segments as a huge ugly string
  * during EXPLAIN ANALYZE?
  *
