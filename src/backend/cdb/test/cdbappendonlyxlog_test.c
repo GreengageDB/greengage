@@ -1,6 +1,9 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include "cmockery.h"
 
 #include "postgres.h"
@@ -33,6 +36,7 @@ ao_invalid_segment_file_test(uint8 xl_info)
 	xl_ao_target xlaotarget;
 	xl_ao_insert xlaoinsert;
 	xl_ao_truncate xlaotruncate;
+	char	   *created_path = NULL;
 
 	/* create mock transaction log */
 	relfilenode.spcNode = DEFAULTTABLESPACE_OID;
@@ -75,6 +79,34 @@ ao_invalid_segment_file_test(uint8 xl_info)
 		decoded.main_data_len = sizeof(xlaotruncate);
 	}
 
+	/*
+	 * ao_truncate_replay() only registers the segfile in the invalid-page
+	 * table when the file EXISTS on disk but cannot be opened read-write (a
+	 * genuine divergence); a truly absent file is the benign crash-window case
+	 * and is skipped (its stat() fails).  So for the truncate path create the
+	 * real segfile on disk -- while PathNameOpenFile is still mocked to fail --
+	 * so the stat() existence check passes and XLogAOSegmentFile is exercised.
+	 * ao_insert_replay registers unconditionally and needs no file.
+	 */
+	if (xl_info == XLOG_APPENDONLY_TRUNCATE)
+	{
+		char	   *dbPath = GetDatabasePath(relfilenode.dbNode,
+											 relfilenode.spcNode);
+		char		path[MAXPGPATH];
+		int			fd;
+
+		snprintf(path, MAXPGPATH, "%s/%u.%u", dbPath, relfilenode.relNode,
+				 xlaotarget.segment_filenum);
+		/* GetDatabasePath yields "base/<db>"; create both dirs then the file */
+		mkdir("base", S_IRWXU);
+		mkdir(dbPath, S_IRWXU);
+		fd = open(path, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+		if (fd >= 0)
+			close(fd);
+		created_path = pstrdup(path);
+		pfree(dbPath);
+	}
+
 	/* mock to not find AO segment file */
 	expect_any(PathNameOpenFile, fileName);
 	expect_any(PathNameOpenFile, fileFlags);
@@ -90,6 +122,12 @@ ao_invalid_segment_file_test(uint8 xl_info)
 		ao_insert_replay(mockrecord);
 	else if (xl_info == XLOG_APPENDONLY_TRUNCATE)
 		ao_truncate_replay(mockrecord);
+
+	if (created_path != NULL)
+	{
+		unlink(created_path);
+		pfree(created_path);
+	}
 }
 
 /*
