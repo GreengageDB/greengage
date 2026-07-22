@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 
 #include "access/aomd.h"
 #include "access/xloginsert.h"
@@ -147,6 +148,8 @@ ao_truncate_replay(XLogReaderState *record)
 	file = PathNameOpenFile(path, O_RDWR | PG_BINARY);
 	if (file < 0)
 	{
+		struct stat st;
+
 		/*
 		 * Primary creates the file first and then writes the xlog record for
 		 * the creation for AO tables similar to heap.  Hence, file can get
@@ -158,8 +161,28 @@ ao_truncate_replay(XLogReaderState *record)
 		 * the entry to invalid hash table for truncate at offset zero
 		 * (EOF=0).  This avoids mirror PANIC, as anyways truncate to zero is
 		 * same as file not present.
+		 *
+		 * We must also distinguish WHY the open failed.  If the segfile is
+		 * genuinely ABSENT (ENOENT), this is the benign crash-window case: the
+		 * primary created/extended a segfile and updated the aoseg catalog
+		 * without the matching xlog reaching this replica, and a later VACUUM
+		 * emitted this (non-zero-EOF) truncate.  Truncating an absent file is a
+		 * no-op, so registering it in the invalid-page table -- which escalates
+		 * to a "WAL contains references to invalid pages" PANIC once recovery is
+		 * consistent (and never gets a matching forget when the relation is not
+		 * dropped in the replayed WAL) -- would wrongly take the segment down
+		 * during crash/standby recovery (ao_same_trans_truncate_crash,
+		 * pg_rewind_fail_missing_xlog, udf_exception_blocks_panic_scenarios,
+		 * uao_crash_compaction_*).  A genuine WAL gap is still caught by
+		 * ao_insert_replay(), which creates/registers the segfile as needed.
+		 *
+		 * If, on the other hand, the file EXISTS but could not be opened
+		 * read-write (e.g. read-only), that is a real divergence and we DO
+		 * register it so the mirror PANICs and gets rebuilt from the primary
+		 * (validated by src/test/regress/mirror_replay, which chmods the mirror
+		 * segfile read-only and asserts the mirror goes down).
 		 */
-		if (xlrec->target.offset != 0)
+		if (xlrec->target.offset != 0 && stat(path, &st) == 0)
 			XLogAOSegmentFile(xlrec->target.node, xlrec->target.segment_filenum);
 		return;
 	}
