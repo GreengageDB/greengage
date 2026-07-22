@@ -137,6 +137,17 @@ m/^WARNING:  the distributed transaction '.*' broadcast failed to one or more se
 # the query result sets and the row-security ERRORs.
 m/^NOTICE:  f_leak => /
 
+# With optimizer_trace_fallback=on, GPORCA emits "INFO: GPORCA failed to
+# produce a plan, falling back to planner" plus a DETAIL naming the construct
+# it cannot translate to DXL.  For a query that ALSO raises its own NOTICEs
+# (e.g. aggregates' my_avg(distinct ...)/my_sum(distinct ...) custom aggregate,
+# whose transition function RAISEs a NOTICE per group), the per-QE fallback
+# INFO/DETAIL interleave with those NOTICEs in a nondeterministic order and
+# count, which atmsort cannot reorder.  The query result and the transfn
+# NOTICEs still compare; drop the fallback trace lines.
+m/^INFO:  GPORCA failed to produce a plan, falling back to planner/
+m/^DETAIL:  GPDB Expression type: .* not supported in DXL/
+
 -- end_matchignore
 
 -- start_matchsubs
