@@ -17,6 +17,7 @@ class GpCheckCatTestCase(GpTestCase):
         gpcheckcat_file = os.path.abspath(os.path.dirname(__file__) + "/../../../gpcheckcat")
         self.subject = imp.load_source('gpcheckcat', gpcheckcat_file)
         self.subject.check_gpexpand = lambda : (True, "")
+        self.subject.check_ggrebalance = lambda : (True, "")
 
         self.db_connection = Mock(spec=['close', 'cursor', 'set_session'])
         self.unique_index_violation_check = Mock(spec=['runCheck'])

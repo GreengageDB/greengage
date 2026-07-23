@@ -39,6 +39,7 @@ from gppylib.commands.base import Command, REMOTE
 from gppylib import pgconf
 from gppylib.commands.gp import get_coordinatordatadir
 from gppylib.parseutils import canonicalize_address
+from gppylib import fault_injection
 
 coordinator_data_dir = None
 
@@ -159,6 +160,8 @@ def impl(context, query, db, contentids):
 
 
 @given('the user connects to "{dbname}" with named connection "{cname}"')
+@when('the user connects to "{dbname}" with named connection "{cname}"')
+@then('the user connects to "{dbname}" with named connection "{cname}"')
 def impl(context, dbname, cname):
     if not hasattr(context, 'named_conns'):
         context.named_conns = {}
@@ -200,11 +203,14 @@ def impl(conetxt, tabname):
 
 
 @given('the user executes "{sql}" with named connection "{cname}"')
+@when('the user executes "{sql}" with named connection "{cname}"')
+@then('the user executes "{sql}" with named connection "{cname}"')
 def impl(context, cname, sql):
     conn = context.named_conns[cname]
     dbconn.execSQL(conn, sql)
 
 
+@when('the user drops the named connection "{cname}"')
 @then('the user drops the named connection "{cname}"')
 def impl(context, cname):
     if cname in context.named_conns:
@@ -671,6 +677,31 @@ def impl(context, kill_process_name, log_msg, logfile_name):
               "fi; done" % (log_msg, logfile_name, kill_process_name)
     run_async_command(context, command)
 
+@given('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+@when('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+@then('the user waits till {process_name} prints "{log_msg}" in the logs (with timeout of "{timeout}" sec)')
+def impl(context, process_name, log_msg, timeout):
+    poll_period = 0.1
+    max_iteration_cnt = int(int(timeout) / poll_period)
+    command = f"""
+    ITERATION=0
+    MAX_ITERATION_CNT={max_iteration_cnt}
+    while sleep {poll_period}; do
+        if grep -E --quiet '{log_msg}'  ~/gpAdminLogs/{process_name}*log ;
+            then break 2;
+        fi;
+
+        ITERATION=$((ITERATION + 1))
+        if [ $ITERATION -ge $MAX_ITERATION_CNT ]; then
+            echo "Timeout after {timeout} seconds waiting for '{log_msg}' in {process_name} logs" >&2
+            exit 1
+        fi
+    done
+    """
+    rc, _, error = run_cmd(command)
+    if rc:
+        raise Exception(error)
+
 @given('the user asynchronously sets up to end {process_name} process with {signal_name}')
 @when('the user asynchronously sets up to end {process_name} process with {signal_name}')
 @then('the user asynchronously sets up to end {process_name} process with {signal_name}')
@@ -974,12 +1005,20 @@ def impl(context, tname, dbname, nrows):
     check_row_count(context, tname, dbname, int(nrows))
 
 @given('schema "{schema_list}" exists in "{dbname}"')
+@when('schema "{schema_list}" exists in "{dbname}"')
 @then('schema "{schema_list}" exists in "{dbname}"')
 def impl(context, schema_list, dbname):
     schemas = [s.strip() for s in schema_list.split(',')]
     for s in schemas:
         drop_schema_if_exists(context, s.strip(), dbname)
         create_schema(context, s.strip(), dbname)
+
+@given('schema "{schema_list}" is removed in "{dbname}"')
+@then('schema "{schema_list}" is removed in "{dbname}"')
+def impl(context, schema_list, dbname):
+    schemas = [s.strip() for s in schema_list.split(',')]
+    for s in schemas:
+        drop_schema_if_exists(context, s.strip(), dbname)
 
 
 @then('the temporary file "{filename}" is removed')
@@ -988,19 +1027,25 @@ def impl(context, filename):
         os.remove(filename)
 
 
-def create_table_file_locally(context, filename, table_list, location=os.getcwd()):
-    tables = table_list.split('|')
+def create_value_list_file_locally(context, filename, value_list, location=os.getcwd()):
+    values = value_list.split('|')
     file_path = os.path.join(location, filename)
     with open(file_path, 'w') as fp:
-        for t in tables:
+        for t in values:
             fp.write(t + '\n')
     context.filename = file_path
 
 
-@given('there is a file "{filename}" with tables "{table_list}"')
-@then('there is a file "{filename}" with tables "{table_list}"')
-def impl(context, filename, table_list):
-    create_table_file_locally(context, filename, table_list)
+@given('there is a file "{filename}" with tables "{list}"')
+@then('there is a file "{filename}" with tables "{list}"')
+@given('there is a file "{filename}" with hosts "{list}"')
+@when('there is a file "{filename}" with hosts "{list}"')
+@then('there is a file "{filename}" with hosts "{list}"')
+@given('there is a file "{filename}" with datadirs "{list}"')
+@when('there is a file "{filename}" with datadirs "{list}"')
+@then('there is a file "{filename}" with datadirs "{list}"')
+def impl(context, filename, list):
+    create_value_list_file_locally(context, filename, list)
 
 
 @given('the row "{row_values}" is inserted into "{table}" in "{dbname}"')
@@ -1570,6 +1615,11 @@ def get_opened_files(filename, pidfile):
 def impl(context, tablename, dbname):
     drop_table_if_exists(context, table_name=tablename, dbname=dbname)
 
+@when('materialized view "{viewname}" is dropped in "{dbname}"')
+@then('materialized view "{viewname}" is dropped in "{dbname}"')
+@given('materialized view "{viewname}" is dropped in "{dbname}"')
+def impl(context, viewname, dbname):
+    drop_materialized_view_if_exists(context, view_name=viewname, dbname=dbname)
 
 @given('all the segments are running')
 @when('all the segments are running')
@@ -1626,6 +1676,18 @@ def impl(context, filter):
     Given the user runs psql with "-c 'BEGIN; CREATE TEMP TABLE tempt(a int); COMMIT'" against database "postgres"
     ''')
 
+@given('the cluster configuration has {segment_count} segments where "{filter}"')
+@when('the cluster configuration has {segment_count} segments where "{filter}"')
+@then('the cluster configuration has {segment_count} segments where "{filter}"')
+def impl(context, segment_count, filter):
+    sql = "SELECT count(*) FROM gp_segment_configuration WHERE %s" % filter
+    with closing(dbconn.connect(dbconn.DbURL(), unsetSearchPath=False)) as conn:
+        row = dbconn.queryRow(conn, sql)
+    if segment_count == 'some':
+        if int(row[0]) == 0:
+            raise Exception(f"Expected some segments, but got 0")
+    elif int(row[0]) != int(segment_count):
+        raise Exception(f"Expected {segment_count} segments, but got {row[0]}")
 
 @given('the cluster configuration is saved for "{when}"')
 @then('the cluster configuration is saved for "{when}"')
@@ -1694,6 +1756,30 @@ def impl(context, seg):
     cmd = Command(name="remove pid", cmdStr='rm -rf /tmp/bgpid', remoteHost=hostname, ctxt=REMOTE)
     cmd.run(validateAfter=True)
 
+
+@given('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+@when('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+@then('a sample {lock_file} file is created using the background pid in the coordinator_data_directory')
+def impl(context, lock_file):
+    if 'bg_pid' in context:
+        bg_pid = context.bg_pid
+        if not unix.check_pid(bg_pid):
+            raise Exception("The background process with PID {} is not running.".format(bg_pid))
+    else:
+        bg_pid = ""
+
+    utility_pidfile = os.path.join(get_coordinatordatadir(), lock_file)
+
+    with open(utility_pidfile, 'w') as f:
+        f.write(bg_pid)
+
+@given('a sample {lock_file} file is removed from the coordinator_data_directory')
+@when('a sample {lock_file} file is removed from the coordinator_data_directory')
+@then('a sample {lock_file} file is removed from the coordinator_data_directory')
+def impl(context, lock_file):
+    utility_pidfile = os.path.join(get_coordinatordatadir(), lock_file)
+    if os.path.exists(utility_pidfile):
+        os.remove(utility_pidfile)
 
 @when('{process} is killed on mirror with content {contentids}')
 @then('{process} is killed on mirror with content {contentids}')
@@ -2306,9 +2392,16 @@ def impl(context):
     ''')
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@when('there is a "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
 def impl(context, tabletype, tablename, dbname, numrows):
     populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows))
 
+@given('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@then('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+@when('there is an unlogged "{tabletype}" table "{tablename}" in "{dbname}" with "{numrows}" rows')
+def impl(context, tabletype, tablename, dbname, numrows):
+    populate_regular_table_data(context, tabletype, tablename, dbname, compression_type=None, with_data=True, rowcount=int(numrows), unlogged=True)
 
 @given('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
 @then('there is a "{tabletype}" table "{tablename}" in "{dbname}" with data')
@@ -2328,6 +2421,12 @@ def impl(context, tabletype, tablename, dbname):
 @when('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with data')
 def impl(context, tabletype, table_name, dbname):
     create_partition(context, tablename=table_name, storage_type=tabletype, dbname=dbname, with_data=True)
+
+@given('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+@then('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+@when('there is a "{tabletype}" partition table "{table_name}" in "{dbname}" with "{numrows}" rows')
+def impl(context, tabletype, table_name, dbname, numrows):
+    create_partition(context, tablename=table_name, storage_type=tabletype, dbname=dbname, with_data=True, rowcount=int(numrows))
 
 @given('there is a view without columns in "{dbname}"')
 @then('there is a view without columns in "{dbname}"')
@@ -2637,7 +2736,15 @@ def impl(context, location):
 @when('all files in gpAdminLogs directory are deleted')
 @then('all files in gpAdminLogs directory are deleted')
 def impl(context):
-    log_dir = _get_gpAdminLogs_directory()
+    remove_all_logfiles(_get_gpAdminLogs_directory())
+
+@given('all files in "{log_dir}" directory are deleted')
+@when('all files in "{log_dir}" directory are deleted')
+@then('all files in "{log_dir}" directory are deleted')
+def impl(context, log_dir):
+    remove_all_logfiles(log_dir)
+
+def remove_all_logfiles(log_dir):
     files_found = glob.glob('%s/*' % (log_dir))
     for file in files_found:
         os.remove(file)
@@ -2678,7 +2785,15 @@ def impl(context):
 
 @then('gpAdminLogs directory {has} "{expected_file}" files')
 def impl(context, has, expected_file):
-    log_dir = _get_gpAdminLogs_directory()
+    check_logs_directory(_get_gpAdminLogs_directory(), has, expected_file)
+
+
+@then('"{log_dir}" directory {has} "{expected_file}" files')
+def impl(context, log_dir, has, expected_file):
+    check_logs_directory(log_dir, has, expected_file)
+
+
+def check_logs_directory(log_dir, has, expected_file):
     files_found = glob.glob('%s/%s' % (log_dir, expected_file))
     if files_found and (has == 'has no'):
         raise Exception("expected no %s files in %s, but found %s" % (expected_file, log_dir, files_found))
@@ -2759,8 +2874,14 @@ def impl(context, command, target):
     if target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
 
-@then('{command} should print "{target}" to logfile with latest timestamp')
-def impl(context, command, target):
+@then('{command} should {print} "{target}" to logfile with latest timestamp')
+def impl(context, command, print, target):
+    if print == 'print':
+        valuesShouldExist = True
+    elif print == 'not print':
+        valuesShouldExist = False
+    else:
+        raise Exception("only 'print' and 'not print' are valid inputs")
     log_dir = _get_gpAdminLogs_directory()
     filenames = glob.glob('%s/%s_*.log' % (log_dir, command))
     filename = max(filenames, key=os.path.getctime)
@@ -2768,8 +2889,10 @@ def impl(context, command, target):
     with open(filename) as fr:
         for line in fr:
             contents += line
-    if target not in contents:
+    if valuesShouldExist and target not in contents:
         raise Exception("cannot find %s in %s" % (target, filename))
+    if not valuesShouldExist and target in contents:
+        raise Exception("found %s in %s" % (target, filename))
 
 
 @then('{command} should print "{target}" regex to logfile')
@@ -2866,7 +2989,7 @@ def _create_working_directory(context, working_directory, mode=''):
         os.mkdir(context.working_directory)
 
 
-def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group'):
+def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames='0', with_mirrors=False, mirroring_configuration='group', number_of_segments=2):
     if segment_host_list == "":
         segment_host_list = []
     else:
@@ -2889,7 +3012,10 @@ def _create_cluster(context, coordinator_host, segment_host_list, hba_hostnames=
     except:
         pass
 
-    testcluster = TestCluster(hosts=[coordinator_host]+segment_host_list, base_dir=context.working_directory,hba_hostnames=hba_hostnames)
+    testcluster = TestCluster(hosts=[coordinator_host]+segment_host_list,
+                              base_dir=context.working_directory,
+                              hba_hostnames=hba_hostnames,
+                              number_of_segments=number_of_segments)
     testcluster.reset_cluster()
     testcluster.create_cluster(with_mirrors=with_mirrors, mirroring_configuration=mirroring_configuration)
     context.gpexpand_mirrors_enabled = with_mirrors
@@ -2913,6 +3039,10 @@ def impl(context, coordinator_host, segment_host_list):
 @given('a cluster is created with "{mirroring_configuration}" segment mirroring on "{coordinator_host}" and "{segment_host_list}"')
 def impl(context, mirroring_configuration, coordinator_host, segment_host_list):
     _create_cluster(context, coordinator_host, segment_host_list, with_mirrors=True, mirroring_configuration=mirroring_configuration)
+
+@given('a cluster is created with mirrors on "{coordinator_host}" and "{segment_host_list}", with {number_of_segments} segments on each')
+def impl(context, coordinator_host, segment_host_list, number_of_segments):
+    _create_cluster(context, coordinator_host, segment_host_list, with_mirrors=True, mirroring_configuration='group', number_of_segments=int(number_of_segments))
 
 @given('the user runs gpexpand interview to add {num_of_segments} new segment and {num_of_hosts} new host "{hostnames}"')
 @when('the user runs gpexpand interview to add {num_of_segments} new segment and {num_of_hosts} new host "{hostnames}"')
@@ -3486,6 +3616,20 @@ def impl(context, table_name, dbname):
 def impl(context, table, dbname):
     context.pre_redistribution_row_count = _get_row_count_per_segment(table, dbname)
     context.pre_redistribution_dist_policy = _get_dist_policy_per_partition(table, dbname)
+
+@then('distribution information from table "{table}" with data in "{dbname}" is equal to segment count = {seg_cnt}, row count = {row_cnt}')
+def impl(context, table, dbname, seg_cnt, row_cnt):
+    with closing(dbconn.connect(dbconn.DbURL(dbname=dbname), unsetSearchPath=False)) as conn:
+        query = "SELECT count(1) FROM (SELECT gp_segment_id FROM %s GROUP BY gp_segment_id) t" % table
+        cursor = dbconn.query(conn, query)
+        table_segments = cursor.fetchone()[0]
+        query = "SELECT count(1) FROM %s" % table
+        cursor = dbconn.query(conn, query)
+        table_rows = cursor.fetchone()[0]
+        if int(table_segments) != int(seg_cnt):
+            raise Exception("Expected table %s in db %s to be distributed on %s segments, but it is distributed on %s segments" % (table, dbname, seg_cnt, table_segments))
+        if int(table_rows) != int(row_cnt):
+            raise Exception("Expected table %s in db %s to have %s rows, but got %s rows" % (table, dbname, row_cnt, table_rows))
 
 @then('distribution information from table "{table}" with data in "{dbname}" is verified against saved data')
 def impl(context, table, dbname):
@@ -4150,6 +4294,29 @@ def impl(context):
                 raise Exception("Postgres process {0} not killed on {1}.".format(pid, host))
 
 
+@given('segment information for content {content} is saved in context')
+@when('segment information for content {content} is saved in context')
+@then('segment information for content {content} is saved in context')
+def impl(context, content):
+    segment_information = []
+    segs = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
+    for seg in segs:
+        if int(content) == int(seg.getSegmentContentId()):
+            segment_information.append(seg)
+
+    context.segment_information = segment_information
+
+
+@given('verify no segment running for saved segment information')
+@when('verify no segment running for saved segment information')
+@then('verify no segment running for saved segment information')
+def impl(context):
+    for seg in context.segment_information:
+        segment_check = gp.SegmentIsShutDown('', seg.getSegmentDataDirectory(), REMOTE, seg.getSegmentHostName())
+        segment_check.run()
+        if not segment_check.is_shutdown():
+            raise Exception(f'Segment is up (dbid {seg.getSegmentDbId()})')
+
 @then('the database segments are in execute mode')
 def impl(context):
     # Get all primary segments details
@@ -4415,3 +4582,116 @@ def step_impl(context):
 @given(u'the cluster is running in IC proxy mode with new proxy address {address}')
 def step_impl(context, address):
     set_ic_proxy_and_address(context, address)
+
+@given('set fault inject "{fault}"')
+@then('set fault inject "{fault}"')
+@when('set fault inject "{fault}"')
+def impl(context, fault):
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
+
+@given('unset fault inject')
+@then('unset fault inject')
+@when('unset fault inject')
+def impl(context):
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = ""
+    os.environ[fault_injection.GPMGMT_FAULT_FILE_FLAG] = ""
+    if hasattr(context, 'fault_flag_filename') and os.path.exists(context.fault_flag_filename):
+        os.remove(context.fault_flag_filename)
+
+@given('on host "{host}" set fault inject "{fault}"')
+@then('on host "{host}" set fault inject "{fault}"')
+@when('on host "{host}" set fault inject "{fault}"')
+def impl(context, fault, host):
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = fault
+    cmd = f"""
+    ssh {host} "
+        echo 'export {fault_injection.GPMGMT_FAULT_POINT}={fault}' >> ~/.bashrc"
+        export {fault_injection.GPMGMT_FAULT_POINT}={fault}
+    """
+    run_command(context, cmd.strip())
+
+@given('on host "{host}" unset fault inject')
+@then('on host "{host}" unset fault inject')
+@when('on host "{host}" unset fault inject')
+def impl(context, host):
+    cmd = f"""
+    ssh {host} "
+        sed -i '/{fault_injection.GPMGMT_FAULT_POINT}=/d' ~/.bashrc
+        unset {fault_injection.GPMGMT_FAULT_POINT}
+    "
+    """
+    run_command(context, cmd.strip())
+
+@given('set fault inject delay {delay} ms')
+@then('set fault inject delay {delay} ms')
+@when('set fault inject delay {delay} ms')
+def impl(context, delay):
+    os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = delay
+
+@given('set fault inject type to suspend')
+@then('set fault inject type to suspend')
+@when('set fault inject type to suspend')
+def impl(context):
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = fault_injection.GPMGMT_FAULT_TYPE_SYSPEND
+    context.fault_flag_filename = "/tmp/ggrebalance_fault_suspend_flag"
+    with open(context.fault_flag_filename, "w"):
+        pass
+    os.environ[fault_injection.GPMGMT_FAULT_FILE_FLAG] = context.fault_flag_filename
+
+@given('unset fault inject delay')
+@then('unset fault inject delay')
+@when('unset fault inject delay')
+def impl(context):
+    os.environ[fault_injection.GPMGMT_FAULT_DELAY_MS] = ""
+
+@given('user will answer "{answer}" to the prompt "{prompt}"')
+@then('user will answer "{answer}" to the prompt "{prompt}"')
+@when('user will answer "{answer}" to the prompt "{prompt}"')
+def impl(context, answer, prompt):
+    assert answer == 'yes' or answer == 'no'
+    if not hasattr(context, 'fault_injected_answers'):
+        context.fault_injected_answers = {}
+    context.fault_injected_answers[prompt] = answer
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = fault_injection.GPMGMT_FAULT_TYPE_VALUE
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = json.dumps(context.fault_injected_answers)
+
+@given("clear user's answers")
+@then("clear user's answers")
+@when("clear user's answers")
+def impl(context):
+    context.fault_injected_answers = {}
+    os.environ[fault_injection.GPMGMT_FAULT_TYPE] = ''
+    os.environ[fault_injection.GPMGMT_FAULT_POINT] = ''
+
+@given('stub')
+@then('stub')
+@when('stub')
+def impl(context):
+    pass
+
+@given('the temporary file "{filename}" is created with content')
+@then('the temporary file "{filename}" is created  with content')
+@when('the temporary file "{filename}" is created  with content')
+def impl(context, filename):
+    with open(filename, 'w') as f:
+        f.write(context.text + '\n')
+
+@given('the environment variable "{var}" is set from output of "{command}"')
+def impl(context, var, command):
+    run_command(context, command)
+    context.execute_steps(f'Given the environment variable "{var}" is set to "{context.stdout_message.rstrip()}"')
+
+@given('coordinator data directory is updated')
+@then('coordinator data directory is updated')
+def impl(context):
+    global coordinator_data_dir 
+    coordinator_data_dir = os.environ.get('COORDINATOR_DATA_DIRECTORY')
+
+@given('verify that the file "{filepath}" contains text')
+@then('verify that the file "{filepath}" contains text')
+def impl(context, filepath):
+    filepath = glob.glob(filepath)[0]
+    with open(filepath, 'r') as f:
+        if context.text != f.read():
+            raise Exception("The file '%s' does not contain '%s'" % (filepath, context.text))

@@ -1,0 +1,685 @@
+-- Check 'ALTER TABLE ... REBALANCE' command and 'gp_target_numsegments' GUC
+
+-- Create hashed distributed tables
+create table table_distr_hashed(a int) distributed by (a);
+insert into table_distr_hashed select generate_series(1, 20);
+
+create table table_distr_hashed_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into table_distr_hashed_ao_row select generate_series(1, 20);
+
+create table table_distr_hashed_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into table_distr_hashed_ao_col select generate_series(1, 20);
+
+-- Create randomly distributed tables
+create table table_distr_random(a int) distributed randomly;
+insert into table_distr_random select generate_series(1, 20);
+
+create table table_distr_random_ao_row(a int) with (appendonly=true, orientation=row) distributed randomly;
+insert into table_distr_random_ao_row select generate_series(1, 20);
+
+create table table_distr_random_ao_col(a int) with (appendonly=true, orientation=column) distributed randomly;
+insert into table_distr_random_ao_col select generate_series(1, 20);
+
+-- Create replicated distributed tables
+create table table_distr_replicated(a int) distributed replicated;
+insert into table_distr_replicated select generate_series(1, 20);
+
+create table table_distr_replicated_ao_row(a int) with (appendonly=true, orientation=row) distributed replicated;
+insert into table_distr_replicated_ao_row select generate_series(1, 20);
+
+create table table_distr_replicated_ao_col(a int) with (appendonly=true, orientation=column) distributed replicated;
+insert into table_distr_replicated_ao_col select generate_series(1, 20);
+
+-- Create part tables
+create table part_range_table_distr_hashed (a int, b date) distributed by (a)
+partition by range (b) (
+    start (date '2023-01-01') inclusive
+    end (date '2024-01-01') exclusive
+    every (interval '1 month'),
+    default partition other_vals
+);
+insert into part_range_table_distr_hashed select i, '2023-01-02' from generate_series(1, 20)i;
+insert into part_range_table_distr_hashed select i, '2023-05-02' from generate_series(1, 20)i;
+insert into part_range_table_distr_hashed select i, '2020-05-02' from generate_series(1, 20)i;
+
+create table part_range_table_distr_random (a int, b date) distributed randomly
+partition by range (b) (
+    start (date '2023-01-01') inclusive
+    end (date '2024-01-01') exclusive
+    every (interval '1 month'),
+    default partition other_vals
+);
+insert into part_range_table_distr_random select i, '2023-01-02' from generate_series(1, 20)i;
+insert into part_range_table_distr_random select i, '2023-05-02' from generate_series(1, 20)i;
+insert into part_range_table_distr_random select i, '2020-05-02' from generate_series(1, 20)i;
+
+create table part_list_table_distr_hashed(a int, b text) distributed by (a)
+partition by list (b) (
+    partition part1 values ('test1'),
+    partition part2 values ('test2'),
+    default partition other_vals
+);
+insert into part_list_table_distr_hashed select i, 'test1' from generate_series(1, 20)i;
+insert into part_list_table_distr_hashed select i, 'test2' from generate_series(1, 20)i;
+insert into part_list_table_distr_hashed select i, 'test3' from generate_series(1, 20)i;
+
+create table part_list_table_distr_random(a int, b text) distributed randomly
+partition by list (b) (
+    partition part1 values ('test1'),
+    partition part2 values ('test2'),
+    default partition other_vals
+);
+insert into part_list_table_distr_random select i, 'test1' from generate_series(1, 20)i;
+insert into part_list_table_distr_random select i, 'test2' from generate_series(1, 20)i;
+insert into part_list_table_distr_random select i, 'test3' from generate_series(1, 20)i;
+
+create table multi_part_table_distr_hashed(a int, b date, c text) distributed by (a)
+partition by range (b)
+subpartition by list (c) subpartition template
+(
+    subpartition subpart1 values ('test1'),
+    subpartition subpart2 values ('test2')
+)
+(
+    partition part1 start (date '2023-01-01'),
+    partition part2 start (date '2023-02-01'),
+	partition part3 start (date '2023-03-01') end (date '2024-01-01')
+);
+insert into multi_part_table_distr_hashed select i, '2023-01-05', 'test1' from generate_series(1, 20)i;
+insert into multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from generate_series(1, 20)i;
+insert into multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(1, 20)i;
+
+-- Now check shrink of the created tables into 2 segments
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+end;
+
+alter table table_distr_hashed rebalance;
+alter table table_distr_hashed_ao_row rebalance;
+alter table table_distr_hashed_ao_col rebalance;
+
+alter table table_distr_random rebalance;
+alter table table_distr_random_ao_row rebalance;
+alter table table_distr_random_ao_col rebalance;
+
+alter table table_distr_replicated rebalance;
+alter table table_distr_replicated_ao_row rebalance;
+alter table table_distr_replicated_ao_col rebalance;
+
+alter table part_range_table_distr_hashed rebalance;
+alter table part_range_table_distr_random rebalance;
+
+alter table part_list_table_distr_hashed rebalance;
+alter table part_list_table_distr_random rebalance;
+
+alter table multi_part_table_distr_hashed rebalance; 
+
+-- Verify that data is presented only on segments #0 and #1
+select a, gp_segment_id from table_distr_hashed order by a;
+select a, gp_segment_id from table_distr_hashed_ao_row order by a;
+select a, gp_segment_id from table_distr_hashed_ao_col order by a;
+
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random_ao_row order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random_ao_col order by a;
+
+select a from table_distr_replicated order by a;
+select a from table_distr_replicated_ao_row order by a;
+select a from table_distr_replicated_ao_col order by a;
+
+select *, gp_segment_id from part_range_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from part_range_table_distr_random order by a, b;
+
+select *, gp_segment_id from part_list_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from part_list_table_distr_random order by a, b;
+
+select *, gp_segment_id from multi_part_table_distr_hashed order by a, b, c;
+
+-- Check that new data is added only to reduced set of segments
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_reset_rebalance_numsegments();
+end;
+
+insert into table_distr_hashed select generate_series(21, 40);
+insert into table_distr_hashed_ao_row select generate_series(21, 40);
+insert into table_distr_hashed_ao_col select generate_series(21, 40);
+
+insert into table_distr_random select generate_series(21, 40);
+insert into table_distr_random_ao_row select generate_series(21, 40);
+insert into table_distr_random_ao_col select generate_series(21, 40);
+
+insert into table_distr_replicated select generate_series(21, 40);
+insert into table_distr_replicated_ao_row select generate_series(21, 40);
+insert into table_distr_replicated_ao_col select generate_series(21, 40);
+
+insert into part_range_table_distr_hashed select i, '2023-01-02' from generate_series(21, 40)i;
+insert into part_range_table_distr_hashed select i, '2023-05-02' from generate_series(21, 40)i;
+insert into part_range_table_distr_hashed select i, '2020-05-02' from generate_series(21, 40)i;
+
+insert into part_range_table_distr_random select i, '2023-01-02' from generate_series(21, 40)i;
+insert into part_range_table_distr_random select i, '2023-05-02' from generate_series(21, 40)i;
+insert into part_range_table_distr_random select i, '2020-05-02' from generate_series(21, 40)i;
+
+insert into part_list_table_distr_hashed select i, 'test1' from generate_series(21, 40)i;
+insert into part_list_table_distr_hashed select i, 'test2' from generate_series(21, 40)i;
+insert into part_list_table_distr_hashed select i, 'test3' from generate_series(21, 40)i;
+
+insert into part_list_table_distr_random select i, 'test1' from generate_series(21, 40)i;
+insert into part_list_table_distr_random select i, 'test2' from generate_series(21, 40)i;
+insert into part_list_table_distr_random select i, 'test3' from generate_series(21, 40)i;
+
+insert into multi_part_table_distr_hashed select i, '2023-01-05', 'test1' from generate_series(21, 40)i;
+insert into multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from generate_series(21, 40)i;
+insert into multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(21, 40)i;
+
+select a, gp_segment_id from table_distr_hashed order by a;
+select a, gp_segment_id from table_distr_hashed_ao_row order by a;
+select a, gp_segment_id from table_distr_hashed_ao_col order by a;
+
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random_ao_row order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from table_distr_random_ao_col order by a;
+
+select a from table_distr_replicated order by a;
+select a from table_distr_replicated_ao_row order by a;
+select a from table_distr_replicated_ao_col order by a;
+
+select *, gp_segment_id from part_range_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from part_range_table_distr_random order by a, b;
+
+select *, gp_segment_id from part_list_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from part_list_table_distr_random order by a, b;
+
+select *, gp_segment_id from multi_part_table_distr_hashed order by a, b, c;
+
+-- Check vacuum on the tables
+vacuum table_distr_hashed;
+vacuum table_distr_hashed_ao_row;
+vacuum table_distr_hashed_ao_col;
+
+vacuum table_distr_random;
+vacuum table_distr_random_ao_row;
+vacuum table_distr_random_ao_col;
+
+vacuum table_distr_replicated;
+vacuum table_distr_replicated_ao_row;
+vacuum table_distr_replicated_ao_col;
+
+vacuum part_range_table_distr_hashed;
+vacuum part_range_table_distr_random;
+
+vacuum part_list_table_distr_hashed;
+vacuum part_list_table_distr_random;
+
+vacuum multi_part_table_distr_hashed;
+
+-- Check reltuples statistics after vacuum
+select reltuples from pg_class where oid = 'table_distr_hashed'::regclass;
+select reltuples from pg_class where oid = 'table_distr_hashed_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_hashed_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'table_distr_random'::regclass;
+select reltuples from pg_class where oid = 'table_distr_random_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_random_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'table_distr_replicated'::regclass;
+select reltuples from pg_class where oid = 'table_distr_replicated_ao_row'::regclass;
+select reltuples from pg_class where oid = 'table_distr_replicated_ao_col'::regclass;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_range_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_range_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_list_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('part_list_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('multi_part_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+-- And do some cleanup
+drop table table_distr_hashed;
+drop table table_distr_hashed_ao_row;
+drop table table_distr_hashed_ao_col;
+
+drop table table_distr_random;
+drop table table_distr_random_ao_row;
+drop table table_distr_random_ao_col;
+
+drop table table_distr_replicated;
+drop table table_distr_replicated_ao_row;
+drop table table_distr_replicated_ao_col;
+
+drop table part_range_table_distr_hashed;
+drop table part_range_table_distr_random;
+
+drop table part_list_table_distr_hashed;
+drop table part_list_table_distr_random;
+
+drop table multi_part_table_distr_hashed;
+
+-- Check that all newly created tables have data only on segments #0 and #1
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_set_rebalance_numsegments(2);
+end;
+
+create table new_table_distr_hashed(a int) distributed by (a);
+insert into new_table_distr_hashed select generate_series(1, 20);
+
+create table new_table_distr_hashed_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into new_table_distr_hashed_ao_row select generate_series(1, 20);
+
+create table new_table_distr_hashed_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into new_table_distr_hashed_ao_col select generate_series(1, 20);
+
+create table new_table_distr_random(a int) distributed randomly;
+insert into new_table_distr_random select generate_series(1, 20);
+
+create table new_table_distr_random_ao_row(a int) with (appendonly=true, orientation=row) distributed randomly;
+insert into new_table_distr_random_ao_row select generate_series(1, 20);
+
+create table new_table_distr_random_ao_col(a int) with (appendonly=true, orientation=column) distributed randomly;
+insert into new_table_distr_random_ao_col select generate_series(1, 20);
+
+create table new_table_distr_replicated(a int) distributed replicated;
+insert into new_table_distr_replicated select generate_series(1, 20);
+
+create table new_table_distr_replicated_ao_row(a int) with (appendonly=true, orientation=row) distributed replicated;
+insert into new_table_distr_replicated_ao_row select generate_series(1, 20);
+
+create table new_table_distr_replicated_ao_col(a int) with (appendonly=true, orientation=column) distributed replicated;
+insert into new_table_distr_replicated_ao_col select generate_series(1, 20);
+
+create table new_part_range_table_distr_hashed (a int, b date) distributed by (a)
+partition by range (b) (
+    start (date '2023-01-01') inclusive
+    end (date '2024-01-01') exclusive
+    every (interval '1 month'),
+    default partition other_vals
+);
+insert into new_part_range_table_distr_hashed select i, '2023-01-02' from generate_series(1, 20)i;
+insert into new_part_range_table_distr_hashed select i, '2023-05-02' from generate_series(1, 20)i;
+insert into new_part_range_table_distr_hashed select i, '2020-05-02' from generate_series(1, 20)i;
+
+create table new_part_range_table_distr_random (a int, b date) distributed randomly
+partition by range (b) (
+    start (date '2023-01-01') inclusive
+    end (date '2024-01-01') exclusive
+    every (interval '1 month'),
+    default partition other_vals
+);
+insert into new_part_range_table_distr_random select i, '2023-01-02' from generate_series(1, 20)i;
+insert into new_part_range_table_distr_random select i, '2023-05-02' from generate_series(1, 20)i;
+insert into new_part_range_table_distr_random select i, '2020-05-02' from generate_series(1, 20)i;
+
+create table new_part_list_table_distr_hashed(a int, b text) distributed by (a)
+partition by list (b) (
+    partition part1 values ('test1'),
+    partition part2 values ('test2'),
+    default partition other_vals
+);
+insert into new_part_list_table_distr_hashed select i, 'test1' from generate_series(1, 20)i;
+insert into new_part_list_table_distr_hashed select i, 'test2' from generate_series(1, 20)i;
+insert into new_part_list_table_distr_hashed select i, 'test3' from generate_series(1, 20)i;
+
+create table new_part_list_table_distr_random(a int, b text) distributed randomly
+partition by list (b) (
+    partition part1 values ('test1'),
+    partition part2 values ('test2'),
+    default partition other_vals
+);
+insert into new_part_list_table_distr_random select i, 'test1' from generate_series(1, 20)i;
+insert into new_part_list_table_distr_random select i, 'test2' from generate_series(1, 20)i;
+insert into new_part_list_table_distr_random select i, 'test3' from generate_series(1, 20)i;
+
+create table new_multi_part_table_distr_hashed(a int, b date, c text) distributed by (a)
+partition by range (b)
+subpartition by list (c) subpartition template
+(
+    subpartition subpart1 values ('test1'),
+    subpartition subpart2 values ('test2')
+)
+(
+    partition part1 start (date '2023-01-01'),
+    partition part2 start (date '2023-02-01'),
+	partition part3 start (date '2023-03-01') end (date '2024-01-01')
+);
+insert into new_multi_part_table_distr_hashed select i, '2023-01-05', 'test1' from generate_series(1, 20)i;
+insert into new_multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from generate_series(1, 20)i;
+insert into new_multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(1, 20)i;
+
+-- Also check CTAS statement
+create table new_table_ctas as select a from generate_series(1, 20)a distributed by(a);
+select * into new_table_into from generate_series(1, 20)a;
+
+select a, gp_segment_id from new_table_distr_hashed order by a;
+select a, gp_segment_id from new_table_distr_hashed_ao_row order by a;
+select a, gp_segment_id from new_table_distr_hashed_ao_col order by a;
+
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random_ao_row order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random_ao_col order by a;
+
+select a from new_table_distr_replicated order by a;
+select a from new_table_distr_replicated_ao_row order by a;
+select a from new_table_distr_replicated_ao_col order by a;
+
+select *, gp_segment_id from new_part_range_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from new_part_range_table_distr_random order by a, b;
+
+select *, gp_segment_id from new_part_list_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from new_part_list_table_distr_random order by a, b;
+
+select *, gp_segment_id from new_multi_part_table_distr_hashed order by a, b, c;
+
+select a, gp_segment_id from new_table_ctas order by a;
+select *, (gp_segment_id < 2) as correct_segment_id from new_table_into order by a;
+
+-- Validate the insertion works fine with the new tables
+-- after 'gp_target_numsegments' reset
+begin;
+select gp_expand_lock_catalog();
+select gp_toolkit.gp_reset_rebalance_numsegments();
+end;
+
+insert into new_table_ctas select generate_series(21, 40);
+insert into new_table_into select generate_series(21, 40);
+
+insert into new_table_distr_hashed select generate_series(21, 40);
+insert into new_table_distr_hashed_ao_row select generate_series(21, 40);
+insert into new_table_distr_hashed_ao_col select generate_series(21, 40);
+
+insert into new_table_distr_random select generate_series(21, 40);
+insert into new_table_distr_random_ao_row select generate_series(21, 40);
+insert into new_table_distr_random_ao_col select generate_series(21, 40);
+
+insert into new_part_range_table_distr_hashed select i, '2023-01-02' from generate_series(21, 40)i;
+insert into new_part_range_table_distr_hashed select i, '2023-05-02' from generate_series(21, 40)i;
+insert into new_part_range_table_distr_hashed select i, '2020-05-02' from generate_series(21, 40)i;
+
+insert into new_part_range_table_distr_random select i, '2023-01-02' from generate_series(21, 40)i;
+insert into new_part_range_table_distr_random select i, '2023-05-02' from generate_series(21, 40)i;
+insert into new_part_range_table_distr_random select i, '2020-05-02' from generate_series(21, 40)i;
+
+insert into new_part_list_table_distr_hashed select i, 'test1' from generate_series(21, 40)i;
+insert into new_part_list_table_distr_hashed select i, 'test2' from generate_series(21, 40)i;
+insert into new_part_list_table_distr_hashed select i, 'test3' from generate_series(21, 40)i;
+
+insert into new_part_list_table_distr_random select i, 'test1' from generate_series(21, 40)i;
+insert into new_part_list_table_distr_random select i, 'test2' from generate_series(21, 40)i;
+insert into new_part_list_table_distr_random select i, 'test3' from generate_series(21, 40)i;
+
+insert into new_multi_part_table_distr_hashed select i, '2023-01-05', 'test1' from generate_series(21, 40)i;
+insert into new_multi_part_table_distr_hashed select i, '2023-02-05', 'test2' from generate_series(21, 40)i;
+insert into new_multi_part_table_distr_hashed select i, '2023-03-05', 'test1' from generate_series(21, 40)i;
+
+select a, gp_segment_id from new_table_ctas order by a;
+select *, (gp_segment_id < 2) as correct_segment_id from new_table_into order by a;
+
+select a, gp_segment_id from new_table_distr_hashed order by a;
+select a, gp_segment_id from new_table_distr_hashed_ao_row order by a;
+select a, gp_segment_id from new_table_distr_hashed_ao_col order by a;
+
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random_ao_row order by a;
+select a, (gp_segment_id < 2) as correct_segment_id from new_table_distr_random_ao_col order by a;
+
+select *, gp_segment_id from new_part_range_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from new_part_range_table_distr_random order by a, b;
+
+select *, gp_segment_id from new_part_list_table_distr_hashed order by a, b;
+select *, (gp_segment_id < 2) as correct_segment_id from new_part_list_table_distr_random order by a, b;
+
+select *, gp_segment_id from new_multi_part_table_distr_hashed order by a, b, c;
+
+-- Check vacuum on the tables
+vacuum new_table_distr_hashed;
+vacuum new_table_distr_hashed_ao_row;
+vacuum new_table_distr_hashed_ao_col;
+
+vacuum new_table_distr_random;
+vacuum new_table_distr_random_ao_row;
+vacuum new_table_distr_random_ao_col;
+
+vacuum new_table_distr_replicated;
+vacuum new_table_distr_replicated_ao_row;
+vacuum new_table_distr_replicated_ao_col;
+
+vacuum new_part_range_table_distr_hashed;
+vacuum new_part_range_table_distr_random;
+
+vacuum new_part_list_table_distr_hashed;
+vacuum new_part_list_table_distr_random;
+
+vacuum new_multi_part_table_distr_hashed;
+
+-- Check reltuples statistics after vacuum
+select reltuples from pg_class where oid = 'new_table_distr_hashed'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_hashed_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_hashed_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'new_table_distr_random'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_random_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_random_ao_col'::regclass;
+
+select reltuples from pg_class where oid = 'new_table_distr_replicated'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_replicated_ao_row'::regclass;
+select reltuples from pg_class where oid = 'new_table_distr_replicated_ao_col'::regclass;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_range_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_range_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_list_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_part_list_table_distr_random') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+select sum(c.reltuples) as total_estimated_rows
+from pg_partition_tree('new_multi_part_table_distr_hashed') pt
+join pg_class c on pt.relid::oid = c.oid where pt.isleaf = true;
+
+-- And do some cleanup
+drop table new_table_distr_hashed;
+drop table new_table_distr_hashed_ao_row;
+drop table new_table_distr_hashed_ao_col;
+
+drop table new_table_distr_random;
+drop table new_table_distr_random_ao_row;
+drop table new_table_distr_random_ao_col;
+
+drop table new_table_distr_replicated;
+drop table new_table_distr_replicated_ao_row;
+drop table new_table_distr_replicated_ao_col;
+
+drop table new_part_range_table_distr_hashed;
+drop table new_part_range_table_distr_random;
+
+drop table new_part_list_table_distr_hashed;
+drop table new_part_list_table_distr_random;
+
+drop table new_multi_part_table_distr_hashed;
+
+drop table new_table_ctas;
+drop table new_table_into;
+
+-- Check rollback of alter rebalance operation
+create table table_distr_hashed(a int) distributed by (a);
+insert into table_distr_hashed select generate_series(1, 20);
+
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+begin;
+alter table table_distr_hashed rebalance 2;
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+rollback;
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+drop table table_distr_hashed;
+
+-- Check rebalance with parameter
+create table table_distr_hashed(a int) distributed by (a);
+insert into table_distr_hashed select generate_series(1, 20);
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+-- Shrink to 2 segments
+alter table table_distr_hashed rebalance 2;
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+-- Shrink to 1 segment
+alter table table_distr_hashed rebalance 1;
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+-- Expand back to 3 segments
+alter table table_distr_hashed rebalance 3;
+select count(1), gp_segment_id from table_distr_hashed group by gp_segment_id order by gp_segment_id;
+
+-- Try to expand to 4 segments - should do nothing
+alter table table_distr_hashed rebalance 3;
+
+drop table table_distr_hashed;
+
+-- Check rebalance of materialized view
+-- start_ignore
+drop materialized view if exists mv_test_table;
+drop table if exists test_table;
+-- end_ignore
+
+create table test_table(a int) distributed by (a);
+insert into test_table select generate_series(1, 10);
+
+create materialized view mv_test_table as select a from test_table distributed by (a);
+
+alter table test_table rebalance 1;
+alter materialized view mv_test_table rebalance 1;
+
+select count(1), gp_segment_id from test_table group by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id;
+
+drop materialized view mv_test_table;
+drop table test_table;
+
+-- Check rollback of the rebalance of materialized view
+create table test_table(a int) distributed by (a);
+insert into test_table select generate_series(1, 10);
+
+create materialized view mv_test_table as select a from test_table distributed by (a);
+
+select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id order by gp_segment_id;
+
+begin;
+alter table test_table rebalance 1;
+alter materialized view mv_test_table rebalance 1;
+rollback;
+
+select count(1), gp_segment_id from test_table group by gp_segment_id order by gp_segment_id;
+select count(1), gp_segment_id from mv_test_table group by gp_segment_id order by gp_segment_id;
+
+drop materialized view mv_test_table;
+drop table test_table;
+
+-- check ANALYZE after REBALANCE
+drop table if exists test_table_heap;
+create table test_table_heap(a int) distributed by (a);
+insert into test_table_heap select generate_series(1, 50000);
+alter table test_table_heap rebalance 2;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+drop table test_table_heap;
+
+drop table if exists test_table_ao_row;
+create table test_table_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into test_table_ao_row select generate_series(1, 50000);
+alter table test_table_ao_row rebalance 2;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+drop table test_table_ao_row;
+
+drop table if exists test_table_ao_col;
+create table test_table_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into test_table_ao_col select generate_series(1, 50000);
+alter table test_table_ao_col rebalance 2;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+drop table test_table_ao_col;
+
+-- Check ANALYZE inside the transaction and after rollback
+create table test_table_heap(a int) distributed by (a);
+insert into test_table_heap select generate_series(1, 50000);
+begin;
+alter table test_table_heap rebalance 2;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+rollback;
+analyze test_table_heap;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_heap group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_heap'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_heap' and attname = 'a';
+drop table test_table_heap;
+
+create table test_table_ao_row(a int) with (appendonly=true, orientation=row) distributed by (a);
+insert into test_table_ao_row select generate_series(1, 50000);
+begin;
+alter table test_table_ao_row rebalance 2;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+rollback;
+analyze test_table_ao_row;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_row group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_row'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_row' and attname = 'a';
+drop table test_table_ao_row;
+
+create table test_table_ao_col(a int) with (appendonly=true, orientation=column) distributed by (a);
+insert into test_table_ao_col select generate_series(1, 50000);
+begin;
+alter table test_table_ao_col rebalance 2;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+rollback;
+analyze test_table_ao_col;
+-- validate data and statistics correctness
+select count(*), gp_segment_id from test_table_ao_col group by gp_segment_id order by gp_segment_id;
+select reltuples from pg_class where oid = 'test_table_ao_col'::regclass;
+select n_distinct from pg_stats where tablename = 'test_table_ao_col' and attname = 'a';
+drop table test_table_ao_col;

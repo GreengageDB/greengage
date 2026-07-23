@@ -16,6 +16,8 @@
 #include "utils/builtins.h"
 #include "cdb/cdbutil.h"
 #include "catalog/pg_type.h"
+#include "port/atomics.h"
+#include "utils/gpexpand.h"
 
 
 #ifdef PG_MODULE_MAGIC
@@ -52,6 +54,13 @@ gp_debug_set_create_table_default_numsegments(PG_FUNCTION_ARGS)
 	int			numsegments = -1;
 
 	Assert(1 == PG_NARGS());
+
+	uint32 gp_rebalance_numsegs = pg_atomic_read_u32(gp_create_table_rebalance_numsegments);
+	if (gp_rebalance_numsegs != GP_DEFAULT_NUMSEGMENTS_SHARED_UNSET)
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("ggrebalance in progress, all relations will be created at %u segments",
+						 gp_rebalance_numsegs)));
 
 	argtypeoid = get_fn_expr_argtype(fcinfo->flinfo, 0);
 
@@ -138,6 +147,13 @@ gp_debug_get_create_table_default_numsegments(PG_FUNCTION_ARGS)
 {
 	char		buf[64];
 	const char *result = NULL;
+	uint32 gp_rebalance_numsegs = pg_atomic_read_u32(gp_create_table_rebalance_numsegments);
+
+	if (gp_rebalance_numsegs != GP_DEFAULT_NUMSEGMENTS_SHARED_UNSET)
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("ggrebalance in progress, all relations will be created at %u segments",
+						 gp_rebalance_numsegs)));
 
 	switch (gp_create_table_default_numsegments)
 	{

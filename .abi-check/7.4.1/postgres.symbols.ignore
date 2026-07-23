@@ -1,1 +1,8 @@
 ConfigureNamesBool_gp
+gp_segment_number_for_table_shrink
+getRebalanceNumsegments
+GgRebalanceNumsegmentsShmemInit
+GgRebalanceNumsegmentsShmemSize
+gp_create_table_rebalance_numsegments
+ScanKeywordCategories
+ScanKeywordTokens
