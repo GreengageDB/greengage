@@ -395,6 +395,14 @@ class SQLIsolationExecutor(object):
         def connectdb(self, given_dbname, given_host = None, given_port = None, given_opt = None, given_user = None, given_passwd = None):
             con = None
             retry = 1000
+            # The raw-TCP-reset window during a coordinator crash-reset is brief (a
+            # connection accepted then SIGQUIT'd mid-handshake, before the postmaster
+            # starts returning the retryable "resetting"/"in recovery" rejection).
+            # Give it its OWN small budget: sharing the ~100s `retry` budget let a
+            # genuinely-down coordinator drag ~100s onto every reconnect across the
+            # rest of the schedule, blowing the job timeout (jit-orca).  ~5s rides out
+            # the reset window yet fails fast when the coordinator is really gone.
+            reset_retry = 50
             while retry:
                 try:
                     if (given_port is None):
@@ -422,18 +430,21 @@ class SQLIsolationExecutor(object):
                          # CAC_NOTCONSISTENT between the end-of-recovery mirror-ready
                          # reset and PM_RUN; retry until it finishes promoting.  Note
                          # this does NOT match "not yet accepting connections".
-                         "the database system is not accepting connections" in str(e) or
-                         # During a coordinator PANIC/postmaster crash-reset, a fresh
-                         # connection can be accepted and then SIGQUIT'd mid-handshake
-                         # before the retryable "resetting"/"in recovery" rejection is
-                         # sent, so the client instead sees a raw TCP reset.  Ride it
-                         # out: coordinator-crash tests have no surviving session to
-                         # poll for readiness, so retrying the reconnect across the
-                         # reset window is the reliable barrier (bounded by `retry`).
-                         "server closed the connection unexpectedly" in str(e) or
-                         "Connection reset by peer" in str(e)) and
+                         "the database system is not accepting connections" in str(e)) and
                         retry > 1):
                         retry -= 1
+                        time.sleep(0.1)
+                    elif (("server closed the connection unexpectedly" in str(e) or
+                         "Connection reset by peer" in str(e)) and
+                        reset_retry > 1):
+                        # During a coordinator PANIC/postmaster crash-reset, a fresh
+                        # connection can be accepted and then SIGQUIT'd mid-handshake
+                        # before the retryable "resetting"/"in recovery" rejection is
+                        # sent, so the client instead sees a raw TCP reset.  Ride out
+                        # that narrow window, but on the tight `reset_retry` budget
+                        # (see above) so a really-down coordinator fails fast instead
+                        # of dragging the 100s `retry` budget onto every reconnect.
+                        reset_retry -= 1
                         time.sleep(0.1)
                     else:
                         raise

@@ -71,11 +71,15 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 -- sanity check the tuple distribution (assumption of the test).
 -- wait for content-0's newly promoted primary (the ex-mirror) to finish startup
 -- and accept connections before dispatching a write to it, so this INSERT does
--- not race the promotion/recovery window ("not accepting connections").  Run the
--- wait in utility mode: a normal session would first try to (re)acquire its
--- writer gang against the still-down old seg0 primary and fail before the
--- pg_isready poll could even run.
--1U: SELECT wait_until_segment_accepts_connections(0);
+-- not race the promotion/recovery window ("not accepting connections").  Use
+-- connectSeg: it probes the segment with a utility-mode psql subprocess and
+-- dispatches nothing -- the outer scan is over the coordinator-only
+-- gp_segment_configuration catalog and the body runs no plpy.execute()/SPI --
+-- so unlike wait_until_segment_accepts_connections it neither re-acquires a
+-- writer gang against the still-down old seg0 primary ("failed to acquire
+-- resources") nor runs the in-function FTS probe a utility session rejects.
+-- Same pattern used for content 1 below.
+2: select connectSeg(600,port,hostname) from gp_segment_configuration where content = 0 and role = 'p';
 2: INSERT INTO tst_missing_tbl values(2),(1),(5);
 2: SELECT gp_segment_id, count(*) from tst_missing_tbl group by gp_segment_id;
 
