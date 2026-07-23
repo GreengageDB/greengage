@@ -422,7 +422,16 @@ class SQLIsolationExecutor(object):
                          # CAC_NOTCONSISTENT between the end-of-recovery mirror-ready
                          # reset and PM_RUN; retry until it finishes promoting.  Note
                          # this does NOT match "not yet accepting connections".
-                         "the database system is not accepting connections" in str(e)) and
+                         "the database system is not accepting connections" in str(e) or
+                         # During a coordinator PANIC/postmaster crash-reset, a fresh
+                         # connection can be accepted and then SIGQUIT'd mid-handshake
+                         # before the retryable "resetting"/"in recovery" rejection is
+                         # sent, so the client instead sees a raw TCP reset.  Ride it
+                         # out: coordinator-crash tests have no surviving session to
+                         # poll for readiness, so retrying the reconnect across the
+                         # reset window is the reliable barrier (bounded by `retry`).
+                         "server closed the connection unexpectedly" in str(e) or
+                         "Connection reset by peer" in str(e)) and
                         retry > 1):
                         retry -= 1
                         time.sleep(0.1)
