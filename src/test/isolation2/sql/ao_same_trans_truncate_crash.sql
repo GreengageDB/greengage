@@ -7,6 +7,11 @@
 -- cluster before disabling FTS so this test starts from a healthy state and does
 -- not cascade-fail on its first CHECKPOINT.
 select wait_until_all_segments_synchronized();
+-- mode='s' (mirror synced) does not imply the primary has finished crash
+-- recovery; also make sure every primary actually accepts connections before we
+-- start, so this test does not inherit a still-recovering segment from the
+-- preceding crash-recovery test.
+select wait_until_segment_accepts_connections(content) from gp_segment_configuration where role='p' and content<>-1;
 -- skip FTS probes to avoid segment being marked down on restart
 SELECT gp_inject_fault_infinite('fts_probe', 'skip', dbid)
     FROM gp_segment_configuration WHERE role='p' AND content=-1;
@@ -36,6 +41,11 @@ SELECT gp_wait_until_triggered_fault('fts_probe', 1, dbid)
 1: ABORT;
 -- restart (immediate) to invoke crash recovery
 1: SELECT pg_ctl(datadir, 'restart') FROM gp_segment_configuration WHERE role = 'p' AND content <> -1;
+-- wait for every restarted primary to finish crash recovery and accept
+-- connections before dispatching a query gang to them (pg_ctl -w can return
+-- before crash recovery + synchronous-mirror resync completes; FTS is skipped
+-- here so wait_until_all_segments_synchronized() cannot be used)
+select wait_until_segment_accepts_connections(content) from gp_segment_configuration where role='p' and content<>-1;
 -- validate the segments recovered fine and able to serve queries
 2: SELECT oid from gp_dist_random('pg_class') WHERE relname='ao_same_trans_truncate';
 

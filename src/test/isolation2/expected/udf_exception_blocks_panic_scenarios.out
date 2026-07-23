@@ -40,6 +40,24 @@
 -- s/transaction -\d+/transaction/
 -- end_matchsubs
 
+-- The seg0 sub-transaction panic (debug_dtm_action) surfaces on the QD in one
+-- of two non-deterministic forms for the SAME statement: a direct receive
+-- failure ("Error on receive ... server closed the connection unexpectedly"),
+-- or a gang-reset-during-exception-cleanup form ("DTX
+-- RollbackAndReleaseCurrentSubTransaction dispatch failed").  Neither is a
+-- regression -- both are the intended panic -- so ignore both error forms (and
+-- form A's detail/continuation lines; CONTEXT lines are already gpdiff-ignored)
+-- so the test does not flake on whichever one occurs.  A real non-panic
+-- (success) still fails: the function's result rows / surviving 'employees'
+-- table would then appear and diff.
+-- start_matchignore
+-- m/^ERROR:  Error on receive from seg\d+ : server closed the connection unexpectedly/
+-- m/^\tThis probably means the server terminated abnormally/
+-- m/^\tbefore or while processing the request\./
+-- m/^PL\/pgSQL function test_protocol_allseg.* line \d+ at SQL statement/
+-- m/^ERROR:  DTX RollbackAndReleaseCurrentSubTransaction dispatch failed/
+-- end_matchignore
+
 -- skip FTS probes always
 SELECT gp_inject_fault_infinite('fts_probe', 'skip', 1);
  gp_inject_fault_infinite 

@@ -39,6 +39,15 @@ server closed the connection unexpectedly
  1        
 (1 row)
 
+-- the coordinator's FTS view can still be stale right after the crash-reset;
+-- refresh it (and confirm segments are synchronized) before the first gang
+-- dispatch below, so gp_dist_random does not race the post-recovery window.
+3: SELECT wait_until_all_segments_synchronized();
+ wait_until_all_segments_synchronized 
+--------------------------------------
+ OK                                   
+(1 row)
+
 3: select gp_segment_id, gp_get_next_gxid() < (select gp_get_next_gxid()) from gp_dist_random('gp_id');
  gp_segment_id | ?column? 
 ---------------+----------

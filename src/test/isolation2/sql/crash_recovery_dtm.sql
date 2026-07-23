@@ -47,13 +47,17 @@ FROM gp_segment_configuration g1 where role = 'p';
 3&: SELECT wait_till_master_shutsdown();
 -- Start transaction which should hit PANIC as COMMIT PREPARED will fail to one segment
 1: CREATE TABLE commit_phase1_panic(a int, b int);
+-- Join back to know master has completed its postmaster reset BEFORE we
+-- reconnect below, so the -1U utility connect no longer races the crash-reset
+-- SIGQUIT/reinit window (whose "server closed the connection unexpectedly" is
+-- not retried by the harness).  This matches the robust ordering used by the
+-- later scenarios, which join immediately after the crash, before any reconnect.
+3<:
 -- Reset the fault in utility mode because normal mode connection will
 -- not be accepted until DTX recovery is finished.
 -1U: SELECT gp_inject_fault('finish_prepared_start_of_function', 'reset', dbid)
      from gp_segment_configuration where content=0 and role='p';
 -1Uq:
--- Join back to know master has completed postmaster reset.
-3<:
 -- Start a session on master which would complete the DTM recovery and hence COMMIT PREPARED
 4: SELECT * from commit_phase1_panic;
 4: INSERT INTO commit_phase1_panic select i,i from generate_series(1, 10)i;
