@@ -2,6 +2,28 @@
 -- Set fsync on since we need to test the fsync code logic.
 !\retcode gpconfig -c fsync -v on --skipvalidation;
 !\retcode gpstop -u;
+-- connectSeg(n, port, hostname): a utility-mode "psql select 1" readiness probe
+-- run via subprocess.  Unlike wait_until_segment_accepts_connections it issues no
+-- plpy.execute()/SPI, so it never re-dispatches to the calling session's stale
+-- gang against a just-restarted/recovering segment ("Error on receive from segN:
+-- server closed the connection"), and because it runs a real query rather than
+-- pg_isready, a segment that merely accepts connections but cannot yet serve a
+-- query does not pass the barrier prematurely.
+CREATE OR REPLACE FUNCTION connectSeg(n int, port int, hostname text) RETURNS bool AS $$
+import os
+import subprocess
+import time
+for i in range(n):
+    try:
+        subprocess.run(["psql", "-h", str(hostname), "-p", str(port), "postgres", "-Xc", "select 1;"],
+                       env={"PGOPTIONS": "-c gp_role=utility", "PATH": os.getenv("PATH")},
+                       check=True)
+        return True
+    except Exception as e:
+        time.sleep(1)
+raise Exception("wait connection timeout")
+$$
+LANGUAGE plpython3u;
 -- The preceding crash-recovery test (udf_exception_blocks_panic_scenarios) can
 -- leave a segment still completing recovery / resync; wait for a synchronized
 -- cluster before disabling FTS so this test starts from a healthy state and does
@@ -11,7 +33,7 @@ select wait_until_all_segments_synchronized();
 -- recovery; also make sure every primary actually accepts connections before we
 -- start, so this test does not inherit a still-recovering segment from the
 -- preceding crash-recovery test.
-select wait_until_segment_accepts_connections(content) from gp_segment_configuration where role='p' and content<>-1;
+-1U: select connectSeg(600, port, hostname) from gp_segment_configuration where role='p' and content<>-1;
 -- skip FTS probes to avoid segment being marked down on restart
 SELECT gp_inject_fault_infinite('fts_probe', 'skip', dbid)
     FROM gp_segment_configuration WHERE role='p' AND content=-1;
@@ -45,7 +67,7 @@ SELECT gp_wait_until_triggered_fault('fts_probe', 1, dbid)
 -- connections before dispatching a query gang to them (pg_ctl -w can return
 -- before crash recovery + synchronous-mirror resync completes; FTS is skipped
 -- here so wait_until_all_segments_synchronized() cannot be used)
-select wait_until_segment_accepts_connections(content) from gp_segment_configuration where role='p' and content<>-1;
+-1U: select connectSeg(600, port, hostname) from gp_segment_configuration where role='p' and content<>-1;
 -- validate the segments recovered fine and able to serve queries
 2: SELECT oid from gp_dist_random('pg_class') WHERE relname='ao_same_trans_truncate';
 
