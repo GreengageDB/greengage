@@ -148,4 +148,7 @@ INSERT INTO tst_missing_tbl values(2),(1),(5);
 !\retcode gprecoverseg -ar;
 5: SELECT wait_until_all_segments_synchronized();
 !\retcode gpconfig -r wal_keep_size;
-!\retcode gpstop -ari;
+-- Retry the restart (as with the earlier gpstop -ari): the coordinator can be in
+-- startup ("not accepting connections") when gpstop's internal gpstart reconnects.
+-- Retry until clean so this cleanup restart cannot wedge the cluster for later tests.
+!\retcode for i in $(seq 1 10); do gpstop -ari && break; echo "retry gpstop -ari ($i)"; sleep 5; done;
