@@ -56,6 +56,7 @@ extern void      tempcat_endscan(TempCatScanData* scan);
 extern void      tempcat_rescan(TempCatScanData* scan, ScanKey keys, int nkeys);
 extern HeapTuple tempcat_getnext(TempCatScanData* scan, BufferHeapTupleTableSlot* bslot);
 extern bool      tempcat_is_fetched(TempCatScanData* scan);
+extern bool      tempcat_relation_has_entries(Relation rel);
 
 /* Transaction support */
 extern void      tempcat_begin_transaction(void);

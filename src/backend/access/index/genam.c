@@ -605,6 +605,16 @@ systable_beginscan_ordered(Relation heapRelation,
 	sysscan->irel = indexRelation;
 	sysscan->slot = table_slot_create(heapRelation, NULL);
 
+	/*
+	 * Ordered catalog scans do not consult the in-memory temp catalog; they
+	 * read only on-disk tuples.  Make the (unused) tempscan pointer NULL so it
+	 * is never mistaken for a live tempcat scan, and assert the relation has no
+	 * virtual rows. On the codepath where ordered scan is needed there should be
+	 * no virtual tuples. 
+	 */
+	sysscan->tempscan = NULL;
+	Assert(!tempcat_relation_has_entries(heapRelation));
+
 	if (snapshot == NULL)
 	{
 		Oid			relid = RelationGetRelid(heapRelation);
