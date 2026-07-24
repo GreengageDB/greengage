@@ -213,11 +213,21 @@ main(int argc, char **argv)
 			  new_cluster.pgdata);
 	check_ok();
 
-	/*
-	 * GPDB_UPGRADE_FIXME: Copy the pg_distributedlog over in vanilla.
-	 * The assumption that this works needs to be verified
-	 */
-	copy_subdir_files("pg_distributedlog", "pg_distributedlog");
+	if (GET_MAJOR_VERSION(old_cluster.major_version) < 1200 &&
+		GET_MAJOR_VERSION(new_cluster.major_version) >= 1200)
+	{
+		/*
+		 * pg_distributedlog stores local xid -> distributed xid mappings. The
+		 * on-disk representation changed between Greengage 6 and 7, so do not
+		 * copy pre-7 files into a 7+ cluster. This is safe because a clean
+		 * pg_upgrade cannot leave active distributed transactions that require
+		 * old mappings.
+		 */
+		prep_status("Skipping old pg_distributedlog copy");
+		check_ok();
+	}
+	else
+		copy_subdir_files("pg_distributedlog", "pg_distributedlog");
 
 	/* New now using xids of the old system */
 
