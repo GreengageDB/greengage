@@ -242,23 +242,22 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	 *
 	 * The init fork is created via mdcreate() (SMGR_AO's smgr_create), which
 	 * register_dirty_segment()s it under the regular md sync handler
-	 * (SYNC_HANDLER_MD) -- including when its XLOG_SMGR_CREATE is replayed
-	 * during crash recovery.  So, contrary to the older belief that INIT_FORK
-	 * sync requests are never remembered, that md fsync request IS pending:
-	 * during redo we must forget it before unlinking, otherwise the
-	 * end-of-recovery checkpoint PANICs ("could not fsync file ... No such
-	 * file or directory") on the now-removed file and the segment crash-loops.
-	 * This mirrors the MAIN-fork forget in mdunlink_ao_base_relfile().
+	 * (SYNC_HANDLER_MD) in BOTH normal and redo mode -- unlike the AO base
+	 * relfile, whose normal-mode fsync is performed by the backend rather than
+	 * the checkpointer.  So, contrary to the older belief that INIT_FORK sync
+	 * requests are never remembered, that md fsync request IS pending, and it
+	 * must be forgotten before unlinking unconditionally (not just under redo,
+	 * as mdunlink_ao_base_relfile() does for the MAIN fork): a stale request
+	 * left by a normal-mode DROP makes a later checkpoint PANIC ("could not
+	 * fsync file ... No such file or directory") on the now-removed file,
+	 * dropping the segment's connection and crash-looping it.
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
-		if (isRedo)
-		{
-			FileTag		tag;
+		FileTag		tag;
 
-			INIT_FILETAG(tag, rnode.node, INIT_FORKNUM, 0, SYNC_HANDLER_MD);
-			RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
-		}
+		INIT_FILETAG(tag, rnode.node, INIT_FORKNUM, 0, SYNC_HANDLER_MD);
+		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
