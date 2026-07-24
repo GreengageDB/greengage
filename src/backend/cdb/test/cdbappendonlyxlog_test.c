@@ -81,12 +81,13 @@ ao_invalid_segment_file_test(uint8 xl_info)
 
 	/*
 	 * ao_truncate_replay() only registers the segfile in the invalid-page
-	 * table when the file EXISTS on disk but cannot be opened read-write (a
-	 * genuine divergence); a truly absent file is the benign crash-window case
-	 * and is skipped (its stat() fails).  So for the truncate path create the
-	 * real segfile on disk -- while PathNameOpenFile is still mocked to fail --
-	 * so the stat() existence check passes and XLogAOSegmentFile is exercised.
-	 * ao_insert_replay registers unconditionally and needs no file.
+	 * table when the file EXISTS on disk but is NOT WRITABLE (a genuine
+	 * divergence); a truly absent file, or a writable file that merely failed
+	 * to open, is a benign case and is skipped.  So for the truncate path
+	 * create the real segfile on disk and make it read-only -- while
+	 * PathNameOpenFile is still mocked to fail -- so the write-bit check keys
+	 * XLogAOSegmentFile on.  ao_insert_replay registers unconditionally and
+	 * needs no file.
 	 */
 	if (xl_info == XLOG_APPENDONLY_TRUNCATE)
 	{
@@ -103,6 +104,8 @@ ao_invalid_segment_file_test(uint8 xl_info)
 		fd = open(path, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 		if (fd >= 0)
 			close(fd);
+		/* read-only ((st_mode & S_IWUSR) == 0) marks it as a real divergence */
+		chmod(path, S_IRUSR);
 		created_path = pstrdup(path);
 		pfree(dbPath);
 	}

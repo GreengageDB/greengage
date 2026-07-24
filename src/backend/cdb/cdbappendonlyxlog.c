@@ -176,13 +176,21 @@ ao_truncate_replay(XLogReaderState *record)
 		 * uao_crash_compaction_*).  A genuine WAL gap is still caught by
 		 * ao_insert_replay(), which creates/registers the segfile as needed.
 		 *
-		 * If, on the other hand, the file EXISTS but could not be opened
-		 * read-write (e.g. read-only), that is a real divergence and we DO
-		 * register it so the mirror PANICs and gets rebuilt from the primary
-		 * (validated by src/test/regress/mirror_replay, which chmods the mirror
-		 * segfile read-only and asserts the mirror goes down).
+		 * If, on the other hand, the segfile EXISTS but is not writable, that
+		 * is a real divergence and we DO register it so the mirror PANICs and
+		 * gets rebuilt from the primary (validated by src/test/regress/
+		 * mirror_replay, which chmods the mirror segfile read-only and asserts
+		 * the mirror goes down).  We must key off writability rather than mere
+		 * existence: a segfile that EXISTS AND is writable but momentarily
+		 * failed to open (a transient/VFD open failure) is not a divergence, and
+		 * registering it would spuriously take a healthy segment down and wedge
+		 * dependent HA replay -- a mirror hitting this on a post-promotion
+		 * timeline is what stalled the segwalrep suite for hours.  (Test the
+		 * write bit via stat() rather than access(2) so the result does not
+		 * depend on whether recovery happens to run as the file's owner.)
 		 */
-		if (xlrec->target.offset != 0 && stat(path, &st) == 0)
+		if (xlrec->target.offset != 0 &&
+			stat(path, &st) == 0 && (st.st_mode & S_IWUSR) == 0)
 			XLogAOSegmentFile(xlrec->target.node, xlrec->target.segment_filenum);
 		return;
 	}
