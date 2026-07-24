@@ -55,7 +55,6 @@
 #include "utils/rel.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
-#include "utils/typcache.h"
 #include "lib/stringinfo.h"
 
 /*****************************************************************************
@@ -90,12 +89,8 @@ struct TempCatScanData
 {
 	TempcatSnapshotRelationData *rel;
 	TupleDesc	tupdesc;
-	ScanKey key;
-	int nkeys;
-	AttrNumber	attrNumbers[TempcatIndexMaxAttributes];
-	FmgrInfo    attrOpFuncs[TempcatIndexMaxAttributes];	/* operator functions from sk_func (return bool) */
-	FmgrInfo    attrCmpFuncs[TempcatIndexMaxAttributes];	/* btree cmp functions from type cache (three-way) */
-	Oid         attrCollations[TempcatIndexMaxAttributes];
+	int			nkeys;
+	ScanKeyData	keyData[TempcatIndexMaxAttributes];
 	bool scan_finish_returned;
 	bool inmem_tuplist_init_done;
 	dlist_head inmem_tuplist;		/* list of virtual tuples */
@@ -561,6 +556,18 @@ tempcat_is_fetched(TempCatScanData* scan)
 }
 
 /*
+ * Does the current tempcat snapshot hold any virtual rows for this relation?
+ */
+bool
+tempcat_relation_has_entries(Relation rel)
+{
+	TempcatSnapshotRelationData *entry;
+
+	entry = find_relation_entry(TempcatSnapshotGetCurrent(), rel);
+	return entry != NULL && entry->tuples_num > 0;
+}
+
+/*
  * Insert a tuple. Basically heap_insert implementation for virtual tuples.
  * Returns true if tuple was inserted, false otherwise.
  */
@@ -715,116 +722,36 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 }
 
 /*
- * Determine whether a virtual heap tuple matches the WHERE condition
- * represented by the scan keys.
+ * Filter a virtual heap tuple against the scan keys and, if it matches,
+ * append a copy to scan->inmem_tuplist.
  *
- * Compares each scan key argument against the corresponding tuple attribute
- * using DirectFunctionCall2Coll and evaluates the B-tree strategy.
- *
- * Returns true if the tuple satisfies all scan key conditions.
- */
-static bool
-tempcat_index_tuple_matches_where_condition(TempCatScanData *scan, HeapTuple tup)
-{
-	for (int keyIndex = 0; keyIndex < scan->nkeys; keyIndex++)
-	{
-		bool	isnull;
-		Datum	val;
-
-		val = heap_getattr(tup, scan->attrNumbers[keyIndex], scan->tupdesc, &isnull);
-		if (isnull)
-			return false;
-
-		/*
-		 * Use the operator function directly (e.g. oideq, int4lt).  The
-		 * ScanKey's sk_func already encodes the correct semantics for the
-		 * strategy (=, <, <=, >, >=) and returns a boolean.
-		 */
-		if (!DatumGetBool(FunctionCall2Coll(
-				&scan->attrOpFuncs[keyIndex],
-				scan->attrCollations[keyIndex],
-				val,
-				scan->key[keyIndex].sk_argument)))
-			return false;
-	}
-
-	return true;
-}
-
-/*
- * Compare two virtual heap tuples by index key order.
- *
- * Returns a value < 0 if first < second, 0 if equal, > 0 if first > second,
- * evaluated across all index key attributes.
- */
-static int
-tempcat_index_compare_tuples(TempCatScanData *scan, HeapTuple first, HeapTuple second)
-{
-	for (int keyIndex = 0; keyIndex < scan->nkeys; keyIndex++)
-	{
-		bool	isnull_first, isnull_second;
-		Datum	val_first, val_second;
-		int		cmp;
-
-		val_first = heap_getattr(first, scan->attrNumbers[keyIndex], scan->tupdesc, &isnull_first);
-		val_second = heap_getattr(second, scan->attrNumbers[keyIndex], scan->tupdesc, &isnull_second);
-
-		/* NULLs sort to end */
-		if (isnull_first && isnull_second)
-			continue;
-		if (isnull_first)
-			return 1;
-		if (isnull_second)
-			return -1;
-
-		cmp = DatumGetInt32(FunctionCall2Coll(
-			&scan->attrCmpFuncs[keyIndex],
-			scan->attrCollations[keyIndex],
-			val_first,
-			val_second));
-
-		if (cmp != 0)
-			return cmp;
-	}
-
-	return 0;
-}
-
-/*
- * Filter and insert a tuple into scan->inmem_tuplist in sorted order.
+ * Tuples are appended in relation (insertion) order.  systable_beginscan()
+ * does not promise index order to its callers - ordered catalog access uses
+ * the separate systable_beginscan_ordered() API - so there is no need to sort
+ * here.
  *
  * Returns:
- * true - tuple added (matched WHERE condition)
+ * true - tuple added (matched the scan keys)
  * false - tuple not added (filtered out)
  */
 static bool
-tempcat_index_insert_tuple_in_sorted_list(TempCatScanData *scan, HeapTuple tup)
+tempcat_index_filter_and_append_tuple(TempCatScanData *scan, HeapTuple tup)
 {
 	DListHeapTuple *dlist_tup;
-	dlist_node *insert_after = &scan->inmem_tuplist.head;
-	dlist_iter	iter;
+	bool		matches;
 
-	if (!tempcat_index_tuple_matches_where_condition(scan, tup))
+	HeapKeyTest(tup, scan->tupdesc, scan->nkeys, scan->keyData, matches);
+	if (!matches)
 		return false;
 
 	/* Using regular transaction memory context here. */
 	dlist_tup = palloc(sizeof(DListHeapTuple));
 	dlist_tup->tup = heap_copytuple(tup);
 
-	dlist_foreach(iter, &scan->inmem_tuplist)
-	{
-		DListHeapTuple *dlist_curr = (DListHeapTuple *) iter.cur;
-
-		if (tempcat_index_compare_tuples(scan, dlist_curr->tup, tup) >= 0)
-			break;
-
-		insert_after = iter.cur;
-	}
-
-	dlist_insert_after(insert_after, &dlist_tup->node);
+	dlist_push_tail(&scan->inmem_tuplist, &dlist_tup->node);
 
 #ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_index_insert_tuple_in_sorted_list scan = %p, tup oid = %d, tuple added to list",
+	elog(NOTICE, "TEMPCAT: tempcat_index_filter_and_append_tuple scan = %p, tup oid = %d, tuple added to list",
 		 scan, HeapTupleGetOid(tup));
 #endif
 
@@ -843,17 +770,6 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 	TempcatSnapshot	tempcat_snapshot;
 	TempcatSnapshotRelationData *relation_entry;
 
-	/*
-	 * Guard against recursion.  lookup_type_cache() below performs catalog
-	 * lookups that may re-enter systable_beginscan → tempcat_beginscan.
-	 * When that happens, return NULL so the recursive scan falls through
-	 * to the normal on-disk path.
-	 */
-	static bool nested = false;
-
-	if (nested)
-		return NULL;
-
 	Assert(nkeys <= TempcatIndexMaxAttributes);
 
 	tempcat_snapshot = TempcatSnapshotGetCurrent();
@@ -861,44 +777,20 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 	if (!relation_entry)
 		return NULL;
 
-	nested = true;
-	PG_TRY();
-	{
-		oldCtx = MemoryContextSwitchTo(GetLocalMemoryContext());
-		scan = palloc_object(TempCatScanData);
-		MemoryContextSwitchTo(oldCtx);
+	oldCtx = MemoryContextSwitchTo(GetLocalMemoryContext());
+	scan = palloc_object(TempCatScanData);
+	MemoryContextSwitchTo(oldCtx);
 
-		scan->rel = relation_entry;
-		scan->tupdesc = RelationGetDescr(relation);
-		scan->key = key;
-		scan->nkeys = nkeys;
-		for (int i = 0; i < nkeys; i++) {
-			TypeCacheEntry *typeEntry;
+	scan->rel = relation_entry;
+	scan->tupdesc = RelationGetDescr(relation);
+	scan->nkeys = nkeys;
 
-			scan->attrNumbers[i] = key[i].sk_attno;
-			scan->attrCollations[i] = key[i].sk_collation;
-
-			/* Operator function from ScanKey (e.g. oideq, int4lt): returns bool.
-			 * Used by tempcat_index_tuple_matches_where_condition. */
-			scan->attrOpFuncs[i] = key[i].sk_func;
-
-			/* Btree comparison function from type cache (e.g. btoidcmp):
-			 * returns int32 three-way (<0, 0, >0).
-			 * Used by tempcat_index_compare_tuples for sort ordering. */
-			typeEntry = lookup_type_cache(
-				scan->tupdesc->attrs[key[i].sk_attno - 1].atttypid,
-				TYPECACHE_CMP_PROC_FINFO);
-			Assert(OidIsValid(typeEntry->cmp_proc_finfo.fn_oid));
-			scan->attrCmpFuncs[i] = typeEntry->cmp_proc_finfo;
-		}
-	}
-	PG_CATCH();
-	{
-		nested = false;
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-	nested = false;
+	/*
+	 * Snapshot the scan keys now, while their sk_attno still reference heap
+	 * attributes.  systable_beginscan() rewrites the caller's keys to index
+	 * column numbers immediately after we return, so we must not alias them.
+	 */
+	memcpy(scan->keyData, key, nkeys * sizeof(ScanKeyData));
 
 	/*
 	 * inmem_tuplist is initialized when tempcat_getnext is called first
@@ -950,10 +842,14 @@ void
 tempcat_rescan(TempCatScanData *scan, ScanKey keys, int nkeys)
 {
 	TempcatDListFree(&scan->inmem_tuplist);
-	if (keys)
-		scan->key = keys;
 	if (nkeys > 0)
 		scan->nkeys = nkeys;
+	/* See tempcat_beginscan(): snapshot the keys, don't alias them. */
+	if (keys)
+	{
+		Assert(scan->nkeys <= TempcatIndexMaxAttributes);
+		memcpy(scan->keyData, keys, scan->nkeys * sizeof(ScanKeyData));
+	}
 	scan->scan_finish_returned = false;
 	scan->inmem_tuplist_init_done = false;
 	dlist_init(&scan->inmem_tuplist);
@@ -975,7 +871,7 @@ tempcat_index_make_sure_inmem_tuplist_init_done(TempCatScanData *scan)
 	{
 		DListHeapTuple *dlist_curr = (DListHeapTuple *) iter.cur;
 
-		(void) tempcat_index_insert_tuple_in_sorted_list(scan, dlist_curr->tup);
+		(void) tempcat_index_filter_and_append_tuple(scan, dlist_curr->tup);
 	}
 
 	scan->inmem_tuplist_init_done = true;
