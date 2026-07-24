@@ -27,6 +27,8 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 
+#include "utils/memutils.h"
+#include "utils/syscache.h"
 
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
@@ -38,14 +40,148 @@ do {															\
 				 (errmsg("function can only be called when server is in binary upgrade mode")))); \
 } while (0)
 
+typedef struct {
+	List *names;
+	Oid  schema;
+} CreatedNamesPerSchema;
+
+static MemoryContext upgradeCxt = NULL;
+static List *createdArrayNames = NIL;
+
+/*
+ * isNamePreassigned
+ *     Outputs whether type name arg was already assigned during upgrade.
+ */
+static bool
+isNamePreassigned(const char *arr, Oid typeNamespace)
+{
+	CreatedNamesPerSchema *target = NULL;
+	ListCell *lc;
+	char *name;
+	foreach(lc, createdArrayNames)
+	{
+		CreatedNamesPerSchema *names = lfirst(lc);
+		if (names->schema == typeNamespace)
+		{
+			target = names;
+			break;
+		}
+	}
+	if (target)
+	{
+		foreach (lc, target->names)
+		{
+			name = lfirst(lc);
+			if (strcmp(arr, name) == 0)
+				return true;
+		}
+	}
+	return false;
+}
+
+/*
+ * RememberCreatedName
+ *     Stores the typename for future collision detections.
+ */
+static void
+RememberCreatedName(char *typname, Oid schema)
+{
+	Assert(upgradeCxt);
+	CreatedNamesPerSchema *target = NULL;
+	ListCell *lc;
+	char* persistentTypeName = pstrdup(typname);
+
+	foreach(lc, createdArrayNames)
+	{
+		CreatedNamesPerSchema *names = lfirst(lc);
+		if (names->schema == schema)
+		{
+			target = names;
+			break;
+		}
+	}
+	if (!target)
+	{
+		target = palloc0(sizeof(CreatedNamesPerSchema));
+		target->schema = schema;
+		target->names = NIL;
+		createdArrayNames = lappend(createdArrayNames, target);
+	}
+
+	target->names = lappend(target->names, persistentTypeName);
+}
+
+/*
+ * makeArrayTypeNameUpgrade
+ *     A wrapper around makeArrayTypeName, that also checks if the newly
+ *     generated name collides with the ones already assigned
+ *     during upgrade.
+ */
+static char *
+makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
+{
+	char *arr, *modifiedTypeName;
+	int typeNameLen = strlen(typeName);
+	int underscores = 0;
+
+	modifiedTypeName = palloc(NAMEDATALEN);
+	arr = makeArrayTypeName(typeName, typeNamespace);
+	while (isNamePreassigned(arr, typeNamespace))
+	{
+		underscores++;
+		if (typeNameLen + underscores >= NAMEDATALEN)
+			ereport(ERROR,
+				   (errcode(ERRCODE_DUPLICATE_OBJECT),
+					errmsg("could not form array type name for type \"%s\"", typeName)));
+		memset(modifiedTypeName, '_', underscores);
+		strcpy(modifiedTypeName + underscores, typeName);
+		arr = makeArrayTypeName(modifiedTypeName, typeNamespace);
+	}
+	pfree(modifiedTypeName);
+
+	return arr;
+}
+
+Datum
+binary_upgrade_init(PG_FUNCTION_ARGS)
+{
+	CHECK_IS_BINARY_UPGRADE;
+
+	Assert(!upgradeCxt);
+	if (!upgradeCxt)
+		upgradeCxt = AllocSetContextCreate(TopMemoryContext,
+										   "pg_upgrade temp context",
+										   ALLOCSET_DEFAULT_SIZES);
+
+	PG_RETURN_VOID();
+}
+
+Datum
+binary_upgrade_cleanup(PG_FUNCTION_ARGS)
+{
+	CHECK_IS_BINARY_UPGRADE;
+
+	if (upgradeCxt)
+		MemoryContextDelete(upgradeCxt);
+
+	PG_RETURN_VOID();
+}
+
 Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {
+	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
 	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
 
 	CHECK_IS_BINARY_UPGRADE;
+
+	/* Remember that we've already taken this name */
+	oldctx = MemoryContextSwitchTo(upgradeCxt);
+	RememberCreatedName(typname, typnamespaceoid);
+	MemoryContextSwitchTo(oldctx);
+
 	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
 						typnamespaceoid, InvalidOid, InvalidOid);
 
@@ -55,11 +191,60 @@ binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 Datum
 binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
 {
+	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
+	Oid         old_type_oid;
+	bool        exists;
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
-	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
+	char	   *relname = GET_STR(PG_GETARG_TEXT_P(2));
+	char       *typname;
+	ListCell   *lc;
 
 	CHECK_IS_BINARY_UPGRADE;
+
+	old_type_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
+								   CStringGetDatum(relname),
+								   ObjectIdGetDatum(typnamespaceoid));
+
+	exists = OidIsValid(old_type_oid);
+
+	foreach(lc, createdArrayNames)
+	{
+		char *name = (char *) lfirst(lc);
+		if (strcmp(relname, name) == 0)
+		{
+			exists = true;
+			break;
+		}
+	}
+
+	oldctx = MemoryContextSwitchTo(upgradeCxt);
+	typname = makeArrayTypeNameUpgrade(relname, typnamespaceoid);
+	RememberCreatedName(typname, typnamespaceoid);
+	if (exists)
+	{
+		/*
+		 * When database wants to create a regular type, and
+		 * there is already an array type with the same name
+		 * in the cluster, exising array type would be renamed,
+		 * getting the next free name via an additional call to
+		 * makeArrayType. Meaning that the next array type name
+		 * needs two makeArrayType calls to get to.
+		 *
+		 * Note, that we assume that the base type for this array type
+		 * is always created.
+		 *
+		 * Also, the whole logic descripted here works only if existing
+		 * type is an array type. If it not, it wouldn't be possible
+		 * to move existing type, and upgrade would fail. But it would
+		 * happed regardless of what we are doing here, so let's
+		 * not complicate the logic.
+		 */
+		typname = makeArrayTypeNameUpgrade(typname, typnamespaceoid);
+		RememberCreatedName(typname, typnamespaceoid);
+	}
+	MemoryContextSwitchTo(oldctx);
+
 	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
 						typnamespaceoid, InvalidOid, InvalidOid);
 

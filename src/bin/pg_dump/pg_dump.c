@@ -313,6 +313,8 @@ static void binary_upgrade_set_namespace_oid(Archive *fout,
 								PQExpBuffer upgrade_buffer,
 								Oid pg_namespace_oid);
 static void dumpSearchPath(Archive *AH);
+static void binaryInitUpgradeCxt(Archive *fout);
+static void binaryCleanupUpgradeCxt(Archive *fout);
 static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 PQExpBuffer upgrade_buffer,
 													 const TypeInfo *tyinfo,
@@ -1089,6 +1091,13 @@ main(int argc, char **argv)
 	if (dopt.outputCreateDB)
 		dumpDatabase(fout);
 
+	/*
+	 * In case of binary upgrade, we might need to have a memory context on backend
+	 * for temp stuff (e.g. assigned type names) during upgrade.
+	 */
+	if (dopt.binary_upgrade)
+		binaryInitUpgradeCxt(fout);
+
 	int binfo_index = -1;
 	/* Now the rearrangeable objects. */
 	for (i = 0; i < numObjs; i++)
@@ -1168,6 +1177,9 @@ main(int argc, char **argv)
 	 */
 	if (plainText)
 		RestoreArchive(fout);
+
+	if (dopt.binary_upgrade)
+		binaryCleanupUpgradeCxt(fout);
 
 	CloseArchive(fout);
 
@@ -4780,6 +4792,44 @@ dumpSubscription(Archive *fout, const SubscriptionInfo *subinfo)
 }
 
 /*
+ * binaryInitUpgradeCxt
+ *    Set up a temp memory context on backend.
+ *    Used for binary upgrade purposes only.
+ */
+static void
+binaryInitUpgradeCxt(Archive *fout)
+{
+	PQExpBuffer query = createPQExpBuffer();
+	appendPQExpBufferStr(query, "\n-- Allocate binary upgrade memory context\n"
+								"SELECT binary_upgrade_init();\n\n");
+	ArchiveEntry(fout, nilCatalogId, createDumpId(),
+				 ARCHIVE_OPTS(.tag = "BINARY UPGRADE INIT",
+							  .description = "BINARY UPGRADE INIT",
+							  .section = SECTION_PRE_DATA,
+							  .createStmt = query->data));
+	destroyPQExpBuffer(query);
+}
+
+/*
+ * binaryCleanupUpgradeCxt
+ *    Cleanup a previosly allocated temp memory context on backend.
+ *    Used for binary upgrade purposes only.
+ */
+static void
+binaryCleanupUpgradeCxt(Archive *fout)
+{
+	PQExpBuffer query = createPQExpBuffer();
+	appendPQExpBufferStr(query, "\n-- Free binary upgrade memory context \n"
+								"SELECT binary_upgrade_cleanup();\n\n");
+	ArchiveEntry(fout, nilCatalogId, createDumpId(),
+				 ARCHIVE_OPTS(.tag = "BINARY UPGRADE CLEANUP",
+							  .description = "BINARY UPGRADE CLEANUP",
+							  .section = SECTION_POST_DATA,
+							  .createStmt = query->data));
+	destroyPQExpBuffer(query);
+}
+
+/*
  * Given a "create query", append as many ALTER ... DEPENDS ON EXTENSION as
  * the object needs.
  */
@@ -4879,7 +4929,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 	PGresult   *res;
 	Oid			pg_type_array_oid = tyinfo->typarrayoid;
 	Oid			pg_type_array_ns_oid = tyinfo->typarrayns;
-	char	*pg_type_array_name = tyinfo->typarrayname;
 
 
 	simple_oid_list_append(&preassigned_oids, tyinfo->dobj.catId.oid);
@@ -4917,7 +4966,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 
 		pg_type_array_oid = next_possible_free_oid;
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
-		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
 	}
 
 	if (OidIsValid(pg_type_array_oid))
@@ -4929,7 +4977,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  "SELECT pg_catalog.binary_upgrade_set_next_array_pg_type_oid('%u'::pg_catalog.oid, "
 						  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						  pg_type_array_oid, pg_type_array_ns_oid,
-						  pg_type_array_name);
+						  tyinfo->dobj.name /* leave the target cluster decide the name of this type */);
 	}
 
 	destroyPQExpBuffer(upgrade_query);
