@@ -238,11 +238,27 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	/*
 	 * Unlogged AO tables have INIT_FORK, in addition to MAIN_FORK.  It is
 	 * created once, regardless of the number of segment files (or the number
-	 * of columns for column-oriented tables).  Sync requests for INIT_FORKs
-	 * are not remembered, so they need not be forgotten.
+	 * of columns for column-oriented tables).
+	 *
+	 * The init fork is created via mdcreate() (SMGR_AO's smgr_create), which
+	 * register_dirty_segment()s it under the regular md sync handler
+	 * (SYNC_HANDLER_MD) -- including when its XLOG_SMGR_CREATE is replayed
+	 * during crash recovery.  So, contrary to the older belief that INIT_FORK
+	 * sync requests are never remembered, that md fsync request IS pending:
+	 * during redo we must forget it before unlinking, otherwise the
+	 * end-of-recovery checkpoint PANICs ("could not fsync file ... No such
+	 * file or directory") on the now-removed file and the segment crash-loops.
+	 * This mirrors the MAIN-fork forget in mdunlink_ao_base_relfile().
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
+		if (isRedo)
+		{
+			FileTag		tag;
+
+			INIT_FILETAG(tag, rnode.node, INIT_FORKNUM, 0, SYNC_HANDLER_MD);
+			RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
+		}
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
