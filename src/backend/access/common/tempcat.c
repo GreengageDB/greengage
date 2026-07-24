@@ -777,7 +777,7 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 	if (!relation_entry)
 		return NULL;
 
-	oldCtx = MemoryContextSwitchTo(GetLocalMemoryContext());
+	oldCtx = MemoryContextSwitchTo(CurrentMemoryContext);
 	scan = palloc_object(TempCatScanData);
 	MemoryContextSwitchTo(oldCtx);
 

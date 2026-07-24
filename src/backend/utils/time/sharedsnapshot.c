@@ -789,7 +789,6 @@ AtEOXact_SharedSnapshot(void)
 
 		SharedLocalSnapshotSlot->cur_dump_id = 0;
 		MemSet(SharedLocalSnapshotSlot->dump, 0, sizeof(SnapshotDump) * SNAPSHOTDUMPARRAYSZ);
-
 		created_dump = false;
 		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 
