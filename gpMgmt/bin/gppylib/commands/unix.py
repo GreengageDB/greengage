@@ -691,6 +691,29 @@ class Hostname(Command):
             raise Exception('Command not yet executed')
         return self.results.stdout.strip()
 
+# --------------port is not busy--------------------
+class PortIsAvailable(Command):
+    def __init__(self, name, port, ctxt=REMOTE, remoteHost=None):
+        self.port = port
+        # Check if port is listening: return code 0 if is in use,
+        # 1 if is available
+        cmdStr = (
+            f"(command -v ss >/dev/null 2>&1 && "
+            f"ss -tuln | grep -q ':{port} ') && "
+            f"echo 'IN_USE' || echo 'AVAILABLE'"
+        )
+        Command.__init__(self, name, cmdStr, ctxt, remoteHost)
+
+    def is_port_available(self) -> bool:
+        """
+        Check if port is available based on command results
+        """
+        if not self.results:
+            return False
+        
+        output = self.results.stdout.strip()
+        
+        return output == 'AVAILABLE' 
 
 # --------------tcp port is active -----------------------
 class PgPortIsActive(Command):

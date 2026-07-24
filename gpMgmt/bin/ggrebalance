@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+#
+# Copyright (c) 2025-Present, Greengage Community
+#
+
+try:
+    from gppylib.commands.unix import *
+    from gppylib.commands.gp import *
+    from gppylib.gpparseopts import OptParser, OptChecker
+    from gppylib.gplog import *
+    from gppylib.gparray import GpArray
+    from gppylib.db import dbconn
+    from gppylib.userinput import *
+    from gppylib.system.environment import GpCoordinatorEnvironment
+    from gppylib.system import configurationInterface, configurationImplGpdb
+    from ggrebalance_modules.rebalance_schema import DBNAME
+    from ggrebalance_modules.ggrebalance_main_sm import GGRebalanceMainSM
+    from ggrebalance_modules.planner import *
+    from gppylib.programs.clsRecoverSegment_triples import get_segments_with_running_basebackup
+except ImportError as e:
+    sys.exit('ERROR: Cannot import modules.  Please check that you have sourced greengage_path.sh.  Detail: ' + str(e))
+from datetime import datetime, time
+from threading import Timer
+from psycopg2 import DatabaseError
+
+_usage = """
+    Use 'ggrebalance --help' to get list of available options.
+"""
+
+EXECNAME = os.path.split(__file__)[-1]
+MAX_BATCH_SIZE = 128
+MAX_PARALLEL_WORKERS = 96
+MAX_SEGMENTS = 4096
+
+def parseargs():
+    parser = OptParser(option_class=OptChecker,
+                       version='%prog version $Revision$')
+    parser.set_usage(_usage)
+    parser.remove_option('-h')
+
+    parser.add_option('-x', '--target-segment-count', type='int', dest='target_segment_count', metavar='<target_segment_count>',
+                      help='Target segments number of the whole cluster')
+    parser.add_option('-B', '--batch-size', type='int', default=16, dest='batch_size', metavar='<batch_size>',
+                      help='Max worker number in WorkerPool instance. Valid values are 1-%d.' % MAX_BATCH_SIZE)
+    parser.add_option('-n', '--parallel', type="int", default=16, dest="parallel", metavar='<parallel>',
+                      help='Max number of workers at a time. Valid values are 1-%d.' % MAX_PARALLEL_WORKERS)
+    parser.add_option('-c', '--clean', action='store_true', dest="clean_required",
+                      help='remove the rebalance schema.')
+    parser.add_option('-r', '--rollback', action='store_true', dest="rollback_required",
+                      help='performs rebalance rollback if possible.')
+    parser.add_option('-h', '-?', '--help', '--usage', action='help',
+                      help='show this help message and exit.')
+    parser.add_option('--non-interactive-mode', dest="interactive", action='store_false', default=True,
+                         help="non-interactive mode, do not require user input for confirmations, use defaults.")
+    parser.add_option('-y', '--approve-swap-roles', dest="approve_swap_roles", action='store_true', default=False,
+                      help="In interactive mode don't ask a user for permission to switch role.")
+    parser.add_option('-H', '--target-hosts', dest='target_hosts', metavar='<target_hosts>',
+                      help='Set of hostnames where rebalance will distribute segments to')
+    parser.add_option('-A', '--add-hosts', dest='add_hosts', metavar='<hosts_to_add>', 
+                      help='Hosts extending the configuration')
+    parser.add_option('-R', '--remove-hosts', dest='remove_hosts', metavar='<hosts_to_remove>', 
+                      help='Decomissioned hosts')
+    parser.add_option('-m', '--mirror-mode', dest='mirror_mode', metavar='<mirror_mode>',
+                      help='Desirable mirroring strategy after rebalance.')
+    parser.add_option('--skip-rebalance', dest='skip_rebalance', metavar='<skip_rebalance>', action='store_true', default=False,
+                      help='Perform shrink or expand only.')
+    parser.add_option('-p', '--show-plan', dest='show_plan', metavar='<show_plan>', action='store_true', default=False,
+                      help='Show rebalance plan')
+    parser.add_option('-d', '--target-datadirs', dest='target_datadirs', metavar='<target_datadirs>',
+                      help='segment datadirs on new hosts')
+    parser.add_option('--target-hosts-file', dest='target_hosts_file', metavar='<target_hosts_file>',
+                      help='Target hosts list file. One host per line')
+    parser.add_option('--target-datadirs-file', dest='target_datadirs_file', metavar='<target_datadirs_file>',
+                      help='Target segment data directories passed as file. One datadir per line')
+    parser.add_option('--add-hosts-file', dest='add_hosts_file', metavar='<add_hosts_file>',
+                      help='Hosts that user wants to add to a cluster. One host per line')
+    parser.add_option('--remove-hosts-file', dest='remove_hosts_file', metavar='<remove_hosts_file>',
+                      help='Hosts that user wants to remove from a cluster. One host per line')
+    parser.add_option('--skip-resource-estimation', dest='skip_resource_estimation', metavar='<skip_resource_estimation>',
+                      action='store_true', default=False, help='Skip resource estimation (storage)')
+    parser.add_option('-l', '--log-dir', dest='logfile_directory', metavar='<logfile_directory>',
+                      help='The directory to write the log files. The default location is ~/gpAdminLogs.')
+    parser.add_option('-a', '--analyze', dest="analyze", action='store_true', default=False,
+                      help='Run ANALYZE after rebalance tables redistribution.' +
+                           'Ignored if no shrink or expand had been performed.')
+    parser.add_option('--hba-hostnames', dest="hba_hostnames", action='store_true', default=False,
+                      help='Use host names when updating the pg_hba.conf file.')
+    parser.add_option('--replay-lag', dest="replay_lag", type="float",
+                      help='Replay lag(in GBs) allowed on mirror when rebalancing the segments.')
+    parser.add_option('-T', '--duration', type='duration', metavar='[h][:m[:s]]',
+                      help='duration from beginning to end.')
+    parser.add_option('-E', '--end', type='datetime', metavar='datetime',
+                      help="ending date and time in the format 'YYYY-MM-DD hh:mm:ss'.")
+    parser.add_option('-D', '--detailed-progress', dest='detailed_progress', action='store_true', default=False,
+                      help='Show a detailed progress view.')
+    parser.add_option('-S', '--simple-progress', dest='simple_progress', action='store_true', default=False,
+                      help='Show a simple progress view.')
+    parser.add_option('--no-progress', dest='no_progress', action='store_true', default=False,
+                      help='Suppress progress reports.')
+    parser.add_option('-v', '--verbose', action='store_true', default=False,
+                      help='debug output.')
+    parser.add_option('--inplace-swap-roles', dest="inplace_swap_roles", action='store_true', default=False,
+                      help='Allows to place primary and mirror at the same host during rebalance.')
+    parser.add_option('-q', '--quiet', action='store_true', default=False,
+                      help='Run in quiet mode.')
+    parser.add_option('--seed', dest="solver_seed", type="int", help='seed value for stable plan generation')
+
+    # Parse the command line arguments
+    options, args = parser.parse_args()
+    return options, args, parser
+
+
+def validate_options(options, args, parser):
+    if len(args) > 0:
+        logger.error(f'Unknown argument {args[0]}')
+        parser.exit(1)
+
+    try:
+        options.coordinator_data_directory = get_coordinatordatadir()
+        options.gphome = get_gphome()
+    except GpError as msg:
+        logger.error(msg)
+        parser.exit(1)
+
+    if not os.path.exists(options.coordinator_data_directory):
+        logger.error('Coordinator data directory %s does not exist.' %
+                     options.coordinator_data_directory)
+        parser.exit(1)
+
+    if options.batch_size < 1 or options.batch_size > MAX_BATCH_SIZE:
+        logger.error(
+            'Invalid argument.  batch-size value must be >= 1 and <= %d' % MAX_BATCH_SIZE)
+        parser.exit(1)
+
+    if options.parallel < 1 or options.parallel > MAX_PARALLEL_WORKERS:
+        logger.error(
+            'Invalid argument.  parallel value must be >= 1 and <= %d' % MAX_PARALLEL_WORKERS)
+        parser.exit(1)
+    
+    if options.target_segment_count and (
+        options.target_segment_count < 1
+        or options.target_segment_count > MAX_SEGMENTS):
+        logger.error(
+            'Invalid value of --target-segment-count. It must be >= 1 and <= %d' % MAX_SEGMENTS)
+        parser.exit(1)
+    
+    if options.solver_seed and options.solver_seed < 0:
+        logger.error('Invalid value of --seed. Must be >= 0')
+        parser.exit(1)
+
+    incompatibility_rules = [
+        # (condition_option, incompatible_options)
+        ('target_hosts', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file', 'target_hosts_file']),
+        ('target_hosts_file', ['add_hosts', 'add_hosts_file', 'remove_hosts', 'remove_hosts_file']),
+        ('add_hosts', ['add_hosts_file']),
+        ('remove_hosts', ['remove_hosts_file']),
+        ('duration', ['end']),
+
+        ('target_datadirs', ['target_datadirs_file']),
+
+        ('skip_rebalance', ['mirror_mode', 'inplace_swap_roles']),
+
+        ('clean_required', [
+            'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
+            'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
+            'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
+            'skip_resource_estimation', 'analyze', 'replay_lag', 'hba_hostnames', 'inplace_swap_roles',
+            'duration', 'end',
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
+        ]),
+
+        ('rollback_required', [
+            'target_hosts', 'target_hosts_file', 'add_hosts', 'add_hosts_file',
+            'remove_hosts', 'remove_hosts_file', 'target_datadirs', 'target_datadirs_file',
+            'target_segment_count', 'mirror_mode', 'skip_rebalance', 'show_plan',
+            'skip_resource_estimation', 'inplace_swap_roles',
+            'detailed_progress', 'simple_progress', 'no_progress', 'seed'
+        ]),
+
+        ('detailed_progress', ['simple_progress', 'no_progress']),
+        ('simple_progress', ['no_progress'])
+    ]
+
+    def option_is_set(opt_name):
+        """Check if option is set"""
+        if not hasattr(options, opt_name):
+            return False
+        value = getattr(options, opt_name)
+        return value is not None and value != False
+    
+    for rule in incompatibility_rules:
+        condition_opt, incompatible_opts = rule
+        if option_is_set(condition_opt):
+            # Check if any incompatible option is set
+            for incomp_opt in incompatible_opts:
+                if option_is_set(incomp_opt):
+                    error_msg = \
+                    f"Can't use together options '--{condition_opt.replace('_', '-')}' and '--{incomp_opt.replace('_', '-')}'"
+                    logger.error(error_msg)
+                    parser.exit(1)
+
+    # OptParse can return date instead of datetime so we might need to convert
+    if options.end and not isinstance(options.end, datetime):
+        options.end = datetime.combine(options.end, time(0))
+
+    if options.end and options.end < datetime.now():
+        logger.error('End time occurs in the past')
+        parser.exit(1)
+
+    if options.duration:
+        options.end = datetime.now() + options.duration
+
+    if option_is_set('mirror_mode') and options.mirror_mode not in ('grouped', 'spread'):
+        logger.error('Mirroring strategy %s is not supported' % options.mirror_mode)
+        parser.exit(1)
+
+    if not (option_is_set('detailed_progress') or
+            option_is_set('simple_progress') or
+            option_is_set('no_progress')):
+        options.simple_progress = True
+
+    return options, args
+
+
+def check_running_gputils(dburl: dbconn.DbURL, coordinator_data_directory: str):
+    """
+    Checks if there are any running instances of
+    ggrebalance/gpbackup/gpexpand/gpshrink/gpresize
+    """
+    for util in ('ggrebalance', 'gpexpand', 'gpshrink', 'gpresize'):
+        try:
+            with open(f'{coordinator_data_directory}/{util}.pid', 'r') as fp:
+                pid = int(fp.readline().strip())
+                if check_pid(pid):
+                    logger.error(f'{util} is already running.')
+                    sys.exit(1)
+        except IOError:
+            pass
+
+    gpexpand_status_file = 'gpexpand.status'
+    if os.path.exists(os.path.join(coordinator_data_directory, gpexpand_status_file)):
+        logger.error(f'{gpexpand_status_file} file exists. Assuming gpexpand is already running.')
+        sys.exit(1)
+
+    with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+        cursor = dbconn.query(conn, "SELECT oid FROM pg_namespace WHERE nspname='gpexpand'")
+        if cursor.rowcount > 0:
+            logger.error(
+                '''gpexpand schema exists. Assuming gpexpand is already running.''')
+            sys.exit(1)
+
+        cursor = dbconn.query(conn, '''SELECT datid
+                    FROM pg_stat_activity
+                    WHERE application_name LIKE 'gpbackup%' OR
+                    application_name LIKE 'gprestore%' ''')
+        if cursor.rowcount > 0:
+            logger.error(
+                '''gpbackup/gprestore utility is already running.''')
+            sys.exit(1)
+
+    if is_gprecoverseg_running():
+        logger.error(
+            '''gprecoverseg is already running.''')
+        sys.exit(1)
+
+    segments_with_running_basebackup = get_segments_with_running_basebackup()
+    if len(segments_with_running_basebackup) > 0:
+        logger.error(
+            f'''Segments {segments_with_running_basebackup} have running pg_basebackup.''')
+        sys.exit(1)
+
+
+def create_pid_file(coordinator_data_directory: str):
+    """
+    Creates ggrebalance pid file
+    """
+    with open(coordinator_data_directory + '/ggrebalance.pid', 'w') as fp:
+        fp.write(str(os.getpid()))
+
+
+def remove_pid_file(coordinator_data_directory: str):
+    """
+    Removes ggrebalance pid file
+    """
+    pid_filename = f'{coordinator_data_directory}/ggrebalance.pid'
+    try:
+        with open(pid_filename, 'r') as fp:
+            pid = int(fp.readline().strip())
+            if os.getpid() != pid:
+                return
+        os.unlink(pid_filename)
+    except IOError:
+        pass
+
+gg_main_rebalance_SM = None
+
+def sig_handler(sig, arg):
+    if gg_main_rebalance_SM is not None:
+        gg_main_rebalance_SM.shutdown()
+        # Set shutdown type back to 'hard' for the case we are here due to timeout
+        gg_main_rebalance_SM.set_hard_shutdown(True)
+    else:
+        sys.exit(1)
+
+def check_down_segments(logger: Any, options: Any, dburl: dbconn.DbURL):
+    # check if some of the segments are down - it can happen if we're recovering from an
+    # interrupted state, and such segments are left by the interrupted gprecoverseg
+    conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
+    dbconn.execSQL(conn, "SELECT gp_request_fts_probe_scan()")
+    cnt_primaries_down = int(dbconn.queryRow(conn, f"SELECT COUNT(1) FROM gp_segment_configuration WHERE role = 'p' AND status = 'd'")[0])
+    conn.close()
+
+    if cnt_primaries_down != 0:
+        raise Exception('Detected some primary segments are down, please recover manually')
+
+def main(options, args, parser):
+    conn = None
+    timeout_checker = None
+    try:
+        signal.signal(signal.SIGTERM, sig_handler)
+        signal.signal(signal.SIGHUP, sig_handler)
+        signal.signal(signal.SIGINT, sig_handler)
+
+        logger = get_default_logger()
+        setup_tool_logging(EXECNAME, getLocalHostname(), getUserName(), options.logfile_directory)
+
+        options, args = validate_options(options, args, parser)
+
+        if options.verbose:
+            enable_verbose_logging()
+        if options.quiet:
+            quiet_stdout_logging()
+
+        if options.end:
+            logger.info(f'Time limit is set to "{options.end}", current time is "{datetime.now()}"')
+            timer_period = math.ceil((options.end - datetime.now()).total_seconds())
+
+            def timeout_handler():
+                if gg_main_rebalance_SM is not None:
+                    gg_main_rebalance_SM.set_hard_shutdown(False)
+                os.kill(os.getpid(), signal.SIGINT)
+
+            timeout_checker = Timer(timer_period, timeout_handler)
+            timeout_checker.start()
+        else:
+            logger.info('No time limit is set')
+
+        gpenv = GpCoordinatorEnvironment(
+            options.coordinator_data_directory, True)
+
+        configurationInterface.registerConfigurationProvider(
+            configurationImplGpdb.GpConfigurationProviderUsingGpdbCatalog())
+        configurationInterface.getConfigurationProvider().initializeProvider(gpenv.getCoordinatorPort())
+
+        dburl = dbconn.DbURL(dbname=DBNAME, port=gpenv.getCoordinatorPort())
+
+        check_down_segments(logger, options, dburl)
+
+        check_running_gputils(dburl, options.coordinator_data_directory)
+
+        create_pid_file(options.coordinator_data_directory)
+
+        gparray_dump_filename = options.coordinator_data_directory + '/gparraydump'
+
+        logger.info('Init gparray from catalog')
+        try:
+            gparray = GpArray.initFromCatalog(dburl, utility=True)
+        except DatabaseError as ex:
+            logger.error("Failed to connect to database.  Make sure the"
+                         " Greengage instance you wish to expand is running"
+                         " and that your environment is correct, then rerun"
+                         " ggrebalance" + ' '.join(sys.argv[1:]))
+            sys.exit(1)
+        except ConnectionError as ex:
+            logger.error(f"{str(ex)}")
+            sys.exit(1)
+
+        conn = dbconn.connect(dburl, encoding='UTF8', allowSystemTableMods=True)
+
+        global gg_main_rebalance_SM
+        gg_main_rebalance_SM = GGRebalanceMainSM(conn, logger, dburl, options, gpenv, gparray, gparray_dump_filename)
+        gg_main_rebalance_SM.run()
+
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f'ggrebalance failed: {e} \n\nExiting...')
+        sys.exit(1)
+    finally:
+        if conn != None:
+            conn.close()
+        if timeout_checker != None:
+            timeout_checker.cancel()
+        remove_pid_file(get_coordinatordatadir())
+
+if __name__ == '__main__':
+    options, args, parser = parseargs()
+    main(options, args, parser)

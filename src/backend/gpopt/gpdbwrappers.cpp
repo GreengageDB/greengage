@@ -1100,6 +1100,17 @@ gpdb::GetGPSegmentCount(void)
 	return 0;
 }
 
+int
+gpdb::GetGPTargetSegmentCount(void)
+{
+	GP_WRAP_START;
+	{
+		return GP_POLICY_DEFAULT_NUMSEGMENTS();
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
 bool
 gpdb::HeapAttIsNull(HeapTuple tup, int attno)
 {
