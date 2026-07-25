@@ -16,10 +16,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_1 values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_singlecol_1;
 -- ctas tests
 create table dd_ctas_1 as select * from dd_singlecol_1 where a=1 distributed by (a);
@@ -120,8 +118,8 @@ select b from dd_singlecol_1 where a=1 or a=2;
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 1 0
  b 
 ---
- 1
  2
+ 1
 (2 rows)
 
 -- single column distr key, values hash to the same segment
@@ -174,10 +172,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_part_singlecol values (NULL, NULL);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 -- disjunction with partitioned tables
 select * from dd_part_singlecol where a in (10,11,12);
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 2 1
@@ -201,8 +197,8 @@ select * from dd_part_singlecol where a is null or a=1;
 INFO:  (slice 1) Dispatch command to PARTIAL contents: 0 1
  a | b | c 
 ---+---+---
- 1 | 2 | 3
    |   |  
+ 1 | 2 | 3
 (2 rows)
 
 -- simple predicates
@@ -303,10 +299,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_idx values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 create table dd_singlecol_idx2(a int, b int, c int) distributed by (a);
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
@@ -319,10 +313,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_idx2 values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_singlecol_idx;
 analyze dd_singlecol_idx2;
 -- disjunction with index scans
@@ -370,10 +362,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_bitmap_idx values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_singlecol_bitmap_idx;
 -- disjunction with bitmap index scans
 select * from dd_singlecol_bitmap_idx where (a=1 or a=2) and b<2;
@@ -448,10 +438,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_part_bitmap_idx values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_singlecol_part_bitmap_idx;
 -- bitmap indexes on partitioned tables
 select * from dd_singlecol_part_bitmap_idx where a=1 and b=0;
@@ -495,10 +483,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_multicol_idx values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_multicol_idx;
 select count(*) from dd_multicol_idx;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
@@ -603,10 +589,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_part_idx values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 create table dd_singlecol_part_idx2(a int, b int, c int) 
 distributed by (a)
 partition by range (b) 
@@ -622,10 +606,8 @@ INFO:  (slice 1) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into dd_singlecol_part_idx2 values(null, null);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 analyze dd_singlecol_part_idx;
 analyze dd_singlecol_part_idx2;
 -- indexes on partitioned tables
@@ -928,9 +910,9 @@ select * from dd_singlecol_1 where a=1 or b=5;
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
  a  | b 
 ----+---
+  5 | 5
  65 | 5
  80 | 5
-  5 | 5
   1 | 1
  20 | 5
  35 | 5

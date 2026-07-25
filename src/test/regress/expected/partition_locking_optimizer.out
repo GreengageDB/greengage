@@ -476,9 +476,9 @@ select * from locktest_master where coalesce not like 'gp_%' and coalesce not li
 (10 rows)
 
 select * from locktest_segments where coalesce not like 'gp_%' and coalesce not like 'pg_%';
-     coalesce      |       mode       | locktype |    node    
--------------------+------------------+----------+------------
- partlockt         | RowExclusiveLock | relation | n segments
+     coalesce      |       mode       | locktype |   node    
+-------------------+------------------+----------+-----------
+ partlockt         | RowExclusiveLock | relation | 1 segment
  partlockt_1_prt_3 | RowExclusiveLock | relation | 1 segment
 (2 rows)
 

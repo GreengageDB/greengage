@@ -159,20 +159,16 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into boolean values ('f', 1);
 set test_print_direct_dispatch_info=on;
 insert into boolean values ('t', 2);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table boolean set distributed by (b);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into boolean values ('t', 1);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table boolean set distributed randomly;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
@@ -204,25 +200,19 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into date values ('2001-11-11',234.23234);
 set test_print_direct_dispatch_info=on;
 insert into date values ('2001-11-12',234.2323);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table date set distributed by (dp1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into date values ('2001-11-13',234.23234);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 insert into date values ('2001-11-14',234.2323);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table date set distributed by (date1, dp1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
@@ -246,25 +236,19 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into interval values ('23',2345);
 set test_print_direct_dispatch_info=on;
 insert into interval values ('2',234);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table interval set distributed by (num);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into interval values ('24',234);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 insert into interval values ('26',2343);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table interval set distributed by (num,interval1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
@@ -286,25 +270,19 @@ create table real (real1 real, si1 smallint) distributed by (real1);
 insert into real values (23, 4);
 set test_print_direct_dispatch_info=on;
 insert into real values (23, 4);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 Alter table real set distributed by (si1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into real values (21, 3);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 insert into real values (21, 2);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from real where real.si1=3;
 INFO:  (slice 1) Dispatch command to SINGLE content
  real1 | si1 
@@ -333,20 +311,16 @@ create table bytea (bytea1 bytea, cidr1 cidr) distributed by (bytea1);
 insert into bytea values ('d','0.0.0.0');
 set test_print_direct_dispatch_info=on;
 insert into bytea values ('d','0.0.0.1');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table bytea set distributed by (cidr1,bytea1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into bytea values ('e','0.0.1.0');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from bytea where bytea1='d' and cidr1='0.0.0.1';
 INFO:  (slice 1) Dispatch command to SINGLE content
  bytea1 |   cidr1    
@@ -363,30 +337,24 @@ create table inetmac (inet1 inet, macaddr1 macaddr) distributed by (inet1);
 insert into inetmac values ('0.0.0.0','AA:AA:AA:AA:AA:AA');
 set test_print_direct_dispatch_info=on;
 insert into inetmac values ('0.0.0.0','AC:AA:AA:AA:AA:AA');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table inetmac set distributed by (macaddr1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into inetmac values ('0.0.0.2','AA:AA:AA:AA:AA:AC');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table inetmac set distributed by (macaddr1,inet1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into inetmac values ('0.0.0.2','AA:AA:AA:AA:AA:AC');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from inetmac where inet1='0.0.0.0' and macaddr1 ='AA:AA:AA:AA:AA:AA';
 INFO:  (slice 1) Dispatch command to SINGLE content
   inet1  |     macaddr1      
@@ -404,30 +372,24 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into time2 values ('00:00:00+1359', 'abcg');
 set test_print_direct_dispatch_info=on;
 insert into time2 values ('00:00:00+1359', 'abcf');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table time2 set distributed by (text1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into time2 values ('00:00:00+1352', 'abce');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table time2 set distributed by (text1,time2);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into time2 values ('00:00:00+1352', 'abcd');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from time2 where time2='00:00:00+1359' and text1='abcg';
 INFO:  (slice 1) Dispatch command to SINGLE content
      time2      | text1 
@@ -445,30 +407,24 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 insert into timestamp values ('2004-12-13 01:51:15','2004-12-13 01:51:15+1359');
 set test_print_direct_dispatch_info=on;
 insert into timestamp values ('2004-12-13 01:51:15','2004-12-13 01:51:15+1359');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table timestamp set distributed by (time2);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into timestamp values ('2004-12-13 01:51:25','2004-12-12 01:51:15+1359');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table timestamp set distributed by (time2, timestamp1);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into timestamp values ('2004-12-13 01:51:25','2004-12-12 01:51:15+1359');
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from timestamp where timestamp1='2004-12-13 01:51:25' and time2 ='2004-12-12 01:51:15+1359';
 INFO:  (slice 1) Dispatch command to SINGLE content
         timestamp1        |            time2             
@@ -485,30 +441,24 @@ create table bit1 (a bit(1), b int) distributed by (a);
 insert into bit1 values ('0', 23);
 set test_print_direct_dispatch_info=on;
 insert into bit1 values ('1', 23);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table bit1 set distributed by (b);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into bit1 values ('0', 24);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 alter table bit1 set distributed by (b,a);
 INFO:  (slice 1) Dispatch command to ALL contents: 0 1 2
 INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into bit1 values ('0', 24);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from bit1 where a='0' and b =24;
 INFO:  (slice 1) Dispatch command to SINGLE content
  a | b  
@@ -615,10 +565,8 @@ INSERT INTO range_table(id) VALUES (0);
 CREATE INDEX id3 ON range_table USING BITMAP (id);
 set test_print_direct_dispatch_info=on;
 INSERT INTO range_table(id) VALUES (1);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 DROP INDEX id3;
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
@@ -626,30 +574,20 @@ CREATE INDEX id3 ON range_table USING BITMAP (id);
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 INSERT INTO range_table(id) VALUES (2);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 INSERT INTO range_table(id) VALUES (3);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 INSERT INTO range_table(id) VALUES (4);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 INSERT INTO range_table(id) VALUES (5);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 INSERT INTO range_table(id) VALUES (5);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 select * from range_table where id =1;
 INFO:  (slice 1) Dispatch command to SINGLE content
  id 
@@ -709,10 +647,8 @@ INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
 INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
 insert into mpp7620 values (200, 200);
-INFO:  (slice 0) Dispatch command to ALL contents: 0 1 2
-INFO:  (slice 1) Dispatch command to SINGLE content
-INFO:  Distributed transaction command 'Distributed Prepare' to ALL contents: 0 1 2
-INFO:  Distributed transaction command 'Distributed Commit Prepared' to ALL contents: 0 1 2
+INFO:  (slice 0) Dispatch command to SINGLE content
+INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
 insert into zoompp7620 select * from mpp7620 where key=200;
 INFO:  (slice 0) Dispatch command to SINGLE content
 INFO:  Distributed transaction command 'Distributed Commit (one-phase)' to SINGLE content
@@ -745,10 +681,10 @@ explain select * from (select * from mpp7620 where key=200) ss where key =200;
 (4 rows)
 
 explain insert into zoompp7620(key) select key from mpp7620 where mpp7620.key=200;
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                           QUERY PLAN                            
+-----------------------------------------------------------------
  Insert on zoompp7620  (cost=0.00..123.58 rows=0 width=0)
-   ->  Seq Scan on mpp7620  (cost=0.00..123.58 rows=7 width=36)
+   ->  Seq Scan on mpp7620  (cost=0.00..123.58 rows=7 width=122)
          Filter: (key = 200)
  Optimizer: Postgres query optimizer
 (4 rows)
@@ -803,12 +739,12 @@ explain select * from table_a where a0=3;
 explain select a0 from table_a where a0 in (select max(a1) from table_a);
                                                 QUERY PLAN                                                
 ----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.08..2.15 rows=3 width=4)
-   ->  Hash Join  (cost=1.08..2.11 rows=1 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.07..2.14 rows=3 width=4)
+   ->  Hash Join  (cost=1.07..2.10 rows=1 width=4)
          Hash Cond: (table_a.a0 = (max(table_a_1.a1)))
          ->  Seq Scan on table_a  (cost=0.00..1.01 rows=1 width=4)
-         ->  Hash  (cost=1.07..1.07 rows=1 width=4)
-               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=1.03..1.07 rows=1 width=4)
+         ->  Hash  (cost=1.06..1.06 rows=1 width=4)
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=1.03..1.06 rows=1 width=4)
                      Hash Key: (max(table_a_1.a1))
                      ->  Aggregate  (cost=1.03..1.04 rows=1 width=4)
                            ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..1.03 rows=1 width=4)
@@ -841,12 +777,12 @@ INFO:  (slice 2) Dispatch command to SINGLE content
 explain select a0 from table_a where a0 in (select max(a1) from table_a where a0=1);
                                                 QUERY PLAN                                                
 ----------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=1.09..2.16 rows=3 width=4)
-   ->  Hash Join  (cost=1.09..2.11 rows=1 width=4)
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=1.08..2.15 rows=3 width=4)
+   ->  Hash Join  (cost=1.08..2.10 rows=1 width=4)
          Hash Cond: (table_a.a0 = (max(table_a_1.a1)))
          ->  Seq Scan on table_a  (cost=0.00..1.01 rows=1 width=4)
-         ->  Hash  (cost=1.07..1.07 rows=1 width=4)
-               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=1.03..1.07 rows=1 width=4)
+         ->  Hash  (cost=1.06..1.06 rows=1 width=4)
+               ->  Redistribute Motion 1:3  (slice2; segments: 1)  (cost=1.03..1.06 rows=1 width=4)
                      Hash Key: (max(table_a_1.a1))
                      ->  Aggregate  (cost=1.03..1.04 rows=1 width=4)
                            ->  Gather Motion 1:1  (slice3; segments: 1)  (cost=0.00..1.03 rows=1 width=4)
@@ -870,9 +806,9 @@ select rank from ( select rank() over ( order by dist_key asc ) as rank , * from
 explain select rank from ( select rank() over ( order by dist_key asc ) as rank , * from foo_direct_dispatch )a where 10 = dist_key;
                                             QUERY PLAN                                            
 --------------------------------------------------------------------------------------------------
- Subquery Scan on a  (cost=2446.06..6033.56 rows=86 width=8)
+ Subquery Scan on a  (cost=2446.09..6033.56 rows=86 width=8)
    Filter: (10 = a.dist_key)
-   ->  WindowAgg  (cost=2446.06..4957.31 rows=86100 width=16)
+   ->  WindowAgg  (cost=2446.09..4957.31 rows=86100 width=16)
          Order By: foo_direct_dispatch.dist_key
          ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=2446.06..3665.81 rows=86100 width=4)
                Merge Key: foo_direct_dispatch.dist_key

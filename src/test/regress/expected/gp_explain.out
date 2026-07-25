@@ -34,18 +34,18 @@ HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sur
 INSERT INTO explaintest SELECT generate_series(1, 10);
 ANALYZE explaintest;
 EXPLAIN ANALYZE SELECT * FROM explaintest;
-                                                        QUERY PLAN                                                         
----------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=0.457..0.467 rows=10.00 loops=1)
-   ->  Seq Scan on explaintest  (cost=0.00..1.03 rows=3 width=4) (actual time=0.042..0.043 rows=5.00 loops=1)
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=2.911..22.658 rows=10.00 loops=1)
+   ->  Seq Scan on explaintest  (cost=0.00..1.03 rows=3 width=4) (actual time=0.029..0.030 rows=5.00 loops=1)
  Optimizer: Postgres query optimizer
  Planning:
-   Buffers: shared hit=68
- Planning Time: 0.615 ms
+   Buffers: shared hit=97
+ Planning Time: 0.499 ms
    (slice0)    Executor memory: 111K bytes.
    (slice1)    Executor memory: 111K bytes avg x 3 workers, 111K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 1.166 ms
+ Memory used:  256000kB
+ Execution Time: 39.052 ms
 (10 rows)
 
 set explain_memory_verbosity='summary';
@@ -96,34 +96,34 @@ ORDER BY id
 LIMIT 1;
                                                                    QUERY PLAN                                                                   
 ------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=1.06..1.08 rows=1 width=4) (actual time=0.174..0.176 rows=1.00 loops=1)
+ Limit  (cost=1.06..1.08 rows=1 width=4) (actual time=2.452..2.455 rows=1.00 loops=1)
    InitPlan 1  (slice2)
-     ->  Finalize Aggregate  (cost=1.10..1.11 rows=1 width=32) (actual time=0.604..0.604 rows=1.00 loops=1)
-           ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=1.04..1.09 rows=3 width=32) (actual time=0.547..0.584 rows=3.00 loops=1)
-                 ->  Partial Aggregate  (cost=1.04..1.05 rows=1 width=32) (actual time=0.035..0.036 rows=1.00 loops=1)
-                       ->  Seq Scan on explaintest explaintest_1  (cost=0.00..1.03 rows=3 width=4) (actual time=0.026..0.028 rows=5.00 loops=1)
-   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1.06..1.11 rows=3 width=4) (actual time=0.172..0.173 rows=1.00 loops=1)
+     ->  Finalize Aggregate  (cost=1.10..1.11 rows=1 width=32) (actual time=7.018..7.018 rows=1.00 loops=1)
+           ->  Gather Motion 3:1  (slice3; segments: 3)  (cost=1.04..1.09 rows=3 width=32) (actual time=0.731..6.994 rows=3.00 loops=1)
+                 ->  Partial Aggregate  (cost=1.04..1.05 rows=1 width=32) (actual time=0.032..0.032 rows=1.00 loops=1)
+                       ->  Seq Scan on explaintest explaintest_1  (cost=0.00..1.03 rows=3 width=4) (actual time=0.026..0.026 rows=5.00 loops=1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)  (cost=1.06..1.11 rows=3 width=4) (actual time=2.450..2.451 rows=1.00 loops=1)
          Merge Key: explaintest.id
-         ->  Limit  (cost=1.06..1.07 rows=1 width=4) (actual time=0.039..0.045 rows=1.00 loops=1)
-               ->  Sort  (cost=1.06..1.06 rows=1 width=4) (actual time=0.038..0.039 rows=1.00 loops=1)
+         ->  Limit  (cost=1.06..1.07 rows=1 width=4) (actual time=0.045..0.050 rows=1.00 loops=1)
+               ->  Sort  (cost=1.06..1.06 rows=1 width=4) (actual time=0.044..0.045 rows=1.00 loops=1)
                      Sort Key: explaintest.id
                      Sort Method:  top-N heapsort  Memory: 25kB
                      Sort Method:  quicksort  Memory: 50kB
                      Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
-                     ->  Seq Scan on explaintest  (cost=0.00..1.05 rows=1 width=4) (actual time=0.027..0.029 rows=3.00 loops=1)
+                     ->  Seq Scan on explaintest  (cost=0.00..1.05 rows=1 width=4) (actual time=0.035..0.037 rows=3.00 loops=1)
                            Filter: ((id)::numeric > (InitPlan 1).col1)
                            Rows Removed by Filter: 1
  Optimizer: Postgres query optimizer
  Planning:
-   Buffers: shared hit=155
- Planning Time: 0.851 ms
+   Buffers: shared hit=179
+ Planning Time: 0.998 ms
    (slice0)    Executor memory: 116K bytes.
    (slice1)    Executor memory: 114K bytes avg x 3 workers, 114K bytes max (seg0).  Work_mem: 26K bytes max.
    (slice2)    Executor memory: 47K bytes.
  _ (slice3)    Workers: Workers: 3 not dispatched;.  
  Executor memory: 119K bytes avg x 3 workers, 119K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 1.637 ms
+ Memory used:  256000kB
+ Execution Time: 20.993 ms
 (28 rows)
 
 select * from
@@ -316,51 +316,36 @@ explain (format yaml, costs off) SELECT * FROM dummy_aotab;
 
 -- DML node (with ORCA)
 explain (format xml, costs off) insert into dummy_aotab values (1);
-                           QUERY PLAN                           
-----------------------------------------------------------------
- <explain xmlns="http://www.postgresql.org/2009/explain">      +
-   <Query>                                                     +
-     <Plan>                                                    +
-       <Node-Type>ModifyTable</Node-Type>                      +
-       <Operation>Insert</Operation>                           +
-       <Slice>0</Slice>                                        +
-       <Segments>3</Segments>                                  +
-       <Gang-Type>primary writer</Gang-Type>                   +
-       <Parallel-Aware>false</Parallel-Aware>                  +
-       <Async-Capable>false</Async-Capable>                    +
-       <Relation-Name>dummy_aotab</Relation-Name>              +
-       <Alias>dummy_aotab</Alias>                              +
-       <Disabled>false</Disabled>                              +
-       <Plans>                                                 +
-         <Plan>                                                +
-           <Node-Type>Redistribute Motion</Node-Type>          +
-           <Senders>1</Senders>                                +
-           <Receivers>3</Receivers>                            +
-           <Parent-Relationship>Outer</Parent-Relationship>    +
-           <Slice>1</Slice>                                    +
-           <Segments>1</Segments>                              +
-           <Gang-Type>singleton reader</Gang-Type>             +
-           <Parallel-Aware>false</Parallel-Aware>              +
-           <Async-Capable>false</Async-Capable>                +
-           <Disabled>false</Disabled>                          +
-           <Hash-Key>1</Hash-Key>                              +
-           <Plans>                                             +
-             <Plan>                                            +
-               <Node-Type>Result</Node-Type>                   +
-               <Parent-Relationship>Outer</Parent-Relationship>+
-               <Slice>1</Slice>                                +
-               <Segments>1</Segments>                          +
-               <Gang-Type>singleton reader</Gang-Type>         +
-               <Parallel-Aware>false</Parallel-Aware>          +
-               <Async-Capable>false</Async-Capable>            +
-               <Disabled>false</Disabled>                      +
-             </Plan>                                           +
-           </Plans>                                            +
-         </Plan>                                               +
-       </Plans>                                                +
-     </Plan>                                                   +
-     <Optimizer>Postgres query optimizer</Optimizer>           +
-   </Query>                                                    +
+                         QUERY PLAN                         
+------------------------------------------------------------
+ <explain xmlns="http://www.postgresql.org/2009/explain">  +
+   <Query>                                                 +
+     <Plan>                                                +
+       <Node-Type>ModifyTable</Node-Type>                  +
+       <Operation>Insert</Operation>                       +
+       <Slice>0</Slice>                                    +
+       <Segments>1</Segments>                              +
+       <Gang-Type>primary writer</Gang-Type>               +
+       <Parallel-Aware>false</Parallel-Aware>              +
+       <Async-Capable>false</Async-Capable>                +
+       <Relation-Name>dummy_aotab</Relation-Name>          +
+       <Alias>dummy_aotab</Alias>                          +
+       <Disabled>false</Disabled>                          +
+       <Plans>                                             +
+         <Plan>                                            +
+           <Node-Type>Result</Node-Type>                   +
+           <Parent-Relationship>Outer</Parent-Relationship>+
+           <Slice>0</Slice>                                +
+           <Segments>1</Segments>                          +
+           <Gang-Type>primary writer</Gang-Type>           +
+           <Parallel-Aware>false</Parallel-Aware>          +
+           <Async-Capable>false</Async-Capable>            +
+           <Disabled>false</Disabled>                      +
+         </Plan>                                           +
+       </Plans>                                            +
+     </Plan>                                               +
+     <Optimizer>Postgres query optimizer</Optimizer>       +
+   </Query>                                                +
  </explain>
 (1 row)
 
@@ -369,30 +354,30 @@ explain (format xml, costs off) insert into dummy_aotab values (1);
 explain SELECT * from information_schema.key_column_usage;
                                                                    QUERY PLAN                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------
- Hash Join  (cost=19.80..110.41 rows=12 width=456)
+ Hash Join  (cost=97.68..482.18 rows=14 width=456)
    Hash Cond: ((a.attrelid = ss.roid) AND (a.attnum = (ss.x).x))
    Join Filter: (pg_has_role(ss.relowner, 'USAGE'::text) OR has_column_privilege(ss.roid, a.attnum, 'SELECT, INSERT, UPDATE, REFERENCES'::text))
-   ->  Seq Scan on pg_attribute a  (cost=0.00..64.13 rows=4413 width=70)
+   ->  Seq Scan on pg_attribute a  (cost=0.00..302.82 rows=15500 width=70)
          Filter: (NOT attisdropped)
-   ->  Hash  (cost=18.91..18.91 rows=59 width=333)
-         ->  Subquery Scan on ss  (cost=3.35..18.91 rows=59 width=333)
-               ->  ProjectSet  (cost=3.35..18.32 rows=59 width=341)
-                     ->  Hash Join  (cost=3.35..16.53 rows=6 width=333)
-                           Hash Cond: (r.relnamespace = nr.oid)
-                           ->  Hash Join  (cost=2.20..15.30 rows=6 width=273)
-                                 Hash Cond: (r.oid = c.conrelid)
-                                 ->  Seq Scan on pg_class r  (cost=0.00..12.81 rows=89 width=76)
-                                       Filter: (relkind = ANY ('{r,p}'::"char"[]))
-                                 ->  Hash  (cost=2.16..2.16 rows=3 width=201)
-                                       ->  Hash Join  (cost=1.04..2.16 rows=3 width=201)
-                                             Hash Cond: (nc.oid = c.connamespace)
-                                             ->  Seq Scan on pg_namespace nc  (cost=0.00..1.07 rows=7 width=68)
-                                             ->  Hash  (cost=1.03..1.03 rows=1 width=141)
-                                                   ->  Seq Scan on pg_constraint c  (cost=0.00..1.03 rows=1 width=141)
-                                                         Filter: (contype = ANY ('{p,u,f}'::"char"[]))
-                           ->  Hash  (cost=1.09..1.09 rows=5 width=68)
-                                 ->  Seq Scan on pg_namespace nr  (cost=0.00..1.09 rows=5 width=68)
-                                       Filter: (NOT pg_is_other_temp_schema(oid))
+   ->  Hash  (cost=97.35..97.35 rows=22 width=325)
+         ->  Subquery Scan on ss  (cost=13.76..97.35 rows=22 width=325)
+               ->  ProjectSet  (cost=13.76..97.13 rows=22 width=333)
+                     ->  Hash Join  (cost=13.76..91.80 rows=20 width=316)
+                           Hash Cond: (c.connamespace = nc.oid)
+                           ->  Hash Join  (cost=12.31..90.09 rows=20 width=256)
+                                 Hash Cond: (r.relnamespace = nr.oid)
+                                 ->  Hash Join  (cost=10.89..88.39 rows=31 width=196)
+                                       Hash Cond: (r.oid = c.conrelid)
+                                       ->  Seq Scan on pg_class r  (cost=0.00..75.16 rows=745 width=76)
+                                             Filter: (relkind = ANY ('{r,p}'::"char"[]))
+                                       ->  Hash  (cost=9.85..9.85 rows=83 width=124)
+                                             ->  Seq Scan on pg_constraint c  (cost=0.00..9.85 rows=83 width=124)
+                                                   Filter: (contype = ANY ('{p,u,f}'::"char"[]))
+                                 ->  Hash  (cost=1.25..1.25 rows=13 width=68)
+                                       ->  Seq Scan on pg_namespace nr  (cost=0.00..1.25 rows=13 width=68)
+                                             Filter: (NOT pg_is_other_temp_schema(oid))
+                           ->  Hash  (cost=1.20..1.20 rows=20 width=68)
+                                 ->  Seq Scan on pg_namespace nc  (cost=0.00..1.20 rows=20 width=68)
  Optimizer: Postgres query optimizer
 (25 rows)
 
@@ -402,17 +387,17 @@ set gp_enable_explain_allstat=on;
 explain analyze SELECT * FROM explaintest;
                                                           QUERY PLAN                                                           
 -------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=0.113..0.153 rows=10.00 loops=1)
-   ->  Seq Scan on explaintest  (cost=0.00..1.03 rows=3 width=4) (actual time=0.017..0.018 rows=5.00 loops=1)
-         allstat: seg_firststart_total_ntuples/seg0_0.134 ms_0.018 ms_5/seg1_0.170 ms_0.010 ms_1/seg2_0.132 ms_0.015 ms_4//end
+ Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1.17 rows=10 width=4) (actual time=0.300..10.022 rows=10.00 loops=1)
+   ->  Seq Scan on explaintest  (cost=0.00..1.03 rows=3 width=4) (actual time=0.029..0.030 rows=5.00 loops=1)
+         allstat: seg_firststart_total_ntuples/seg0_7.987 ms_0.030 ms_5/seg1_2.653 ms_0.022 ms_1/seg2_0.397 ms_0.029 ms_4//end
  Optimizer: Postgres query optimizer
  Planning:
-   Buffers: shared hit=27
- Planning Time: 0.072 ms
+   Buffers: shared hit=50
+ Planning Time: 0.213 ms
    (slice0)    Executor memory: 111K bytes.
    (slice1)    Executor memory: 111K bytes avg x 3 workers, 111K bytes max (seg0).
- Memory used:  128000kB
- Execution Time: 0.470 ms
+ Memory used:  256000kB
+ Execution Time: 14.522 ms
 (11 rows)
 
 set gp_enable_explain_allstat=DEFAULT;
