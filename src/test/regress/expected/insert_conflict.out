@@ -26,11 +26,9 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (fruit, key, fruit, key) do nothing;
                                   QUERY PLAN                                   
@@ -38,35 +36,29 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit), key, lower(fruit), key) do nothing;
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 explain (costs off) insert into insertconflictview values(0, 'Crowberry') on conflict (lower(fruit), key, lower(fruit), key) do nothing;
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (key, fruit) do update set fruit = excluded.fruit
   where exists (select 1 from insertconflicttest ii where ii.key = excluded.key);
@@ -76,17 +68,15 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: op_index_key, collation_index_key, both_index_key
    Conflict Filter: EXISTS(SubPlan 1)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
    SubPlan 1
      ->  Result
            Filter: (ii.key = excluded.key)
            ->  Materialize
-                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Broadcast Motion 3:1  (slice1; segments: 3)
                        ->  Seq Scan on insertconflicttest ii
  Optimizer: Postgres query optimizer
-(14 rows)
+(12 rows)
 
 -- Neither collation nor operator class specifications are required --
 -- supplying them merely *limits* matches to indexes with matching opclasses
@@ -97,11 +87,9 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- Okay, arbitrates using both index where text_pattern_ops opclass does and
 -- does not appear.
@@ -111,39 +99,33 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: collation_index_key, both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- Okay, but only accepts the single index where both opclass and collation are
 -- specified
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (fruit collate "C" text_pattern_ops, key) do nothing;
-                      QUERY PLAN                      
-------------------------------------------------------
+                 QUERY PLAN                 
+--------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- Okay, but only accepts the single index where both opclass and collation are
 -- specified (plus expression variant)
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) collate "C", key, key) do nothing;
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- Attribute appears twice, while not all attributes/expressions on attributes
 -- appearing within index definition match in terms of both opclass and
@@ -165,23 +147,19 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: op_index_key, both_index_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (lower(fruit) collate "C" text_pattern_ops, key, key) do nothing;
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: NOTHING
    Conflict Arbiter Indexes: both_index_expr_key
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 drop index op_index_key;
 drop index collation_index_key;
@@ -212,16 +190,14 @@ create unique index key_index on insertconflicttest(key);
 -- Explain tests
 --
 explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit;
-                      QUERY PLAN                      
-------------------------------------------------------
+              QUERY PLAN               
+---------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- Should display qual actually attributable to internal sequential scan:
 explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Cawesh';
@@ -231,11 +207,9 @@ explain (costs off) insert into insertconflicttest values (0, 'Bilberry') on con
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
    Conflict Filter: (insertconflicttest.fruit <> 'Cawesh'::text)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 -- With EXCLUDED.* expression in scan node:
 explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on conflict (key) do update set fruit = excluded.fruit where excluded.fruit != 'Elderberry';
@@ -245,11 +219,9 @@ explain (costs off) insert into insertconflicttest values(0, 'Crowberry') on con
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: key_index
    Conflict Filter: (excluded.fruit <> 'Elderberry'::text)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 0
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 -- Does the same, but JSON format shows "Conflict Arbiter Index" as JSON array:
 explain (costs off, format json) insert into insertconflicttest values (0, 'Bilberry') on conflict (key) do update set fruit = excluded.fruit where insertconflicttest.fruit != 'Lime' returning *;
@@ -259,10 +231,10 @@ explain (costs off, format json) insert into insertconflicttest values (0, 'Bilb
    {                                                                       +
      "Plan": {                                                             +
        "Node Type": "Gather Motion",                                       +
-       "Senders": 3,                                                       +
+       "Senders": 1,                                                       +
        "Receivers": 1,                                                     +
        "Slice": 1,                                                         +
-       "Segments": 3,                                                      +
+       "Segments": 1,                                                      +
        "Gang Type": "primary writer",                                      +
        "Parallel Aware": false,                                            +
        "Async Capable": false,                                             +
@@ -273,7 +245,7 @@ explain (costs off, format json) insert into insertconflicttest values (0, 'Bilb
            "Operation": "Insert",                                          +
            "Parent Relationship": "Outer",                                 +
            "Slice": 1,                                                     +
-           "Segments": 3,                                                  +
+           "Segments": 1,                                                  +
            "Gang Type": "primary writer",                                  +
            "Parallel Aware": false,                                        +
            "Async Capable": false,                                         +
@@ -285,29 +257,14 @@ explain (costs off, format json) insert into insertconflicttest values (0, 'Bilb
            "Conflict Filter": "(insertconflicttest.fruit <> 'Lime'::text)",+
            "Plans": [                                                      +
              {                                                             +
-               "Node Type": "Redistribute Motion",                         +
-               "Senders": 1,                                               +
-               "Receivers": 3,                                             +
+               "Node Type": "Result",                                      +
                "Parent Relationship": "Outer",                             +
-               "Slice": 2,                                                 +
+               "Slice": 1,                                                 +
                "Segments": 1,                                              +
-               "Gang Type": "singleton reader",                            +
+               "Gang Type": "primary writer",                              +
                "Parallel Aware": false,                                    +
                "Async Capable": false,                                     +
-               "Disabled": false,                                          +
-               "Hash Key": "0",                                            +
-               "Plans": [                                                  +
-                 {                                                         +
-                   "Node Type": "Result",                                  +
-                   "Parent Relationship": "Outer",                         +
-                   "Slice": 2,                                             +
-                   "Segments": 1,                                          +
-                   "Gang Type": "singleton reader",                        +
-                   "Parallel Aware": false,                                +
-                   "Async Capable": false,                                 +
-                   "Disabled": false                                       +
-                 }                                                         +
-               ]                                                           +
+               "Disabled": false                                           +
              }                                                             +
            ]                                                               +
          }                                                                 +
@@ -442,16 +399,14 @@ insert into insertconflicttest values (24, 'Plum') on conflict (key, lower(fruit
 insert into insertconflicttest values (25, 'Peach') on conflict (lower(fruit), key) do update set fruit = excluded.fruit;
 -- Should not infer "tricky_expr_comp_key_index" index:
 explain (costs off) insert into insertconflicttest values (26, 'Fig') on conflict (lower(fruit), key, lower(fruit), key) do update set fruit = excluded.fruit;
-                      QUERY PLAN                      
-------------------------------------------------------
+                   QUERY PLAN                    
+-------------------------------------------------
  Insert on insertconflicttest
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: expr_comp_key_index
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 26
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 -- inference fails:
 insert into insertconflicttest values (27, 'Prune') on conflict (key, upper(fruit)) do update set fruit = excluded.fruit;
@@ -536,29 +491,25 @@ insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do 
 
 -- deparse whole row var in WHERE and SET clauses:
 explain (costs off) insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do update set fruit = excluded.fruit where excluded.* is null;
-                      QUERY PLAN                      
-------------------------------------------------------
+               QUERY PLAN                
+-----------------------------------------
  Insert on insertconflicttest i
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: plain
    Conflict Filter: (excluded.* IS NULL)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 23
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 explain (costs off) insert into insertconflicttest as i values (23, 'Avocado') on conflict (key) do update set fruit = excluded.*::text;
-                      QUERY PLAN                      
-------------------------------------------------------
+             QUERY PLAN              
+-------------------------------------
  Insert on insertconflicttest i
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: plain
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 23
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(7 rows)
+(5 rows)
 
 drop index plain;
 -- Cleanup
@@ -682,9 +633,9 @@ select tableoid::regclass, * from cities;
 ----------+---------------+------------+----------
  cities   | Las Vegas     |     583000 |     2001
  capitals | Sacramento    |  466400000 |       30
+ cities   | San Francisco |     724000 |       63
  cities   | Mariposa      |       1200 |     1953
  capitals | Madison       |     191300 |      845
- cities   | San Francisco |     724000 |       63
 (5 rows)
 
 insert into capitals values ('Las Vegas', 5.83E+5, 2222, 'NV') on conflict (name) do update set population = excluded.population;
@@ -702,12 +653,12 @@ select * from capitals;
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
- cities   | Mariposa      |       1200 |     1953
- capitals | Madison       |     191300 |      845
  cities   | Las Vegas     |     583000 |     2001
  capitals | Sacramento    |  466400000 |       30
  capitals | Las Vegas     |     583000 |     2222
  cities   | San Francisco |     724000 |       63
+ cities   | Mariposa      |       1200 |     1953
+ capitals | Madison       |     191300 |      845
 (6 rows)
 
 -- This only affects "cities" version of "Las Vegas":
@@ -715,12 +666,12 @@ insert into cities values ('Las Vegas', 5.86E+5, 2223) on conflict (name) do upd
 select tableoid::regclass, * from cities;
  tableoid |     name      | population | altitude 
 ----------+---------------+------------+----------
- cities   | Mariposa      |       1200 |     1953
- capitals | Madison       |     191300 |      845
  cities   | Las Vegas     |     586000 |     2223
  capitals | Sacramento    |  466400000 |       30
  capitals | Las Vegas     |     583000 |     2222
  cities   | San Francisco |     724000 |       63
+ cities   | Mariposa      |       1200 |     1953
+ capitals | Madison       |     191300 |      845
 (6 rows)
 
 -- clean up
@@ -856,17 +807,17 @@ insert into selfconflict values (3,1), (3,2) on conflict do nothing;
 commit;
 begin transaction isolation level read committed;
 insert into selfconflict values (4,1), (4,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.4:7002 pid=1159067)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg0 172.17.0.2:7002 pid=164778)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level repeatable read;
 insert into selfconflict values (5,1), (5,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.4:7004 pid=1159071)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.2:7004 pid=164780)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 begin transaction isolation level serializable;
 insert into selfconflict values (6,1), (6,2) on conflict(f1) do update set f2 = 0;
-ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.4:7004 pid=1159071)
+ERROR:  ON CONFLICT DO UPDATE command cannot affect row a second time  (seg2 172.17.0.2:7004 pid=164780)
 HINT:  Ensure that no rows proposed for insertion within the same command have duplicate constrained values.
 commit;
 select * from selfconflict;

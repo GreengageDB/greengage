@@ -3143,30 +3143,50 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 	ModifyTable *plan;
 	Path	   *subpath = best_path->subpath;
 	Plan	   *subplan;
+	RangeTblEntry *rte = planner_rt_fetch(best_path->nominalRelation, root);
 
-	/* Subplan must produce exactly the specified tlist */
-	subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
+	/*
+	 * GPDB: try the Single-Row-Insert direct-dispatch optimization first.
+	 *
+	 * For a constant INSERT ... VALUES, cdbpathtoplan_create_sri_plan()
+	 * replaces the redistribute Motion with a per-writer-segment hash filter
+	 * and marks the slice for direct dispatch to the single target segment.
+	 * Without it the ModifyTable runs a writer gang on *every* segment, so the
+	 * commit does 2PC across all segments -- and blocks forever on any segment
+	 * whose mirror is down (segwalrep/commit_blocking, fts_unblock_primary rely
+	 * on the "should not block" direct-dispatch behavior).  The caller was lost
+	 * in the PG18 merge (upstream reshaped ModifyTablePath from a per-result-rel
+	 * subpaths list to a single subpath); re-graft it into the new shape.  When
+	 * it applies, the returned Result already carries correct tlist labeling.
+	 */
+	subplan = cdbpathtoplan_create_sri_plan(rte, root, subpath, CP_EXACT_TLIST);
 
-	/* Transfer resname/resjunk labeling, too, to keep executor happy */
-	if (root->is_split_update &&
-		list_length(subplan->targetlist) > list_length(root->processed_tlist))
+	if (!subplan)
 	{
-		/*
-		 * GPDB: a Split Update appends a junk DMLAction column to the subplan's
-		 * targetlist, but root->processed_tlist was built by expand_targetlist()
-		 * before the SplitUpdate node was added and so does not include it. Label
-		 * only the columns processed_tlist describes (the SplitUpdate already
-		 * labels its own DMLAction column); apply_tlist_labeling() otherwise
-		 * asserts the two lists have equal length.
-		 */
-		List	   *labelcols = list_truncate(list_copy(subplan->targetlist),
-											  list_length(root->processed_tlist));
+		/* Subplan must produce exactly the specified tlist */
+		subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
 
-		apply_tlist_labeling(labelcols, root->processed_tlist);
-		list_free(labelcols);
+		/* Transfer resname/resjunk labeling, too, to keep executor happy */
+		if (root->is_split_update &&
+			list_length(subplan->targetlist) > list_length(root->processed_tlist))
+		{
+			/*
+			 * GPDB: a Split Update appends a junk DMLAction column to the subplan's
+			 * targetlist, but root->processed_tlist was built by expand_targetlist()
+			 * before the SplitUpdate node was added and so does not include it. Label
+			 * only the columns processed_tlist describes (the SplitUpdate already
+			 * labels its own DMLAction column); apply_tlist_labeling() otherwise
+			 * asserts the two lists have equal length.
+			 */
+			List	   *labelcols = list_truncate(list_copy(subplan->targetlist),
+												  list_length(root->processed_tlist));
+
+			apply_tlist_labeling(labelcols, root->processed_tlist);
+			list_free(labelcols);
+		}
+		else
+			apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
 	}
-	else
-		apply_tlist_labeling(subplan->targetlist, root->processed_tlist);
 
 	plan = make_modifytable(root,
 							subplan,

@@ -225,12 +225,12 @@ UPDATE rw_view14 SET b='ROW 3' WHERE a=3; -- should be OK
 SELECT * FROM base_tbl;
  a  |   b    
 ----+--------
- -1 | Row -1
   2 | Row 2
   3 | ROW 3
  -2 | Row -2
   0 | Row 0
   1 | Row 1
+ -1 | Row -1
 (6 rows)
 
 DELETE FROM rw_view14 WHERE a=3; -- should be OK
@@ -278,11 +278,11 @@ INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT DO NOTHING; -- succeeds
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
+  2 | ROW 2
+  3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
-  2 | ROW 2
-  3 | UNSPECIFIED
  -1 | ROW -1
 (6 rows)
 
@@ -290,12 +290,12 @@ INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO NOTHING; -- succeeds
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
- -1 | ROW -1
   2 | ROW 2
   3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
+ -1 | ROW -1
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set a = excluded.a; -- succeeds
@@ -304,10 +304,10 @@ SELECT * FROM rw_view15;
 ----+-------------
   2 | ROW 2
   3 | UNSPECIFIED
+ -1 | ROW -1
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
- -1 | ROW -1
 (6 rows)
 
 INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set upper = 'blarg'; -- fails
@@ -316,22 +316,22 @@ DETAIL:  View columns that are not columns of their base relation are not updata
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
- -2 | ROW -2
-  0 | ROW 0
-  1 | ROW 1
  -1 | ROW -1
   2 | ROW 2
   3 | UNSPECIFIED
+ -2 | ROW -2
+  0 | ROW 0
+  1 | ROW 1
 (6 rows)
 
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
+  2 | ROW 2
+  3 | UNSPECIFIED
  -2 | ROW -2
   0 | ROW 0
   1 | ROW 1
-  2 | ROW 2
-  3 | UNSPECIFIED
  -1 | ROW -1
 (6 rows)
 
@@ -349,12 +349,12 @@ UPDATE rw_view15 SET a=4 WHERE a=3; -- should be OK
 SELECT * FROM base_tbl;
  a  |      b      
 ----+-------------
+ -1 | Row -1
+  2 | Row 2
+  4 | Unspecified
  -2 | Row -2
   0 | Row 0
   1 | Row 1
-  2 | Row 2
-  4 | Unspecified
- -1 | Row -1
 (6 rows)
 
 DELETE FROM rw_view15 WHERE a=4; -- should be OK
@@ -485,12 +485,12 @@ DELETE FROM rw_view1 WHERE b='Row 2';
 SELECT * FROM base_tbl;
  a  |      b      
 ----+-------------
- -1 | Row -1
-  5 | Unspecified
+  3 | Row 3
  -2 | Row -2
   0 | Row 0
   1 | Row 1
-  3 | Row 3
+ -1 | Row -1
+  5 | Unspecified
 (6 rows)
 
 SET jit_above_cost = 0;
@@ -503,9 +503,9 @@ MERGE INTO rw_view1 t
   RETURNING merge_action(), v.*, old, new, old.*, new.*, t.*;
  merge_action | a |   b   |             old              |                  new                   | a |   b   |   c   |    d     | a |      b      |   c   |       d        | a |      b      |   c   |       d        
 --------------+---+-------+------------------------------+----------------------------------------+---+-------+-------+----------+---+-------------+-------+----------------+---+-------------+-------+----------------
+ UPDATE       | 1 | ROW 1 | (1,"Row 1",Const,"b: Row 1") | (1,"ROW 1",Const,"b: ROW 1")           | 1 | Row 1 | Const | b: Row 1 | 1 | ROW 1       | Const | b: ROW 1       | 1 | ROW 1       | Const | b: ROW 1
  INSERT       | 2 | ROW 2 |                              | (2,Unspecified,Const,"b: Unspecified") |   |       |       |          | 2 | Unspecified | Const | b: Unspecified | 2 | Unspecified | Const | b: Unspecified
  DELETE       | 3 | ROW 3 | (3,"Row 3",Const,"b: Row 3") |                                        | 3 | Row 3 | Const | b: Row 3 |   |             |       |                | 3 | Row 3       | Const | b: Row 3
- UPDATE       | 1 | ROW 1 | (1,"Row 1",Const,"b: Row 1") | (1,"ROW 1",Const,"b: ROW 1")           | 1 | Row 1 | Const | b: Row 1 | 1 | ROW 1       | Const | b: ROW 1       | 1 | ROW 1       | Const | b: ROW 1
 (3 rows)
 
 SET jit_above_cost TO DEFAULT;
@@ -530,10 +530,10 @@ MERGE INTO rw_view1 t
   RETURNING merge_action(), v.*, old, new, old.*, new.*, t.*;
  merge_action | a | b  |                  old                   |                  new                   | a |      b      |   c   |       d        | a |      b      |   c   |       d        | a |      b      |   c   |       d        
 --------------+---+----+----------------------------------------+----------------------------------------+---+-------------+-------+----------------+---+-------------+-------+----------------+---+-------------+-------+----------------
- UPDATE       | 1 | R1 | (1,"ROW 1",Const,"b: ROW 1")           | (1,R1,Const,"b: R1")                   | 1 | ROW 1       | Const | b: ROW 1       | 1 | R1          | Const | b: R1          | 1 | R1          | Const | b: R1
  DELETE       |   |    | (5,Unspecified,Const,"b: Unspecified") |                                        | 5 | Unspecified | Const | b: Unspecified |   |             |       |                | 5 | Unspecified | Const | b: Unspecified
  DELETE       | 2 | R2 | (2,Unspecified,Const,"b: Unspecified") |                                        | 2 | Unspecified | Const | b: Unspecified |   |             |       |                | 2 | Unspecified | Const | b: Unspecified
  INSERT       | 3 | R3 |                                        | (3,Unspecified,Const,"b: Unspecified") |   |             |       |                | 3 | Unspecified | Const | b: Unspecified | 3 | Unspecified | Const | b: Unspecified
+ UPDATE       | 1 | R1 | (1,"ROW 1",Const,"b: ROW 1")           | (1,R1,Const,"b: R1")                   | 1 | ROW 1       | Const | b: ROW 1       | 1 | R1          | Const | b: R1          | 1 | R1          | Const | b: R1
 (4 rows)
 
 SELECT * FROM base_tbl ORDER BY a;
@@ -629,6 +629,8 @@ MERGE INTO rw_view1 t
 
 -- it's still updatable if we add a DO ALSO rule
 CREATE TABLE base_tbl_hist(ts timestamptz default now(), a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ts' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE RULE base_tbl_log AS ON INSERT TO rw_view1 DO ALSO
   INSERT INTO base_tbl_hist(a,b) VALUES(new.a, new.b);
 SELECT table_name, is_updatable, is_insertable_into
@@ -927,9 +929,9 @@ UPDATE rw_view2 SET b='Row three' WHERE a=3 RETURNING old.*, new.*;
 SELECT * FROM rw_view2;
  a |     b     
 ---+-----------
- 1 | Row 1
  2 | Row 2
  3 | Row three
+ 1 | Row 1
 (3 rows)
 
 DELETE FROM rw_view2 WHERE a=3 RETURNING old.*, new.*;
@@ -1178,8 +1180,8 @@ HINT:  To enable updating the view, provide an INSTEAD OF UPDATE trigger or an u
 SELECT * FROM rw_view2;
  a |   b   |   c1   |   c2   
 ---+-------+--------+--------
- 2 | Row 2 | Const1 | Const2
  1 | Row 1 | Const1 | Const2
+ 2 | Row 2 | Const1 | Const2
 (2 rows)
 
 DELETE FROM rw_view2 WHERE a=3 RETURNING old.*, new.*;
@@ -1362,6 +1364,8 @@ CREATE USER regress_view_user3;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_view_user1;
 CREATE TABLE base_tbl(a int, b text, c float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1, 'Row 1', 1.0);
 CREATE VIEW rw_view1 AS SELECT b AS bb, c AS cc, a AS aa FROM base_tbl;
 INSERT INTO rw_view1 VALUES ('Row 2', 2.0, 2);
@@ -1375,15 +1379,15 @@ CREATE VIEW rw_view2 AS SELECT b AS bb, c AS cc, a AS aa FROM base_tbl;
 SELECT * FROM base_tbl; -- ok
  a |   b   | c 
 ---+-------+---
- 2 | Row 2 | 2
  1 | Row 1 | 1
+ 2 | Row 2 | 2
 (2 rows)
 
 SELECT * FROM rw_view1; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 2 |  2 |  2
  Row 1 |  1 |  1
+ Row 2 |  2 |  2
 (2 rows)
 
 SELECT * FROM rw_view2; -- ok
@@ -1492,6 +1496,8 @@ DETAIL:  drop cascades to view rw_view1
 drop cascades to view rw_view2
 -- nested-view permissions
 CREATE TABLE base_tbl(a int, b text, c float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1, 'Row 1', 1.0);
 SET SESSION AUTHORIZATION regress_view_user1;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl;
@@ -1645,6 +1651,8 @@ drop cascades to view rw_view2
 -- security invoker view permissions
 SET SESSION AUTHORIZATION regress_view_user1;
 CREATE TABLE base_tbl(a int, b text, c float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1, 'Row 1', 1.0);
 CREATE VIEW rw_view1 AS SELECT b AS bb, c AS cc, a AS aa FROM base_tbl;
 ALTER VIEW rw_view1 SET (security_invoker = true);
@@ -1688,8 +1696,8 @@ SELECT * FROM base_tbl; -- ok
 SELECT * FROM rw_view1; -- ok
   bb   | cc | aa 
 -------+----+----
- Row 1 |  1 |  1
  Row 2 |  2 |  2
+ Row 1 |  1 |  1
 (2 rows)
 
 UPDATE base_tbl SET a=a, c=c; -- ok
@@ -1749,6 +1757,8 @@ DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- ordinary view on top of security invoker view permissions
 CREATE TABLE base_tbl(a int, b text, c float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1, 'Row 1', 1.0);
 SET SESSION AUTHORIZATION regress_view_user1;
 CREATE VIEW rw_view1 AS SELECT b AS bb, c AS cc, a AS aa FROM base_tbl;
@@ -1999,12 +2009,12 @@ MERGE INTO rw_view1 t USING (VALUES (6)) AS v(a) ON t.aa = v.a
 SELECT * FROM base_tbl;
  a |      b       | c 
 ---+--------------+---
+ 5 | View default | 5
+ 6 | View default | 6
  2 | Row 2        | 2
  3 | Unspecified  | 3
  4 | Row 4        | 4
  1 | Row 1        | 1
- 5 | View default | 5
- 6 | View default | 6
 (6 rows)
 
 DROP TABLE base_tbl CASCADE;
@@ -2029,7 +2039,7 @@ CREATE TRIGGER rw_view1_ins_trig AFTER INSERT ON base_tbl
   FOR EACH ROW EXECUTE PROCEDURE rw_view1_trig_fn();
 CREATE VIEW rw_view1 AS SELECT a AS aa, b AS bb FROM base_tbl;
 INSERT INTO rw_view1 VALUES (3, 'Row 3');
-ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  function cannot execute on a QE slice because it issues a non-SELECT statement  (seg0 172.17.0.2:7002 pid=164984)
 CONTEXT:  SQL statement "UPDATE base_tbl SET b=NEW.b WHERE a=1"
 PL/pgSQL function rw_view1_trig_fn() line 4 at SQL statement
 select * from base_tbl;
@@ -2045,6 +2055,8 @@ DROP FUNCTION rw_view1_trig_fn();
 DROP TABLE base_tbl;
 -- view with ORDER BY
 CREATE TABLE base_tbl (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1,2), (4,5), (3,-3);
 ANALYZE base_tbl;
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl ORDER BY a+b;
@@ -2101,20 +2113,24 @@ DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- multiple array-column updates
 CREATE TABLE base_tbl (a int, arr int[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1,ARRAY[2]), (3,ARRAY[4]);
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl;
 UPDATE rw_view1 SET arr[1] = 42, arr[2] = 77 WHERE a = 3;
 SELECT * FROM rw_view1;
  a |   arr   
 ---+---------
- 3 | {42,77}
  1 | {2}
+ 3 | {42,77}
 (2 rows)
 
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- views with updatable and non-updatable columns
 CREATE TABLE base_tbl(a float);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl SELECT i/10.0 FROM generate_series(1,10) g(i);
 CREATE VIEW rw_view1 AS
   SELECT ctid, sin(a) s, a, cos(a) c
@@ -2260,6 +2276,8 @@ drop cascades to view rw_view2
 drop cascades to view rw_view3
 -- view on table with GENERATED columns
 CREATE TABLE base_tbl (id int, idplus1 int GENERATED ALWAYS AS (id + 1) STORED);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl;
 INSERT INTO base_tbl (id) VALUES (1);
 INSERT INTO rw_view1 (id) VALUES (2);
@@ -2274,10 +2292,10 @@ DETAIL:  Column "idplus1" is a generated column.
 SELECT * FROM base_tbl;
  id | idplus1 
 ----+---------
-  1 |       2
   2 |       3
   3 |       4
   4 |       5
+  1 |       2
 (4 rows)
 
 UPDATE base_tbl SET id = 2000 WHERE id = 2;
@@ -2285,16 +2303,18 @@ UPDATE rw_view1 SET id = 3000 WHERE id = 3;
 SELECT * FROM base_tbl;
   id  | idplus1 
 ------+---------
+ 3000 |    3001
     1 |       2
     4 |       5
  2000 |    2001
- 3000 |    3001
 (4 rows)
 
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- inheritance tests
 CREATE TABLE base_tbl_parent (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE base_tbl_child (CHECK (a > 0)) INHERITS (base_tbl_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO base_tbl_parent SELECT * FROM generate_series(-8, -1);
@@ -2425,6 +2445,8 @@ SELECT * FROM base_tbl_child ORDER BY a;
 (6 rows)
 
 CREATE TABLE other_tbl_parent (id int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE other_tbl_child () INHERITS (other_tbl_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO other_tbl_parent VALUES (7),(200);
@@ -2485,6 +2507,8 @@ DROP TABLE other_tbl_parent CASCADE;
 NOTICE:  drop cascades to table other_tbl_child
 -- simple WITH CHECK OPTION
 CREATE TABLE base_tbl (a int, b int DEFAULT 10);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO base_tbl VALUES (1,2), (2,3), (1,-1);
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a < b
   WITH LOCAL CHECK OPTION;
@@ -2512,18 +2536,18 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view1';
 
 INSERT INTO rw_view1 VALUES(3,4); -- ok
 INSERT INTO rw_view1 VALUES(4,3); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (4, 3).
 INSERT INTO rw_view1 VALUES(5,null); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (5, null).
 UPDATE rw_view1 SET b = 5 WHERE a = 3; -- ok
 UPDATE rw_view1 SET b = -5 WHERE a = 3; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (3, -5).
 INSERT INTO rw_view1(a) VALUES (9); -- ok
 INSERT INTO rw_view1(a) VALUES (10); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (10, 10).
 SELECT * FROM base_tbl ORDER BY a, b;
  a | b  
@@ -2539,13 +2563,13 @@ MERGE INTO rw_view1 t USING (VALUES (10)) AS v(a) ON t.a = v.a
   WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.a + 1); -- ok
 MERGE INTO rw_view1 t USING (VALUES (11)) AS v(a) ON t.a = v.a
   WHEN NOT MATCHED THEN INSERT VALUES (v.a, v.a - 1); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (11, 10).
 MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a - 1; -- ok
 MERGE INTO rw_view1 t USING (VALUES (2)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a + 1; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (3, 3).
 SELECT * FROM base_tbl ORDER BY a, b;
  a  | b  
@@ -2562,6 +2586,8 @@ DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- WITH LOCAL/CASCADED CHECK OPTION
 CREATE TABLE base_tbl (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a > 0;
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
   WITH CHECK OPTION; -- implicitly cascaded
@@ -2585,11 +2611,11 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
 (1 row)
 
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-5).
 INSERT INTO rw_view2 VALUES (5); -- ok
 INSERT INTO rw_view2 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (15).
 SELECT * FROM base_tbl;
  a 
@@ -2598,10 +2624,10 @@ SELECT * FROM base_tbl;
 (1 row)
 
 UPDATE rw_view2 SET a = a - 10; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-5).
 UPDATE rw_view2 SET a = a + 10; -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (15).
 CREATE OR REPLACE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a < 10
   WITH LOCAL CHECK OPTION;
@@ -2626,7 +2652,7 @@ SELECT * FROM information_schema.views WHERE table_name = 'rw_view2';
 
 INSERT INTO rw_view2 VALUES (-10); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (20); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (20).
 SELECT * FROM base_tbl;
   a  
@@ -2640,10 +2666,10 @@ ERROR:  invalid value for enum option "check_option": here
 DETAIL:  Valid values are "local" and "cascaded".
 ALTER VIEW rw_view1 SET (check_option=local);
 INSERT INTO rw_view2 VALUES (-20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-20).
 INSERT INTO rw_view2 VALUES (30); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (30).
 ALTER VIEW rw_view2 RESET (check_option);
 \d+ rw_view2
@@ -2679,6 +2705,8 @@ DETAIL:  drop cascades to view rw_view1
 drop cascades to view rw_view2
 -- WITH CHECK OPTION with no local view qual
 CREATE TABLE base_tbl (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WITH CHECK OPTION;
 CREATE VIEW rw_view2 AS SELECT * FROM rw_view1 WHERE a > 0;
 CREATE VIEW rw_view3 AS SELECT * FROM rw_view2 WITH CHECK OPTION;
@@ -2699,7 +2727,7 @@ INSERT INTO rw_view1 VALUES (1); -- ok
 INSERT INTO rw_view2 VALUES (-2); -- ok, but not in view
 INSERT INTO rw_view2 VALUES (2); -- ok
 INSERT INTO rw_view3 VALUES (-3); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-3).
 INSERT INTO rw_view3 VALUES (3); -- ok
 DROP TABLE base_tbl CASCADE;
@@ -2709,26 +2737,30 @@ drop cascades to view rw_view2
 drop cascades to view rw_view3
 -- WITH CHECK OPTION with scalar array ops
 CREATE TABLE base_tbl (a int, b int[]);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a = ANY (b)
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (1, ARRAY[1,2,3]); -- ok
 INSERT INTO rw_view1 VALUES (10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (10, {4,5}).
 UPDATE rw_view1 SET b[2] = -b[2] WHERE a = 1; -- ok
 UPDATE rw_view1 SET b[1] = -b[1] WHERE a = 1; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (1, {-1,-2,3}).
 PREPARE ins(int, int[]) AS INSERT INTO rw_view1 VALUES($1, $2);
 EXECUTE ins(2, ARRAY[1,2,3]); -- ok
 EXECUTE ins(10, ARRAY[4,5]); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (10, {4,5}).
 DEALLOCATE PREPARE ins;
 DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- WITH CHECK OPTION with subquery
 CREATE TABLE base_tbl (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE ref_tbl (a int PRIMARY KEY);
 INSERT INTO ref_tbl SELECT * FROM generate_series(1,10);
 ANALYZE ref_tbl;
@@ -2738,27 +2770,25 @@ CREATE VIEW rw_view1 AS
   WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5); -- ok
 INSERT INTO rw_view1 VALUES (15); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (15).
 UPDATE rw_view1 SET a = a + 5; -- ok
 UPDATE rw_view1 SET a = a + 5; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (15).
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (5);
                            QUERY PLAN                            
 -----------------------------------------------------------------
  Insert on base_tbl b
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 5
-         ->  Result
+   ->  Result
    SubPlan 1
      ->  Result
            Filter: (r.a = b.a)
            ->  Materialize
-                 ->  Broadcast Motion 3:3  (slice2; segments: 3)
+                 ->  Broadcast Motion 3:1  (slice1; segments: 3)
                        ->  Seq Scan on ref_tbl r
  Optimizer: Postgres query optimizer
-(11 rows)
+(9 rows)
 
 ANALYZE base_tbl;
 EXPLAIN (costs off) UPDATE rw_view1 SET a = a + 5;
@@ -2784,6 +2814,8 @@ DROP TABLE base_tbl, ref_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- WITH CHECK OPTION with BEFORE trigger on base table
 CREATE TABLE base_tbl (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE FUNCTION base_tbl_trig_fn()
 RETURNS trigger AS
 $$
@@ -2798,7 +2830,7 @@ CREATE TRIGGER base_tbl_trig BEFORE INSERT OR UPDATE ON base_tbl
 CREATE VIEW rw_view1 AS SELECT * FROM base_tbl WHERE a < b WITH CHECK OPTION;
 INSERT INTO rw_view1 VALUES (5,0); -- ok
 INSERT INTO rw_view1 VALUES (15, 20); -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (15, 10).
 UPDATE rw_view1 SET a = 20, b = 30; -- should fail
 ERROR:  UPDATE on distributed key column not allowed on relation with update triggers
@@ -2807,6 +2839,8 @@ NOTICE:  drop cascades to view rw_view1
 DROP FUNCTION base_tbl_trig_fn();
 -- WITH LOCAL CHECK OPTION with INSTEAD OF trigger on base view
 CREATE TABLE base_tbl (a int, b int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT a FROM base_tbl WHERE a < b;
 CREATE FUNCTION rw_view1_trig_fn()
 RETURNS trigger AS
@@ -2832,7 +2866,7 @@ ERROR:  INSTEAD OF triggers are not supported in Greenplum
 CREATE VIEW rw_view2 AS
   SELECT * FROM rw_view1 WHERE a > 0 WITH LOCAL CHECK OPTION;
 INSERT INTO rw_view2 VALUES (-5); -- should fail
-ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "rw_view2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-5, null).
 MERGE INTO rw_view2 t USING (VALUES (-5)) AS v(a) ON t.a = v.a
   WHEN NOT MATCHED THEN INSERT VALUES (v.a); -- should fail
@@ -2852,25 +2886,25 @@ MERGE INTO rw_view2 t USING (VALUES (6)) AS v(a) ON t.a = v.a
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
- 50 |  
- 60 |  
   5 |  
   6 |  
+ 60 |  
+ 50 |  
 (4 rows)
 
 -- Check option won't cascade down to base view with INSTEAD OF triggers
 ALTER VIEW rw_view2 SET (check_option=cascaded);
 INSERT INTO rw_view2 VALUES (100); -- ok, but not in view (doesn't fail rw_view1's check)
-ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (100, null).
 UPDATE rw_view2 SET a = 200 WHERE a = 5; -- ok, but not in view (doesn't fail rw_view1's check)
 SELECT * FROM base_tbl;
  a  | b 
 ----+---
- 60 |  
- 50 |  
   5 |  
   6 |  
+ 50 |  
+ 60 |  
 (4 rows)
 
 -- Neither local nor cascaded check options work with INSTEAD rules
@@ -2894,9 +2928,9 @@ UPDATE rw_view2 SET a = -5 WHERE a = 5; -- ok, but not in view (doesn't fail rw_
 SELECT * FROM base_tbl;
   a  | b  
 -----+----
- -10 | 10
  100 | 10
  200 | 10
+ -10 | 10
   50 | 10
   20 | 10
   30 | 10
@@ -2909,6 +2943,8 @@ DETAIL:  drop cascades to view rw_view1
 drop cascades to view rw_view2
 DROP FUNCTION rw_view1_trig_fn();
 CREATE TABLE base_tbl (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW rw_view1 AS SELECT a,10 AS b FROM base_tbl;
 CREATE RULE rw_view1_ins_rule AS ON INSERT TO rw_view1
   DO INSTEAD INSERT INTO base_tbl VALUES (NEW.a);
@@ -2921,6 +2957,8 @@ DETAIL:  drop cascades to view rw_view1
 drop cascades to view rw_view2
 -- security barrier view
 CREATE TABLE base_tbl (person text, visibility text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'person' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: The tests below which throw NOTICEs, throw them in indeterminate
 -- order, if the rows are hashed to different segments. Force all the rows
 -- to the same segment, by adding a dummy column and using it as the
@@ -2950,9 +2988,9 @@ END;
 $$
 LANGUAGE plpgsql STRICT IMMUTABLE LEAKPROOF;
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Dick  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Dick  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=164984)
  person 
 --------
  Tom
@@ -2960,13 +2998,13 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Dick  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 ALTER VIEW rw_view1 SET (security_barrier = true);
 SELECT table_name, is_insertable_into
   FROM information_schema.tables
@@ -2994,8 +3032,8 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view1 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=164984)
  person 
 --------
  Tom
@@ -3003,16 +3041,16 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
 (2 rows)
 
 UPDATE rw_view1 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 DELETE FROM rw_view1 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 MERGE INTO rw_view1 t
   USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
   WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 EXPLAIN (costs off) SELECT * FROM rw_view1 WHERE snoop(person);
                      QUERY PLAN                      
 -----------------------------------------------------
@@ -3087,10 +3125,10 @@ SELECT table_name, column_name, is_updatable
 (1 row)
 
 SELECT * FROM rw_view2 WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Tom  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=164984)
  person 
 --------
  Tom
@@ -3098,22 +3136,22 @@ NOTICE:  snooped value: Harry  (seg0 slice1 172.17.0.2:7002 pid=2259443)
 (2 rows)
 
 UPDATE rw_view2 SET person=person WHERE snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 DELETE FROM rw_view2 WHERE NOT snoop(person);
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 MERGE INTO rw_view2 t
   USING (VALUES ('Tom'), ('Dick'), ('Harry')) AS v(person) ON t.person = v.person
   WHEN MATCHED AND snoop(t.person) THEN UPDATE SET person = v.person;
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Tom  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped value: Harry  (seg0 172.17.0.2:7002 pid=164984)
 EXPLAIN (costs off) SELECT * FROM rw_view2 WHERE snoop(person);
                         QUERY PLAN                         
 -----------------------------------------------------------
@@ -3199,20 +3237,18 @@ EXPLAIN (costs off) DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
 (8 rows)
 
 DELETE FROM rw_view1 WHERE id = 1 AND snoop(data);
-NOTICE:  snooped value: Row 1  (seg1 172.17.0.2:7003 pid=2259445)
+NOTICE:  snooped value: Row 1  (seg1 172.17.0.2:7003 pid=164985)
 reset enable_seqscan;
 EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
-                           QUERY PLAN                           
-----------------------------------------------------------------
+                        QUERY PLAN                        
+----------------------------------------------------------
  Insert on base_tbl
-   InitPlan 1  (slice2)
-     ->  Gather Motion 1:1  (slice3; segments: 1)
+   InitPlan 1  (slice1)
+     ->  Gather Motion 1:1  (slice2; segments: 1)
            ->  Seq Scan on base_tbl t
                  Filter: (id = 2)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 2
-         ->  Result
-               One-Time Filter: ((InitPlan 1).col1 IS NOT TRUE)
+   ->  Result
+         One-Time Filter: ((InitPlan 1).col1 IS NOT TRUE)
  Optimizer: Postgres query optimizer
  
  Update on base_tbl
@@ -3225,7 +3261,7 @@ EXPLAIN (costs off) INSERT INTO rw_view1 VALUES (2, 'New row 2');
          ->  Seq Scan on base_tbl
                Filter: (id = 2)
  Optimizer: Postgres query optimizer
-(21 rows)
+(19 rows)
 
 INSERT INTO rw_view1 VALUES (2, 'New row 2');
 SELECT * FROM base_tbl;
@@ -3239,6 +3275,8 @@ DROP TABLE base_tbl CASCADE;
 NOTICE:  drop cascades to view rw_view1
 -- security barrier view based on inheritance set
 CREATE TABLE t1 (a int, b float, c text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE INDEX t1_a_idx ON t1(a);
 INSERT INTO t1
 SELECT i,i,'t1' FROM generate_series(1,10) g(i);
@@ -3454,10 +3492,10 @@ UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
 (74 rows)
 
 UPDATE v1 SET a=a+1 WHERE snoop(a) AND leakproof(a) AND a = 8;
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=2259874)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=2259874)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=2259874)
-NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=2259874)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=165142)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=165142)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=165142)
+NOTICE:  snooped value: 8  (seg0 slice1 172.17.0.2:7002 pid=165142)
 SELECT * FROM v1 WHERE b=8;
  a | b |  c   |  d   
 ---+---+------+------
@@ -3488,26 +3526,26 @@ END;
 $$
 LANGUAGE plpgsql COST 0.000001;
 DELETE FROM v1 WHERE snoop_five(a) AND leakproof(a); -- should not delete everything, just where a>5
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=2259449)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=2259443)
-NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=2259443)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg0 172.17.0.2:7002 pid=164984)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
+NOTICE:  snooped a value that's above 5  (seg2 172.17.0.2:7004 pid=164986)
 TABLE t1; -- verify all a<=5 are intact
  a | b |  c   
 ---+---+------
@@ -3523,14 +3561,14 @@ TABLE t1; -- verify all a<=5 are intact
  2 | 2 | t111
  3 | 3 | t111
  4 | 4 | t111
- 5 | 5 | t1
- 5 | 5 | t11
- 5 | 5 | t12
- 5 | 5 | t111
  1 | 1 | t1
  1 | 1 | t11
  1 | 1 | t12
  1 | 1 | t111
+ 5 | 5 | t1
+ 5 | 5 | t11
+ 5 | 5 | t12
+ 5 | 5 | t111
 (20 rows)
 
 DROP TABLE t1, t11, t12, t111 CASCADE;
@@ -3538,8 +3576,14 @@ NOTICE:  drop cascades to view v1
 DROP FUNCTION snoop(anyelement);
 DROP FUNCTION leakproof(anyelement);
 CREATE TABLE tx1 (a integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx2 (b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx3 (c integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW vx1 AS SELECT a FROM tx1 WHERE EXISTS(SELECT 1 FROM tx2 JOIN tx3 ON b=c);
 INSERT INTO vx1 values (1);
 SELECT * FROM tx1;
@@ -3558,8 +3602,14 @@ DROP TABLE tx1;
 DROP TABLE tx2;
 DROP TABLE tx3;
 CREATE TABLE tx1 (a integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx2 (b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx3 (c integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW vx1 AS SELECT a FROM tx1 WHERE EXISTS(SELECT 1 FROM tx2 JOIN tx3 ON b=c);
 INSERT INTO vx1 VALUES (1);
 INSERT INTO vx1 VALUES (1);
@@ -3580,8 +3630,14 @@ DROP TABLE tx1;
 DROP TABLE tx2;
 DROP TABLE tx3;
 CREATE TABLE tx1 (a integer, b integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx2 (b integer, c integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tx3 (c integer, d integer);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE tx1 DROP COLUMN b;
 ALTER TABLE tx2 DROP COLUMN c;
 ALTER TABLE tx3 DROP COLUMN d;
@@ -3609,8 +3665,12 @@ DROP TABLE tx3;
 -- security barrier views, per bug #13988
 --
 CREATE TABLE t1 (a int, b text, c int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t1 VALUES (1, 'one', 10);
 CREATE TABLE t2 (cc int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'cc' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO t2 VALUES (10), (20);
 CREATE VIEW v1 WITH (security_barrier = true) AS
   SELECT * FROM t1 WHERE (a > 0)
@@ -3620,17 +3680,17 @@ CREATE VIEW v2 WITH (security_barrier = true) AS
   WITH CHECK OPTION;
 INSERT INTO v2 VALUES (2, 'two', 20); -- ok
 INSERT INTO v2 VALUES (-2, 'minus two', 20); -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "v1"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (-2, minus two, 20).
 INSERT INTO v2 VALUES (3, 'three', 30); -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "v2"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (3, three, 30).
 UPDATE v2 SET b = 'ONE' WHERE a = 1; -- ok
 UPDATE v2 SET a = -1 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (-1, ONE, 10).
 UPDATE v2 SET c = 30 WHERE a = 1; -- not allowed
-ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "v2"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (1, ONE, 30).
 DELETE FROM v2 WHERE a = 2; -- ok
 SELECT * FROM v2;
@@ -3647,6 +3707,8 @@ DROP TABLE t1;
 -- Test sub-select in nested security barrier views, per bug #17972
 --
 CREATE TABLE t1 (a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW v1 WITH (security_barrier = true) AS
   SELECT * FROM t1;
 CREATE RULE v1_upd_rule AS ON UPDATE TO v1 DO INSTEAD
@@ -3683,19 +3745,26 @@ DROP TABLE t1;
 -- auto-updatable view and adding check options in a single step
 --
 CREATE TABLE t1 (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE VIEW v1 AS SELECT null::int AS a;
 CREATE OR REPLACE VIEW v1 AS SELECT * FROM t1 WHERE a > 0 WITH CHECK OPTION;
 INSERT INTO v1 VALUES (1, 'ok'); -- ok
 INSERT INTO v1 VALUES (-1, 'invalid'); -- should fail
-ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=2259449)
+ERROR:  new row violates check option for view "v1"  (seg2 172.17.0.2:7004 pid=164986)
 DETAIL:  Failing row contains (-1, invalid).
 DROP VIEW v1;
 DROP TABLE t1;
 -- check that an auto-updatable view on a partitioned table works correctly
 create table uv_pt (a int, b int, v varchar) partition by range (a, b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table uv_pt set distributed by (b);
 create table uv_pt1 (b int not null, v varchar, a int not null) partition by range (b);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table uv_pt11 (like uv_pt1);
+NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
 alter table uv_pt11 drop a;
 alter table uv_pt11 add a int;
 alter table uv_pt11 drop a;
@@ -3749,7 +3818,7 @@ select tableoid::regclass, * from uv_pt;
 
 create view uv_ptv_wco as select * from uv_pt where a = 0 with check option;
 insert into uv_ptv_wco values (1, 2);
-ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "uv_ptv_wco"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (1, 2, null).
 merge into uv_ptv t
   using (values (1,2), (1,4)) as v(a,b) on t.a = v.a -- fail: matches 2 src rows
@@ -3761,7 +3830,7 @@ merge into uv_ptv t
   using (values (1,2), (1,4)) as v(a,b) on t.a = v.a and t.b = v.b
   when matched then update set b = t.b + 1
   when not matched then insert values (v.a, v.b + 1); -- fail: no partition for b=5
-ERROR:  no partition of relation "uv_pt1" found for row  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  no partition of relation "uv_pt1" found for row  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Partition key of the failing row contains (b) = (5).
 merge into uv_ptv t
   using (values (1,2), (1,3)) as v(a,b) on t.a = v.a and t.b = v.b
@@ -3779,19 +3848,25 @@ drop table uv_pt, uv_pt1, uv_pt11;
 -- check that wholerow vars appearing in WITH CHECK OPTION constraint expressions
 -- work fine with partitioned tables
 create table wcowrtest (a int) partition by list (a);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table wcowrtest1 partition of wcowrtest for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create view wcowrtest_v as select * from wcowrtest where wcowrtest = '(2)'::wcowrtest with check option;
 insert into wcowrtest_v values (1);
-ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.2:7003 pid=2259445)
+ERROR:  new row violates check option for view "wcowrtest_v"  (seg1 172.17.0.2:7003 pid=164985)
 DETAIL:  Failing row contains (1).
 alter table wcowrtest add b text;
 create table wcowrtest2 (b text, c int, a int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table wcowrtest2 drop c;
 -- GPDB: distribution policy must match the parent table.
 alter table wcowrtest2 set distributed by (a);
 alter table wcowrtest attach partition wcowrtest2 for values in (2);
 create table sometable (a int, b text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into sometable values (1, 'a'), (2, 'b');
 create view wcowrtest_v2 as
     select *
@@ -3801,7 +3876,7 @@ with check option;
 -- WITH CHECK qual will be processed with wcowrtest2's
 -- rowtype after tuple-routing
 insert into wcowrtest_v2 values (2, 'no such row in sometable');
-ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.2:7002 pid=2259443)
+ERROR:  new row violates check option for view "wcowrtest_v2"  (seg0 172.17.0.2:7002 pid=164984)
 DETAIL:  Failing row contains (2, no such row in sometable).
 drop view wcowrtest_v, wcowrtest_v2;
 drop table wcowrtest, sometable;
@@ -3846,11 +3921,9 @@ insert into uv_iocu_view (a, b) values ('xyxyxy', 3)
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: uv_iocu_tab_a_key
    Conflict Filter: ((excluded.b + '1'::double precision) > '0'::double precision)
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 'xyxyxy'::text
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 insert into uv_iocu_view (a, b) values ('xyxyxy', 3)
    on conflict (a) do update set b = excluded.b where excluded.c > 0;
@@ -3879,11 +3952,9 @@ insert into uv_iocu_view (aa,bb) values (1,'y')
    Conflict Resolution: UPDATE
    Conflict Arbiter Indexes: uv_iocu_tab_a_key
    Conflict Filter: ((excluded.a > 0) AND (excluded.b <> ''::text) AND ((excluded.*)::text IS NOT NULL))
-   ->  Redistribute Motion 1:3  (slice1; segments: 1)
-         Hash Key: 1
-         ->  Result
+   ->  Result
  Optimizer: Postgres query optimizer
-(8 rows)
+(6 rows)
 
 insert into uv_iocu_view (aa,bb) values (1,'y')
    on conflict (aa) do update set bb = 'Rejected: '||excluded.*
@@ -4011,6 +4082,8 @@ drop user regress_view_user2;
 -- Table defaults should be used, unless overridden by view defaults.
 create table base_tab_def (a int, b text default 'Table default',
                            c text default 'Table default', d text, e text);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view base_tab_def_view as select * from base_tab_def;
 alter view base_tab_def_view alter b set default 'View default';
 alter view base_tab_def_view alter d set default 'View default';
@@ -4197,6 +4270,8 @@ drop view base_tab_def_view;
 drop table base_tab_def;
 -- Test defaults with array assignments
 create table base_tab (a serial, b int[], c text, d text default 'Table default');
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create view base_tab_view as select c, a, b from base_tab;
 alter view base_tab_view alter column c set default 'View default';
 insert into base_tab_view (b[1], b[2], c, b[5], b[4], a, b[3])
