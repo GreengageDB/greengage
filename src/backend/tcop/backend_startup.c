@@ -325,7 +325,7 @@ BackendInitialize(ClientSocket *client_sock, CAC_state cac)
 				if (!EnableHotStandby)
 					ereport(FATAL,
 							(errcode(ERRCODE_CANNOT_CONNECT_NOW),
-							 errmsg("the database system is not accepting connections"),
+							 errmsg(POSTMASTER_NOT_ACCEPTING_CONNECTIONS_MSG),
 							 errdetail("Hot standby mode is disabled.")));
 				else if (reachedConsistency)
 					ereport(FATAL,

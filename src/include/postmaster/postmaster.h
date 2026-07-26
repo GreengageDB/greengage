@@ -93,6 +93,7 @@ extern PGDLLIMPORT int postmaster_alive_fds[2];
 #define POSTMASTER_IN_RESET_MSG "the database system is resetting"
 #define POSTMASTER_IN_RECOVERY_MSG "the database system is in recovery mode"
 #define POSTMASTER_IN_RECOVERY_DETAIL_MSG "last replayed record at"
+#define POSTMASTER_NOT_ACCEPTING_CONNECTIONS_MSG "the database system is not accepting connections"
 /* gpstate must be updated if this message changes */
 #define POSTMASTER_MIRROR_VERSION_DETAIL_MSG "- VERSION:"
 

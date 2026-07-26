@@ -204,6 +204,21 @@ segment_failure_due_to_recovery(const char *error_message)
 		{
 			return true;
 		}
+		/*
+		 * GPDB: a primary segment doing crash recovery normally runs with
+		 * hot_standby off, so it answers a connection attempt with
+		 * CAC_NOTHOTSTANDBY -- "the database system is not accepting
+		 * connections" (backend_startup.c) -- rather than any of the messages
+		 * above.  That state is transient (it clears once recovery finishes),
+		 * so treat it as a retryable recovery failure too; otherwise a gang
+		 * connection that races a segment restart / mirror promotion fails the
+		 * whole query with "failed to acquire resources on one or more
+		 * segments" instead of retrying via the bounded gang-creation retry.
+		 */
+		if (strstr(error_message, _(POSTMASTER_NOT_ACCEPTING_CONNECTIONS_MSG)))
+		{
+			return true;
+		}
 		/* We could do retries for "sorry, too many clients already" here too */
 	}
 
