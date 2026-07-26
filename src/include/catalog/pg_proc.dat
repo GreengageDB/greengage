@@ -10133,14 +10133,6 @@
   prosrc => 'hypothetical_dense_rank_final' },
 
 # pg_upgrade support
-{ oid => '7780', descr => 'for use by pg_upgrade',
-  proname => 'binary_upgrade_init', provolatile => 'v',
-  proparallel => 'r', prorettype => 'void', proargtypes => '',
-  prosrc => 'binary_upgrade_init' },
-{ oid => '7781', descr => 'for use by pg_upgrade',
-  proname => 'binary_upgrade_cleanup', provolatile => 'v',
-  proparallel => 'r', prorettype => 'void', proargtypes => '',
-  prosrc => 'binary_upgrade_cleanup' },
 { oid => '3582', descr => 'for use by pg_upgrade',
   proname => 'binary_upgrade_set_next_pg_type_oid', provolatile => 'v',
   proparallel => 'r', prorettype => 'void', proargtypes => 'oid oid text',
