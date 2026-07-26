@@ -1214,6 +1214,21 @@ pg_newlocale_from_collation(Oid collid)
 
 	AssertCouldGetRelation();
 
+	/*
+	 * GPDB: fire this fault BEFORE the MRU fast-path (and the per-collation
+	 * cache lookup) below.  PG18 added the last_collation_cache_oid
+	 * short-circuit (commit 12d3345c0d28), so a repeated lookup of an
+	 * already-cached collation would return here without ever reaching the
+	 * old fault site further down -- letting the gp_collation test's
+	 * collate_locale_os_lookup fault (which simulates an OS locale lookup
+	 * failure) be silently skipped.  Keep it at the earliest point past the
+	 * trivial DEFAULT/C/invalid early returns so it fires on every real
+	 * collation lookup regardless of cache state.
+	 */
+#ifdef FAULT_INJECTOR
+	SIMPLE_FAULT_INJECTOR("collate_locale_os_lookup");
+#endif
+
 	if (last_collation_cache_oid == collid)
 		return last_collation_cache_locale;
 
@@ -1235,10 +1250,6 @@ pg_newlocale_from_collation(Oid collid)
 		 */
 		cache_entry->locale = 0;
 	}
-
-#ifdef FAULT_INJECTOR
-	SIMPLE_FAULT_INJECTOR("collate_locale_os_lookup");
-#endif
 
 	if (cache_entry->locale == 0)
 	{
