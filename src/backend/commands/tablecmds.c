@@ -21592,6 +21592,58 @@ ATExecExpandTableCTAS(AlterTableCmd *rootCmd, Relation rel, AlterTableCmd *cmd)
 }
 
 /*
+ * refresh_stale_entry_distribution_policy
+ *
+ * A relation's cached distribution policy (rd_cdbpolicy) can be transiently
+ * left as a POLICYTYPE_ENTRY placeholder: GpPolicyFetch() (via
+ * RelationBuildDesc) returns ENTRY whenever it finds no *command-visible*
+ * gp_distribution_policy row, and while a relation is being created that row is
+ * written by GpPolicyStore() but is not visible until the DefineRelation
+ * CommandCounterIncrement.  A relcache (re)build forced inside that window can
+ * latch that transient ENTRY onto the live entry; the keep_gp_policy guard in
+ * RelationRebuildRelation (relcache.c) only recovers the case where the *old*
+ * live policy was still valid, so a NULL or already-ENTRY old policy slips
+ * through (a race that surfaces under a busy multi-host CI, e.g. a relcache
+ * invalidation landing during the window right after a cluster restart).
+ *
+ * Callers that consume rd_cdbpolicy under a strict "must be distributed"
+ * invariant -- partition child generation via make_distributedby_for_rel(), and
+ * ALTER TABLE ... SET DISTRIBUTED BY -- all run *after* the row is
+ * command-visible, so re-derive the authoritative policy from the catalog and
+ * heal the live entry when the cache disagrees.  A relation that is genuinely an
+ * entry table still comes back ENTRY, so the callers' own entry-table checks
+ * (and the make_distributedby_for_rel Assert) are preserved.
+ */
+static void
+refresh_stale_entry_distribution_policy(Relation rel)
+{
+	GpPolicy   *fresh;
+
+	if (rel->rd_cdbpolicy != NULL &&
+		rel->rd_cdbpolicy->ptype != POLICYTYPE_ENTRY)
+		return;					/* cached policy already valid */
+
+	fresh = GpPolicyFetch(RelationGetRelid(rel));
+	if (fresh != NULL && fresh->ptype != POLICYTYPE_ENTRY)
+	{
+		MemoryContext oldcontext;
+
+		/*
+		 * Install the authoritative policy into the live relcache entry, in the
+		 * entry's own memory context -- the same in-place update idiom used
+		 * elsewhere in this file (e.g. the ATExecSetDistributedBy policy swap).
+		 */
+		oldcontext = MemoryContextSwitchTo(GetMemoryChunkContext(rel));
+		rel->rd_cdbpolicy = GpPolicyCopy(fresh);
+		MemoryContextSwitchTo(oldcontext);
+	}
+	/*
+	 * else: genuinely an entry table (or no policy row) -- leave rd_cdbpolicy
+	 * unchanged and let the caller's own invariant handle it.
+	 */
+}
+
+/*
  * ALTER TABLE SET DISTRIBUTED BY
  *
  * set distribution policy for rel
@@ -21643,8 +21695,12 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			 errmsg("SET DISTRIBUTED BY not supported in utility mode")));
 	/*
 	 * SET DISTRIBUTED BY only change the distribution policy, but should not
-	 * change numsegments, keep the old value.
+	 * change numsegments, keep the old value.  Heal a transiently-stale
+	 * POLICYTYPE_ENTRY cache first so a genuine entry table is still rejected by
+	 * the GpPolicyIsEntry() check below, while a stale ENTRY (numsegments == -1)
+	 * cannot leak into the new policy and trip makeGpPolicy's numsegments Assert.
 	 */
+	refresh_stale_entry_distribution_policy(rel);
 	numsegments = rel->rd_cdbpolicy->numsegments;
 
 	if (Gp_role == GP_ROLE_DISPATCH && ldistro)
@@ -22189,9 +22245,19 @@ l_distro_fini:
 DistributedBy *
 make_distributedby_for_rel(Relation rel)
 {
-	GpPolicy *policy = rel->rd_cdbpolicy;
+	GpPolicy *policy;
 	int			i;
 	DistributedBy *dist;
+
+	/*
+	 * Heal a transiently-stale POLICYTYPE_ENTRY cache before reading the policy
+	 * (see refresh_stale_entry_distribution_policy).  Every caller runs after
+	 * the gp_distribution_policy row is command-visible, so a cached ENTRY on a
+	 * table that really is distributed is stale and gets corrected here; a
+	 * genuine entry table still asserts below, as intended.
+	 */
+	refresh_stale_entry_distribution_policy(rel);
+	policy = rel->rd_cdbpolicy;
 
 	dist = makeNode(DistributedBy);
 
