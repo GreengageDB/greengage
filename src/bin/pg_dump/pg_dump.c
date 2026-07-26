@@ -4879,7 +4879,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 	PGresult   *res;
 	Oid			pg_type_array_oid = tyinfo->typarrayoid;
 	Oid			pg_type_array_ns_oid = tyinfo->typarrayns;
-	char	*pg_type_array_name = tyinfo->typarrayname;
 
 
 	simple_oid_list_append(&preassigned_oids, tyinfo->dobj.catId.oid);
@@ -4917,7 +4916,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 
 		pg_type_array_oid = next_possible_free_oid;
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
-		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
 	}
 
 	if (OidIsValid(pg_type_array_oid))
@@ -4929,7 +4927,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  "SELECT pg_catalog.binary_upgrade_set_next_array_pg_type_oid('%u'::pg_catalog.oid, "
 						  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						  pg_type_array_oid, pg_type_array_ns_oid,
-						  pg_type_array_name);
+						  tyinfo->dobj.name /* leave the target cluster decide the name of this type */);
 	}
 
 	destroyPQExpBuffer(upgrade_query);
