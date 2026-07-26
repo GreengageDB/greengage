@@ -16,6 +16,7 @@
 #include "miscadmin.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
+#include "utils/faultinjector.h"
 
 /*
  * ExecScanFetch -- check interrupts & fetch next potential tuple
@@ -165,6 +166,16 @@ ExecScanExtended(ScanState *node,
 				 ProjectionInfo *projInfo)
 {
 	ExprContext *econtext = node->ps.ps_ExprContext;
+
+	/*
+	 * GPDB: fire the before_exec_scan fault here rather than in ExecScan().
+	 * PG15 (upstream fb9f955025f) split the scan core into this inline funnel
+	 * and made the specialized scan executors (ExecSeqScan and friends) call
+	 * ExecScanExtended() directly, bypassing ExecScan() -- so a fault placed in
+	 * ExecScan() no longer fires for those node types.  ExecScanExtended() is
+	 * the common entry both paths share.  (No-op in non-fault builds.)
+	 */
+	SIMPLE_FAULT_INJECTOR("before_exec_scan");
 
 	/* interrupt checks are in ExecScanFetch */
 

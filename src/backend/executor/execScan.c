@@ -54,8 +54,9 @@ ExecScan(ScanState *node,
 	ExprState  *qual;
 	ProjectionInfo *projInfo;
 
-	SIMPLE_FAULT_INJECTOR("before_exec_scan");
-
+	/* before_exec_scan fault now fires inside ExecScanExtended() (the common
+	 * funnel), so it also covers the specialized ExecSeqScan* paths that call
+	 * ExecScanExtended() directly and never go through ExecScan(). */
 	epqstate = node->ps.state->es_epq_active;
 	qual = node->ps.qual;
 	projInfo = node->ps.ps_ProjInfo;
