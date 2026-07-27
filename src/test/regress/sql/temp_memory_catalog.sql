@@ -272,6 +272,32 @@ SELECT relname, relpersistence
 DROP TABLE tempcat_permanent;
 
 -- ============================================================
+-- Append-optimized temp tables
+-- ============================================================
+
+CREATE TEMP TABLE tempcat_ao (a int, b text) WITH (appendonly=true);
+INSERT INTO tempcat_ao SELECT i, 'v' || i FROM generate_series(1, 10) i;
+CREATE INDEX tempcat_ao_idx ON tempcat_ao (a);
+ALTER TABLE tempcat_ao ADD COLUMN c int;
+SELECT count(*), sum(a) FROM tempcat_ao;
+TRUNCATE tempcat_ao;
+SELECT count(*) FROM tempcat_ao;
+DROP TABLE tempcat_ao;
+
+CREATE TEMP TABLE tempcat_aoco (a int, b text)
+    WITH (appendonly=true, orientation=column, compresstype=zlib);
+INSERT INTO tempcat_aoco SELECT i, 'v' || i FROM generate_series(1, 10) i;
+SELECT count(*), sum(a) FROM tempcat_aoco;
+DROP TABLE tempcat_aoco;
+
+-- Dropping an AO temp table after the GUC was switched off: the delete has
+-- to dispatch on the item pointer, not on the GUC.
+CREATE TEMP TABLE tempcat_ao_off (a int) WITH (appendonly=true);
+SET gp_enable_temp_memory_catalog = off;
+DROP TABLE tempcat_ao_off;
+SET gp_enable_temp_memory_catalog = on;
+
+-- ============================================================
 -- TEMP CATALOG is still respected when switched off
 -- ============================================================
 
