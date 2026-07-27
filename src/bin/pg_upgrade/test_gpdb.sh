@@ -312,40 +312,39 @@ diff_and_exit() {
 				args_to_ignore_partitions+=(-T)
 				args_to_ignore_partitions+=("${partition}")
 			done
+
+			queries_query=$(cat <<- EOF
+				COPY (
+					SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
+					FROM (
+						SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+						quote_ident(c.relname)) name,
+						string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+						FROM pg_class c
+							JOIN pg_namespace n ON c.relnamespace = n.oid
+							JOIN pg_attribute a ON a.attrelid = c.oid
+						WHERE c.relkind = 'p'
+							AND a.attnum > 0::pg_catalog.int2
+							AND EXISTS (
+								SELECT 1
+								FROM pg_partition_tree(c.oid)
+								WHERE parentrelid IS NULL
+							)
+						GROUP BY (n.nspname, c.relname)
+					) subq
+					ORDER BY (out)
+				) TO STDOUT;
+			EOF
+			)
+			queries_string=$(psql "${database}" -c "${queries_query}")
+			readarray -t queries <<< ${queries_string}
+			for query in "${queries[@]}"; do
+				echo "${query}" >> "$temp_root/dump_partitions2.sql"
+				psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions2.sql"
+			done
 		fi
 
 		PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "$temp_root/dump2.sql"
-
-		queries_query=$(cat <<- EOF
-			COPY (
-				SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
-				FROM (
-					SELECT FORMAT('%s.%s', quote_ident(n.nspname),
-					quote_ident(c.relname)) name,
-					string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
-					FROM pg_class c
-						JOIN pg_namespace n ON c.relnamespace = n.oid
-						JOIN pg_attribute a ON a.attrelid = c.oid
-					WHERE c.relkind = 'p'
-						AND a.attnum > 0::pg_catalog.int2
-						AND EXISTS (
-							SELECT 1
-							FROM pg_partition_tree(c.oid)
-							WHERE parentrelid IS NULL
-						)
-					GROUP BY (n.nspname, c.relname)
-				) subq
-				ORDER BY (out)
-			) TO STDOUT;
-		EOF
-		)
-		queries_string=$(psql "${database}" -c "${queries_query}")
-		readarray -t queries <<< ${queries_string}
-		for query in "${queries[@]}"; do
-			echo "${query}" >> "$temp_root/dump_partitions2.sql"
-			psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions2.sql"
-		done
-
 	done
 	echo done
 
@@ -373,7 +372,7 @@ diff_and_exit() {
 		exit 1
 	fi
 
-	if (( cross_version_upgrade )); then
+	if (( $cross_version_upgrade )); then
 		if ! diff -w "$temp_root/dump_partitions1.sql" "$temp_root/dump_partitions2.sql" >/dev/null; then
 			diff -wdu "$temp_root/dump_partitions1.sql" "$temp_root/dump_partitions2.sql" | tee partitions_regression.diffs
 			echo "Error: before and after partition dumps differ"
@@ -541,39 +540,39 @@ main() {
 					args_to_ignore_partitions+=(-T)
 					args_to_ignore_partitions+=("${partition}")
 				done
-			fi
 
-			# And now, create a separate dump for each partitioned table, by manually getting
-			# their contents. Do this the way as in the pg_dump (see dumpTableData_copy).
-			# Also, sort the rows, as their order may differ between the versions.
-			queries_query=$(cat <<- EOF
-				COPY (
-					SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
-					FROM (
-						SELECT FORMAT('%s.%s', quote_ident(n.nspname),
-						quote_ident(c.relname)) name,
-						string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
-						FROM pg_class c
-							JOIN pg_namespace n ON c.relnamespace = n.oid
-							JOIN pg_attribute a ON a.attrelid = c.oid
-							WHERE a.attnum > 0::pg_catalog.int2
-								AND EXISTS (
-									SELECT 1
-									FROM pg_partition p
-									WHERE p.parrelid = c.oid
-								)
-						GROUP BY (n.nspname, c.relname)
-					) subq
-					ORDER BY (out)
-				) TO STDOUT;
-			EOF
-			)
-			queries_string=$(psql "${database}" -c "${queries_query}")
-			readarray -t queries <<< ${queries_string}
-			for query in "${queries[@]}"; do
-				echo "${query}" >> "$temp_root/dump_partitions1.sql"
-				psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions1.sql"
-			done
+				# And now, create a separate dump for each partitioned table, by manually getting
+				# their contents. Do this the way as in the pg_dump (see dumpTableData_copy).
+				# Also, sort the rows, as their order may differ between the versions.
+				queries_query=$(cat <<- EOF
+					COPY (
+						SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
+						FROM (
+							SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+							quote_ident(c.relname)) name,
+							string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+							FROM pg_class c
+								JOIN pg_namespace n ON c.relnamespace = n.oid
+								JOIN pg_attribute a ON a.attrelid = c.oid
+								WHERE a.attnum > 0::pg_catalog.int2
+									AND EXISTS (
+										SELECT 1
+										FROM pg_partition p
+										WHERE p.parrelid = c.oid
+									)
+							GROUP BY (n.nspname, c.relname)
+						) subq
+						ORDER BY (out)
+					) TO STDOUT;
+				EOF
+				)
+				queries_string=$(psql "${database}" -c "${queries_query}")
+				readarray -t queries <<< ${queries_string}
+				for query in "${queries[@]}"; do
+					echo "${query}" >> "$temp_root/dump_partitions1.sql"
+					psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions1.sql"
+				done
+			fi
 
 			${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "$temp_root/dump1.sql"
 		done
