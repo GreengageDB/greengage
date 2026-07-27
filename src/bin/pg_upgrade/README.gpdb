@@ -62,9 +62,9 @@ to test pg_upgrade from the same repository where it is located.
 In total, Greengage-specific testing files include:
 
 - `test_gpdb.sh` - the core script mentioned above, which does all the heavy lifting.
-- `pg_upgrade_run_6X_to_7X_migration.sh` - small wrapper to run the above test between Greengage6 and Greengage7.
+- `pg_upgrade_run_6X_to_7X_migration.bash` - small wrapper to run the above test between Greengage6 and Greengage7.
 - `Dockerfile.pg_upgrade` - creates an image intended to run the above tests on the CI.
-- `cleanup_regression_dump_from_6X.sql` - a script which deletes/changes objects that cause `pg_upgrade_run_6X_to_7X_migration.sh` test with the regression dump to fail.
+- `cleanup_regression_dump_from_6X.sql` - a script which deletes/changes objects that cause `pg_upgrade_run_6X_to_7X_migration.bash` test with the regression dump to fail.
 
 
 GPDB Merge notice:

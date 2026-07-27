@@ -179,7 +179,7 @@ Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and p
 
 ## Running pg_upgrade test locally
 
-To run `pg_upgrade_run_6X_to_7X_migration.sh` locally, it is necessary to specify the following environment variables:
+To run `pg_upgrade_run_6X_to_7X_migration.bash` locally, it is necessary to specify the following environment variables:
 - GREENGAGE6_SRC - directory of the Greengage6 source code.
 - GREENGAGE7_SRC - directory of the Greengage7 source code.
 - GREENGAGE6_INSTALLATION - directory where the Greengage6 installation is located (i.e., after make install).
@@ -265,5 +265,8 @@ docker run --rm \
 	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
-	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs;"
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions1.sql /logs/dump_partitions1.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions2.sql /logs/dump_partitions2.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs;"
 ```

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Helper script for running src/bin/pg_upgrade/test_gpdb.sh to
 # upgrade between Greengage6 and Greengage7
 
@@ -74,7 +75,7 @@ echo 'CREATE DATABASE regression;' | psql template1 -f-
 # And finally, run the test
 pushd ${GREENGAGE7_SRC}/src/bin/pg_upgrade
 ./test_gpdb.sh \
-    -r \
+    -r -v \
     -b ${GREENGAGE7_INSTALLATION}/bin \
     -B ${GREENGAGE6_INSTALLATION}/bin \
     -O ${GREENGAGE6_SRC}/gpAux/gpdemo/datadirs/ \
