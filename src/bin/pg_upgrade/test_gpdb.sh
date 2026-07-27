@@ -278,7 +278,7 @@ diff_and_exit() {
 
 	# Keep this logic in sync with the one before upgrade
 	echo -n 'Dumping database schema after upgrade... '
-	databases_string=$(echo "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;" | psql template1);
+	databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
 	readarray -t databases <<< ${databases_string}
 	for database in "${databases[@]}"; do
 		database=$(echo "${database}" | sed 's/\\\\/\\/g')
@@ -300,7 +300,7 @@ diff_and_exit() {
 				) TO STDOUT;
 			EOF
 			)
-			partitions_string=$(psql "${database}" -c "${partitions_query}")
+			partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
 			readarray -t partitions <<< ${partitions_string}
 			for partition in "${partitions[@]}"; do
 				# When a database doesn't have partitioned tables, we'll still get
@@ -336,11 +336,11 @@ diff_and_exit() {
 				) TO STDOUT;
 			EOF
 			)
-			queries_string=$(psql "${database}" -c "${queries_query}")
+			queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
 			readarray -t queries <<< ${queries_string}
 			for query in "${queries[@]}"; do
 				echo "${query}" >> "$temp_root/dump_partitions2.sql"
-				psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions2.sql"
+				PGOPTIONS="${pgopts}" psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions2.sql"
 			done
 		fi
 
@@ -511,7 +511,7 @@ main() {
 	# objects from the dumps, and it is possible only with regular pg_dump.
 	if (( !$perf_test )) ; then
 		echo -n 'Dumping database schema before upgrade... '
-		databases_string=$(echo "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;" | psql template1);
+		databases_string=$(psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
 		readarray -t databases <<< ${databases_string}
 		for database in "${databases[@]}"; do
 			# We are getting '\' symbol automatically escaped to '\\', convert is back
