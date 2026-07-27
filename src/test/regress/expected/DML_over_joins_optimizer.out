@@ -77,6 +77,9 @@ DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet nod
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
+-- Re-analyze after the delete/insert churn so ORCA's cost-tie EXISTS plan is deterministic.
+analyze r;
+analyze s;
 explain update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
                                                    QUERY PLAN                                                   
 ----------------------------------------------------------------------------------------------------------------
