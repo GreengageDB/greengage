@@ -96,10 +96,22 @@ gp_aoblkdir(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("function not supported on non append-optimized relation")));
-		sst = GetActiveSnapshot();
+		/*
+		 * Read the AO aux-oid metadata from pg_appendonly with a genuine,
+		 * registered MVCC snapshot.  We must NOT use GetActiveSnapshot() here:
+		 * under gp_select_invisible the active snapshot is SnapshotAny (see
+		 * pquery.c), and a SnapshotAny scan of pg_appendonly returns the stale
+		 * pre-index tuple version (blkdirrelid == InvalidOid, from the CREATE
+		 * TABLE insert before the block directory was created) instead of the
+		 * live updated one, spuriously reporting that the relation has no block
+		 * directory.  Registering the latest snapshot also satisfies PG18's
+		 * regd_count/active_count assertion in HeapTupleSatisfiesMVCC.
+		 */
+		sst = RegisterSnapshot(GetLatestSnapshot());
 		GetAppendOnlyEntryAuxOids(aoRelOid, sst,
 								  NULL, &blkdirrelid, NULL,
 								  NULL, NULL);
+		UnregisterSnapshot(sst);
 		sst = gp_select_invisible ? SnapshotAny : GetActiveSnapshot();
 		if (blkdirrelid == InvalidOid)
 			ereport(ERROR,
