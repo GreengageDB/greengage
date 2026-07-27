@@ -2939,10 +2939,20 @@ index_update_stats(Relation rel,
 	 * change.  This can be important when restoring a dump that includes
 	 * statistics, as the table statistics may be restored before the index is
 	 * created, and we want to preserve the restored table statistics.
+	 *
+	 * GPDB: exempt append-optimized (AO/CO) base tables from this gate.  Unlike
+	 * a heap table, an AO/CO table's reltuples is authoritatively (re)computed
+	 * by the index build's own per-segment scan -- the build is the primary
+	 * source of the count, not a value autovacuum would otherwise maintain --
+	 * so we always record it, even when autovacuum is off.  This preserves the
+	 * long-standing GGDB behavior that the upstream autovacuum gate (PG18
+	 * d611f8b1587 / 29d6808edeb) would otherwise disable, and keeps AO planner
+	 * cardinality correct after CREATE INDEX without requiring a later ANALYZE.
 	 */
-	if (rel->rd_rel->relkind == RELKIND_RELATION ||
-		rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
-		rel->rd_rel->relkind == RELKIND_MATVIEW)
+	if ((rel->rd_rel->relkind == RELKIND_RELATION ||
+		 rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
+		 rel->rd_rel->relkind == RELKIND_MATVIEW) &&
+		!RelationIsAppendOptimized(rel))
 	{
 		if (AutoVacuumingActive())
 		{
