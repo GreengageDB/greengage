@@ -29,6 +29,7 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 
+
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
 
 #define CHECK_IS_BINARY_UPGRADE									\
@@ -39,69 +40,40 @@ do {															\
 				 (errmsg("function can only be called when server is in binary upgrade mode")))); \
 } while (0)
 
-typedef struct {
-	List *names;
-	Oid  schema;
-} CreatedNamesPerSchema;
-
-static List *createdArrayNames = NIL;
-
-/*
- * isNamePreassigned
- *     Outputs whether type name arg was already assigned during upgrade.
- */
-static bool
-isNamePreassigned(const char *arr, Oid typeNamespace)
+typedef struct
 {
-	CreatedNamesPerSchema *target = NULL;
-	ListCell *lc;
-	char *name;
-	foreach(lc, createdArrayNames)
-	{
-		CreatedNamesPerSchema *names = lfirst(lc);
-		if (names->schema == typeNamespace)
-		{
-			target = names;
-			break;
-		}
-	}
-	if (target)
-	{
-		foreach (lc, target->names)
-		{
-			name = lfirst(lc);
-			if (strcmp(arr, name) == 0)
-				return true;
-		}
-	}
-	return false;
+	Oid		schema_oid;
+	char	name[NAMEDATALEN];
+} CreatedName;
+
+/* Initialized on the first use in RememberCreatedName() */
+static HTAB *created_names = NULL;
+
+static void
+InitCreatedArrayNamesHash()
+{
+	HASHCTL ctl;
+	MemSet(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(CreatedName);
+	ctl.entrysize = sizeof(CreatedName);
+	ctl.hcxt = TopMemoryContext;
+	created_names = hash_create("Created names during pg_upgrade",
+								128,
+								&ctl,
+								HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 }
 
 static void
 RememberCreatedName(char *typname, Oid schema)
 {
-	CreatedNamesPerSchema *target = NULL;
-	ListCell *lc;
-	char* persistentTypeName = pstrdup(typname);
-
-	foreach(lc, createdArrayNames)
-	{
-		CreatedNamesPerSchema *names = lfirst(lc);
-		if (names->schema == schema)
-		{
-			target = names;
-			break;
-		}
-	}
-	if (!target)
-	{
-		target = palloc0(sizeof(CreatedNamesPerSchema));
-		target->schema = schema;
-		target->names = NIL;
-		createdArrayNames = lappend(createdArrayNames, target);
-	}
-
-	target->names = lappend(target->names, persistentTypeName);
+	CreatedName key;
+	if (created_names == NULL)
+		InitCreatedArrayNamesHash();
+	/* Zero out padding bytes for HASH_BLOBS */
+	MemSet(&key, 0, sizeof(CreatedName));
+	key.schema_oid = schema;
+	strlcpy(key.name, typname, NAMEDATALEN);
+	hash_search(created_names, &key, HASH_ENTER, NULL);
 }
 
 /*
@@ -113,13 +85,17 @@ RememberCreatedName(char *typname, Oid schema)
 static char *
 makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 {
+	CreatedName key;
 	char *arr, *modifiedTypeName;
 	int typeNameLen = strlen(typeName);
 	int underscores = 0;
 
 	modifiedTypeName = palloc(NAMEDATALEN);
 	arr = makeArrayTypeName(typeName, typeNamespace);
-	while (isNamePreassigned(arr, typeNamespace))
+	MemSet(&key, 0, sizeof(CreatedName));
+	key.schema_oid = typeNamespace;
+	strlcpy(key.name, arr, NAMEDATALEN);
+	while (created_names && hash_search(created_names, &key, HASH_FIND, NULL))
 	{
 		underscores++;
 		if (typeNameLen + underscores >= NAMEDATALEN)
@@ -127,9 +103,13 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 				   (errcode(ERRCODE_DUPLICATE_OBJECT),
 					errmsg("could not form array type name for type \"%s\"",
 							typeName)));
-		memset(modifiedTypeName, '_', underscores);
+		MemSet(modifiedTypeName, '_', underscores);
 		strcpy(modifiedTypeName + underscores, typeName);
+		pfree(arr);
 		arr = makeArrayTypeName(modifiedTypeName, typeNamespace);
+		MemSet(&key, 0, sizeof(CreatedName));
+		key.schema_oid = typeNamespace;
+		strlcpy(key.name, arr, NAMEDATALEN);
 	}
 	pfree(modifiedTypeName);
 
@@ -167,25 +147,13 @@ binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
 	char	   *relname = GET_STR(PG_GETARG_TEXT_P(2));
 	char       *typname;
-	ListCell   *lc;
 
 	CHECK_IS_BINARY_UPGRADE;
 
 	old_type_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
 								   CStringGetDatum(relname),
 								   ObjectIdGetDatum(typnamespaceoid));
-
 	exists = OidIsValid(old_type_oid);
-
-	foreach(lc, createdArrayNames)
-	{
-		char *name = (char *) lfirst(lc);
-		if (strcmp(relname, name) == 0)
-		{
-			exists = true;
-			break;
-		}
-	}
 
 	oldctx = MemoryContextSwitchTo(TopMemoryContext);
 	typname = makeArrayTypeNameUpgrade(relname, typnamespaceoid);
@@ -209,7 +177,10 @@ binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
 		 * happed regardless of what we are doing here, so let's
 		 * not complicate the logic.
 		 */
-		typname = makeArrayTypeNameUpgrade(typname, typnamespaceoid);
+		char new_typname[NAMEDATALEN];
+		strlcpy(new_typname, typname, NAMEDATALEN);
+		pfree(typname);
+		typname = makeArrayTypeNameUpgrade(new_typname, typnamespaceoid);
 		RememberCreatedName(typname, typnamespaceoid);
 	}
 	MemoryContextSwitchTo(oldctx);
