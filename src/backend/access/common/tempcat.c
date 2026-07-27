@@ -407,14 +407,30 @@ tempcat_begin_transaction(void)
 }
 
 /*
+ * Discard every snapshot above the root one, leaving no transaction in
+ * progress.  Tolerates an already unwound stack.
+ */
+static void
+TempcatSnapshotUnwind(void)
+{
+	TempcatSnapshot tempcat_snapshot;
+
+	while ((tempcat_snapshot = TempcatSnapshotPopBack()) != NULL)
+		TempcatSnapshotFree(tempcat_snapshot);
+
+	Assert(!TempcatTransactionInProgress());
+	TempcatDirtyFlag = true;
+}
+
+/*
  * Perform actions related to virtual catalog on transaction commit.
  */
 void
 tempcat_end_transaction(void)
 {
 #ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_end_transaction result (1 - commit, 0 - rollback)"
-		 ", transaction is in progress: %u", TempcatTransactionInProgress());
+	elog(NOTICE, "TEMPCAT: tempcat_end_transaction, transaction is in progress: %u",
+		 TempcatTransactionInProgress());
 #endif
 
 	if (!TempcatTransactionInProgress())
@@ -423,35 +439,27 @@ tempcat_end_transaction(void)
 	/* Commit transaction. 1) Save top snapshot to the bottom of the stack. */
 	TempcatSnapshotPushFront(TempcatSnapshotPopBack());
 	/* 2) get rid of all snapshots except the root one */
-	tempcat_abort_transaction();
+	TempcatSnapshotUnwind();
 }
 
 /*
  * Perform actions related to virtual catalog on transaction abort.
  *
- * NB: There could be in fact no transaction running.
+ * NB: There could be in fact no transaction running.  AbortTransaction() is
+ * reached even when StartTransaction() threw before tempcat_begin_transaction()
+ * ran (see the TRANS_START handling in AbortCurrentTransaction() and
+ * AbortOutOfAnyTransaction()), and it may run twice for the same transaction.
+ * Like the other end-of-xact callbacks, this one has to cope with that.
  */
 void
 tempcat_abort_transaction(void)
 {
-	TempcatSnapshot tempcat_snapshot;
-
 #ifdef TEMPCAT_DEBUG
-	elog(NOTICE, "TEMPCAT: tempcat_abort_transaction, transaction is in progress: %u (it's OK if this procedure is called from tempcat_end_transaction - see the code)",
+	elog(NOTICE, "TEMPCAT: tempcat_abort_transaction, transaction is in progress: %u",
 		 TempcatTransactionInProgress());
 #endif
 
-	for (;;)
-	{
-		tempcat_snapshot = TempcatSnapshotPopBack();
-		if (!tempcat_snapshot)	/* root snapshot reached */
-			break;
-
-		TempcatSnapshotFree(tempcat_snapshot);
-	}
-
-	Assert(!TempcatTransactionInProgress());
-	TempcatDirtyFlag = true;
+	TempcatSnapshotUnwind();
 }
 
 /*
