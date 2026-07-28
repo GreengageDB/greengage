@@ -583,7 +583,7 @@ FORMAT 'text'
 )
 ;
 CREATE INDEX index ON ext_lineitem (L_ORDERKEY);
-ERROR:  cannot create index on foreign table "ext_lineitem"
+ERROR:  cannot create index on relation "ext_lineitem"
 TRUNCATE ext_lineitem;
 ERROR:  cannot truncate foreign table "ext_lineitem"
 DELETE FROM ext_lineitem where L_ORDERKEY > 10;
@@ -895,7 +895,7 @@ FORMAT 'text'
         FORCE NOT NULL L_COMMENT
 )
 ;
-ERROR:  COPY force not null available only in CSV mode
+ERROR:  COPY FORCE_NOT_NULL requires CSV mode
 SELECT count(*) FROM ext_lineitem;
 ERROR:  relation "ext_lineitem" does not exist
 LINE 1: SELECT count(*) FROM ext_lineitem;
