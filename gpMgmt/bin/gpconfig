@@ -167,7 +167,11 @@ class Guc:
                 if msg is not None:
                     return msg
             elif newval == "'group-v2'":
-                msg = GpResGroup().validate_v2()
+                dburl = dbconn.DbURL()
+                conn = dbconn.connect(dburl, True)
+                cgroup_parent = Guc(dbconn.queryRow(conn, GucQuery("gp_resource_group_cgroup_parent").query))
+                msg = GpResGroup().validate_v2(cgroup_parent.setting)
+
                 if msg is not None:
                     return msg
             elif newval != "'queue'" and newval != "'none'":

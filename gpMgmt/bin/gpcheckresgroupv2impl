@@ -2,6 +2,7 @@
 # Copyright (c) 2017, VMware, Inc. or its affiliates.
 
 import os
+import sys
 from functools import reduce
 
 
@@ -30,7 +31,7 @@ class CgroupValidationVersionTwo(CgroupValidation):
         self.mount_point = self.detect_cgroup_mount_point()
         self.tab = {"r": os.R_OK, "w": os.W_OK, "x": os.X_OK, "f": os.F_OK}
 
-    def validate_all(self):
+    def validate_all(self, cgroup_parent):
         """
         Check the permissions of the toplevel gpdb cgroup dirs.
 
@@ -43,23 +44,23 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
         self.validate_permission("cgroup.procs", "rw")
 
-        self.validate_permission("gpdb/", "rwx")
-        self.validate_permission("gpdb/cgroup.procs", "rw")
+        self.validate_permission(os.path.join(cgroup_parent, ""), "rwx")
+        self.validate_permission(os.path.join(cgroup_parent, "cgroup.procs"), "rw")
 
-        self.validate_permission("gpdb/cpu.max", "rw")
-        self.validate_permission("gpdb/cpu.weight", "rw")
-        self.validate_permission("gpdb/cpu.weight.nice", "rw")
-        self.validate_permission("gpdb/cpu.stat", "r")
+        self.validate_permission(os.path.join(cgroup_parent, "cpu.max"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpu.weight"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpu.weight.nice"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpu.stat"), "r")
 
-        self.validate_permission("gpdb/cpuset.cpus", "rw")
-        self.validate_permission("gpdb/cpuset.cpus.partition", "rw")
-        self.validate_permission("gpdb/cpuset.mems", "rw")
-        self.validate_permission("gpdb/cpuset.cpus.effective", "r")
-        self.validate_permission("gpdb/cpuset.mems.effective", "r")
+        self.validate_permission(os.path.join(cgroup_parent, "cpuset.cpus"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpuset.cpus.partition"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpuset.mems"), "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "cpuset.cpus.effective"), "r")
+        self.validate_permission(os.path.join(cgroup_parent, "cpuset.mems.effective"), "r")
 
-        self.validate_permission("gpdb/memory.current", "r")
+        self.validate_permission(os.path.join(cgroup_parent, "memory.current"), "r")
 
-        self.validate_permission("gpdb/io.max", "rw")
+        self.validate_permission(os.path.join(cgroup_parent, "io.max"), "rw")
 
     def die(self, msg):
         raise ValidationException("cgroup is not properly configured: {}".format(msg))
@@ -85,7 +86,10 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
 
 if __name__ == '__main__':
+    # We should always be given exactly one arg
+    cgroup_parent = sys.argv[1]
+
     try:
-        CgroupValidationVersionTwo().validate_all()
+        CgroupValidationVersionTwo().validate_all(cgroup_parent)
     except ValidationException as e:
         exit(e.message)
