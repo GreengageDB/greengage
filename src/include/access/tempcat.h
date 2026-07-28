@@ -27,6 +27,7 @@
 #include "access/heapam.h"
 #include "access/sdir.h"
 #include "access/genam.h"
+#include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "storage/itemptr.h"
 #include "utils/relcache.h"
@@ -99,7 +100,17 @@ extern bool temp_table_scope;
 		temp_table_scope = _temp_scope_save; \
 	} while (0)
 
+/* Raw scope flag.  Catalog DML sites must use IsTempTableScopeFor() instead. */
 #define IsTempTableScope()  (temp_table_scope)
+
+/*
+ * Should a write to `rel` be redirected into the in-memory catalog?
+ *
+ * Being inside a temp table scope is not sufficient.  The CatalogTuple*
+ * wrappers surprisingly are also used to write ordinary relations that are not catalogs at
+ * all.
+ */
+#define IsTempTableScopeFor(rel)  (temp_table_scope && IsCatalogRelation(rel))
 
 /* Dirty tracking for tempcat versioning */
 extern bool tempcat_is_dirty(void);

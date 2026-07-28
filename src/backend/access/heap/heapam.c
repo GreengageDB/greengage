@@ -6251,7 +6251,7 @@ heap_inplace_update_and_unlock(Relation relation,
 
 	Assert(ItemPointerEquals(&oldtup->t_self, &tuple->t_self));
 
-	if (IsTempTableScope() || IsTempcatItemPointer(&tuple->t_self))
+	if (IsTempTableScopeFor(relation) || IsTempcatItemPointer(&tuple->t_self))
 	{
 		tempcat_update_inplace(relation, tuple);
 		return;
@@ -6349,7 +6349,7 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	uint32		oldlen;
 	uint32		newlen;
 
-	if (IsTempTableScope() || IsTempcatItemPointer(&tuple->t_self))
+	if (IsTempTableScopeFor(relation) || IsTempcatItemPointer(&tuple->t_self))
 	{
 		tempcat_update_inplace(relation, tuple);
 		return;
