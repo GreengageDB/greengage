@@ -235,7 +235,7 @@ CatalogTupleInsert(Relation heapRel, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
-	if (IsTempTableScope())
+	if (IsTempTableScopeFor(heapRel))
 	{
 		tempcat_insert(heapRel, tup);
 		return;
@@ -263,7 +263,7 @@ void
 CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
-	if (IsTempTableScope())
+	if (IsTempTableScopeFor(heapRel))
 	{
 		tempcat_insert(heapRel, tup);
 		return;
@@ -292,7 +292,7 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
-	if (IsTempTableScope() || IsTempcatItemPointer(otid))
+	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
@@ -320,7 +320,7 @@ void
 CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
-	if (IsTempTableScope() || IsTempcatItemPointer(otid))
+	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
@@ -351,7 +351,7 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 void
 CatalogTupleDelete(Relation heapRel, ItemPointer tid)
 {
-	if (IsTempTableScope() || IsTempcatItemPointer(tid))
+	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(tid))
 	{
 		tempcat_delete(heapRel, tid);
 		return;

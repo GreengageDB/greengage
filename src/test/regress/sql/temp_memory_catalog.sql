@@ -278,6 +278,11 @@ DROP TABLE tempcat_permanent;
 CREATE TEMP TABLE tempcat_ao (a int, b text) WITH (appendonly=true);
 INSERT INTO tempcat_ao SELECT i, 'v' || i FROM generate_series(1, 10) i;
 CREATE INDEX tempcat_ao_idx ON tempcat_ao (a);
+-- Read through the index: the block directory rows must have gone to the
+-- block directory's own storage, not into the in-memory catalog.
+SET enable_seqscan = off;
+SELECT count(*) FROM tempcat_ao WHERE a = 5;
+RESET enable_seqscan;
 ALTER TABLE tempcat_ao ADD COLUMN c int;
 SELECT count(*), sum(a) FROM tempcat_ao;
 TRUNCATE tempcat_ao;
