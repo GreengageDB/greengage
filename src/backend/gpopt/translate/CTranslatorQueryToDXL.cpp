@@ -746,6 +746,17 @@ CTranslatorQueryToDXL::TranslateQueryToDXL()
 		case CMD_UPDATE:
 			return TranslateUpdateQueryToDXL();
 
+		case CMD_MERGE:
+			// ORCA does not implement MERGE.  Raise an unsupported-feature
+			// error so the optimizer falls back to the Postgres planner.
+			// Without this the statement hits the default case below, whose
+			// GPOS_ASSERT is compiled out of a production (non-cassert) build,
+			// so TranslateQueryToDXL() returns a NULL DXL tree that is then
+			// dereferenced in CTranslatorDXLToExpr::Pexpr and crashes the
+			// backend with SIGSEGV.
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("MERGE"));
+
 		default:
 			GPOS_ASSERT(!"Statement type not supported");
 			return nullptr;
