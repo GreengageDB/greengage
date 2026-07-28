@@ -128,6 +128,11 @@ test: gp_pg14_merge_regress
 # standalone for the same partition-DDL / AO-DML isolation reason.
 test: gp_pg15_merge_regress
 
+# SQL MERGE (PG15) under ORCA: ORCA has no CMD_MERGE support and must fall back
+# to the Postgres planner; a production (non-cassert) build without the fallback
+# segfaults the coordinator.  Forces optimizer=on; standalone for its partition DDL.
+test: gp_merge_orca
+
 # PG14 feature coverage over MPP (GROUP BY DISTINCT, recursive CTE SEARCH/CYCLE,
 # multirange types).
 test: gp_pg14_features
