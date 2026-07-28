@@ -22,6 +22,12 @@ NAME = gppc
 SO_MAJOR_VERSION = 1
 SO_MINOR_VERSION = 2
 
+# Export the public GPPC API.  Without an export list, src/Makefile.shlib
+# builds the library with -fvisibility=hidden and only PGDLLEXPORT-marked
+# symbols (i.e. just the PG_MODULE_MAGIC Pg_magic_func) survive, so modules
+# that link -lgppc fail to load with "undefined symbol: GppcOid...".
+SHLIB_EXPORTS = exports.txt
+
 override CPPFLAGS := $(CPPFLAGS) -I$(includedir_server) -I$(includedir_internal)
 OBJS = gppc.o
 

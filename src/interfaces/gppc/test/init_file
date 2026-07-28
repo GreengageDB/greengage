@@ -3,7 +3,16 @@
  m/NOTICE:  Table doesn\'t have \'DISTRIBUTED BY\' clause.*/
  m/HINT:  The \'DISTRIBUTED BY\' clause determines the distribution of data.*/
 -- end_matchignore
+-- GPPC dispatched errors carry two nondeterministic, environment-dependent
+-- decorations that may each appear zero, one or more times and in varying
+-- position: a "(gppc.c:NNNN)" source location, and a
+-- "(segN sliceM host:port pid=NNNN)" segment locus whose segment index, host,
+-- port and pid all vary between runs and clusters.  Strip both (the substitution
+-- block below cannot itself contain comments) so only the stable error text is
+-- compared.
 -- start_matchsubs
-m/ \(gppc\.c:[0-9]+\)$/
-s/ \(gppc\.c:[0-9]+\)$//
+m/ \(gppc\.c:[0-9]+\)/
+s/ \(gppc\.c:[0-9]+\)//g
+m/  \(seg[0-9]+ slice[0-9]+ [^)]*pid=[0-9]+\)/
+s/  \(seg[0-9]+ slice[0-9]+ [^)]*pid=[0-9]+\)//
 -- end_matchsubs

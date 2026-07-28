@@ -71,6 +71,23 @@ typedef char		bool;
 
 #endif  /* GPPC_C_BUILD */
 
+/*
+ * Export marker for the symbols the backend must resolve when a GPPC module is
+ * loaded.  PostgreSQL builds loadable modules with -fvisibility=hidden, so the
+ * SQL-invokable entry points and their info functions must be given default
+ * visibility explicitly -- otherwise they are hidden and the backend fails with
+ * "could not find function ... in file ...".  This is the GPPC analogue of
+ * PGDLLEXPORT on PG_FUNCTION_INFO_V1; gppc.h stays backend-independent so it
+ * cannot use PGDLLEXPORT itself.
+ */
+#ifndef GPPC_EXPORT
+#if defined(__GNUC__) || defined(__clang__)
+#define GPPC_EXPORT __attribute__((visibility("default")))
+#else
+#define GPPC_EXPORT
+#endif
+#endif
+
 /**
  * \brief Creates the necessary glue to make the named function SQL invokable.
  * \param funcname the name of exposed function.
@@ -78,8 +95,9 @@ typedef char		bool;
  * Every SQL invokable function must be declared via this macro.
  */
 #define GPPC_FUNCTION_INFO(funcname) \
-extern const void * pg_finfo_##funcname (void); \
-const void * \
+extern GPPC_EXPORT GppcDatum funcname(GPPC_FUNCTION_ARGS); \
+extern GPPC_EXPORT const void * pg_finfo_##funcname (void); \
+GPPC_EXPORT const void * \
 pg_finfo_##funcname (void) \
 { \
 	return GppcFinfoV1(); \

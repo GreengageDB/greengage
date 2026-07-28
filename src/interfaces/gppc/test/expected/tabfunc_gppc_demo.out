@@ -142,7 +142,7 @@ NOTICE:  function transform(anytable) does not exist, skipping
     SELECT * FROM transform( 
         TABLE( SELECT * FROM randtable ORDER BY id, value SCATTER BY id) 
     ) order by b;
-ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
+ERROR:  invalid tuple returned from table function
 DETAIL:  Returned tuple does not match output tuple descriptor.
     -- The 1st workaround of MPP-16614
     DROP FUNCTION IF EXISTS transform(anytable);
@@ -220,6 +220,8 @@ DETAIL:  Returned tuple does not match output tuple descriptor.
       AS '$libdir/gppc_test', 'mytransform'
       LANGUAGE C;
 ERROR:  functions cannot accept set arguments
+LINE 1: CREATE OR REPLACE FUNCTION transform3(a SETOF intable)
+                                              ^
     -- Negative: CREATE FUNCTION tabfunc_bad2 (x TABLE(a int) ) RETURNS ...
     CREATE OR REPLACE FUNCTION transform3(x TABLE(a int, b text))
       RETURNS SETOF outtable
@@ -273,6 +275,8 @@ DETAIL:  Creating a shell type definition.
       AS '$libdir/gppc_test', 'mytransform'
       LANGUAGE C;
 ERROR:  type outtable_nonexist does not exist
+LINE 2:       RETURNS TABLE (LIKE outtable_nonexist)
+                                  ^
 -- Create ETF using return syntax: TABLE LIKE table
     CREATE OR REPLACE FUNCTION transform(a anytable)
       RETURNS TABLE (LIKE outtable)
@@ -280,7 +284,7 @@ ERROR:  type outtable_nonexist does not exist
       LANGUAGE C;
 -- Verify ETF can be called successfully
 select * from transform(TABLE(select * from intable where id<3));
-ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
+ERROR:  invalid tuple returned from table function
 DETAIL:  Returned tuple does not match output tuple descriptor.
 -- Add a new column to output table, then drop the new added column.
 alter table outtable add column newcol int;
@@ -296,7 +300,7 @@ Distributed randomly
 -- Calling ETF again, get ERROR: invalid output tuple
 -- MPP-14231
 select * from transform(TABLE(select * from intable where id<3));
-ERROR:  invalid tuple returned from table function  (seg0 slice1 172.17.0.3:7002 pid=3308511)
+ERROR:  invalid tuple returned from table function
 DETAIL:  Returned tuple does not match output tuple descriptor.
 -- Recreate outtable
 DROP TABLE IF EXISTS outtable cascade;
@@ -317,8 +321,8 @@ CREATE OR REPLACE FUNCTION transform (a anytable)
     select * from transform3(TABLE(select * from intable where id<3));
     b    | a 
 ---------+---
- value_2 | 2
  value_1 | 1
+ value_2 | 2
 (2 rows)
 
 -- Currently ETF can take one only one anytable type input.
@@ -812,7 +816,7 @@ LINE 2:     SCATTER BY (a,b);
 (10 rows)
 
     SELECT * FROM transform( TABLE(select distinct b,c from t1) );
-ERROR:  invalid input tuple for function mytransform (gppc.c:1412)  (seg1 slice1 172.17.0.3:7003 pid=3308512) (gppc.c:1412)
+ERROR:  invalid input tuple for function mytransform
     -- CONSTANT input
     SELECT * FROM transform( TABLE( SELECT 2 as id,'haha'::text as value FROM intable) );
   a   | b 
@@ -2512,8 +2516,8 @@ LINE 2:               (transform(TABLE(select a,e from t1 where a<10...
  a      | text    |           |          |         | extended | 
  b      | integer |           |          |         | plain    | 
 View definition:
- SELECT transform.a,
-    transform.b
+ SELECT a,
+    b
    FROM transform(TABLE( SELECT t1.a,
             t1.e
            FROM t1
@@ -2548,14 +2552,14 @@ LINE 2:     transform(
  a      | text    |           |          |         | extended | 
  b      | integer |           |          |         | plain    | 
 View definition:
- SELECT transform.a,
-    transform.b
+ SELECT a,
+    b
    FROM transform(TABLE( SELECT t1_view.a,
             t1_view.e
            FROM t1_view
           ORDER BY t1_view.b
           SCATTER RANDOMLY)) transform
-  ORDER BY transform.a;
+  ORDER BY a;
 
     -- Create temp table (CTAS) using ETF 
     create temp table tmp_t2 as select * from transform( 
@@ -3582,15 +3586,15 @@ LINE 1: SELECT id FROM project( TABLE( SELECT time,id FROM history )...
     WITH (describe = project_desc);
 -- Invalid projection position 
     SELECT * FROM project( TABLE( SELECT * FROM history ), NULL);
-ERROR:  the 2nd argument must be an integer (gppc.c:1412)
+ERROR:  the 2nd argument must be an integer
     SELECT * FROM project( TABLE( SELECT * FROM history ), -1);
-ERROR:  invalid column position -1 (gppc.c:1412)
+ERROR:  invalid column position -1
     SELECT * FROM project( TABLE( SELECT * FROM history ), 0);
-ERROR:  invalid column position 0 (gppc.c:1412)
+ERROR:  invalid column position 0
     SELECT * FROM project( TABLE( SELECT * FROM history ), 25);
-ERROR:  invalid column position 25 (gppc.c:1412)
+ERROR:  invalid column position 25
     SELECT * FROM project( TABLE( SELECT time FROM history ), 2);
-ERROR:  invalid column position 2 (gppc.c:1412)
+ERROR:  invalid column position 2
     SELECT * FROM project( TABLE( SELECT * FROM t1 ), (ARRAY[2,3])[1]);
 ERROR:  unable to resolve function argument
 LINE 1: SELECT * FROM project( TABLE( SELECT * FROM t1 ), (ARRAY[2,3...
@@ -4880,8 +4884,8 @@ ERROR:  CREATE VIEW statements cannot include calls to dynamically typed functio
 -- Calling the error callback function (tfcallback()) from table function (project_errorcallback())
 CREATE OR REPLACE FUNCTION project_errorcallback(anytable, OUT int, OUT int) RETURNS SETOF record AS '$libdir/gppc_test' LANGUAGE c;
 SELECT * FROM project_errorcallback(TABLE(SELECT CASE WHEN a < 10 THEN a END, a FROM generate_series(1, 10)a SCATTER BY a));
-INFO:  message: Hello, world!  (seg2 slice1 172.17.0.3:7004 pid=3308513)
-ERROR:  first attribute is NULL (gppc.c:1412)  (seg2 slice1 172.17.0.3:7004 pid=3308513) (gppc.c:1412)
+INFO:  message: Hello, world!
+ERROR:  first attribute is NULL
 SELECT * FROM project_errorcallback(TABLE(SELECT a, a FROM generate_series(1, 5)a SCATTER BY a)) ORDER BY 1;
  column1 | column2 
 ---------+---------
