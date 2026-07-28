@@ -19,6 +19,8 @@ RETURNS cstring
 AS 'int4out'
 LANGUAGE internal IMMUTABLE STRICT;
 NOTICE:  argument type int42 is only a shell
+LINE 1: CREATE FUNCTION int42_out(int42)
+                                  ^
 CREATE TYPE int42 (
 internallength = 4,
 input = int42_in,

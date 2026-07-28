@@ -7862,13 +7862,16 @@ set enable_seqscan=off;
 set enable_bitmapscan=off;
 EXPLAIN (COSTS OFF)
 SELECT * FROM ltreetest WHERE t =  '12.3' order by t asc;
-                 QUERY PLAN                 
---------------------------------------------
+                QUERY PLAN                 
+-------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Index Scan using tstidx on ltreetest
-         Index Cond: (t = '12.3'::ltree)
- Optimizer: Postgres query optimizer
-(4 rows)
+   Merge Key: t
+   ->  Sort
+         Sort Key: t
+         ->  Seq Scan on ltreetest
+               Filter: (t = '12.3'::ltree)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(7 rows)
 
 SELECT * FROM ltreetest WHERE t =  '12.3' order by t asc;
   t   
@@ -7887,16 +7890,17 @@ SELECT t FROM (SELECT * FROM ltreetest UNION ALL SELECT * FROM ltreetest) t1 GRO
 ) t2;
                            QUERY PLAN                            
 -----------------------------------------------------------------
- Finalize Aggregate
+ Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
-         ->  Partial Aggregate
-               ->  HashAggregate
-                     Group Key: ltreetest.t
+         ->  GroupAggregate
+               Group Key: ltreetest.t
+               ->  Sort
+                     Sort Key: ltreetest.t
                      ->  Append
                            ->  Seq Scan on ltreetest
                            ->  Seq Scan on ltreetest ltreetest_1
- Optimizer: Postgres query optimizer
-(9 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
 
 SELECT count(*) FROM (
 SELECT t FROM (SELECT * FROM ltreetest UNION ALL SELECT * FROM ltreetest) t1 GROUP BY t
@@ -7922,7 +7926,7 @@ DETAIL:  Valid values are between "4" and "8168".
 create index tstidx on ltreetest using gist (t gist_ltree_ops(siglen=8163));
 ERROR:  siglen value must be a multiple of 4
 create index tstidx on ltreetest using gist (t gist_ltree_ops(siglen=8168));
-ERROR:  index row requires 8288 bytes, maximum size is 8191  (seg2 172.17.0.5:7004 pid=5908)
+ERROR:  index row requires 8288 bytes, maximum size is 8191  (seg2 172.17.0.2:7004 pid=644610)
 SELECT count(*) FROM ltreetest WHERE t <  '12.3';
  count 
 -------
