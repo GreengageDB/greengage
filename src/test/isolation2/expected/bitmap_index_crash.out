@@ -6,6 +6,7 @@
 -- overwrite.
 1:CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE
+
 -- connectSeg(): non-dispatching utility-mode readiness probe (psql select 1 by
 -- port/hostname); used to wait for a just-restarted primary to actually serve a
 -- query before the next direct connection to it.
@@ -62,7 +63,8 @@ ALTER
 --------
  OK     
 (1 row)
--- wait until content=1 serves a real query before the next access to it.
+-- pg_ctl -w returns while the restarted primary is still in crash recovery; wait
+-- until content=1 serves a real query before the next access to it.
 1:SELECT connectSeg(600, port, hostname) FROM gp_segment_configuration WHERE role='p' AND content=1;
  connectseg 
 ------------
