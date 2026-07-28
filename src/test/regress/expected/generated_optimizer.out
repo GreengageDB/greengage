@@ -241,7 +241,7 @@ MERGE INTO gtestm t USING (VALUES (1, 10), (2, 20)) v(id, f1) ON t.id = v.id
   WHEN MATCHED THEN UPDATE SET f1 = v.f1
   WHEN NOT MATCHED THEN INSERT VALUES (v.id, v.f1, 200);
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:750: Failed assertion: !"Statement type not supported"
+DETAIL:  Feature not supported: MERGE
 SELECT * FROM gtestm ORDER BY id;
  id | f1 | f2  | f3 | f4  
 ----+----+-----+----+-----

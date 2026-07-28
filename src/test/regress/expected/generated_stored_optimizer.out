@@ -275,7 +275,7 @@ MERGE INTO gtestm t USING (VALUES (1, 10), (2, 20)) v(id, f1) ON t.id = v.id
   WHEN NOT MATCHED THEN INSERT VALUES (v.id, v.f1, 200)
   RETURNING merge_action(), old.*, new.*;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:750: Failed assertion: !"Statement type not supported"
+DETAIL:  Feature not supported: MERGE
  merge_action | id | f1 | f2  | f3 | f4  | id | f1 | f2  | f3 | f4  
 --------------+----+----+-----+----+-----+----+----+-----+----+-----
  INSERT       |    |    |     |    |     |  2 | 20 | 200 | 40 | 400
@@ -297,7 +297,7 @@ CREATE TABLE gtestm (
 INSERT INTO gtestm (a) SELECT g FROM generate_series(1, 10) g;
 MERGE INTO gtestm t USING gtestm AS s ON 2 * t.a = s.b WHEN MATCHED THEN DELETE RETURNING *;
 INFO:  GPORCA failed to produce a plan, falling back to planner
-DETAIL:  CTranslatorQueryToDXL.cpp:750: Failed assertion: !"Statement type not supported"
+DETAIL:  Feature not supported: MERGE
 ERROR:  MERGE on a distributed table is not supported when the join requires redistributing the target table
 HINT:  Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.
 DROP TABLE gtestm;

@@ -155,6 +155,12 @@ m/^DETAIL:  GPDB Expression type: .* not supported in DXL/
 m/\s+\(entry db(.*)+\spid=\d+\)/
 s/\s+\(entry db(.*)+\spid=\d+\)//
 
+# ORCA assertion/error DETAILs carry the source line number of the raising
+# site in CTranslatorQueryToDXL.cpp; it shifts whenever that file is edited.
+# Mask the line number so those answer files do not need churn on every change.
+m/CTranslatorQueryToDXL\.cpp:\d+:/
+s/CTranslatorQueryToDXL\.cpp:\d+:/CTranslatorQueryToDXL.cpp:LINE:/
+
 # Mask oids in append-optimized auxiliary relation names; they vary
 # from run to run (e.g. VACUUM warnings naming pg_aoseg_<oid>).
 # Kept as two capture-free rules: an optional (cs)? group leaves $1
