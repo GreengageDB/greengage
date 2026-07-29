@@ -162,6 +162,7 @@ static _stringlist *extra_guc_names = NULL;
 static _stringlist *extra_guc_values = NULL;
 static bool debug = false;
 static bool noclean = false;
+static bool noinstructions = false;
 static bool do_sync = true;
 static bool sync_only = false;
 static bool show_setting = false;
@@ -3501,6 +3502,7 @@ main(int argc, char *argv[])
 		{"sync-only", no_argument, NULL, 'S'},
 		{"waldir", required_argument, NULL, 'X'},
 		{"wal-segsize", required_argument, NULL, 12},
+		{"no-instructions", no_argument, NULL, 13},
 		{"data-checksums", no_argument, NULL, 'k'},
         {"max_connections", required_argument, NULL, 1001},     /*CDB*/
         {"shared_buffers", required_argument, NULL, 1003},      /*CDB*/
@@ -3679,6 +3681,9 @@ main(int argc, char *argv[])
 				if (!option_parse_int(optarg, "--wal-segsize", 1, 1024, &wal_segment_size_mb))
 					exit(1);
 				break;
+			case 13:
+				noinstructions = true;
+				break;
 			case 'g':
 				SetDataDirectoryCreatePerm(PG_DIR_MODE_GROUP);
 				break;
@@ -3846,34 +3851,37 @@ main(int argc, char *argv[])
 							"--auth-local and --auth-host, the next time you run initdb.");
 	}
 
-	/*
-	 * Build up a shell command to tell the user how to start the server
-	 */
-	start_db_cmd = createPQExpBuffer();
+	if (!noinstructions)
+	{
+		/*
+		 * Build up a shell command to tell the user how to start the server
+		 */
+		start_db_cmd = createPQExpBuffer();
 
-	/* Get directory specification used to start initdb ... */
-	strlcpy(pg_ctl_path, argv[0], sizeof(pg_ctl_path));
-	canonicalize_path(pg_ctl_path);
-	get_parent_directory(pg_ctl_path);
-	/* ... and tag on pg_ctl instead */
-	join_path_components(pg_ctl_path, pg_ctl_path, "pg_ctl");
+		/* Get directory specification used to start initdb ... */
+		strlcpy(pg_ctl_path, argv[0], sizeof(pg_ctl_path));
+		canonicalize_path(pg_ctl_path);
+		get_parent_directory(pg_ctl_path);
+		/* ... and tag on pg_ctl instead */
+		join_path_components(pg_ctl_path, pg_ctl_path, "pg_ctl");
 
-	/* path to pg_ctl, properly quoted */
-	appendShellString(start_db_cmd, pg_ctl_path);
+		/* path to pg_ctl, properly quoted */
+		appendShellString(start_db_cmd, pg_ctl_path);
 
-	/* add -D switch, with properly quoted data directory */
-	appendPQExpBufferStr(start_db_cmd, " -D ");
-	appendShellString(start_db_cmd, pgdata_native);
+		/* add -D switch, with properly quoted data directory */
+		appendPQExpBufferStr(start_db_cmd, " -D ");
+		appendShellString(start_db_cmd, pgdata_native);
 
-	/* add suggested -l switch and "start" command */
-	/* translator: This is a placeholder in a shell command. */
-	appendPQExpBuffer(start_db_cmd, " -l %s start", _("logfile"));
+		/* add suggested -l switch and "start" command */
+		/* translator: This is a placeholder in a shell command. */
+		appendPQExpBuffer(start_db_cmd, " -l %s start", _("logfile"));
 
-	printf(_("\nSuccess. You can now start the database server using:\n\n"
-			 "    %s\n\n"),
-		   start_db_cmd->data);
+		printf(_("\nSuccess. You can now start the database server using:\n\n"
+				 "    %s\n\n"),
+			   start_db_cmd->data);
 
-	destroyPQExpBuffer(start_db_cmd);
+		destroyPQExpBuffer(start_db_cmd);
+	}
 
 	success = true;
 	return 0;
