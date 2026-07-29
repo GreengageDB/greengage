@@ -200,46 +200,6 @@ INIT
 
 =over
 
-=item PostgreSQL::Test::Cluster::new($class, $name, $pghost, $pgport)
-
-Create a new PostgresNode instance. Does not initdb or start it.
-
-You should generally prefer to use PostgreSQL::Test::Cluster->new() instead since it takes care
-of finding port numbers, registering instances for cleanup, etc.
-
-=cut
-
-sub new
-{
-	my ($class, $name, $pghost, $pgport) = @_;
-	my $testname = basename($0);
-	$testname =~ s/\.[^.]+$//;
-
-	# GPDB needs unique dbid for each node for certain operations
-	$last_dbid = $last_dbid + 1;
-
-	my $self = {
-		_port    => $pgport,
-		_host    => $pghost,
-		_dbid    => $last_dbid,
-		_basedir => "$PostgreSQL::Test::Utils::tmp_check/t_${testname}_${name}_data",
-		_name    => $name,
-		_logfile_generation => 0,
-		_logfile_base       => "$PostgreSQL::Test::Utils::log_path/${testname}_${name}",
-		_logfile            => "$PostgreSQL::Test::Utils::log_path/${testname}_${name}.log"
-	};
-
-	bless $self, $class;
-	mkdir $self->{_basedir}
-	  or
-	  BAIL_OUT("could not create data directory \"$self->{_basedir}\": $!");
-	$self->dump_info;
-
-	return $self;
-}
-
-=pod
-
 =item $node->port()
 
 Get the port number assigned to the host. This won't necessarily be a TCP port
@@ -1690,11 +1650,15 @@ sub new
 		}
 	}
 
+	# GPDB needs a unique dbid for each node for certain operations
+	$last_dbid = $last_dbid + 1;
+
 	my $testname = basename($0);
 	$testname =~ s/\.[^.]+$//;
 	my $node = {
 		_port => $port,
 		_host => $host,
+		_dbid => $last_dbid,
 		_basedir =>
 		  "$PostgreSQL::Test::Utils::tmp_check/t_${testname}_${name}_data",
 		_name => $name,
