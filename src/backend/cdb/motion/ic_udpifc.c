@@ -643,7 +643,6 @@ static struct sockaddr_storage udp_dummy_packet_sockaddr;
  * just prior to it.
  */
 typedef enum ICTraceOperation {
-	IC_OP_SEND,
 	IC_OP_FREELIST_APPEND,
 	IC_OP_FREELIST_DELETE,
 	IC_OP_UNACK_QUEUE_APPEND,
@@ -671,7 +670,7 @@ static uint32 ic_trace_idx = 0;
 	t->operation = (o); \
 	t->buf = (b); \
 	t->numOutStanding = unack_queue_ring.numOutStanding; \
-	t->route = t->buf->conn->route; \
+	t->route = t->buf->conn? t->buf->conn->route : -1; \
 	t->seq = t->buf->pkt->seq; \
 } while(0)
 
@@ -2770,9 +2769,6 @@ getSndBuffer(MotionConn *conn)
 	{
 		ret = icBufferListPop(&snd_buffer_pool.freeList);
 		IC_TRACE(IC_OP_FREELIST_DELETE, ret);
-		if (conn != ret->conn)
-			elog(PANIC, "ack/buf mismatch: conn route=%d ret->conn route=%d seq=%d",
-				 conn->route, ret->conn->route, ret->pkt->seq);
 		return ret;
 	}
 	else
@@ -4945,7 +4941,6 @@ sendBuffers(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEnt
 			break;
 
 		buf = icBufferListPop(&conn->sndQueue);
-		IC_TRACE(IC_OP_SEND, buf);
 
 		uint64		now = getCurrentTime();
 
