@@ -1048,6 +1048,14 @@ PostmasterMain(int argc, char *argv[])
 		ereport(ERROR,
 				(errmsg("WAL cannot be summarized when \"wal_level\" is \"minimal\"")));
 
+	/*
+	 * GPDB: a bare "postgres -C <guc>" query -- e.g. pg_checksums or
+	 * pg_controldata reading a runtime-computed GUC from an offline data
+	 * directory -- has no MPP identity and does not need one.  Only require the
+	 * identity for a real server start (output_config_variable == NULL).
+	 */
+	if (output_config_variable == NULL)
+	{
     if ( GpIdentity.dbid == -1 && Gp_role == GP_ROLE_UTILITY)
     {
         /**
@@ -1070,6 +1078,7 @@ PostmasterMain(int argc, char *argv[])
              errmsg("contentid (from -C option) is not specified or is invalid.  This value must be >= -1.  "
              "The contentid value to pass can be determined this server's entry in the segment configuration; it may be -1 for a master, or in utility mode."
              )));
+	}
 	}
 
 	/*
