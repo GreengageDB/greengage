@@ -708,6 +708,7 @@ static bool prebuild_temp_table(Relation rel, RangeVar *tmpname, DistributedBy *
 
 static void prepare_AlterTableStmt_for_dispatch(AlterTableStmt *stmt);
 static List *strip_gpdb_part_commands(List *cmds);
+static void clear_dispatched_index_reuse(List *cmds);
 static void populate_rel_col_encodings(Relation rel, List *stenc, List *withOptions);
 static Datum get_rel_opts(Relation rel);
 static void clear_rel_opts(Relation rel);
@@ -5196,13 +5197,70 @@ prepare_AlterTableStmt_for_dispatch(AlterTableStmt *stmt)
 	ListCell   *lc;
 
 	stmt->cmds = strip_gpdb_part_commands(stmt->cmds);
+	clear_dispatched_index_reuse(stmt->cmds);
 
 	foreach (lc, stmt->wqueue)
 	{
 		AlteredTableInfo *tab = (AlteredTableInfo *) lfirst(lc);
 
 		for (int i = 0; i < AT_NUM_PASSES; i++)
+		{
 			tab->subcmds[i] = strip_gpdb_part_commands(tab->subcmds[i]);
+			clear_dispatched_index_reuse(tab->subcmds[i]);
+		}
+	}
+}
+
+/*
+ * Clear any index-storage-reuse relfilenumber before dispatching ALTER TABLE
+ * to the QEs.
+ *
+ * A binary-coercible ALTER COLUMN TYPE that does not rewrite the table rebuilds
+ * the column's indexes in place: ATPostAlterTypeParse()/TryReuseIndex() stamps
+ * each rebuilt index's IndexStmt with oldNumber = the index's *current*
+ * relfilenumber so that this backend can reuse the existing storage instead of
+ * building a new file (see ATExecAddIndex(), which treats a valid oldNumber as
+ * skip_build + RelationPreserveStorage).
+ *
+ * That relfilenumber is only meaningful on the node that produced it.
+ * Relfilenumbers are allocated independently on every node, so the QD-local
+ * value stamped here almost never matches a QE's own index storage.  If a QE
+ * honored it, the QE would repoint its pg_class at a relfilenumber that has no
+ * file on that segment while its real index file is dropped by the pending-
+ * delete machinery -- producing "could not open file" (or, when the stale
+ * relfilenumber happens to be reused by another relation, bogus toast/compression)
+ * errors on the next scan of the index.  REINDEX is the only recovery.
+ *
+ * The standalone CREATE INDEX dispatch path already guards against this by
+ * clearing stmt->oldNumber right before CdbDispatchUtilityStatement() (see
+ * DefineIndex() in indexcmds.c).  Do the same for the ALTER TABLE work queue so
+ * that each QE performs a genuine index build whose relfilenumber matches its
+ * own pg_class entry.  This runs after ATController() has already executed the
+ * subcommands on the QD, so clearing the to-be-dispatched copy does not disturb
+ * the QD's own storage reuse.
+ */
+static void
+clear_dispatched_index_reuse(List *cmds)
+{
+	ListCell   *lc;
+
+	foreach (lc, cmds)
+	{
+		AlterTableCmd *cmd = lfirst_node(AlterTableCmd, lc);
+
+		if ((cmd->subtype == AT_ReAddIndex || cmd->subtype == AT_AddIndex) &&
+			cmd->def != NULL && IsA(cmd->def, IndexStmt))
+		{
+			IndexStmt  *istmt = (IndexStmt *) cmd->def;
+
+			/*
+			 * oldNumber is the gate for storage reuse in ATExecAddIndex(); once
+			 * it is invalid the QE ignores oldCreateSubid /
+			 * oldFirstRelfilelocatorSubid, so clearing it alone is sufficient
+			 * (mirrors indexcmds.c).
+			 */
+			istmt->oldNumber = InvalidRelFileNumber;
+		}
 	}
 }
 
