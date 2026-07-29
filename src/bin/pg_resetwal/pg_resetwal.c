@@ -671,6 +671,14 @@ AcceptWarning(void)
 	/* initialize response to empty string. */
 	response[0] = 0;
 
+	/*
+	 * GPDB: when stdin is not a terminal (a TAP test, a pipe, --binary-upgrade
+	 * already bypasses this) there is nobody to answer the warning; behave as
+	 * if the operator confirmed, matching upstream which never prompts at all.
+	 */
+	if (!isatty(fileno(stdin)))
+		return true;
+
 	printf(_("WARNING: Do not use this on Greenplum. %s might cause data loss\n"
 			"and render system irrecoverable. Do you wish to proceed? [yes/no] "), progname);
 
