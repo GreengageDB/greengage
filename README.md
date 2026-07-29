@@ -39,7 +39,7 @@ Follow [appropriate linux steps](README.Linux.md) for getting your system ready 
 
 ### Build the database
 
-```
+```sh
 # Initialize and update submodules in the repository
 git submodule update --init
 
@@ -64,23 +64,23 @@ standbys for segments and coordinator for the demo cluster can be changed
 on the fly.
 Instead of `make create-demo-cluster`, consider:
 
-```
+```sh
 DATADIRS=/tmp/gpdb-cluster PORT_BASE=5555 NUM_PRIMARY_MIRROR_PAIRS=1 WITH_MIRRORS=false make create-demo-cluster
 ```
 
 The TCP port for the regression test can be changed on the fly:
 
-```
+```sh
 PGPORT=5555 make installcheck-world
 ```
 
 To turn GPORCA off and use Postgres planner for query optimization:
-```
+```sh
 set optimizer=off;
 ```
 
 If you want to clean all generated files
-```
+```sh
 make distclean
 ```
 
@@ -88,7 +88,7 @@ make distclean
 
 * The default regression tests
 
-```
+```sh
 make installcheck-world
 ```
 
@@ -122,7 +122,7 @@ make installcheck-world
 
 Currently, GPDB is built with GPORCA by default. If you want to build GPDB
 without GPORCA, configure requires `--disable-orca` flag to be set.
-```
+```sh
 # Clean environment
 make distclean
 
