@@ -1193,7 +1193,12 @@ sub start
 		'pg_ctl', '--wait',
 		'--pgdata' => $self->data_dir,
 		'--log' => $self->logfile,
-		'--options' => "--cluster-name=$name",
+		# GPDB: a postmaster refuses to start without its MPP identity
+		# (gp_contentid, i.e. segindex >= -1). PostgreSQL::Test::Cluster nodes
+		# are always standalone single instances, so launch them in utility mode
+		# as a coordinator, mirroring src/bin/pg_ctl/t/001_start_stop.pl.
+		'--options' =>
+		  "--cluster-name=$name -c gp_role=utility --gp_dbid=-1 --gp_contentid=-1",
 		'start');
 
 	if ($ret != 0)
