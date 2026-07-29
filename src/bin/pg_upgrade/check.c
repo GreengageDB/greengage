@@ -345,7 +345,7 @@ data_type_check_query(int checknum)
 	/* start with the type(s) returned by base_query */
 					"	%s "
 					"	UNION ALL "
-					"	SELECT * FROM ( "
+					"	( "
 	/* inner WITH because we can only reference the CTE once */
 					"		WITH x AS (SELECT oid FROM oids) "
 	/* domains on any type selected so far */
@@ -365,7 +365,7 @@ data_type_check_query(int checknum)
 	/* ranges containing any type selected so far */
 					"			SELECT t.oid FROM pg_catalog.pg_type t, pg_catalog.pg_range r, x "
 					"			WHERE t.typtype = 'r' AND r.rngtypid = t.oid AND r.rngsubtype = x.oid"
-					"	) foo "
+					"	) "
 					") "
 	/* now look for stored columns of any such type */
 					"SELECT n.nspname, c.relname, a.attname "
