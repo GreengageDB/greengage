@@ -9,7 +9,7 @@ use Fcntl ':mode';
 use File::stat qw{lstat};
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
-use Test::More tests => 26;
+use Test::More;
 
 my $tempdir = PostgreSQL::Test::Utils::tempdir;
 my $tempdir_short = PostgreSQL::Test::Utils::tempdir_short;
@@ -145,3 +145,5 @@ if (not $windows_os)
 
 	system_or_bail 'pg_ctl', 'stop', '-D', "$tempdir/data", '-m', 'fast';
 }
+
+done_testing();
