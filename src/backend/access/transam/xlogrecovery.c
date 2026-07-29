@@ -61,6 +61,7 @@
 #include "storage/spin.h"
 #include "utils/datetime.h"
 #include "utils/fmgrprotos.h"
+#include "utils/guc.h"
 #include "utils/guc_hooks.h"
 #include "utils/pgstat_internal.h"
 #include "utils/pg_lsn.h"
@@ -2031,6 +2032,30 @@ ApplyWalRecord(XLogReaderState *xlogreader, XLogRecord *record, TimeLineID *repl
 	XLogRecoveryCtl->lastReplayedEndRecPtr = xlogreader->EndRecPtr;
 	XLogRecoveryCtl->lastReplayedTLI = *replayTLI;
 	SpinLockRelease(&XLogRecoveryCtl->info_lck);
+
+	/*
+	 * GPDB: force an immediate restartpoint when a standby/mirror replays a
+	 * checkpoint record, so gp_replica_check -- which compares primary and
+	 * mirror data files directly on disk, bypassing shared buffers -- sees an
+	 * up-to-date on-disk mirror instead of pages that only lazily reach disk at
+	 * the next checkpointer-driven restartpoint.  The checkpointer turns this
+	 * request into a restartpoint during recovery.  (Re-grafted from adb-6.x
+	 * xlog.c; bgwriterLaunched there is now IsUnderPostmaster.)
+	 */
+	if (create_restartpoint_on_ckpt_record_replay && ArchiveRecoveryRequested &&
+		record->xl_rmid == RM_XLOG_ID)
+	{
+		uint8		xlogRecInfo = record->xl_info & ~XLR_INFO_MASK;
+
+		if (xlogRecInfo == XLOG_CHECKPOINT_SHUTDOWN ||
+			xlogRecInfo == XLOG_CHECKPOINT_ONLINE)
+		{
+			if (IsUnderPostmaster)
+				RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_WAIT);
+			else
+				elog(LOG, "Skipping CreateRestartPoint() as checkpointer is not launched.");
+		}
+	}
 
 	/* ------
 	 * Wakeup walsenders:
