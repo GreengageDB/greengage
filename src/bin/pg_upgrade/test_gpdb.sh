@@ -285,7 +285,7 @@ usage()
 	echo " -m           Upgrade mirrors"
 	echo " -r           Retain temporary installation after test, even on success"
 	echo " -p           pg_upgrade performance checking only"
-	echo " -v           test pg_upgrade from Greenagage 6 to Greengage 7"
+	echo " -v           test pg_upgrade from Greengage 6 to Greengage 7"
 	exit 0
 }
 
