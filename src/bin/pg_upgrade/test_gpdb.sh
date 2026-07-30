@@ -175,6 +175,61 @@ check_vacuum_worked()
 	return 0
 }
 
+dump_database_schema()
+{
+	dump_path="$1"
+	partitions_dump_path="$2"
+	partitions_query="$3"
+	queries_query="$4"
+	pgopts="$5"
+
+	# To dump schemas, use pg_dump from NEW_BINDIR. Note, that we intentionally don't use pg_dumpall,
+	# and dump each database by hand, because we need to be able to exclude specific
+	if (( !$perf_test )) ; then
+		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
+		readarray -t databases <<< ${databases_string}
+		for database in "${databases[@]}"; do
+			# We are getting '\' symbol automatically escaped to '\\', convert is back
+			database=$(echo "${database}" | sed 's/\\\\/\\/g')
+
+			# When upgrading Greengage 6 to Greengage 7, partitioned tables would cause
+			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
+			# on the version of the source cluster. So, make pg_dump ignore them and compare
+			# them seperately.
+			args_to_ignore_partitions=()
+			if (( $cross_version_upgrade )); then
+				partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
+				readarray -t partitions <<< ${partitions_string}
+				for partition in "${partitions[@]}"; do
+					if [ -z "${partition}" ]; then
+						continue
+					fi
+					args_to_ignore_partitions+=(-T)
+					args_to_ignore_partitions+=("${partition}")
+				done
+
+				# And now, create a separate dump for each partitioned table, by manually getting
+				# their contents. Do this the way as in the pg_dump (see dumpTableData_copy).
+				# Use the --extra-float-digits option to make sure that floats
+				# are dumped identically.
+				# Also, sort the rows, as their order may differ between the versions.
+				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
+				readarray -t queries <<< ${queries_string}
+				for query in "${queries[@]}"; do
+					result=$(PGOPTIONS="-c extra_float_digits=3 ${pgopts}" psql "${database}" -c "${query}")
+					result=$(echo "${result}" | sort)
+
+					echo "${query}"  >> "${partitions_dump_path}"
+					echo "${result}" >> "${partitions_dump_path}"
+				done
+			fi
+
+			PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "${dump_path}"
+		done
+		echo done
+	fi
+}
+
 upgrade_qd()
 {
 	mkdir -p $1
@@ -276,77 +331,47 @@ diff_and_exit() {
 	export COORDINATOR_DATA_DIRECTORY="${NEW_DATADIR}/qddir/demoDataDir-1"
 	${NEW_BINDIR}/gpstart -a ${args}
 
-	# Keep this logic in sync with the one before upgrade
+	dump_path="$temp_root/dump2.sql"
+	partitions_dump_path="$temp_root/dump_partitions2.sql"
+	partitions_query=$(cat <<- EOF
+		COPY (
+			WITH partitions AS (
+				SELECT DISTINCT (pg_partition_tree(oid)).relid
+				FROM pg_class
+			) SELECT FORMAT('%s.%s', quote_ident(n.nspname), quote_ident(c.relname)) out
+			FROM partitions p
+				JOIN pg_class c ON p.relid = c.oid
+				JOIN pg_namespace n ON c.relnamespace = n.oid
+			ORDER BY(out)
+		) TO STDOUT;
+	EOF
+	)
+	queries_query=$(cat <<- EOF
+		COPY (
+			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
+			FROM (
+				SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+				quote_ident(c.relname)) name,
+				string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+				FROM pg_class c
+					JOIN pg_namespace n ON c.relnamespace = n.oid
+					JOIN pg_attribute a ON a.attrelid = c.oid
+				WHERE c.relkind = 'p'
+					AND a.attnum > 0::pg_catalog.int2
+					AND EXISTS (
+						SELECT 1
+						FROM pg_partition_tree(c.oid)
+						WHERE parentrelid IS NULL
+					)
+				GROUP BY (n.nspname, c.relname)
+			) subq
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
 	echo -n 'Dumping database schema after upgrade... '
-	databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
-	readarray -t databases <<< ${databases_string}
-	for database in "${databases[@]}"; do
-		database=$(echo "${database}" | sed 's/\\\\/\\/g')
+	dump_database_schema "${dump_path}" "${partitions_dump_path}" "${partitions_query}" "${queries_query}" "${pgopts}"
 
-		# The same thing as before upgrade, but we need to exclude each table in each partition hierarchy,
-		# as they dumped separately.
-		args_to_ignore_partitions=()
-		if (( $cross_version_upgrade )); then
-			partitions_query=$(cat <<- EOF
-				COPY (
-					WITH partitions AS (
-						SELECT DISTINCT (pg_partition_tree(oid)).relid
-						FROM pg_class
-					) SELECT FORMAT('%s.%s', quote_ident(n.nspname), quote_ident(c.relname)) out
-					FROM partitions p
-						JOIN pg_class c ON p.relid = c.oid
-						JOIN pg_namespace n ON c.relnamespace = n.oid
-					ORDER BY(out)
-				) TO STDOUT;
-			EOF
-			)
-			partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
-			readarray -t partitions <<< ${partitions_string}
-			for partition in "${partitions[@]}"; do
-				# When a database doesn't have partitioned tables, we'll still get
-				# here with an empty string. Make sure that it doesn't get added
-				# into ignored partitions.
-				if [ -z "${partition}" ]; then
-					continue
-				fi
-				args_to_ignore_partitions+=(-T)
-				args_to_ignore_partitions+=("${partition}")
-			done
-
-			queries_query=$(cat <<- EOF
-				COPY (
-					SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
-					FROM (
-						SELECT FORMAT('%s.%s', quote_ident(n.nspname),
-						quote_ident(c.relname)) name,
-						string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
-						FROM pg_class c
-							JOIN pg_namespace n ON c.relnamespace = n.oid
-							JOIN pg_attribute a ON a.attrelid = c.oid
-						WHERE c.relkind = 'p'
-							AND a.attnum > 0::pg_catalog.int2
-							AND EXISTS (
-								SELECT 1
-								FROM pg_partition_tree(c.oid)
-								WHERE parentrelid IS NULL
-							)
-						GROUP BY (n.nspname, c.relname)
-					) subq
-					ORDER BY (out)
-				) TO STDOUT;
-			EOF
-			)
-			queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
-			readarray -t queries <<< ${queries_string}
-			for query in "${queries[@]}"; do
-				echo "${query}" >> "$temp_root/dump_partitions2.sql"
-				PGOPTIONS="${pgopts}" psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions2.sql"
-			done
-		fi
-
-		PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "$temp_root/dump2.sql"
-	done
-	echo done
 
 	${NEW_BINDIR}/gpstop -a ${args}
 	COORDINATOR_DATA_DIRECTORY=""; unset COORDINATOR_DATA_DIRECTORY
@@ -509,79 +534,42 @@ main() {
 			exit 1
 		fi
 	fi
-	
-	# yes, use pg_dump from NEW_BINDIR. Note, that we intentionally don't use pg_dumpall,
-	# and dump each database by hand, because we need to be able to exclude specific
-	# objects from the dumps, and it is possible only with regular pg_dump.
-	if (( !$perf_test )) ; then
-		echo -n 'Dumping database schema before upgrade... '
-		databases_string=$(psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
-		readarray -t databases <<< ${databases_string}
-		for database in "${databases[@]}"; do
-			# We are getting '\' symbol automatically escaped to '\\', convert is back
-			database=$(echo "${database}" | sed 's/\\\\/\\/g')
 
-			# When upgrading Greengage 6 to Greengage 7, partitioned tables would cause
-			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
-			# on the version of the source cluster. So, make pg_dump ignore them and compare
-			# them seperately.
-			args_to_ignore_partitions=()
-			if (( $cross_version_upgrade )); then
-				partitions_query=$(cat <<- EOF
-					COPY (
-						SELECT DISTINCT FORMAT('%s.%s', quote_ident(schemaname), quote_ident(tablename)) out
-						FROM pg_partitions
-						ORDER BY (out)
-					) TO STDOUT;
-				EOF
-				)
-				partitions_string=$(psql "${database}" -c "${partitions_query}")
-				readarray -t partitions <<< ${partitions_string}
-				for partition in "${partitions[@]}"; do
-					if [ -z "${partition}" ]; then
-						continue
-					fi
-					args_to_ignore_partitions+=(-T)
-					args_to_ignore_partitions+=("${partition}")
-				done
-
-				# And now, create a separate dump for each partitioned table, by manually getting
-				# their contents. Do this the way as in the pg_dump (see dumpTableData_copy).
-				# Also, sort the rows, as their order may differ between the versions.
-				queries_query=$(cat <<- EOF
-					COPY (
-						SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
-						FROM (
-							SELECT FORMAT('%s.%s', quote_ident(n.nspname),
-							quote_ident(c.relname)) name,
-							string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
-							FROM pg_class c
-								JOIN pg_namespace n ON c.relnamespace = n.oid
-								JOIN pg_attribute a ON a.attrelid = c.oid
-								WHERE a.attnum > 0::pg_catalog.int2
-									AND EXISTS (
-										SELECT 1
-										FROM pg_partition p
-										WHERE p.parrelid = c.oid
-									)
-							GROUP BY (n.nspname, c.relname)
-						) subq
-						ORDER BY (out)
-					) TO STDOUT;
-				EOF
-				)
-				queries_string=$(psql "${database}" -c "${queries_query}")
-				readarray -t queries <<< ${queries_string}
-				for query in "${queries[@]}"; do
-					echo "${query}" >> "$temp_root/dump_partitions1.sql"
-					psql "${database}" -c "${query}" | sort >> "$temp_root/dump_partitions1.sql"
-				done
-			fi
-
-			${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "$temp_root/dump1.sql"
-		done
-		echo done
-	fi
+	dump_path="$temp_root/dump1.sql"
+	partitions_dump_path="$temp_root/dump_partitions1.sql"
+	# Queries to get all partitioned tables, used in cross-version upgrade
+	partitions_query=$(cat <<- EOF
+		COPY (
+			SELECT DISTINCT FORMAT('%s.%s', quote_ident(schemaname), quote_ident(tablename)) out
+			FROM pg_partitions
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
+	queries_query=$(cat <<- EOF
+		COPY (
+			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
+			FROM (
+				SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+				quote_ident(c.relname)) name,
+				string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+				FROM pg_class c
+					JOIN pg_namespace n ON c.relnamespace = n.oid
+					JOIN pg_attribute a ON a.attrelid = c.oid
+					WHERE a.attnum > 0::pg_catalog.int2
+						AND EXISTS (
+							SELECT 1
+							FROM pg_partition p
+							WHERE p.parrelid = c.oid
+						)
+				GROUP BY (n.nspname, c.relname)
+			) subq
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
+	echo -n 'Dumping database schema before upgrade... '
+	dump_database_schema "${dump_path}" "${partitions_dump_path}" "${partitions_query}" "${queries_query}" ""
 	
 	${OLD_BINDIR}/gpstop -a
 	
