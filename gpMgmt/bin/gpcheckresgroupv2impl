@@ -86,7 +86,7 @@ class CgroupValidationVersionTwo(CgroupValidation):
 
 
 if __name__ == '__main__':
-    # We should always be given exactly one arg
+    assert len(sys.argv) == 2, "Internal error: this script should be given exactly one argument."
     cgroup_parent = sys.argv[1]
 
     try:
