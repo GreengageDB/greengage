@@ -55,7 +55,7 @@ In following example, Anaconda is installed to `/home/gpadmin/miniconda`.
 ```sh
 ldd greengagedb/lib/postgresql/plpython.so
 # ...
-libpython2.7.so.1.0 => /home/gpadmin/miniconda/lib/libpython2.7.so.1.0 (0x00007f1f3c40c000)
+# libpython2.7.so.1.0 => /home/gpadmin/miniconda/lib/libpython2.7.so.1.0 (0x00007f1f3c40c000)
 # ...
 ```
 
