@@ -216,7 +216,7 @@ dump_database_schema()
 				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
 				readarray -t queries <<< ${queries_string}
 				for query in "${queries[@]}"; do
-					result=$(PGOPTIONS="-c extra_float_digits=3 ${pgopts}" psql "${database}" -c "${query}")
+					result=$(PGOPTIONS="-c extra_float_digits=-3 ${pgopts}" psql "${database}" -c "${query}")
 					result=$(echo "${result}" | sort)
 
 					echo "${query}"  >> "${partitions_dump_path}"
