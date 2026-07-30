@@ -358,6 +358,7 @@ diff_and_exit() {
 					JOIN pg_attribute a ON a.attrelid = c.oid
 				WHERE c.relkind = 'p'
 					AND a.attnum > 0::pg_catalog.int2
+					AND a.attisdropped = false
 					AND EXISTS (
 						SELECT 1
 						FROM pg_partition_tree(c.oid)
@@ -557,6 +558,7 @@ main() {
 					JOIN pg_namespace n ON c.relnamespace = n.oid
 					JOIN pg_attribute a ON a.attrelid = c.oid
 					WHERE a.attnum > 0::pg_catalog.int2
+						AND a.attisdropped = false
 						AND EXISTS (
 							SELECT 1
 							FROM pg_partition p
