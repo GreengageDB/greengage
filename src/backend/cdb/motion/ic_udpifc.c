@@ -1695,6 +1695,7 @@ CleanupMotionUDPIFC(void)
 
 	/* free the debug trace buffer*/
 	pfree(ic_trace);
+	ic_trace = NULL;
 
 	MemoryContextDelete(ic_control_info.memContext);
 
