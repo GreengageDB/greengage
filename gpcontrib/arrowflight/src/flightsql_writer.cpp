@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
- * arrowflight_fdw_writer.cpp
- *	  Arrow Flight DoPut writer for arrowflight_fdw INSERT.
+ * flightsql_writer.cpp
+ *	  Arrow Flight SQL bulk-ingest writer.
  *
  *-------------------------------------------------------------------------
  */
@@ -14,8 +14,12 @@ extern "C"
 #include "catalog/pg_type.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
+#include "common/base64.h"
 #include "common/int.h"
+#include "common/sha2.h"
+#include "commands/defrem.h"
 #include "executor/tuptable.h"
+#include "foreign/foreign.h"
 #include "miscadmin.h"
 #include "utils/cash.h"
 #include "utils/date.h"
@@ -39,19 +43,30 @@ extern "C"
 #include <arrow/array/builder_time.h>
 #include <arrow/buffer.h>
 #include <arrow/flight/api.h>
+#include <arrow/flight/sql/client.h>
+#include <arrow/ipc/writer.h>
 #include <arrow/array/builder_decimal.h>
 #include <arrow/util/key_value_metadata.h>
+#include <arrow/util/byte_size.h>
 #include <arrow/util/decimal.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cerrno>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
 #include <exception>
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -59,7 +74,7 @@ extern "C"
 #define AF_PG_TO_ARROW_EPOCH_USECS \
 	((int64) AF_PG_TO_ARROW_EPOCH_DAYS * USECS_PER_DAY)
 
-typedef enum ArrowFlightFdwWriterColumnKind
+typedef enum FlightSqlWriterColumnKind
 {
 	AF_WRITER_BOOL,
 	AF_WRITER_INT2,
@@ -82,56 +97,192 @@ typedef enum ArrowFlightFdwWriterColumnKind
 	AF_WRITER_DATE,
 	AF_WRITER_TIMESTAMP,
 	AF_WRITER_TIMESTAMPTZ
-} ArrowFlightFdwWriterColumnKind;
+} FlightSqlWriterColumnKind;
 
-typedef struct ArrowFlightFdwWriterColumn
+typedef struct FlightSqlWriterColumn
 {
 	int			attnum;
 	Oid			typid;
 	std::string name;
-	ArrowFlightFdwWriterColumnKind kind;
+	FlightSqlWriterColumnKind kind;
 	std::shared_ptr<arrow::DataType> arrow_type;
 	std::unique_ptr<arrow::ArrayBuilder> builder;
-} ArrowFlightFdwWriterColumn;
+} FlightSqlWriterColumn;
 
-class ArrowFlightFdwWriterState
+class ArrowFlightSqlBatchReader : public arrow::RecordBatchReader
 {
 public:
-	std::string operation_id;
+	struct QueueStats
+	{
+		int64		queued_bytes;
+		int64		peak_queued_bytes;
+		int64		wait_nanos;
+	};
+
+	ArrowFlightSqlBatchReader(std::shared_ptr<arrow::Schema> schema,
+							  int64 max_queued_bytes)
+		: schema_(std::move(schema)),
+		  max_queued_bytes_(max_queued_bytes)
+	{
+	}
+
+	std::shared_ptr<arrow::Schema>
+	schema() const override
+	{
+		return schema_;
+	}
+
+	arrow::Status
+	ReadNext(std::shared_ptr<arrow::RecordBatch> *batch) override
+	{
+		std::unique_lock<std::mutex> lock(mutex_);
+
+		ready_.wait(lock, [this]() {
+			return !batches_.empty() || finished_ || !status_.ok();
+		});
+
+		if (!status_.ok())
+			return status_;
+		if (batches_.empty())
+		{
+			*batch = nullptr;
+			return arrow::Status::OK();
+		}
+
+		QueuedBatch queued = std::move(batches_.front());
+
+		batches_.pop_front();
+		queued_bytes_ -= queued.bytes;
+		*batch = std::move(queued.batch);
+		space_.notify_all();
+		return arrow::Status::OK();
+	}
+
+	void
+	Push(const std::shared_ptr<arrow::RecordBatch>& batch)
+	{
+		int64		bytes = arrow::util::TotalBufferSize(*batch);
+		std::unique_lock<std::mutex> lock(mutex_);
+		const auto wait_started = std::chrono::steady_clock::now();
+		bool		waited = false;
+
+		if (bytes > max_queued_bytes_)
+			throw std::runtime_error(
+				"Flight SQL completed batch exceeds the queue byte limit");
+
+		while (status_.ok() && !finished_ &&
+			   queued_bytes_ + bytes > max_queued_bytes_)
+		{
+			waited = true;
+			space_.wait_for(lock, std::chrono::milliseconds(100));
+			lock.unlock();
+			CHECK_FOR_INTERRUPTS();
+			lock.lock();
+		}
+
+		if (!status_.ok())
+			throw std::runtime_error("Flight SQL ingest failed: " +
+									 status_.ToString());
+		if (finished_)
+			throw std::runtime_error("Flight SQL ingest reader is closed");
+		if (waited)
+			wait_nanos_ +=
+				std::chrono::duration_cast<std::chrono::nanoseconds>(
+					std::chrono::steady_clock::now() - wait_started).count();
+
+		batches_.push_back({batch, bytes});
+		queued_bytes_ += bytes;
+		peak_queued_bytes_ =
+			std::max(peak_queued_bytes_, queued_bytes_);
+		ready_.notify_one();
+	}
+
+	QueueStats
+	GetQueueStats()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return {queued_bytes_, peak_queued_bytes_, wait_nanos_};
+	}
+
+	void
+	Finish()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		finished_ = true;
+		ready_.notify_all();
+		space_.notify_all();
+	}
+
+	void
+	Fail(const arrow::Status& status)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		if (status_.ok())
+			status_ = status;
+		finished_ = true;
+		ready_.notify_all();
+		space_.notify_all();
+	}
+
+private:
+	struct QueuedBatch
+	{
+		std::shared_ptr<arrow::RecordBatch> batch;
+		int64		bytes;
+	};
+
+	std::shared_ptr<arrow::Schema> schema_;
+	int64		max_queued_bytes_;
+	int64		queued_bytes_ = 0;
+	int64		peak_queued_bytes_ = 0;
+	int64		wait_nanos_ = 0;
+	std::deque<QueuedBatch> batches_;
+	std::mutex	mutex_;
+	std::condition_variable ready_;
+	std::condition_variable space_;
+	arrow::Status status_ = arrow::Status::OK();
+	bool		finished_ = false;
+};
+
+class FlightSqlWriterState
+{
+public:
 	std::string url;
-	std::string dataset;
-	std::string write_mode;
-	std::string operation_metadata;
+	std::string table_name;
+	std::string schema_name;
+	std::string catalog_name;
+	std::string transaction_id;
+	std::unordered_map<std::string, std::string> ingest_options;
 	std::string endpoint;
-	std::string descriptor;
-	std::string stream_id;
 	std::string tls_ca_file;
 	std::string tls_client_cert_file;
 	std::string tls_client_key_file;
 	std::string auth_token_file;
 	arrow::flight::FlightCallOptions call_options;
-	std::unique_ptr<arrow::flight::FlightClient> client;
-	std::unique_ptr<arrow::flight::FlightStreamWriter> writer;
-	std::unique_ptr<arrow::flight::FlightMetadataReader> reader;
+	arrow::StopSource ingest_stop_source;
+	std::shared_ptr<arrow::flight::FlightClient> client;
 	std::shared_ptr<arrow::Schema> schema;
-	std::vector<ArrowFlightFdwWriterColumn> columns;
+	std::vector<FlightSqlWriterColumn> columns;
+	std::shared_ptr<ArrowFlightSqlBatchReader> ingest_reader;
+	std::thread ingest_thread;
+	std::mutex ingest_result_mutex;
+	arrow::Status ingest_status = arrow::Status::OK();
+	int64		ingested_rows = -1;
+	bool		verify_ingested_rows = true;
 	int			batch_rows = AF_DEFAULT_BATCH_ROWS;
 	int			max_batch_bytes = AF_DEFAULT_MAX_BATCH_BYTES;
-	int			retry_count = 0;
-	int			retry_backoff_ms = 100;
-	int			attempt = 0;
 	int64		rows_in_batch = 0;
 	int64		estimated_batch_bytes = 0;
 	int64		total_rows = 0;
 	int64		batches = 0;
-	std::string server_ack_transfer_id;
-	int64		server_ack_rows = -1;
-	int64		server_ack_bytes = -1;
-	int64		server_ack_batches = -1;
-	bool		server_final_ack = false;
 	bool		finalized = false;
 	bool		tls_enabled = false;
 	bool		auth_enabled = false;
+	bool		mpp_planned = false;
+	std::string mpp_worker_id;
 };
 
 template <typename T>
@@ -140,85 +291,102 @@ static T af_writer_value_or_throw(arrow::Result<T> result,
 static void af_writer_status_or_throw(const arrow::Status& status,
 									  const char *context);
 static std::shared_ptr<arrow::DataType> af_writer_arrow_type(Form_pg_attribute attr,
-															 ArrowFlightFdwWriterColumnKind *kind);
+															 FlightSqlWriterColumnKind *kind);
 static bool af_writer_numeric_typmod(Form_pg_attribute attr,
 									 int32 *precision, int32 *scale);
 static std::unique_ptr<arrow::ArrayBuilder> af_writer_make_builder(
-									const ArrowFlightFdwWriterColumn *column);
-static void af_writer_init_columns(ArrowFlightFdwWriterState *state,
-								   Relation rel, List *target_attrs);
-static void af_writer_reset_builders(ArrowFlightFdwWriterState *state);
+									const FlightSqlWriterColumn *column);
+static void af_writer_init_columns(FlightSqlWriterState *state,
+								   Relation rel, List *target_attrs,
+								   bool use_remote_names);
+static void af_writer_reset_builders(FlightSqlWriterState *state);
 static std::shared_ptr<arrow::Schema> af_writer_build_schema(
-								   ArrowFlightFdwWriterState *state,
+								   FlightSqlWriterState *state,
 								   Relation rel);
-static std::shared_ptr<arrow::KeyValueMetadata> af_writer_build_metadata(
-								   ArrowFlightFdwWriterState *state,
-								   Relation rel);
-static void af_writer_append_static_metadata(arrow::KeyValueMetadata *metadata,
-											 const char *operation_metadata);
-static std::string af_writer_batch_metadata(ArrowFlightFdwWriterState *state,
-											bool final, int64 rows);
-static void af_writer_connect(ArrowFlightFdwWriterState *state);
 static arrow::flight::FlightClientOptions af_writer_client_options(
-									ArrowFlightFdwWriterState *state);
-static void af_writer_apply_auth_header(ArrowFlightFdwWriterState *state);
+									FlightSqlWriterState *state);
+static void af_writer_apply_auth_header(FlightSqlWriterState *state);
 static std::string af_writer_read_file(const std::string& path,
 									   const char *label);
 static std::string af_writer_read_token(const std::string& path);
 static int32 af_writer_date_to_arrow_days(
-									const ArrowFlightFdwWriterColumn *column,
+									const FlightSqlWriterColumn *column,
 									Datum value);
 static int64 af_writer_timestamp_to_arrow_usecs(
-									const ArrowFlightFdwWriterColumn *column,
+									const FlightSqlWriterColumn *column,
 									Datum value);
-static void af_writer_append_attr(ArrowFlightFdwWriterColumn *column,
+static void af_writer_append_attr(FlightSqlWriterColumn *column,
 								  Datum value, bool isnull,
 								  int64 *estimated_bytes);
-static void af_writer_flush(ArrowFlightFdwWriterState *state);
-static void af_writer_drain_metadata(ArrowFlightFdwWriterState *state);
-static bool af_writer_metadata_has_line(std::shared_ptr<arrow::Buffer> metadata,
-										const char *key,
-										const char *value);
-static bool af_writer_metadata_value(std::shared_ptr<arrow::Buffer> metadata,
-									 const char *key, std::string *value);
-static bool af_writer_parse_int64(const std::string& value, int64 *out);
-static void af_writer_parse_ack_metadata(ArrowFlightFdwWriterState *state,
-										 std::shared_ptr<arrow::Buffer> metadata);
-static std::string af_writer_action_body(ArrowFlightFdwWriterState *state,
-										 const char *action_type);
-static void af_writer_do_action(ArrowFlightFdwWriterState *state,
-								const char *action_type);
-static void af_writer_abort_operation(ArrowFlightFdwWriterState *state);
-static std::string af_writer_context(ArrowFlightFdwWriterState *state);
-static void af_writer_delete(ArrowFlightFdwWriterState *state);
+static void af_writer_append(FlightSqlWriterState *state,
+							 TupleTableSlot *slot);
+static void af_writer_flush(FlightSqlWriterState *state);
+static std::string af_writer_context(FlightSqlWriterState *state);
+static void af_writer_delete(FlightSqlWriterState *state);
+static void af_writer_resource_cleanup(void *resource);
+static std::string af_flightsql_decode_transaction_id(
+	const char *encoded_transaction_id);
+static void af_flightsql_start_ingest(FlightSqlWriterState *state);
+static void af_flightsql_join_ingest(FlightSqlWriterState *state);
 
 void *
-af_fdw_writer_open(Relation rel, List *target_attrs,
-				   const char *operation_id, const char *url,
-				   const char *dataset, const char *write_mode,
-				   const char *operation_metadata, int batch_rows,
-				   int max_batch_bytes, int timeout_ms,
-				   int retry_count, int retry_backoff_ms,
-				   const ArrowFlightSecurityOptions *security_options)
+af_flightsql_writer_open(
+	Relation rel, List *target_attrs, const char *url, const char *table_name,
+	const char *schema_name, const char *catalog_name, int batch_rows,
+	int max_batch_bytes, int timeout_ms, bool verify_ingested_rows,
+	const char *transaction_id,
+	const ArrowFlightSecurityOptions *security_options,
+	const ArrowFlightSqlMppRoute *mpp_route)
 {
-	std::unique_ptr<ArrowFlightFdwWriterState> state;
+	std::unique_ptr<FlightSqlWriterState> state;
 
 	try
 	{
-		ArrowFlightEndpoint endpoint;
+		ArrowFlightConnection connection;
+		arrow::Result<arrow::flight::Location> location_result;
 
 		if (GpIdentity.segindex < 0)
-			throw std::runtime_error("Arrow Flight FDW write requires QE segment execution");
+			throw std::runtime_error("Flight SQL ingest requires QE segment execution");
+		if (table_name == nullptr || table_name[0] == '\0')
+			throw std::runtime_error("Flight SQL ingest table name is empty");
 
 		CHECK_FOR_INTERRUPTS();
-
-		af_parse_flight_endpoint(url, &endpoint);
-		state = std::make_unique<ArrowFlightFdwWriterState>();
-		state->operation_id = operation_id == nullptr ? "" : operation_id;
+		af_parse_flight_connection(url, &connection);
+		state = std::make_unique<FlightSqlWriterState>();
 		state->url = url == nullptr ? "" : url;
-		state->dataset = dataset == nullptr ? "" : dataset;
-		state->write_mode = write_mode == nullptr ? "" : write_mode;
-		state->tls_enabled = endpoint.tls;
+		state->table_name = table_name;
+		state->schema_name = schema_name == nullptr ? "" : schema_name;
+		state->catalog_name = catalog_name == nullptr ? "" : catalog_name;
+		if (transaction_id != nullptr && transaction_id[0] != '\0')
+			state->transaction_id =
+				af_flightsql_decode_transaction_id(transaction_id);
+		if (mpp_route != nullptr)
+		{
+			state->mpp_planned = true;
+			state->mpp_worker_id =
+				mpp_route->worker_id == nullptr ?
+				"" : mpp_route->worker_id;
+			state->ingest_options[AF_FLIGHT_SQL_MPP_OPTION_VERSION] =
+				std::to_string(AF_FLIGHT_SQL_MPP_PROTOCOL_VERSION);
+			state->ingest_options[AF_FLIGHT_SQL_MPP_OPTION_PLAN_ID] =
+				mpp_route->plan_id;
+			state->ingest_options[AF_FLIGHT_SQL_MPP_OPTION_ROUTE_TOKEN] =
+				mpp_route->route_token;
+			state->ingest_options[AF_FLIGHT_SQL_MPP_OPTION_SEGMENT_INDEX] =
+				std::to_string(mpp_route->segment_index);
+			state->ingest_options[AF_FLIGHT_SQL_MPP_OPTION_SEGMENT_COUNT] =
+				std::to_string(mpp_route->segment_count);
+			state->ingest_options[
+				AF_FLIGHT_SQL_MPP_OPTION_CLIENT_OPERATION_ID] =
+				mpp_route->client_operation_id;
+			state->ingest_options[
+				AF_FLIGHT_SQL_MPP_OPTION_SCHEMA_FINGERPRINT] =
+				mpp_route->schema_fingerprint;
+		}
+		state->batch_rows = batch_rows;
+		state->max_batch_bytes = max_batch_bytes;
+		state->verify_ingested_rows = verify_ingested_rows;
+		state->tls_enabled = connection.tls;
 		if (security_options != nullptr)
 		{
 			state->tls_ca_file = security_options->tls_ca_file == nullptr ?
@@ -239,115 +407,82 @@ af_fdw_writer_open(Relation rel, List *target_attrs,
 			 !state->tls_client_cert_file.empty() ||
 			 !state->tls_client_key_file.empty() ||
 			 state->auth_enabled))
-			throw std::runtime_error("Arrow Flight TLS/auth options require tls=true");
-		state->operation_metadata =
-			operation_metadata == nullptr ? "" : operation_metadata;
-		state->batch_rows = batch_rows;
-		state->max_batch_bytes = max_batch_bytes;
-		state->retry_count = retry_count;
-		state->retry_backoff_ms = retry_backoff_ms;
-		state->stream_id = state->operation_id + "/seg" +
-			std::to_string(GpIdentity.segindex) + "/attempt0";
-		state->descriptor = "af-v1/write/" + state->dataset + "/" +
-			state->operation_id + "/segment/" +
-			std::to_string(GpIdentity.segindex);
+			throw std::runtime_error("Flight SQL TLS/auth options require tls=true");
 
-		arrow::Result<arrow::flight::Location> location_result =
-			endpoint.tls ?
-			arrow::flight::Location::ForGrpcTls(endpoint.host, endpoint.port) :
-			arrow::flight::Location::ForGrpcTcp(endpoint.host, endpoint.port);
+		location_result = connection.tls ?
+			arrow::flight::Location::ForGrpcTls(connection.host,
+											   connection.port) :
+			arrow::flight::Location::ForGrpcTcp(connection.host,
+											   connection.port);
 		arrow::flight::Location location =
 			af_writer_value_or_throw(std::move(location_result),
-									 "create Arrow Flight write location");
+									 "create Flight SQL ingest location");
 		state->endpoint = location.ToString();
-
 		if (timeout_ms > 0)
 			state->call_options.timeout =
 				arrow::flight::TimeoutDuration((double) timeout_ms / 1000.0);
+		state->call_options.stop_token = state->ingest_stop_source.token();
+		af_writer_apply_auth_header(state.get());
 
-		af_writer_init_columns(state.get(), rel, target_attrs);
+		af_writer_init_columns(state.get(), rel, target_attrs, true);
+		state->schema = af_writer_build_schema(state.get(), rel);
+		state->client =
+			af_writer_value_or_throw(
+				arrow::flight::FlightClient::Connect(
+					location, af_writer_client_options(state.get())),
+				"connect to Flight SQL ingest server");
 
-		int			attempt;
-		std::string last_error;
+		int64		queue_limit = max_batch_bytes > 0 ?
+			(int64) max_batch_bytes * 2 :
+			(int64) AF_DEFAULT_MAX_BATCH_BYTES * 2;
 
-		for (attempt = 0; attempt <= retry_count; attempt++)
-		{
-			CHECK_FOR_INTERRUPTS();
-			state->attempt = attempt;
-			state->stream_id = state->operation_id + "/seg" +
-				std::to_string(GpIdentity.segindex) + "/attempt" +
-				std::to_string(attempt);
-			state->schema = af_writer_build_schema(state.get(), rel);
-			state->call_options.headers.clear();
-			state->call_options.headers.push_back(
-				{"x-arrowflight-operation-id", state->operation_id});
-			state->call_options.headers.push_back(
-				{"x-arrowflight-stream-id", state->stream_id});
-			state->call_options.headers.push_back(
-				{"x-arrowflight-segment-index",
-				 std::to_string(GpIdentity.segindex)});
-			af_writer_apply_auth_header(state.get());
-
-			try
-			{
-				state->client.reset();
-				state->writer.reset();
-				state->reader.reset();
-
-				state->client =
-					af_writer_value_or_throw(
-						arrow::flight::FlightClient::Connect(
-							location, af_writer_client_options(state.get())),
-						"connect to Arrow Flight write server");
-				af_writer_connect(state.get());
-				break;
-			}
-			catch (const std::exception& ex)
-			{
-				last_error = ex.what();
-				state->client.reset();
-				state->writer.reset();
-				state->reader.reset();
-
-				if (attempt >= retry_count)
-					throw std::runtime_error("failed after " +
-											 std::to_string(attempt + 1) +
-											 " attempt(s): " + last_error);
-
-				if (retry_backoff_ms > 0)
-					pg_usleep((long) retry_backoff_ms * 1000L);
-			}
-		}
-
+		state->ingest_reader =
+			std::make_shared<ArrowFlightSqlBatchReader>(state->schema,
+														queue_limit);
+		af_flightsql_start_ingest(state.get());
+		af_resource_register(state.get(), af_writer_resource_cleanup,
+							 "Flight SQL write");
 		return state.release();
 	}
 	catch (const std::exception& ex)
 	{
-		std::string context = af_writer_context(state.get());
-
+		if (state != nullptr)
+		{
+			state->ingest_stop_source.RequestStop(
+				arrow::Status::Cancelled("ingest open failed"));
+			if (state->ingest_reader != nullptr)
+				state->ingest_reader->Fail(
+					arrow::Status::Cancelled("ingest open failed"));
+			af_flightsql_join_ingest(state.get());
+		}
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write failed%s: %s",
-						context.c_str(), ex.what())));
+				 errmsg("Flight SQL ingest failed: %s", ex.what())));
 	}
 	catch (...)
 	{
+		if (state != nullptr)
+		{
+			state->ingest_stop_source.RequestStop(
+				arrow::Status::Cancelled("ingest open failed"));
+			if (state->ingest_reader != nullptr)
+				state->ingest_reader->Fail(
+					arrow::Status::Cancelled("ingest open failed"));
+			af_flightsql_join_ingest(state.get());
+		}
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write raised unknown C++ exception")));
+				 errmsg("Flight SQL ingest raised unknown C++ exception")));
 	}
 
 	return NULL;
 }
 
-void
-af_fdw_writer_append(void *writer_state, TupleTableSlot *slot)
+static void
+af_writer_append(FlightSqlWriterState *state, TupleTableSlot *slot)
 {
-	ArrowFlightFdwWriterState *state =
-		static_cast<ArrowFlightFdwWriterState *>(writer_state);
-
 	if (state == nullptr)
-		elog(ERROR, "arrowflight_fdw writer is not initialized");
+		elog(ERROR, "Flight SQL writer is not initialized");
 
 	try
 	{
@@ -376,22 +511,31 @@ af_fdw_writer_append(void *writer_state, TupleTableSlot *slot)
 
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write failed%s: %s",
+				 errmsg("Flight SQL ingest failed%s: %s",
 						context.c_str(), ex.what())));
 	}
 	catch (...)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write raised unknown C++ exception")));
+				 errmsg("Flight SQL ingest raised unknown C++ exception")));
 	}
 }
 
 void
-af_fdw_writer_finish(void *writer_state)
+af_flightsql_writer_append(void *writer_state, TupleTableSlot *slot)
 {
-	ArrowFlightFdwWriterState *state =
-		static_cast<ArrowFlightFdwWriterState *>(writer_state);
+	FlightSqlWriterState *state =
+		static_cast<FlightSqlWriterState *>(writer_state);
+
+	af_writer_append(state, slot);
+}
+
+void
+af_flightsql_writer_finish(void *writer_state)
+{
+	FlightSqlWriterState *state =
+		static_cast<FlightSqlWriterState *>(writer_state);
 
 	if (state == nullptr)
 		return;
@@ -400,53 +544,150 @@ af_fdw_writer_finish(void *writer_state)
 	{
 		CHECK_FOR_INTERRUPTS();
 		af_writer_flush(state);
+		state->ingest_reader->Finish();
+		af_flightsql_join_ingest(state);
+		if (!state->ingest_status.ok())
+			throw std::runtime_error(state->ingest_status.ToString());
+		if (state->verify_ingested_rows &&
+			state->ingested_rows >= 0 &&
+			state->ingested_rows != state->total_rows)
+			throw std::runtime_error(
+				"Flight SQL server reported " +
+				std::to_string(state->ingested_rows) +
+				" ingested rows, sent " +
+				std::to_string(state->total_rows));
 
-		if (state->writer != nullptr)
-		{
-			af_writer_status_or_throw(
-				state->writer->WriteMetadata(
-					arrow::Buffer::FromString(
-						af_writer_batch_metadata(state, true, 0))),
-				"write Arrow Flight final metadata");
-			af_writer_status_or_throw(state->writer->DoneWriting(),
-									  "finish Arrow Flight DoPut stream");
-		}
-
-		af_writer_drain_metadata(state);
-		af_writer_do_action(state, "FinalizeOperation");
 		state->finalized = true;
+		{
+			std::string context = af_writer_context(state);
+
+			elog(DEBUG1, "Flight SQL ingest completed%s",
+				 context.c_str());
+		}
 		af_writer_delete(state);
 	}
 	catch (const std::exception& ex)
 	{
+		state->ingest_stop_source.RequestStop(
+			arrow::Status::Cancelled("ingest finish failed"));
+		if (state->ingest_reader != nullptr)
+			state->ingest_reader->Fail(
+				arrow::Status::Cancelled("ingest finish failed"));
+		af_flightsql_join_ingest(state);
 		std::string context = af_writer_context(state);
 
-		if (state != nullptr && !state->finalized)
-			af_writer_abort_operation(state);
 		af_writer_delete(state);
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write failed%s: %s",
+				 errmsg("Flight SQL ingest failed%s: %s",
 						context.c_str(), ex.what())));
 	}
 	catch (...)
 	{
+		state->ingest_stop_source.RequestStop(
+			arrow::Status::Cancelled("ingest finish failed"));
+		if (state->ingest_reader != nullptr)
+			state->ingest_reader->Fail(
+				arrow::Status::Cancelled("ingest finish failed"));
+		af_flightsql_join_ingest(state);
 		af_writer_delete(state);
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight FDW write raised unknown C++ exception")));
+				 errmsg("Flight SQL ingest raised unknown C++ exception")));
 	}
 }
 
 void
-af_fdw_writer_abort(void *writer_state)
+af_flightsql_writer_abort(void *writer_state)
 {
-	ArrowFlightFdwWriterState *state =
-		static_cast<ArrowFlightFdwWriterState *>(writer_state);
+	FlightSqlWriterState *state =
+		static_cast<FlightSqlWriterState *>(writer_state);
 
-	if (state != nullptr && !state->finalized)
-		af_writer_abort_operation(state);
+	if (state == nullptr)
+		return;
+	state->ingest_stop_source.RequestStop(
+		arrow::Status::Cancelled("Greengage statement aborted"));
+	if (state->ingest_reader != nullptr)
+		state->ingest_reader->Fail(
+			arrow::Status::Cancelled("Greengage statement aborted"));
+	af_flightsql_join_ingest(state);
 	af_writer_delete(state);
+}
+
+char *
+af_flightsql_writer_schema(
+	Relation rel, List *target_attrs, int *schema_len,
+	char **schema_fingerprint)
+{
+#ifdef USE_ARROW_FLIGHT
+	try
+	{
+		FlightSqlWriterState state;
+		std::shared_ptr<arrow::Buffer> serialized;
+		pg_sha256_ctx sha;
+		uint8		digest[PG_SHA256_DIGEST_LENGTH];
+		static const char hex[] = "0123456789abcdef";
+		char	   *result;
+		char	   *fingerprint;
+
+		if (rel == NULL || schema_len == NULL ||
+			schema_fingerprint == NULL)
+			throw std::runtime_error(
+				"Flight SQL schema serialization arguments are invalid");
+
+		af_writer_init_columns(&state, rel, target_attrs, true);
+		state.schema = af_writer_build_schema(&state, rel);
+		serialized = af_writer_value_or_throw(
+			arrow::ipc::SerializeSchema(*state.schema),
+			"serialize Flight SQL ingest schema");
+		if (serialized == nullptr || serialized->size() <= 0 ||
+			serialized->size() > INT_MAX)
+			throw std::runtime_error(
+				"serialized Flight SQL ingest schema has invalid size");
+
+		result = (char *) palloc((Size) serialized->size());
+		memcpy(result, serialized->data(), (Size) serialized->size());
+		*schema_len = (int) serialized->size();
+
+		pg_sha256_init(&sha);
+		pg_sha256_update(
+			&sha, reinterpret_cast<const uint8 *>(serialized->data()),
+			(Size) serialized->size());
+		pg_sha256_final(&sha, digest);
+
+		fingerprint =
+			(char *) palloc(PG_SHA256_DIGEST_STRING_LENGTH);
+		for (int i = 0; i < PG_SHA256_DIGEST_LENGTH; i++)
+		{
+			fingerprint[i * 2] = hex[digest[i] >> 4];
+			fingerprint[i * 2 + 1] = hex[digest[i] & 0x0f];
+		}
+		fingerprint[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+		*schema_fingerprint = fingerprint;
+		return result;
+	}
+	catch (const std::exception& ex)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("could not serialize Flight SQL ingest schema: %s",
+						ex.what())));
+	}
+	catch (...)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("could not serialize Flight SQL ingest schema: unknown C++ exception")));
+	}
+#else
+	(void) rel;
+	(void) target_attrs;
+	(void) schema_len;
+	(void) schema_fingerprint;
+	af_check_arrow_flight_linkage();
+#endif
+
+	return NULL;
 }
 
 template <typename T>
@@ -470,7 +711,7 @@ af_writer_status_or_throw(const arrow::Status& status, const char *context)
 
 static std::shared_ptr<arrow::DataType>
 af_writer_arrow_type(Form_pg_attribute attr,
-					 ArrowFlightFdwWriterColumnKind *kind)
+					 FlightSqlWriterColumnKind *kind)
 {
 	switch (attr->atttypid)
 	{
@@ -560,7 +801,7 @@ af_writer_arrow_type(Form_pg_attribute attr,
 									 std::string(NameStr(attr->attname)) +
 									 "\" has unsupported type oid " +
 									 std::to_string(attr->atttypid) +
-									 " for Arrow Flight FDW write");
+									 " for Flight SQL ingest");
 	}
 }
 
@@ -585,7 +826,7 @@ af_writer_numeric_typmod(Form_pg_attribute attr, int32 *precision, int32 *scale)
 }
 
 static std::unique_ptr<arrow::ArrayBuilder>
-af_writer_make_builder(const ArrowFlightFdwWriterColumn *column)
+af_writer_make_builder(const FlightSqlWriterColumn *column)
 {
 	if (column->kind == AF_WRITER_ENUM)
 		return std::make_unique<arrow::Dictionary32Builder<arrow::StringType>>(
@@ -597,8 +838,8 @@ af_writer_make_builder(const ArrowFlightFdwWriterColumn *column)
 }
 
 static void
-af_writer_init_columns(ArrowFlightFdwWriterState *state, Relation rel,
-					   List *target_attrs)
+af_writer_init_columns(FlightSqlWriterState *state, Relation rel,
+					   List *target_attrs, bool use_remote_names)
 {
 	ListCell   *cell;
 	TupleDesc	tupdesc = RelationGetDescr(rel);
@@ -607,10 +848,10 @@ af_writer_init_columns(ArrowFlightFdwWriterState *state, Relation rel,
 	{
 		int			attnum = lfirst_int(cell);
 		Form_pg_attribute attr;
-		ArrowFlightFdwWriterColumn column;
+		FlightSqlWriterColumn column;
 
 		if (attnum <= 0 || attnum > tupdesc->natts)
-			throw std::runtime_error("invalid Arrow Flight FDW write target attribute");
+			throw std::runtime_error("invalid Flight SQL ingest target attribute");
 
 		attr = TupleDescAttr(tupdesc, attnum - 1);
 		if (attr->attisdropped)
@@ -619,6 +860,23 @@ af_writer_init_columns(ArrowFlightFdwWriterState *state, Relation rel,
 		column.attnum = attnum;
 		column.typid = attr->atttypid;
 		column.name = NameStr(attr->attname);
+		if (use_remote_names)
+		{
+			List	   *column_options =
+				GetForeignColumnOptions(RelationGetRelid(rel), attnum);
+			ListCell   *option_cell;
+
+			foreach(option_cell, column_options)
+			{
+				DefElem    *def = (DefElem *) lfirst(option_cell);
+
+				if (strcmp(def->defname, "column_name") == 0)
+				{
+					column.name = defGetString(def);
+					break;
+				}
+			}
+		}
 		column.arrow_type = af_writer_arrow_type(attr, &column.kind);
 		column.builder = af_writer_make_builder(&column);
 		state->columns.push_back(std::move(column));
@@ -626,124 +884,101 @@ af_writer_init_columns(ArrowFlightFdwWriterState *state, Relation rel,
 }
 
 static void
-af_writer_reset_builders(ArrowFlightFdwWriterState *state)
+af_writer_reset_builders(FlightSqlWriterState *state)
 {
 	for (auto& column : state->columns)
 		column.builder = af_writer_make_builder(&column);
 }
 
 static std::shared_ptr<arrow::Schema>
-af_writer_build_schema(ArrowFlightFdwWriterState *state, Relation rel)
+af_writer_build_schema(FlightSqlWriterState *state, Relation rel)
 {
 	std::vector<std::shared_ptr<arrow::Field>> fields;
 
+	(void) rel;
 	for (const auto& column : state->columns)
 		fields.push_back(arrow::field(column.name, column.arrow_type));
 
-	return arrow::schema(fields)->WithMetadata(
-		af_writer_build_metadata(state, rel));
-}
-
-static std::shared_ptr<arrow::KeyValueMetadata>
-af_writer_build_metadata(ArrowFlightFdwWriterState *state, Relation rel)
-{
-	auto metadata = std::make_shared<arrow::KeyValueMetadata>();
-
-	metadata->Append("af.protocol.version", "1");
-	metadata->Append("af.operation.id", state->operation_id);
-	metadata->Append("af.operation.type", "insert");
-	metadata->Append("af.operation.mode", state->write_mode);
-	metadata->Append("af.dataset", state->dataset);
-	metadata->Append("af.relation.oid",
-					 std::to_string(RelationGetRelid(rel)));
-	metadata->Append("af.relation.name", RelationGetRelationName(rel));
-	metadata->Append("af.segment.index",
-					 std::to_string(GpIdentity.segindex));
-	metadata->Append("af.segment.count",
-					 std::to_string(getgpsegmentCount()));
-	metadata->Append("af.stream.id", state->stream_id);
-	metadata->Append("af.stream.attempt", std::to_string(state->attempt));
-	metadata->Append("af.session.id", std::to_string(gp_session_id));
-	metadata->Append("af.command.count", std::to_string(gp_command_count));
-	metadata->Append("af.pid", std::to_string(MyProcPid));
-	af_writer_append_static_metadata(metadata.get(),
-									 state->operation_metadata.c_str());
-
-	return metadata;
+	return arrow::schema(fields);
 }
 
 static void
-af_writer_append_static_metadata(arrow::KeyValueMetadata *metadata,
-								 const char *operation_metadata)
+af_flightsql_start_ingest(FlightSqlWriterState *state)
 {
-	const char *pos;
+	if (state == nullptr || state->client == nullptr ||
+		state->ingest_reader == nullptr)
+		throw std::runtime_error("Flight SQL ingest state is not initialized");
 
-	if (operation_metadata == nullptr || operation_metadata[0] == '\0')
-		return;
+	state->ingest_thread = std::thread([state]() {
+		try
+		{
+			arrow::flight::sql::FlightSqlClient sql_client(state->client);
+			arrow::flight::sql::TableDefinitionOptions definition_options{
+				arrow::flight::sql::TableDefinitionOptionsTableNotExistOption::kFail,
+				arrow::flight::sql::TableDefinitionOptionsTableExistsOption::kAppend
+			};
+			std::optional<std::string> schema =
+				state->schema_name.empty() ?
+				std::nullopt :
+				std::optional<std::string>(state->schema_name);
+			std::optional<std::string> catalog =
+				state->catalog_name.empty() ?
+				std::nullopt :
+				std::optional<std::string>(state->catalog_name);
+			arrow::Result<int64_t> result =
+				state->transaction_id.empty() ?
+				sql_client.ExecuteIngest(
+					state->call_options, state->ingest_reader,
+					definition_options, state->table_name, schema,
+					catalog, false,
+					arrow::flight::sql::no_transaction(),
+					state->ingest_options) :
+				sql_client.ExecuteIngest(
+					state->call_options, state->ingest_reader,
+					definition_options, state->table_name, schema,
+					catalog, false,
+					arrow::flight::sql::Transaction(
+						state->transaction_id),
+					state->ingest_options);
+			std::lock_guard<std::mutex> lock(state->ingest_result_mutex);
 
-	pos = operation_metadata;
-	while (*pos != '\0')
-	{
-		const char *entry_end = pos;
-		const char *eq;
-		std::string key;
-		std::string value;
+			if (result.ok())
+				state->ingested_rows = std::move(result).ValueOrDie();
+			else
+			{
+				state->ingest_status = result.status();
+				state->ingest_reader->Fail(state->ingest_status);
+			}
+		}
+		catch (const std::exception& ex)
+		{
+			std::lock_guard<std::mutex> lock(state->ingest_result_mutex);
 
-		while (*entry_end != '\0' && *entry_end != ',' &&
-			   *entry_end != ';')
-			entry_end++;
+			state->ingest_status =
+				arrow::Status::UnknownError(ex.what());
+			state->ingest_reader->Fail(state->ingest_status);
+		}
+		catch (...)
+		{
+			std::lock_guard<std::mutex> lock(state->ingest_result_mutex);
 
-		eq = (const char *) memchr(pos, '=', entry_end - pos);
-		if (eq == nullptr)
-			break;
-
-		key.assign(pos, eq - pos);
-		value.assign(eq + 1, entry_end - eq - 1);
-		if (key.rfind("static.", 0) == 0)
-			key = "af." + key;
-		metadata->Append(key, value);
-
-		pos = entry_end;
-		if (*pos == ',' || *pos == ';')
-			pos++;
-	}
-}
-
-static std::string
-af_writer_batch_metadata(ArrowFlightFdwWriterState *state, bool final,
-						 int64 rows)
-{
-	std::string metadata;
-
-	metadata += "af.operation.id=" + state->operation_id + "\n";
-	metadata += "af.stream.id=" + state->stream_id + "\n";
-	metadata += "af.segment.index=" + std::to_string(GpIdentity.segindex) + "\n";
-	metadata += "af.batch.index=" + std::to_string(state->batches) + "\n";
-	metadata += "af.batch.rows=" + std::to_string(rows) + "\n";
-	metadata += "af.batch.final=" + std::string(final ? "true" : "false") + "\n";
-	return metadata;
+			state->ingest_status =
+				arrow::Status::UnknownError(
+					"unknown Flight SQL ingest exception");
+			state->ingest_reader->Fail(state->ingest_status);
+		}
+	});
 }
 
 static void
-af_writer_connect(ArrowFlightFdwWriterState *state)
+af_flightsql_join_ingest(FlightSqlWriterState *state)
 {
-	arrow::flight::FlightDescriptor descriptor =
-		arrow::flight::FlightDescriptor::Path(
-			{"af-v1", "write", state->dataset, state->operation_id,
-			 "segment", std::to_string(GpIdentity.segindex)});
-
-	arrow::flight::FlightClient::DoPutResult result =
-		af_writer_value_or_throw(
-			state->client->DoPut(state->call_options, descriptor,
-								 state->schema),
-			"open Arrow Flight DoPut stream");
-
-	state->writer = std::move(result.writer);
-	state->reader = std::move(result.reader);
+	if (state != nullptr && state->ingest_thread.joinable())
+		state->ingest_thread.join();
 }
 
 static arrow::flight::FlightClientOptions
-af_writer_client_options(ArrowFlightFdwWriterState *state)
+af_writer_client_options(FlightSqlWriterState *state)
 {
 	arrow::flight::FlightClientOptions options =
 		arrow::flight::FlightClientOptions::Defaults();
@@ -773,7 +1008,7 @@ af_writer_client_options(ArrowFlightFdwWriterState *state)
 }
 
 static void
-af_writer_apply_auth_header(ArrowFlightFdwWriterState *state)
+af_writer_apply_auth_header(FlightSqlWriterState *state)
 {
 	if (state == nullptr || state->auth_token_file.empty())
 		return;
@@ -825,7 +1060,7 @@ af_writer_read_token(const std::string& path)
 }
 
 static int32
-af_writer_date_to_arrow_days(const ArrowFlightFdwWriterColumn *column,
+af_writer_date_to_arrow_days(const FlightSqlWriterColumn *column,
 							 Datum value)
 {
 	DateADT	date = DatumGetDateADT(value);
@@ -848,7 +1083,7 @@ af_writer_date_to_arrow_days(const ArrowFlightFdwWriterColumn *column,
 }
 
 static int64
-af_writer_timestamp_to_arrow_usecs(const ArrowFlightFdwWriterColumn *column,
+af_writer_timestamp_to_arrow_usecs(const FlightSqlWriterColumn *column,
 								   Datum value)
 {
 	Timestamp	timestamp = DatumGetTimestamp(value);
@@ -871,7 +1106,7 @@ af_writer_timestamp_to_arrow_usecs(const ArrowFlightFdwWriterColumn *column,
 }
 
 static void
-af_writer_append_attr(ArrowFlightFdwWriterColumn *column, Datum value,
+af_writer_append_attr(FlightSqlWriterColumn *column, Datum value,
 					  bool isnull, int64 *estimated_bytes)
 {
 	if (isnull)
@@ -1115,7 +1350,7 @@ af_writer_append_attr(ArrowFlightFdwWriterColumn *column, Datum value,
 }
 
 static void
-af_writer_flush(ArrowFlightFdwWriterState *state)
+af_writer_flush(FlightSqlWriterState *state)
 {
 	std::vector<std::shared_ptr<arrow::Array>> arrays;
 
@@ -1136,311 +1371,182 @@ af_writer_flush(ArrowFlightFdwWriterState *state)
 	std::shared_ptr<arrow::RecordBatch> batch =
 		arrow::RecordBatch::Make(state->schema, state->rows_in_batch,
 								 arrays);
-	std::shared_ptr<arrow::Buffer> metadata =
-		arrow::Buffer::FromString(
-			af_writer_batch_metadata(state, false, state->rows_in_batch));
 
-	af_writer_status_or_throw(
-		state->writer->WriteWithMetadata(*batch, metadata),
-		"write Arrow Flight record batch");
-
+	state->ingest_reader->Push(batch);
 	state->batches++;
 	state->rows_in_batch = 0;
 	state->estimated_batch_bytes = 0;
 	af_writer_reset_builders(state);
 }
 
-static void
-af_writer_drain_metadata(ArrowFlightFdwWriterState *state)
+static std::string
+af_writer_context(FlightSqlWriterState *state)
 {
-	if (state->reader == nullptr)
-		return;
+	if (state == nullptr)
+		return "";
 
-	while (true)
-	{
-		std::shared_ptr<arrow::Buffer> metadata;
-		arrow::Status status = state->reader->ReadMetadata(&metadata);
+	ArrowFlightSqlBatchReader::QueueStats queue_stats{0, 0, 0};
 
-		if (!status.ok())
-			throw std::runtime_error("failed to read Arrow Flight DoPut metadata: " +
-									 status.ToString());
-		if (metadata == nullptr)
-			break;
+	if (state->ingest_reader != nullptr)
+		queue_stats = state->ingest_reader->GetQueueStats();
 
-		if (af_writer_metadata_has_line(metadata, "af.ack.final", "true"))
-		{
-			state->server_final_ack = true;
-			af_writer_parse_ack_metadata(state, metadata);
-		}
-		CHECK_FOR_INTERRUPTS();
-	}
-
-	if (!state->server_final_ack)
-		throw std::runtime_error(
-			"Arrow Flight DoPut server did not return final ack");
+	return " (endpoint=" + state->endpoint +
+		" table=" + state->table_name +
+		" schema=" + state->schema_name +
+		" catalog=" + state->catalog_name +
+		" transactional=" +
+		std::string(state->transaction_id.empty() ? "false" : "true") +
+		" routing=" +
+		std::string(state->mpp_planned ? "planned" : "origin") +
+		" worker=" +
+		(state->mpp_worker_id.empty() ? "origin" : state->mpp_worker_id) +
+		" segment=" + std::to_string(GpIdentity.segindex) +
+		" tls=" + std::string(state->tls_enabled ? "true" : "false") +
+		" auth=" + std::string(state->auth_enabled ? "true" : "false") +
+		" batches=" + std::to_string(state->batches) +
+		" rows=" + std::to_string(state->total_rows) +
+		" queue_bytes=" + std::to_string(queue_stats.queued_bytes) +
+		" queue_peak_bytes=" +
+		std::to_string(queue_stats.peak_queued_bytes) +
+		" queue_wait_nanos=" +
+		std::to_string(queue_stats.wait_nanos) +
+		")";
 }
 
 static void
-af_writer_parse_ack_metadata(ArrowFlightFdwWriterState *state,
-							 std::shared_ptr<arrow::Buffer> metadata)
+af_writer_delete(FlightSqlWriterState *state)
 {
-	std::string value;
-	int64		parsed = 0;
-
 	if (state == nullptr)
 		return;
 
-	if (af_writer_metadata_value(metadata, "af.ack.transfer_id", &value))
-		state->server_ack_transfer_id = value;
-	if (af_writer_metadata_value(metadata, "af.ack.rows", &value) &&
-		af_writer_parse_int64(value, &parsed))
-		state->server_ack_rows = parsed;
-	if (af_writer_metadata_value(metadata, "af.ack.bytes", &value) &&
-		af_writer_parse_int64(value, &parsed))
-		state->server_ack_bytes = parsed;
-	if (af_writer_metadata_value(metadata, "af.ack.batches", &value) &&
-		af_writer_parse_int64(value, &parsed))
-		state->server_ack_batches = parsed;
-}
-
-static bool
-af_writer_metadata_has_line(std::shared_ptr<arrow::Buffer> metadata,
-							const char *key,
-							const char *value)
-{
-	std::string text;
-	std::string expected;
-	size_t		start = 0;
-
-	if (metadata == nullptr || metadata->size() <= 0)
-		return false;
-
-	text.assign(reinterpret_cast<const char *>(metadata->data()),
-				metadata->size());
-	expected = std::string(key) + "=" + value;
-
-	while (start <= text.size())
-	{
-		size_t		end = text.find('\n', start);
-		std::string line =
-			text.substr(start, end == std::string::npos ?
-						std::string::npos : end - start);
-
-		if (line == expected)
-			return true;
-		if (end == std::string::npos)
-			break;
-		start = end + 1;
-	}
-
-	return false;
-}
-
-static bool
-af_writer_metadata_value(std::shared_ptr<arrow::Buffer> metadata,
-						 const char *key, std::string *value)
-{
-	std::string text;
-	std::string prefix;
-	size_t		start = 0;
-
-	if (metadata == nullptr || metadata->size() <= 0 ||
-		key == nullptr || value == nullptr)
-		return false;
-
-	text.assign(reinterpret_cast<const char *>(metadata->data()),
-				metadata->size());
-	prefix = std::string(key) + "=";
-
-	while (start <= text.size())
-	{
-		size_t		end = text.find('\n', start);
-		std::string line =
-			text.substr(start, end == std::string::npos ?
-						std::string::npos : end - start);
-
-		if (line.rfind(prefix, 0) == 0)
-		{
-			*value = line.substr(prefix.size());
-			return true;
-		}
-		if (end == std::string::npos)
-			break;
-		start = end + 1;
-	}
-
-	return false;
-}
-
-static bool
-af_writer_parse_int64(const std::string& value, int64 *out)
-{
-	char	   *end = nullptr;
-	long long	parsed = 0;
-
-	if (out == nullptr || value.empty())
-		return false;
-
-	errno = 0;
-	parsed = std::strtoll(value.c_str(), &end, 10);
-	if (errno != 0 || end == value.c_str() || *end != '\0')
-		return false;
-
-	*out = (int64) parsed;
-	return true;
+	af_resource_unregister(state);
+	if (state->ingest_reader != nullptr)
+		state->ingest_reader->Finish();
+	af_flightsql_join_ingest(state);
+	delete state;
 }
 
 static std::string
-af_writer_action_body(ArrowFlightFdwWriterState *state,
-					  const char *action_type)
+af_flightsql_decode_transaction_id(const char *encoded_transaction_id)
 {
-	std::string body;
+	int			encoded_len;
+	int			decoded_capacity;
+	int			decoded_len;
+	std::string transaction_id;
 
-	body += "af.protocol.version=1\n";
-	body += "af.action.type=" + std::string(action_type) + "\n";
-	body += "af.operation.id=" + state->operation_id + "\n";
-	body += "af.operation.type=insert\n";
-	body += "af.operation.mode=" + state->write_mode + "\n";
-	body += "af.dataset=" + state->dataset + "\n";
-	body += "af.stream.id=" + state->stream_id + "\n";
-	body += "af.stream.attempt=" + std::to_string(state->attempt) + "\n";
-	body += "af.segment.index=" + std::to_string(GpIdentity.segindex) + "\n";
-	body += "af.segment.count=" + std::to_string(getgpsegmentCount()) + "\n";
-	body += "af.rows=" + std::to_string(state->total_rows) + "\n";
-	body += "af.batches=" + std::to_string(state->batches) + "\n";
-	body += "af.session.id=" + std::to_string(gp_session_id) + "\n";
-	body += "af.command.count=" + std::to_string(gp_command_count) + "\n";
-	body += "af.pid=" + std::to_string(MyProcPid) + "\n";
+	if (encoded_transaction_id == nullptr ||
+		encoded_transaction_id[0] == '\0')
+		throw std::runtime_error("Flight SQL transaction id is empty");
 
-	return body;
+	encoded_len = strlen(encoded_transaction_id);
+	decoded_capacity = pg_b64_dec_len(encoded_len);
+	if (decoded_capacity > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
+		throw std::runtime_error(
+			"Flight SQL transaction id exceeds the supported size");
+	transaction_id.resize(decoded_capacity);
+	decoded_len = pg_b64_decode(encoded_transaction_id, encoded_len,
+								transaction_id.data());
+	if (decoded_len <= 0)
+		throw std::runtime_error(
+			"Flight SQL transaction id is not valid base64");
+	transaction_id.resize(decoded_len);
+	return transaction_id;
 }
 
 static void
-af_writer_do_action(ArrowFlightFdwWriterState *state,
-					const char *action_type)
+af_writer_resource_cleanup(void *resource)
 {
-	if (state->client == nullptr)
-		throw std::runtime_error("Arrow Flight client is not initialized");
-
-	CHECK_FOR_INTERRUPTS();
-
-	arrow::flight::Action action(
-		action_type,
-		arrow::Buffer::FromString(af_writer_action_body(state, action_type)));
-	std::unique_ptr<arrow::flight::ResultStream> results =
-		af_writer_value_or_throw(
-			state->client->DoAction(state->call_options, action),
-			action_type);
-
-	af_writer_status_or_throw(results->Drain(), action_type);
-}
-
-static void
-af_writer_abort_operation(ArrowFlightFdwWriterState *state)
-{
-	if (state == nullptr || state->client == nullptr)
-		return;
+	FlightSqlWriterState *state =
+		static_cast<FlightSqlWriterState *>(resource);
 
 	try
 	{
-		arrow::flight::Action action(
-			"AbortOperation",
-			arrow::Buffer::FromString(
-				af_writer_action_body(state, "AbortOperation")));
-		arrow::Result<std::unique_ptr<arrow::flight::ResultStream>> result =
-			state->client->DoAction(state->call_options, action);
-
-		if (result.ok())
-			(void) std::move(result).ValueOrDie()->Drain();
+		if (state != nullptr)
+		{
+			state->ingest_stop_source.RequestStop(
+				arrow::Status::Cancelled(
+					"Greengage resource owner released"));
+			if (state->ingest_reader != nullptr)
+				state->ingest_reader->Fail(
+					arrow::Status::Cancelled(
+						"Greengage resource owner released"));
+			af_flightsql_join_ingest(state);
+		}
+		delete state;
 	}
 	catch (...)
 	{
 	}
 }
 
-static std::string
-af_writer_context(ArrowFlightFdwWriterState *state)
-{
-	if (state == nullptr)
-		return "";
-
-	return " (endpoint=" + state->endpoint +
-		" dataset=" + state->dataset +
-		" operation_id=" + state->operation_id +
-		" stream_id=" + state->stream_id +
-		" segment=" + std::to_string(GpIdentity.segindex) +
-		" tls=" + std::string(state->tls_enabled ? "true" : "false") +
-		" auth=" + std::string(state->auth_enabled ? "true" : "false") +
-		" batches=" + std::to_string(state->batches) +
-		" rows=" + std::to_string(state->total_rows) +
-		" server_ack_transfer_id=" + state->server_ack_transfer_id +
-		" server_ack_rows=" + std::to_string(state->server_ack_rows) +
-		" server_ack_bytes=" + std::to_string(state->server_ack_bytes) +
-		" server_ack_batches=" + std::to_string(state->server_ack_batches) +
-		")";
-}
-
-static void
-af_writer_delete(ArrowFlightFdwWriterState *state)
-{
-	if (state == nullptr)
-		return;
-
-	delete state;
-}
-
 #else							/* !USE_ARROW_FLIGHT */
 
 void *
-af_fdw_writer_open(Relation rel, List *target_attrs,
-				   const char *operation_id, const char *url,
-				   const char *dataset, const char *write_mode,
-				   const char *operation_metadata, int batch_rows,
-				   int max_batch_bytes, int timeout_ms,
-				   int retry_count, int retry_backoff_ms,
-				   const ArrowFlightSecurityOptions *security_options)
+af_flightsql_writer_open(
+	Relation rel, List *target_attrs, const char *url, const char *table_name,
+	const char *schema_name, const char *catalog_name, int batch_rows,
+	int max_batch_bytes, int timeout_ms, bool verify_ingested_rows,
+	const char *transaction_id,
+	const ArrowFlightSecurityOptions *security_options,
+	const ArrowFlightSqlMppRoute *mpp_route)
 {
 	(void) rel;
 	(void) target_attrs;
-	(void) operation_id;
 	(void) url;
-	(void) dataset;
-	(void) write_mode;
-	(void) operation_metadata;
+	(void) table_name;
+	(void) schema_name;
+	(void) catalog_name;
 	(void) batch_rows;
 	(void) max_batch_bytes;
 	(void) timeout_ms;
-	(void) retry_count;
-	(void) retry_backoff_ms;
+	(void) verify_ingested_rows;
+	(void) transaction_id;
 	(void) security_options;
+	(void) mpp_route;
 
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("Arrow Flight FDW write requires Arrow Flight support"),
+			 errmsg("Flight SQL ingest requires Arrow Flight SQL support"),
 			 errhint("Build the arrowflight extension with USE_ARROW_FLIGHT=1 or with_arrow_flight=yes.")));
 
 	return NULL;
 }
 
+char *
+af_flightsql_writer_schema(
+	Relation rel, List *target_attrs, int *schema_len,
+	char **schema_fingerprint)
+{
+	(void) rel;
+	(void) target_attrs;
+	(void) schema_len;
+	(void) schema_fingerprint;
+
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("Flight SQL ingest requires Arrow Flight SQL support")));
+	return NULL;
+}
+
 void
-af_fdw_writer_append(void *writer_state, TupleTableSlot *slot)
+af_flightsql_writer_append(void *writer_state, TupleTableSlot *slot)
 {
 	(void) writer_state;
 	(void) slot;
 
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("Arrow Flight FDW write requires Arrow Flight support")));
+			 errmsg("Flight SQL ingest requires Arrow Flight SQL support")));
 }
 
 void
-af_fdw_writer_finish(void *writer_state)
+af_flightsql_writer_finish(void *writer_state)
 {
 	(void) writer_state;
 }
 
 void
-af_fdw_writer_abort(void *writer_state)
+af_flightsql_writer_abort(void *writer_state)
 {
 	(void) writer_state;
 }

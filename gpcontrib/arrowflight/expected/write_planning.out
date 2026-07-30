@@ -3,105 +3,79 @@
 -- s/Redistribute Motion 1:\d+/Redistribute Motion 1:N/
 -- end_matchsubs
 SET optimizer=off;
-CREATE SERVER arrowflight_fdw_plan_srv
-FOREIGN DATA WRAPPER arrowflight_fdw
+CREATE SERVER flightsql_plan_srv
+FOREIGN DATA WRAPPER flightsql_fdw
 OPTIONS (
     host 'localhost',
     port '8815',
-    write_mode 'staging',
     batch_rows '8',
-    max_batch_bytes '1024',
-    timeout_ms '1000',
-    retry_count '0',
-    retry_backoff_ms '10'
+    max_batch_bytes '4096',
+    timeout_ms '1000'
 );
-CREATE FOREIGN TABLE arrowflight_fdw_read_only_check (
+CREATE FOREIGN TABLE flightsql_plan_check (
     id int4,
     label text
 )
-SERVER arrowflight_fdw_plan_srv
+SERVER flightsql_plan_srv
 OPTIONS (
-    path 'dataset/read_plan',
+    table_name 'events',
     rows '10'
 );
--- start_ignore
+SELECT (pg_relation_is_updatable(
+            'flightsql_plan_check'::regclass, false) & 8) <> 0
+       AS table_insertable;
+ table_insertable 
+------------------
+ t
+(1 row)
+
 EXPLAIN (COSTS OFF)
 SELECT id
-FROM arrowflight_fdw_read_only_check;
--- end_ignore
-CREATE FOREIGN TABLE arrowflight_fdw_write_check (
-    id int4,
-    label text
-)
-SERVER arrowflight_fdw_plan_srv
-OPTIONS (
-    path 'dataset/events',
-    operation_metadata 'static.source=regress,static.job_id=afw1'
-);
-SELECT (pg_relation_is_updatable('arrowflight_fdw_read_only_check'::regclass, false) & 8) <> 0
-       AS read_table_insertable;
- read_table_insertable 
------------------------
- t
-(1 row)
-
-SELECT (pg_relation_is_updatable('arrowflight_fdw_write_check'::regclass, false) & 8) <> 0
-       AS write_table_insertable;
- write_table_insertable 
-------------------------
- t
-(1 row)
+FROM flightsql_plan_check;
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_plan_check
+         Flight SQL query: SELECT id AS id FROM events
+ Optimizer: Postgres-based planner
+(4 rows)
 
 EXPLAIN (COSTS OFF, VERBOSE)
-INSERT INTO arrowflight_fdw_write_check
+INSERT INTO flightsql_plan_check
 SELECT 1, 'one';
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Insert on public.arrowflight_fdw_write_check
-   Arrow Flight Endpoint: arrowflight://localhost:8815/dataset/events
-   Arrow Flight Dataset: events
-   Arrow Flight Write Mode: staging
-   Arrow Flight Batch Rows: 8
-   Arrow Flight Max Batch Bytes: 1024
-   ->  Redistribute Motion 1:N  (slice1; segments: 1)
+                      QUERY PLAN                      
+------------------------------------------------------
+ Insert on public.flightsql_plan_check
+   Flight SQL Ingest Table: events
+   Flight SQL Ingest Mode: append
+   Flight SQL Transaction Mode: auto_commit
+   Flight SQL Write Routing: origin
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
          Output: 1, 'one'::text
          ->  Result
                Output: 1, 'one'::text
  Optimizer: Postgres-based planner
  Settings: optimizer = 'off'
-(12 rows)
+(10 rows)
 
-CREATE FOREIGN TABLE arrowflight_fdw_bad_metadata (
-    id int4
-)
-SERVER arrowflight_fdw_plan_srv
-OPTIONS (
-    operation_metadata 'af.operation.id=bad'
-);
-ERROR:  invalid arrowflight_fdw operation_metadata key
-HINT:  Use keys in the static.* or af.static.* namespace.
-CREATE FOREIGN TABLE arrowflight_fdw_bad_type (
+CREATE FOREIGN TABLE flightsql_bad_numeric (
     n numeric
 )
-SERVER arrowflight_fdw_plan_srv
+SERVER flightsql_plan_srv
 OPTIONS (
-    path 'dataset/events'
+    table_name 'bad_numeric'
 );
 EXPLAIN (COSTS OFF)
-INSERT INTO arrowflight_fdw_bad_type
+INSERT INTO flightsql_bad_numeric
 SELECT 1.0::numeric;
-ERROR:  column "n" has unsupported type oid 1700 for Arrow Flight FDW write
-DETAIL:  constrained numeric(p,s) is required
-DROP FOREIGN TABLE arrowflight_fdw_bad_type;
-CREATE FOREIGN TABLE arrowflight_fdw_missing_write_path (
-    id int4
-)
-SERVER arrowflight_fdw_plan_srv;
-EXPLAIN (COSTS OFF)
-INSERT INTO arrowflight_fdw_missing_write_path
-SELECT 1;
-ERROR:  arrowflight_fdw INSERT requires table option "path" or "url"
-DROP FOREIGN TABLE arrowflight_fdw_missing_write_path;
-DROP FOREIGN TABLE arrowflight_fdw_read_only_check;
-DROP FOREIGN TABLE arrowflight_fdw_write_check;
-DROP SERVER arrowflight_fdw_plan_srv;
+                      QUERY PLAN                      
+------------------------------------------------------
+ Insert on flightsql_bad_numeric
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         ->  Result
+ Optimizer: Postgres-based planner
+(4 rows)
+
+DROP FOREIGN TABLE flightsql_bad_numeric;
+DROP FOREIGN TABLE flightsql_plan_check;
+DROP SERVER flightsql_plan_srv;

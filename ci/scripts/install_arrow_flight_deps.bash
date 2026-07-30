@@ -7,7 +7,13 @@ install_ubuntu_deps() {
 	local distro_id distro_codename arrow_source_deb
 
 	apt-get update
-	apt-get install -y -V ca-certificates lsb-release pkg-config wget
+	apt-get install -y -V \
+		ca-certificates \
+		libprotobuf-dev \
+		lsb-release \
+		pkg-config \
+		protobuf-compiler \
+		wget
 
 	distro_id="$(lsb_release --id --short | tr 'A-Z' 'a-z')"
 	distro_codename="$(lsb_release --codename --short)"
@@ -21,9 +27,13 @@ install_ubuntu_deps() {
 	if [ -n "${arrow_package_version}" ]; then
 		apt-get install -y -V \
 			"libarrow-dev=${arrow_package_version}" \
-			"libarrow-flight-dev=${arrow_package_version}"
+			"libarrow-flight-dev=${arrow_package_version}" \
+			"libarrow-flight-sql-dev=${arrow_package_version}"
 	else
-		apt-get install -y -V libarrow-dev libarrow-flight-dev
+		apt-get install -y -V \
+			libarrow-dev \
+			libarrow-flight-dev \
+			libarrow-flight-sql-dev
 	fi
 
 	rm -f "${arrow_source_deb}"
@@ -35,7 +45,11 @@ install_rhel_deps() {
 
 	major_version="$(cut -d: -f5 /etc/system-release-cpe | cut -d. -f1)"
 
-	dnf install -y 'dnf-command(config-manager)' pkgconf-pkg-config
+	dnf install -y \
+		'dnf-command(config-manager)' \
+		pkgconf-pkg-config \
+		protobuf-compiler \
+		protobuf-devel
 	dnf install -y epel-release || \
 		dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${major_version}.noarch.rpm"
 	dnf install -y "https://packages.apache.org/artifactory/arrow/almalinux/${major_version}/apache-arrow-release-latest.rpm"
@@ -46,9 +60,13 @@ install_rhel_deps() {
 	if [ -n "${arrow_package_version}" ]; then
 		dnf install -y \
 			"arrow-devel-${arrow_package_version}" \
-			"arrow-flight-devel-${arrow_package_version}"
+			"arrow-flight-devel-${arrow_package_version}" \
+			"arrow-flight-sql-devel-${arrow_package_version}"
 	else
-		dnf install -y arrow-devel arrow-flight-devel
+		dnf install -y \
+			arrow-devel \
+			arrow-flight-devel \
+			arrow-flight-sql-devel
 	fi
 
 	dnf clean all
@@ -63,4 +81,4 @@ else
 	exit 1
 fi
 
-pkg-config --exists arrow arrow-flight
+pkg-config --exists arrow arrow-flight arrow-flight-sql protobuf

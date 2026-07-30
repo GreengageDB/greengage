@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * arrowflight_reader.cpp
+ * flightsql_reader.cpp
  *    Apache Arrow Flight read client and Arrow-to-Greengage decoding.
  *
  *-------------------------------------------------------------------------
@@ -14,6 +14,7 @@ extern "C"
 #include "catalog/pg_type.h"
 #include "cdb/cdbutil.h"
 #include "cdb/cdbvars.h"
+#include "common/base64.h"
 #include "common/int.h"
 #include "executor/tuptable.h"
 #include "miscadmin.h"
@@ -41,8 +42,11 @@ extern "C"
 #include <arrow/array/array_dict.h>
 #include <arrow/array/array_primitive.h>
 #include <arrow/flight/api.h>
+#include <arrow/flight/sql/client.h>
 #include <arrow/record_batch.h>
 #include <arrow/result.h>
+#include <arrow/scalar.h>
+#include <arrow/table.h>
 #include <arrow/type.h>
 #include <arrow/util/config.h>
 
@@ -54,6 +58,7 @@ extern "C"
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 class ArrowFlightStreamState;
@@ -66,14 +71,6 @@ static void af_arrow_throw_unsupported_type(Form_pg_attribute attr);
 static uint64 af_profile_now_us(void);
 static void af_profile_emit(ArrowFlightStreamState *state);
 static void af_profile_add_us(uint64 *target, uint64 start_us);
-static bool af_projection_pushdown_enabled(const char *mode);
-static bool af_projection_pushdown_candidate(TupleDesc tupdesc,
-								 const bool *projected_attrs);
-static std::string af_projected_descriptor_path(const char *descriptor_path,
-								 TupleDesc tupdesc,
-								 const bool *projected_attrs);
-static void af_append_projection_name(std::string *out, const char *name);
-static bool af_projection_name_char_allowed(unsigned char ch);
 static int af_find_projected_attr_by_name(TupleDesc tupdesc,
 								 const bool *projected_attrs,
 								 const std::string& name);
@@ -133,17 +130,33 @@ static Datum af_arrow_macaddr_to_datum(
 								 Form_pg_attribute attr,
 								 const std::shared_ptr<arrow::Array>& array,
 								 int64 rownum);
-static arrow::flight::Ticket af_resolve_flight_info_ticket(
-								 ArrowFlightStreamState *state,
-								 const char *descriptor_path,
-								 const char *endpoint_policy);
 static arrow::flight::FlightClientOptions af_arrow_client_options(
 								 ArrowFlightStreamState *state);
 static void af_arrow_apply_auth_header(ArrowFlightStreamState *state);
+static void af_arrow_parse_endpoint_location_allowlist(
+									 ArrowFlightStreamState *state,
+									 const std::string& value);
+static bool af_arrow_endpoint_location_allowed(
+									 const ArrowFlightStreamState *state,
+									 const arrow::flight::Location& location);
 static std::string af_arrow_read_file(const std::string& path,
 									  const char *label);
 static std::string af_arrow_read_token(const std::string& path);
 static std::string af_format_flight_context(ArrowFlightStreamState *state);
+static void af_flightsql_cancel_info(
+							 std::shared_ptr<arrow::flight::FlightClient> client,
+							 arrow::flight::FlightCallOptions call_options,
+							 std::unique_ptr<arrow::flight::FlightInfo> info);
+static void af_flightsql_initialize_state(
+								 ArrowFlightStreamState *state,
+								 TupleDesc tupdesc, const char *url,
+								 const ArrowFlightSecurityOptions *security_options);
+static bool af_flightsql_open_next_endpoint(
+								 ArrowFlightStreamState *state,
+								 const bool *projected_attrs);
+static TupleTableSlot *af_stream_next_slot(
+								 void **flight_state, TupleTableSlot *slot,
+								 bool project_all, const bool *projected_attrs);
 static Datum af_arrow_attr_to_datum(Form_pg_attribute attr,
 									const std::shared_ptr<arrow::Array>& array,
 									int64 rownum, bool *isnull,
@@ -151,6 +164,44 @@ static Datum af_arrow_attr_to_datum(Form_pg_attribute attr,
 static int64 af_arrow_timestamp_to_pg_usecs(Form_pg_attribute attr,
 											int64 value,
 											arrow::TimeUnit::type unit);
+static void af_flightsql_stream_resource_cleanup(void *resource);
+
+struct FlightSqlCapabilitiesCacheEntry
+{
+	std::string server_name;
+	std::string server_version;
+	int			bulk_ingestion = AF_FLIGHT_SQL_CAPABILITY_UNKNOWN;
+	int			ingest_transactions = AF_FLIGHT_SQL_CAPABILITY_UNKNOWN;
+	int			transaction_support = AF_FLIGHT_SQL_CAPABILITY_UNKNOWN;
+	int			sql_transactions = AF_FLIGHT_SQL_CAPABILITY_UNKNOWN;
+	int			cancellation = AF_FLIGHT_SQL_CAPABILITY_UNKNOWN;
+	int			default_isolation = 0;
+	bool		default_isolation_known = false;
+};
+
+static std::unordered_map<std::string, FlightSqlCapabilitiesCacheEntry>
+	flightsql_capability_cache;
+
+static std::unique_ptr<ArrowFlightStreamState> af_flightsql_connect(
+	const char *url, const ArrowFlightSecurityOptions *security_options);
+static std::string af_flightsql_capability_cache_key(
+	const char *url, const ArrowFlightSecurityOptions *security_options);
+static FlightSqlCapabilitiesCacheEntry af_flightsql_discover_capabilities(
+	const char *url, const ArrowFlightSecurityOptions *security_options);
+static void af_flightsql_fetch_sql_info(
+	ArrowFlightStreamState *state, const std::vector<int>& info_ids,
+	FlightSqlCapabilitiesCacheEntry *capabilities);
+static void af_flightsql_parse_sql_info_table(
+	const std::shared_ptr<arrow::Table>& table,
+	FlightSqlCapabilitiesCacheEntry *capabilities);
+static void af_flightsql_copy_capabilities(
+	const FlightSqlCapabilitiesCacheEntry& source,
+	ArrowFlightSqlCapabilities *target);
+static char *af_flightsql_begin_transaction_impl(
+	const char *url, const ArrowFlightSecurityOptions *security_options);
+static std::string af_flightsql_end_transaction_impl(
+	const char *url, const char *transaction_id, bool commit,
+	const ArrowFlightSecurityOptions *security_options);
 
 class ArrowFlightStreamState
 {
@@ -160,6 +211,10 @@ public:
 		af_profile_emit(this);
 		if (reader != nullptr)
 			reader->Cancel();
+		if (flight_sql_mode && !flight_sql_complete &&
+			flight_info != nullptr && origin_client != nullptr)
+			af_flightsql_cancel_info(origin_client, call_options,
+									 std::move(flight_info));
 	}
 
 	TupleDesc	tupdesc = nullptr;
@@ -167,15 +222,23 @@ public:
 	int			max_batch_bytes = AF_DEFAULT_MAX_BATCH_BYTES;
 	std::string endpoint;
 	std::string descriptor;
-	std::string ticket;
+	size_t		ticket_bytes = 0;
 	std::string tls_ca_file;
 	std::string tls_client_cert_file;
 	std::string tls_client_key_file;
 	std::string auth_token_file;
+	std::string endpoint_location_allowlist;
 	int			segment_index = -1;
 	int			endpoint_index = -1;
-	std::unique_ptr<arrow::flight::FlightClient> client;
+	std::shared_ptr<arrow::flight::FlightClient> client;
+	std::shared_ptr<arrow::flight::FlightClient> origin_client;
 	std::unique_ptr<arrow::flight::FlightStreamReader> reader;
+	std::unique_ptr<arrow::flight::FlightInfo> flight_info;
+	arrow::flight::Location origin_location;
+	std::vector<arrow::flight::Location> allowed_endpoint_locations;
+	std::vector<int> assigned_endpoint_indexes;
+	size_t		next_assigned_endpoint = 0;
+	std::string current_client_location;
 	std::shared_ptr<arrow::RecordBatch> batch;
 	std::vector<int> attr_batch_indexes;
 	int			expected_batch_columns = -1;
@@ -184,6 +247,8 @@ public:
 	bool		projection_pushdown_required = false;
 	bool		tls_enabled = false;
 	bool		auth_enabled = false;
+	bool		flight_sql_mode = false;
+	bool		flight_sql_complete = false;
 	bool		profile_enabled = false;
 	bool		profile_reported = false;
 	std::string profile_consumer;
@@ -206,6 +271,40 @@ public:
 	int64		varlena_values = 0;
 	int64		varlena_bytes = 0;
 };
+
+static void
+af_flightsql_stream_resource_cleanup(void *resource)
+{
+	try
+	{
+		delete static_cast<ArrowFlightStreamState *>(resource);
+	}
+	catch (...)
+	{
+	}
+}
+
+static void
+af_flightsql_cancel_info(
+	std::shared_ptr<arrow::flight::FlightClient> client,
+	arrow::flight::FlightCallOptions call_options,
+	std::unique_ptr<arrow::flight::FlightInfo> info)
+{
+	if (client == nullptr || info == nullptr)
+		return;
+
+	try
+	{
+		arrow::flight::CancelFlightInfoRequest request(std::move(info));
+		arrow::flight::sql::FlightSqlClient sql_client(std::move(client));
+
+		call_options.timeout = arrow::flight::TimeoutDuration(5.0);
+		(void) sql_client.CancelFlightInfo(call_options, request);
+	}
+	catch (...)
+	{
+	}
+}
 
 static uint64
 af_profile_now_us(void)
@@ -233,7 +332,7 @@ af_profile_emit(ArrowFlightStreamState *state)
 
 	state->profile_reported = true;
 	ereport(NOTICE,
-			(errmsg("arrowflight_profile consumer=%s label=%s segment=%d endpoint_index=%d rows=%ld batches=%ld next_calls=%ld open_total_us=%llu connect_us=%llu get_flight_info_us=%llu endpoint_connect_us=%llu doget_us=%llu get_schema_us=%llu validate_schema_us=%llu next_us=%llu fdw_decode_us=%llu slot_store_us=%llu varlena_us=%llu fdw_rows=%ld varlena_values=%ld varlena_bytes=%ld",
+			(errmsg("flightsql_profile consumer=%s label=%s segment=%d endpoint_index=%d rows=%ld batches=%ld next_calls=%ld open_total_us=%llu connect_us=%llu get_flight_info_us=%llu endpoint_connect_us=%llu doget_us=%llu get_schema_us=%llu validate_schema_us=%llu next_us=%llu fdw_decode_us=%llu slot_store_us=%llu varlena_us=%llu fdw_rows=%ld varlena_values=%ld varlena_bytes=%ld",
 				 state->profile_consumer.empty() ? "unknown" :
 				 state->profile_consumer.c_str(),
 				 state->profile_label.empty() ? "default" :
@@ -259,217 +358,333 @@ af_profile_emit(ArrowFlightStreamState *state)
 				 (long) state->varlena_bytes)));
 }
 
-void *
-af_flight_stream_open(TupleDesc tupdesc, const char *url,
-					  const char *consumer,
-					  const bool *projected_attrs,
-					  const ArrowFlightSecurityOptions *security_options)
+static void
+af_flightsql_initialize_state(
+	ArrowFlightStreamState *state, TupleDesc tupdesc, const char *url,
+	const ArrowFlightSecurityOptions *security_options)
 {
-	ArrowFlightEndpoint endpoint;
+	ArrowFlightConnection connection;
 	int			timeout_ms;
 	int			max_batch_bytes;
-	int			retry_count;
-	int			retry_backoff_ms;
-	bool		use_get_flight_info;
-	char		endpoint_policy[32];
-	char		projection_pushdown[16];
-	char		profile_label[128];
-	std::string descriptor_path;
-	std::unique_ptr<ArrowFlightStreamState> state;
-	uint64		open_start_us = af_profile_now_us();
+	arrow::Result<arrow::flight::Location> location_result;
 
-	try
+	if (state == nullptr)
+		throw std::runtime_error("Flight SQL stream state is not initialized");
+
+	af_parse_flight_connection(url, &connection);
+	timeout_ms = af_get_url_int_option(url, "timeout_ms", -1, -1, INT_MAX);
+	max_batch_bytes = af_get_url_int_option(url, "max_batch_bytes",
+											AF_DEFAULT_MAX_BATCH_BYTES,
+											0, INT_MAX);
+	location_result = connection.tls ?
+		arrow::flight::Location::ForGrpcTls(connection.host,
+											connection.port) :
+		arrow::flight::Location::ForGrpcTcp(connection.host,
+											connection.port);
+
+	state->tupdesc = tupdesc;
+	state->max_batch_bytes = max_batch_bytes;
+	state->origin_location =
+		af_arrow_value_or_throw(std::move(location_result),
+								"create Flight SQL location");
+	state->endpoint = state->origin_location.ToString();
+	state->segment_index = GpIdentity.segindex;
+	state->tls_enabled = connection.tls;
+	state->profile_consumer = "flightsql_fdw";
+	state->profile_label = "statement_query";
+	if (security_options != nullptr)
 	{
-		af_check_arrow_flight_linkage();
-		af_parse_flight_endpoint(url, &endpoint);
-		af_expand_ticket_placeholders(&endpoint);
-		timeout_ms = af_get_url_int_option(url, "timeout_ms", -1, -1,
-										   INT_MAX);
-		max_batch_bytes = af_get_url_int_option(url, "max_batch_bytes",
-												AF_DEFAULT_MAX_BATCH_BYTES,
-												0, INT_MAX);
-		retry_count = af_get_url_int_option(url, "retry_count", 0, 0,
-											AF_MAX_RETRY_COUNT);
-		retry_backoff_ms = af_get_url_int_option(url, "retry_backoff_ms",
-												 100, 0,
-												 AF_MAX_RETRY_BACKOFF_MS);
-		use_get_flight_info = af_get_url_bool_option(url, "use_get_flight_info",
-													 false);
-		snprintf(endpoint_policy, sizeof(endpoint_policy), "%s",
-				 AF_ENDPOINT_POLICY_FIRST);
-		if (use_get_flight_info)
-			(void) af_get_url_option(url, "flight_endpoint_policy",
-									 endpoint_policy, sizeof(endpoint_policy));
-		af_validate_endpoint_policy(endpoint_policy);
-		snprintf(projection_pushdown, sizeof(projection_pushdown), "%s",
-				 AF_PROJECTION_PUSHDOWN_OFF);
-		(void) af_get_url_option(url, "projection_pushdown",
-								 projection_pushdown,
-								 sizeof(projection_pushdown));
-		af_validate_projection_pushdown(projection_pushdown);
-		if (strcmp(projection_pushdown,
-				   AF_PROJECTION_PUSHDOWN_REQUIRE) == 0 &&
-			!use_get_flight_info)
-			throw std::runtime_error("projection_pushdown=require requires use_get_flight_info=true");
-		snprintf(profile_label, sizeof(profile_label), "default");
-		(void) af_get_url_option(url, "profile_label", profile_label,
-								 sizeof(profile_label));
+		state->tls_ca_file = security_options->tls_ca_file == nullptr ?
+			"" : security_options->tls_ca_file;
+		state->tls_client_cert_file =
+			security_options->tls_client_cert_file == nullptr ?
+			"" : security_options->tls_client_cert_file;
+		state->tls_client_key_file =
+			security_options->tls_client_key_file == nullptr ?
+			"" : security_options->tls_client_key_file;
+		state->auth_token_file =
+			security_options->auth_token_file == nullptr ?
+			"" : security_options->auth_token_file;
+		state->endpoint_location_allowlist =
+			security_options->endpoint_location_allowlist == nullptr ?
+			"" : security_options->endpoint_location_allowlist;
+	}
+	state->auth_enabled = !state->auth_token_file.empty();
+	if (!state->tls_enabled &&
+		(!state->tls_ca_file.empty() ||
+		 !state->tls_client_cert_file.empty() ||
+		 !state->tls_client_key_file.empty() ||
+		 state->auth_enabled))
+		throw std::runtime_error("Flight SQL TLS/auth options require tls=true");
+	if (timeout_ms > 0)
+		state->call_options.timeout =
+			arrow::flight::TimeoutDuration((double) timeout_ms / 1000.0);
+	af_arrow_parse_endpoint_location_allowlist(
+		state, state->endpoint_location_allowlist);
+	af_arrow_apply_auth_header(state);
+}
 
-		arrow::Result<arrow::flight::Location> location_result =
-			endpoint.tls ?
-			arrow::flight::Location::ForGrpcTls(endpoint.host, endpoint.port) :
-			arrow::flight::Location::ForGrpcTcp(endpoint.host, endpoint.port);
-		arrow::flight::Location location =
-			af_arrow_value_or_throw(std::move(location_result),
-									"create Arrow Flight location");
+static bool
+af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
+								 const bool *projected_attrs)
+{
+	if (state == nullptr || state->flight_info == nullptr)
+		throw std::runtime_error("Flight SQL FlightInfo is not initialized");
 
-		state = std::make_unique<ArrowFlightStreamState>();
-		state->tupdesc = tupdesc;
-		state->max_batch_bytes = max_batch_bytes;
-		state->endpoint = location.ToString();
-		state->segment_index = GpIdentity.segindex;
-		state->tls_enabled = endpoint.tls;
-		if (security_options != nullptr)
-		{
-			state->tls_ca_file = security_options->tls_ca_file == nullptr ?
-				"" : security_options->tls_ca_file;
-			state->tls_client_cert_file =
-				security_options->tls_client_cert_file == nullptr ?
-				"" : security_options->tls_client_cert_file;
-			state->tls_client_key_file =
-				security_options->tls_client_key_file == nullptr ?
-				"" : security_options->tls_client_key_file;
-			state->auth_token_file =
-				security_options->auth_token_file == nullptr ?
-				"" : security_options->auth_token_file;
-		}
-		state->auth_enabled = !state->auth_token_file.empty();
-		if (!state->tls_enabled &&
-			(!state->tls_ca_file.empty() ||
-			 !state->tls_client_cert_file.empty() ||
-			 !state->tls_client_key_file.empty() ||
-			 state->auth_enabled))
-			throw std::runtime_error("Arrow Flight TLS/auth options require tls=true");
-		state->projection_pushdown_requested =
-			use_get_flight_info &&
-			af_projection_pushdown_enabled(projection_pushdown) &&
-			af_projection_pushdown_candidate(tupdesc, projected_attrs);
-		state->projection_pushdown_required =
-			state->projection_pushdown_requested &&
-			strcmp(projection_pushdown,
-				   AF_PROJECTION_PUSHDOWN_REQUIRE) == 0;
-		descriptor_path = state->projection_pushdown_requested ?
-			af_projected_descriptor_path(endpoint.ticket, tupdesc,
-										 projected_attrs) :
-			std::string(endpoint.ticket);
-		state->descriptor = use_get_flight_info ? descriptor_path : "";
-		state->profile_enabled =
-			af_get_url_bool_option(url, "profile", false);
-		state->profile_consumer = consumer == nullptr ? "unknown" : consumer;
-		state->profile_label = profile_label;
-		if (timeout_ms > 0)
-			state->call_options.timeout =
-				arrow::flight::TimeoutDuration((double) timeout_ms / 1000.0);
-		af_arrow_apply_auth_header(state.get());
-		arrow::flight::FlightClientOptions client_options =
-			af_arrow_client_options(state.get());
+	state->reader.reset();
+	state->batch.reset();
+	state->next_row = 0;
 
-		std::shared_ptr<arrow::Schema> schema;
+	while (state->next_assigned_endpoint <
+		   state->assigned_endpoint_indexes.size())
+	{
+		int			endpoint_index =
+			state->assigned_endpoint_indexes[state->next_assigned_endpoint++];
+		const arrow::flight::FlightEndpoint& endpoint =
+			state->flight_info->endpoints()[endpoint_index];
+		std::vector<arrow::flight::Location> locations = endpoint.locations;
 		std::string last_error;
-		int			attempt;
 
-		for (attempt = 0; attempt <= retry_count; attempt++)
+		if (endpoint.ticket.ticket.empty())
+			throw std::runtime_error("Flight SQL returned an empty ticket for endpoint " +
+									 std::to_string(endpoint_index));
+		if (locations.empty())
+			locations.push_back(state->origin_location);
+
+		for (const arrow::flight::Location& advertised_location : locations)
 		{
-			CHECK_FOR_INTERRUPTS();
+			arrow::flight::Location location =
+				advertised_location.Equals(
+					arrow::flight::Location::ReuseConnection()) ?
+				state->origin_location : advertised_location;
+			const std::string location_text = location.ToString();
 
+			if (state->tls_enabled && location.scheme() != "grpc+tls")
+			{
+				last_error =
+					"Flight SQL endpoint attempted to downgrade a TLS connection";
+				continue;
+			}
+			if (!af_arrow_endpoint_location_allowed(state, location))
+			{
+				last_error =
+					"Flight SQL endpoint location is not allowed: " +
+					location_text;
+				continue;
+			}
+
+			CHECK_FOR_INTERRUPTS();
 			try
 			{
-				state->reader.reset();
-				state->client.reset();
-				state->batch.reset();
-				state->next_row = 0;
-				state->endpoint = location.ToString();
-				state->endpoint_index = -1;
-				state->ticket.clear();
+				if (state->client == nullptr ||
+					state->current_client_location != location_text)
+				{
+					bool		origin =
+						location.Equals(state->origin_location);
+					bool		previous_tls = state->tls_enabled;
 
-				uint64 phase_start_us = af_profile_now_us();
-				state->client =
-					af_arrow_value_or_throw(
-						arrow::flight::FlightClient::Connect(location,
-															 client_options),
-						"connect to Arrow Flight server");
-				if (state->profile_enabled)
-					af_profile_add_us(&state->connect_us, phase_start_us);
+					state->tls_enabled =
+						location.scheme() == "grpc+tls";
+					arrow::flight::FlightClientOptions client_options =
+						af_arrow_client_options(state);
+					state->tls_enabled = previous_tls;
+					state->client =
+						af_arrow_value_or_throw(
+							arrow::flight::FlightClient::Connect(
+								location, client_options),
+							"connect to Flight SQL endpoint");
+					state->current_client_location = location_text;
+					if (origin)
+						state->origin_client = state->client;
+				}
 
-				phase_start_us = af_profile_now_us();
-				arrow::flight::Ticket ticket =
-					use_get_flight_info ?
-					af_resolve_flight_info_ticket(state.get(),
-												  descriptor_path.c_str(),
-												  endpoint_policy) :
-					arrow::flight::Ticket(endpoint.ticket);
-				state->ticket = ticket.ticket;
-
-				phase_start_us = af_profile_now_us();
 				state->reader =
 					af_arrow_value_or_throw(
-						state->client->DoGet(state->call_options, ticket),
-						"open Arrow Flight DoGet stream");
-				if (state->profile_enabled)
-					af_profile_add_us(&state->doget_us, phase_start_us);
-
-				phase_start_us = af_profile_now_us();
-				schema =
+						state->client->DoGet(state->call_options,
+											 endpoint.ticket),
+						"open Flight SQL DoGet stream");
+				std::shared_ptr<arrow::Schema> schema =
 					af_arrow_value_or_throw(state->reader->GetSchema(),
-											"read Arrow Flight stream schema");
-				if (state->profile_enabled)
-					af_profile_add_us(&state->get_schema_us, phase_start_us);
-				break;
+											"read Flight SQL stream schema");
+
+				state->endpoint = location_text;
+				state->endpoint_index = endpoint_index;
+				state->ticket_bytes = endpoint.ticket.ticket.size();
+				af_validate_arrow_schema(state, state->tupdesc, schema,
+										 projected_attrs);
+				return true;
 			}
 			catch (const std::exception& ex)
 			{
 				last_error = ex.what();
 				state->reader.reset();
 				state->client.reset();
-
-				if (attempt >= retry_count)
-					throw std::runtime_error("failed after " +
-											 std::to_string(attempt + 1) +
-											 " attempt(s): " + last_error);
-
-				if (retry_backoff_ms > 0)
-					pg_usleep((long) retry_backoff_ms * 1000L);
+				state->current_client_location.clear();
 			}
 		}
 
-		uint64 phase_start_us = af_profile_now_us();
+		throw std::runtime_error("could not open Flight SQL endpoint " +
+								 std::to_string(endpoint_index) +
+								 ": " + last_error);
+	}
+
+	state->flight_sql_complete = true;
+	return false;
+}
+
+static void *
+af_flightsql_stream_open(
+	TupleDesc tupdesc, const char *url, const char *serialized_flight_info,
+	bool project_all, const bool *projected_attrs,
+	const ArrowFlightSecurityOptions *security_options)
+{
+	std::unique_ptr<ArrowFlightStreamState> state =
+		std::make_unique<ArrowFlightStreamState>();
+	int			encoded_len;
+	int			decoded_capacity;
+	int			decoded_len;
+	std::string decoded;
+
+	af_check_arrow_flight_linkage();
+	if (serialized_flight_info == nullptr ||
+		serialized_flight_info[0] == '\0')
+		throw std::runtime_error("Flight SQL serialized FlightInfo is empty");
+
+	af_flightsql_initialize_state(state.get(), tupdesc, url,
+								  security_options);
+	state->flight_sql_mode = true;
+	state->projection_pushdown_requested = !project_all;
+	state->projection_pushdown_required = !project_all;
+	state->descriptor = "CommandStatementQuery";
+
+	encoded_len = strlen(serialized_flight_info);
+	decoded_capacity = pg_b64_dec_len(encoded_len);
+	decoded.resize(decoded_capacity);
+	decoded_len = pg_b64_decode(serialized_flight_info, encoded_len,
+								decoded.data());
+	if (decoded_len < 0)
+		throw std::runtime_error("Flight SQL serialized FlightInfo is not valid base64");
+	decoded.resize(decoded_len);
+	af_arrow_status_or_throw(
+		arrow::flight::FlightInfo::Deserialize(
+			decoded, &state->flight_info),
+		"deserialize Flight SQL FlightInfo");
+
+	if (GpIdentity.segindex < 0)
+		throw std::runtime_error("Flight SQL endpoint assignment requires a QE segment id");
+
+	const int segment_count = getgpsegmentCount();
+	const std::vector<arrow::flight::FlightEndpoint>& endpoints =
+		state->flight_info->endpoints();
+
+	for (size_t i = 0; i < endpoints.size(); i++)
+	{
+		if ((int) (i % segment_count) == GpIdentity.segindex)
+			state->assigned_endpoint_indexes.push_back((int) i);
+	}
+
+	arrow::ipc::DictionaryMemo dictionary_memo;
+	std::shared_ptr<arrow::Schema> schema =
+		af_arrow_value_or_throw(
+			state->flight_info->GetSchema(&dictionary_memo),
+			"read Flight SQL FlightInfo schema");
+	if (schema != nullptr)
 		af_validate_arrow_schema(state.get(), tupdesc, schema,
 								 projected_attrs);
-		if (state->profile_enabled)
-		{
-			af_profile_add_us(&state->validate_schema_us, phase_start_us);
-			state->open_total_us = af_profile_now_us() - open_start_us;
-		}
 
-		return state.release();
-	}
-	catch (const std::exception& ex)
+	(void) af_flightsql_open_next_endpoint(state.get(), projected_attrs);
+	af_resource_register(state.get(), af_flightsql_stream_resource_cleanup,
+						 "Flight SQL read");
+	return state.release();
+}
+
+static char *
+af_flightsql_execute_query_impl(
+	const char *url, const char *query, int max_endpoints, int max_plan_bytes,
+	const ArrowFlightSecurityOptions *security_options)
+{
+	std::unique_ptr<ArrowFlightStreamState> state =
+		std::make_unique<ArrowFlightStreamState>();
+	std::string serialized;
+	int			encoded_capacity;
+	int			encoded_len;
+	char	   *encoded;
+
+	af_check_arrow_flight_linkage();
+	if (query == nullptr || query[0] == '\0')
+		throw std::runtime_error("Flight SQL query is empty");
+
+	af_flightsql_initialize_state(state.get(), nullptr, url,
+								  security_options);
+	state->descriptor = "CommandStatementQuery";
+	arrow::flight::FlightClientOptions client_options =
+		af_arrow_client_options(state.get());
+	state->client =
+		af_arrow_value_or_throw(
+			arrow::flight::FlightClient::Connect(state->origin_location,
+												 client_options),
+			"connect to Flight SQL server");
+	state->origin_client = state->client;
+	state->current_client_location = state->origin_location.ToString();
+
+	CHECK_FOR_INTERRUPTS();
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
+	std::unique_ptr<arrow::flight::FlightInfo> info =
+		af_arrow_value_or_throw(
+			sql_client.Execute(state->call_options, query),
+			"execute Flight SQL statement query");
+	CHECK_FOR_INTERRUPTS();
+
+	if (info == nullptr)
+		throw std::runtime_error("Flight SQL query returned no FlightInfo");
+	if (info->endpoints().size() > (size_t) max_endpoints)
 	{
-		std::string context = af_format_flight_context(state.get());
+		std::string message =
+			"Flight SQL query returned " +
+			std::to_string(info->endpoints().size()) +
+			" endpoints, limit is " + std::to_string(max_endpoints);
 
-		ereport(ERROR,
-				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight read failed%s: %s",
-						context.c_str(), ex.what())));
+		af_flightsql_cancel_info(state->client, state->call_options,
+								 std::move(info));
+		throw std::runtime_error(message);
 	}
-	catch (...)
+
+	arrow::Status serialize_status = info->SerializeToString(&serialized);
+
+	if (!serialize_status.ok())
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
-				 errmsg("Arrow Flight client raised unknown C++ exception")));
+		std::string message =
+			"failed to serialize Flight SQL FlightInfo: " +
+			serialize_status.ToString();
+
+		af_flightsql_cancel_info(state->client, state->call_options,
+								 std::move(info));
+		throw std::runtime_error(message);
+	}
+	if (serialized.size() > INT_MAX)
+	{
+		af_flightsql_cancel_info(state->client, state->call_options,
+								 std::move(info));
+		throw std::runtime_error("Flight SQL FlightInfo is too large");
 	}
 
-	return NULL;
+	encoded_capacity = pg_b64_enc_len((int) serialized.size());
+	if (encoded_capacity > max_plan_bytes)
+	{
+		std::string message =
+			"serialized Flight SQL FlightInfo requires " +
+			std::to_string(encoded_capacity) +
+			" plan bytes, limit is " + std::to_string(max_plan_bytes);
+
+		af_flightsql_cancel_info(state->client, state->call_options,
+								 std::move(info));
+		throw std::runtime_error(message);
+	}
+	encoded = (char *) palloc(encoded_capacity + 1);
+	encoded_len = pg_b64_encode(serialized.data(), (int) serialized.size(),
+								encoded);
+	encoded[encoded_len] = '\0';
+	return encoded;
 }
 
 template <typename T>
@@ -528,7 +743,8 @@ af_validate_arrow_schema(ArrowFlightStreamState *state,
 	if (schema->num_fields() == tupdesc->natts)
 	{
 		if (state->projection_pushdown_required)
-			throw std::runtime_error("projection_pushdown=require requested a reduced schema, but Arrow Flight stream returned full schema");
+			throw std::runtime_error(
+				"projected Flight SQL query returned the full remote schema");
 
 		for (i = 0; i < tupdesc->natts; i++)
 		{
@@ -579,107 +795,6 @@ af_validate_arrow_schema(ArrowFlightStreamState *state,
 									 std::string(NameStr(TupleDescAttr(tupdesc, i)->attname)) +
 									 "\"");
 	}
-}
-
-static bool
-af_projection_pushdown_enabled(const char *mode)
-{
-	return mode != nullptr &&
-		(strcmp(mode, AF_PROJECTION_PUSHDOWN_TRY) == 0 ||
-		 strcmp(mode, AF_PROJECTION_PUSHDOWN_REQUIRE) == 0);
-}
-
-static bool
-af_projection_pushdown_candidate(TupleDesc tupdesc, const bool *projected_attrs)
-{
-	bool		any_projected = false;
-	bool		any_unprojected = false;
-
-	if (tupdesc == nullptr || projected_attrs == nullptr)
-		return false;
-
-	for (int i = 0; i < tupdesc->natts; i++)
-	{
-		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
-
-		if (attr->attisdropped)
-			continue;
-
-		if (projected_attrs[i])
-			any_projected = true;
-		else
-			any_unprojected = true;
-	}
-
-	return any_projected && any_unprojected;
-}
-
-static std::string
-af_projected_descriptor_path(const char *descriptor_path, TupleDesc tupdesc,
-							 const bool *projected_attrs)
-{
-	std::string result;
-	bool		first = true;
-
-	if (descriptor_path == nullptr || descriptor_path[0] == '\0')
-		throw std::runtime_error("Arrow FlightInfo descriptor is empty");
-
-	result = descriptor_path;
-	if (!result.empty() && result.back() != '/')
-		result += "/";
-	result += "columns/";
-
-	for (int i = 0; i < tupdesc->natts; i++)
-	{
-		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
-
-		if (attr->attisdropped || projected_attrs == nullptr ||
-			!projected_attrs[i])
-			continue;
-
-		if (!first)
-			result += ",";
-		af_append_projection_name(&result, NameStr(attr->attname));
-		first = false;
-	}
-
-	if (first)
-		throw std::runtime_error("Arrow Flight projection pushdown has no projected columns");
-
-	return result;
-}
-
-static void
-af_append_projection_name(std::string *out, const char *name)
-{
-	static const char hex[] = "0123456789ABCDEF";
-
-	if (out == nullptr || name == nullptr || name[0] == '\0')
-		throw std::runtime_error("Arrow Flight projection column name is empty");
-
-	for (const unsigned char *pos = (const unsigned char *) name;
-		 *pos != '\0'; pos++)
-	{
-		unsigned char ch = *pos;
-
-		if (af_projection_name_char_allowed(ch))
-			*out += (char) ch;
-		else
-		{
-			*out += "%";
-			*out += hex[(ch >> 4) & 0x0f];
-			*out += hex[ch & 0x0f];
-		}
-	}
-}
-
-static bool
-af_projection_name_char_allowed(unsigned char ch)
-{
-	return (ch >= 'A' && ch <= 'Z') ||
-		(ch >= 'a' && ch <= 'z') ||
-		(ch >= '0' && ch <= '9') ||
-		ch == '-' || ch == '.' || ch == '_' || ch == '~';
 }
 
 static int
@@ -1202,85 +1317,6 @@ af_arrow_macaddr_to_datum(Form_pg_attribute attr,
 	return MacaddrPGetDatum(result);
 }
 
-static arrow::flight::Ticket
-af_resolve_flight_info_ticket(ArrowFlightStreamState *state,
-							  const char *descriptor_path,
-							  const char *endpoint_policy)
-{
-	if (state == nullptr || state->client == nullptr)
-		throw std::runtime_error("Arrow Flight client is not initialized");
-
-	if (descriptor_path == nullptr || descriptor_path[0] == '\0')
-		throw std::runtime_error("Arrow FlightInfo descriptor is empty");
-
-	state->descriptor = descriptor_path;
-
-	arrow::flight::FlightDescriptor descriptor =
-		arrow::flight::FlightDescriptor::Path({std::string(descriptor_path)});
-
-	uint64 phase_start_us = af_profile_now_us();
-	std::unique_ptr<arrow::flight::FlightInfo> info =
-		af_arrow_value_or_throw(
-			state->client->GetFlightInfo(state->call_options, descriptor),
-			"get Arrow FlightInfo");
-	if (state->profile_enabled)
-		af_profile_add_us(&state->get_flight_info_us, phase_start_us);
-
-	if (info == nullptr || info->endpoints().empty())
-		throw std::runtime_error("Arrow FlightInfo returned no endpoints");
-
-	const std::vector<arrow::flight::FlightEndpoint>& endpoints =
-		info->endpoints();
-	int			endpoint_index = 0;
-
-	if (strcmp(endpoint_policy, AF_ENDPOINT_POLICY_FIRST) == 0)
-		endpoint_index = 0;
-	else if (strcmp(endpoint_policy, AF_ENDPOINT_POLICY_SEGMENT_INDEX) == 0)
-	{
-		if (GpIdentity.segindex < 0)
-			throw std::runtime_error("Arrow Flight endpoint policy \"" +
-									 std::string(endpoint_policy) +
-									 "\" requires a QE segment id");
-
-		if (GpIdentity.segindex >= (int) endpoints.size())
-			throw std::runtime_error("Arrow FlightInfo returned " +
-									 std::to_string(endpoints.size()) +
-									 " endpoints, but segment id is " +
-									 std::to_string(GpIdentity.segindex));
-
-		endpoint_index = GpIdentity.segindex;
-	}
-	else
-		throw std::runtime_error("unknown Arrow Flight endpoint policy \"" +
-								 std::string(endpoint_policy) + "\"");
-
-	const arrow::flight::FlightEndpoint& endpoint = endpoints[endpoint_index];
-
-	if (!endpoint.locations.empty() &&
-		!endpoint.locations.front().Equals(arrow::flight::Location::ReuseConnection()))
-	{
-		state->endpoint = endpoint.locations.front().ToString();
-		phase_start_us = af_profile_now_us();
-		arrow::flight::FlightClientOptions client_options =
-			af_arrow_client_options(state);
-		state->client =
-			af_arrow_value_or_throw(
-				arrow::flight::FlightClient::Connect(endpoint.locations.front(),
-													 client_options),
-				"connect to Arrow Flight endpoint");
-		if (state->profile_enabled)
-			af_profile_add_us(&state->endpoint_connect_us, phase_start_us);
-	}
-
-	if (endpoint.ticket.ticket.empty())
-		throw std::runtime_error("Arrow FlightInfo returned an empty ticket");
-
-	state->endpoint_index = endpoint_index;
-	state->ticket = endpoint.ticket.ticket;
-
-	return endpoint.ticket;
-}
-
 static arrow::flight::FlightClientOptions
 af_arrow_client_options(ArrowFlightStreamState *state)
 {
@@ -1323,6 +1359,62 @@ af_arrow_apply_auth_header(ArrowFlightStreamState *state)
 	state->call_options.headers.push_back(
 		{"authorization",
 		 "Bearer " + af_arrow_read_token(state->auth_token_file)});
+}
+
+static void
+af_arrow_parse_endpoint_location_allowlist(ArrowFlightStreamState *state,
+										   const std::string& value)
+{
+	size_t		start = 0;
+
+	if (state == nullptr || value.empty())
+		return;
+	if (value.size() > AF_MAX_ENDPOINT_LOCATION_ALLOWLIST_BYTES)
+		throw std::runtime_error(
+			"Flight SQL endpoint_location_allowlist is too large");
+
+	while (start < value.size())
+	{
+		size_t		end = value.find(',', start);
+		std::string entry =
+			value.substr(start, end == std::string::npos ?
+							std::string::npos : end - start);
+		arrow::flight::Location location =
+			af_arrow_value_or_throw(
+				arrow::flight::Location::Parse(entry),
+				"parse Flight SQL endpoint_location_allowlist entry");
+		const char *expected_scheme =
+			state->tls_enabled ? "grpc+tls" : "grpc+tcp";
+
+		if (location.scheme() != expected_scheme)
+			throw std::runtime_error(
+				"Flight SQL endpoint_location_allowlist entry uses an "
+				"unexpected transport scheme");
+		state->allowed_endpoint_locations.push_back(std::move(location));
+
+		if (end == std::string::npos)
+			break;
+		start = end + 1;
+	}
+}
+
+static bool
+af_arrow_endpoint_location_allowed(
+	const ArrowFlightStreamState *state,
+	const arrow::flight::Location& location)
+{
+	if (state == nullptr)
+		return false;
+	if (location.Equals(state->origin_location))
+		return true;
+
+	for (const arrow::flight::Location& allowed :
+		 state->allowed_endpoint_locations)
+	{
+		if (location.Equals(allowed))
+			return true;
+	}
+	return false;
 }
 
 static std::string
@@ -1379,8 +1471,8 @@ af_format_flight_context(ArrowFlightStreamState *state)
 		context += ", endpoint=" + state->endpoint;
 	if (!state->descriptor.empty())
 		context += ", descriptor=" + state->descriptor;
-	if (!state->ticket.empty())
-		context += ", ticket=" + state->ticket;
+	if (state->ticket_bytes > 0)
+		context += ", ticket_bytes=" + std::to_string(state->ticket_bytes);
 
 	context += ", tls=" + std::string(state->tls_enabled ? "true" : "false");
 	context += ", auth=" + std::string(state->auth_enabled ? "true" : "false");
@@ -1650,126 +1742,695 @@ af_arrow_timestamp_to_pg_usecs(Form_pg_attribute attr, int64 value,
 	return pg_usecs;
 }
 
-#endif /* USE_ARROW_FLIGHT */
-
-
-TupleTableSlot *
-af_flight_stream_next_slot(Relation rel, const char *url,
-						   void **flight_state, TupleTableSlot *slot,
-						   bool project_all, const bool *projected_attrs,
-						   const ArrowFlightSecurityOptions *security_options)
+static TupleTableSlot *
+af_stream_next_slot(void **flight_state, TupleTableSlot *slot,
+					bool project_all, const bool *projected_attrs)
 {
-#ifdef USE_ARROW_FLIGHT
-	try
+	ArrowFlightStreamState *state =
+		static_cast<ArrowFlightStreamState *>(*flight_state);
+	TupleDesc	tupdesc = state->tupdesc;
+
+	for (;;)
 	{
-		ArrowFlightStreamState *state;
-		TupleDesc	tupdesc;
-		int			i;
-
-		if (flight_state == nullptr)
-			elog(ERROR, "arrowflight_fdw: invalid Flight stream state pointer");
-
-		if (*flight_state == NULL)
-			*flight_state = af_flight_stream_open(RelationGetDescr(rel), url,
-											  "fdw", projected_attrs,
-											  security_options);
-
-		state = static_cast<ArrowFlightStreamState *>(*flight_state);
-		tupdesc = state->tupdesc;
-
-		for (;;)
+		if (state->reader == nullptr)
 		{
-			if (state->batch == nullptr ||
-				state->next_row >= state->batch->num_rows())
-			{
-				uint64		phase_start_us;
+			if (state->flight_sql_mode && !state->flight_sql_complete &&
+				af_flightsql_open_next_endpoint(state, projected_attrs))
+				continue;
 
-				CHECK_FOR_INTERRUPTS();
+			af_resource_unregister(state);
+			delete state;
+			*flight_state = NULL;
+			return slot;
+		}
 
-				phase_start_us = af_profile_now_us();
-				arrow::flight::FlightStreamChunk chunk =
-					af_arrow_value_or_throw(state->reader->Next(),
+		if (state->batch == nullptr ||
+			state->next_row >= state->batch->num_rows())
+		{
+			uint64		phase_start_us;
+
+			CHECK_FOR_INTERRUPTS();
+			phase_start_us = af_profile_now_us();
+			arrow::flight::FlightStreamChunk chunk =
+				af_arrow_value_or_throw(state->reader->Next(),
 										"read Arrow Flight record batch");
-				if (state->profile_enabled)
-				{
-					af_profile_add_us(&state->next_us, phase_start_us);
-					state->next_calls++;
-				}
+			if (state->profile_enabled)
+			{
+				af_profile_add_us(&state->next_us, phase_start_us);
+				state->next_calls++;
+			}
+			CHECK_FOR_INTERRUPTS();
 
-				CHECK_FOR_INTERRUPTS();
+			if (chunk.data == nullptr)
+			{
+				state->reader.reset();
+				state->batch.reset();
+				if (state->flight_sql_mode &&
+					af_flightsql_open_next_endpoint(state, projected_attrs))
+					continue;
 
-				if (chunk.data == nullptr)
-				{
-					delete state;
-					*flight_state = NULL;
-					return slot;
-				}
+				state->flight_sql_complete = state->flight_sql_mode;
+				af_resource_unregister(state);
+				delete state;
+				*flight_state = NULL;
+				return slot;
+			}
 
-				if (chunk.data->num_columns() != state->expected_batch_columns)
-					throw std::runtime_error("Arrow Flight record batch has " +
+			if (chunk.data->num_columns() != state->expected_batch_columns)
+				throw std::runtime_error("Arrow Flight record batch has " +
 										 std::to_string(chunk.data->num_columns()) +
 										 " columns, stream schema expects " +
 										 std::to_string(state->expected_batch_columns));
 
-				state->batch = chunk.data;
-				state->next_row = 0;
-				if (state->profile_enabled)
-					state->batches++;
-			}
+			state->batch = chunk.data;
+			state->next_row = 0;
+			if (state->profile_enabled)
+				state->batches++;
+		}
 
-			if (state->next_row < state->batch->num_rows())
+		if (state->next_row < state->batch->num_rows())
+			break;
+	}
+
+	uint64		decode_start_us = af_profile_now_us();
+
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+
+		if (attr->attisdropped)
+		{
+			slot->tts_values[i] = (Datum) 0;
+			slot->tts_isnull[i] = true;
+			continue;
+		}
+
+		if (!project_all && !projected_attrs[i])
+		{
+			slot->tts_values[i] = (Datum) 0;
+			slot->tts_isnull[i] = true;
+			continue;
+		}
+
+		if (i >= (int) state->attr_batch_indexes.size() ||
+			state->attr_batch_indexes[i] < 0)
+			throw std::runtime_error("Arrow Flight stream has no batch column for projected foreign table column \"" +
+									 std::string(NameStr(attr->attname)) +
+									 "\"");
+
+		slot->tts_values[i] =
+			af_arrow_attr_to_datum(
+				attr,
+				state->batch->column(state->attr_batch_indexes[i]),
+				state->next_row, &slot->tts_isnull[i], state);
+	}
+	if (state->profile_enabled)
+		af_profile_add_us(&state->fdw_decode_us, decode_start_us);
+
+	state->next_row++;
+	if (state->profile_enabled)
+	{
+		uint64		slot_start_us = af_profile_now_us();
+		TupleTableSlot *stored = ExecStoreVirtualTuple(slot);
+
+		af_profile_add_us(&state->slot_store_us, slot_start_us);
+		state->rows++;
+		state->fdw_rows++;
+		return stored;
+	}
+
+	return ExecStoreVirtualTuple(slot);
+}
+
+static std::unique_ptr<ArrowFlightStreamState>
+af_flightsql_connect(
+	const char *url, const ArrowFlightSecurityOptions *security_options)
+{
+	std::unique_ptr<ArrowFlightStreamState> state =
+		std::make_unique<ArrowFlightStreamState>();
+
+	af_check_arrow_flight_linkage();
+	af_flightsql_initialize_state(state.get(), nullptr, url, security_options);
+	arrow::flight::FlightClientOptions client_options =
+		af_arrow_client_options(state.get());
+
+	state->client =
+		af_arrow_value_or_throw(
+			arrow::flight::FlightClient::Connect(state->origin_location,
+												 client_options),
+			"connect to Flight SQL server");
+	state->origin_client = state->client;
+	state->current_client_location = state->origin_location.ToString();
+	return state;
+}
+
+static std::string
+af_flightsql_capability_cache_key(
+	const char *url, const ArrowFlightSecurityOptions *security_options)
+{
+	std::string key = url == nullptr ? "" : url;
+
+	if (security_options == nullptr)
+		return key;
+
+	const char *values[] = {
+		security_options->tls_ca_file,
+		security_options->tls_client_cert_file,
+		security_options->tls_client_key_file,
+		security_options->auth_token_file,
+		security_options->endpoint_location_allowlist
+	};
+
+	for (const char *value : values)
+	{
+		key.push_back('\0');
+		if (value != nullptr)
+			key.append(value);
+	}
+	return key;
+}
+
+static int32_t
+af_flightsql_sql_info_id(const std::shared_ptr<arrow::Scalar>& scalar)
+{
+	if (auto value = std::dynamic_pointer_cast<arrow::Int32Scalar>(scalar))
+		return value->value;
+	if (auto value = std::dynamic_pointer_cast<arrow::UInt32Scalar>(scalar))
+		return static_cast<int32_t>(value->value);
+	if (auto value = std::dynamic_pointer_cast<arrow::Int64Scalar>(scalar))
+	{
+		if (value->value < INT32_MIN || value->value > INT32_MAX)
+			throw std::runtime_error("Flight SQL GetSqlInfo id is out of range");
+		return static_cast<int32_t>(value->value);
+	}
+
+	throw std::runtime_error("Flight SQL GetSqlInfo returned an invalid id type");
+}
+
+static std::shared_ptr<arrow::Scalar>
+af_flightsql_sql_info_value(const std::shared_ptr<arrow::Scalar>& scalar)
+{
+	auto value = std::dynamic_pointer_cast<arrow::DenseUnionScalar>(scalar);
+
+	if (value == nullptr || !value->is_valid || value->value == nullptr)
+		throw std::runtime_error("Flight SQL GetSqlInfo returned an invalid value");
+	return value->value;
+}
+
+static int
+af_flightsql_sql_info_bool(const std::shared_ptr<arrow::Scalar>& scalar,
+						   const char *name)
+{
+	auto value = std::dynamic_pointer_cast<arrow::BooleanScalar>(scalar);
+
+	if (value == nullptr || !value->is_valid)
+		throw std::runtime_error(std::string("Flight SQL GetSqlInfo ") +
+								 name + " is not boolean");
+	return value->value ?
+		AF_FLIGHT_SQL_CAPABILITY_SUPPORTED :
+		AF_FLIGHT_SQL_CAPABILITY_UNSUPPORTED;
+}
+
+static int32_t
+af_flightsql_sql_info_int32(const std::shared_ptr<arrow::Scalar>& scalar,
+							const char *name)
+{
+	auto value = std::dynamic_pointer_cast<arrow::Int32Scalar>(scalar);
+
+	if (value == nullptr || !value->is_valid)
+		throw std::runtime_error(std::string("Flight SQL GetSqlInfo ") +
+								 name + " is not int32");
+	return value->value;
+}
+
+static std::string
+af_flightsql_sql_info_string(const std::shared_ptr<arrow::Scalar>& scalar,
+							 const char *name)
+{
+	auto value = std::dynamic_pointer_cast<arrow::StringScalar>(scalar);
+
+	if (value == nullptr || !value->is_valid)
+		throw std::runtime_error(std::string("Flight SQL GetSqlInfo ") +
+								 name + " is not UTF-8");
+	return std::string(value->view());
+}
+
+static void
+af_flightsql_parse_sql_info_table(
+	const std::shared_ptr<arrow::Table>& table,
+	FlightSqlCapabilitiesCacheEntry *capabilities)
+{
+	if (table == nullptr || capabilities == nullptr ||
+		table->num_columns() != 2)
+		throw std::runtime_error("Flight SQL GetSqlInfo returned an invalid table");
+
+	for (int64_t row = 0; row < table->num_rows(); row++)
+	{
+		std::shared_ptr<arrow::Scalar> id_scalar =
+			af_arrow_value_or_throw(table->column(0)->GetScalar(row),
+									"read Flight SQL GetSqlInfo id");
+		std::shared_ptr<arrow::Scalar> union_scalar =
+			af_arrow_value_or_throw(table->column(1)->GetScalar(row),
+									"read Flight SQL GetSqlInfo value");
+		int32_t		id = af_flightsql_sql_info_id(id_scalar);
+		std::shared_ptr<arrow::Scalar> value =
+			af_flightsql_sql_info_value(union_scalar);
+
+		switch (id)
+		{
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_NAME:
+				capabilities->server_name =
+					af_flightsql_sql_info_string(value, "server name");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_VERSION:
+				capabilities->server_version =
+					af_flightsql_sql_info_string(value, "server version");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_TRANSACTION:
+				capabilities->transaction_support =
+					af_flightsql_sql_info_int32(value,
+											   "transaction support");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_CANCEL:
+				capabilities->cancellation =
+					af_flightsql_sql_info_bool(value,
+											  "cancellation support");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_BULK_INGESTION:
+				capabilities->bulk_ingestion =
+					af_flightsql_sql_info_bool(value,
+											  "bulk ingestion support");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_INGEST_TRANSACTIONS_SUPPORTED:
+				capabilities->ingest_transactions =
+					af_flightsql_sql_info_bool(
+						value, "ingest transaction support");
+				break;
+			case arrow::flight::sql::SqlInfoOptions::SQL_DEFAULT_TRANSACTION_ISOLATION:
+				capabilities->default_isolation =
+					af_flightsql_sql_info_int32(
+						value, "default transaction isolation");
+				capabilities->default_isolation_known = true;
+				break;
+			case arrow::flight::sql::SqlInfoOptions::SQL_TRANSACTIONS_SUPPORTED:
+				capabilities->sql_transactions =
+					af_flightsql_sql_info_bool(value,
+											  "SQL transaction support");
+				break;
+			default:
 				break;
 		}
+	}
+}
 
-		uint64 decode_start_us = af_profile_now_us();
+static void
+af_flightsql_fetch_sql_info(
+	ArrowFlightStreamState *state, const std::vector<int>& info_ids,
+	FlightSqlCapabilitiesCacheEntry *capabilities)
+{
+	if (state == nullptr || state->client == nullptr)
+		throw std::runtime_error("Flight SQL client is not initialized");
 
-		for (i = 0; i < tupdesc->natts; i++)
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
+	std::unique_ptr<arrow::flight::FlightInfo> info =
+		af_arrow_value_or_throw(
+			sql_client.GetSqlInfo(state->call_options, info_ids),
+			"get Flight SQL server capabilities");
+
+	if (info == nullptr || info->endpoints().empty())
+		throw std::runtime_error("Flight SQL GetSqlInfo returned no endpoints");
+
+	for (const arrow::flight::FlightEndpoint& endpoint : info->endpoints())
+	{
+		if (endpoint.ticket.ticket.empty())
+			throw std::runtime_error("Flight SQL GetSqlInfo returned an empty ticket");
+
+		std::shared_ptr<arrow::flight::FlightClient> client = state->client;
+		if (!endpoint.locations.empty() &&
+			!endpoint.locations.front().Equals(
+				arrow::flight::Location::ReuseConnection()))
 		{
-			Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+			const arrow::flight::Location& location =
+				endpoint.locations.front();
+			const bool previous_tls = state->tls_enabled;
+			arrow::flight::FlightClientOptions client_options =
+				arrow::flight::FlightClientOptions::Defaults();
 
-			if (attr->attisdropped)
+			if (previous_tls && location.scheme() != "grpc+tls")
+				throw std::runtime_error(
+					"Flight SQL GetSqlInfo endpoint attempted to downgrade a "
+					"TLS connection");
+			if (!af_arrow_endpoint_location_allowed(state, location))
+				throw std::runtime_error(
+					"Flight SQL GetSqlInfo endpoint location is not allowed: " +
+					location.ToString());
+			state->tls_enabled = location.scheme() == "grpc+tls";
+			try
 			{
-				slot->tts_values[i] = (Datum) 0;
-				slot->tts_isnull[i] = true;
-				continue;
+				client_options = af_arrow_client_options(state);
 			}
-
-			if (!project_all && !projected_attrs[i])
+			catch (...)
 			{
-				slot->tts_values[i] = (Datum) 0;
-				slot->tts_isnull[i] = true;
-				continue;
+				state->tls_enabled = previous_tls;
+				throw;
 			}
-
-			if (i >= (int) state->attr_batch_indexes.size() ||
-				state->attr_batch_indexes[i] < 0)
-				throw std::runtime_error("Arrow Flight stream has no batch column for projected foreign table column \"" +
-										 std::string(NameStr(attr->attname)) +
-										 "\"");
-
-			slot->tts_values[i] =
-				af_arrow_attr_to_datum(attr,
-								   state->batch->column(state->attr_batch_indexes[i]),
-								   state->next_row,
-								   &slot->tts_isnull[i],
-								   state);
+			state->tls_enabled = previous_tls;
+			client =
+				af_arrow_value_or_throw(
+					arrow::flight::FlightClient::Connect(
+						location, client_options),
+					"connect to Flight SQL GetSqlInfo endpoint");
 		}
-		if (state->profile_enabled)
-			af_profile_add_us(&state->fdw_decode_us, decode_start_us);
 
-		state->next_row++;
-		if (state->profile_enabled)
+		std::unique_ptr<arrow::flight::FlightStreamReader> reader =
+			af_arrow_value_or_throw(
+				client->DoGet(state->call_options, endpoint.ticket),
+				"read Flight SQL server capabilities");
+		std::shared_ptr<arrow::Table> table =
+			af_arrow_value_or_throw(
+				reader->ToTable(),
+				"materialize Flight SQL server capabilities");
+
+		af_flightsql_parse_sql_info_table(table, capabilities);
+	}
+}
+
+static FlightSqlCapabilitiesCacheEntry
+af_flightsql_discover_capabilities(
+	const char *url, const ArrowFlightSecurityOptions *security_options)
+{
+	std::unique_ptr<ArrowFlightStreamState> state =
+		af_flightsql_connect(url, security_options);
+	FlightSqlCapabilitiesCacheEntry capabilities;
+	const std::vector<int> all_info = {
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_NAME,
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_VERSION,
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_TRANSACTION,
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_CANCEL,
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_BULK_INGESTION,
+		arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_INGEST_TRANSACTIONS_SUPPORTED,
+		arrow::flight::sql::SqlInfoOptions::SQL_DEFAULT_TRANSACTION_ISOLATION,
+		arrow::flight::sql::SqlInfoOptions::SQL_TRANSACTIONS_SUPPORTED
+	};
+
+	try
+	{
+		af_flightsql_fetch_sql_info(state.get(), all_info, &capabilities);
+	}
+	catch (const std::exception&)
+	{
+		const std::vector<int> baseline_info = {
+			arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_NAME,
+			arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_VERSION,
+			arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_TRANSACTION,
+			arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_CANCEL
+		};
+
+		af_flightsql_fetch_sql_info(state.get(), baseline_info, &capabilities);
+		for (size_t i = baseline_info.size(); i < all_info.size(); i++)
 		{
-			uint64		slot_start_us = af_profile_now_us();
-			TupleTableSlot *stored = ExecStoreVirtualTuple(slot);
+			try
+			{
+				af_flightsql_fetch_sql_info(
+					state.get(), {all_info[i]}, &capabilities);
+			}
+			catch (const std::exception&)
+			{
+				/* Older servers may not implement newer SqlInfo identifiers. */
+			}
+		}
+	}
 
-			af_profile_add_us(&state->slot_store_us, slot_start_us);
-			state->rows++;
-			state->fdw_rows++;
-			return stored;
+	return capabilities;
+}
+
+static void
+af_flightsql_copy_capabilities(
+	const FlightSqlCapabilitiesCacheEntry& source,
+	ArrowFlightSqlCapabilities *target)
+{
+	if (target == nullptr)
+		throw std::runtime_error("Flight SQL capability result is null");
+
+	memset(target, 0, sizeof(*target));
+	target->server_name = pstrdup(source.server_name.c_str());
+	target->server_version = pstrdup(source.server_version.c_str());
+	target->bulk_ingestion =
+		(ArrowFlightSqlCapabilityState) source.bulk_ingestion;
+	target->ingest_transactions =
+		(ArrowFlightSqlCapabilityState) source.ingest_transactions;
+	target->transaction_support = source.transaction_support;
+	target->sql_transactions =
+		(ArrowFlightSqlCapabilityState) source.sql_transactions;
+	target->cancellation =
+		(ArrowFlightSqlCapabilityState) source.cancellation;
+	target->default_isolation = source.default_isolation;
+	target->default_isolation_known = source.default_isolation_known;
+}
+
+static char *
+af_flightsql_begin_transaction_impl(
+	const char *url, const ArrowFlightSecurityOptions *security_options)
+{
+	std::unique_ptr<ArrowFlightStreamState> state =
+		af_flightsql_connect(url, security_options);
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
+	arrow::flight::sql::Transaction transaction =
+		af_arrow_value_or_throw(
+			sql_client.BeginTransaction(state->call_options),
+			"begin Flight SQL transaction");
+
+	if (!transaction.is_valid())
+		throw std::runtime_error(
+			"Flight SQL server returned an empty transaction id");
+
+	const std::string& transaction_id = transaction.transaction_id();
+	int			encoded_capacity;
+	int			encoded_len;
+	char	   *encoded;
+
+	if (transaction_id.size() > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
+		throw std::runtime_error(
+			"Flight SQL transaction id exceeds the supported size");
+
+	encoded_capacity = pg_b64_enc_len((int) transaction_id.size());
+	encoded = (char *) palloc(encoded_capacity + 1);
+	encoded_len = pg_b64_encode(transaction_id.data(),
+								(int) transaction_id.size(), encoded);
+	encoded[encoded_len] = '\0';
+	return encoded;
+}
+
+static std::string
+af_flightsql_end_transaction_impl(
+	const char *url, const char *encoded_transaction_id, bool commit,
+	const ArrowFlightSecurityOptions *security_options)
+{
+	try
+	{
+		int			encoded_len;
+		int			decoded_capacity;
+		int			decoded_len;
+		std::string transaction_id;
+
+		if (encoded_transaction_id == nullptr ||
+			encoded_transaction_id[0] == '\0')
+			throw std::runtime_error("Flight SQL transaction id is empty");
+
+		encoded_len = strlen(encoded_transaction_id);
+		decoded_capacity = pg_b64_dec_len(encoded_len);
+		if (decoded_capacity > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
+			throw std::runtime_error(
+				"Flight SQL transaction id exceeds the supported size");
+		transaction_id.resize(decoded_capacity);
+		decoded_len = pg_b64_decode(encoded_transaction_id, encoded_len,
+									transaction_id.data());
+		if (decoded_len <= 0)
+			throw std::runtime_error(
+				"Flight SQL transaction id is not valid base64");
+		transaction_id.resize(decoded_len);
+
+		std::unique_ptr<ArrowFlightStreamState> state =
+			af_flightsql_connect(url, security_options);
+		arrow::flight::sql::FlightSqlClient sql_client(state->client);
+		arrow::flight::sql::Transaction transaction(transaction_id);
+		arrow::Status status = commit ?
+			sql_client.Commit(state->call_options, transaction) :
+			sql_client.Rollback(state->call_options, transaction);
+
+		if (!status.ok())
+			return status.ToString();
+		return "";
+	}
+	catch (const std::exception& ex)
+	{
+		return ex.what();
+	}
+	catch (...)
+	{
+		return "unknown Flight SQL transaction exception";
+	}
+}
+
+#endif /* USE_ARROW_FLIGHT */
+
+
+char *
+af_flightsql_execute_query(
+	const char *url, const char *query, int max_endpoints, int max_plan_bytes,
+	const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	try
+	{
+		return af_flightsql_execute_query_impl(
+			url, query, max_endpoints, max_plan_bytes, security_options);
+	}
+	catch (const std::exception& ex)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("Flight SQL query discovery failed: %s", ex.what())));
+	}
+	catch (...)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("Flight SQL query discovery raised unknown C++ exception")));
+	}
+#else
+	(void) url;
+	(void) query;
+	(void) max_endpoints;
+	(void) max_plan_bytes;
+	(void) security_options;
+	af_check_arrow_flight_linkage();
+#endif
+
+	return NULL;
+}
+
+void
+af_flightsql_get_capabilities(
+	const char *url, const ArrowFlightSecurityOptions *security_options,
+	ArrowFlightSqlCapabilities *capabilities)
+{
+#ifdef USE_ARROW_FLIGHT
+	try
+	{
+		std::string key =
+			af_flightsql_capability_cache_key(url, security_options);
+		auto		found = flightsql_capability_cache.find(key);
+
+		if (found == flightsql_capability_cache.end())
+		{
+			FlightSqlCapabilitiesCacheEntry discovered =
+				af_flightsql_discover_capabilities(url, security_options);
+
+			found =
+				flightsql_capability_cache.emplace(
+					std::move(key), std::move(discovered)).first;
 		}
 
-		return ExecStoreVirtualTuple(slot);
+		af_flightsql_copy_capabilities(found->second, capabilities);
+		return;
+	}
+	catch (const std::exception& ex)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("Flight SQL capability discovery failed: %s",
+						ex.what())));
+	}
+	catch (...)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("Flight SQL capability discovery raised unknown C++ exception")));
+	}
+#else
+	(void) url;
+	(void) security_options;
+	(void) capabilities;
+	af_check_arrow_flight_linkage();
+#endif
+}
+
+char *
+af_flightsql_begin_transaction(
+	const char *url, const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	try
+	{
+		return af_flightsql_begin_transaction_impl(url, security_options);
+	}
+	catch (const std::exception& ex)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("could not begin Flight SQL transaction: %s",
+						ex.what())));
+	}
+	catch (...)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("could not begin Flight SQL transaction: unknown C++ exception")));
+	}
+#else
+	(void) url;
+	(void) security_options;
+	af_check_arrow_flight_linkage();
+#endif
+
+	return NULL;
+}
+
+char *
+af_flightsql_end_transaction(
+	const char *url, const char *transaction_id, bool commit,
+	const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	std::string error =
+		af_flightsql_end_transaction_impl(
+			url, transaction_id, commit, security_options);
+
+	return error.empty() ? NULL : pstrdup(error.c_str());
+#else
+	(void) url;
+	(void) transaction_id;
+	(void) commit;
+	(void) security_options;
+	return pstrdup("Arrow Flight SQL support is not compiled in");
+#endif
+}
+
+TupleTableSlot *
+af_flightsql_stream_next_slot(
+	Relation rel, const char *url, const char *serialized_flight_info,
+	void **flight_state, TupleTableSlot *slot, bool project_all,
+	const bool *projected_attrs,
+	const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	try
+	{
+		if (flight_state == nullptr)
+			elog(ERROR, "flightsql_fdw: invalid Flight stream state pointer");
+
+		if (*flight_state == NULL)
+		{
+			*flight_state =
+				af_flightsql_stream_open(
+					RelationGetDescr(rel), url, serialized_flight_info,
+					project_all, projected_attrs, security_options);
+			af_resource_attach(flight_state);
+		}
+
+		return af_stream_next_slot(flight_state, slot, project_all,
+								   projected_attrs);
 	}
 	catch (const std::exception& ex)
 	{
@@ -1779,28 +2440,29 @@ af_flight_stream_next_slot(Relation rel, const char *url,
 
 		if (flight_state != nullptr && *flight_state != NULL)
 		{
-			delete state;
+			af_flightsql_stream_close(state);
 			*flight_state = NULL;
 		}
-
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Arrow Flight FDW read failed%s: %s",
+				 errmsg("Flight SQL read failed%s: %s",
 						context.c_str(), ex.what())));
 	}
 	catch (...)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("Arrow Flight FDW client raised unknown C++ exception")));
+				 errmsg("Flight SQL client raised unknown C++ exception")));
 	}
 #else
 	(void) rel;
 	(void) url;
+	(void) serialized_flight_info;
 	(void) flight_state;
 	(void) slot;
 	(void) project_all;
 	(void) projected_attrs;
+	(void) security_options;
 	af_check_arrow_flight_linkage();
 #endif
 
@@ -1808,13 +2470,14 @@ af_flight_stream_next_slot(Relation rel, const char *url,
 }
 
 void
-af_flight_stream_close(void *flight_state)
+af_flightsql_stream_close(void *flight_state)
 {
 #ifdef USE_ARROW_FLIGHT
 	ArrowFlightStreamState *state =
 		static_cast<ArrowFlightStreamState *>(flight_state);
 
-	delete state;
+	af_resource_unregister(state);
+	af_flightsql_stream_resource_cleanup(state);
 #else
 	(void) flight_state;
 #endif

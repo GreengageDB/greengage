@@ -29,6 +29,19 @@ docker build -t gpdb7_regress_arrowflight:latest \
   -f ci/Dockerfile .
 ```
 
+The standard CI images use the x86_64 packaging path. For a native Linux
+ARM64 development image, build Greengage directly with:
+
+```bash
+docker buildx build --load \
+  --platform linux/arm64 \
+  --build-arg WITH_ARROW_FLIGHT_DEPS=true \
+  --target dev \
+  -f ci/Dockerfile.ubuntu.arm64-dev \
+  -t greengage7-u22-arm64-dev:latest \
+  .
+```
+
 Then build the extension with:
 ```bash
 make -C gpcontrib/arrowflight USE_ARROW_FLIGHT=1
