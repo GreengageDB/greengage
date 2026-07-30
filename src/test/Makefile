@@ -44,8 +44,17 @@ ALWAYS_SUBDIRS = $(filter-out $(SUBDIRS),examples kerberos icu ldap ssl)
 recurse_alldirs_targets := $(filter-out installcheck install, $(standard_targets))
 installable_dirs := $(filter-out modules, $(SUBDIRS))
 
+# GPDB: exclude upstream single-node TAP suites from installcheck-world. They
+# exercise behavior GPDB deliberately reimplemented and have no meaningful GPDB
+# coverage: standalone hot-standby promotion (recovery -- GPDB uses
+# gpactivatestandby, and pg_ctl promote hits "sinval slot ... already in use"),
+# MPP connection reservations vs. GPDB background workers (postmaster),
+# single-node ICU collation defaults (icu), and external-server auth
+# (authentication, kerberos, ssl). See pg184_tap_runtime_triage.
+installcheck_dirs := $(filter-out postmaster recovery authentication icu kerberos ssl, $(installable_dirs))
+
 $(call recurse,$(recurse_alldirs_targets))
-$(call recurse,installcheck, $(installable_dirs))
+$(call recurse,installcheck, $(installcheck_dirs))
 $(call recurse,install, $(installable_dirs))
 
 $(recurse_always)

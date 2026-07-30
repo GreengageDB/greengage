@@ -13,7 +13,10 @@ PGFILEDESC = "dblink - connect to other PostgreSQL databases"
 
 REGRESS = dblink
 REGRESS_OPTS = --dlpath=$(top_builddir)/src/test/regress
-TAP_TESTS = 1
+# GPDB: dblink's only TAP test (t/001_auth_scram.pl) exercises upstream SCRAM
+# passthrough auth, which GPDB sets up differently; disable it (the regress
+# test still runs). See pg184_tap_runtime_triage.
+# TAP_TESTS = 1
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config

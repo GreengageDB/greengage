@@ -47,5 +47,9 @@ clean distclean:
 check:
 	$(prove_check)
 
+# GPDB: the remaining test files exercise physical replication / standby
+# promotion / backup / auth behavior GPDB reimplemented (see
+# pg184_tap_runtime_triage); restrict installcheck to the GPDB-compatible files.
+installcheck: PROVE_TESTS = t/001_basic.pl
 installcheck:
 	$(prove_installcheck)

@@ -58,5 +58,9 @@ export with_icu
 check:
 	$(prove_check)
 
+# GPDB: the remaining test files exercise physical replication / standby
+# promotion / backup / auth behavior GPDB reimplemented (see
+# pg184_tap_runtime_triage); restrict installcheck to the GPDB-compatible files.
+installcheck: PROVE_TESTS = t/010_clusterdb.pl t/020_createdb.pl t/040_createuser.pl t/070_dropuser.pl t/080_pg_isready.pl t/090_reindexdb.pl t/100_vacuumdb.pl t/102_vacuumdb_stages.pl t/200_connstr.pl
 installcheck:
 	$(prove_installcheck)
