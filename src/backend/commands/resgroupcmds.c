@@ -38,8 +38,10 @@
 #include "utils/datetime.h"
 #include "utils/fmgroids.h"
 #include "utils/palloc.h"
+#include "utils/memutils.h"
 #include "utils/resgroup.h"
 #include "utils/cgroup.h"
+#include "utils/cgroup_io_limit.h"
 #include "utils/resource_manager.h"
 #include "utils/resowner.h"
 #include "utils/syscache.h"
@@ -80,7 +82,24 @@ static void checkAuthIdForDrop(Oid groupId);
 static void createResgroupCallback(XactEvent event, void *arg);
 static void dropResgroupCallback(XactEvent event, void *arg);
 static void alterResgroupCallback(XactEvent event, void *arg);
+static void alterResgroupSubXactCallback(SubXactEvent event,
+										 SubTransactionId mySubid,
+										 SubTransactionId parentSubid,
+										 void *arg);
 static void checkCpusetSyntax(const char *cpuset);
+static bool resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+									const ResGroupCaps *caps);
+static ResourceGroupCallbackContext *resgroupAlterCallbackFindPreparedDuplicate(
+											List *prepared,
+											ResourceGroupCallbackContext *ctx);
+static void freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx);
+static bool resGroupIOLimitMatches(List *left, List *right);
+static bool resgroupHasLaterCpuCallbackMatchingFinal(
+										List *callbacks,
+										ResourceGroupCallbackContext *ctx,
+										const ResGroupCaps *finalCaps);
+
+static List *resgroup_alter_callbacks = NIL;
 
 /*
  * CREATE RESOURCE GROUP
@@ -355,11 +374,23 @@ DropResourceGroup(DropResourceGroupStmt *stmt)
 	}
 }
 
+void
+AlterResourceGroup(AlterResourceGroupStmt *stmt)
+{
+	/*
+	 * Legacy ABI entry point has no ProcessUtilityContext.
+	 * Treat it as top-level so IsInTransactionChain() can still detect
+	 * explicit transaction blocks, subtransactions and non-standalone
+	 * transaction states, but does not assume function/multi-command context.
+	 */
+	AlterResourceGroupExtended(stmt, true);
+}
+
 /*
  * ALTER RESOURCE GROUP
  */
 void
-AlterResourceGroup(AlterResourceGroupStmt *stmt)
+AlterResourceGroupExtended(AlterResourceGroupStmt *stmt, bool isTopLevel)
 {
 	Relation	pg_resgroupcapability_rel;
 	Oid			groupid;
@@ -409,6 +440,19 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 	 * exists.
 	 */
 	groupid = get_resgroup_oid(stmt->name, false);
+
+	/*
+	 * The session alters its own resource group inside a transaction block.
+	 * The change will not be visible to this session before COMMIT.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH &&
+		IsInTransactionBlock(isTopLevel) &&
+		groupid == GetMyResGroupId())
+	{
+		ereport(WARNING,
+				(errmsg("resource group \"%s\" settings will be applied after COMMIT",
+						stmt->name)));
+	}
 
 	if (limitType == RESGROUP_LIMIT_TYPE_CONCURRENCY &&
 		value == 0 &&
@@ -559,9 +603,28 @@ AlterResourceGroup(AlterResourceGroupStmt *stmt)
 		callbackCtx->limittype = limitType;
 		callbackCtx->caps = caps;
 		callbackCtx->oldCaps = oldCaps;
+		callbackCtx->subXactId = GetCurrentSubTransactionId();
 
+		/*
+		 * Collect ALTERs and apply them together at COMMIT after PRE_COMMIT
+		 * validates final catalog state. Outside an explicit transaction this
+		 * list contains only one ALTER.
+		 */
+		resgroup_alter_callbacks = lappend(resgroup_alter_callbacks,
+										   callbackCtx);
 		MemoryContextSwitchTo(oldContext);
-		RegisterXactCallbackOnce(alterResgroupCallback, callbackCtx);
+
+		static bool alter_tran_callback_registered = false;
+		if (!alter_tran_callback_registered)
+		{
+			/*
+			 * Use a regular callback because once callbacks are not fired
+			 * at PRE_COMMIT, where we need to validate final catalog state.
+			 */
+			RegisterXactCallback(alterResgroupCallback, NULL);
+			RegisterSubXactCallback(alterResgroupSubXactCallback, NULL);
+			alter_tran_callback_registered = true;
+		}
 	}
 }
 
@@ -698,6 +761,56 @@ GetResGroupCapabilities(Relation rel, Oid groupId, ResGroupCaps *resgroupCaps)
 				 errmsg("cannot find limit capabilities for resource group: %d",
 						groupId)));
 	}
+}
+
+/*
+ * Get the stored value string of one capability type for a group.
+ */
+static char *
+getResgroupCapabilityValueString(Relation rel, Oid groupId,
+								 ResGroupLimitType limitType)
+{
+	SysScanDesc	sscan;
+	ScanKeyData	key;
+	HeapTuple	tuple;
+	char	   *value = NULL;
+	bool		isNull;
+
+	ScanKeyInit(&key,
+				Anum_pg_resgroupcapability_resgroupid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(groupId));
+
+	sscan = systable_beginscan(rel,
+							   ResGroupCapabilityResgroupidIndexId,
+							   true,
+							   NULL, 1, &key);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
+	{
+		Datum		typeDatum;
+		Datum		valueDatum;
+
+		typeDatum = heap_getattr(tuple, Anum_pg_resgroupcapability_reslimittype,
+								 rel->rd_att, &isNull);
+		if ((ResGroupLimitType) DatumGetInt16(typeDatum) != limitType)
+			continue;
+
+		valueDatum = heap_getattr(tuple, Anum_pg_resgroupcapability_value,
+								  rel->rd_att, &isNull);
+		value = TextDatumGetCString(valueDatum);
+		break;
+	}
+
+	systable_endscan(sscan);
+
+	if (value == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("cannot find %s capability for resource group: %d",
+						getResgroupOptionName(limitType), groupId)));
+
+	return value;
 }
 
 /*
@@ -1121,27 +1234,423 @@ dropResgroupCallback(XactEvent event, void *arg)
 	pfree(callbackCtx);
 }
 
+static void
+freeResgroupAlterCallback(ResourceGroupCallbackContext *ctx)
+{
+	if (ctx->caps.io_limit != NIL)
+		cgroupOpsRoutine->freeio(ctx->caps.io_limit);
+
+	if (ctx->oldCaps.io_limit != NIL)
+		cgroupOpsRoutine->freeio(ctx->oldCaps.io_limit);
+
+	pfree(ctx);
+}
+
+/*
+ * Compare two io_limit lists through their canonical catalog representation.
+ *
+ * dumpio walks each list in stored order, so the same entries listed in a
+ * different order would dump to different strings. Sort shallow copies by
+ * tablespace first so only the values decide the match.
+ */
+static bool
+resGroupIOLimitMatches(List *left, List *right)
+{
+	List       *sortedLeft;
+	List       *sortedRight;
+	char       *leftStr;
+	char       *rightStr;
+	bool        result;
+
+	if (left == NIL || right == NIL)
+		return left == NIL && right == NIL;
+
+	sortedLeft = list_qsort(left, compare_tablespace_oid);
+	sortedRight = list_qsort(right, compare_tablespace_oid);
+
+	leftStr = cgroupOpsRoutine->dumpio(sortedLeft);
+	rightStr = cgroupOpsRoutine->dumpio(sortedRight);
+	result = strcmp(leftStr, rightStr) == 0;
+
+	pfree(leftStr);
+	pfree(rightStr);
+	list_free(sortedLeft);
+	list_free(sortedRight);
+
+	return result;
+}
+
+/*
+ * Compare the callback io_limit with the stored catalog value as strings.
+ *
+ * The stored value is the dumpio output of the ALTER that wrote it, so the
+ * strings are equal exactly when this callback wrote the final state.
+ * Re-parsing the stored value can fail and be demoted to a WARNING when a
+ * tablespace path disappears, and such a failure must not silently drop a
+ * committed ALTER, so the comparison avoids parseio entirely.
+ */
+static bool
+resGroupIOLimitMatchesStoredValue(Relation rel,
+								  const ResourceGroupCallbackContext *ctx)
+{
+	char	   *storedValue;
+	char	   *ctxValue;
+	bool		is_match;
+
+	storedValue = getResgroupCapabilityValueString(rel, ctx->groupid,
+												   RESGROUP_LIMIT_TYPE_IO_LIMIT);
+
+	if (ctx->caps.io_limit == NIL)
+		ctxValue = pstrdup(DefaultIOLimit);
+	else
+		ctxValue = cgroupOpsRoutine->dumpio(ctx->caps.io_limit);
+
+	is_match = strcmp(storedValue, ctxValue) == 0;
+
+	pfree(storedValue);
+	pfree(ctxValue);
+
+	return is_match;
+}
+
+/*
+ * Check whether the field changed by this callback has the same value in
+ * the given capability snapshot.
+ *
+ * The set of fields compared per limit type must stay equal to the set
+ * resGroupCapFieldApply in resgroup.c installs at COMMIT, otherwise a kept
+ * callback writes a field that was never validated against the final state.
+ */
+static bool
+resGroupCapFieldMatches(const ResourceGroupCallbackContext *ctx,
+						const ResGroupCaps *caps)
+{
+	switch (ctx->limittype)
+	{
+		case RESGROUP_LIMIT_TYPE_CONCURRENCY:
+			return ctx->caps.concurrency == caps->concurrency;
+
+		case RESGROUP_LIMIT_TYPE_CPU:
+			return ctx->caps.cpuMaxPercent == caps->cpuMaxPercent &&
+				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
+
+		case RESGROUP_LIMIT_TYPE_CPU_SHARES:
+			return ctx->caps.cpuWeight == caps->cpuWeight;
+
+		case RESGROUP_LIMIT_TYPE_CPUSET:
+			return ctx->caps.cpuMaxPercent == caps->cpuMaxPercent &&
+				   ctx->caps.cpuWeight == caps->cpuWeight &&
+				   strcmp(ctx->caps.cpuset, caps->cpuset) == 0;
+
+		case RESGROUP_LIMIT_TYPE_MEMORY_LIMIT:
+			return ctx->caps.memory_limit == caps->memory_limit;
+
+		case RESGROUP_LIMIT_TYPE_MIN_COST:
+			return ctx->caps.min_cost == caps->min_cost;
+
+		case RESGROUP_LIMIT_TYPE_IO_LIMIT:
+			return resGroupIOLimitMatches(ctx->caps.io_limit, caps->io_limit);
+
+		case RESGROUP_LIMIT_TYPE_UNKNOWN:
+		case RESGROUP_LIMIT_TYPE_COUNT:
+			break;
+	}
+
+	ereport(ERROR,
+			(errcode(ERRCODE_UNDEFINED_OBJECT),
+			 errmsg("invalid resource group limit type: %d", ctx->limittype)));
+
+	return false;
+}
+
+/*
+ * CPUSET has side effects: it disables CPU_MAX_PERCENT and resets CPU_WEIGHT.
+ * Keep it when a later SET CPU_MAX_PERCENT or SET CPU_WEIGHT overwrites only
+ * part of these side effects and the remaining part is still final.
+ */
+static bool
+resgroupHasLaterCpuCallbackMatchingFinal(List *callbacks,
+										 ResourceGroupCallbackContext *ctx,
+										 const ResGroupCaps *finalCaps)
+{
+	ListCell   *lc;
+	bool		after = false;
+
+	foreach (lc, callbacks)
+	{
+		ResourceGroupCallbackContext *other = lfirst(lc);
+
+		if (other == ctx)
+		{
+			after = true;
+			continue;
+		}
+
+		if (!after || other->groupid != ctx->groupid)
+			continue;
+
+		/*
+		 * Example:
+		 *   SET CPUSET '1'; SET CPU_MAX_PERCENT 30;
+		 * Keep CPUSET to preserve its CPU_WEIGHT reset.
+		 */
+		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU &&
+			other->caps.cpuMaxPercent == finalCaps->cpuMaxPercent &&
+			strcmp(other->caps.cpuset, finalCaps->cpuset) == 0 &&
+			ctx->caps.cpuWeight == finalCaps->cpuWeight)
+			return true;
+
+		/*
+		 * Example:
+		 *   SET CPUSET '1'; SET CPU_WEIGHT 120;
+		 * Keep CPUSET to preserve CPUSET mode.
+		 */
+		if (other->limittype == RESGROUP_LIMIT_TYPE_CPU_SHARES &&
+			other->caps.cpuWeight == finalCaps->cpuWeight &&
+			ctx->caps.cpuMaxPercent == finalCaps->cpuMaxPercent &&
+			strcmp(ctx->caps.cpuset, finalCaps->cpuset) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ * Find an already prepared ALTER callback with the same target and value.
+ */
+static ResourceGroupCallbackContext *
+resgroupAlterCallbackFindPreparedDuplicate(List *prepared,
+										   ResourceGroupCallbackContext *ctx)
+{
+	ListCell   *lc;
+
+	foreach (lc, prepared)
+	{
+		ResourceGroupCallbackContext *prev = lfirst(lc);
+
+		if (prev->groupid != ctx->groupid)
+			continue;
+
+		if (prev->limittype != ctx->limittype)
+			continue;
+
+		if (resGroupCapFieldMatches(ctx, &prev->caps))
+			return prev;
+	}
+
+	return NULL;
+}
+
+/*
+ * An aborted subtransaction rolls back its ALTER catalog changes, but the
+ * PRE_COMMIT value match alone could still keep its queued callback when the
+ * value coincides with the final catalog state. Drop such callbacks at
+ * subtransaction abort. Callbacks of a committed subtransaction move up to
+ * the parent.
+ */
+static void
+alterResgroupSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+							 SubTransactionId parentSubid, void *arg)
+{
+	ListCell   *cell;
+	ListCell   *prev;
+	ListCell   *next;
+
+	if (resgroup_alter_callbacks == NIL)
+		return;
+
+	if (event == SUBXACT_EVENT_COMMIT_SUB)
+	{
+		foreach (cell, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(cell);
+
+			if (ctx->subXactId == mySubid)
+				ctx->subXactId = parentSubid;
+		}
+	}
+	else if (event == SUBXACT_EVENT_ABORT_SUB)
+	{
+		prev = NULL;
+		for (cell = list_head(resgroup_alter_callbacks); cell != NULL; cell = next)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(cell);
+
+			next = lnext(cell);
+			if (ctx->subXactId == mySubid)
+			{
+				resgroup_alter_callbacks =
+					list_delete_cell(resgroup_alter_callbacks, cell, prev);
+				freeResgroupAlterCallback(ctx);
+			}
+			else
+				prev = cell;
+		}
+	}
+}
+
 /*
  * Resource group call back function
  *
+ * PRE_COMMIT: keep callbacks matching final pg_resgroupcapability state.
+ * COMMIT: apply kept callbacks, then cleanup.
+ * ABORT: cleanup.
+ *
  * When ALTER RESOURCE GROUP SET CONCURRENCY commits, some queuing
  * transaction of this resource group may need to be woke up.
+ *
+ * The callback remains registered for the backend lifetime. The first check
+ * is the fast path for transactions without ALTER RESOURCE GROUP.
  */
 static void
 alterResgroupCallback(XactEvent event, void *arg)
 {
-	ResourceGroupCallbackContext *callbackCtx = arg;
+	ListCell   *lc;
 
-	if (event == XACT_EVENT_COMMIT)
-		ResGroupAlterOnCommit(callbackCtx);
+	if (resgroup_alter_callbacks == NIL)
+		return;
 
-	if (callbackCtx->caps.io_limit != NIL)
-		cgroupOpsRoutine->freeio(callbackCtx->caps.io_limit);
+	if (event == XACT_EVENT_ABORT)
+	{
+		foreach (lc, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			freeResgroupAlterCallback(ctx);
+		}
 
-	if (callbackCtx->oldCaps.io_limit != NIL)
-		cgroupOpsRoutine->freeio(callbackCtx->oldCaps.io_limit);
+		list_free(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = NIL;
+	}
+	else if (event == XACT_EVENT_COMMIT)
+	{
+		foreach (lc, resgroup_alter_callbacks)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			ResGroupAlterOnCommit(ctx);
+			freeResgroupAlterCallback(ctx);
+		}
+		list_free(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = NIL;
+	}
+	else if (event == XACT_EVENT_PRE_COMMIT)
+	{
+		List *volatile prepared = NIL;
+		List *volatile finalIoLimit = NIL;
+		List	   *rejected = NIL;
+		Relation	rel;
+		ResGroupCaps finalCaps;
+		Oid			cachedGroupId = InvalidOid;
 
-	pfree(callbackCtx);
+		/*
+		 * Keep final, non-duplicate callbacks, plus CPUSET callbacks whose
+		 * side effects remain in the final catalog state.
+		 */
+		rel = heap_open(ResGroupCapabilityRelationId, AccessShareLock);
+
+		/*
+		 * GetResGroupCapabilities can raise on a malformed stored value, which
+		 * would turn this commit into an abort. Release the relation, the
+		 * TopMemoryContext list and the parsed io_limit on that path so they
+		 * do not leak, then let the abort proceed. The variables read after
+		 * the longjmp are volatile. The rejected list lives in transaction
+		 * memory and needs no cleanup here. The contexts themselves stay
+		 * owned by resgroup_alter_callbacks, which the abort callback frees.
+		 */
+		PG_TRY();
+		{
+			foreach (lc, resgroup_alter_callbacks)
+			{
+				ResourceGroupCallbackContext *ctx = lfirst(lc);
+				bool		matchesFinal;
+
+				SIMPLE_FAULT_INJECTOR("resgroup_alter_pre_commit");
+
+				/*
+				 * The catalog cannot change inside the loop because the ALTER
+				 * statements hold ExclusiveLock on the relation until commit,
+				 * so one snapshot per group suffices.
+				 */
+				if (ctx->groupid != cachedGroupId)
+				{
+					if (finalIoLimit != NIL)
+					{
+						cgroupOpsRoutine->freeio(finalIoLimit);
+						finalIoLimit = NIL;
+					}
+
+					GetResGroupCapabilities(rel, ctx->groupid, &finalCaps);
+					finalIoLimit = finalCaps.io_limit;
+					cachedGroupId = ctx->groupid;
+				}
+
+				if (ctx->limittype == RESGROUP_LIMIT_TYPE_IO_LIMIT)
+					matchesFinal = resGroupIOLimitMatchesStoredValue(rel, ctx);
+				else
+					matchesFinal = resGroupCapFieldMatches(ctx, &finalCaps) ||
+						(ctx->limittype == RESGROUP_LIMIT_TYPE_CPUSET &&
+						 resgroupHasLaterCpuCallbackMatchingFinal(
+													resgroup_alter_callbacks,
+													ctx,
+													&finalCaps));
+
+				if (matchesFinal)
+				{
+					MemoryContext oldcxt;
+
+					/*
+					 * COMMIT applies prepared callbacks in list order, so of
+					 * two callbacks with the same target and value the later
+					 * one must survive. Keeping the earlier one would let a
+					 * kept CPUSET callback sitting between them apply last
+					 * and override the final state.
+					 */
+					ResourceGroupCallbackContext *duplicate =
+						resgroupAlterCallbackFindPreparedDuplicate(prepared,
+																   ctx);
+
+					if (duplicate != NULL)
+					{
+						prepared = list_delete_ptr(prepared, duplicate);
+						rejected = lappend(rejected, duplicate);
+					}
+
+					oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+					prepared = lappend(prepared, ctx);
+					MemoryContextSwitchTo(oldcxt);
+				}
+				else
+					rejected = lappend(rejected, ctx);
+			}
+
+			if (finalIoLimit != NIL)
+			{
+				cgroupOpsRoutine->freeio(finalIoLimit);
+				finalIoLimit = NIL;
+			}
+		}
+		PG_CATCH();
+		{
+			if (finalIoLimit != NIL)
+				cgroupOpsRoutine->freeio(finalIoLimit);
+
+			heap_close(rel, AccessShareLock);
+			list_free(prepared);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		heap_close(rel, AccessShareLock);
+
+		list_free(resgroup_alter_callbacks);
+		resgroup_alter_callbacks = prepared;
+
+		foreach (lc, rejected)
+		{
+			ResourceGroupCallbackContext *ctx = lfirst(lc);
+			freeResgroupAlterCallback(ctx);
+		}
+		list_free(rejected);
+	}
 }
 
 /*
