@@ -32,7 +32,7 @@ Install following tools and add them to PATH, make sure you can invoke them from
 
 [Download](https://www.msys2.org/) and install latest x86_64 package.
 
-After installation, open MSYS2 command line, run ```pacman -S flex bison```. Add ```<msys2>\usr\bin``` to PATH.
+After installation, open MSYS2 command line, run `pacman -S flex bison`. Add `<msys2>\usr\bin` to PATH.
 
 5. Perl
 
@@ -48,7 +48,7 @@ We will install all dependencies to C:\dep. If you want another location,
 make sure you've changed C:\dep in the following scripts.
 
 1. zlib
-```
+```batch
 git clone --branch v1.2.11 --depth 1 https://github.com/madler/zlib.git
 cd zlib
 
@@ -61,7 +61,7 @@ copy C:\dep\lib\zlibstatic.lib C:\dep\lib\zdll.lib
 ```
 
 2. libapr
-```
+```batch
 git clone --branch 1.6.5 --depth 1 https://github.com/apache/apr.git
 cd apr
 mkdir build2
@@ -72,7 +72,7 @@ cmake --build . --config Release --target INSTALL
 ```
 
 3. libevent
-```
+```batch
 git clone --branch release-2.1.8-stable --depth 1 https://github.com/libevent/libevent.git
 cd libevent
 mkdir build
@@ -89,7 +89,7 @@ make sure you've changed C:\dep in the following scripts.
 
 1. OpenSSL 1.0.2
 
-```
+```batch
 git clone --branch OpenSSL_1_0_2r --depth 1 https://github.com/openssl/openssl
 cd openssl
 perl Configure --prefix=C:\dep VC-WIN64A 
@@ -99,7 +99,7 @@ nmake -f ms\ntdll.mak install
 ```
 
 2. Kerberos
-```
+```batch
 git clone --branch krb5-1.17-final --depth 1 https://github.com/krb5/krb5.git
 cd krb5
 set NO_LEASH=1
@@ -121,20 +121,20 @@ make sure you've replaced C:\greengage-db-devel in the following scripts.
 
 
 1. Create config.pl at src/tools/msvc. If you don't build with these supports, it's ok to skip this step.
-```
+```batch
 cd <path\to\gpdb>\src\tools\msvc
 echo print "our \$config = {gss => 'c:/dep', openssl => 'c:/dep', zlib => 'c:/dep'};" | perl >config.pl
 ```
 
 2. Build postgres clients and scripts
-```
+```batch
 cd <path\to\gpdb>\src\tools\msvc
 build client
 install C:\greengage-db-devel client
 ```
 
 3. Build gpfdist
-```
+```batch
 cd <path\to\gpdb>\src\bin\gpfdist
 cd build
 cmake -DCMAKE_PREFIX_PATH:PATH=C:\ext -DCMAKE_INSTALL_PREFIX:PATH=C:\greengage-db-devel -G "Visual Studio 15 2017 Win64" ..
