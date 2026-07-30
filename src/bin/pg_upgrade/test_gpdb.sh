@@ -386,6 +386,10 @@ diff_and_exit() {
 	fi
 
 	rm -f regression.diffs
+	if (( $cross_version_upgrade )); then
+		rm -f partitions_regression.diffs
+	fi
+
 	echo "Passed"
 	exit 0
 }
