@@ -148,7 +148,7 @@ class Guc:
         self.min_val = row[6]
         self.max_val = row[7]
 
-    def validate(self, newval, newcoordinatorval, options):
+    def validate(self, newval, newcoordinatorval, options, conn):
         # todo add code here...
         # be careful 128KB in postgresql.conf is translated into 32KB units
 
@@ -167,18 +167,10 @@ class Guc:
                 if msg is not None:
                     return msg
             elif newval == "'group-v2'":
-                try:
-                    dburl = dbconn.DbURL()
-                    conn = dbconn.connect(dburl, True)
-                    cgroup_parent = Guc(dbconn.queryRow(conn, GucQuery("gp_resource_group_cgroup_parent").query))
-                    conn.close()
-                    msg = GpResGroup().validate_v2(cgroup_parent.setting)
-                    if msg is not None:
-                        return msg
-
-                except DatabaseError as _:
-                    LOGGER.error('Failed to connect to database, this script can only be run when the database is up.')
-
+                cgroup_parent = Guc(dbconn.queryRow(conn, GucQuery("gp_resource_group_cgroup_parent").query))
+                msg = GpResGroup().validate_v2(cgroup_parent.setting)
+                if msg is not None:
+                    return msg
             elif newval != "'queue'" and newval != "'none'":
                 return "the value of gp_resource_manager must be 'none', 'queue', 'group', or 'group-v2'"
         elif self.name == "gp_resource_group_cgroup_parent":
@@ -463,7 +455,7 @@ def validate_change_options(options, conn, guc):
         raise Exception(msg)
 
     if options.value:
-        msg = guc.validate(options.value, options.coordinatorvalue, options)
+        msg = guc.validate(options.value, options.coordinatorvalue, options, conn)
         if msg != "ok":
             msg = "new GUC value failed validation: " + msg
             LOGGER.fatal(msg)
