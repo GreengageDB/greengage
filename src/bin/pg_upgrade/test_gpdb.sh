@@ -24,7 +24,7 @@
 #
 # It has been tested on demo clusters transitioning from (7 to 7).
 # Details on how to run transition from 6 to 7 are described in
-# src/bin/pg_upgrade/README.test.md
+# ci/readme.md
 
 OLD_BINDIR=
 OLD_DATADIR=
