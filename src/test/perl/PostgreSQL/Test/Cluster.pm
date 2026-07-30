@@ -891,12 +891,16 @@ sub backup
 	local %ENV = $self->_get_env();
 
 	print "# Taking pg_basebackup $backup_name from node \"$name\"\n";
+	# GPDB: pg_basebackup requires --target-gp-dbid (it names tablespace
+	# subdirectories by dbid and stamps gp_dbid into the backup config). Test
+	# nodes are standalone utility instances, so a placeholder dbid is fine.
 	PostgreSQL::Test::Utils::system_or_bail(
 		'pg_basebackup', '--no-sync',
 		'--pgdata' => $backup_path,
 		'--host' => $self->host,
 		'--port' => $self->port,
 		'--checkpoint' => 'fast',
+		'--target-gp-dbid' => 1,
 		@{ $params{backup_options} });
 	print "# Backup finished\n";
 	return;
