@@ -87,7 +87,6 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 {
 	CreatedName key;
 	char *arr, *modifiedTypeName;
-	int typeNameLen = strlen(typeName);
 	int underscores = 0;
 
 	modifiedTypeName = palloc(NAMEDATALEN);
@@ -98,13 +97,17 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 	while (created_names && hash_search(created_names, &key, HASH_FIND, NULL))
 	{
 		underscores++;
-		if (typeNameLen + underscores >= NAMEDATALEN)
+		/* 
+		 * We tried to create new name NAMEDATALEN times,
+		 * effectivly meaning that it is impossible to create one.
+		 */
+		if (underscores >= NAMEDATALEN)
 			ereport(ERROR,
 				   (errcode(ERRCODE_DUPLICATE_OBJECT),
 					errmsg("could not form array type name for type \"%s\"",
 							typeName)));
 		MemSet(modifiedTypeName, '_', underscores);
-		strcpy(modifiedTypeName + underscores, typeName);
+		strlcpy(modifiedTypeName + underscores, typeName, NAMEDATALEN - underscores);
 		pfree(arr);
 		arr = makeArrayTypeName(modifiedTypeName, typeNamespace);
 		MemSet(&key, 0, sizeof(CreatedName));
@@ -119,46 +122,27 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {
+	CreatedName   key;
 	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
-	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
-
-	CHECK_IS_BINARY_UPGRADE;
-
-	/* Remember that we've already taken this name */
-	oldctx = MemoryContextSwitchTo(TopMemoryContext);
-	RememberCreatedName(typname, typnamespaceoid);
-	MemoryContextSwitchTo(oldctx);
-
-	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
-						typnamespaceoid, InvalidOid, InvalidOid);
-
-	PG_RETURN_VOID();
-}
-
-Datum
-binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
-{
-	MemoryContext oldctx;
-	Oid			typoid = PG_GETARG_OID(0);
 	Oid         old_type_oid;
-	bool        exists;
-	Oid			typnamespaceoid = PG_GETARG_OID(1);
-	char	   *relname = GET_STR(PG_GETARG_TEXT_P(2));
-	char       *typname;
+	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
+	char       *moved_array_typname;
+	bool        in_catalog;
 
 	CHECK_IS_BINARY_UPGRADE;
 
 	old_type_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
-								   CStringGetDatum(relname),
+								   CStringGetDatum(typname),
 								   ObjectIdGetDatum(typnamespaceoid));
-	exists = OidIsValid(old_type_oid);
+	in_catalog = OidIsValid(old_type_oid);
 
 	oldctx = MemoryContextSwitchTo(TopMemoryContext);
-	typname = makeArrayTypeNameUpgrade(relname, typnamespaceoid);
-	RememberCreatedName(typname, typnamespaceoid);
-	if (exists)
+	MemSet(&key, 0, sizeof(CreatedName));
+	key.schema_oid = typnamespaceoid;
+	strlcpy(key.name, typname, NAMEDATALEN);
+	if (in_catalog || (created_names && hash_search(created_names, &key, HASH_FIND, NULL)))
 	{
 		/*
 		 * When database wants to create a regular type, and
@@ -179,10 +163,35 @@ binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
 		 */
 		char new_typname[NAMEDATALEN];
 		strlcpy(new_typname, typname, NAMEDATALEN);
-		pfree(typname);
-		typname = makeArrayTypeNameUpgrade(new_typname, typnamespaceoid);
-		RememberCreatedName(typname, typnamespaceoid);
+
+		moved_array_typname = makeArrayTypeNameUpgrade(new_typname, typnamespaceoid);
+		RememberCreatedName(moved_array_typname, typnamespaceoid);
 	}
+
+	/* Remember that we've already taken this name */
+	RememberCreatedName(typname, typnamespaceoid);
+	MemoryContextSwitchTo(oldctx);
+
+	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
+						typnamespaceoid, InvalidOid, InvalidOid);
+
+	PG_RETURN_VOID();
+}
+
+Datum
+binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
+{
+	MemoryContext oldctx;
+	Oid			typoid = PG_GETARG_OID(0);
+	Oid			typnamespaceoid = PG_GETARG_OID(1);
+	char	   *relname = GET_STR(PG_GETARG_TEXT_P(2));
+	char       *typname;
+
+	CHECK_IS_BINARY_UPGRADE;
+
+	oldctx = MemoryContextSwitchTo(TopMemoryContext);
+	typname = makeArrayTypeNameUpgrade(relname, typnamespaceoid);
+	RememberCreatedName(typname, typnamespaceoid);
 	MemoryContextSwitchTo(oldctx);
 
 	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
