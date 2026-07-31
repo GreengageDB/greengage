@@ -38,7 +38,8 @@ clean distclean maintainer-clean:
 	rm -f pg_upgrade$(X) $(OBJS)
 	rm -rf analyze_new_cluster.sh delete_old_cluster.sh log/ tmp_check/ \
 				 reindex_hash.sql clusterConfigPostgresAddonsFile clusterConfigFile \
-				 gpdemo-env.sh hostfile regression.diffs aomd_filehandler.c
+				 gpdemo-env.sh hostfile regression.diffs partitions_regression.diffs \
+				 aomd_filehandler.c
 
 greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
 	rm -f $@ && cd greengage && $(LN_S) ../$< aomd_filehandler.c
