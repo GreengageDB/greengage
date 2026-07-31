@@ -236,7 +236,7 @@ docker run --rm \
 	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash;"
 ```
 
-To collect execution logs, mount an additional volume:
+To collect execution logs, mount an additional volume. Note that the test exit code is saved before collecting logs. Also, '.diffs' files are not created on a successful run, so it is expected that 'cp' commands might produce errors:
 ```bash
 mkdir logs
 docker run --rm \
@@ -246,9 +246,12 @@ docker run --rm \
 	"export SQL_SCHEMA=/dump_dir/dump.sql; \
 	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
 	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
+	 test_exit_code=\$?; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
-	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs;"
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs; \
+	 (exit \$test_exit_code);"
 ```
 
 To run pg_upgrade tests with the regression dump, it is necessary to specify `cleanup_regression_dump_from_6X.sql` cleanup script. Also, only --data-only dumps can be compared without any difference. The --extra-float-digits option is specified to synchronize the formatting of floats in the dumps.
@@ -263,10 +266,12 @@ docker run --rm \
 	 export DUMP_OPTIONS='--data-only --extra-float-digits=-3'; \
 	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
 	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
+	 test_exit_code=\$?; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions1.sql /logs/dump_partitions1.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions2.sql /logs/dump_partitions2.sql; \
 	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs; \
-	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs;"
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs; \
+	 (exit \$test_exit_code);"
 ```
