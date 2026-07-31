@@ -488,7 +488,8 @@ get_db_infos(ClusterInfo *cluster)
 	i_datcollate = PQfnumber(res, "datcollate");
 	i_datctype = PQfnumber(res, "datctype");
 	i_datlocprovider = PQfnumber(res, "datlocprovider");
-	i_daticulocale = PQfnumber(res, "daticulocale");
+	/* the query aliases the locale column as datlocale in every branch above */
+	i_daticulocale = PQfnumber(res, "datlocale");
 	i_spclocation = PQfnumber(res, "spclocation");
 
 	ntups = PQntuples(res);
