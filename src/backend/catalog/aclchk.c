@@ -3,7 +3,7 @@
  * aclchk.c
  *	  Routines to check access control permissions.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -3292,7 +3292,7 @@ ExecGrant_Type(InternalGrant *istmt)
 
 		pg_type_tuple = (Form_pg_type) GETSTRUCT(tuple);
 
-		if (pg_type_tuple->typelem != 0 && pg_type_tuple->typlen == -1)
+		if (IsTrueArrayType(pg_type_tuple))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_GRANT_OPERATION),
 					 errmsg("cannot set privileges of array types"),
@@ -4747,7 +4747,7 @@ pg_type_aclmask(Oid type_oid, Oid roleid, AclMode mask, AclMaskHow how)
 	 * "True" array types don't manage permissions of their own; consult the
 	 * element type instead.
 	 */
-	if (OidIsValid(typeForm->typelem) && typeForm->typlen == -1)
+	if (IsTrueArrayType(typeForm))
 	{
 		Oid			elttype_oid = typeForm->typelem;
 

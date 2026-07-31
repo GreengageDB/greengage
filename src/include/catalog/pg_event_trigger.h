@@ -4,7 +4,7 @@
  *	  definition of the "event trigger" system catalog (pg_event_trigger)
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_event_trigger.h
@@ -47,5 +47,12 @@ CATALOG(pg_event_trigger,3466,EventTriggerRelationId)
  * ----------------
  */
 typedef FormData_pg_event_trigger *Form_pg_event_trigger;
+
+DECLARE_TOAST(pg_event_trigger, 4145, 4146);
+
+DECLARE_UNIQUE_INDEX(pg_event_trigger_evtname_index, 3467, on pg_event_trigger using btree(evtname name_ops));
+#define EventTriggerNameIndexId  3467
+DECLARE_UNIQUE_INDEX(pg_event_trigger_oid_index, 3468, on pg_event_trigger using btree(oid oid_ops));
+#define EventTriggerOidIndexId	3468
 
 #endif							/* PG_EVENT_TRIGGER_H */

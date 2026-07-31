@@ -3678,7 +3678,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 explain (costs off) select * from pp_recpart where a = '(1,1)'::pp_rectype;
                 QUERY PLAN                 
 -------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)
+ Gather Motion 1:1  (slice1; segments: 1)
    ->  Dynamic Seq Scan on pp_recpart
          Number of partitions to scan: 1 (out of 2)
          Filter: (a = '(1,1)'::pp_rectype)

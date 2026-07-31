@@ -4,7 +4,7 @@
  *	  prototypes for catalog/index.c.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/index.h
@@ -31,6 +31,15 @@ typedef enum
 	INDEX_DROP_CLEAR_VALID,
 	INDEX_DROP_SET_DEAD
 } IndexStateFlagsAction;
+
+/* options for REINDEX */
+typedef enum ReindexOption
+{
+	REINDEXOPT_VERBOSE = 1 << 0,	/* print progress info */
+	REINDEXOPT_REPORT_PROGRESS = 1 << 1,	/* report pgstat progress */
+	REINDEXOPT_MISSING_OK = 1 << 2, /* skip missing relations */
+	REINDEXOPT_CONCURRENTLY = 1 << 3	/* concurrent mode */
+} ReindexOption;
 
 /* state info for validate_index bulkdelete callback */
 typedef struct ValidateIndexState

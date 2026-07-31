@@ -618,7 +618,9 @@ transformFormatOpts(char formattype, List *formatOpts, int numcols, bool iswrita
 	ListCell   *option;
 	ParseState *pstate;
 
-	CopyState cstate = palloc0(sizeof(CopyStateData));
+	CopyFormatOptions cstate_opts;
+
+	memset(&cstate_opts, 0, sizeof(cstate_opts));
 
 	pstate = make_parsestate(NULL);
 	pstate->p_sourcetext = NULL;
@@ -668,11 +670,12 @@ transformFormatOpts(char formattype, List *formatOpts, int numcols, bool iswrita
 
 		/* verify all user supplied control char combinations are legal */
 		ProcessCopyOptions(pstate,
-						   cstate,
+						   &cstate_opts,
 						   !iswritable, /* is_from */
-						   formatOpts);
+						   formatOpts,
+						   true /* is_external_table */);
 
-		if (cstate->delim_off)
+		if (cstate_opts.delim_off)
 		{
 			if (numcols != 1)
 				ereport(ERROR,
@@ -680,7 +683,7 @@ transformFormatOpts(char formattype, List *formatOpts, int numcols, bool iswrita
 					 errmsg("using no delimiter is only possible for a single column table")));
 		}
 
-		if (cstate->header_line)
+		if (cstate_opts.header_line)
 		{
 			if (Gp_role == GP_ROLE_DISPATCH)
 			{
@@ -701,28 +704,28 @@ transformFormatOpts(char formattype, List *formatOpts, int numcols, bool iswrita
 		}
 
 		/* keep the same order with the original pg_exttable catalog's fmtopt field */
-		cslist = lappend(cslist, makeDefElem("delimiter", (Node *) makeString(cstate->delim), -1));
-		cslist = lappend(cslist, makeDefElem("null", (Node *) makeString(cstate->null_print), -1));
-		cslist = lappend(cslist, makeDefElem("escape", (Node *) makeString(cstate->escape), -1));
+		cslist = lappend(cslist, makeDefElem("delimiter", (Node *) makeString(cstate_opts.delim), -1));
+		cslist = lappend(cslist, makeDefElem("null", (Node *) makeString(cstate_opts.null_print), -1));
+		cslist = lappend(cslist, makeDefElem("escape", (Node *) makeString(cstate_opts.escape), -1));
 		if (fmttype_is_csv(formattype))
-			cslist = lappend(cslist, makeDefElem("quote", (Node *) makeString(cstate->quote), -1));
-		if (cstate->header_line)
+			cslist = lappend(cslist, makeDefElem("quote", (Node *) makeString(cstate_opts.quote), -1));
+		if (cstate_opts.header_line)
 			cslist = lappend(cslist, makeDefElem("header", (Node *) makeString("true"), -1));
-		if (cstate->fill_missing)
+		if (cstate_opts.fill_missing)
 			cslist = lappend(cslist, makeDefElem("fill_missing_fields", (Node *) makeString("true"), -1));
 
 		/* Re-construct the FORCE NOT NULL list string */
-		if (cstate->force_notnull)
-			cslist = lappend(cslist, makeDefElem("force_not_null", (Node *) makeString(list_join(cstate->force_notnull, ',')), -1));
+		if (cstate_opts.force_notnull)
+			cslist = lappend(cslist, makeDefElem("force_not_null", (Node *) makeString(list_join(cstate_opts.force_notnull, ',')), -1));
 
 		/* Re-construct the FORCE QUOTE list string */
-		if (cstate->force_quote)
-			cslist = lappend(cslist, makeDefElem("force_quote", (Node *) makeString(list_join(cstate->force_quote, ',')), -1));
-		else if (cstate->force_quote_all)
+		if (cstate_opts.force_quote)
+			cslist = lappend(cslist, makeDefElem("force_quote", (Node *) makeString(list_join(cstate_opts.force_quote, ',')), -1));
+		else if (cstate_opts.force_quote_all)
 			cslist = lappend(cslist, makeDefElem("force_quote", (Node *) makeString("*"), -1));
 
-		if (cstate->eol_str)
-			cslist = lappend(cslist, makeDefElem("newline", (Node *) makeString(cstate->eol_str), -1));
+		if (cstate_opts.eol_str)
+			cslist = lappend(cslist, makeDefElem("newline", (Node *) makeString(cstate_opts.eol_str), -1));
 	}
 	else
 	{

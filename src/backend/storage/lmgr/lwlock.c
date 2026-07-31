@@ -20,7 +20,7 @@
  * appropriate value for a free lock.  The meaning of the variable is up to
  * the caller, the lightweight lock code just assigns and compares it.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -344,7 +344,6 @@ init_lwlock_stats(void)
 											 ALLOCSET_DEFAULT_SIZES);
 	MemoryContextAllowInCriticalSection(lwlock_stats_cxt, true);
 
-	MemSet(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(lwlock_stats_key);
 	ctl.entrysize = sizeof(lwlock_stats);
 	ctl.hcxt = lwlock_stats_cxt;
@@ -527,18 +526,17 @@ InitializeLWLocks(void)
 		LWLockInitialize(&lock->lock, id);
 
 	/* Initialize buffer mapping LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS;
+	lock = MainLWLockArray + BUFFER_MAPPING_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_BUFFER_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_BUFFER_MAPPING);
 
 	/* Initialize lmgrs' LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS + NUM_BUFFER_PARTITIONS;
+	lock = MainLWLockArray + LOCK_MANAGER_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_LOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_LOCK_MANAGER);
 
 	/* Initialize predicate lmgrs' LWLocks in main array */
-	lock = MainLWLockArray + NUM_INDIVIDUAL_LWLOCKS +
-		NUM_BUFFER_PARTITIONS + NUM_LOCK_PARTITIONS;
+	lock = MainLWLockArray + PREDICATELOCK_MANAGER_LWLOCK_OFFSET;
 	for (id = 0; id < NUM_PREDICATELOCK_PARTITIONS; id++, lock++)
 		LWLockInitialize(&lock->lock, LWTRANCHE_PREDICATE_LOCK_MANAGER);
 

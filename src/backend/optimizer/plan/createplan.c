@@ -7,7 +7,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1967,13 +1967,15 @@ create_gather_merge_plan(PlannerInfo *root, GatherMergePath *best_path)
 										 &gm_plan->nullsFirst);
 
 
-	/* Now, insert a Sort node if subplan isn't sufficiently ordered */
+	/*
+	 * All gather merge paths should have already guaranteed the necessary sort
+	 * order either by adding an explicit sort node or by using presorted input.
+	 * We can't simply add a sort here on additional pathkeys, because we can't
+	 * guarantee the sort would be safe. For example, expressions may be
+	 * volatile or otherwise parallel unsafe.
+	 */
 	if (!pathkeys_contained_in(pathkeys, best_path->subpath->pathkeys))
-		subplan = (Plan *) make_sort(subplan, gm_plan->numCols,
-									 gm_plan->sortColIdx,
-									 gm_plan->sortOperators,
-									 gm_plan->collations,
-									 gm_plan->nullsFirst);
+		elog(ERROR, "gather merge input not sufficiently sorted");
 
 	/* Now insert the subplan under GatherMerge. */
 	gm_plan->plan.lefttree = subplan;
@@ -3275,6 +3277,20 @@ create_motion_plan(PlannerInfo *root, CdbMotionPath *path)
 		default:
 			elog(ERROR, "unknown locus type %d", subpath->locus.locustype);
 	}
+
+	/*
+	 * make_motion() forbids a Motion directly atop another Motion.  That can
+	 * happen when a path that itself plans to a Motion is redistributed again
+	 * -- e.g. CREATE TABLE ... AS SELECT <agg> ... DISTRIBUTED BY (<agg>),
+	 * where the single-row aggregate result (already behind a gather/
+	 * redistribute Motion) is redistributed by the new table's policy.
+	 * Interpose a pass-through Result so the two Motions occupy adjacent
+	 * slices; setrefs will rewire the Result's targetlist to reference the
+	 * lower Motion's output.
+	 */
+	if (IsA(subplan, Motion))
+		subplan = (Plan *) make_result(copyObject(subplan->targetlist),
+									   NULL, subplan);
 
 	/* Add motion operator. */
 	motion = cdbpathtoplan_create_motion_plan(root, path, subplan);
@@ -7060,6 +7076,9 @@ make_incrementalsort(Plan *lefttree, int numCols, int nPresortedCols,
  *
  * Returns the node which is to be the input to the Sort (either lefttree,
  * or a Result stacked atop lefttree).
+ *
+ * Note: Restrictions on what expressions are safely sortable may also need to
+ * be added to find_em_expr_usable_for_sorting_rel.
  */
 static Plan *
 prepare_sort_from_pathkeys(Plan *lefttree, List *pathkeys,

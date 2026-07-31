@@ -41,4 +41,9 @@ FOREIGN_KEY(typid REFERENCES pg_type(oid));
  */
 typedef FormData_pg_type_encoding *Form_pg_type_encoding;
 
+DECLARE_TOAST(pg_type_encoding, 6222, 6223);
+
+DECLARE_UNIQUE_INDEX(pg_type_encoding_typid_index, 6207, on pg_type_encoding using btree(typid oid_ops));
+#define TypeEncodingTypidIndexId	6207
+
 #endif   /* PG_TYPE_ENCODING_H */

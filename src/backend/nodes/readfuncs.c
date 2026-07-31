@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1163,11 +1163,12 @@ _readFuncCall(void)
 	READ_NODE_FIELD(args);
 	READ_NODE_FIELD(agg_order);
 	READ_NODE_FIELD(agg_filter);
+	READ_NODE_FIELD(over);
 	READ_BOOL_FIELD(agg_within_group);
 	READ_BOOL_FIELD(agg_star);
 	READ_BOOL_FIELD(agg_distinct);
 	READ_BOOL_FIELD(func_variadic);
-	READ_NODE_FIELD(over);
+	READ_ENUM_FIELD(funcformat, CoercionForm);
 	READ_LOCATION_FIELD(location);
 
 	READ_DONE();
@@ -1276,11 +1277,6 @@ _readAExpr(void)
 		local_node->kind = AEXPR_NULLIF;
 		READ_NODE_FIELD(name);
 	}
-	else if (strncmp(token,"OF",length)==0)
-	{
-		local_node->kind = AEXPR_OF;
-		READ_NODE_FIELD(name);
-	}
 	else if (strncmp(token,"IN",length)==0)
 	{
 		local_node->kind = AEXPR_IN;
@@ -1319,11 +1315,6 @@ _readAExpr(void)
 	else if (strncmp(token,"NOT_BETWEEN_SYM",length)==0)
 	{
 		local_node->kind = AEXPR_NOT_BETWEEN_SYM;
-		READ_NODE_FIELD(name);
-	}
-	else if (strncmp(token,"PAREN",length)==0)
-	{
-		local_node->kind = AEXPR_PAREN;
 		READ_NODE_FIELD(name);
 	}
 	else
@@ -1381,7 +1372,8 @@ _readAggref(void)
 	READ_CHAR_FIELD(aggkind);
 	READ_UINT_FIELD(agglevelsup);
 	READ_ENUM_FIELD(aggsplit, AggSplit);
-
+	READ_INT_FIELD(aggno);
+	READ_INT_FIELD(aggtransno);
 	READ_LOCATION_FIELD(location);
 	READ_INT_FIELD(agg_expr_id);
 
@@ -1465,6 +1457,7 @@ _readSubscriptingRef(void)
 
 	READ_OID_FIELD(refcontainertype);
 	READ_OID_FIELD(refelemtype);
+	READ_OID_FIELD(refrestype);
 	READ_INT_FIELD(reftypmod);
 	READ_OID_FIELD(refcollid);
 	READ_NODE_FIELD(refupperindexpr);

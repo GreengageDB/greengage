@@ -3,7 +3,7 @@
  * pg_foreign_server.h
  *	  definition of the "foreign server" system catalog (pg_foreign_server)
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_foreign_server.h
@@ -48,5 +48,11 @@ CATALOG(pg_foreign_server,1417,ForeignServerRelationId)
 typedef FormData_pg_foreign_server *Form_pg_foreign_server;
 
 #define GP_EXTTABLE_SERVER_NAME "gp_exttable_server"
+DECLARE_TOAST(pg_foreign_server, 4151, 4152);
+
+DECLARE_UNIQUE_INDEX(pg_foreign_server_oid_index, 113, on pg_foreign_server using btree(oid oid_ops));
+#define ForeignServerOidIndexId 113
+DECLARE_UNIQUE_INDEX(pg_foreign_server_name_index, 549, on pg_foreign_server using btree(srvname name_ops));
+#define ForeignServerNameIndexId	549
 
 #endif							/* PG_FOREIGN_SERVER_H */

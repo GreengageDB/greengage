@@ -2134,6 +2134,12 @@ CTranslatorDXLToScalar::TranslateDXLScalarArrayRefToScalar(
 	array_ref->refcollid = gpdb::TypeCollation(array_ref->refelemtype);
 	array_ref->reftypmod = dxlop->TypeModifier();
 
+	// PG14: exprType() of a SubscriptingRef is refrestype; left unset it
+	// defaults to 0, and building a tupdesc from the expression then fails
+	// with "cache lookup failed for type 0" (e.g. UPDATE arr SET a[i] = ...,
+	// or a subscript in ORDER BY such as point f1[0]).
+	array_ref->refrestype = CMDIdGPDB::CastMdid(dxlop->ReturnTypeMDid())->Oid();
+
 	const ULONG arity = scalar_array_ref_node->Arity();
 	GPOS_ASSERT(3 == arity || 4 == arity);
 

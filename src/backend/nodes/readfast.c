@@ -520,7 +520,7 @@ _readAExpr(void)
 
 	READ_ENUM_FIELD(kind, A_Expr_Kind);
 
-	Assert(local_node->kind <= AEXPR_PAREN);
+	Assert(local_node->kind <= AEXPR_NOT_BETWEEN_SYM);
 
 	switch (local_node->kind)
 	{
@@ -543,10 +543,6 @@ _readAExpr(void)
 			READ_NODE_FIELD(name);
 			break;
 		case AEXPR_NULLIF:
-
-			READ_NODE_FIELD(name);
-			break;
-		case AEXPR_OF:
 
 			READ_NODE_FIELD(name);
 			break;
@@ -579,10 +575,6 @@ _readAExpr(void)
 			READ_NODE_FIELD(name);
 			break;
 		case AEXPR_NOT_BETWEEN_SYM:
-
-			READ_NODE_FIELD(name);
-			break;
-		case AEXPR_PAREN:
 
 			READ_NODE_FIELD(name);
 			break;
@@ -1157,6 +1149,7 @@ _readCreateTrigStmt(void)
 	READ_BOOL_FIELD(deferrable);
 	READ_BOOL_FIELD(initdeferred);
 	READ_NODE_FIELD(constrrel);
+	READ_BOOL_FIELD(replace);
 
 	READ_DONE();
 }
@@ -1418,6 +1411,17 @@ _readAlterEnumStmt(void)
 	READ_STRING_FIELD(newValNeighbor);
 	READ_BOOL_FIELD(newValIsAfter);
 	READ_BOOL_FIELD(skipIfNewValExists);
+
+	READ_DONE();
+}
+
+static AlterTypeStmt *
+_readAlterTypeStmt(void)
+{
+	READ_LOCALS(AlterTypeStmt);
+
+	READ_NODE_FIELD(typeName);
+	READ_NODE_FIELD(options);
 
 	READ_DONE();
 }
@@ -2176,6 +2180,9 @@ readNodeBinary(void)
 				break;
 			case T_AlterEnumStmt:
 				return_value = _readAlterEnumStmt();
+				break;
+			case T_AlterTypeStmt:
+				return_value = _readAlterTypeStmt();
 				break;
 			case T_CreateCastStmt:
 				return_value = _readCreateCastStmt();

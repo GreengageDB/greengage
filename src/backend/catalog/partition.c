@@ -3,7 +3,7 @@
  * partition.c
  *		  Partitioning related data structures and functions.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -170,13 +170,14 @@ index_get_partition(Relation partition, Oid indexId)
 		ReleaseSysCache(tup);
 		if (!ispartition)
 			continue;
-		if (get_partition_parent(lfirst_oid(l)) == indexId)
+		if (get_partition_parent(partIdx) == indexId)
 		{
 			list_free(idxlist);
 			return partIdx;
 		}
 	}
 
+	list_free(idxlist);
 	return InvalidOid;
 }
 

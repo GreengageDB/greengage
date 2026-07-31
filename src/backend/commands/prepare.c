@@ -7,7 +7,7 @@
  * accessed via the extended FE/BE query protocol.
  *
  *
- * Copyright (c) 2002-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2002-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/commands/prepare.c
@@ -426,15 +426,13 @@ InitQueryHashTable(void)
 {
 	HASHCTL		hash_ctl;
 
-	MemSet(&hash_ctl, 0, sizeof(hash_ctl));
-
 	hash_ctl.keysize = NAMEDATALEN;
 	hash_ctl.entrysize = sizeof(PreparedStatement);
 
 	prepared_queries = hash_create("Prepared Queries",
 								   32,
 								   &hash_ctl,
-								   HASH_ELEM);
+								   HASH_ELEM | HASH_STRINGS);
 }
 
 /*
@@ -718,8 +716,28 @@ ExplainExecuteQuery(ExecuteStmt *execstmt, IntoClause *into, ExplainState *es,
 		PlannedStmt *pstmt = lfirst_node(PlannedStmt, p);
 
 		if (pstmt->commandType != CMD_UTILITY)
+		{
+			/*
+			 * GPDB: CREATE TABLE AS / SELECT INTO ... EXECUTE creates the
+			 * target relation in intorel_initplan(), which is driven off
+			 * PlannedStmt->intoClause (see execMain.c).  Unlike the
+			 * freshly-planned path (ExplainOneQuery), the cached plan reached
+			 * here does not carry the IntoClause, so without it intorel_initplan
+			 * is skipped, the DestReceiver's rel stays NULL and the executor
+			 * SIGSEGVs in intorel_startup_dummy.  Set the IntoClause -- on a
+			 * copy, since the PlannedStmt belongs to the shared cached plan and
+			 * a stale IntoClause would make a later plain EXECUTE create a
+			 * table.
+			 */
+			if (into != NULL)
+			{
+				pstmt = copyObject(pstmt);
+				pstmt->intoClause = copyObject(into);
+			}
+
 			ExplainOnePlan(pstmt, into, es, query_string, paramLI, queryEnv,
 						   &planduration, (es->buffers ? &bufusage : NULL), 0);
+		}
 		else
 			ExplainOneUtility(pstmt->utilityStmt, into, es, query_string,
 							  paramLI, queryEnv);

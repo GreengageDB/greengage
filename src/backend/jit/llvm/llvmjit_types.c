@@ -16,7 +16,7 @@
  * bitcode.
  *
  *
- * Copyright (c) 2016-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2016-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/jit/llvm/llvmjit_types.c
@@ -48,6 +48,9 @@
 PGFunction	TypePGFunction;
 size_t		TypeSizeT;
 bool		TypeStorageBool;
+ExprStateEvalFunc TypeExprStateEvalFunc;
+ExecEvalSubroutine TypeExecEvalSubroutine;
+ExecEvalBoolSubroutine TypeExecEvalBoolSubroutine;
 
 NullableDatum StructNullableDatum;
 AggState	StructAggState;
@@ -126,10 +129,6 @@ void	   *referenced_functions[] =
 	ExecEvalScalarArrayOpFastInt,
 	ExecEvalScalarArrayOpFastStr,
 	ExecEvalSubPlan,
-	ExecEvalSubscriptingRef,
-	ExecEvalSubscriptingRefAssign,
-	ExecEvalSubscriptingRefFetch,
-	ExecEvalSubscriptingRefOld,
 	ExecEvalSysVar,
 	ExecEvalWholeRowVar,
 	ExecEvalXmlExpr,

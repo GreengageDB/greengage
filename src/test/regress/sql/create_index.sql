@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/ERROR:  could not serialize current snapshot, ActiveSnapshot not set \(cdbdisp_dtx\.c\:\d+\)/
+-- s/ \(cdbdisp_dtx\.c:\d+\)//
+-- end_matchsubs
 --
 -- CREATE_INDEX
 -- Create ancillary data structures (i.e. indices)
@@ -139,22 +143,24 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 
 -- In gpdb, we intentional filter out point (1e-300, -1e-300) every order by related queries
 -- in this test case file. It is an underflow point, rank it cause randomly results( (0,0),
--- (1e-300, -1e-300) are equal).
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
+-- (1e-300, -1e-300) are equal). We also filter the new point (Infinity, 1e+300) because it
+-- has the same distance to the point (0, 1) as the point (1e+300, Infinity), which produces
+-- random results.
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
 
 SELECT * FROM point_tbl WHERE f1 IS NULL;
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
 
 SELECT * FROM gpolygon_tbl ORDER BY f1 <-> '(0,0)'::point LIMIT 10;
 
@@ -226,32 +232,32 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM point_tbl WHERE f1 IS NULL;
 SELECT * FROM point_tbl WHERE f1 IS NULL;
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
 
 EXPLAIN (COSTS OFF)
 SELECT * FROM gpolygon_tbl ORDER BY f1 <-> '(0,0)'::point LIMIT 10;
@@ -267,8 +273,8 @@ SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
 
 RESET enable_seqscan;
 RESET enable_indexscan;
@@ -821,7 +827,7 @@ DROP TABLE reindex_verbose;
 CREATE TABLE concur_reindex_tab (c1 int);
 -- REINDEX
 REINDEX TABLE concur_reindex_tab; -- notice
-REINDEX TABLE CONCURRENTLY concur_reindex_tab; -- notice
+REINDEX (CONCURRENTLY) TABLE concur_reindex_tab; -- notice
 ALTER TABLE concur_reindex_tab ADD COLUMN c2 text; -- add toast index
 -- Normal index with integer column
 CREATE UNIQUE INDEX concur_reindex_ind1 ON concur_reindex_tab(c1);

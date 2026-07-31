@@ -64,6 +64,11 @@ where storage_parameter is:
    defining <command>SELECT</command> statement whenever it is
    queried.
   </para>
+
+  <para>
+   <command>CREATE TABLE AS</command> requires <literal>CREATE</literal>
+   privilege on the schema used for the table.
+  </para>
  </refsect1>
 
  <refsect1>

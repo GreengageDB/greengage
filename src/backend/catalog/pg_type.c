@@ -3,7 +3,7 @@
  * pg_type.c
  *	  routines to support manipulation of the pg_type relation
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -29,6 +29,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/typecmds.h"
+#include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "parser/scansup.h"
 #include "utils/acl.h"
@@ -37,13 +38,15 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
-
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/reloptions.h"
 #include "catalog/pg_type_encoding.h"
 #include "cdb/cdbvars.h"
 #include "parser/parse_type.h"
+
+static char *makeUniqueTypeName(const char *typeName, Oid typeNamespace,
+								bool tryOriginal);
 
 /*
  * Record a type's default encoding clause in the catalog.
@@ -267,6 +270,7 @@ TypeShellMake(const char *typeName, Oid typeNamespace, Oid ownerId)
 	values[Anum_pg_type_typisdefined - 1] = BoolGetDatum(false);
 	values[Anum_pg_type_typdelim - 1] = CharGetDatum(DEFAULT_TYPDELIM);
 	values[Anum_pg_type_typrelid - 1] = ObjectIdGetDatum(InvalidOid);
+	values[Anum_pg_type_typsubscript - 1] = ObjectIdGetDatum(InvalidOid);
 	values[Anum_pg_type_typelem - 1] = ObjectIdGetDatum(InvalidOid);
 	values[Anum_pg_type_typarray - 1] = ObjectIdGetDatum(InvalidOid);
 	values[Anum_pg_type_typinput - 1] = ObjectIdGetDatum(F_SHELL_IN);
@@ -359,11 +363,12 @@ TypeCreate(Oid newTypeOid,
 		   Oid typmodinProcedure,
 		   Oid typmodoutProcedure,
 		   Oid analyzeProcedure,
+		   Oid subscriptProcedure,
 		   Oid elementType,
 		   bool isImplicitArray,
 		   Oid arrayType,
 		   Oid baseType,
-		   const char *defaultTypeValue,	/* human readable rep */
+		   const char *defaultTypeValue,	/* human-readable rep */
 		   char *defaultTypeBin,	/* cooked rep */
 		   bool passedByValue,
 		   char alignment,
@@ -508,6 +513,7 @@ TypeCreate(Oid newTypeOid,
 	values[Anum_pg_type_typisdefined - 1] = BoolGetDatum(true);
 	values[Anum_pg_type_typdelim - 1] = CharGetDatum(typDelim);
 	values[Anum_pg_type_typrelid - 1] = ObjectIdGetDatum(relationOid);
+	values[Anum_pg_type_typsubscript - 1] = ObjectIdGetDatum(subscriptProcedure);
 	values[Anum_pg_type_typelem - 1] = ObjectIdGetDatum(elementType);
 	values[Anum_pg_type_typarray - 1] = ObjectIdGetDatum(arrayType);
 	values[Anum_pg_type_typinput - 1] = ObjectIdGetDatum(inputProcedure);
@@ -807,7 +813,7 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 		recordDependencyOnCurrentExtension(&myself, rebuild);
 	}
 
-	/* Normal dependencies on the I/O functions */
+	/* Normal dependencies on the I/O and support functions */
 	if (OidIsValid(typeForm->typinput))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typinput);
@@ -847,6 +853,12 @@ GenerateTypeDependencies(HeapTuple typeTuple,
 	if (OidIsValid(typeForm->typanalyze))
 	{
 		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typanalyze);
+		add_exact_object_address(&referenced, addrs_normal);
+	}
+
+	if (OidIsValid(typeForm->typsubscript))
+	{
+		ObjectAddressSet(referenced, ProcedureRelationId, typeForm->typsubscript);
 		add_exact_object_address(&referenced, addrs_normal);
 	}
 
@@ -994,31 +1006,10 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace)
 char *
 makeArrayTypeName(const char *typeName, Oid typeNamespace)
 {
-	char	   *arr = (char *) palloc(NAMEDATALEN);
-	int			namelen = strlen(typeName);
-	int			i;
+	char	   *arr;
 
-	/*
-	 * The idea is to prepend underscores as needed until we make a name that
-	 * doesn't collide with anything...
-	 */
-	for (i = 1; i < NAMEDATALEN - 1; i++)
-	{
-		arr[i - 1] = '_';
-		if (i + namelen < NAMEDATALEN)
-			strcpy(arr + i, typeName);
-		else
-		{
-			memcpy(arr + i, typeName, NAMEDATALEN - i);
-			truncate_identifier(arr, NAMEDATALEN, false);
-		}
-		if (!SearchSysCacheExists2(TYPENAMENSP,
-								   CStringGetDatum(arr),
-								   ObjectIdGetDatum(typeNamespace)))
-			break;
-	}
-
-	if (i >= NAMEDATALEN - 1)
+	arr = makeUniqueTypeName(typeName, typeNamespace, false);
+	if (arr == NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("could not form array type name for type \"%s\"",
@@ -1090,3 +1081,88 @@ moveArrayTypeName(Oid typeOid, const char *typeName, Oid typeNamespace)
 	return true;
 }
 
+/*
+ * makeMultirangeTypeName
+ *	  - given a range type name, make a multirange type name for it
+ *
+ * caller is responsible for pfreeing the result
+ */
+char *
+makeMultirangeTypeName(const char *rangeTypeName, Oid typeNamespace)
+{
+	char	   *buf;
+	char	   *rangestr;
+
+	/*
+	 * If the range type name contains "range" then change that to
+	 * "multirange". Otherwise add "_multirange" to the end.
+	 */
+	rangestr = strstr(rangeTypeName, "range");
+	if (rangestr)
+	{
+		char	   *prefix = pnstrdup(rangeTypeName, rangestr - rangeTypeName);
+
+		buf = psprintf("%s%s%s", prefix, "multi", rangestr);
+	}
+	else
+		buf = psprintf("%s_multirange", pnstrdup(rangeTypeName, NAMEDATALEN - 12));
+
+	/* clip it at NAMEDATALEN-1 bytes */
+	buf[pg_mbcliplen(buf, strlen(buf), NAMEDATALEN - 1)] = '\0';
+
+	if (SearchSysCacheExists2(TYPENAMENSP,
+							  CStringGetDatum(buf),
+							  ObjectIdGetDatum(typeNamespace)))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("type \"%s\" already exists", buf),
+				 errdetail("Failed while creating a multirange type for type \"%s\".", rangeTypeName),
+				 errhint("You can manually specify a multirange type name using the \"multirange_type_name\" attribute")));
+
+	return pstrdup(buf);
+}
+
+/*
+ * makeUniqueTypeName
+ *		Generate a unique name for a prospective new type
+ *
+ * Given a typeName, return a new palloc'ed name by preprending underscores
+ * until a non-conflicting name results.
+ *
+ * If tryOriginal, first try with zero underscores.
+ */
+static char *
+makeUniqueTypeName(const char *typeName, Oid typeNamespace, bool tryOriginal)
+{
+	int			i;
+	int			namelen;
+	char		dest[NAMEDATALEN];
+
+	Assert(strlen(typeName) <= NAMEDATALEN - 1);
+
+	if (tryOriginal &&
+		!SearchSysCacheExists2(TYPENAMENSP,
+							   CStringGetDatum(typeName),
+							   ObjectIdGetDatum(typeNamespace)))
+		return pstrdup(typeName);
+
+	/*
+	 * The idea is to prepend underscores as needed until we make a name that
+	 * doesn't collide with anything ...
+	 */
+	namelen = strlen(typeName);
+	for (i = 1; i < NAMEDATALEN - 1; i++)
+	{
+		dest[i - 1] = '_';
+		strlcpy(dest + i, typeName, NAMEDATALEN - i);
+		if (namelen + i >= NAMEDATALEN)
+			truncate_identifier(dest, NAMEDATALEN, false);
+
+		if (!SearchSysCacheExists2(TYPENAMENSP,
+								   CStringGetDatum(dest),
+								   ObjectIdGetDatum(typeNamespace)))
+			return pstrdup(dest);
+	}
+
+	return NULL;
+}

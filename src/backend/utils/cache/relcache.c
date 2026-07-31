@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -102,15 +102,15 @@
 #define RELCACHE_INIT_FILEMAGIC		0x773266	/* version ID value */
 
 /*
- * Default policy for whether to apply RECOVER_RELATION_BUILD_MEMORY:
- * do so in clobber-cache builds but not otherwise.  This choice can be
- * overridden at compile time with -DRECOVER_RELATION_BUILD_MEMORY=1 or =0.
+ * Whether to bother checking if relation cache memory needs to be freed
+ * eagerly.  See also RelationBuildDesc() and pg_config_manual.h.
  */
-#ifndef RECOVER_RELATION_BUILD_MEMORY
-#if defined(CLOBBER_CACHE_ALWAYS) || defined(CLOBBER_CACHE_RECURSIVELY)
-#define RECOVER_RELATION_BUILD_MEMORY 1
+#if defined(RECOVER_RELATION_BUILD_MEMORY) && (RECOVER_RELATION_BUILD_MEMORY != 0)
+#define MAYBE_RECOVER_RELATION_BUILD_MEMORY 1
 #else
 #define RECOVER_RELATION_BUILD_MEMORY 0
+#ifdef CLOBBER_CACHE_ENABLED
+#define MAYBE_RECOVER_RELATION_BUILD_MEMORY 1
 #endif
 #endif
 
@@ -1058,19 +1058,25 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	 * scope, and relcache loads shouldn't happen so often that it's essential
 	 * to recover transient data before end of statement/transaction.  However
 	 * that's definitely not true in clobber-cache test builds, and perhaps
-	 * it's not true in other cases.  If RECOVER_RELATION_BUILD_MEMORY is not
-	 * zero, arrange to allocate the junk in a temporary context that we'll
-	 * free before returning.  Make it a child of caller's context so that it
-	 * will get cleaned up appropriately if we error out partway through.
+	 * it's not true in other cases.
+	 *
+	 * When cache clobbering is enabled or when forced to by
+	 * RECOVER_RELATION_BUILD_MEMORY=1, arrange to allocate the junk in a
+	 * temporary context that we'll free before returning.  Make it a child
+	 * of caller's context so that it will get cleaned up appropriately if
+	 * we error out partway through.
 	 */
-#if RECOVER_RELATION_BUILD_MEMORY
-	MemoryContext tmpcxt;
-	MemoryContext oldcxt;
+#ifdef MAYBE_RECOVER_RELATION_BUILD_MEMORY
+	MemoryContext tmpcxt = NULL;
+	MemoryContext oldcxt = NULL;
 
-	tmpcxt = AllocSetContextCreate(CurrentMemoryContext,
-								   "RelationBuildDesc workspace",
-								   ALLOCSET_DEFAULT_SIZES);
-	oldcxt = MemoryContextSwitchTo(tmpcxt);
+	if (RECOVER_RELATION_BUILD_MEMORY || debug_invalidate_system_caches_always > 0)
+	{
+		tmpcxt = AllocSetContextCreate(CurrentMemoryContext,
+									   "RelationBuildDesc workspace",
+									   ALLOCSET_DEFAULT_SIZES);
+		oldcxt = MemoryContextSwitchTo(tmpcxt);
+	}
 #endif
 
 	/*
@@ -1083,10 +1089,13 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	 */
 	if (!HeapTupleIsValid(pg_class_tuple))
 	{
-#if RECOVER_RELATION_BUILD_MEMORY
-		/* Return to caller's context, and blow away the temporary context */
-		MemoryContextSwitchTo(oldcxt);
-		MemoryContextDelete(tmpcxt);
+#ifdef MAYBE_RECOVER_RELATION_BUILD_MEMORY
+		if (tmpcxt)
+		{
+			/* Return to caller's context, and blow away the temporary context */
+			MemoryContextSwitchTo(oldcxt);
+			MemoryContextDelete(tmpcxt);
+		}
 #endif
 		return NULL;
 	}
@@ -1290,10 +1299,13 @@ RelationBuildDesc(Oid targetRelId, bool insertIt)
 	/* It's fully valid */
 	relation->rd_isvalid = true;
 
-#if RECOVER_RELATION_BUILD_MEMORY
-	/* Return to caller's context, and blow away the temporary context */
-	MemoryContextSwitchTo(oldcxt);
-	MemoryContextDelete(tmpcxt);
+#ifdef MAYBE_RECOVER_RELATION_BUILD_MEMORY
+	if (tmpcxt)
+	{
+		/* Return to caller's context, and blow away the temporary context */
+		MemoryContextSwitchTo(oldcxt);
+		MemoryContextDelete(tmpcxt);
+	}
 #endif
 
 	return relation;
@@ -1650,7 +1662,6 @@ LookupOpclassInfo(Oid operatorClassOid,
 		/* First time through: initialize the opclass cache */
 		HASHCTL		ctl;
 
-		MemSet(&ctl, 0, sizeof(ctl));
 		ctl.keysize = sizeof(Oid);
 		ctl.entrysize = sizeof(OpClassCacheEnt);
 		OpClassCache = hash_create("Operator class cache", 64,
@@ -1690,8 +1701,9 @@ LookupOpclassInfo(Oid operatorClassOid,
 	 * while we are loading the info, and it's very hard to provoke that if
 	 * this happens only once per opclass per backend.
 	 */
-#if defined(CLOBBER_CACHE_ALWAYS)
-	opcentry->valid = false;
+#ifdef CLOBBER_CACHE_ENABLED
+	if (debug_invalidate_system_caches_always > 0)
+		opcentry->valid = false;
 #endif
 
 	if (opcentry->valid)
@@ -3924,7 +3936,6 @@ RelationCacheInitialize(void)
 	/*
 	 * create hashtable that indexes the relcache
 	 */
-	MemSet(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(Oid);
 	ctl.entrysize = sizeof(RelIdCacheEnt);
 	RelationIdCache = hash_create("Relcache by OID", INITRELCACHESIZE,

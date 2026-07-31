@@ -739,7 +739,7 @@ select localoid::regclass::name, policytype, numsegments, distkey, distclass
 from gp_distribution_policy where localoid = 't_9526'::regclass::oid;
  localoid | policytype | numsegments | distkey | distclass 
 ----------+------------+-------------+---------+-----------
- t_9526   | p          |           3 | 1       | 10055
+ t_9526   | p          |           3 | 1       | 10056
 (1 row)
 
 -- storage paramter should be same with before
@@ -779,7 +779,7 @@ select localoid::regclass::name, policytype, numsegments, distkey, distclass
     from gp_distribution_policy where localoid = 't_9527'::regclass::oid;
  localoid | policytype | numsegments | distkey | distclass 
 ----------+------------+-------------+---------+-----------
- t_9527   | p          |           3 | 1       | 10055
+ t_9527   | p          |           3 | 1       | 10056
 (1 row)
 
 -- storage paramter should be same with before
@@ -818,7 +818,7 @@ select localoid::regclass::name, policytype, numsegments, distkey, distclass
     from gp_distribution_policy where localoid = 't_9528'::regclass::oid;
  localoid | policytype | numsegments | distkey | distclass 
 ----------+------------+-------------+---------+-----------
- t_9528   | p          |           2 | 2       | 10073
+ t_9528   | p          |           2 | 2       | 10075
 (1 row)
 
 -- storage paramter should be same with before

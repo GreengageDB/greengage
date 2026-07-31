@@ -3,7 +3,7 @@
  * partbounds.c
  *		Support routines for manipulating partition bounds
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -4685,6 +4685,8 @@ compute_partition_hash_value(int partnatts, FmgrInfo *partsupfunc, Oid *partcoll
  *
  * Returns true if remainder produced when this computed single hash value is
  * divided by the given modulus is equal to given remainder, otherwise false.
+ * NB: it's important that this never return null, as the constraint machinery
+ * would consider that to be a "pass".
  *
  * See get_qual_for_hash() for usage.
  */
@@ -4709,9 +4711,9 @@ satisfies_hash_partition(PG_FUNCTION_ARGS)
 	ColumnsHashData *my_extra;
 	uint64		rowHash = 0;
 
-	/* Return null if the parent OID, modulus, or remainder is NULL. */
+	/* Return false if the parent OID, modulus, or remainder is NULL. */
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
-		PG_RETURN_NULL();
+		PG_RETURN_BOOL(false);
 	parentId = PG_GETARG_OID(0);
 	modulus = PG_GETARG_INT32(1);
 	remainder = PG_GETARG_INT32(2);
@@ -4741,14 +4743,11 @@ satisfies_hash_partition(PG_FUNCTION_ARGS)
 		int			j;
 
 		/* Open parent relation and fetch partition key info */
-		parent = try_relation_open(parentId, AccessShareLock, false);
-		if (parent == NULL)
-			PG_RETURN_NULL();
+		parent = relation_open(parentId, AccessShareLock);
 		key = RelationGetPartitionKey(parent);
 
 		/* Reject parent table that is not hash-partitioned. */
-		if (parent->rd_rel->relkind != RELKIND_PARTITIONED_TABLE ||
-			key->strategy != PARTITION_STRATEGY_HASH)
+		if (key == NULL || key->strategy != PARTITION_STRATEGY_HASH)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("\"%s\" is not a hash partitioned table",

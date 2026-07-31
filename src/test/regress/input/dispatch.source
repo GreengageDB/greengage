@@ -14,6 +14,12 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
 -- m/WARNING:  Connection \(seg\d.*:.*\) is broken/
 -- s/WARNING:  Connection \(seg\d.*:.*\) is broken/WARNING:  Connection seg0 slice1 is broken/
+-- # Newer libpq prefixes connection failures with "could not connect to
+-- # host ..., port ...:" even when the failure is a FATAL from the server
+-- # during startup. The host/ip/port are environment-dependent, so mask
+-- # them out.
+-- m/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/
+-- s/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/could not connect to host "HOST", port PORT:/
 -- end_matchsubs
 
 -- skip FTS probes always

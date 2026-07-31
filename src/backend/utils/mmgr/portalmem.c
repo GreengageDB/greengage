@@ -10,7 +10,7 @@
  *
  * Portions Copyright (c) 2006-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -126,7 +126,7 @@ EnablePortalManager(void)
 	 * create, initially
 	 */
 	PortalHashTable = hash_create("Portal hash", PORTALS_PER_USER,
-								  &ctl, HASH_ELEM);
+								  &ctl, HASH_ELEM | HASH_STRINGS);
 }
 
 /*

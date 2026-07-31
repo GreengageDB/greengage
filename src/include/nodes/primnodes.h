@@ -9,7 +9,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/nodes/primnodes.h
@@ -331,6 +331,12 @@ typedef struct Param
  * a crosscheck that the Aggrefs match the plan; but note that when aggsplit
  * indicates a non-final mode, aggtype reflects the transition data type
  * not the SQL-level output type of the aggregate.
+ *
+ * aggno and aggtransno are -1 in the parse stage, and are set in planning.
+ * Aggregates with the same 'aggno' represent the same aggregate expression,
+ * and can share the result.  Aggregates with same 'transno' but different
+ * 'aggno' can share the same transition state, only the final function needs
+ * to be called separately.
  */
 typedef struct Aggref
 {
@@ -352,6 +358,8 @@ typedef struct Aggref
 	char		aggkind;		/* aggregate kind (see pg_aggregate.h) */
 	Index		agglevelsup;	/* > 0 if agg belongs to outer query */
 	AggSplit	aggsplit;		/* expected agg-splitting mode of parent Agg */
+	int			aggno;			/* unique ID within the Agg node */
+	int			aggtransno;		/* unique ID of transition state in the Agg */
 	int			location;		/* token location, or -1 if unknown */
 
 	int         agg_expr_id;    /* gpdb private, if aggref is distinct qualified, record AggExprId value in tuple split */
@@ -500,14 +508,14 @@ typedef struct WindowFunc
 	int			location;		/* token location, or -1 if unknown */
 } WindowFunc;
 
-/* ----------------
- *	SubscriptingRef: describes a subscripting operation over a container
- *			(array, etc).
+/*
+ * SubscriptingRef: describes a subscripting operation over a container
+ * (array, etc).
  *
  * A SubscriptingRef can describe fetching a single element from a container,
- * fetching a part of container (e.g. array slice), storing a single element into
- * a container, or storing a slice.  The "store" cases work with an
- * initial container value and a source value that is inserted into the
+ * fetching a part of a container (e.g. an array slice), storing a single
+ * element into a container, or storing a slice.  The "store" cases work with
+ * an initial container value and a source value that is inserted into the
  * appropriate part of the container; the result of the operation is an
  * entire new modified container value.
  *
@@ -520,23 +528,32 @@ typedef struct WindowFunc
  *
  * In the slice case, individual expressions in the subscript lists can be
  * NULL, meaning "substitute the array's current lower or upper bound".
+ * (Non-array containers may or may not support this.)
  *
- * Note: the result datatype is the element type when fetching a single
- * element; but it is the array type when doing subarray fetch or either
- * type of store.
+ * refcontainertype is the actual container type that determines the
+ * subscripting semantics.  (This will generally be either the exposed type of
+ * refexpr, or the base type if that is a domain.)  refelemtype is the type of
+ * the container's elements; this is saved for the use of the subscripting
+ * functions, but is not used by the core code.  refrestype, reftypmod, and
+ * refcollid describe the type of the SubscriptingRef's result.  In a store
+ * expression, refrestype will always match refcontainertype; in a fetch,
+ * it could be refelemtype for an element fetch, or refcontainertype for a
+ * slice fetch, or possibly something else as determined by type-specific
+ * subscripting logic.  Likewise, reftypmod and refcollid will match the
+ * container's properties in a store, but could be different in a fetch.
  *
  * Note: for the cases where a container is returned, if refexpr yields a R/W
- * expanded container, then the implementation is allowed to modify that object
- * in-place and return the same object.)
- * ----------------
+ * expanded container, then the implementation is allowed to modify that
+ * object in-place and return the same object.
  */
 typedef struct SubscriptingRef
 {
 	Expr		xpr;
 	Oid			refcontainertype;	/* type of the container proper */
-	Oid			refelemtype;	/* type of the container elements */
-	int32		reftypmod;		/* typmod of the container (and elements too) */
-	Oid			refcollid;		/* OID of collation, or InvalidOid if none */
+	Oid			refelemtype;	/* the container type's pg_type.typelem */
+	Oid			refrestype;		/* type of the SubscriptingRef's result */
+	int32		reftypmod;		/* typmod of the result */
+	Oid			refcollid;		/* collation of result, or InvalidOid if none */
 	List	   *refupperindexpr;	/* expressions that evaluate to upper
 									 * container indexes */
 	List	   *reflowerindexpr;	/* expressions that evaluate to lower
@@ -544,7 +561,6 @@ typedef struct SubscriptingRef
 									 * container element */
 	Expr	   *refexpr;		/* the expression that evaluates to a
 								 * container value */
-
 	Expr	   *refassgnexpr;	/* expression for the source value, or NULL if
 								 * fetch */
 } SubscriptingRef;
@@ -559,11 +575,15 @@ typedef enum CoercionContext
 {
 	COERCION_IMPLICIT,			/* coercion in context of expression */
 	COERCION_ASSIGNMENT,		/* coercion in context of assignment */
+	COERCION_PLPGSQL,			/* if no assignment cast, use CoerceViaIO */
 	COERCION_EXPLICIT			/* explicit cast operation */
 } CoercionContext;
 
 /*
- * CoercionForm - how to display a node that could have come from a cast
+ * CoercionForm - how to display a FuncExpr or related node
+ *
+ * "Coercion" is a bit of a misnomer, since this value records other
+ * special syntaxes besides casts, but for now we'll keep this naming.
  *
  * NB: equal() ignores CoercionForm fields, therefore this *must* not carry
  * any semantically significant information.  We need that behavior so that
@@ -575,7 +595,8 @@ typedef enum CoercionForm
 {
 	COERCE_EXPLICIT_CALL,		/* display as a function call */
 	COERCE_EXPLICIT_CAST,		/* display as an explicit cast */
-	COERCE_IMPLICIT_CAST		/* implicit cast, so hide it */
+	COERCE_IMPLICIT_CAST,		/* implicit cast, so hide it */
+	COERCE_SQL_SYNTAX			/* display with SQL-mandated special syntax */
 } CoercionForm;
 
 /*

@@ -58,12 +58,13 @@ OBJS_COMMON = \
 	file_perm.o \
 	file_utils.o \
 	hashfn.o \
+	hex_decode.o \
 	ip.o \
 	jsonapi.o \
 	keywords.o \
 	kwlookup.o \
 	link-canary.o \
-	md5.o \
+	md5_common.o \
 	pg_get_line.o \
 	pg_lzcompress.o \
 	pgfnames.o \
@@ -82,9 +83,12 @@ OBJS_COMMON = \
 ifeq ($(with_openssl),yes)
 OBJS_COMMON += \
 	protocol_openssl.o \
-	sha2_openssl.o
+	cryptohash_openssl.o
 else
-OBJS_COMMON += sha2.o
+OBJS_COMMON += \
+	cryptohash.o \
+	md5.o \
+	sha2.o
 endif
 
 # A few files are currently only built for frontend, not server

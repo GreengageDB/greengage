@@ -346,8 +346,33 @@ ERROR:  FOR NO KEY UPDATE is not allowed with UNION/INTERSECT/EXCEPT
         1 |        2 |        3
 (1 row)
 
--- exercise both hashed and sorted implementations of INTERSECT/EXCEPT
+-- exercise both hashed and sorted implementations of UNION/INTERSECT/EXCEPT
 set enable_hashagg to on;
+explain (costs off)
+select count(*) from
+  ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: tenk1.unique1
+                     ->  Append
+                           ->  Seq Scan on tenk1
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: tenk1_1.fivethous
+                                 ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(11 rows)
+
+select count(*) from
+  ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
+ count 
+-------
+ 10000
+(1 row)
+
 explain (costs off)
 select count(*) from
   ( select unique1 from tenk1 intersect select fivethous from tenk1 ) ss;
@@ -404,6 +429,31 @@ select unique1 from tenk1 except select unique2 from tenk1 where unique2 != 10;
 set enable_hashagg to off;
 explain (costs off)
 select count(*) from
+  ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         ->  Partial Aggregate
+               ->  HashAggregate
+                     Group Key: tenk1.unique1
+                     ->  Append
+                           ->  Seq Scan on tenk1
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: tenk1_1.fivethous
+                                 ->  Seq Scan on tenk1 tenk1_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(11 rows)
+
+select count(*) from
+  ( select unique1 from tenk1 union select fivethous from tenk1 ) ss;
+ count 
+-------
+ 10000
+(1 row)
+
+explain (costs off)
+select count(*) from
   ( select unique1 from tenk1 intersect select fivethous from tenk1 ) ss;
                                        QUERY PLAN                                        
 -----------------------------------------------------------------------------------------
@@ -453,6 +503,398 @@ select unique1 from tenk1 except select unique2 from tenk1 where unique2 != 10;
  unique1 
 ---------
       10
+(1 row)
+
+reset enable_hashagg;
+-- non-hashable type
+set enable_hashagg to on;
+explain (costs off)
+select x from (values (100::money), (200::money)) _(x) union select x from (values (100::money), (300::money)) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+set enable_hashagg to off;
+explain (costs off)
+select x from (values (100::money), (200::money)) _(x) union select x from (values (100::money), (300::money)) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+reset enable_hashagg;
+-- arrays
+set enable_hashagg to on;
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,2}
+ {1,3}
+ {1,4}
+(3 rows)
+
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Nested Loop
+   Join Filter: (NOT (("Values_1".column1)::anyarray IS DISTINCT FROM ("Values".column1)::anyarray))
+   ->  GroupAggregate
+         Group Key: "Values_1".column1
+         ->  Sort
+               Sort Key: "Values_1".column1
+               ->  Values Scan on "Values_1"
+   ->  GroupAggregate
+         Group Key: "Values".column1
+         ->  Sort
+               Sort Key: "Values".column1
+               ->  Values Scan on "Values"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,2}
+(1 row)
+
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ GroupAggregate
+   Group Key: "Values_1".column1
+   ->  Sort
+         Sort Key: "Values_1".column1
+         ->  Nested Loop Anti Join
+               Join Filter: (NOT (("Values_1".column1)::anyarray IS DISTINCT FROM ("Values".column1)::anyarray))
+               ->  Values Scan on "Values_1"
+               ->  Values Scan on "Values"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(9 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,3}
+(1 row)
+
+-- non-hashable type
+explain (costs off)
+select x from (values (array[100::money]), (array[200::money])) _(x) union select x from (values (array[100::money]), (array[300::money])) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select x from (values (array[100::money]), (array[200::money])) _(x) union select x from (values (array[100::money]), (array[300::money])) _(x);
+     x     
+-----------
+ {$100.00}
+ {$200.00}
+ {$300.00}
+(3 rows)
+
+set enable_hashagg to off;
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) union select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,2}
+ {1,3}
+ {1,4}
+(3 rows)
+
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Nested Loop
+   Join Filter: (NOT (("Values_1".column1)::anyarray IS DISTINCT FROM ("Values".column1)::anyarray))
+   ->  GroupAggregate
+         Group Key: "Values_1".column1
+         ->  Sort
+               Sort Key: "Values_1".column1
+               ->  Values Scan on "Values_1"
+   ->  GroupAggregate
+         Group Key: "Values".column1
+         ->  Sort
+               Sort Key: "Values".column1
+               ->  Values Scan on "Values"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(13 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) intersect select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,2}
+(1 row)
+
+explain (costs off)
+select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
+ GroupAggregate
+   Group Key: "Values_1".column1
+   ->  Sort
+         Sort Key: "Values_1".column1
+         ->  Nested Loop Anti Join
+               Join Filter: (NOT (("Values_1".column1)::anyarray IS DISTINCT FROM ("Values".column1)::anyarray))
+               ->  Values Scan on "Values_1"
+               ->  Values Scan on "Values"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(9 rows)
+
+select x from (values (array[1, 2]), (array[1, 3])) _(x) except select x from (values (array[1, 2]), (array[1, 4])) _(x);
+   x   
+-------
+ {1,3}
+(1 row)
+
+reset enable_hashagg;
+-- records
+set enable_hashagg to on;
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+               QUERY PLAN                
+-----------------------------------------
+ HashAggregate
+   Group Key: "*VALUES*".column1
+   ->  Append
+         ->  Values Scan on "*VALUES*"
+         ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,4)
+ (1,3)
+ (1,2)
+(3 rows)
+
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+                  QUERY PLAN                   
+-----------------------------------------------
+ HashSetOp Intersect
+   ->  Append
+         ->  Subquery Scan on "*SELECT* 1"
+               ->  Values Scan on "*VALUES*"
+         ->  Subquery Scan on "*SELECT* 2"
+               ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,2)
+(1 row)
+
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+                  QUERY PLAN                   
+-----------------------------------------------
+ HashSetOp Except
+   ->  Append
+         ->  Subquery Scan on "*SELECT* 1"
+               ->  Values Scan on "*VALUES*"
+         ->  Subquery Scan on "*SELECT* 2"
+               ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(7 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,3)
+(1 row)
+
+-- non-hashable type
+-- With an anonymous row type, the typcache reports that the type is
+-- hashable, but then it will fail at run time.
+explain (costs off)
+select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+               QUERY PLAN                
+-----------------------------------------
+ HashAggregate
+   Group Key: "*VALUES*".column1
+   ->  Append
+         ->  Values Scan on "*VALUES*"
+         ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(6 rows)
+
+select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+ERROR:  could not identify a hash function for type money
+-- With a defined row type, the typcache can inspect the type's fields
+-- for hashability.
+create type ct1 as (f1 money);
+explain (costs off)
+select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union select x from (values (row(100::money)::ct1), (row(300::money)::ct1)) _(x);
+                 QUERY PLAN                  
+---------------------------------------------
+ GroupAggregate
+   Group Key: "Values".column1
+   ->  Sort
+         Sort Key: "Values".column1
+         ->  Append
+               ->  Values Scan on "Values"
+               ->  Values Scan on "Values_1"
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select x from (values (row(100::money)::ct1), (row(200::money)::ct1)) _(x) union select x from (values (row(100::money)::ct1), (row(300::money)::ct1)) _(x);
+     x     
+-----------
+ ($100.00)
+ ($200.00)
+ ($300.00)
+(3 rows)
+
+drop type ct1;
+set enable_hashagg to off;
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+                  QUERY PLAN                   
+-----------------------------------------------
+ Unique
+   Group Key: "*VALUES*".column1
+   ->  Sort
+         Sort Key: "*VALUES*".column1
+         ->  Append
+               ->  Values Scan on "*VALUES*"
+               ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(8 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,2)
+ (1,3)
+ (1,4)
+(3 rows)
+
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+                     QUERY PLAN                      
+-----------------------------------------------------
+ SetOp Intersect
+   ->  Sort
+         Sort Key: "*SELECT* 1".x
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  Values Scan on "*VALUES*"
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,2)
+(1 row)
+
+explain (costs off)
+select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+                     QUERY PLAN                      
+-----------------------------------------------------
+ SetOp Except
+   ->  Sort
+         Sort Key: "*SELECT* 1".x
+         ->  Append
+               ->  Subquery Scan on "*SELECT* 1"
+                     ->  Values Scan on "*VALUES*"
+               ->  Subquery Scan on "*SELECT* 2"
+                     ->  Values Scan on "*VALUES*_1"
+ Optimizer: Postgres query optimizer
+(9 rows)
+
+select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: ROW EXPRESSION
+   x   
+-------
+ (1,3)
 (1 row)
 
 reset enable_hashagg;

@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/paths.h
@@ -136,7 +136,10 @@ extern EquivalenceClass *get_eclass_for_sort_expr(PlannerInfo *root,
 												  Relids rel,
 												  bool create_it);
 extern Expr *find_em_expr_for_rel(EquivalenceClass *ec, RelOptInfo *rel);
-extern Expr *find_em_expr_usable_for_sorting_rel(EquivalenceClass *ec, RelOptInfo *rel);
+extern Expr *find_em_expr_usable_for_sorting_rel(PlannerInfo *root,
+												 EquivalenceClass *ec,
+												 RelOptInfo *rel,
+												 bool require_parallel_safe);
 extern void generate_base_implied_equalities(PlannerInfo *root);
 extern List *generate_join_implied_equalities(PlannerInfo *root,
 											  Relids join_relids,

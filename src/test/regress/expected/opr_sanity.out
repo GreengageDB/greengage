@@ -31,11 +31,16 @@ begin
   if $2 = 'pg_catalog.any'::pg_catalog.regtype then return true; end if;
   if $2 = 'pg_catalog.anyarray'::pg_catalog.regtype then
     if EXISTS(select 1 from pg_catalog.pg_type where
-              oid = $1 and typelem != 0 and typlen = -1)
+              oid = $1 and typelem != 0 and
+              typsubscript = 'pg_catalog.array_subscript_handler'::pg_catalog.regproc)
     then return true; end if;
   end if;
   if $2 = 'pg_catalog.anyrange'::pg_catalog.regtype then
     if (select typtype from pg_catalog.pg_type where oid = $1) = 'r'
+    then return true; end if;
+  end if;
+  if $2 = 'pg_catalog.anymultirange'::pg_catalog.regtype then
+    if (select typtype from pg_catalog.pg_type where oid = $1) = 'm'
     then return true; end if;
   end if;
   return false;
@@ -55,7 +60,8 @@ begin
   if $2 = 'pg_catalog.any'::pg_catalog.regtype then return true; end if;
   if $2 = 'pg_catalog.anyarray'::pg_catalog.regtype then
     if EXISTS(select 1 from pg_catalog.pg_type where
-              oid = $1 and typelem != 0 and typlen = -1)
+              oid = $1 and typelem != 0 and
+              typsubscript = 'pg_catalog.array_subscript_handler'::pg_catalog.regproc)
     then return true; end if;
   end if;
   if $2 = 'pg_catalog.anyrange'::pg_catalog.regtype then
@@ -185,7 +191,8 @@ WHERE p1.oid < p2.oid AND
 -- need to be modified whenever new pairs of types are made binary-equivalent,
 -- or when new polymorphic built-in functions are added!
 -- Note: ignore aggregate functions here, since they all point to the same
--- dummy built-in function.  Likewise, ignore range constructor functions.
+-- dummy built-in function.  Likewise, ignore range and multirange constructor
+-- functions.
 SELECT DISTINCT p1.prorettype::regtype, p2.prorettype::regtype
 FROM pg_proc AS p1, pg_proc AS p2
 WHERE p1.oid != p2.oid AND
@@ -194,6 +201,8 @@ WHERE p1.oid != p2.oid AND
     p1.prokind != 'a' AND p2.prokind != 'a' AND
     p1.prosrc NOT LIKE E'range\\_constructor_' AND
     p2.prosrc NOT LIKE E'range\\_constructor_' AND
+    p1.prosrc NOT LIKE E'multirange\\_constructor_' AND
+    p2.prosrc NOT LIKE E'multirange\\_constructor_' AND
     (p1.prorettype < p2.prorettype)
     -- int2/int4/int8/float8_matrix_accum functions violate this
     AND p1.proname NOT LIKE E'%_matrix_accum'
@@ -215,6 +224,8 @@ WHERE p1.oid != p2.oid AND
     p1.prokind != 'a' AND p2.prokind != 'a' AND
     p1.prosrc NOT LIKE E'range\\_constructor_' AND
     p2.prosrc NOT LIKE E'range\\_constructor_' AND
+    p1.prosrc NOT LIKE E'multirange\\_constructor_' AND
+    p2.prosrc NOT LIKE E'multirange\\_constructor_' AND
     (p1.proargtypes[0] < p2.proargtypes[0])
     -- int2/int4/int8/float8_matrix_accum functions violate this
     AND p1.proname NOT LIKE E'%_matrix_accum'
@@ -238,6 +249,8 @@ WHERE p1.oid != p2.oid AND
     p1.prokind != 'a' AND p2.prokind != 'a' AND
     p1.prosrc NOT LIKE E'range\\_constructor_' AND
     p2.prosrc NOT LIKE E'range\\_constructor_' AND
+    p1.prosrc NOT LIKE E'multirange\\_constructor_' AND
+    p2.prosrc NOT LIKE E'multirange\\_constructor_' AND
     (p1.proargtypes[1] < p2.proargtypes[1])
     -- int2/int4/int8/float8_matrix_accum functions violate this
     AND p1.proname NOT LIKE E'%_matrix_accum'
@@ -353,7 +366,8 @@ WHERE p1.prorettype IN
      'anyarray'::regtype = ANY (p1.proargtypes) OR
      'anynonarray'::regtype = ANY (p1.proargtypes) OR
      'anyenum'::regtype = ANY (p1.proargtypes) OR
-     'anyrange'::regtype = ANY (p1.proargtypes))
+     'anyrange'::regtype = ANY (p1.proargtypes) OR
+     'anymultirange'::regtype = ANY (p1.proargtypes))
 ORDER BY 2;
  oid  |    proname     
 ------+----------------
@@ -368,20 +382,25 @@ ORDER BY 2;
  3532 | enum_recv
 (9 rows)
 
--- anyrange is tighter than the rest, can only resolve from anyrange input
+-- anyrange and anymultirange are tighter than the rest, can only resolve
+-- from each other
 SELECT p1.oid, p1.proname
 FROM pg_proc as p1
-WHERE p1.prorettype = 'anyrange'::regtype
+WHERE p1.prorettype IN ('anyrange'::regtype, 'anymultirange'::regtype)
   AND NOT
-     'anyrange'::regtype = ANY (p1.proargtypes)
+    ('anyrange'::regtype = ANY (p1.proargtypes) OR
+      'anymultirange'::regtype = ANY (p1.proargtypes))
 ORDER BY 2;
  oid  |     proname      
 ------+------------------
+ 4229 | anymultirange_in
  3832 | anyrange_in
+ 4231 | multirange_in
+ 4233 | multirange_recv
  3876 | range_gist_union
  3834 | range_in
  3836 | range_recv
-(4 rows)
+(7 rows)
 
 -- similarly for the anycompatible family
 SELECT p1.oid, p1.proname
@@ -2013,8 +2032,6 @@ ORDER BY 1, 2, 3;
         783 |            8 | <@
         783 |            9 | &<|
         783 |           10 | <<|
-        783 |           10 | <^
-        783 |           11 | >^
         783 |           11 | |>>
         783 |           12 | |&>
         783 |           15 | <->
@@ -2030,6 +2047,8 @@ ORDER BY 1, 2, 3;
         783 |           26 | >>
         783 |           27 | >>=
         783 |           28 | <@
+        783 |           29 | <^
+        783 |           30 | >^
         783 |           48 | <@
         783 |           68 | <@
        2742 |            1 | &&
@@ -2088,9 +2107,7 @@ ORDER BY 1, 2, 3;
        4000 |            8 | <@
        4000 |            9 | &<|
        4000 |           10 | <<|
-       4000 |           10 | <^
        4000 |           11 | <
-       4000 |           11 | >^
        4000 |           11 | |>>
        4000 |           12 | <=
        4000 |           12 | |&>
@@ -2109,6 +2126,8 @@ ORDER BY 1, 2, 3;
        4000 |           26 | >>
        4000 |           27 | >>=
        4000 |           28 | ^@
+       4000 |           29 | <^
+       4000 |           30 | >^
        7013 |            1 | *<
        7013 |            1 | <
        7013 |            1 | <<
@@ -2249,13 +2268,14 @@ ORDER BY 1, 2, 3;
                     | float_ops        | float4_ops       | real
                     | float_ops        | float8_ops       | double precision
                     | jsonb_ops        | jsonb_ops        | jsonb
+                    | multirange_ops   | multirange_ops   | anymultirange
                     | numeric_ops      | numeric_ops      | numeric
                     | range_ops        | range_ops        | anyrange
                     | record_image_ops | record_image_ops | record
                     | record_ops       | record_ops       | record
                     | tsquery_ops      | tsquery_ops      | tsquery
                     | tsvector_ops     | tsvector_ops     | tsvector
-(15 rows)
+(16 rows)
 
 -- **************** pg_index ****************
 -- Look for illegal values in pg_index fields.

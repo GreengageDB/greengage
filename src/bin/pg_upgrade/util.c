@@ -3,7 +3,7 @@
  *
  *	utility functions
  *
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/util.c
  */
 
@@ -483,39 +483,4 @@ uint64
 str2uint64(const char *str)
 {
 	return (uint64) strtoull(str, NULL, 10);
-}
-
-/*
- *	pg_putenv()
- *
- *	This is like putenv(), but takes two arguments.
- *	It also does unsetenv() if val is NULL.
- */
-void
-pg_putenv(const char *var, const char *val)
-{
-	if (val)
-	{
-#ifndef WIN32
-		char	   *envstr;
-
-		envstr = psprintf("%s=%s", var, val);
-		putenv(envstr);
-
-		/*
-		 * Do not free envstr because it becomes part of the environment on
-		 * some operating systems.  See port/unsetenv.c::unsetenv.
-		 */
-#else
-		SetEnvironmentVariableA(var, val);
-#endif
-	}
-	else
-	{
-#ifndef WIN32
-		unsetenv(var);
-#else
-		SetEnvironmentVariableA(var, "");
-#endif
-	}
 }

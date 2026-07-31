@@ -4,7 +4,7 @@
  *	  POSTGRES heap access method definitions.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/heapam.h
@@ -129,7 +129,6 @@ extern bool heap_hot_search_buffer(ItemPointer tid, Relation relation,
 								   bool *all_dead, bool first_call);
 
 extern void heap_get_latest_tid(TableScanDesc scan, ItemPointer tid);
-extern void setLastTid(const ItemPointer tid);
 
 extern BulkInsertState GetBulkInsertState(void);
 extern void FreeBulkInsertState(BulkInsertState);

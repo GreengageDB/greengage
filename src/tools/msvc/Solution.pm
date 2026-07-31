@@ -336,17 +336,20 @@ sub GenerateFiles
 		HAVE_PPC_LWARX_MUTEX_HINT   => undef,
 		HAVE_PPOLL                  => undef,
 		HAVE_PREAD                  => undef,
+		HAVE_PREADV                 => undef,
 		HAVE_PSTAT                  => undef,
 		HAVE_PS_STRINGS             => undef,
 		HAVE_PTHREAD                => undef,
 		HAVE_PTHREAD_IS_THREADED_NP => undef,
 		HAVE_PTHREAD_PRIO_INHERIT   => undef,
 		HAVE_PWRITE                 => undef,
+		HAVE_PWRITEV                => undef,
 		HAVE_RANDOM                 => undef,
 		HAVE_READLINE_H             => undef,
 		HAVE_READLINE_HISTORY_H     => undef,
 		HAVE_READLINE_READLINE_H    => undef,
 		HAVE_READLINK               => undef,
+		HAVE_READV                  => undef,
 		HAVE_RL_COMPLETION_APPEND_CHARACTER      => undef,
 		HAVE_RL_COMPLETION_MATCHES               => undef,
 		HAVE_RL_COMPLETION_SUPPRESS_QUOTE        => undef,
@@ -355,6 +358,7 @@ sub GenerateFiles
 		HAVE_RL_FILENAME_QUOTING_FUNCTION        => undef,
 		HAVE_RL_RESET_SCREEN_SIZE                => undef,
 		HAVE_SECURITY_PAM_APPL_H                 => undef,
+		HAVE_SETENV                              => undef,
 		HAVE_SETPROCTITLE                        => undef,
 		HAVE_SETPROCTITLE_FAST                   => undef,
 		HAVE_SETSID                              => undef,
@@ -406,6 +410,7 @@ sub GenerateFiles
 		HAVE_SYS_TAS_H                           => undef,
 		HAVE_SYS_TYPES_H                         => 1,
 		HAVE_SYS_UCRED_H                         => undef,
+		HAVE_SYS_UIO_H                           => undef,
 		HAVE_SYS_UN_H                            => undef,
 		HAVE_TERMIOS_H                           => undef,
 		HAVE_TYPEOF                              => undef,
@@ -424,6 +429,7 @@ sub GenerateFiles
 		HAVE_WINLDAP_H                           => undef,
 		HAVE_WCSTOMBS_L                          => 1,
 		HAVE_WCTYPE_H                            => 1,
+		HAVE_WRITEV                              => undef,
 		HAVE_X509_GET_SIGNATURE_NID              => 1,
 		HAVE_X86_64_POPCNTQ                      => undef,
 		HAVE__BOOL                               => undef,
@@ -484,7 +490,6 @@ sub GenerateFiles
 		USE_ASSERT_CHECKING => $self->{options}->{asserts} ? 1 : undef,
 		USE_BONJOUR         => undef,
 		USE_BSD_AUTH        => undef,
-		USE_DEV_URANDOM     => undef,
 		USE_ICU => $self->{options}->{icu} ? 1 : undef,
 		USE_LIBXML                 => undef,
 		USE_LIBXSLT                => undef,
@@ -492,7 +497,6 @@ sub GenerateFiles
 		USE_LLVM                   => undef,
 		USE_NAMED_POSIX_SEMAPHORES => undef,
 		USE_OPENSSL                => undef,
-		USE_OPENSSL_RANDOM         => undef,
 		USE_PAM                    => undef,
 		USE_SLICING_BY_8_CRC32C    => undef,
 		USE_SSE42_CRC32C           => undef,
@@ -501,7 +505,6 @@ sub GenerateFiles
 		USE_SYSV_SEMAPHORES                 => undef,
 		USE_SYSV_SHARED_MEMORY              => undef,
 		USE_UNNAMED_POSIX_SEMAPHORES        => undef,
-		USE_WIN32_RANDOM                    => 1,
 		USE_WIN32_SEMAPHORES                => 1,
 		USE_WIN32_SHARED_MEMORY             => 1,
 		WCSTOMBS_L_IN_XLOCALE               => undef,
@@ -771,8 +774,6 @@ EOF
 	$mf =~ /^CATALOG_HEADERS\s*:?=(.*)$/gm
 	  || croak "Could not find CATALOG_HEADERS in Makefile\n";
 	my @bki_srcs = split /\s+/, $1;
-	push @bki_srcs, 'toasting.h';
-	push @bki_srcs, 'indexing.h';
 	$mf =~ /^POSTGRES_BKI_DATA\s*:?=[^,]+,(.*)\)$/gm
 	  || croak "Could not find POSTGRES_BKI_DATA in Makefile\n";
 	my @bki_data = split /\s+/, $1;

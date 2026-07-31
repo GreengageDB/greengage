@@ -4,7 +4,7 @@
  *	  definition of the "text search parser" system catalog (pg_ts_parser)
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_ts_parser.h
@@ -60,5 +60,10 @@ FOREIGN_KEY(prsheadline REFERENCES pg_proc(oid));
 FOREIGN_KEY(prslextype REFERENCES pg_proc(oid));
 
 typedef FormData_pg_ts_parser *Form_pg_ts_parser;
+
+DECLARE_UNIQUE_INDEX(pg_ts_parser_prsname_index, 3606, on pg_ts_parser using btree(prsname name_ops, prsnamespace oid_ops));
+#define TSParserNameNspIndexId	3606
+DECLARE_UNIQUE_INDEX(pg_ts_parser_oid_index, 3607, on pg_ts_parser using btree(oid oid_ops));
+#define TSParserOidIndexId	3607
 
 #endif							/* PG_TS_PARSER_H */

@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/ERROR:  could not serialize current snapshot, ActiveSnapshot not set \(cdbdisp_dtx\.c\:\d+\)/
+-- s/ \(cdbdisp_dtx\.c:\d+\)//
+-- end_matchsubs
 --
 -- CREATE_INDEX
 -- Create ancillary data structures (i.e. indices)
@@ -160,19 +164,19 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 << '(0.0, 0.0)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
  count 
 -------
-     3
+     4
 (1 row)
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
  count 
 -------
      1
 (1 row)
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
  count 
 -------
-     4
+     5
 (1 row)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
@@ -183,8 +187,10 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 
 -- In gpdb, we intentional filter out point (1e-300, -1e-300) every order by related queries
 -- in this test case file. It is an underflow point, rank it cause randomly results( (0,0),
--- (1e-300, -1e-300) are equal).
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
+-- (1e-300, -1e-300) are equal). We also filter the new point (Infinity, 1e+300) because it
+-- has the same distance to the point (0, 1) as the point (1e+300, Infinity), which produces
+-- random results.
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
         f1         
 -------------------
  (-3,4)
@@ -202,7 +208,7 @@ SELECT * FROM point_tbl WHERE f1 IS NULL;
  
 (1 row)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
         f1         
 -------------------
  (-3,4)
@@ -214,7 +220,7 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL O
  (NaN,NaN)
 (7 rows)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
 ---------
  (-3,4)
@@ -511,43 +517,43 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
 SELECT count(*) FROM point_tbl p WHERE p.f1 >> '(0.0, 0.0)';
  count 
 -------
-     3
+     4
 (1 row)
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
                      QUERY PLAN                      
 -----------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Index Scan using gpointind on point_tbl
-               Index Cond: (f1 <^ '(0,0)'::point)
-               Filter: (f1 <^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+               Index Cond: (f1 <<| '(0,0)'::point)
+               Filter: (f1 <<| '(0,0)'::point)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 <^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 <<| '(0.0, 0.0)';
  count 
 -------
      1
 (1 row)
 
 EXPLAIN (COSTS OFF)
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
                      QUERY PLAN                      
 -----------------------------------------------------
  Aggregate
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Index Scan using gpointind on point_tbl
-               Index Cond: (f1 >^ '(0,0)'::point)
-               Filter: (f1 >^ '(0,0)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+               Index Cond: (f1 |>> '(0,0)'::point)
+               Filter: (f1 |>> '(0,0)'::point)
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
-SELECT count(*) FROM point_tbl p WHERE p.f1 >^ '(0.0, 0.0)';
+SELECT count(*) FROM point_tbl p WHERE p.f1 |>> '(0.0, 0.0)';
  count 
 -------
-     4
+     5
 (1 row)
 
 EXPLAIN (COSTS OFF)
@@ -559,7 +565,7 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
          ->  Index Scan using gpointind on point_tbl
                Index Cond: (f1 ~= '(-5,-12)'::point)
                Filter: (f1 ~= '(-5,-12)'::point)
- Optimizer: Pivotal Optimizer (GPORCA) version 3.83.0
+ Optimizer: Pivotal Optimizer (GPORCA)
 (6 rows)
 
 SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
@@ -569,18 +575,18 @@ SELECT count(*) FROM point_tbl p WHERE p.f1 ~= '(-5, -12)';
 (1 row)
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
-                     QUERY PLAN                     
-----------------------------------------------------
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((f1 <-> '(0,1)'::point))
    ->  Index Only Scan using gpointind on point_tbl
          Order By: (f1 <-> '(0,1)'::point)
-         Filter: (f1 <> '(1e-300,-1e-300)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <> '(Infinity,1e+300)'::point))
  Optimizer: Postgres query optimizer
 (6 rows)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' ORDER BY f1 <-> '0,1';
         f1         
 -------------------
  (-3,4)
@@ -609,19 +615,19 @@ SELECT * FROM point_tbl WHERE f1 IS NULL;
 (1 row)
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
-                     QUERY PLAN                     
-----------------------------------------------------
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    Merge Key: ((f1 <-> '(0,1)'::point))
    ->  Index Only Scan using gpointind on point_tbl
          Index Cond: (f1 IS NOT NULL)
          Order By: (f1 <-> '(0,1)'::point)
-         Filter: (f1 <> '(1e-300,-1e-300)'::point)
+         Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <> '(Infinity,1e+300)'::point))
  Optimizer: Postgres query optimizer
 (7 rows)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 IS NOT NULL ORDER BY f1 <-> '0,1';
         f1         
 -------------------
  (-3,4)
@@ -634,9 +640,9 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 IS NOT NULL O
 (7 rows)
 
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
  Result
    ->  Sort
          Sort Key: ((f1 <-> '(0,1)'::point))
@@ -644,11 +650,11 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10)
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Index Scan using gpointind on point_tbl
                            Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box))
+                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <> '(Infinity,1e+300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box))
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
 ---------
  (-3,4)
@@ -717,9 +723,9 @@ SET enable_seqscan = OFF;
 SET enable_indexscan = OFF;
 SET enable_bitmapscan = ON;
 EXPLAIN (COSTS OFF)
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
-                                                 QUERY PLAN                                                 
-------------------------------------------------------------------------------------------------------------
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+                                                                    QUERY PLAN                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------
  Result
    ->  Sort
          Sort Key: ((f1 <-> '(0,1)'::point))
@@ -727,11 +733,11 @@ SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10)
                ->  Gather Motion 3:1  (slice1; segments: 3)
                      ->  Index Scan using gpointind on point_tbl
                            Index Cond: (f1 <@ '(10,10),(-10,-10)'::box)
-                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box))
+                           Filter: ((f1 <> '(1e-300,-1e-300)'::point) AND (f1 <> '(Infinity,1e+300)'::point) AND (f1 <@ '(10,10),(-10,-10)'::box))
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 
-SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
+SELECT * FROM point_tbl WHERE NOT f1 ~= '(1e-300, -1e-300)' AND NOT f1 ~= '(Inf, 1e+300)' AND f1 <@ '(-10,-10),(10,10)':: box ORDER BY f1 <-> '0,1';
    f1    
 ---------
  (-3,4)
@@ -2172,8 +2178,9 @@ CREATE TABLE concur_reindex_tab (c1 int);
 -- REINDEX
 REINDEX TABLE concur_reindex_tab; -- notice
 NOTICE:  table "concur_reindex_tab" has no indexes to reindex
-REINDEX TABLE CONCURRENTLY concur_reindex_tab; -- notice
-ERROR:  REINDEX CONCURRENTLY is not supported
+REINDEX (CONCURRENTLY) TABLE concur_reindex_tab; -- notice
+NOTICE:  table "concur_reindex_tab" has no indexes that can be reindexed concurrently
+ERROR:  could not serialize current snapshot, ActiveSnapshot not set
 ALTER TABLE concur_reindex_tab ADD COLUMN c2 text; -- add toast index
 -- Normal index with integer column
 CREATE UNIQUE INDEX concur_reindex_ind1 ON concur_reindex_tab(c1);

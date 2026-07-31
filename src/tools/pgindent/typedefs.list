@@ -50,7 +50,6 @@ AggStatePerPhase
 AggStatePerTrans
 AggStrategy
 Aggref
-AggrefExprState
 AlenState
 Alias
 AllocBlock
@@ -1024,6 +1023,7 @@ HeapScanDesc
 HeapTuple
 HeapTupleData
 HeapTupleFields
+HeapTupleForceOption
 HeapTupleHeader
 HeapTupleHeaderData
 HeapTupleTableSlot
@@ -1314,9 +1314,21 @@ LogStmtLevel
 LogicalDecodeBeginCB
 LogicalDecodeChangeCB
 LogicalDecodeCommitCB
+LogicalDecodeFilterPrepareCB
+LogicalDecodeBeginPrepareCB
+LogicalDecodePrepareCB
+LogicalDecodeCommitPreparedCB
+LogicalDecodeRollbackPreparedCB
 LogicalDecodeFilterByOriginCB
 LogicalDecodeMessageCB
 LogicalDecodeShutdownCB
+LogicalDecodeStreamStartCB
+LogicalDecodeStreamStopCB
+LogicalDecodeStreamAbortCB
+LogicalDecodeStreamPrepareCB
+LogicalDecodeStreamCommitCB
+LogicalDecodeStreamChangeCB
+LogicalDecodeStreamMessageCB
 LogicalDecodeStartupCB
 LogicalDecodeTruncateCB
 LogicalDecodingContext
@@ -1394,6 +1406,9 @@ MultiXactMember
 MultiXactOffset
 MultiXactStateData
 MultiXactStatus
+MultirangeIOData
+MultirangeParseState
+MultirangeType
 NDBOX
 NODE
 NUMCacheEntry
@@ -2391,8 +2406,8 @@ SubPlanState
 SubTransactionId
 SubXactCallback
 SubXactCallbackItem
-SubXactInfo
 SubXactEvent
+SubXactInfo
 SubplanResultRelHashElem
 SubqueryScan
 SubqueryScanPath
@@ -2503,6 +2518,7 @@ Tcl_Obj
 Tcl_Time
 TempNamespaceStatus
 TestDecodingData
+TestDecodingTxnData
 TestSpec
 TextFreq
 TextPositionState
@@ -2956,9 +2972,11 @@ f_smgr
 fd_set
 fe_scram_state
 fe_scram_state_enum
+fetch_range_request
 file_action_t
 file_entry_t
 file_type_t
+filehash_hash
 filemap_t
 fill_string_relopt
 finalize_primnode_context
@@ -3084,11 +3102,13 @@ lclContext
 lclTocEntry
 leafSegmentInfo
 leaf_item
+libpq_source
 line_t
 lineno_t
 list_sort_comparator
 local_relopt
 local_relopts
+local_source
 locale_t
 locate_agg_of_level_context
 locate_var_of_level_context
@@ -3133,6 +3153,7 @@ mp_small
 mp_usmall
 mp_word
 mpz_t
+multirange_bsearch_comparison
 mxact
 mxtruncinfo
 needs_fmgr_hook_type
@@ -3173,6 +3194,8 @@ pg_conn_host_type
 pg_conv_map
 pg_crc32
 pg_crc32c
+pg_cryptohash_ctx
+pg_cryptohash_type
 pg_ctype_cache
 pg_enc
 pg_enc2gettext
@@ -3183,6 +3206,7 @@ pg_int64
 pg_local_to_utf_combined
 pg_locale_t
 pg_mb_radix_tree
+pg_md5_ctx
 pg_on_exit_callback
 pg_re_flags
 pg_saslprep_rc
@@ -3209,6 +3233,7 @@ pgpid_t
 pgsocket
 pgsql_thing_t
 pgssEntry
+pgssGlobalStats
 pgssHashKey
 pgssJumbleState
 pgssLocationLen
@@ -3312,6 +3337,7 @@ rendezvousHashEntry
 replace_rte_variables_callback
 replace_rte_variables_context
 ret_type
+rewind_source
 rewrite_event
 rijndael_ctx
 rm_detail_t
@@ -3592,4 +3618,3 @@ yyscan_t
 z_stream
 z_streamp
 zic_t
-HeapTupleForceOption

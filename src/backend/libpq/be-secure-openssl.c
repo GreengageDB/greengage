@@ -4,7 +4,7 @@
  *	  functions for OpenSSL support in the backend.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -181,6 +181,7 @@ be_tls_init(bool isServerStart)
 		if (ssl_ver_min == -1)
 		{
 			ereport(isServerStart ? FATAL : LOG,
+			/*- translator: first %s is a GUC option name, second %s is its value */
 					(errmsg("\"%s\" setting \"%s\" not supported by this build",
 							"ssl_min_protocol_version",
 							GetConfigOption("ssl_min_protocol_version",
@@ -203,6 +204,7 @@ be_tls_init(bool isServerStart)
 		if (ssl_ver_max == -1)
 		{
 			ereport(isServerStart ? FATAL : LOG,
+			/*- translator: first %s is a GUC option name, second %s is its value */
 					(errmsg("\"%s\" setting \"%s\" not supported by this build",
 							"ssl_max_protocol_version",
 							GetConfigOption("ssl_max_protocol_version",

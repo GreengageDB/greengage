@@ -3,7 +3,7 @@
  * parse_target.c
  *	  handle target lists
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -34,17 +34,6 @@
 
 static void markTargetListOrigin(ParseState *pstate, TargetEntry *tle,
 								 Var *var, int levelsup);
-static Node *transformAssignmentIndirection(ParseState *pstate,
-											Node *basenode,
-											const char *targetName,
-											bool targetIsSubscripting,
-											Oid targetTypeId,
-											int32 targetTypMod,
-											Oid targetCollation,
-											List *indirection,
-											ListCell *indirection_cell,
-											Node *rhs,
-											int location);
 static Node *transformAssignmentSubscripts(ParseState *pstate,
 										   Node *basenode,
 										   const char *targetName,
@@ -56,6 +45,7 @@ static Node *transformAssignmentSubscripts(ParseState *pstate,
 										   List *indirection,
 										   ListCell *next_indirection,
 										   Node *rhs,
+										   CoercionContext ccontext,
 										   int location);
 static List *ExpandColumnRefStar(ParseState *pstate, ColumnRef *cref,
 								 bool make_target_entry);
@@ -563,6 +553,7 @@ transformAssignedExpr(ParseState *pstate,
 										   indirection,
 										   list_head(indirection),
 										   (Node *) expr,
+										   COERCION_ASSIGNMENT,
 										   location);
 	}
 	else
@@ -644,15 +635,15 @@ updateTargetListEntry(ParseState *pstate,
 
 /*
  * Process indirection (field selection or subscripting) of the target
- * column in INSERT/UPDATE.  This routine recurses for multiple levels
- * of indirection --- but note that several adjacent A_Indices nodes in
- * the indirection list are treated as a single multidimensional subscript
+ * column in INSERT/UPDATE/assignment.  This routine recurses for multiple
+ * levels of indirection --- but note that several adjacent A_Indices nodes
+ * in the indirection list are treated as a single multidimensional subscript
  * operation.
  *
  * In the initial call, basenode is a Var for the target column in UPDATE,
- * or a null Const of the target's type in INSERT.  In recursive calls,
- * basenode is NULL, indicating that a substitute node should be consed up if
- * needed.
+ * or a null Const of the target's type in INSERT, or a Param for the target
+ * variable in PL/pgSQL assignment.  In recursive calls, basenode is NULL,
+ * indicating that a substitute node should be consed up if needed.
  *
  * targetName is the name of the field or subfield we're assigning to, and
  * targetIsSubscripting is true if we're subscripting it.  These are just for
@@ -669,12 +660,16 @@ updateTargetListEntry(ParseState *pstate,
  * rhs is the already-transformed value to be assigned; note it has not been
  * coerced to any particular type.
  *
+ * ccontext is the coercion level to use while coercing the rhs.  For
+ * normal statements it'll be COERCION_ASSIGNMENT, but PL/pgSQL uses
+ * a special value.
+ *
  * location is the cursor error position for any errors.  (Note: this points
  * to the head of the target clause, eg "foo" in "foo.bar[baz]".  Later we
  * might want to decorate indirection cells with their own location info,
  * in which case the location argument could probably be dropped.)
  */
-static Node *
+Node *
 transformAssignmentIndirection(ParseState *pstate,
 							   Node *basenode,
 							   const char *targetName,
@@ -685,6 +680,7 @@ transformAssignmentIndirection(ParseState *pstate,
 							   List *indirection,
 							   ListCell *indirection_cell,
 							   Node *rhs,
+							   CoercionContext ccontext,
 							   int location)
 {
 	Node	   *result;
@@ -759,6 +755,7 @@ transformAssignmentIndirection(ParseState *pstate,
 													 indirection,
 													 i,
 													 rhs,
+													 ccontext,
 													 location);
 			}
 
@@ -809,6 +806,7 @@ transformAssignmentIndirection(ParseState *pstate,
 												 indirection,
 												 lnext(indirection, i),
 												 rhs,
+												 ccontext,
 												 location);
 
 			/* and build a FieldStore node */
@@ -847,6 +845,7 @@ transformAssignmentIndirection(ParseState *pstate,
 											 indirection,
 											 NULL,
 											 rhs,
+											 ccontext,
 											 location);
 	}
 
@@ -855,7 +854,7 @@ transformAssignmentIndirection(ParseState *pstate,
 	result = coerce_to_target_type(pstate,
 								   rhs, exprType(rhs),
 								   targetTypeId, targetTypMod,
-								   COERCION_ASSIGNMENT,
+								   ccontext,
 								   COERCE_IMPLICIT_CAST,
 								   -1);
 	if (result == NULL)
@@ -863,7 +862,7 @@ transformAssignmentIndirection(ParseState *pstate,
 		if (targetIsSubscripting)
 			ereport(ERROR,
 					(errcode(ERRCODE_DATATYPE_MISMATCH),
-					 errmsg("array assignment to \"%s\" requires type %s"
+					 errmsg("subscripted assignment to \"%s\" requires type %s"
 							" but expression is of type %s",
 							targetName,
 							format_type_be(targetTypeId),
@@ -900,29 +899,41 @@ transformAssignmentSubscripts(ParseState *pstate,
 							  List *indirection,
 							  ListCell *next_indirection,
 							  Node *rhs,
+							  CoercionContext ccontext,
 							  int location)
 {
 	Node	   *result;
+	SubscriptingRef *sbsref;
 	Oid			containerType;
 	int32		containerTypMod;
-	Oid			elementTypeId;
 	Oid			typeNeeded;
+	int32		typmodNeeded;
 	Oid			collationNeeded;
 
 	Assert(subscripts != NIL);
 
-	/* Identify the actual array type and element type involved */
+	/* Identify the actual container type involved */
 	containerType = targetTypeId;
 	containerTypMod = targetTypMod;
-	elementTypeId = transformContainerType(&containerType, &containerTypMod);
+	transformContainerType(&containerType, &containerTypMod);
 
-	/* Identify type that RHS must provide */
-	typeNeeded = isSlice ? containerType : elementTypeId;
+	/* Process subscripts and identify required type for RHS */
+	sbsref = transformContainerSubscripts(pstate,
+										  basenode,
+										  containerType,
+										  containerTypMod,
+										  subscripts,
+										  true);
+
+	typeNeeded = sbsref->refrestype;
+	typmodNeeded = sbsref->reftypmod;
 
 	/*
-	 * container normally has same collation as elements, but there's an
-	 * exception: we might be subscripting a domain over a container type. In
-	 * that case use collation of the base type.
+	 * Container normally has same collation as its elements, but there's an
+	 * exception: we might be subscripting a domain over a container type.  In
+	 * that case use collation of the base type.  (This is shaky for arbitrary
+	 * subscripting semantics, but it doesn't matter all that much since we
+	 * only use this to label the collation of a possible CaseTestExpr.)
 	 */
 	if (containerType == targetTypeId)
 		collationNeeded = targetCollation;
@@ -935,21 +946,23 @@ transformAssignmentSubscripts(ParseState *pstate,
 										 targetName,
 										 true,
 										 typeNeeded,
-										 containerTypMod,
+										 typmodNeeded,
 										 collationNeeded,
 										 indirection,
 										 next_indirection,
 										 rhs,
+										 ccontext,
 										 location);
 
-	/* process subscripts */
-	result = (Node *) transformContainerSubscripts(pstate,
-												   basenode,
-												   containerType,
-												   elementTypeId,
-												   containerTypMod,
-												   subscripts,
-												   rhs);
+	/*
+	 * Insert the already-properly-coerced RHS into the SubscriptingRef.  Then
+	 * set refrestype and reftypmod back to the container type's values.
+	 */
+	sbsref->refassgnexpr = (Expr *) rhs;
+	sbsref->refrestype = containerType;
+	sbsref->reftypmod = containerTypMod;
+
+	result = (Node *) sbsref;
 
 	/* If target was a domain over container, need to coerce up to the domain */
 	if (containerType != targetTypeId)
@@ -959,7 +972,7 @@ transformAssignmentSubscripts(ParseState *pstate,
 		result = coerce_to_target_type(pstate,
 									   result, resulttype,
 									   targetTypeId, targetTypMod,
-									   COERCION_ASSIGNMENT,
+									   ccontext,
 									   COERCE_IMPLICIT_CAST,
 									   -1);
 		/* can fail if we had int2vector/oidvector, but not for true domains */
@@ -1762,11 +1775,6 @@ FigureColnameInternal(Node *node, char **name)
 				/* make nullif() act like a regular function */
 				*name = "nullif";
 				return 2;
-			}
-			if (((A_Expr *) node)->kind == AEXPR_PAREN)
-			{
-				/* look through dummy parenthesis node */
-				return FigureColnameInternal(((A_Expr *) node)->lexpr, name);
 			}
 			break;
 		case T_TypeCast:

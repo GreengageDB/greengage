@@ -4,7 +4,7 @@
  *	  POSTGRES define and remove utility definitions.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/defrem.h
@@ -37,10 +37,10 @@ extern ObjectAddress DefineIndex(Oid relationId,
 								 bool skip_build,
 								 bool quiet,
 								 bool is_new_table);
-extern void ReindexIndex(ReindexStmt *stmt, bool isTopLevel);
-extern Oid	ReindexTable(ReindexStmt *stmt, bool isTopLevel);
-extern void ReindexMultipleTables(const char *objectName, ReindexObjectType objectKind,
-								  int options);
+extern int	ReindexParseOptions(ParseState *pstate, ReindexStmt *stmt);
+extern void ReindexIndex(ReindexStmt *stmt, int options, bool isTopLevel);
+extern Oid	ReindexTable(ReindexStmt *stmt, int options, bool isTopLevel);
+extern void ReindexMultipleTables(ReindexStmt *stmt, int options);
 extern char *makeObjectName(const char *name1, const char *name2,
 							const char *label);
 extern char *ChooseRelationName(const char *name1, const char *name2,

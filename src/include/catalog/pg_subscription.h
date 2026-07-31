@@ -3,7 +3,7 @@
  * pg_subscription.h
  *	  definition of the "subscription" system catalog (pg_subscription)
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_subscription.h
@@ -69,6 +69,15 @@ CATALOG(pg_subscription,6100,SubscriptionRelationId) BKI_SHARED_RELATION BKI_ROW
 } FormData_pg_subscription;
 
 typedef FormData_pg_subscription *Form_pg_subscription;
+
+DECLARE_TOAST(pg_subscription, 4183, 4184);
+#define PgSubscriptionToastTable 4183
+#define PgSubscriptionToastIndex 4184
+
+DECLARE_UNIQUE_INDEX(pg_subscription_oid_index, 6114, on pg_subscription using btree(oid oid_ops));
+#define SubscriptionObjectIndexId 6114
+DECLARE_UNIQUE_INDEX(pg_subscription_subname_index, 6115, on pg_subscription using btree(subdbid oid_ops, subname name_ops));
+#define SubscriptionNameIndexId 6115
 
 typedef struct Subscription
 {

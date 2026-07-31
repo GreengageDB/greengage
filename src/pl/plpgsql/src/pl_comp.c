@@ -3,7 +3,7 @@
  * pl_comp.c		- Compiler part of the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -26,6 +26,7 @@
 #include "parser/parse_type.h"
 #include "plpgsql.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -514,6 +515,8 @@ do_compile(FunctionCallInfo fcinfo,
 					else if (rettypeid == ANYRANGEOID ||
 							 rettypeid == ANYCOMPATIBLERANGEOID)
 						rettypeid = INT4RANGEOID;
+					else if (rettypeid == ANYMULTIRANGEOID)
+						rettypeid = INT4MULTIRANGEOID;
 					else		/* ANYELEMENT or ANYNONARRAY or ANYCOMPATIBLE */
 						rettypeid = INT4OID;
 					/* XXX what could we use for ANYENUM? */
@@ -1455,7 +1458,8 @@ plpgsql_parse_dblword(char *word1, char *word2,
 	/*
 	 * We should do nothing in DECLARE sections.  In SQL expressions, we
 	 * really only need to make sure that RECFIELD datums are created when
-	 * needed.
+	 * needed.  In all the cases handled by this function, returning a T_DATUM
+	 * with a two-word idents string is the right thing.
 	 */
 	if (plpgsql_IdentifierLookup != IDENTIFIER_LOOKUP_DECLARE)
 	{
@@ -1529,40 +1533,53 @@ plpgsql_parse_tripword(char *word1, char *word2, char *word3,
 	List	   *idents;
 	int			nnames;
 
-	idents = list_make3(makeString(word1),
-						makeString(word2),
-						makeString(word3));
-
 	/*
-	 * We should do nothing in DECLARE sections.  In SQL expressions, we
-	 * really only need to make sure that RECFIELD datums are created when
-	 * needed.
+	 * We should do nothing in DECLARE sections.  In SQL expressions, we need
+	 * to make sure that RECFIELD datums are created when needed, and we need
+	 * to be careful about how many names are reported as belonging to the
+	 * T_DATUM: the third word could be a sub-field reference, which we don't
+	 * care about here.
 	 */
 	if (plpgsql_IdentifierLookup != IDENTIFIER_LOOKUP_DECLARE)
 	{
 		/*
-		 * Do a lookup in the current namespace stack. Must find a qualified
+		 * Do a lookup in the current namespace stack.  Must find a record
 		 * reference, else ignore.
 		 */
 		ns = plpgsql_ns_lookup(plpgsql_ns_top(), false,
 							   word1, word2, word3,
 							   &nnames);
-		if (ns != NULL && nnames == 2)
+		if (ns != NULL)
 		{
 			switch (ns->itemtype)
 			{
 				case PLPGSQL_NSTYPE_REC:
 					{
-						/*
-						 * words 1/2 are a record name, so third word could be
-						 * a field in this record.
-						 */
 						PLpgSQL_rec *rec;
 						PLpgSQL_recfield *new;
 
 						rec = (PLpgSQL_rec *) (plpgsql_Datums[ns->itemno]);
-						new = plpgsql_build_recfield(rec, word3);
-
+						if (nnames == 1)
+						{
+							/*
+							 * First word is a record name, so second word
+							 * could be a field in this record (and the third,
+							 * a sub-field).  We build a RECFIELD datum
+							 * whether it is or not --- any error will be
+							 * detected later.
+							 */
+							new = plpgsql_build_recfield(rec, word2);
+							idents = list_make2(makeString(word1),
+												makeString(word2));
+						}
+						else
+						{
+							/* Block-qualified reference to record variable. */
+							new = plpgsql_build_recfield(rec, word3);
+							idents = list_make3(makeString(word1),
+												makeString(word2),
+												makeString(word3));
+						}
 						wdatum->datum = (PLpgSQL_datum *) new;
 						wdatum->ident = NULL;
 						wdatum->quoted = false; /* not used */
@@ -1577,6 +1594,9 @@ plpgsql_parse_tripword(char *word1, char *word2, char *word3,
 	}
 
 	/* Nothing found */
+	idents = list_make3(makeString(word1),
+						makeString(word2),
+						makeString(word3));
 	cword->idents = idents;
 	return false;
 }
@@ -2108,6 +2128,7 @@ build_datatype(HeapTuple typeTup, int32 typmod,
 		case TYPTYPE_BASE:
 		case TYPTYPE_ENUM:
 		case TYPTYPE_RANGE:
+		case TYPTYPE_MULTIRANGE:
 			typ->ttype = PLPGSQL_TTYPE_SCALAR;
 			break;
 		case TYPTYPE_COMPOSITE:
@@ -2144,8 +2165,7 @@ build_datatype(HeapTuple typeTup, int32 typmod,
 		 * This test should include what get_element_type() checks.  We also
 		 * disallow non-toastable array types (i.e. oidvector and int2vector).
 		 */
-		typ->typisarray = (typeStruct->typlen == -1 &&
-						   OidIsValid(typeStruct->typelem) &&
+		typ->typisarray = (IsTrueArrayType(typeStruct) &&
 						   typeStruct->typstorage != TYPSTORAGE_PLAIN);
 	}
 	else if (typeStruct->typtype == TYPTYPE_DOMAIN)
@@ -2526,6 +2546,9 @@ plpgsql_resolve_polymorphic_argtypes(int numargs,
 				case ANYCOMPATIBLERANGEOID:
 					argtypes[i] = INT4RANGEOID;
 					break;
+				case ANYMULTIRANGEOID:
+					argtypes[i] = INT4MULTIRANGEOID;
+					break;
 				default:
 					break;
 			}
@@ -2567,7 +2590,6 @@ plpgsql_HashTableInit(void)
 	/* don't allow double-initialization */
 	Assert(plpgsql_HashTable == NULL);
 
-	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(PLpgSQL_func_hashkey);
 	ctl.entrysize = sizeof(plpgsql_HashEnt);
 	plpgsql_HashTable = hash_create("PLpgSQL function hash",

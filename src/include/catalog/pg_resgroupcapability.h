@@ -39,4 +39,10 @@ FOREIGN_KEY(resgroupid REFERENCES pg_resgroup(oid));
  */
 typedef FormData_pg_resgroupcapability *Form_pg_resgroupcapability;
 
+DECLARE_UNIQUE_INDEX(pg_resgroupcapability_resgroupid_reslimittype_index, 6445, on pg_resgroupcapability using btree(resgroupid oid_ops, reslimittype int2_ops));
+#define ResGroupCapabilityResgroupidResLimittypeIndexId	6445
+
+DECLARE_INDEX(pg_resgroupcapability_resgroupid_index, 6446, on pg_resgroupcapability using btree(resgroupid oid_ops));
+#define ResGroupCapabilityResgroupidIndexId	6446
+
 #endif   /* PG_RESGROUPCAPABILITY_H */

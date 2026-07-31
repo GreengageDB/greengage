@@ -3,7 +3,7 @@
  * nodeModifyTable.c
  *	  routines to handle ModifyTable nodes.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -678,10 +678,7 @@ ExecInsert(ModifyTableState *mtstate,
 		}
 	}
 	if (canSetTag)
-	{
 		(estate->es_processed)++;
-		setLastTid(&slot->tts_tid);
-	}
 
 	/*
 	 * If this insert is the result of a partition key update that moved the
@@ -2760,7 +2757,6 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	 * Initialize any WITH CHECK OPTION constraints if needed.
 	 */
 	resultRelInfo = mtstate->resultRelInfo;
-	i = 0;
 	foreach(l, node->withCheckOptionLists)
 	{
 		List	   *wcoList = (List *) lfirst(l);
@@ -2779,7 +2775,6 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 		resultRelInfo->ri_WithCheckOptions = wcoList;
 		resultRelInfo->ri_WithCheckOptionExprs = wcoExprs;
 		resultRelInfo++;
-		i++;
 	}
 
 	/*

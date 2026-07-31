@@ -8,7 +8,7 @@
  *	  This file contains only the public interface routines.
  *
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -538,8 +538,7 @@ btrescan(IndexScanDesc scan, ScanKey scankey, int nscankeys,
 	}
 
 	/*
-	 * Reset the scan keys. Note that keys ordering stuff moved to _bt_first.
-	 * - vadim 05/05/97
+	 * Reset the scan keys
 	 */
 	if (scankey && scan->numberOfKeys > 0)
 		memmove(scan->keyData,
@@ -1035,6 +1034,12 @@ btvacuumcleanup(IndexVacuumInfo *info, IndexBulkDeleteResult *stats)
 	 * double-counting some index tuples, so disbelieve any total that exceeds
 	 * the underlying heap's count ... if we know that accurately.  Otherwise
 	 * this might just make matters worse.
+	 *
+	 * Posting list tuples are another source of inaccuracy.  Cleanup-only
+	 * btvacuumscan calls assume that the number of index tuples can be used
+	 * as num_index_tuples, even though num_index_tuples is supposed to
+	 * represent the number of TIDs in the index.  This naive approach can
+	 * underestimate the number of tuples in the index.
 	 */
 	if (!info->estimated_count)
 	{
@@ -1496,14 +1501,18 @@ backtrack:
 		 * separate live tuples).  We don't delete when backtracking, though,
 		 * since that would require teaching _bt_pagedel() about backtracking
 		 * (doesn't seem worth adding more complexity to deal with that).
+		 *
+		 * We don't count the number of live TIDs during cleanup-only calls to
+		 * btvacuumscan (i.e. when callback is not set).  We count the number
+		 * of index tuples directly instead.  This avoids the expense of
+		 * directly examining all of the tuples on each page.
 		 */
 		if (minoff > maxoff)
 			attempt_pagedel = (blkno == scanblkno);
-		else if (callback == NULL)
-			/* GPDB_13_MERGE_FIXME: Commit 02c9386 has alternative fix */
-			stats->num_index_tuples += maxoff - minoff + 1;
-		else
+		else if (callback)
 			stats->num_index_tuples += nhtidslive;
+		else
+			stats->num_index_tuples += maxoff - minoff + 1;
 
 		Assert(!attempt_pagedel || nhtidslive == 0);
 	}

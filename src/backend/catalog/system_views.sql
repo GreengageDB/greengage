@@ -3,7 +3,7 @@
  *
  * Portions Copyright (c) 2006-2010, Greenplum inc.
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  * src/backend/catalog/system_views.sql
  *
@@ -1380,6 +1380,9 @@ CREATE VIEW pg_stat_bgwriter AS
 
 CREATE VIEW pg_stat_wal AS
     SELECT
+        w.wal_records,
+        w.wal_fpi,
+        w.wal_bytes,
         w.wal_buffers_full,
         w.stats_reset
     FROM pg_stat_get_wal() w;
@@ -1500,6 +1503,17 @@ CREATE VIEW pg_stat_progress_basebackup AS
         S.param4 AS tablespaces_total,
         S.param5 AS tablespaces_streamed
     FROM pg_stat_get_progress_info('BASEBACKUP') AS S;
+
+
+CREATE VIEW pg_stat_progress_copy AS
+    SELECT
+        S.pid AS pid, S.datid AS datid, D.datname AS datname,
+        S.relid AS relid,
+        S.param1 AS bytes_processed,
+        S.param2 AS bytes_total,
+        S.param3 AS lines_processed
+    FROM pg_stat_get_progress_info('COPY') AS S
+        LEFT JOIN pg_database D ON S.datid = D.oid;
 
 CREATE VIEW pg_user_mappings AS
     SELECT

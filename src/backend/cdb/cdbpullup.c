@@ -237,6 +237,43 @@ cdbpullup_expr(Expr *expr, List *targetlist, List *newvarlist, Index newvarno)
  * atop an argument of a function or operator, but generally not atop a
  * targetlist expr.)
  */
+
+/*
+ * Return a copy of 'node' with every Aggref's aggno/aggtransno reset to -1.
+ *
+ * PG14 (dfd85ea03f6) stamps these physical execution-slot numbers onto the
+ * query's Aggrefs in preprocess_aggrefs(); _equalAggref() compares them.  A
+ * distribution-key expression -- e.g. CREATE TABLE ... AS SELECT count(*) AS c
+ * ... DISTRIBUTED BY (c) -- can be an un-numbered copy of that aggregate, so a
+ * plain equal() rejects an otherwise identical aggregate solely on these
+ * fields.  They carry no semantic meaning for matching an EC member to a
+ * targetlist entry, so normalize them away before comparing.
+ */
+static Node *
+reset_aggref_numbers_mutator(Node *node, void *context)
+{
+	if (node == NULL)
+		return NULL;
+	if (IsA(node, Aggref))
+	{
+		Aggref	   *agg = (Aggref *) expression_tree_mutator(node,
+															 reset_aggref_numbers_mutator,
+															 context);
+
+		agg->aggno = -1;
+		agg->aggtransno = -1;
+		return (Node *) agg;
+	}
+	return expression_tree_mutator(node, reset_aggref_numbers_mutator, context);
+}
+
+static bool
+cdb_exprs_equal_ignore_aggno(Node *a, Node *b)
+{
+	return equal(reset_aggref_numbers_mutator(a, NULL),
+				 reset_aggref_numbers_mutator(b, NULL));
+}
+
 Expr *
 cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 								 Oid hashOpFamily)
@@ -309,6 +346,9 @@ cdbpullup_findEclassInTargetList(EquivalenceClass *eclass, List *targetlist,
 			else
 			{
 				if (equal(naked_tlexpr, key))
+					return (Expr *) tlexpr;
+				/* Retry ignoring PG14 Aggref aggno/aggtransno (see above). */
+				if (cdb_exprs_equal_ignore_aggno(naked_tlexpr, (Node *) key))
 					return (Expr *) tlexpr;
 			}
 		}

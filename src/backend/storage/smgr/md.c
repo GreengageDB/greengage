@@ -10,7 +10,7 @@
  * It doesn't matter whether the bits are on spinning rust or some other
  * storage technology.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -345,19 +345,8 @@ do_truncate(const char *path)
 {
 	int			save_errno;
 	int			ret;
-	int			fd;
 
-	/* truncate(2) would be easier here, but Windows hasn't got it */
-	fd = OpenTransientFile(path, O_RDWR | PG_BINARY);
-	if (fd >= 0)
-	{
-		ret = ftruncate(fd, 0);
-		save_errno = errno;
-		CloseTransientFile(fd);
-		errno = save_errno;
-	}
-	else
-		ret = -1;
+	ret = pg_truncate(path, 0);
 
 	/* Log a warning here to avoid repetition in callers. */
 	if (ret < 0 && errno != ENOENT)

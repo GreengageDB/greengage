@@ -96,7 +96,6 @@ typedef struct
 	bool		can_sort;
 	bool		can_hash;
 	double		dNumGroupsTotal;		/* total number of groups in the result, across all QEs */
-	const AggClauseCosts *agg_costs;
 	const AggClauseCosts *agg_partial_costs;
 	const AggClauseCosts *agg_final_costs;
 	List	   *rollups;
@@ -223,7 +222,7 @@ fetch_multi_dqas_info(PlannerInfo *root,
 					  cdb_multi_dqas_info *info);
 
 static DQAType
-recognize_dqa_type(cdb_agg_planning_context *ctx);
+recognize_dqa_type(PlannerInfo *root, cdb_agg_planning_context *ctx);
 
 static PathTarget *
 strip_aggdistinct(PathTarget *target);
@@ -246,7 +245,6 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 								   PathTarget *partial_grouping_target,
 								   List *havingQual,
 								   double dNumGroupsTotal,
-								   const AggClauseCosts *agg_costs,
 								   const AggClauseCosts *agg_partial_costs,
 								   const AggClauseCosts *agg_final_costs,
 								   List *rollups,
@@ -255,7 +253,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 {
 	Query	   *parse = root->parse;
 	Path	   *cheapest_path = input_rel->cheapest_total_path;
-	bool		has_ordered_aggs = agg_costs->numPureOrderedAggs > 0;
+	bool		has_ordered_aggs = root->numPureOrderedAggs > 0;
 	cdb_agg_planning_context ctx;
 	bool		can_sort;
 	bool		can_hash;
@@ -268,7 +266,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	 * functions per DQA and were willing to plan some DQAs as single and
 	 * some as multiple phases.  Not currently, however.
 	 */
-	Assert(!agg_costs->hasNonCombine && !agg_costs->hasNonSerial);
+	Assert(!root->hasNonCombineAggs && !root->hasNonSerialAggs);
 	Assert(root->config->gp_enable_multiphase_agg);
 
 	/*
@@ -297,7 +295,7 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	 */
 	can_sort = grouping_is_sortable(parse->groupClause);
 	can_hash = (parse->groupClause != NIL &&
-				agg_costs->numPureOrderedAggs == 0 &&
+				root->numPureOrderedAggs == 0 &&
 				grouping_is_hashable(parse->groupClause));
 
 	/*
@@ -309,7 +307,6 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	ctx.can_hash = can_hash;
 	ctx.target = target;
 	ctx.dNumGroupsTotal = dNumGroupsTotal;
-	ctx.agg_costs = agg_costs;
 	ctx.agg_partial_costs = agg_partial_costs;
 	ctx.agg_final_costs = agg_final_costs;
 	ctx.rollups = rollups;
@@ -451,13 +448,13 @@ cdb_create_multistage_grouping_paths(PlannerInfo *root,
 	 */
 	if ((can_hash || parse->groupClause == NIL) &&
 		!parse->groupingSets &&
-		list_length(agg_costs->distinctAggrefs) > 0)
+		list_length(root->distinctAggrefs) > 0)
 	{
 		/*
 		 * Try possible plans for DISTINCT-qualified aggregate.
 		 */
 		cdb_multi_dqas_info info = {};
-		DQAType type = recognize_dqa_type(&ctx);
+		DQAType type = recognize_dqa_type(root, &ctx);
 		switch (type)
 		{
 		case SINGLE_DQA:
@@ -558,7 +555,6 @@ cdb_create_twostage_distinct_paths(PlannerInfo *root,
 	ctx.target = target;
 	ctx.partial_grouping_target = target;
 	ctx.dNumGroupsTotal = dNumGroupsTotal;
-	ctx.agg_costs = &zero_agg_costs;
 	ctx.agg_partial_costs = &zero_agg_costs;
 	ctx.agg_final_costs = &zero_agg_costs;
 	ctx.rollups = NIL;
@@ -674,7 +670,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 	 * Hashing is not possible with DQAs.
 	 */
 	if (ctx->can_hash &&
-		list_length(ctx->agg_costs->distinctAggrefs) == 0)
+		list_length(root->distinctAggrefs) == 0)
 	{
 		/*
 		 * If the input is neatly distributed along the GROUP BY columns,
@@ -721,7 +717,7 @@ create_two_stage_paths(PlannerInfo *root, cdb_agg_planning_context *ctx,
 			}
 		}
 
-		if (ctx->can_hash && list_length(ctx->agg_costs->distinctAggrefs) == 0)
+		if (ctx->can_hash && list_length(root->distinctAggrefs) == 0)
 			add_second_stage_hash_agg_path(root, cheapest_first_stage_path,
 										   ctx, output_rel);
 	}
@@ -829,12 +825,12 @@ static void
 	 * case that the input happens to be collocated with the DISTINCT
 	 * argument.
 	 */
-	if (ctx->agg_costs->distinctAggrefs)
+	if (root->distinctAggrefs)
 	{
 		cdb_multi_dqas_info info = {};
 		List	   *dqa_group_tles;
 
-		dqa_type = recognize_dqa_type(ctx);
+		dqa_type = recognize_dqa_type(root, ctx);
 
 		/* For the query:
 		 *     select count(distinct a), sum(b), sum(c) from t;
@@ -1550,10 +1546,14 @@ add_multi_dqas_hash_agg_path(PlannerInfo *root,
 										  ctx->groupClause,
 										  info->dqa_expr_lst);
 
-	AggClauseCosts DedupCost = {};
-	get_agg_clause_costs(root, (Node *) info->tup_split_target->exprs,
-						 AGGSPLIT_SIMPLE,
-						 &DedupCost);
+	/*
+	 * AggRefs should not appear in info->tup_split_target->exprs, since
+	 * by this point they should have already been pulled out by
+	 * make_group_input_target. info->tup_split_target->exprs should contain
+	 * variables present inside AggRefs, not AggRefs themselves. Therefore,
+	 * AggClauseCosts can be zero-initialized here.
+	 */
+	Assert(!contain_agg_clause((Node *) info->tup_split_target->exprs));
 
 	if (gp_enable_dqa_pruning)
 	{
@@ -1580,7 +1580,7 @@ add_multi_dqas_hash_agg_path(PlannerInfo *root,
 										true, /* streaming */
 										dummy_group_clause, /* only its length 1 is being used here */
 										NIL,
-										&DedupCost,
+										NULL, /* aggcosts */
 										estimate_num_groups_on_segment(info->dNumDistinctGroups,
 																	   path->rows, path->locus));
 
@@ -1613,7 +1613,7 @@ add_multi_dqas_hash_agg_path(PlannerInfo *root,
 										false, /* streaming */
 										info->dqa_group_clause,
 										NIL,
-										&DedupCost,
+										NULL, /* aggcosts */
 										clamp_row_est(info->dNumDistinctGroups / CdbPathLocus_NumSegments(distinct_locus)));
 
 		split = AGG_HASHED;
@@ -1878,13 +1878,13 @@ choose_grouping_locus(PlannerInfo *root, Path *path,
 }
 
 static DQAType
-recognize_dqa_type(cdb_agg_planning_context *ctx)
+recognize_dqa_type(PlannerInfo *root, cdb_agg_planning_context *ctx)
 {
 	ListCell    *lc, *lcc;
 	List        *dqaArgs = NIL;
 	ctx->type = INVALID_DQA;
 
-	foreach (lc, ctx->agg_costs->distinctAggrefs)
+	foreach (lc, root->distinctAggrefs)
 	{
 		Aggref *aggref = (Aggref *) lfirst(lc);
 		SortGroupClause *arg_sortcl;
@@ -1968,7 +1968,6 @@ fetch_multi_dqas_info(PlannerInfo *root,
 					  cdb_multi_dqas_info *info)
 {
 	ListCell    *lc;
-	ListCell    *lcc;
 	Index		maxRef = 0;
 	PathTarget *proj_target;
 	int			num_input_segments;
@@ -2003,18 +2002,23 @@ fetch_multi_dqas_info(PlannerInfo *root,
 	 * assign numDisDQAs and agg_args_id_bms
 	 *
 	 * find all DQAs with different args, count the number, store their args bitmapsets
+	 *
+	 * We can find all the distinct DQAs in top-level of ctx->partial_grouping_target->exprs
+	 * and compute the agg_expr_id here immeditely.
 	 */
 	dNumDistinctGroups = 0;
-	forboth(lc, ctx->agg_partial_costs->distinctAggrefs,
-	        lcc, ctx->agg_final_costs->distinctAggrefs)
+	foreach(lc, ctx->partial_grouping_target->exprs)
 	{
 		Aggref	        *aggref = (Aggref *) lfirst(lc);
-		Aggref	        *aggref_final = (Aggref *) lfirst(lcc);
 		SortGroupClause *arg_sortcl;
 		TargetEntry     *arg_tle;
 		ListCell        *lc2;
 		Bitmapset       *bms = NULL;
 		List		   *this_dqa_group_exprs;
+
+		/* partial target also holds group cols / non-DQA exprs */
+		if (!IsA(aggref, Aggref) || aggref->aggdistinct == NIL)
+			continue;
 
 		this_dqa_group_exprs = list_copy(group_exprs);
 
@@ -2151,14 +2155,20 @@ fetch_multi_dqas_info(PlannerInfo *root,
 			                                          NULL);
 		}
 
-		/* assign an agg_expr_id value to aggref*/
+		/* compute-and-apply on the SAME partial node */
 		aggref->agg_expr_id = agg_expr_id;
-
-		/* rid of filter in aggref */
 		aggref->aggfilter = NULL;
-		aggref_final->aggfilter = NULL;
 	}
 	info->dNumDistinctGroups = dNumDistinctGroups;
+
+	/*
+	 * Strip the filter from the final-phase (and HAVING) DQA Aggrefs. These are
+	 * the canonical nodes shared with processed_tlist, so root->distinctAggrefs
+	 * reaches them; the filter now lives on the TupleSplit path. Unconditional,
+	 * so no key is needed.
+	 */
+	foreach(lc, root->distinctAggrefs)
+		((Aggref *) lfirst(lc))->aggfilter = NULL;
 
 	info->input_proj_target = proj_target;
 	info->tup_split_target = copy_pathtarget(proj_target);
@@ -2221,7 +2231,7 @@ fetch_single_dqa_info(PlannerInfo *root,
 	dqa_group_exprs = get_sortgrouplist_exprs(ctx->groupClause,
 											  make_tlist_from_pathtarget(path->pathtarget));
 
-	Aggref	   *aggref = list_nth(ctx->agg_costs->distinctAggrefs, 0);
+	Aggref	   *aggref = list_nth(root->distinctAggrefs, 0);
 	SortGroupClause *arg_sortcl;
 	SortGroupClause *sortcl = NULL;
 	TargetEntry *arg_tle;

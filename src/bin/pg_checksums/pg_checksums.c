@@ -4,7 +4,7 @@
  *	  Checks, enables or disables page level checksums for an offline
  *	  cluster
  *
- * Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/bin/pg_checksums/pg_checksums.c
@@ -635,7 +635,7 @@ main(int argc, char *argv[])
 		if (mode == PG_MODE_CHECK)
 		{
 			printf(_("Bad checksums:  %s\n"), psprintf(INT64_FORMAT, badblocks));
-			printf(_("Data checksum version: %d\n"), ControlFile->data_checksum_version);
+			printf(_("Data checksum version: %u\n"), ControlFile->data_checksum_version);
 
 			if (badblocks > 0)
 				exit(1);
@@ -662,7 +662,7 @@ main(int argc, char *argv[])
 		update_controlfile(DataDir, ControlFile, do_sync);
 
 		if (verbose)
-			printf(_("Data checksum version: %d\n"), ControlFile->data_checksum_version);
+			printf(_("Data checksum version: %u\n"), ControlFile->data_checksum_version);
 		if (mode == PG_MODE_ENABLE)
 			printf(_("Checksums enabled in cluster\n"));
 		else

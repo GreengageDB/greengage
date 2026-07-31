@@ -57,6 +57,9 @@ FOREIGN_KEY(relid REFERENCES pg_class(oid));
 */
 typedef FormData_pg_appendonly *Form_pg_appendonly;
 
+DECLARE_UNIQUE_INDEX(pg_appendonly_relid_index, 7141, on pg_appendonly using btree(relid oid_ops));
+#define AppendOnlyRelidIndexId  7141
+
 /*
  * AORelationVersion defines valid values for the version of AppendOnlyEntry.
  * NOTE: When this is updated, AoRelationVersion_GetLatest() must be updated accordingly.

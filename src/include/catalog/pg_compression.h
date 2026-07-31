@@ -54,6 +54,9 @@ FOREIGN_KEY(compowner REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_compression *Form_pg_compression;
 
+DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, on pg_compression using btree(compname name_ops));
+#define CompressionCompnameIndexId	7059
+
 #define NUM_COMPRESS_FUNCS 5
 
 #define COMPRESSION_CONSTRUCTOR 0

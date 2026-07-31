@@ -7,7 +7,7 @@
  *
  * Portions Copyright (c) 2006-2008, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  *
  *	  src/include/utils/guc_tables.h
  *
@@ -199,6 +199,8 @@ struct config_generic
 	GucContext	reset_scontext; /* context that set the reset value */
 	GucStack   *stack;			/* stacked prior values */
 	void	   *extra;			/* "extra" pointer for current actual value */
+	char	   *last_reported;	/* if variable is GUC_REPORT, value last sent
+								 * to client (NULL if not yet sent) */
 	char	   *sourcefile;		/* file current setting is from (NULL if not
 								 * set in config file) */
 	int			sourceline;		/* line in source file */
@@ -210,7 +212,8 @@ struct config_generic
  * Caution: the GUC_IS_IN_FILE bit is transient state for ProcessConfigFile.
  * Do not assume that its value represents useful information elsewhere.
  */
-#define GUC_PENDING_RESTART 0x0002
+#define GUC_PENDING_RESTART 0x0002	/* changed value cannot be applied yet */
+#define GUC_NEEDS_REPORT	0x0004	/* new value must be reported to client */
 
 /* upper limit for GUC variables measured in kilobytes of memory */
 /* note that various places assume the byte size fits in a "long" variable */

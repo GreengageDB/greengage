@@ -5,7 +5,7 @@
  * Interactions between userspace and selinux in kernelspace,
  * using libselinux api.
  *
- * Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ * Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *
  * -------------------------------------------------------------------------
  */
@@ -892,7 +892,7 @@ sepgsql_compute_create(const char *scontext,
  * tcontext: security label of the object being referenced
  * tclass: class code (SEPG_CLASS_*) of the object being referenced
  * required: a mask of required permissions (SEPG_<class>__<perm>)
- * audit_name: a human readable object name for audit logs, or NULL.
+ * audit_name: a human-readable object name for audit logs, or NULL.
  * abort_on_violation: true, if error shall be raised on access violation
  */
 bool

@@ -4,7 +4,7 @@
  *	main source file
  *
  *	Portions Copyright (c) 2016-Present, VMware, Inc. or its affiliates
- *	Copyright (c) 2010-2020, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2021, PostgreSQL Global Development Group
  *	src/bin/pg_upgrade/pg_upgrade.c
  */
 
@@ -95,7 +95,6 @@ int
 main(int argc, char **argv)
 {
 	char       *sequence_script_file_name = NULL;
-	char	   *analyze_script_file_name = NULL;
 	char	   *deletion_script_file_name = NULL;
 	bool		live_check = false;
 
@@ -240,7 +239,6 @@ main(int argc, char **argv)
 			  new_cluster.pgdata);
 	check_ok();
 
-	create_script_for_cluster_analyze(&analyze_script_file_name);
 	create_script_for_old_cluster_deletion(&deletion_script_file_name);
 
 	issue_warnings_and_set_wal_level(sequence_script_file_name);
@@ -253,10 +251,8 @@ main(int argc, char **argv)
 	report_progress(NULL, DONE, "Upgrade complete");
 	close_progress();
 
-	output_completion_banner(analyze_script_file_name,
-							 deletion_script_file_name);
+	output_completion_banner(deletion_script_file_name);
 
-	pg_free(analyze_script_file_name);
 	pg_free(deletion_script_file_name);
 
 	cleanup();

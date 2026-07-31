@@ -476,6 +476,9 @@
 /* Define to 1 if you have the `pread' function. */
 #undef HAVE_PREAD
 
+/* Define to 1 if you have the `preadv' function. */
+#undef HAVE_PREADV
+
 /* Define to 1 if you have the `pstat' function. */
 #undef HAVE_PSTAT
 
@@ -494,6 +497,9 @@
 /* Define to 1 if you have the `pwrite' function. */
 #undef HAVE_PWRITE
 
+/* Define to 1 if you have the `pwritev' function. */
+#undef HAVE_PWRITEV
+
 /* Define to 1 if you have the `random' function. */
 #undef HAVE_RANDOM
 
@@ -508,6 +514,9 @@
 
 /* Define to 1 if you have the `readlink' function. */
 #undef HAVE_READLINK
+
+/* Define to 1 if you have the `readv' function. */
+#undef HAVE_READV
 
 /* Define to 1 if you have the global variable
    'rl_completion_append_character'. */
@@ -536,6 +545,9 @@
 
 /* Define to 1 if you have the <security/pam_appl.h> header file. */
 #undef HAVE_SECURITY_PAM_APPL_H
+
+/* Define to 1 if you have the `setenv' function. */
+#undef HAVE_SETENV
 
 /* Define to 1 if you have the `setproctitle' function. */
 #undef HAVE_SETPROCTITLE
@@ -690,6 +702,9 @@
 /* Define to 1 if you have the <sys/ucred.h> header file. */
 #undef HAVE_SYS_UCRED_H
 
+/* Define to 1 if you have the <sys/uio.h> header file. */
+#undef HAVE_SYS_UIO_H
+
 /* Define to 1 if you have the <sys/un.h> header file. */
 #undef HAVE_SYS_UN_H
 
@@ -749,6 +764,9 @@
 
 /* Define to 1 if you have the <winsock2.h> header file. */
 #undef HAVE_WINSOCK2_H
+
+/* Define to 1 if you have the `writev' function. */
+#undef HAVE_WRITEV
 
 /* Define to 1 if you have the `X509_get_signature_nid' function. */
 #undef HAVE_X509_GET_SIGNATURE_NID
@@ -941,9 +959,6 @@
 /* Define to 1 to build with libcurl support. (--with-libcurl) */
 #undef USE_CURL
 
-/* Define to use /dev/urandom for random number generation */
-#undef USE_DEV_URANDOM
-
 /* Define to 1 if you want float8, int8, etc values to be passed by value.
    (Always defined in GPDB) */
 #define USE_FLOAT8_BYVAL 1
@@ -976,9 +991,6 @@
 /* Define to build with OpenSSL support. (--with-openssl) */
 #undef USE_OPENSSL
 
-/* Define to use OpenSSL for random number generation */
-#undef USE_OPENSSL_RANDOM
-
 /* Define to 1 to build with Greenplum ORCA optimizer. (--enable-orca) */
 #undef USE_ORCA
 
@@ -1005,9 +1017,6 @@
 
 /* Define to select unnamed POSIX semaphores. */
 #undef USE_UNNAMED_POSIX_SEMAPHORES
-
-/* Define to use native Windows API for random number generation */
-#undef USE_WIN32_RANDOM
 
 /* Define to select Win32-style semaphores. */
 #undef USE_WIN32_SEMAPHORES

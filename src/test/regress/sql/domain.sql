@@ -59,9 +59,8 @@ select testtext || testvarchar as concat, testnumeric + 42 as sum
 from basictest;
 
 -- check that union/case/coalesce type resolution handles domains properly
-select coalesce(4::domainint4, 7) is of (int4) as t;
-select coalesce(4::domainint4, 7) is of (domainint4) as f;
-select coalesce(4::domainint4, 7::domainint4) is of (domainint4) as t;
+select pg_typeof(coalesce(4::domainint4, 7));
+select pg_typeof(coalesce(4::domainint4, 7::domainint4));
 
 drop table basictest;
 drop domain domainvarchar restrict;
@@ -187,16 +186,12 @@ drop type comptype cascade;
 create type comptype as (r float8, i float8);
 create domain dcomptypea as comptype[];
 create table dcomptable (d1 dcomptypea unique);
--- GPDB: marking the column as 'unique' fails, because a unique column needs
--- to be part of the distribution key, and composite types can't be used as
--- distribution keys because they have no hash opclasses.
-create table dcomptable (d1 dcomptypea /*unique*/);
 create index on dcomptable (d1);
 
 insert into dcomptable values (array[row(1,2)]::dcomptypea);
 insert into dcomptable values (array[row(3,4), row(5,6)]::comptype[]);
 insert into dcomptable values (array[row(7,8)::comptype, row(9,10)::comptype]);
---insert into dcomptable values (array[row(1,2)]::dcomptypea);  -- fail on uniqueness
+insert into dcomptable values (array[row(1,2)]::dcomptypea);  -- fail on uniqueness
 insert into dcomptable (d1[1]) values(row(9,10));
 insert into dcomptable (d1[1].r) values(11);
 

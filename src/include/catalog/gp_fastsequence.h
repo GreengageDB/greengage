@@ -40,6 +40,9 @@ FOREIGN_KEY(objid REFERENCES pg_class(oid));
 */
 typedef FormData_gp_fastsequence *Form_gp_fastsequence;
 
+DECLARE_UNIQUE_INDEX(gp_fastsequence_objid_objmod_index, 6067, on gp_fastsequence using btree(objid oid_ops, objmod  int8_ops));
+#define FastSequenceObjidObjmodIndexId 6067
+
 #define NUM_FAST_SEQUENCES					 100
 extern void InsertInitialFastSequenceEntries(Oid objid);
 

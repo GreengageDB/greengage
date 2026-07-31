@@ -94,12 +94,10 @@ getCdbCopyPrimaryGang(CdbCopy *c)
  * information and state needed by the backend COPY.
  */
 CdbCopy *
-makeCdbCopy(CopyState cstate, bool is_copy_in)
+makeCdbCopy(GpPolicy *policy, bool on_segment, bool is_copy_in)
 {
 	CdbCopy		*c;
-	GpPolicy	*policy;
 
-	policy = cstate->rel->rd_cdbpolicy;
 	Assert(policy);
 
 	c = palloc0(sizeof(CdbCopy));
@@ -115,7 +113,7 @@ makeCdbCopy(CopyState cstate, bool is_copy_in)
 	 * COPY replicated table TO file, pick only one replica, otherwise, duplicate
 	 * rows will be copied.
 	 */
-	if (!is_copy_in && GpPolicyIsReplicated(policy) && !cstate->on_segment)
+	if (!is_copy_in && GpPolicyIsReplicated(policy) && !on_segment)
 	{
 		c->total_segs = 1;
 		c->seglist = list_make1_int(gp_session_id % c->total_segs);
@@ -129,8 +127,6 @@ makeCdbCopy(CopyState cstate, bool is_copy_in)
 		for (i = 0; i < c->total_segs; i++)
 			c->seglist = lappend_int(c->seglist, i);
 	}
-
-	cstate->cdbCopy = c;
 
 	return c;
 }

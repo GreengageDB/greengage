@@ -102,7 +102,7 @@
 #db_user_namespace = off
 
 # GSSAPI using Kerberos
-#krb_server_keyfile = ''
+#krb_server_keyfile = 'FILE:${sysconfdir}/krb5.keytab'
 #krb_caseins_users = off
 
 # - SSL -
@@ -256,7 +256,6 @@ max_prepared_transactions = 250		# can be 0 or more
 				# placeholders: %p = path of file to restore
 				#               %f = file name only
 				# e.g. 'cp /mnt/server/archivedir/%f %p'
-				# (change requires restart)
 #archive_cleanup_command = ''	# command to execute at every restartpoint
 #recovery_end_command = ''	# command to execute at completion of recovery
 
@@ -542,6 +541,8 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 					#   %% = '%'
 					# e.g. '<%u%%%d> '
 #log_lock_waits = off			# log lock waits >= deadlock_timeout
+#log_recovery_conflict_waits = off	# log standby recovery conflict waits
+					# >= deadlock_timeout
 #log_parameter_max_length = -1		# when logging statements, limit logged
 					# bind-parameter values to N bytes;
 					# -1 means print in full, 0 disables
@@ -668,6 +669,7 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #statement_timeout = 0			# in milliseconds, 0 is disabled
 #lock_timeout = 0			# in milliseconds, 0 is disabled
 #idle_in_transaction_session_timeout = 0	# in milliseconds, 0 is disabled
+#idle_session_timeout = 0		# in milliseconds, 0 is disabled
 #vacuum_freeze_min_age = 50000000
 #vacuum_freeze_table_age = 150000000
 #vacuum_multixact_freeze_min_age = 5000000
@@ -765,7 +767,6 @@ gp_resqueue_memory_policy = 'eager_free'	# memory request based queueing.
 #backslash_quote = safe_encoding	# on, off, or safe_encoding
 #escape_string_warning = on
 #lo_compat_privileges = off
-#operator_precedence_warning = off
 #quote_all_identifiers = off
 #standard_conforming_strings = on
 #synchronize_seqscans = on

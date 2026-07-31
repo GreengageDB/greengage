@@ -5,7 +5,7 @@
  *
  * Portions Copyright (c) 2005-2009, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -43,8 +43,8 @@ ExceptionalCondition(const char *conditionName,
 		|| !PointerIsValid(errorType))
 		ereport(FATAL,
 				errFatalReturn(gp_reraise_signal),
-				errmsg("TRAP: ExceptionalCondition: bad arguments in PID %d"),
-					   (int) getpid());
+				errmsg("TRAP: ExceptionalCondition: bad arguments in PID %d",
+					   (int) getpid()));
 	else
 		ereport(FATAL,
 				errFatalReturn(gp_reraise_signal),

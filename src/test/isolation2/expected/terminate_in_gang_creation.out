@@ -145,7 +145,7 @@ SELECT pg_ctl(datadir, 'restart', 'immediate') FROM gp_segment_configuration WHE
 (3 rows)
 11: INSERT INTO foo values(2),(1);
 ERROR:  failed to acquire resources on one or more segments
-DETAIL:  FATAL:  reader could not find writer proc entry
+DETAIL:  could not connect to host "HOST", port PORT: FATAL:  reader could not find writer proc entry
 DETAIL:  lock [0,1260] AccessShareLock 0. Probably because writer gang is gone somehow. Maybe try rerunning.
  (seg1 127.0.0.1:7004)
 11: INSERT INTO foo values(2),(1);

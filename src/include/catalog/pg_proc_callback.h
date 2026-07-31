@@ -45,6 +45,9 @@ FOREIGN_KEY(procallback REFERENCES pg_proc(oid));
  */
 typedef FormData_pg_proc_callback *Form_pg_proc_callback;
 
+DECLARE_UNIQUE_INDEX(pg_proc_callback_profnoid_promethod_index, 9926, on pg_proc_callback using btree(profnoid oid_ops, promethod char_ops));
+#define ProcCallbackProfnoidPromethodIndexId	9926
+
 /* values for promethod */
 #define PROMETHOD_DESCRIBE 'd'
 

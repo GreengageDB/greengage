@@ -6,7 +6,7 @@
  *
  * Portions Copyright (c) 2005-2010, Greenplum inc
  * Portions Copyright (c) 2012-Present VMware, Inc. or its affiliates.
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *	pg_dump will read the system catalogs in a database and dump out a
@@ -306,7 +306,8 @@ static void dumpSearchPath(Archive *AH);
 static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 PQExpBuffer upgrade_buffer,
 													 const TypeInfo *tyinfo,
-													 bool force_array_type);
+													 bool force_array_type,
+													 bool include_multirange_type);
 static void binary_upgrade_set_type_oids_by_rel(Archive *fout,
 													PQExpBuffer upgrade_buffer,
 													const TableInfo *tblinfo);
@@ -1351,9 +1352,6 @@ setup_connection(Archive *AH, const char *dumpencoding,
 			ExecuteSqlStatement(AH, "SET row_security = off");
 	}
 
-	/* Detect whether LOCK TABLE can handle non-table relations */
-	AH->hasGenericLockTable = IsLockTableGeneric(AH);
-
 	/*
 	 * Initialize prepared-query state to "nothing prepared".  We do this here
 	 * so that a parallel dump worker will have its own state.
@@ -1879,7 +1877,7 @@ selectDumpableType(TypeInfo *tyinfo, Archive *fout)
 	}
 
 	/* skip auto-generated array types */
-	if (tyinfo->isArray)
+	if (tyinfo->isArray || tyinfo->isMultirange)
 	{
 		tyinfo->dobj.objType = DO_DUMMY_TYPE;
 
@@ -4573,13 +4571,7 @@ dumpSubscription(Archive *fout, const SubscriptionInfo *subinfo)
 
 	/* Build list of quoted publications and append them to query. */
 	if (!parsePGArray(subinfo->subpublications, &pubnames, &npubnames))
-	{
-		pg_log_warning("could not parse subpublications array");
-		if (pubnames)
-			free(pubnames);
-		pubnames = NULL;
-		npubnames = 0;
-	}
+		fatal("could not parse subpublications array");
 
 	publications = createPQExpBuffer();
 	for (i = 0; i < npubnames; i++)
@@ -4684,6 +4676,36 @@ append_depends_on_extension(Archive *fout,
 	}
 }
 
+static Oid
+get_next_possible_free_pg_type_oid(Archive *fout, PQExpBuffer upgrade_query)
+{
+	/*
+	 * If the old version didn't assign an array type, but the new version
+	 * does, we must select an unused type OID to assign.  This currently only
+	 * happens for domains, when upgrading pre-v11 to v11 and up.
+	 *
+	 * Note: local state here is kind of ugly, but we must have some, since we
+	 * mustn't choose the same unused OID more than once.
+	 */
+	static Oid	next_possible_free_oid = FirstNormalObjectId;
+	PGresult   *res;
+	bool		is_dup;
+
+	do
+	{
+		++next_possible_free_oid;
+		printfPQExpBuffer(upgrade_query,
+						  "SELECT EXISTS(SELECT 1 "
+						  "FROM pg_catalog.pg_type "
+						  "WHERE oid = '%u'::pg_catalog.oid);",
+						  next_possible_free_oid);
+		res = ExecuteSqlQueryForSingleRow(fout, upgrade_query->data);
+		is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
+		PQclear(res);
+	} while (is_dup);
+
+	return next_possible_free_oid;
+}
 
 static void
 binary_upgrade_set_namespace_oid(Archive *fout, PQExpBuffer upgrade_buffer,
@@ -4729,7 +4751,8 @@ static void
 binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 										 PQExpBuffer upgrade_buffer,
 										 const TypeInfo *tyinfo,
-										 bool force_array_type)
+										 bool force_array_type,
+										 bool include_multirange_type)
 {
 	PQExpBuffer upgrade_query = createPQExpBuffer();
 	PGresult   *res;
@@ -4747,31 +4770,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 
 	if (!OidIsValid(pg_type_array_oid) && force_array_type)
 	{
-		/*
-		 * If the old version didn't assign an array type, but the new version
-		 * does, we must select an unused type OID to assign.  This currently
-		 * only happens for domains, when upgrading pre-v11 to v11 and up.
-		 *
-		 * Note: local state here is kind of ugly, but we must have some,
-		 * since we mustn't choose the same unused OID more than once.
-		 */
-		static Oid	next_possible_free_oid = FirstNormalObjectId;
-		bool		is_dup;
-
-		do
-		{
-			++next_possible_free_oid;
-			printfPQExpBuffer(upgrade_query,
-							  "SELECT EXISTS(SELECT 1 "
-							  "FROM pg_catalog.pg_type "
-							  "WHERE oid = '%u'::pg_catalog.oid);",
-							  next_possible_free_oid);
-			res = ExecuteSqlQueryForSingleRow(fout, upgrade_query->data);
-			is_dup = (PQgetvalue(res, 0, 0)[0] == 't');
-			PQclear(res);
-		} while (is_dup);
-
-		pg_type_array_oid = next_possible_free_oid;
+		pg_type_array_oid = get_next_possible_free_pg_type_oid(fout, upgrade_query);
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
 		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
 	}
@@ -4788,6 +4787,60 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  pg_type_array_name);
 	}
 
+	/*
+	 * Pre-set the multirange type oid and its own array type oid.
+	 *
+	 * GGDB: like all other types, these are preassigned by name and
+	 * namespace through the oid_dispatch machinery rather than through
+	 * upstream's backend globals, so that QD and QE clusters restore
+	 * identical OIDs.  A pre-14 version has no multirange types; the
+	 * multirange created during restore is then allocated a new OID like
+	 * any other object that did not exist in the old cluster.
+	 */
+	if (include_multirange_type && fout->remoteVersion >= 140000)
+	{
+		Oid			pg_type_multirange_oid;
+		Oid			pg_type_multirange_array_oid;
+
+		printfPQExpBuffer(upgrade_query,
+						  "SELECT t.oid, t.typname, t.typnamespace, "
+						  "a.oid AS aroid, a.typname AS arname, "
+						  "a.typnamespace AS arns "
+						  "FROM pg_catalog.pg_type t "
+						  "JOIN pg_catalog.pg_range r "
+						  "ON t.oid = r.rngmultitypid "
+						  "JOIN pg_catalog.pg_type a "
+						  "ON a.oid = t.typarray "
+						  "WHERE r.rngtypid = '%u'::pg_catalog.oid;",
+						  tyinfo->dobj.catId.oid);
+
+		res = ExecuteSqlQueryForSingleRow(fout, upgrade_query->data);
+
+		pg_type_multirange_oid = atooid(PQgetvalue(res, 0, PQfnumber(res, "oid")));
+		pg_type_multirange_array_oid = atooid(PQgetvalue(res, 0, PQfnumber(res, "aroid")));
+
+		simple_oid_list_append(&preassigned_oids, pg_type_multirange_oid);
+		appendPQExpBufferStr(upgrade_buffer,
+							 "\n-- For binary upgrade, must preserve multirange pg_type oid\n");
+		appendPQExpBuffer(upgrade_buffer,
+						  "SELECT pg_catalog.binary_upgrade_set_next_multirange_pg_type_oid('%u'::pg_catalog.oid, "
+						   "'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+						  pg_type_multirange_oid,
+						  atooid(PQgetvalue(res, 0, PQfnumber(res, "typnamespace"))),
+						  PQgetvalue(res, 0, PQfnumber(res, "typname")));
+
+		simple_oid_list_append(&preassigned_oids, pg_type_multirange_array_oid);
+		appendPQExpBufferStr(upgrade_buffer,
+							 "\n-- For binary upgrade, must preserve multirange pg_type array oid\n");
+		appendPQExpBuffer(upgrade_buffer,
+						  "SELECT pg_catalog.binary_upgrade_set_next_multirange_array_pg_type_oid('%u'::pg_catalog.oid, "
+						  "'%u'::pg_catalog.oid, $$%s$$::text);\n\n",
+						  pg_type_multirange_array_oid,
+						  atooid(PQgetvalue(res, 0, PQfnumber(res, "arns"))),
+						  PQgetvalue(res, 0, PQfnumber(res, "arname")));
+		PQclear(res);
+	}
+
 	destroyPQExpBuffer(upgrade_query);
 }
 
@@ -4798,7 +4851,7 @@ binary_upgrade_set_type_oids_by_rel(Archive *fout,
 {
 	TypeInfo *typinfo = findTypeByOid(tblinfo->reltype);
 	binary_upgrade_set_type_oids_by_type_oid(fout, upgrade_buffer,
-											 typinfo, false);
+											 typinfo, false, false);
 }
 
 static void
@@ -5401,6 +5454,11 @@ getTypes(Archive *fout, int *numTypes)
 			tyinfo[i].typarrayname =  pg_strdup(PQgetvalue(res, i, i_typarrayname));
 			tyinfo[i].typarrayns =  atooid(PQgetvalue(res, i, i_typarrayns));
 		}
+
+		if (tyinfo[i].typtype == 'm')
+			tyinfo[i].isMultirange = true;
+		else
+			tyinfo[i].isMultirange = false;
 
 		/* Decide whether we want to dump it */
 		selectDumpableType(&tyinfo[i], fout);
@@ -6942,8 +7000,9 @@ getTables(Archive *fout, int *numTables)
 		 * assume our lock on the child is enough to prevent schema
 		 * alterations to parent tables.
 		 *
-		 * We only need to lock the relation for certain components; see
-		 * pg_dump.h
+		 * NOTE: it'd be kinda nice to lock other relations too, not only
+		 * plain or partitioned tables, but the backend doesn't presently
+		 * allow that.
 		 *
 		 * GPDB: Build a single LOCK TABLE statement to lock all interesting tables.
 		 * This is more performant than issuing a separate LOCK TABLE statement for each table,
@@ -7202,10 +7261,7 @@ getInherits(Archive *fout, int *numInherits)
 	int			i_inhrelid;
 	int			i_inhparent;
 
-	/*
-	 * Find all the inheritance information, excluding implicit inheritance
-	 * via partitioning.
-	 */
+	/* find all the inheritance information */
 	appendPQExpBufferStr(query, "SELECT inhrelid, inhparent FROM pg_inherits");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -8467,9 +8523,12 @@ getProcLangs(Archive *fout, int *numProcLangs)
 
 /*
  * getCasts
- *	  get basic information about every cast in the system
+ *	  get basic information about most casts in the system
  *
  * numCasts is set to the number of casts read in
+ *
+ * Skip casts from a range to its multirange, since we'll create those
+ * automatically.
  */
 CastInfo *
 getCasts(Archive *fout, int *numCasts)
@@ -8487,7 +8546,20 @@ getCasts(Archive *fout, int *numCasts)
 	int			i_castcontext;
 	int			i_castmethod;
 
-	if (fout->remoteVersion >= 80400)
+	if (fout->remoteVersion >= 140000)
+	{
+		appendPQExpBufferStr(query, "SELECT tableoid, oid, "
+							 "castsource, casttarget, castfunc, castcontext, "
+							 "castmethod "
+							 "FROM pg_cast c "
+							 "WHERE NOT EXISTS ( "
+							 "SELECT 1 FROM pg_range r "
+							 "WHERE c.castsource = r.rngtypid "
+							 "AND c.casttarget = r.rngmultitypid "
+							 ") "
+							 "ORDER BY 3,4");
+	}
+	else if (fout->remoteVersion >= 80400)
 	{
 		appendPQExpBufferStr(query, "SELECT tableoid, oid, "
 							 "castsource, casttarget, castfunc, castcontext, "
@@ -10965,7 +11037,7 @@ dumpEnumType(Archive *fout, const TypeInfo *tyinfo)
 	appendPQExpBuffer(delq, "DROP TYPE %s;\n", qualtypname);
 
 	if (dopt->binary_upgrade)
-		binary_upgrade_set_type_oids_by_type_oid(fout, q, tyinfo, false);
+		binary_upgrade_set_type_oids_by_type_oid(fout, q, tyinfo, false, false);
 
 	appendPQExpBuffer(q, "CREATE TYPE %s AS ENUM (",
 					  qualtypname);
@@ -11075,6 +11147,13 @@ dumpRangeType(Archive *fout, const TypeInfo *tyinfo)
 		appendPQExpBufferStr(query,
 							 "SELECT ");
 
+		if (fout->remoteVersion >= 140000)
+			appendPQExpBufferStr(query,
+								 "pg_catalog.format_type(rngmultitypid, NULL) AS rngmultitype, ");
+		else
+			appendPQExpBufferStr(query,
+								 "NULL AS rngmultitype, ");
+
 		appendPQExpBufferStr(query,
 							 "pg_catalog.format_type(rngsubtype, NULL) AS rngsubtype, "
 							 "opc.opcname AS opcname, "
@@ -11112,13 +11191,17 @@ dumpRangeType(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo,
-												 false);
+												 false, true);
 
 	appendPQExpBuffer(q, "CREATE TYPE %s AS RANGE (",
 					  qualtypname);
 
 	appendPQExpBuffer(q, "\n    subtype = %s",
 					  PQgetvalue(res, 0, PQfnumber(res, "rngsubtype")));
+
+	if (!PQgetisnull(res, 0, PQfnumber(res, "rngmultitype")))
+		appendPQExpBuffer(q, ",\n    multirange_type_name = %s",
+						  PQgetvalue(res, 0, PQfnumber(res, "rngmultitype")));
 
 	/* print subtype_opclass only if not default for subtype */
 	if (PQgetvalue(res, 0, PQfnumber(res, "opcdefault"))[0] != 't')
@@ -11217,7 +11300,7 @@ dumpUndefinedType(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout,
 												 q, tyinfo,
-												 false);
+												 false, false);
 
 	appendPQExpBuffer(q, "CREATE TYPE %s;\n",
 					  qualtypname);
@@ -11282,11 +11365,13 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 	char	   *typmodin;
 	char	   *typmodout;
 	char	   *typanalyze;
+	char	   *typsubscript;
 	Oid			typreceiveoid;
 	Oid			typsendoid;
 	Oid			typmodinoid;
 	Oid			typmodoutoid;
 	Oid			typanalyzeoid;
+	Oid			typsubscriptoid;
 	char	   *typcategory;
 	char	   *typispreferred;
 	char	   *typdelim;
@@ -11326,16 +11411,24 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 		else
 			appendPQExpBufferStr(query, "false AS typcollatable, ");
 
+		if (fout->remoteVersion >= 140000)
+			appendPQExpBufferStr(query,
+								 "typsubscript, "
+								 "typsubscript::pg_catalog.oid AS typsubscriptoid, ");
+		else
+			appendPQExpBufferStr(query,
+								 "'-' AS typsubscript, 0 AS typsubscriptoid, ");
+
 		/* Before 8.4, pg_get_expr does not allow 0 for its second arg */
 		if (fout->remoteVersion >= 80400)
 			appendPQExpBufferStr(query,
-								"pg_catalog.pg_get_expr(typdefaultbin, 0) AS typdefaultbin, typdefault ");
+								 "pg_catalog.pg_get_expr(typdefaultbin, 0) AS typdefaultbin, typdefault ");
 		else
 			appendPQExpBufferStr(query,
-								"pg_catalog.pg_get_expr(typdefaultbin, 'pg_catalog.pg_type'::pg_catalog.regclass) AS typdefaultbin, typdefault ");
+								 "pg_catalog.pg_get_expr(typdefaultbin, 'pg_catalog.pg_type'::pg_catalog.regclass) AS typdefaultbin, typdefault ");
 
 		appendPQExpBuffer(query, "FROM pg_catalog.pg_type "
-							"WHERE oid = $1");
+						  "WHERE oid = $1");
 
 		ExecuteSqlStatement(fout, query->data);
 
@@ -11356,11 +11449,13 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 	typmodin = PQgetvalue(res, 0, PQfnumber(res, "typmodin"));
 	typmodout = PQgetvalue(res, 0, PQfnumber(res, "typmodout"));
 	typanalyze = PQgetvalue(res, 0, PQfnumber(res, "typanalyze"));
+	typsubscript = PQgetvalue(res, 0, PQfnumber(res, "typsubscript"));
 	typreceiveoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typreceiveoid")));
 	typsendoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typsendoid")));
 	typmodinoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typmodinoid")));
 	typmodoutoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typmodoutoid")));
 	typanalyzeoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typanalyzeoid")));
+	typsubscriptoid = atooid(PQgetvalue(res, 0, PQfnumber(res, "typsubscriptoid")));
 	typcategory = PQgetvalue(res, 0, PQfnumber(res, "typcategory"));
 	typispreferred = PQgetvalue(res, 0, PQfnumber(res, "typispreferred"));
 	typdelim = PQgetvalue(res, 0, PQfnumber(res, "typdelim"));
@@ -11395,7 +11490,7 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo,
-												 false);
+												 false, false);
 
 	appendPQExpBuffer(q,
 					  "CREATE TYPE %s (\n"
@@ -11428,6 +11523,9 @@ dumpBaseType(Archive *fout, const TypeInfo *tyinfo)
 		else
 			appendPQExpBufferStr(q, typdefault);
 	}
+
+	if (OidIsValid(typsubscriptoid))
+		appendPQExpBuffer(q, ",\n    SUBSCRIPT = %s", typsubscript);
 
 	if (OidIsValid(tyinfo->typelem))
 	{
@@ -11622,7 +11720,8 @@ dumpDomain(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo,
-												 true);	/* force array type */
+												 true, /* force array type */
+												 false); /* force multirange type */
 
 	qtypname = pg_strdup(fmtId(tyinfo->dobj.name));
 	qualtypname = pg_strdup(fmtQualifiedDumpable(tyinfo));
@@ -11821,7 +11920,7 @@ dumpCompositeType(Archive *fout, const TypeInfo *tyinfo)
 	{
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo,
-												 false);
+												 false, false);
 		binary_upgrade_set_pg_class_oids(fout, q, tyinfo->typrelid, false);
 	}
 
@@ -12096,7 +12195,7 @@ dumpShellType(Archive *fout, const ShellTypeInfo *stinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 stinfo->baseType,
-												 false);
+												 false, false);
 
 	appendPQExpBuffer(q, "CREATE TYPE %s;\n",
 					  fmtQualifiedDumpable(stinfo));
@@ -12578,13 +12677,12 @@ dumpFunc(Archive *fout, const FuncInfo *finfo)
 	if (proconfig && *proconfig)
 	{
 		if (!parsePGArray(proconfig, &configitems, &nconfigitems))
-		{
-			pg_log_warning("could not parse proconfig array");
-			if (configitems)
-				free(configitems);
-			configitems = NULL;
-			nconfigitems = 0;
-		}
+			fatal("could not parse proconfig array");
+	}
+	else
+	{
+		configitems = NULL;
+		nconfigitems = 0;
 	}
 
 	funcsig_tag = format_function_signature(fout, finfo, false);
@@ -17801,8 +17899,8 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 		char	   *indstatvals = indxinfo->indstatvals;
 		char	  **indstatcolsarray = NULL;
 		char	  **indstatvalsarray = NULL;
-		int			nstatcols;
-		int			nstatvals;
+		int			nstatcols = 0;
+		int			nstatvals = 0;
 
 		if (dopt->binary_upgrade)
 			binary_upgrade_set_pg_class_oids(fout, q, indxinfo->dobj.catId.oid, true);
@@ -17830,11 +17928,16 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 		 * If the index has any statistics on some of its columns, generate
 		 * the associated ALTER INDEX queries.
 		 */
-		if (parsePGArray(indstatcols, &indstatcolsarray, &nstatcols) &&
-			parsePGArray(indstatvals, &indstatvalsarray, &nstatvals) &&
-			nstatcols == nstatvals)
+		if (strlen(indstatcols) != 0 || strlen(indstatvals) != 0)
 		{
 			int			j;
+
+			if (!parsePGArray(indstatcols, &indstatcolsarray, &nstatcols))
+				fatal("could not parse index statistic columns");
+			if (!parsePGArray(indstatvals, &indstatvalsarray, &nstatvals))
+				fatal("could not parse index statistic values");
+			if (nstatcols != nstatvals)
+				fatal("mismatched number of columns and values for index stats");
 
 			for (j = 0; j < nstatcols; j++)
 			{
@@ -19255,14 +19358,19 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 		char	   *extcondition = curext->extcondition;
 		char	  **extconfigarray = NULL;
 		char	  **extconditionarray = NULL;
-		int			nconfigitems;
-		int			nconditionitems;
+		int			nconfigitems = 0;
+		int			nconditionitems = 0;
 
-		if (parsePGArray(extconfig, &extconfigarray, &nconfigitems) &&
-			parsePGArray(extcondition, &extconditionarray, &nconditionitems) &&
-			nconfigitems == nconditionitems)
+		if (strlen(extconfig) != 0 || strlen(extcondition) != 0)
 		{
 			int			j;
+
+			if (!parsePGArray(extconfig, &extconfigarray, &nconfigitems))
+				fatal("could not parse extension configuration array");
+			if (!parsePGArray(extcondition, &extconditionarray, &nconditionitems))
+				fatal("could not parse extension condition array");
+			if (nconfigitems != nconditionitems)
+				fatal("mismatched number of configurations and conditions for extension");
 
 			for (j = 0; j < nconfigitems; j++)
 			{
@@ -20040,13 +20148,25 @@ appendIndexCollationVersion(PQExpBuffer buffer, IndxInfo *indxinfo, int enc,
 	}
 
 	/* Restore the versions that were recorded by the old cluster (if any). */
-	parsePGArray(inddependcollnames,
-				 &inddependcollnamesarray,
-				 &ninddependcollnames);
-	parsePGArray(inddependcollversions,
-				 &inddependcollversionsarray,
-				 &ninddependcollversions);
-	Assert(ninddependcollnames == ninddependcollversions);
+	if (strlen(inddependcollnames) == 0 && strlen(inddependcollversions) == 0)
+	{
+		ninddependcollnames = ninddependcollversions = 0;
+		inddependcollnamesarray = inddependcollversionsarray = NULL;
+	}
+	else
+	{
+		if (!parsePGArray(inddependcollnames,
+						  &inddependcollnamesarray,
+						  &ninddependcollnames))
+			fatal("could not parse index collation name array");
+		if (!parsePGArray(inddependcollversions,
+						  &inddependcollversionsarray,
+						  &ninddependcollversions))
+			fatal("could not parse index collation version array");
+	}
+
+	if (ninddependcollnames != ninddependcollversions)
+		fatal("mismatched number of collation names and versions for index");
 
 	if (ninddependcollnames > 0)
 		appendPQExpBufferStr(buffer,
@@ -20062,7 +20182,7 @@ appendIndexCollationVersion(PQExpBuffer buffer, IndxInfo *indxinfo, int enc,
 						  "UPDATE pg_catalog.pg_depend SET refobjversion = %s WHERE objid = '%u'::pg_catalog.oid AND refclassid = 'pg_catalog.pg_collation'::regclass AND refobjversion IS NOT NULL AND refobjid = ",
 						  inddependcollversionsarray[i],
 						  indxinfo->dobj.catId.oid);
-		appendStringLiteralAH(buffer,inddependcollnamesarray[i], fout);
+		appendStringLiteralAH(buffer, inddependcollnamesarray[i], fout);
 		appendPQExpBuffer(buffer, "::regcollation;\n");
 	}
 
