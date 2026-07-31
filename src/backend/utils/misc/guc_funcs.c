@@ -408,6 +408,39 @@ set_config_by_name(PG_FUNCTION_ARGS)
 							 is_local ? GUC_ACTION_LOCAL : GUC_ACTION_SET,
 							 true, 0, false);
 
+	/*
+	 * GPDB: dispatch the change to the segments, mirroring the plain SET path
+	 * (VAR_SET_VALUE -> DispatchSetPGVariable above).  Without this, a GUC
+	 * changed via set_config() takes effect only on the coordinator, so any
+	 * subsequent DDL run on the writer gang records segment catalog state from
+	 * a stale GUC value (e.g. gp_default_storage_options divergence caught by
+	 * gpcheckcat).  This re-graft was dropped when upstream split guc.c into
+	 * guc_funcs.c; restore it.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH && !IsBootstrapProcessingMode())
+	{
+		StringInfoData	buffer;
+		char		   *quoted_name;
+		char		   *quoted_value = NULL;
+
+		initStringInfo(&buffer);
+
+		quoted_name = quote_literal_cstr(name);
+		if (value)
+			quoted_value = quote_literal_cstr(value);
+
+		appendStringInfo(&buffer, "SELECT pg_catalog.set_config(%s, %s, %s)",
+						 quoted_name,
+						 quoted_value ? quoted_value : "NULL",
+						 is_local ? "true" : "false");
+
+		if (quoted_value)
+			pfree(quoted_value);
+		pfree(quoted_name);
+
+		CdbDispatchSetCommand(buffer.data, false /* cancelOnError */ );
+	}
+
 	/* get the new current value */
 	new_value = GetConfigOptionByName(name, NULL, false);
 
