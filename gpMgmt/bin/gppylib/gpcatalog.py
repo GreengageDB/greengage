@@ -48,6 +48,12 @@ SEGMENT_LOCAL_TABLES = [
 # entry in pg_depend immediately when an entry is created in that
 # catalog table
 DEPENDENCY_EXCLUSION = [
+    # pg_auth_members gained an 'oid' column in PG16, so the "missing object
+    # dependencies" check now examines it. Role-membership rows are never
+    # recorded in pg_depend (their referents are shared roles), so every
+    # membership grant would be falsely flagged -- exclude it like the other
+    # shared catalogs below.
+    'pg_auth_members',
     'pg_authid',
     'pg_compression',
     'pg_conversion',
