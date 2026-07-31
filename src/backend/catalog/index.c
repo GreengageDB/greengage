@@ -1001,13 +1001,20 @@ index_create(Relation heapRelation,
 		 */
 		if (IsBinaryUpgrade)
 		{
-			if ((relkind == RELKIND_INDEX) &&
-				(!RelFileNumberIsValid(binary_upgrade_next_index_pg_class_relfilenumber)))
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("index relfilenumber value not set when in binary upgrade mode")));
-			relFileNumber = binary_upgrade_next_index_pg_class_relfilenumber;
-			binary_upgrade_next_index_pg_class_relfilenumber = InvalidRelFileNumber;
+			/*
+			 * GPDB does not preserve relfilenumbers across a binary upgrade
+			 * (pg_dump emits no binary_upgrade_set_next_index_relfilenode
+			 * call), so unlike upstream the override is normally unset here.
+			 * Do not require it: when it is unset, relFileNumber keeps its
+			 * (invalid) incoming value and heap_create() below assigns a fresh
+			 * relfilenumber from the regular GPDB counter.  Honor the override
+			 * only if some caller did set it.
+			 */
+			if (RelFileNumberIsValid(binary_upgrade_next_index_pg_class_relfilenumber))
+			{
+				relFileNumber = binary_upgrade_next_index_pg_class_relfilenumber;
+				binary_upgrade_next_index_pg_class_relfilenumber = InvalidRelFileNumber;
+			}
 
 			/*
 			 * Note that we want create_storage = true for binary upgrade. The

@@ -3958,23 +3958,32 @@ RelationSetNewRelfilenumber(Relation relation, char persistence)
 	}
 	else if (relation->rd_rel->relkind == RELKIND_INDEX)
 	{
-		if (!OidIsValid(binary_upgrade_next_index_pg_class_relfilenumber))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("index relfilenumber value not set when in binary upgrade mode")));
-
-		newrelfilenumber = binary_upgrade_next_index_pg_class_relfilenumber;
-		binary_upgrade_next_index_pg_class_relfilenumber = InvalidOid;
+		/*
+		 * GPDB does not preserve relfilenumbers across a binary upgrade, so
+		 * the override is normally unset; fall back to a freshly allocated
+		 * relfilenumber (as in the non-binary-upgrade case above) instead of
+		 * requiring it.
+		 */
+		if (RelFileNumberIsValid(binary_upgrade_next_index_pg_class_relfilenumber))
+		{
+			newrelfilenumber = binary_upgrade_next_index_pg_class_relfilenumber;
+			binary_upgrade_next_index_pg_class_relfilenumber = InvalidOid;
+		}
+		else
+			newrelfilenumber = GetNewRelFileNumber(relation->rd_rel->reltablespace,
+												   NULL, persistence);
 	}
 	else if (relation->rd_rel->relkind == RELKIND_RELATION)
 	{
-		if (!OidIsValid(binary_upgrade_next_heap_pg_class_relfilenumber))
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("heap relfilenumber value not set when in binary upgrade mode")));
-
-		newrelfilenumber = binary_upgrade_next_heap_pg_class_relfilenumber;
-		binary_upgrade_next_heap_pg_class_relfilenumber = InvalidOid;
+		/* See the RELKIND_INDEX comment above. */
+		if (RelFileNumberIsValid(binary_upgrade_next_heap_pg_class_relfilenumber))
+		{
+			newrelfilenumber = binary_upgrade_next_heap_pg_class_relfilenumber;
+			binary_upgrade_next_heap_pg_class_relfilenumber = InvalidOid;
+		}
+		else
+			newrelfilenumber = GetNewRelFileNumber(relation->rd_rel->reltablespace,
+												   NULL, persistence);
 	}
 	else
 		ereport(ERROR,

@@ -1639,19 +1639,22 @@ heap_create_with_catalog(const char *relname,
 					 relkind != RELKIND_AOBLOCKDIR)
 			{
 				/*
-				 * GPDB: the append-optimized auxiliary relations are created
-				 * implicitly as part of creating their base relation, so
-				 * pg_dump emits no relfilenumber override for them; they are
-				 * excluded above and get a new relfilenumber from the
-				 * regular GPDB counter (see GetNewRelFileNumber()).
+				 * GPDB does not preserve relfilenumbers across a binary
+				 * upgrade: pg_dump emits the binary_upgrade_set_next_*_oid
+				 * calls but never binary_upgrade_set_next_heap_relfilenode (see
+				 * binary_upgrade_set_pg_class_oids() in pg_dump).  So, unlike
+				 * upstream, the heap relfilenumber override is normally unset
+				 * here and we must NOT require it; when it is unset the relation
+				 * keeps its invalid relfilenumber and heap_create() assigns a
+				 * fresh one from the regular GPDB counter -- exactly as the
+				 * append-optimized auxiliary relations (excluded above) already
+				 * do.  Honor the override only if some caller did set it.
 				 */
-				if (!RelFileNumberIsValid(binary_upgrade_next_heap_pg_class_relfilenumber))
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							 errmsg("relfilenumber value not set when in binary upgrade mode")));
-
-				relfilenumber = binary_upgrade_next_heap_pg_class_relfilenumber;
-				binary_upgrade_next_heap_pg_class_relfilenumber = InvalidRelFileNumber;
+				if (RelFileNumberIsValid(binary_upgrade_next_heap_pg_class_relfilenumber))
+				{
+					relfilenumber = binary_upgrade_next_heap_pg_class_relfilenumber;
+					binary_upgrade_next_heap_pg_class_relfilenumber = InvalidRelFileNumber;
+				}
 			}
 		}
 	}
