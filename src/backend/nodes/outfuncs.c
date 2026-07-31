@@ -356,6 +356,7 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 	WRITE_BITMAPSET_FIELD(rewindPlanIDs);
 	WRITE_NODE_FIELD(rowMarks);
 	WRITE_NODE_FIELD(relationOids);
+	WRITE_NODE_FIELD(partitionOids);
 	/*
 	 * Don't serialize invalItems when dispatching. The TIDs of the invalidated items wouldn't
 	 * make sense in segments.
@@ -859,6 +860,16 @@ _outTidScan(StringInfo str, const TidScan *node)
 	_outScanInfo(str, (const Scan *) node);
 
 	WRITE_NODE_FIELD(tidquals);
+}
+
+static void
+_outTidRangeScan(StringInfo str, const TidRangeScan *node)
+{
+	WRITE_NODE_TYPE("TIDRANGESCAN");
+
+	_outScanInfo(str, (const Scan *) node);
+
+	WRITE_NODE_FIELD(tidrangequals);
 }
 
 static void
@@ -2363,7 +2374,6 @@ _outAppendPath(StringInfo str, const AppendPath *node)
 
 	_outPathInfo(str, (const Path *) node);
 
-	WRITE_NODE_FIELD(partitioned_rels);
 	WRITE_NODE_FIELD(subpaths);
 	WRITE_INT_FIELD(first_partial_path);
 	WRITE_FLOAT_FIELD(limit_tuples, "%.0f");
@@ -2376,7 +2386,6 @@ _outMergeAppendPath(StringInfo str, const MergeAppendPath *node)
 
 	_outPathInfo(str, (const Path *) node);
 
-	WRITE_NODE_FIELD(partitioned_rels);
 	WRITE_NODE_FIELD(subpaths);
 	WRITE_FLOAT_FIELD(limit_tuples, "%.0f");
 }
@@ -2734,6 +2743,7 @@ _outPlannerGlobal(StringInfo str, const PlannerGlobal *node)
 	WRITE_NODE_FIELD(resultRelations);
 	WRITE_NODE_FIELD(appendRelations);
 	WRITE_NODE_FIELD(relationOids);
+	WRITE_NODE_FIELD(partitionOids);
 	WRITE_NODE_FIELD(invalItems);
 	WRITE_NODE_FIELD(paramExecTypes);
 	WRITE_UINT_FIELD(lastPHId);
@@ -2843,6 +2853,7 @@ _outRelOptInfo(StringInfo str, const RelOptInfo *node)
 	WRITE_NODE_FIELD(subroot);
 	WRITE_NODE_FIELD(subplan_params);
 	WRITE_INT_FIELD(rel_parallel_workers);
+	WRITE_UINT_FIELD(amflags);
 	WRITE_OID_FIELD(serverid);
 	WRITE_OID_FIELD(userid);
 	WRITE_BOOL_FIELD(useridiscurrent);
@@ -4089,6 +4100,7 @@ _outSelectStmt(StringInfo str, const SelectStmt *node)
 	WRITE_NODE_FIELD(fromClause);
 	WRITE_NODE_FIELD(whereClause);
 	WRITE_NODE_FIELD(groupClause);
+	WRITE_BOOL_FIELD(groupDistinct);
 	WRITE_NODE_FIELD(havingClause);
 	WRITE_NODE_FIELD(windowClause);
 	WRITE_NODE_FIELD(valuesLists);
@@ -4432,6 +4444,7 @@ _outQuery(StringInfo str, const Query *node)
 	WRITE_NODE_FIELD(onConflict);
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(groupClause);
+	WRITE_BOOL_FIELD(groupDistinct);
 	WRITE_NODE_FIELD(groupingSets);
 	WRITE_NODE_FIELD(havingQual);
 	WRITE_NODE_FIELD(windowClause);
@@ -4531,6 +4544,34 @@ _outWithClause(StringInfo str, const WithClause *node)
 }
 
 static void
+_outCTESearchClause(StringInfo str, const CTESearchClause *node)
+{
+	WRITE_NODE_TYPE("CTESEARCHCLAUSE");
+
+	WRITE_NODE_FIELD(search_col_list);
+	WRITE_BOOL_FIELD(search_breadth_first);
+	WRITE_STRING_FIELD(search_seq_column);
+	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outCTECycleClause(StringInfo str, const CTECycleClause *node)
+{
+	WRITE_NODE_TYPE("CTECYCLECLAUSE");
+
+	WRITE_NODE_FIELD(cycle_col_list);
+	WRITE_STRING_FIELD(cycle_mark_column);
+	WRITE_NODE_FIELD(cycle_mark_value);
+	WRITE_NODE_FIELD(cycle_mark_default);
+	WRITE_STRING_FIELD(cycle_path_column);
+	WRITE_LOCATION_FIELD(location);
+	WRITE_OID_FIELD(cycle_mark_type);
+	WRITE_INT_FIELD(cycle_mark_typmod);
+	WRITE_OID_FIELD(cycle_mark_collation);
+	WRITE_OID_FIELD(cycle_mark_neop);
+}
+
+static void
 _outCommonTableExpr(StringInfo str, const CommonTableExpr *node)
 {
 	WRITE_NODE_TYPE("COMMONTABLEEXPR");
@@ -4539,6 +4580,8 @@ _outCommonTableExpr(StringInfo str, const CommonTableExpr *node)
 	WRITE_NODE_FIELD(aliascolnames);
 	WRITE_ENUM_FIELD(ctematerialized, CTEMaterialize);
 	WRITE_NODE_FIELD(ctequery);
+	WRITE_NODE_FIELD(search_clause);
+	WRITE_NODE_FIELD(cycle_clause);
 	WRITE_LOCATION_FIELD(location);
 	WRITE_BOOL_FIELD(cterecursive);
 	WRITE_INT_FIELD(cterefcount);
@@ -5652,6 +5695,9 @@ outNode(StringInfo str, const void *obj)
 			case T_TidScan:
 				_outTidScan(str, obj);
 				break;
+			case T_TidRangeScan:
+				_outTidRangeScan(str, obj);
+				break;
 			case T_SubqueryScan:
 				_outSubqueryScan(str, obj);
 				break;
@@ -6371,6 +6417,12 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_WithClause:
 				_outWithClause(str, obj);
+				break;
+			case T_CTESearchClause:
+				_outCTESearchClause(str, obj);
+				break;
+			case T_CTECycleClause:
+				_outCTECycleClause(str, obj);
 				break;
 			case T_CommonTableExpr:
 				_outCommonTableExpr(str, obj);

@@ -224,7 +224,7 @@ pgbench(
 	'pgbench help');
 
 # Version
-pgbench('-V', 0, [qr{^pgbench .PostgreSQL. }], [qr{^$}], 'pgbench version');
+pgbench('-V', 0, [qr{^pgbench .Greenplum Database. }], [qr{^$}], 'pgbench version');
 
 # list of builtins
 pgbench(

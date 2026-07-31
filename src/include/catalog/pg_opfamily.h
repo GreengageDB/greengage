@@ -37,16 +37,12 @@ CATALOG(pg_opfamily,2753,OperatorFamilyRelationId)
 	NameData	opfname;
 
 	/* namespace of this opfamily */
-	Oid			opfnamespace BKI_DEFAULT(PGNSP);
+	Oid			opfnamespace BKI_DEFAULT(pg_catalog) BKI_LOOKUP(pg_namespace);
 
 	/* opfamily owner */
-	Oid			opfowner BKI_DEFAULT(PGUID);
+	Oid			opfowner BKI_DEFAULT(POSTGRES) BKI_LOOKUP(pg_authid);
 } FormData_pg_opfamily;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(opfmethod REFERENCES pg_am(oid));
-FOREIGN_KEY(opfnamespace REFERENCES pg_namespace(oid));
-FOREIGN_KEY(opfowner REFERENCES pg_authid(oid));
 
 /* ----------------
  *		Form_pg_opfamily corresponds to a pointer to a tuple with
@@ -57,7 +53,7 @@ typedef FormData_pg_opfamily *Form_pg_opfamily;
 
 DECLARE_UNIQUE_INDEX(pg_opfamily_am_name_nsp_index, 2754, on pg_opfamily using btree(opfmethod oid_ops, opfname name_ops, opfnamespace oid_ops));
 #define OpfamilyAmNameNspIndexId  2754
-DECLARE_UNIQUE_INDEX(pg_opfamily_oid_index, 2755, on pg_opfamily using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_opfamily_oid_index, 2755, on pg_opfamily using btree(oid oid_ops));
 #define OpfamilyOidIndexId	2755
 
 #ifdef EXPOSE_TO_CLIENT_CODE

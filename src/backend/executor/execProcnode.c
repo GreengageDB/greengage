@@ -112,6 +112,7 @@
 #include "executor/nodeSubplan.h"
 #include "executor/nodeSubqueryscan.h"
 #include "executor/nodeTableFuncscan.h"
+#include "executor/nodeTidrangescan.h"
 #include "executor/nodeTidscan.h"
 #include "executor/nodeTupleSplit.h"
 #include "executor/nodeUnique.h"
@@ -326,6 +327,11 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 		case T_TidScan:
 			result = (PlanState *) ExecInitTidScan((TidScan *) node,
 												   estate, eflags);
+			break;
+
+		case T_TidRangeScan:
+			result = (PlanState *) ExecInitTidRangeScan((TidRangeScan *) node,
+														estate, eflags);
 			break;
 
 		case T_SubqueryScan:
@@ -881,6 +887,10 @@ ExecEndNode(PlanState *node)
 
 		case T_TidScanState:
 			ExecEndTidScan((TidScanState *) node);
+			break;
+
+		case T_TidRangeScanState:
+			ExecEndTidRangeScan((TidRangeScanState *) node);
 			break;
 
 		case T_SubqueryScanState:

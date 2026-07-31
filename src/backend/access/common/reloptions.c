@@ -175,6 +175,15 @@ static relopt_bool boolRelOpts[] =
 		},
 		true
 	},
+	{
+		{
+			"parallel_insert_enabled",
+			"Enables \"parallel insert\" feature for this table",
+			RELOPT_KIND_HEAP | RELOPT_KIND_PARTITIONED,
+			ShareUpdateExclusiveLock
+		},
+		true
+	},
 	/* list terminator */
 	{{NULL}}
 };
@@ -471,7 +480,7 @@ static relopt_real realRelOpts[] =
 	{
 		{
 			"vacuum_cleanup_index_scale_factor",
-			"Number of tuple inserts prior to index cleanup as a fraction of reltuples.",
+			"Deprecated B-Tree parameter.",
 			RELOPT_KIND_BTREE,
 			ShareUpdateExclusiveLock
 		},
@@ -1877,8 +1886,10 @@ default_reloptions(Datum reloptions, bool validate, relopt_kind kind)
 		{"vacuum_truncate", RELOPT_TYPE_BOOL,
 		offsetof(StdRdOptions, vacuum_truncate)},
 		{SOPT_ANALYZEHLL, RELOPT_TYPE_BOOL,
-		offsetof(StdRdOptions, analyze_hll_non_part_table)}
+		offsetof(StdRdOptions, analyze_hll_non_part_table)},
 
+		{"parallel_insert_enabled", RELOPT_TYPE_BOOL,
+		offsetof(StdRdOptions, parallel_insert_enabled)}
 	};
 
 	return (bytea *) build_reloptions(reloptions, validate, kind,

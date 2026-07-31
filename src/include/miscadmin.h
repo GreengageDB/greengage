@@ -345,8 +345,6 @@ extern int64 VacuumPageDirty;
 extern int	VacuumCostBalance;
 extern bool VacuumCostActive;
 
-extern double vacuum_cleanup_index_scale_factor;
-
 extern int gp_vmem_protect_limit;
 extern int gp_vmem_protect_gang_cache_limit;
 extern int gp_max_parallel_cursors;
@@ -523,6 +521,7 @@ typedef enum
 	BootstrapProcess,
 	StartupProcess,
 	BgWriterProcess,
+	ArchiverProcess,
 	CheckpointerProcess,
 	WalWriterProcess,
 	WalReceiverProcess,
@@ -535,6 +534,7 @@ extern AuxProcType MyAuxProcType;
 #define AmBootstrapProcess()		(MyAuxProcType == BootstrapProcess)
 #define AmStartupProcess()			(MyAuxProcType == StartupProcess)
 #define AmBackgroundWriterProcess() (MyAuxProcType == BgWriterProcess)
+#define AmArchiverProcess()			(MyAuxProcType == ArchiverProcess)
 #define AmCheckpointerProcess()		(MyAuxProcType == CheckpointerProcess)
 #define AmWalWriterProcess()		(MyAuxProcType == WalWriterProcess)
 #define AmWalReceiverProcess()		(MyAuxProcType == WalReceiverProcess)

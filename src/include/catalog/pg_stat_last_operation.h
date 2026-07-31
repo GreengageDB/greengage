@@ -35,11 +35,13 @@
 CATALOG(pg_stat_last_operation,6052,StatLastOpRelationId)
 {
 	/* unique key */
-	Oid			classid;		/* OID of table containing object */
+	Oid			classid BKI_LOOKUP(pg_class);		/* OID of table containing object */
 	Oid			objid;			/* OID of object itself */
 	NameData	staactionname;	/* name of action */
 
-	/* */
+	/*
+	 * Do not mark it as a foreign key, as the user may be dropped while leaving a record in this table, which will violate the foreign key.
+	 */
 	Oid			stasysid;		/* OID of user (when action was performed) */
 	NameData	stausename;		/* name of user (when action was performed) */
 #ifdef CATALOG_VARLEN
@@ -49,9 +51,6 @@ CATALOG(pg_stat_last_operation,6052,StatLastOpRelationId)
 } FormData_pg_statlastop;
 
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(classid REFERENCES pg_class(oid));
-FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
 
 #undef timestamptz
 
@@ -63,7 +62,7 @@ FOREIGN_KEY(stasysid REFERENCES pg_authid(oid));
 typedef FormData_pg_statlastop *Form_pg_statlastop;
 
 /* MPP-6929: metadata tracking */
-DECLARE_UNIQUE_INDEX(pg_statlastop_classid_objid_staactionname_index, 6054, on pg_stat_last_operation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_statlastop_classid_objid_staactionname_index, 6054, on pg_stat_last_operation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
 #define StatLastOpClassidObjidStaactionnameIndexId  6054
 
 #endif   /* PG_STAT_LAST_OPERATION_H */

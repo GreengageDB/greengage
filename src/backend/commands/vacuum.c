@@ -139,6 +139,7 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	bool		rootonly = false;
 	bool		fullscan = false;
 	int			ao_phase = 0;
+	bool		process_toast = true;
 	ListCell   *lc;
 
 	/* Set default value */
@@ -180,6 +181,8 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 			disable_page_skipping = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "index_cleanup") == 0)
 			params.index_cleanup = get_vacopt_ternary_value(opt);
+		else if (strcmp(opt->defname, "process_toast") == 0)
+			process_toast = defGetBoolean(opt);
 		else if (strcmp(opt->defname, "truncate") == 0)
 			params.truncate = get_vacopt_ternary_value(opt);
 		else if (Gp_role == GP_ROLE_EXECUTE && strcmp(opt->defname, "ao_phase") == 0)
@@ -245,7 +248,8 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 		(analyze ? VACOPT_ANALYZE : 0) |
 		(freeze ? VACOPT_FREEZE : 0) |
 		(full ? VACOPT_FULL : 0) |
-		(disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
+		(disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0) |
+		(process_toast ? VACOPT_PROCESS_TOAST : 0);
 
 	if (rootonly)
 		params.options |= VACOPT_ROOTONLY;
@@ -257,7 +261,6 @@ ExecVacuum(ParseState *pstate, VacuumStmt *vacstmt, bool isTopLevel, bool auto_s
 	Assert(params.options & (VACOPT_VACUUM | VACOPT_ANALYZE));
 	Assert((params.options & VACOPT_VACUUM) ||
 		   !(params.options & (VACOPT_FULL | VACOPT_FREEZE)));
-	Assert(!(params.options & VACOPT_SKIPTOAST));
 
 	if ((params.options & VACOPT_FULL) && params.nworkers > 0)
 		ereport(ERROR,
@@ -346,10 +349,11 @@ vacuum(List *relations, VacuumParams *params,
 	Assert(params != NULL);
 
 	/*
-	 * VACUUM does not support ROOTPARTITION option. Normally it's not possible
-	 * that VACOPT_VACUUM and VACOPT_ROOTONLY set at same time.
+	 * VACUUM does not support ROOTPARTITION option.
 	 */
-	Assert(!((params->options & VACOPT_VACUUM) && (params->options & VACOPT_ROOTONLY)));
+	if ((params->options & VACOPT_VACUUM) && (params->options & VACOPT_ROOTONLY))
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("ANALYZE option ROOTPARTITION cannot be used with VACUUM")));
 
 	stmttype = (params->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 
@@ -391,6 +395,13 @@ vacuum(List *relations, VacuumParams *params,
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("VACUUM option DISABLE_PAGE_SKIPPING cannot be used with FULL")));
+
+	/* sanity check for PROCESS_TOAST */
+	if ((params->options & VACOPT_FULL) != 0 &&
+		(params->options & VACOPT_PROCESS_TOAST) == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("PROCESS_TOAST required with VACUUM FULL")));
 
 	/*
 	 * Send info about dead objects to the statistics collector, unless we are
@@ -631,7 +642,7 @@ vacuum(List *relations, VacuumParams *params,
  * ANALYZE.
  */
 bool
-vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple, int options)
+vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple, bits32 options)
 {
 	char	   *relname;
 
@@ -705,7 +716,7 @@ vacuum_is_relation_owner(Oid relid, Form_pg_class reltuple, int options)
  * or locked, a log is emitted if possible.
  */
 Relation
-vacuum_open_relation(Oid relid, RangeVar *relation, int options,
+vacuum_open_relation(Oid relid, RangeVar *relation, bits32 options,
 					 bool verbose, LOCKMODE lmode)
 {
 	Relation	onerel;
@@ -1244,7 +1255,7 @@ vacuum_set_xid_limits(Relation rel,
 	 * autovacuum_freeze_max_age / 2 XIDs old), complain and force a minimum
 	 * freeze age of zero.
 	 */
-	safeLimit = ReadNewTransactionId() - autovacuum_freeze_max_age;
+	safeLimit = ReadNextTransactionId() - autovacuum_freeze_max_age;
 	if (!TransactionIdIsNormal(safeLimit))
 		safeLimit = FirstNormalTransactionId;
 
@@ -1327,7 +1338,7 @@ vacuum_set_xid_limits(Relation rel,
 		 * Compute XID limit causing a full-table vacuum, being careful not to
 		 * generate a "permanent" XID.
 		 */
-		limit = ReadNewTransactionId() - freezetable;
+		limit = ReadNextTransactionId() - freezetable;
 		if (!TransactionIdIsNormal(limit))
 			limit = FirstNormalTransactionId;
 
@@ -1620,7 +1631,7 @@ vac_update_relstats(Relation relation,
 		TransactionIdIsValid(pgcform->relfrozenxid) &&
 		pgcform->relfrozenxid != frozenxid &&
 		(TransactionIdPrecedes(pgcform->relfrozenxid, frozenxid) ||
-		 TransactionIdPrecedes(ReadNewTransactionId(),
+		 TransactionIdPrecedes(ReadNextTransactionId(),
 							   pgcform->relfrozenxid)))
 	{
 		pgcform->relfrozenxid = frozenxid;
@@ -1712,7 +1723,7 @@ vac_update_datfrozenxid(void)
 	 * validly see during the scan.  These are conservative values, but it's
 	 * not really worth trying to be more exact.
 	 */
-	lastSaneFrozenXid = ReadNewTransactionId();
+	lastSaneFrozenXid = ReadNextTransactionId();
 	lastSaneMinMulti = ReadNextMultiXactId();
 
 	/*
@@ -1898,7 +1909,7 @@ vac_truncate_clog(TransactionId frozenXID,
 				  TransactionId lastSaneFrozenXid,
 				  MultiXactId lastSaneMinMulti)
 {
-	TransactionId nextXID = ReadNewTransactionId();
+	TransactionId nextXID = ReadNextTransactionId();
 	Relation	relation;
 	TableScanDesc scan;
 	HeapTuple	tuple;
@@ -2257,7 +2268,8 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 	 *
 	 * GPDB: Also remember the AO segment relations for later.
 	 */
-	if (!(params->options & VACOPT_SKIPTOAST) && !(params->options & VACOPT_FULL))
+	if ((params->options & VACOPT_PROCESS_TOAST) != 0 &&
+		(params->options & VACOPT_FULL) == 0)
 		toast_relid = onerel->rd_rel->reltoastrelid;
 	else
 		toast_relid = InvalidOid;
@@ -2414,17 +2426,17 @@ vacuum_rel(Oid relid, RangeVar *relation, VacuumParams *params,
 
 	if (!is_appendoptimized && (params->options & VACOPT_FULL))
 	{
-		int			cluster_options = 0;
+		ClusterParams cluster_params = {0};
 
 		/* close relation before vacuuming, but hold lock until commit */
 		relation_close(onerel, NoLock);
 		onerel = NULL;
 
 		if ((params->options & VACOPT_VERBOSE) != 0)
-			cluster_options |= CLUOPT_VERBOSE;
+			cluster_params.options |= CLUOPT_VERBOSE;
 
 		/* VACUUM FULL is now a variant of CLUSTER; see cluster.c */
-		cluster_rel(relid, InvalidOid, cluster_options, true);
+		cluster_rel(relid, InvalidOid, &cluster_params, true);
 	}
 	else /* Heap vacuum or AO/CO vacuum in specific phase */
 		table_relation_vacuum(onerel, params, vac_strategy);
@@ -2821,11 +2833,11 @@ dispatchVacuum(VacuumParams *params, Oid relid, VacuumStatsContext *ctx)
 static List *
 vacuum_params_to_options_list(VacuumParams *params)
 {
-	int			optmask = params->options;
+	bits32 		optmask = params->options;
 	List	   *options = NIL;
 
 	/* VACOPT_VACUUM and ANALYZE are derived from the VacuumStmt */
-	optmask &= ~(VACOPT_VACUUM | VACOPT_ANALYZE);
+	optmask &= ~(VACOPT_VACUUM | VACOPT_ANALYZE | VACOPT_FULLSCAN);
 	if (optmask & VACOPT_VERBOSE)
 	{
 		options = lappend(options, makeDefElem("verbose", (Node *) makeInteger(1), -1));
@@ -2846,11 +2858,6 @@ vacuum_params_to_options_list(VacuumParams *params)
 		options = lappend(options, makeDefElem("skip_locked", (Node *) makeInteger(1), -1));
 		optmask &= ~VACOPT_SKIP_LOCKED;
 	}
-	if (optmask & VACOPT_SKIPTOAST)
-	{
-		options = lappend(options, makeDefElem("skip_toast", (Node *) makeInteger(1), -1));
-		optmask &= ~VACOPT_SKIPTOAST;
-	}
 	if (optmask & VACOPT_DISABLE_PAGE_SKIPPING)
 	{
 		options = lappend(options, makeDefElem("disable_page_skipping", (Node *) makeInteger(1), -1));
@@ -2864,6 +2871,14 @@ vacuum_params_to_options_list(VacuumParams *params)
 											   -1));
 		optmask &= ~VACUUM_AO_PHASE_MASK;
 	}
+
+	if (optmask & VACOPT_PROCESS_TOAST)
+	{
+		options = lappend(options, makeDefElem("process_toast",
+											   (Node *) makeInteger(1), -1));
+		optmask &= ~VACOPT_PROCESS_TOAST;
+	}
+
 	if (optmask != 0)
 		elog(ERROR, "unrecognized vacuum option %x", optmask);
 

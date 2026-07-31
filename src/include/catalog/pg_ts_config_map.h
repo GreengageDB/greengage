@@ -42,13 +42,10 @@ CATALOG(pg_ts_config_map,3603,TSConfigMapRelationId)
 	Oid			mapdict BKI_LOOKUP(pg_ts_dict);
 } FormData_pg_ts_config_map;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(mapcfg REFERENCES pg_ts_config(oid));
-FOREIGN_KEY(mapdict REFERENCES pg_ts_dict(oid));
 
 typedef FormData_pg_ts_config_map *Form_pg_ts_config_map;
 
-DECLARE_UNIQUE_INDEX(pg_ts_config_map_index, 3609, on pg_ts_config_map using btree(mapcfg oid_ops, maptokentype int4_ops, mapseqno int4_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_ts_config_map_index, 3609, on pg_ts_config_map using btree(mapcfg oid_ops, maptokentype int4_ops, mapseqno int4_ops));
 #define TSConfigMapIndexId	3609
 
 #endif							/* PG_TS_CONFIG_MAP_H */

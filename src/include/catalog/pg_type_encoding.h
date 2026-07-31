@@ -25,14 +25,12 @@
  */
 CATALOG(pg_type_encoding,6220,TypeEncodingRelationId)
 {
-	Oid		typid;			
+	Oid		typid BKI_LOOKUP(pg_type);
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text	typoptions[1];	
 #endif
 } FormData_pg_type_encoding;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(typid REFERENCES pg_type(oid));
 
 /* ----------------
  *		Form_pg_type_encoding corresponds to a pointer to a tuple with
@@ -43,7 +41,7 @@ typedef FormData_pg_type_encoding *Form_pg_type_encoding;
 
 DECLARE_TOAST(pg_type_encoding, 6222, 6223);
 
-DECLARE_UNIQUE_INDEX(pg_type_encoding_typid_index, 6207, on pg_type_encoding using btree(typid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_type_encoding_typid_index, 6207, on pg_type_encoding using btree(typid oid_ops));
 #define TypeEncodingTypidIndexId	6207
 
 #endif   /* PG_TYPE_ENCODING_H */

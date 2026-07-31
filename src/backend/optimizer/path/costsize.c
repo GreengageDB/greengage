@@ -126,6 +126,8 @@ Cost		disable_cost = 1.0e10;
 
 int			max_parallel_workers_per_gather = 2;
 
+bool		enable_parallel_insert = true;
+
 bool		enable_seqscan = true;
 bool		enable_indexscan = true;
 bool		enable_indexonlyscan = true;
@@ -1410,6 +1412,103 @@ cost_tidscan(Path *path, PlannerInfo *root,
 }
 
 /*
+ * cost_tidrangescan
+ *	  Determines and sets the costs of scanning a relation using a range of
+ *	  TIDs for 'path'
+ *
+ * 'baserel' is the relation to be scanned
+ * 'tidrangequals' is the list of TID-checkable range quals
+ * 'param_info' is the ParamPathInfo if this is a parameterized path, else NULL
+ */
+void
+cost_tidrangescan(Path *path, PlannerInfo *root,
+				  RelOptInfo *baserel_orig, List *tidrangequals,
+				  ParamPathInfo *param_info_orig)
+{
+	ADJUST_BASESCAN(baserel_orig, baserel, param_info_orig, param_info);
+	Selectivity selectivity;
+	double		pages;
+	Cost		startup_cost = 0;
+	Cost		run_cost = 0;
+	QualCost	qpqual_cost;
+	Cost		cpu_per_tuple;
+	QualCost	tid_qual_cost;
+	double		ntuples;
+	double		nseqpages;
+	double		spc_random_page_cost;
+	double		spc_seq_page_cost;
+
+	/* Should only be applied to base relations */
+	Assert(baserel->relid > 0);
+	Assert(baserel->rtekind == RTE_RELATION);
+
+	/* Mark the path with the correct row estimate */
+	if (param_info)
+		path->rows = param_info->ppi_rows;
+	else
+		path->rows = baserel->rows;
+
+	/* Count how many tuples and pages we expect to scan */
+	selectivity = clauselist_selectivity(root, tidrangequals, baserel->relid,
+										 JOIN_INNER, NULL,
+										 false /* use_damping */);
+	pages = ceil(selectivity * baserel->pages);
+
+	if (pages <= 0.0)
+		pages = 1.0;
+
+	/*
+	 * The first page in a range requires a random seek, but each subsequent
+	 * page is just a normal sequential page read. NOTE: it's desirable for
+	 * TID Range Scans to cost more than the equivalent Sequential Scans,
+	 * because Seq Scans have some performance advantages such as scan
+	 * synchronization and parallelizability, and we'd prefer one of them to
+	 * be picked unless a TID Range Scan really is better.
+	 */
+	ntuples = selectivity * baserel->tuples;
+	nseqpages = pages - 1.0;
+
+	if (!enable_tidscan)
+		startup_cost += disable_cost;
+
+	/*
+	 * The TID qual expressions will be computed once, any other baserestrict
+	 * quals once per retrieved tuple.
+	 */
+	cost_qual_eval(&tid_qual_cost, tidrangequals, root);
+
+	/* fetch estimated page cost for tablespace containing table */
+	get_tablespace_page_costs(baserel->reltablespace,
+							  &spc_random_page_cost,
+							  &spc_seq_page_cost);
+
+	/* disk costs; 1 random page and the remainder as seq pages */
+	run_cost += spc_random_page_cost + spc_seq_page_cost * nseqpages;
+
+	/* Add scanning CPU costs */
+	get_restriction_qual_cost(root, baserel_orig, param_info_orig, &qpqual_cost);
+
+	/*
+	 * XXX currently we assume TID quals are a subset of qpquals at this
+	 * point; they will be removed (if possible) when we create the plan, so
+	 * we subtract their cost from the total qpqual cost.  (If the TID quals
+	 * can't be removed, this is a mistake and we're going to underestimate
+	 * the CPU cost a bit.)
+	 */
+	startup_cost += qpqual_cost.startup + tid_qual_cost.per_tuple;
+	cpu_per_tuple = cpu_tuple_cost + qpqual_cost.per_tuple -
+		tid_qual_cost.per_tuple;
+	run_cost += cpu_per_tuple * ntuples;
+
+	/* tlist eval costs are paid per output row, not per tuple scanned */
+	startup_cost += path->pathtarget->cost.startup;
+	run_cost += path->pathtarget->cost.per_tuple * path->rows;
+
+	path->startup_cost = startup_cost;
+	path->total_cost = startup_cost + run_cost;
+}
+
+/*
  * cost_subqueryscan
  *	  Determines and returns the cost of scanning a subquery RTE.
  *
@@ -2041,7 +2140,7 @@ cost_incremental_sort(Path *path,
 		 * Check if the expression contains Var with "varno 0" so that we
 		 * don't call estimate_num_groups in that case.
 		 */
-		if (bms_is_member(0, pull_varnos((Node *) member->em_expr)))
+		if (bms_is_member(0, pull_varnos(root, (Node *) member->em_expr)))
 		{
 			unknown_varno = true;
 			break;

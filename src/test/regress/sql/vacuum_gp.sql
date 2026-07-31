@@ -280,3 +280,13 @@ drop function clean_roles();
 -- end_ignore
 -- free pg_global space, otherwise it fails db_size_functions
 VACUUM FULL pg_authid, pg_database;
+
+-- start_ignore
+drop table if exists t1;
+-- end_ignore
+create table t1 (a int) distributed by (a);
+-- Must be an error and not an assert triggered.
+vacuum (rootpartition) t1;
+-- Shouldn't throw an error.
+vacuum (analyse, fullscan) t1;
+drop table t1;

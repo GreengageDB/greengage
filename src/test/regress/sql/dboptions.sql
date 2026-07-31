@@ -28,8 +28,8 @@ select pg_reload_conf();
 -- during startup. The socket path is environment-dependent, so mask
 -- it out.
 -- start_matchsubs
--- m/could not connect to socket "[^"]*":/
--- s/could not connect to socket "[^"]*":/could not connect to socket "SOCKET":/
+-- m/connection to server on socket "[^"]*" failed:/
+-- s/connection to server on socket "[^"]*" failed:/connection to server on socket "SOCKET" failed:/
 -- end_matchsubs
 -- should fail, because the connection limit is 0
 \! psql limitdb -c "select 'connected'" -U connlimit_test_user

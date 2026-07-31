@@ -61,6 +61,7 @@ struct XidCache
 #define		PROC_IS_AUTOVACUUM	0x01	/* is it an autovac worker? */
 #define		PROC_IN_VACUUM		0x02	/* currently running lazy vacuum */
 #define		PROC_IN_SAFE_IC		0x04	/* currently running CREATE INDEX
+										 * CONCURRENTLY or REINDEX
 										 * CONCURRENTLY on non-expressional,
 										 * non-partial index */
 #define		PROC_VACUUM_FOR_WRAPAROUND	0x08	/* set by autovac only */
@@ -201,6 +202,8 @@ struct PGPROC
 	LOCKMODE	waitLockMode;	/* type of lock we're waiting for */
 	LOCKMASK	heldLocks;		/* bitmask for lock types already held on this
 								 * lock object by this backend */
+	pg_atomic_uint64 waitStart; /* time at which wait for lock acquisition
+								 * started */
 
 	bool		delayChkpt;		/* true if this proc delays checkpoint start */
 
@@ -430,11 +433,11 @@ extern PGPROC *PreparedXactProcs;
  * We set aside some extra PGPROC structures for auxiliary processes,
  * ie things that aren't full-fledged backends but need shmem access.
  *
- * Background writer, checkpointer and WAL writer run during normal operation.
- * Startup process and WAL receiver also consume 2 slots, but WAL writer is
- * launched only after startup has exited, so we only need 4 slots.
+ * Background writer, checkpointer, WAL writer and archiver run during normal
+ * operation.  Startup process and WAL receiver also consume 2 slots, but WAL
+ * writer is launched only after startup has exited, so we only need 5 slots.
  */
-#define NUM_AUXILIARY_PROCS		4
+#define NUM_AUXILIARY_PROCS		5
 
 /* configurable options */
 extern PGDLLIMPORT int DeadlockTimeout;

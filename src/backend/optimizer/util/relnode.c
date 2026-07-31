@@ -238,6 +238,7 @@ build_simple_rel(PlannerInfo *root, int relid, RelOptInfo *parent)
 	rel->subroot = NULL;
 	rel->subplan_params = NIL;
 	rel->rel_parallel_workers = -1; /* set up in get_relation_info */
+	rel->amflags = 0;
 	rel->serverid = InvalidOid;
 	rel->userid = rte->checkAsUser;
 	rel->useridiscurrent = false;
@@ -683,6 +684,7 @@ build_join_rel(PlannerInfo *root,
 	joinrel->subroot = NULL;
 	joinrel->subplan_params = NIL;
 	joinrel->rel_parallel_workers = -1;
+	joinrel->amflags = 0;
 	joinrel->serverid = InvalidOid;
 	joinrel->userid = InvalidOid;
 	joinrel->useridiscurrent = false;
@@ -871,6 +873,7 @@ build_child_join_rel(PlannerInfo *root, RelOptInfo *outer_rel,
 	joinrel->eclass_indexes = NULL;
 	joinrel->subroot = NULL;
 	joinrel->subplan_params = NIL;
+	joinrel->amflags = 0;
 	joinrel->serverid = InvalidOid;
 	joinrel->userid = InvalidOid;
 	joinrel->useridiscurrent = false;

@@ -541,6 +541,13 @@ CTranslatorQueryToDXL::TranslateSelectQueryToDXL()
 				   GPOS_WSZ_LIT("ON CONFLICT clause"));
 	}
 
+	// GROUP BY DISTINCT is not supported yet.
+	if (m_query->groupDistinct)
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+				   GPOS_WSZ_LIT("GROUP BY DISTINCT clause"));
+	}
+
 	CDXLNode *child_dxlnode = nullptr;
 	IntToUlongMap *sort_group_attno_to_colid_mapping =
 		GPOS_NEW(m_mp) IntToUlongMap(m_mp);

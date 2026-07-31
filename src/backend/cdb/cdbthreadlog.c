@@ -130,7 +130,6 @@ write_log(const char *fmt,...)
 									NULL,
 									NULL,
 									NULL,
-									false,
 									NULL,
 									0,
 									0,

@@ -247,7 +247,6 @@ extern int	errprintstack(bool printstack);
 
 extern int	errbacktrace(void);
 
-extern void errfunction(const char *funcname);
 extern void errposition(int cursorpos);
 
 extern void internalerrposition(int cursorpos);
@@ -418,9 +417,8 @@ typedef struct ErrorData
 	int			elevel;			/* error level */
 	bool		output_to_server;	/* will report to server log? */
 	bool		output_to_client;	/* will report to client? */
-	bool		show_funcname;	/* true to force funcname inclusion */
-    bool        omit_location;  /* GPDB: don't add filename:line# and stack trace */
-    bool        fatal_return;   /* GPDB: true => return instead of proc_exit() */
+	bool		omit_location;	/* GPDB: don't add filename:line# and stack trace */
+	bool		fatal_return;	/* GPDB: true => return instead of proc_exit() */
 	bool		hide_stmt;		/* true to prevent STATEMENT: inclusion */
 	bool		hide_ctx;		/* true to prevent CONTEXT: inclusion */
 	const char *filename;		/* __FILE__ of ereport() call */
@@ -576,7 +574,6 @@ extern void write_message_to_server_log(int elevel,
 										const char *internalquery,
 										const char *context,
 										const char *funcname,
-										bool show_funcname,
 										const char *filename,
 										int lineno,
 										int stacktracesize,

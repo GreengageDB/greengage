@@ -347,6 +347,7 @@ ClosePortalStmt
 ClosePtrType
 Clump
 ClusterInfo
+ClusterParams
 ClusterStmt
 CmdType
 CoalesceExpr
@@ -397,11 +398,13 @@ CompressionAlgorithm
 CompressorState
 ComputeXidHorizonsResult
 ConditionVariable
+ConditionVariableMinimallyPadded
 ConditionalStack
 ConfigData
 ConfigVariable
 ConnCacheEntry
 ConnCacheKey
+ConnParams
 ConnStatusType
 ConnType
 ConnectionStateEnum
@@ -1196,6 +1199,7 @@ JsonbIterator
 JsonbIteratorToken
 JsonbPair
 JsonbParseState
+JsonbSubWorkspace
 JsonbTypeCategory
 JsonbValue
 JunkFilter
@@ -1558,15 +1562,18 @@ PG_Locale_Strategy
 PG_Lock_Status
 PG_init_t
 PGcancel
+PGcmdQueueEntry
 PGconn
 PGdataValue
 PGlobjfuncs
 PGnotify
+PGpipelineStatus
 PGresAttDesc
 PGresAttValue
 PGresParamDesc
 PGresult
 PGresult_data
+PgArchData
 PHANDLE
 PLAINTREE
 PLUID_AND_ATTRIBUTES
@@ -1726,6 +1733,7 @@ ParallelHashJoinState
 ParallelIndexScanDesc
 ParallelReadyList
 ParallelSlot
+ParallelSlotArray
 ParallelState
 ParallelTableScanDesc
 ParallelTableScanDescData
@@ -2060,7 +2068,9 @@ Regis
 RegisNode
 RegisteredBgWorker
 ReindexErrorInfo
+ReindexIndexInfo
 ReindexObjectType
+ReindexParams
 ReindexStmt
 ReindexType
 RelFileNode
@@ -2203,6 +2213,8 @@ SSLExtensionInfoContext
 SSL_CTX
 STARTUPINFO
 STRLEN
+ST_ELEMENT_TYPE
+ST_POINTER_TYPE
 SV
 SampleScan
 SampleScanGetSampleSize_function
@@ -2392,7 +2404,6 @@ StdAnalyzeData
 StdRdOptions
 Step
 StopList
-StopWorkersData
 StrategyNumber
 StreamCtl
 StreamXidHash
@@ -2403,6 +2414,7 @@ SubLink
 SubLinkType
 SubPlan
 SubPlanState
+SubRemoveRels
 SubTransactionId
 SubXactCallback
 SubXactCallbackItem
@@ -3210,6 +3222,7 @@ pg_md5_ctx
 pg_on_exit_callback
 pg_re_flags
 pg_saslprep_rc
+pg_sha1_ctx
 pg_sha224_ctx
 pg_sha256_ctx
 pg_sha384_ctx
@@ -3217,6 +3230,7 @@ pg_sha512_ctx
 pg_snapshot
 pg_stack_base_t
 pg_time_t
+pg_time_usec_t
 pg_tz
 pg_tz_cache
 pg_tzenum
@@ -3286,6 +3300,7 @@ proclist_mutable_iter
 proclist_node
 promptStatus_t
 pthread_attr_t
+pthread_barrier_t
 pthread_key_t
 pthread_mutex_t
 pthread_once_t

@@ -538,6 +538,8 @@ plannode_type(Plan *p)
 			return "BITMAPHEAPSCAN";
 		case T_TidScan:
 			return "TIDSCAN";
+		case T_TidRangeScan:
+			return "TIDRANGESCAN";
 		case T_SubqueryScan:
 			return "SUBQUERYSCAN";
 		case T_FunctionScan:

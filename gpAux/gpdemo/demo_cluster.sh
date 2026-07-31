@@ -417,7 +417,7 @@ echo "gpinitsystem returned: ${RETURN}"
 echo "========================================"
 echo ""
 
-if [ "$enable_gpfdist" = "yes" ] && [ "$with_openssl" = "yes" ]; then
+if [ "$enable_gpfdist" = "yes" ] && [ "$with_ssl" = "openssl" ]; then
 	echo "======================================================================"
 	echo "Generating SSL certificates for gpfdists:"
 	echo "======================================================================"

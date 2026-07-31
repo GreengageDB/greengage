@@ -264,8 +264,6 @@ addByteStringToChunkList(TupleChunkList tcList, char *data, int datalen, TupleCh
 /*
  * Convert RecordCache into a byte-sequence, and store it directly
  * into a chunklist for transmission.
- *
- * This code is based on the printtup_internal_20() function in printtup.c.
  */
 void
 SerializeRecordCacheIntoChunks(SerTupInfo *pSerInfo,
@@ -364,8 +362,6 @@ CandidateForSerializeDirect(int16 targetRoute, struct directTransportBuffer *b)
  *
  * Convert a HeapTuple into a byte-sequence, and store it directly
  * into a chunklist for transmission.
- *
- * This code is based on the printtup_internal_20() function in printtup.c.
  */
 int
 SerializeTuple(TupleTableSlot *slot, SerTupInfo *pSerInfo, struct directTransportBuffer *b, TupleChunkList tcList, int16 targetRoute)

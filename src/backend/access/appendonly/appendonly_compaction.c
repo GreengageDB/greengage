@@ -304,6 +304,7 @@ AppendOnlyMoveTuple(TupleTableSlot *slot,
 		ExecInsertIndexTuples(resultRelInfo,
 							  slot,
 							  estate,
+							  false, /* update */
 							  false, /* noDupError */
 							  NULL, /* specConflict */
 							  NIL /* arbiterIndexes */);

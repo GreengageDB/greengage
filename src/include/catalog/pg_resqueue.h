@@ -53,7 +53,7 @@ CATALOG(pg_resqueue,6026,ResQueueRelationId) BKI_SHARED_RELATION
  */
 typedef FormData_pg_resqueue *Form_pg_resqueue;
 
-DECLARE_UNIQUE_INDEX(pg_resqueue_oid_index, 6027, on pg_resqueue using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_resqueue_oid_index, 6027, on pg_resqueue using btree(oid oid_ops));
 #define ResQueueOidIndexId	6027
 DECLARE_UNIQUE_INDEX(pg_resqueue_rsqname_index, 6028, on pg_resqueue using btree(rsqname name_ops));
 #define ResQueueRsqnameIndexId	6028

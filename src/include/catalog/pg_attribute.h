@@ -38,7 +38,8 @@
  */
 CATALOG(pg_attribute,1249,AttributeRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(75,AttributeRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
-	Oid			attrelid;		/* OID of relation containing this attribute */
+	Oid			attrelid BKI_LOOKUP(pg_class);	/* OID of relation containing
+												 * this attribute */
 	NameData	attname;		/* name of attribute */
 
 	/*
@@ -46,9 +47,12 @@ CATALOG(pg_attribute,1249,AttributeRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(75,
 	 * defines the data type of this attribute (e.g. int4).  Information in
 	 * that instance is redundant with the attlen, attbyval, and attalign
 	 * attributes of this instance, so they had better match or Postgres will
-	 * fail.
+	 * fail.  In an entry for a dropped column, this field is set to zero
+	 * since the pg_type entry may no longer exist; but we rely on attlen,
+	 * attbyval, and attalign to still tell us how large the values in the
+	 * table are.
 	 */
-	Oid			atttypid;
+	Oid			atttypid BKI_LOOKUP_OPT(pg_type);
 
 	/*
 	 * attstattarget is the target number of statistics datapoints to collect
@@ -155,8 +159,8 @@ CATALOG(pg_attribute,1249,AttributeRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(75,
 	/* Number of times inherited from direct parent relation(s) */
 	int32		attinhcount BKI_DEFAULT(0);
 
-	/* attribute's collation */
-	Oid			attcollation;
+	/* attribute's collation, if any */
+	Oid			attcollation BKI_LOOKUP_OPT(pg_collation);
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	/* NOTE: The following fields are not present in tuple descriptors. */
@@ -178,9 +182,6 @@ CATALOG(pg_attribute,1249,AttributeRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(75,
 #endif
 } FormData_pg_attribute;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(attrelid REFERENCES pg_class(oid));
-FOREIGN_KEY(atttypid REFERENCES pg_type(oid));
 
 /*
  * ATTRIBUTE_FIXED_PART_SIZE is the size of the fixed-layout,
@@ -200,7 +201,7 @@ typedef FormData_pg_attribute *Form_pg_attribute;
 
 DECLARE_UNIQUE_INDEX(pg_attribute_relid_attnam_index, 2658, on pg_attribute using btree(attrelid oid_ops, attname name_ops));
 #define AttributeRelidNameIndexId  2658
-DECLARE_UNIQUE_INDEX(pg_attribute_relid_attnum_index, 2659, on pg_attribute using btree(attrelid oid_ops, attnum int2_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_attribute_relid_attnum_index, 2659, on pg_attribute using btree(attrelid oid_ops, attnum int2_ops));
 #define AttributeRelidNumIndexId  2659
 
 #ifdef EXPOSE_TO_CLIENT_CODE

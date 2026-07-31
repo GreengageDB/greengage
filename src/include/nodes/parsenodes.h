@@ -66,6 +66,14 @@ typedef enum SortByNulls
 	SORTBY_NULLS_LAST
 } SortByNulls;
 
+/* Options for [ ALL | DISTINCT ] */
+typedef enum SetQuantifier
+{
+	SET_QUANTIFIER_DEFAULT,
+	SET_QUANTIFIER_ALL,
+	SET_QUANTIFIER_DISTINCT
+} SetQuantifier;
+
 /*
  * Grantable rights are encoded so that we can OR them together in a bitmask.
  * The present representation of AclItem limits us to 16 distinct rights,
@@ -179,6 +187,7 @@ typedef struct Query
 	List	   *returningList;	/* return-values list (of TargetEntry) */
 
 	List	   *groupClause;	/* a list of SortGroupClause's */
+	bool		groupDistinct;	/* is the group by clause distinct? */
 
 	List	   *groupingSets;	/* a list of GroupingSet's if present */
 
@@ -1543,15 +1552,39 @@ typedef struct OnConflictClause
 /*
  * CommonTableExpr -
  *	   representation of WITH list element
- *
- * We don't currently support the SEARCH or CYCLE clause.
  */
+
 typedef enum CTEMaterialize
 {
 	CTEMaterializeDefault,		/* no option specified */
 	CTEMaterializeAlways,		/* MATERIALIZED */
 	CTEMaterializeNever			/* NOT MATERIALIZED */
 } CTEMaterialize;
+
+typedef struct CTESearchClause
+{
+	NodeTag		type;
+	List	   *search_col_list;
+	bool		search_breadth_first;
+	char	   *search_seq_column;
+	int			location;
+} CTESearchClause;
+
+typedef struct CTECycleClause
+{
+	NodeTag		type;
+	List	   *cycle_col_list;
+	char	   *cycle_mark_column;
+	Node	   *cycle_mark_value;
+	Node	   *cycle_mark_default;
+	char	   *cycle_path_column;
+	int			location;
+	/* These fields are set during parse analysis: */
+	Oid			cycle_mark_type;	/* common type of _value and _default */
+	int			cycle_mark_typmod;
+	Oid			cycle_mark_collation;
+	Oid			cycle_mark_neop;	/* <> operator for type */
+} CTECycleClause;
 
 typedef struct CommonTableExpr
 {
@@ -1561,6 +1594,8 @@ typedef struct CommonTableExpr
 	CTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, Query afterwards: */
 	Node	   *ctequery;		/* the CTE's subquery */
+	CTESearchClause *search_clause;
+	CTECycleClause *cycle_clause;
 	int			location;		/* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool		cterecursive;	/* is this CTE actually recursive? */
@@ -1724,6 +1759,7 @@ typedef struct SelectStmt
 	List	   *fromClause;		/* the FROM clause */
 	Node	   *whereClause;	/* WHERE qualification */
 	List	   *groupClause;	/* GROUP BY clauses */
+	bool		groupDistinct;	/* Is this GROUP BY DISTINCT? */
 	Node	   *havingClause;	/* HAVING conditional-expression */
 	List	   *windowClause;	/* window specification clauses */
 	List       *scatterClause;	/* GPDB: TableValueExpr data distribution */
@@ -2210,6 +2246,7 @@ typedef struct GrantStmt
 	/* privileges == NIL denotes ALL PRIVILEGES */
 	List	   *grantees;		/* list of RoleSpec nodes */
 	bool		grant_option;	/* grant or revoke grant option */
+	RoleSpec   *grantor;
 	DropBehavior behavior;		/* drop behavior (for REVOKE) */
 } GrantStmt;
 

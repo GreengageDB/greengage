@@ -29,9 +29,9 @@ CATALOG(pg_extprotocol,7175,ExtprotocolRelationId)
 {
 	Oid			oid;			/* oid */
 	NameData	ptcname;
-	Oid			ptcreadfn;
-	Oid			ptcwritefn;
-	Oid			ptcvalidatorfn;
+	Oid			ptcreadfn BKI_LOOKUP_OPT(pg_proc);
+	Oid			ptcwritefn BKI_LOOKUP_OPT(pg_proc);
+	Oid			ptcvalidatorfn BKI_LOOKUP_OPT(pg_proc);
 	Oid			ptcowner;
 	bool		ptctrusted;
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
@@ -39,10 +39,6 @@ CATALOG(pg_extprotocol,7175,ExtprotocolRelationId)
 #endif
 } FormData_pg_extprotocol;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(ptcreadfn REFERENCES pg_proc(oid));
-FOREIGN_KEY(ptcwritefn REFERENCES pg_proc(oid));
-FOREIGN_KEY(ptcvalidatorfn REFERENCES pg_proc(oid));
 
 /* ----------------
  *		Form_pg_extprotocol corresponds to a pointer to a tuple with
@@ -53,7 +49,7 @@ typedef FormData_pg_extprotocol *Form_pg_extprotocol;
 
 DECLARE_TOAST(pg_extprotocol, 7173, 7174);
 
-DECLARE_UNIQUE_INDEX(pg_extprotocol_oid_index, 7156, on pg_extprotocol using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_extprotocol_oid_index, 7156, on pg_extprotocol using btree(oid oid_ops));
 #define ExtprotocolOidIndexId	7156
 DECLARE_UNIQUE_INDEX(pg_extprotocol_ptcname_index, 7177, on pg_extprotocol using btree(ptcname name_ops));
 #define ExtprotocolPtcnameIndexId	7177

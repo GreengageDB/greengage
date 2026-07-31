@@ -61,15 +61,14 @@ typedef enum
 									 * postmaster.        */
 	CONNECTION_AUTH_OK,			/* Received authentication; waiting for
 								 * backend startup. */
-	CONNECTION_SETENV,			/* Negotiating environment. */
+	CONNECTION_SETENV,			/* This state is no longer used. */
 	CONNECTION_SSL_STARTUP,		/* Negotiating SSL. */
 	CONNECTION_NEEDED,			/* Internal state: connect() needed */
-	CONNECTION_CHECK_WRITABLE,	/* Check if we could make a writable
-								 * connection. */
-	CONNECTION_CONSUME,			/* Wait for any pending message and consume
-								 * them. */
+	CONNECTION_CHECK_WRITABLE,	/* Checking if session is read-write. */
+	CONNECTION_CONSUME,			/* Consuming any extra messages. */
 	CONNECTION_GSS_STARTUP,		/* Negotiating GSSAPI. */
-	CONNECTION_CHECK_TARGET		/* Check if we have a proper target connection */
+	CONNECTION_CHECK_TARGET,	/* Checking target server properties. */
+	CONNECTION_CHECK_STANDBY	/* Checking if server is in standby mode. */
 } ConnStatusType;
 
 typedef enum
@@ -98,7 +97,10 @@ typedef enum
 	PGRES_NONFATAL_ERROR,		/* notice or warning message */
 	PGRES_FATAL_ERROR,			/* query failed */
 	PGRES_COPY_BOTH,			/* Copy In/Out data transfer in progress */
-	PGRES_SINGLE_TUPLE			/* single tuple from larger resultset */
+	PGRES_SINGLE_TUPLE,			/* single tuple from larger resultset */
+	PGRES_PIPELINE_SYNC,		/* pipeline synchronization point */
+	PGRES_PIPELINE_ABORTED,		/* Command didn't run because of an abort
+								 * earlier in a pipeline */
 } ExecStatusType;
 
 typedef enum
@@ -146,6 +148,16 @@ typedef enum
 	 */
 	PQPING_MIRROR_READY = 64,	/* mirror completed startup sequence */
 } PGPing;
+
+/*
+ * PGpipelineStatus - Current status of pipeline mode
+ */
+typedef enum
+{
+	PQ_PIPELINE_OFF,
+	PQ_PIPELINE_ON,
+	PQ_PIPELINE_ABORTED
+} PGpipelineStatus;
 
 /* PGconn encapsulates a connection to the backend.
  * The contents of this struct are not supposed to be known to applications.
@@ -345,6 +357,7 @@ extern int	PQserverVersion(const PGconn *conn);
 extern char *PQerrorMessage(const PGconn *conn);
 extern int	PQsocket(const PGconn *conn);
 extern int	PQbackendPID(const PGconn *conn);
+extern PGpipelineStatus PQpipelineStatus(const PGconn *conn);
 extern int	PQconnectionNeedsPassword(const PGconn *conn);
 extern int	PQconnectionUsedPassword(const PGconn *conn);
 extern int	PQclientEncoding(const PGconn *conn);
@@ -451,6 +464,11 @@ extern PGresult *PQgetResult(PGconn *conn);
 /* Routines for managing an asynchronous query */
 extern int	PQisBusy(PGconn *conn);
 extern int	PQconsumeInput(PGconn *conn);
+
+/* Routines for pipeline mode management */
+extern int	PQenterPipelineMode(PGconn *conn);
+extern int	PQexitPipelineMode(PGconn *conn);
+extern int	PQpipelineSync(PGconn *conn);
 
 /* LISTEN/NOTIFY support */
 extern PGnotify *PQnotifies(PGconn *conn);
@@ -636,7 +654,7 @@ extern int	pg_valid_server_encoding_id(int encoding);
 
 /* === in fe-secure-openssl.c === */
 
-/* Support for overriding sslpassword handling with a callback. */
+/* Support for overriding sslpassword handling with a callback */
 typedef int (*PQsslKeyPassHook_OpenSSL_type) (char *buf, int size, PGconn *conn);
 extern PQsslKeyPassHook_OpenSSL_type PQgetSSLKeyPassHook_OpenSSL(void);
 extern void PQsetSSLKeyPassHook_OpenSSL(PQsslKeyPassHook_OpenSSL_type hook);

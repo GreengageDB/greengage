@@ -111,6 +111,7 @@
 #ssl_ca_file = ''
 #ssl_cert_file = 'server.crt'
 #ssl_crl_file = ''
+#ssl_crl_dir = ''
 #ssl_key_file = 'server.key'
 #ssl_ciphers = 'HIGH:MEDIUM:+3DES:!aNULL' # allowed SSL ciphers
 #ssl_prefer_server_ciphers = on
@@ -174,7 +175,7 @@ max_prepared_transactions = 250		# can be 0 or more
 
 #vacuum_cost_delay = 0			# 0-100 milliseconds (0 disables)
 #vacuum_cost_page_hit = 1		# 0-10000 credits
-#vacuum_cost_page_miss = 10		# 0-10000 credits
+#vacuum_cost_page_miss = 2		# 0-10000 credits
 #vacuum_cost_page_dirty = 20		# 0-10000 credits
 #vacuum_cost_limit = 200		# 1-10000 credits
 
@@ -209,7 +210,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #wal_sync_method = fsync		# the default is the first option
 					# supported by the operating system:
 					#   open_datasync
-					#   fdatasync (default on Linux)
+					#   fdatasync (default on Linux and FreeBSD)
 					#   fsync
 					#   fsync_writethrough
 					#   open_sync
@@ -371,6 +372,7 @@ max_prepared_transactions = 250		# can be 0 or more
 #enable_partitionwise_aggregate = off
 #enable_parallel_hash = on
 #enable_partition_pruning = on
+#enable_parallel_insert = on
 
 #gp_enable_multiphase_agg = on
 #gp_enable_preunique = on
@@ -588,6 +590,7 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #track_activities = on
 #track_counts = off
 #track_io_timing = off
+#track_wal_io_timing = off
 #track_functions = none			# none, pl, all
 #track_activity_query_size = 1024	# (change requires restart)
 #stats_temp_directory = 'pg_stat_tmp'
@@ -674,9 +677,6 @@ optimizer_analyze_root_partition = on # stats collection on root partitions
 #vacuum_freeze_table_age = 150000000
 #vacuum_multixact_freeze_min_age = 5000000
 #vacuum_multixact_freeze_table_age = 150000000
-#vacuum_cleanup_index_scale_factor = 0.1	# fraction of total number of tuples
-						# before index cleanup, 0 always performs
-						# index cleanup
 #bytea_output = 'hex'			# hex, escape
 #xmlbinary = 'base64'
 #xmloption = 'content'
@@ -803,6 +803,8 @@ gp_vmem_protect_limit = 8192  #Virtual memory limit (in MB).
 
 #exit_on_error = off			# terminate session on any error?
 #restart_after_crash = on		# reinitialize after backend crash?
+#remove_temp_files_after_crash = on	# remove temporary files after
+					# backend crash?
 #data_sync_retry = off			# retry or panic on failure to fsync
 					# data?
 					# (change requires restart)

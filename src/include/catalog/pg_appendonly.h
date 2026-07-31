@@ -26,7 +26,7 @@
  */
 CATALOG(pg_appendonly,6105,AppendOnlyRelationId)
 {
-	Oid				relid;				/* relation id */
+	Oid				relid BKI_LOOKUP(pg_class); /* relation id */
 	int32			blocksize;			/* the max block size of this relation */
 	int32			safefswritesize;	/* min write size in bytes to prevent torn-write */
 	int16			compresslevel;		/* the (per seg) total number of varblocks */
@@ -40,8 +40,6 @@ CATALOG(pg_appendonly,6105,AppendOnlyRelationId)
 	Oid             visimapidxid;		/* OID of aovisimap index */
 } FormData_pg_appendonly;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(relid REFERENCES pg_class(oid));
 
 /*
  * Size of fixed part of pg_appendonly tuples, not counting var-length fields
@@ -57,7 +55,7 @@ FOREIGN_KEY(relid REFERENCES pg_class(oid));
 */
 typedef FormData_pg_appendonly *Form_pg_appendonly;
 
-DECLARE_UNIQUE_INDEX(pg_appendonly_relid_index, 7141, on pg_appendonly using btree(relid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_appendonly_relid_index, 7141, on pg_appendonly using btree(relid oid_ops));
 #define AppendOnlyRelidIndexId  7141
 
 /*

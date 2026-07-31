@@ -163,6 +163,7 @@ CatalogIndexInsert(CatalogIndexState indstate, HeapTuple heapTuple)
 					 heapRelation,
 					 index->rd_index->indisunique ?
 					 UNIQUE_CHECK_YES : UNIQUE_CHECK_NO,
+					 false,
 					 indexInfo);
 	}
 
@@ -210,7 +211,6 @@ CatalogTupleCheckConstraints(Relation heapRel, HeapTuple tup)
  * CatalogTupleInsert - do heap and indexing work for a new catalog tuple
  *
  * Insert the tuple data in "tup" into the specified catalog relation.
- * The Oid of the inserted tuple is returned.
  *
  * This is a convenience routine for the common case of inserting a single
  * tuple in a system catalog; it inserts a new heap tuple, keeping indexes

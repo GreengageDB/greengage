@@ -138,6 +138,7 @@ extern int	recovery_min_apply_delay;
 extern char *PrimaryConnInfo;
 extern char *PrimarySlotName;
 extern bool wal_receiver_create_temp_slot;
+extern bool track_wal_io_timing;
 
 /* indirectly set via GUC system */
 extern TransactionId recoveryTargetXid;
@@ -180,6 +181,14 @@ typedef enum RecoveryState
 	RECOVERY_STATE_ARCHIVE,		/* archive recovery */
 	RECOVERY_STATE_DONE			/* currently in production */
 } RecoveryState;
+
+/* Recovery pause states */
+typedef enum RecoveryPauseState
+{
+	RECOVERY_NOT_PAUSED,		/* pause not requested */
+	RECOVERY_PAUSE_REQUESTED,	/* pause requested, but not yet paused */
+	RECOVERY_PAUSED				/* recovery is paused */
+} RecoveryPauseState;
 
 extern PGDLLIMPORT int wal_level;
 
@@ -318,7 +327,7 @@ extern void GetXLogReceiptTime(TimestampTz *rtime, bool *fromStream);
 extern XLogRecPtr GetXLogReplayRecPtr(TimeLineID *replayTLI);
 extern XLogRecPtr GetXLogInsertRecPtr(void);
 extern XLogRecPtr GetXLogWriteRecPtr(void);
-extern bool RecoveryIsPaused(void);
+extern RecoveryPauseState GetRecoveryPauseState(void);
 extern void SetRecoveryPause(bool recoveryPause);
 extern TimestampTz GetLatestXTime(void);
 extern TimestampTz GetCurrentChunkReplayStartTime(void);
@@ -384,8 +393,7 @@ typedef enum SessionBackupState
 
 extern XLogRecPtr do_pg_start_backup(const char *backupidstr, bool fast,
 									 TimeLineID *starttli_p, StringInfo labelfile,
-									 List **tablespaces, StringInfo tblspcmapfile,
-									 bool needtblspcmapfile);
+									 List **tablespaces, StringInfo tblspcmapfile);
 extern XLogRecPtr do_pg_stop_backup(char *labelfile, bool waitforarchive,
 									TimeLineID *stoptli_p);
 extern void do_pg_abort_backup(int code, Datum arg);

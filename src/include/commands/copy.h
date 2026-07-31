@@ -73,8 +73,7 @@ typedef enum
 typedef enum CopySrcDest
 {
 	COPY_FILE,					/* from file (or a piped program) */
-	COPY_OLD_FE,				/* from frontend (2.0 protocol) */
-	COPY_NEW_FE,				/* from frontend (3.0 protocol) */
+	COPY_FRONTEND,				/* from frontend */
 	COPY_CALLBACK				/* from callback function */
 } CopySrcDest;
 

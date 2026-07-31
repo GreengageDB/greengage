@@ -41,7 +41,7 @@ extern double expression_returns_set_rows(PlannerInfo *root, Node *clause);
 
 extern bool contain_subplans(Node *clause);
 
-extern char max_parallel_hazard(Query *parse);
+extern char max_parallel_hazard(Query *parse, PlannerGlobal *glob);
 extern bool is_parallel_safe(PlannerInfo *root, Node *node);
 extern bool contain_nonstrict_functions(Node *clause);
 extern bool contain_exec_param(Node *clause, List *param_ids);
@@ -57,7 +57,7 @@ extern char check_execute_on_functions(Node *clause);
 extern bool is_pseudo_constant_clause(Node *clause);
 extern bool is_pseudo_constant_clause_relids(Node *clause, Relids relids);
 
-extern int	NumRelids(Node *clause);
+extern int	NumRelids(PlannerInfo *root, Node *clause);
 
 extern void CommuteOpExpr(OpExpr *clause);
 
@@ -67,6 +67,7 @@ extern Expr *transform_array_Const_to_ArrayExpr(Const *c);
 
 extern Query *inline_set_returning_function(PlannerInfo *root,
 											RangeTblEntry *rte);
+extern bool is_parallel_allowed_for_modify(Query *parse);
 
 extern Expr *evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 			  Oid result_collation);

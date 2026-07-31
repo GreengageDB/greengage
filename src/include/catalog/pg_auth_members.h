@@ -29,15 +29,12 @@
  */
 CATALOG(pg_auth_members,1261,AuthMemRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(2843,AuthMemRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
-	Oid			roleid;			/* ID of a role */
-	Oid			member;			/* ID of a member of that role */
-	Oid			grantor;		/* who granted the membership */
+	Oid			roleid BKI_LOOKUP(pg_authid);	/* ID of a role */
+	Oid			member BKI_LOOKUP(pg_authid);	/* ID of a member of that role */
+	Oid			grantor BKI_LOOKUP(pg_authid);	/* who granted the membership */
 	bool		admin_option;	/* granted with admin option? */
 } FormData_pg_auth_members;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(roleid  REFERENCES pg_authid(oid));
-FOREIGN_KEY(member  REFERENCES pg_authid(oid));
 /*
  * NOTE: we don't mark grantor a foreign key since we don't actually
  * remove entries when a grantor is dropped. See DropRole().
@@ -50,7 +47,7 @@ FOREIGN_KEY(member  REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_auth_members *Form_pg_auth_members;
 
-DECLARE_UNIQUE_INDEX(pg_auth_members_role_member_index, 2694, on pg_auth_members using btree(roleid oid_ops, member oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_auth_members_role_member_index, 2694, on pg_auth_members using btree(roleid oid_ops, member oid_ops));
 #define AuthMemRoleMemIndexId	2694
 DECLARE_UNIQUE_INDEX(pg_auth_members_member_role_index, 2695, on pg_auth_members using btree(member oid_ops, roleid oid_ops));
 #define AuthMemMemRoleIndexId	2695

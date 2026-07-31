@@ -31,13 +31,11 @@
 CATALOG(pg_enum,3501,EnumRelationId)
 {
 	Oid			oid;			/* oid */
-	Oid			enumtypid;		/* OID of owning enum type */
+	Oid			enumtypid BKI_LOOKUP(pg_type);	/* OID of owning enum type */
 	float4		enumsortorder;	/* sort position of this enum value */
 	NameData	enumlabel;		/* text representation of enum value */
 } FormData_pg_enum;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(enumtypid REFERENCES pg_type(oid));
 
 /* ----------------
  *		Form_pg_enum corresponds to a pointer to a tuple with
@@ -46,7 +44,7 @@ FOREIGN_KEY(enumtypid REFERENCES pg_type(oid));
  */
 typedef FormData_pg_enum *Form_pg_enum;
 
-DECLARE_UNIQUE_INDEX(pg_enum_oid_index, 3502, on pg_enum using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_enum_oid_index, 3502, on pg_enum using btree(oid oid_ops));
 #define EnumOidIndexId	3502
 DECLARE_UNIQUE_INDEX(pg_enum_typid_label_index, 3503, on pg_enum using btree(enumtypid oid_ops, enumlabel name_ops));
 #define EnumTypIdLabelIndexId 3503

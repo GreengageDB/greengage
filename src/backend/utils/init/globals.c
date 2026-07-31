@@ -161,7 +161,7 @@ int			max_parallel_workers = 8;
 int			MaxBackends = 0;
 
 int			VacuumCostPageHit = 1;	/* GUC parameters for vacuum */
-int			VacuumCostPageMiss = 10;
+int			VacuumCostPageMiss = 2;
 int			VacuumCostPageDirty = 20;
 int			VacuumCostLimit = 200;
 double		VacuumCostDelay = 0;
@@ -172,8 +172,6 @@ int64		VacuumPageDirty = 0;
 
 int			VacuumCostBalance = 0;	/* working state for vacuum */
 bool		VacuumCostActive = false;
-
-double		vacuum_cleanup_index_scale_factor;
 
 /* for pljava */
 char*	pljava_vmoptions = NULL;

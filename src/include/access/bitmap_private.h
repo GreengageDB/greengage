@@ -252,6 +252,7 @@ extern void bmbuildempty(Relation index);
 extern bool bminsert(Relation rel, Datum *values, bool *isnull,
 					 ItemPointer ht_ctid, Relation heapRel,
 					 IndexUniqueCheck checkUnique,
+					 bool indexUnchanged,
 					 struct IndexInfo *indexInfo);
 extern IndexScanDesc bmbeginscan(Relation rel, int nkeys, int norderbys);
 extern bool bmgettuple(IndexScanDesc scan, ScanDirection dir);
@@ -289,7 +290,7 @@ extern void _bitmap_buildinsert(Relation rel, ItemPointerData ht_ctid,
 								Datum *attdata, bool *nulls,
 							 	BMBuildState *state);
 extern void _bitmap_doinsert(Relation rel, ItemPointerData ht_ctid, 
-							 Datum *attdata, bool *nulls);
+							 Datum *attdata, bool *nulls, bool indexUnchanged);
 extern void _bitmap_write_alltids(Relation rel, BMTidBuildBuf *tids,
 						  		  bool use_wal);
 
@@ -352,7 +353,8 @@ extern void _bitmap_open_lov_heapandindex(Relation rel, BMMetaPage metapage,
 						 Relation *lovHeapP, Relation *lovIndexP,
 						 LOCKMODE lockMode);
 extern void _bitmap_insert_lov(Relation lovHeap, Relation lovIndex,
-							   Datum *datum, bool *nulls, bool use_wal);
+							   Datum *datum, bool *nulls, bool use_wal,
+							   bool indexUnchanged);
 extern void _bitmap_close_lov_heapandindex(Relation lovHeap, 
 										Relation lovIndex, LOCKMODE lockMode);
 extern bool _bitmap_findvalue(Relation lovHeap, Relation lovIndex,

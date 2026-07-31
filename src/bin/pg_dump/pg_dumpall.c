@@ -30,7 +30,7 @@
 #include "pg_backup.h"
 
 /* version string we expect back from pg_dump */
-#define PGDUMP_VERSIONSTR "pg_dump (PostgreSQL) " PG_VERSION "\n"
+#define PGDUMP_VERSIONSTR "pg_dump (Greenplum Database) " PG_VERSION "\n"
 
 
 static void help(void);
@@ -200,7 +200,7 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_dumpall (PostgreSQL) " PG_VERSION);
+			puts("pg_dumpall (Greenplum Database) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}
@@ -2156,8 +2156,7 @@ connectDatabase(const char *dbname, const char *connection_string,
 	{
 		if (fail_on_error)
 		{
-			pg_log_error("could not connect to database \"%s\": %s",
-						 dbname, PQerrorMessage(conn));
+			pg_log_error("%s", PQerrorMessage(conn));
 			exit_nicely(1);
 		}
 		else

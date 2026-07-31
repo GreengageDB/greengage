@@ -36,16 +36,9 @@ CATALOG(pg_compression,7056,CompressionRelationId)
 	regproc		compcompressor BKI_LOOKUP(pg_proc);
 	regproc		compdecompressor BKI_LOOKUP(pg_proc);
 	regproc		compvalidator BKI_LOOKUP(pg_proc);
-	Oid			compowner BKI_DEFAULT(PGUID);
+	Oid			compowner BKI_DEFAULT(POSTGRES) BKI_LOOKUP(pg_authid);
 } FormData_pg_compression;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(compconstructor REFERENCES pg_proc(oid));
-FOREIGN_KEY(compdestructor REFERENCES pg_proc(oid));
-FOREIGN_KEY(compcompressor REFERENCES pg_proc(oid));
-FOREIGN_KEY(compdecompressor REFERENCES pg_proc(oid));
-FOREIGN_KEY(compvalidator REFERENCES pg_proc(oid));
-FOREIGN_KEY(compowner REFERENCES pg_authid(oid));
 
 /* ----------------
  *		Form_pg_compression corresponds to a pointer to a tuple with
@@ -54,7 +47,7 @@ FOREIGN_KEY(compowner REFERENCES pg_authid(oid));
  */
 typedef FormData_pg_compression *Form_pg_compression;
 
-DECLARE_UNIQUE_INDEX(pg_compression_compname_index, 7059, on pg_compression using btree(compname name_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_compression_compname_index, 7059, on pg_compression using btree(compname name_ops));
 #define CompressionCompnameIndexId	7059
 
 #define NUM_COMPRESS_FUNCS 5

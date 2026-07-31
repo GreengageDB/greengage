@@ -6,7 +6,7 @@ default: installcheck
 REGRESS =
 
 ifeq ($(enable_gpfdist),yes)
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 	REGRESS += gpfdist_ssl
 endif
 endif
@@ -19,7 +19,7 @@ pre_installcheck:
 	mkdir data
 	cp -rf ../regress/data/* data/
 ifeq ($(enable_gpfdist),yes)
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 	cp -rf $(MASTER_DATA_DIRECTORY)/gpfdists data/gpfdist_ssl/certs_matching
 	cp data/gpfdist_ssl/certs_matching/root.crt data/gpfdist_ssl/certs_not_matching
 	scp -r -P ${REMOTE_PORT} ./data/gpfdist_ssl  ${REMOTE_USER}@${REMOTE_HOST}:

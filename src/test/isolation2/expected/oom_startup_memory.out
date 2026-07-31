@@ -29,7 +29,7 @@
 1: select * from gp_dist_random('gp_id') t1 join gp_dist_random('gp_id') t2 using(gpname) join gp_dist_random('gp_id') t3 using(gpname) join gp_dist_random('gp_id') t4 using(gpname) ;
 ERROR:  failed to acquire resources on one or more segments
 DETAIL:  Per-query memory limit reached: current limit is 20480 kB, requested 12582912 bytes, has 0 MB available for this query
-DETAIL:  could not connect to host "HOST", port PORT: FATAL:  Out of memory
+DETAIL:  connection to server at "HOST", port PORT failed: FATAL:  Out of memory
  (seg0 127.0.1.1:7002)
 1q: ... <quitting>
 
@@ -101,5 +101,5 @@ SET
 8: set gp_vmem_idle_resource_timeout to '1h';
 ERROR:  failed to acquire resources on one or more segments
 DETAIL:  Vmem limit reached, failed to allocate 12582912 bytes from tracker, which has 0 MB available
-DETAIL:  could not connect to host "HOST", port PORT: FATAL:  Out of memory
+DETAIL:  connection to server at "HOST", port PORT failed: FATAL:  Out of memory
  (seg0 127.0.1.1:7002)

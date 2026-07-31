@@ -120,7 +120,7 @@ void
 cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 {
 	ListCell   *lc;
-	int			options = 0;
+	ClusterParams params = {0};
 	bool		verbose = false;
 
 	/* Parse option list */
@@ -138,7 +138,7 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 					 parser_errposition(pstate, opt->location)));
 	}
 
-	options = (verbose ? CLUOPT_VERBOSE : 0);
+	params.options = (verbose ? CLUOPT_VERBOSE : 0);
 
 	if (stmt->relation != NULL)
 	{
@@ -209,7 +209,7 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 		table_close(rel, NoLock);
 
 		/* Do the job. */
-		cluster_rel(tableOid, indexOid, options, true /* printError */);
+		cluster_rel(tableOid, indexOid, &params, true /* printError */);
 
 		if (Gp_role == GP_ROLE_DISPATCH)
 		{
@@ -262,14 +262,16 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
 		{
 			RelToCluster *rvtc = (RelToCluster *) lfirst(rv);
 			bool		dispatch;
+			ClusterParams cluster_params = params;
 
 			/* Start a new transaction for each relation. */
 			StartTransactionCommand();
 			/* functions in indexes may want a snapshot set */
 			PushActiveSnapshot(GetTransactionSnapshot());
 			/* Do the job. */
+			cluster_params.options |= CLUOPT_RECHECK;
 			dispatch = cluster_rel(rvtc->tableOid, rvtc->indexOid,
-								   options | CLUOPT_RECHECK,
+								   &cluster_params,
 								   false /* printError */);
 
 			if (Gp_role == GP_ROLE_DISPATCH && dispatch)
@@ -318,11 +320,11 @@ cluster(ParseState *pstate, ClusterStmt *stmt, bool isTopLevel)
  * functions prints out a warning message when the relation is an AO table.
  */
 bool
-cluster_rel(Oid tableOid, Oid indexOid, int options, bool printError)
+cluster_rel(Oid tableOid, Oid indexOid, ClusterParams *params, bool printError)
 {
 	Relation	OldHeap;
-	bool		verbose = ((options & CLUOPT_VERBOSE) != 0);
-	bool		recheck = ((options & CLUOPT_RECHECK) != 0);
+	bool		verbose = ((params->options & CLUOPT_VERBOSE) != 0);
+	bool		recheck = ((params->options & CLUOPT_RECHECK) != 0);
 
 	/* Check for user-requested abort. */
 	CHECK_FOR_INTERRUPTS();
@@ -1639,6 +1641,7 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 	ObjectAddress object;
 	Oid			mapped_tables[4];
 	int			reindex_flags;
+	ReindexParams reindex_params = {0};
 	int			i;
 
 	/* Report that we are now swapping relation files */
@@ -1700,7 +1703,7 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 	pgstat_progress_update_param(PROGRESS_CLUSTER_PHASE,
 								 PROGRESS_CLUSTER_PHASE_REBUILD_INDEX);
 
-	reindex_relation(OIDOldHeap, reindex_flags, 0);
+	reindex_relation(OIDOldHeap, reindex_flags, &reindex_params);
 
 	/* Report that we are now doing clean up */
 	pgstat_progress_update_param(PROGRESS_CLUSTER_PHASE,

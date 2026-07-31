@@ -13,7 +13,7 @@
 
 #include "postgres.h"
 
-#include "common/hex_decode.h"
+#include "common/hex.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
 #include "utils/builtins.h"
@@ -57,7 +57,7 @@ void
 endpoint_token_str2arr(const char *tokenStr, int8 *token)
 {
 	if (strlen(tokenStr) == ENDPOINT_TOKEN_STR_LEN)
-		hex_decode(tokenStr, ENDPOINT_TOKEN_STR_LEN, (char *) token);
+		pg_hex_decode(tokenStr, ENDPOINT_TOKEN_STR_LEN, (char *) token, ENDPOINT_TOKEN_ARR_LEN);
 	else
 		ereport(FATAL, (errcode(ERRCODE_INVALID_PASSWORD),
 				 errmsg("retrieve auth token is invalid")));
@@ -70,7 +70,7 @@ endpoint_token_str2arr(const char *tokenStr, int8 *token)
 void
 endpoint_token_arr2str(const int8 *token, char *tokenStr)
 {
-	hex_encode((const char *) token, ENDPOINT_TOKEN_ARR_LEN, tokenStr);
+	pg_hex_encode((const char *) token, ENDPOINT_TOKEN_ARR_LEN, tokenStr, ENDPOINT_TOKEN_STR_LEN);
 	tokenStr[ENDPOINT_TOKEN_STR_LEN] = 0;
 }
 

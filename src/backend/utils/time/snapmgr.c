@@ -1954,7 +1954,11 @@ TransactionIdLimitedForOldSnapshots(TransactionId recentXmin,
 	Assert(OldSnapshotThresholdActive());
 	Assert(limit_ts != NULL && limit_xid != NULL);
 
-	if (!RelationAllowsEarlyPruning(relation))
+	/*
+	 * TestForOldSnapshot() assumes early pruning advances the page LSN, so we
+	 * can't prune early when skipping WAL.
+	 */
+	if (!RelationAllowsEarlyPruning(relation) || !RelationNeedsWAL(relation))
 		return false;
 
 	ts = GetSnapshotCurrentTimestamp();

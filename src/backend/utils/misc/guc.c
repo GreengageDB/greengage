@@ -1144,7 +1144,7 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 	{
 		{"enable_partition_pruning", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Enables plan-time and run-time partition pruning."),
+			gettext_noop("Enables plan-time and execution-time partition pruning."),
 			gettext_noop("Allows the query planner and executor to compare partition "
 						 "bounds to conditions in the query to determine which "
 						 "partitions must be scanned."),
@@ -1165,6 +1165,16 @@ static struct config_bool ConfigureNamesBool[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"enable_parallel_insert", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Enables the planner's use of parallel plans for INSERT commands."),
+			NULL,
+			GUC_EXPLAIN
+		},
+		&enable_parallel_insert,
+		true,
+		NULL, NULL, NULL
+	},
 	{
 		/* Not for general use --- used by SET SESSION AUTHORIZATION */
 		{"is_superuser", PGC_INTERNAL, UNGROUPED,
@@ -1406,6 +1416,15 @@ static struct config_bool ConfigureNamesBool[] =
 		true,
 		NULL, NULL, NULL
 	},
+	{
+		{"remove_temp_files_after_crash", PGC_SIGHUP, ERROR_HANDLING_OPTIONS,
+			gettext_noop("Remove temporary files after backend crash."),
+			NULL
+		},
+		&remove_temp_files_after_crash,
+		true,
+		NULL, NULL, NULL
+	},
 
 	{
 		{"log_duration", PGC_SUSET, LOGGING_WHAT,
@@ -1527,6 +1546,15 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&track_io_timing,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"track_wal_io_timing", PGC_SUSET, STATS_COLLECTOR,
+			gettext_noop("Collects timing statistics for WAL I/O activity."),
+			NULL
+		},
+		&track_wal_io_timing,
 		false,
 		NULL, NULL, NULL
 	},
@@ -1664,7 +1692,8 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"default_transaction_read_only", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Sets the default read-only status of new transactions."),
-			NULL
+			NULL,
+			GUC_REPORT
 		},
 		&DefaultXactReadOnly,
 		false,
@@ -1987,7 +2016,7 @@ static struct config_bool ConfigureNamesBool[] =
 	{
 		{"parallel_leader_participation", PGC_USERSET, RESOURCES_ASYNCHRONOUS,
 			gettext_noop("Controls whether Gather and Gather Merge also run subplans."),
-			gettext_noop("Should gather nodes also run subplans, or just gather tuples?"),
+			gettext_noop("Should gather nodes also run subplans or just gather tuples?"),
 			GUC_EXPLAIN
 		},
 		&parallel_leader_participation,
@@ -2008,7 +2037,7 @@ static struct config_bool ConfigureNamesBool[] =
 
 	{
 		{"jit_debugging_support", PGC_SU_BACKEND, DEVELOPER_OPTIONS,
-			gettext_noop("Register JIT compiled function with debugger."),
+			gettext_noop("Register JIT-compiled functions with debugger."),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},
@@ -2047,7 +2076,7 @@ static struct config_bool ConfigureNamesBool[] =
 
 	{
 		{"jit_profiling_support", PGC_SU_BACKEND, DEVELOPER_OPTIONS,
-			gettext_noop("Register JIT compiled function with perf profiler."),
+			gettext_noop("Register JIT-compiled functions with perf profiler."),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},
@@ -2458,7 +2487,7 @@ static struct config_int ConfigureNamesInt[] =
 			NULL
 		},
 		&VacuumCostPageMiss,
-		10, 0, 10000,
+		2, 0, 10000,
 		NULL, NULL, NULL
 	},
 
@@ -2629,7 +2658,7 @@ static struct config_int ConfigureNamesInt[] =
 			NULL
 		},
 		&vacuum_defer_cleanup_age,
-		0, 0, 1000000,
+		0, 0, 1000000,		/* see ComputeXidHorizons */
 		NULL, NULL, NULL
 	},
 
@@ -3007,7 +3036,7 @@ static struct config_int ConfigureNamesInt[] =
 			PGC_USERSET,
 			RESOURCES_ASYNCHRONOUS,
 			gettext_noop("Number of simultaneous requests that can be handled efficiently by the disk subsystem."),
-			gettext_noop("For RAID arrays, this should be approximately the number of drive spindles in the array."),
+			NULL,
 			GUC_EXPLAIN
 		},
 		&effective_io_concurrency,
@@ -3613,7 +3642,7 @@ static struct config_real ConfigureNamesReal[] =
 
 	{
 		{"jit_optimize_above_cost", PGC_USERSET, QUERY_TUNING_COST,
-			gettext_noop("Optimize JITed functions if query is more expensive."),
+			gettext_noop("Optimize JIT-compiled functions if query is more expensive."),
 			gettext_noop("-1 disables optimization."),
 			GUC_EXPLAIN
 		},
@@ -3762,16 +3791,6 @@ static struct config_real ConfigureNamesReal[] =
 	},
 
 	{
-		{"vacuum_cleanup_index_scale_factor", PGC_USERSET, CLIENT_CONN_STATEMENT,
-			gettext_noop("Number of tuple inserts prior to index cleanup as a fraction of reltuples."),
-			NULL
-		},
-		&vacuum_cleanup_index_scale_factor,
-		0.1, 0.0, 1e10,
-		NULL, NULL, NULL
-	},
-
-	{
 		{"log_statement_sample_rate", PGC_SUSET, LOGGING_WHEN,
 			gettext_noop("Fraction of statements exceeding log_min_duration_sample to be logged."),
 			gettext_noop("Use a value between 0.0 (never log) and 1.0 (always log).")
@@ -3783,7 +3802,7 @@ static struct config_real ConfigureNamesReal[] =
 
 	{
 		{"log_transaction_sample_rate", PGC_SUSET, LOGGING_WHEN,
-			gettext_noop("Set the fraction of transactions to log for new transactions."),
+			gettext_noop("Sets the fraction of transactions to log for new transactions."),
 			gettext_noop("Logs all statements from a fraction of transactions. "
 						 "Use a value between 0.0 (never log) and 1.0 (log all "
 						 "statements for all transactions).")
@@ -4427,6 +4446,16 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
+		{"ssl_crl_dir", PGC_SIGHUP, CONN_AUTH_SSL,
+			gettext_noop("Location of the SSL certificate revocation list directory."),
+			NULL
+		},
+		&ssl_crl_dir,
+		"",
+		NULL, NULL, NULL
+	},
+
+	{
 		{"stats_temp_directory", PGC_SIGHUP, STATS_COLLECTOR,
 			gettext_noop("Writes temporary statistics files to the specified directory."),
 			NULL,
@@ -4787,7 +4816,7 @@ static struct config_enum ConfigureNamesEnum[] =
 
 	{
 		{"wal_level", PGC_POSTMASTER, WAL_SETTINGS,
-			gettext_noop("Set the level of information written to the WAL."),
+			gettext_noop("Sets the level of information written to the WAL."),
 			NULL
 		},
 		&wal_level,
@@ -6525,11 +6554,9 @@ BeginReportingGUCOptions(void)
 	gp_guc_list_init();
 
 	/*
-	 * Don't do anything unless talking to an interactive frontend of protocol
-	 * 3.0 or later.
+	 * Don't do anything unless talking to an interactive frontend.
 	 */
-	if (whereToSendOutput != DestRemote ||
-		PG_PROTOCOL_MAJOR(FrontendProtocol) < 3)
+	if (whereToSendOutput != DestRemote)
 		return;
 
 	reporting_enabled = true;
@@ -11174,6 +11201,8 @@ ProcessGUCArray(ArrayType *array,
 		char	   *s;
 		char	   *name;
 		char	   *value;
+		char	   *namecopy;
+		char	   *valuecopy;
 
 		d = array_ref(array, 1, &i,
 					  -1 /* varlenarray */ ,
@@ -11198,13 +11227,18 @@ ProcessGUCArray(ArrayType *array,
 			continue;
 		}
 
-		(void) set_config_option(name, value,
+		/* free malloc'd strings immediately to avoid leak upon error */
+		namecopy = pstrdup(name);
+		free(name);
+		valuecopy = pstrdup(value);
+		free(value);
+
+		(void) set_config_option(namecopy, valuecopy,
 								 context, source,
 								 action, true, 0, false);
 
-		free(name);
-		if (value)
-			free(value);
+		pfree(namecopy);
+		pfree(valuecopy);
 		pfree(s);
 	}
 }
@@ -11636,34 +11670,50 @@ static bool
 call_string_check_hook(struct config_string *conf, char **newval, void **extra,
 					   GucSource source, int elevel)
 {
+	volatile bool result = true;
+
 	/* Quick success if no hook */
 	if (!conf->check_hook)
 		return true;
 
-	/* Reset variables that might be set by hook */
-	GUC_check_errcode_value = ERRCODE_INVALID_PARAMETER_VALUE;
-	GUC_check_errmsg_string = NULL;
-	GUC_check_errdetail_string = NULL;
-	GUC_check_errhint_string = NULL;
-
-	if (!conf->check_hook(newval, extra, source))
+	/*
+	 * If elevel is ERROR, or if the check_hook itself throws an elog
+	 * (undesirable, but not always avoidable), make sure we don't leak the
+	 * already-malloc'd newval string.
+	 */
+	PG_TRY();
 	{
-		ereport(elevel,
-				(errcode(GUC_check_errcode_value),
-				 GUC_check_errmsg_string ?
-				 errmsg_internal("%s", GUC_check_errmsg_string) :
-				 errmsg("invalid value for parameter \"%s\": \"%s\"",
-						conf->gen.name, *newval ? *newval : ""),
-				 GUC_check_errdetail_string ?
-				 errdetail_internal("%s", GUC_check_errdetail_string) : 0,
-				 GUC_check_errhint_string ?
-				 errhint("%s", GUC_check_errhint_string) : 0));
-		/* Flush any strings created in ErrorContext */
-		FlushErrorState();
-		return false;
-	}
+		/* Reset variables that might be set by hook */
+		GUC_check_errcode_value = ERRCODE_INVALID_PARAMETER_VALUE;
+		GUC_check_errmsg_string = NULL;
+		GUC_check_errdetail_string = NULL;
+		GUC_check_errhint_string = NULL;
 
-	return true;
+		if (!conf->check_hook(newval, extra, source))
+		{
+			ereport(elevel,
+					(errcode(GUC_check_errcode_value),
+					 GUC_check_errmsg_string ?
+					 errmsg_internal("%s", GUC_check_errmsg_string) :
+					 errmsg("invalid value for parameter \"%s\": \"%s\"",
+							conf->gen.name, *newval ? *newval : ""),
+					 GUC_check_errdetail_string ?
+					 errdetail_internal("%s", GUC_check_errdetail_string) : 0,
+					 GUC_check_errhint_string ?
+					 errhint("%s", GUC_check_errhint_string) : 0));
+			/* Flush any strings created in ErrorContext */
+			FlushErrorState();
+			result = false;
+		}
+	}
+	PG_CATCH();
+	{
+		free(*newval);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return result;
 }
 
 static bool

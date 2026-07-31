@@ -457,8 +457,8 @@ SELECT * from
 -- reads it, and that leftover text becomes visible here. The socket
 -- path is environment-dependent, so mask it out.
 -- start_matchsubs
--- m/could not connect to socket "[^"]*": /
--- s/could not connect to socket "[^"]*": /could not connect to socket "SOCKET": /
+-- m/connection to server on socket "[^"]*" failed:/
+-- s/connection to server on socket "[^"]*" failed:/connection to server on socket "SOCKET" failed:/
 -- end_matchsubs
 SELECT dblink_cancel_query('dtest1');
 SELECT dblink_error_message('dtest1');

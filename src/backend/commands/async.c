@@ -490,7 +490,12 @@ asyncQueuePageDiff(int p, int q)
 	return diff;
 }
 
-/* Is p < q, accounting for wraparound? */
+/*
+ * Is p < q, accounting for wraparound?
+ *
+ * Since asyncQueueIsFull() blocks creation of a page that could precede any
+ * extant page, we need not assess entries within a page.
+ */
 static bool
 asyncQueuePagePrecedes(int p, int q)
 {
@@ -1352,8 +1357,8 @@ asyncQueueIsFull(void)
 	 * logically precedes the current global tail pointer, ie, the head
 	 * pointer would wrap around compared to the tail.  We cannot create such
 	 * a head page for fear of confusing slru.c.  For safety we round the tail
-	 * pointer back to a segment boundary (compare the truncation logic in
-	 * asyncQueueAdvanceTail).
+	 * pointer back to a segment boundary (truncation logic in
+	 * asyncQueueAdvanceTail does not do this, so doing it here is optional).
 	 *
 	 * Note that this test is *not* dependent on how much space there is on
 	 * the current head page.  This is necessary because asyncQueueAddEntries
@@ -2312,8 +2317,7 @@ NotifyMyFrontEnd(const char *channel, const char *payload, int32 srcPid)
 		pq_beginmessage(&buf, 'A');
 		pq_sendint32(&buf, srcPid);
 		pq_sendstring(&buf, channel);
-		if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-			pq_sendstring(&buf, payload);
+		pq_sendstring(&buf, payload);
 		pq_endmessage(&buf);
 
 		/*

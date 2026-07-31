@@ -110,7 +110,7 @@ get_opts(int argc, char **argv, struct options *my_opts)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("oid2name (PostgreSQL) " PG_VERSION);
+			puts("oid2name (Greenplum Database) " PG_VERSION);
 			exit(0);
 		}
 	}
@@ -347,8 +347,7 @@ sql_conn(struct options *my_opts)
 	/* check to see that the backend connection was successfully made */
 	if (PQstatus(conn) == CONNECTION_BAD)
 	{
-		pg_log_error("could not connect to database %s: %s",
-					 my_opts->dbname, PQerrorMessage(conn));
+		pg_log_error("%s", PQerrorMessage(conn));
 		PQfinish(conn);
 		exit(1);
 	}

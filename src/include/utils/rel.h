@@ -319,6 +319,8 @@ typedef struct StdRdOptions
 	int			compresslevel;  /* compression level (AO rels only) */
 	char		compresstype[NAMEDATALEN]; /* compression type (AO rels only) */
 	bool		checksum;		/* checksum (AO rels only) */
+	bool		parallel_insert_enabled;	/* enables planner's use of
+											 * parallel insert */
 } StdRdOptions;
 
 #define HEAP_MIN_FILLFACTOR			10
@@ -438,6 +440,20 @@ typedef struct ViewOptions
 	 (relation)->rd_options &&												\
 	 ((ViewOptions *) (relation)->rd_options)->check_option ==				\
 	  VIEW_OPTION_CHECK_OPTION_CASCADED)
+
+/*
+ * RelationGetParallelInsert
+ *		Returns the relation's parallel_insert_enabled reloption setting.
+ *		Note multiple eval of argument!
+ *
+ * GPDB: partitioned tables use the same StdRdOptions layout as regular
+ * heap tables (see partitioned_table_reloptions()), not a dedicated
+ * struct, so no relkind-based branch is needed here.
+ */
+#define RelationGetParallelInsert(relation, defaultpd) 						\
+	((relation)->rd_options ?												\
+	 ((StdRdOptions *) (relation)->rd_options)->parallel_insert_enabled :		\
+	 (defaultpd))
 
 /*
  * RelationIsValid

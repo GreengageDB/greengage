@@ -15,7 +15,7 @@ OPENSSL_MINOR_VERSION := $(shell echo '$(OPENSSL_VERSION)' | cut -d' ' -f2 | cut
 OPENSSL_FIX_VERSION := $(shell echo '$(OPENSSL_VERSION)' | cut -d' ' -f2 | cut -d. -f3 | sed 's/[^0-9]*//g')
 
 ifeq ($(enable_gpfdist),yes)
-ifeq ($(with_openssl),yes)	
+ifeq ($(with_ssl),openssl)
     ifeq (1,$(shell [ $(OPENSSL_MAJOR_VERSION) -gt 1 ] || ( [ $(OPENSSL_MAJOR_VERSION) -eq 1 ] && [ $(OPENSSL_MINOR_VERSION) -ge 1 ] && [ $(OPENSSL_FIX_VERSION) -ge 1 ] ) && echo 1 ))
         REGRESS += gpfdist_ssl gpfdists_multiCA
     else
@@ -33,7 +33,7 @@ REGRESS_OPTS = --init-file=init_file
 
 installcheck: watchdog ipv4v6_ports
 ifeq ($(enable_gpfdist),yes)
-ifeq ($(with_openssl),yes)
+ifeq ($(with_ssl),openssl)
 	rm -rf data/gpfdist_ssl/certs_server_no_verify
 	mkdir data/gpfdist_ssl/certs_server_no_verify
 	rm -rf data/gpfdist_ssl/certs_matching

@@ -16,8 +16,8 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- # host ..., port ...:" even when the failure is a FATAL from the server
 -- # during startup. The host/ip/port are environment-dependent, so mask
 -- # them out.
--- m/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/
--- s/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/could not connect to host "HOST", port PORT:/
+-- m/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/
+-- s/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/connection to server at "HOST", port PORT failed:/
 -- end_matchsubs
 -- skip FTS probes always
 select gp_inject_fault_infinite('fts_probe', 'skip', 1);
@@ -452,7 +452,7 @@ select cleanupAllGangs();
 select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
 where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
 ERROR:  failed to acquire resources on one or more segments
-DETAIL:  could not connect to host "HOST", port PORT: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'
+DETAIL:  connection to server at "HOST", port PORT failed: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'
  (seg0 127.0.0.1:40000)
 -- expect no resuable gang exist
 select * from hasGangsExist();
@@ -499,7 +499,7 @@ select cleanupAllGangs();
 select * from dispatch_test_t1, dispatch_test_t2, dispatch_test_t3
 where dispatch_test_t1.c2 = dispatch_test_t2.c2 and dispatch_test_t2.c3 = dispatch_test_t3.c3;
 ERROR:  failed to acquire resources on one or more segments
-DETAIL:  could not connect to host "HOST", port PORT: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'
+DETAIL:  connection to server at "HOST", port PORT failed: FATAL:  fault triggered, fault name:'send_qe_details_init_backend' fault type:'error'
  (seg0 127.0.0.1:40000)
 -- expect resuable gang exist
 select * from hasGangsExist();

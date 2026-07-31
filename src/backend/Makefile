@@ -202,7 +202,6 @@ distprep:
 	$(MAKE) -C utils	distprep
 	$(MAKE) -C utils/adt	jsonpath_gram.c jsonpath_scan.c
 	$(MAKE) -C utils/misc	guc-file.c
-	$(MAKE) -C utils/sort	qsort_tuple.c
 
 
 ##########################################################################
@@ -328,8 +327,7 @@ maintainer-clean: distclean
 	      storage/lmgr/lwlocknames.h \
 	      utils/adt/jsonpath_gram.c \
 	      utils/adt/jsonpath_scan.c \
-	      utils/misc/guc-file.c \
-	      utils/sort/qsort_tuple.c
+	      utils/misc/guc-file.c
 
 
 ##########################################################################

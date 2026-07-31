@@ -657,7 +657,7 @@ scalarineqsel(PlannerInfo *root, Oid operator, bool isgt, bool iseq,
 
 			/*
 			 * The calculation so far gave us a selectivity for the "<=" case.
-			 * We'll have one less tuple for "<" and one additional tuple for
+			 * We'll have one fewer tuple for "<" and one additional tuple for
 			 * ">=", the latter of which we'll reverse the selectivity for
 			 * below, so we can simply subtract one tuple for both cases.  The
 			 * cases that need this adjustment can be identified by iseq being
@@ -2239,7 +2239,7 @@ rowcomparesel(PlannerInfo *root,
 		/*
 		 * Otherwise, it's a join if there's more than one relation used.
 		 */
-		is_join_clause = (NumRelids((Node *) opargs) > 1);
+		is_join_clause = (NumRelids(root, (Node *) opargs) > 1);
 	}
 
 	if (is_join_clause)
@@ -4937,7 +4937,7 @@ examine_variable(PlannerInfo *root, Node *node, int varRelid,
 	 * membership.  Note that when varRelid isn't zero, only vars of that
 	 * relation are considered "real" vars.
 	 */
-	varnos = pull_varnos(basenode);
+	varnos = pull_varnos(root, basenode);
 
 	onerel = NULL;
 

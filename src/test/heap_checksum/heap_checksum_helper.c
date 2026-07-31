@@ -3,6 +3,7 @@
 #include "nodes/pg_list.h"
 #include "storage/buf_internals.h"
 #include "storage/bufmgr.h"
+#include "storage/smgr.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -16,15 +17,17 @@ invalidate_buffers(PG_FUNCTION_ARGS)
 {
 	BlockNumber	block = 0;
 	ForkNumber	fork = MAIN_FORKNUM;
-	RelFileNodeBackend  rnodebackend;
+	RelFileNode	rnode;
+	SMgrRelation smgr_reln;
 
-	rnodebackend.node.spcNode = PG_GETARG_OID(0);
-	rnodebackend.node.dbNode  = PG_GETARG_OID(1);
-	rnodebackend.node.relNode = PG_GETARG_OID(2);
+	rnode.spcNode = PG_GETARG_OID(0);
+	rnode.dbNode  = PG_GETARG_OID(1);
+	rnode.relNode = PG_GETARG_OID(2);
 
-	rnodebackend.backend = InvalidBackendId; /* not temporary/local */
+	/* not temporary/local */
+	smgr_reln = smgropen(rnode, InvalidBackendId, SMGR_MD);
 
-	DropRelFileNodeBuffers(rnodebackend, &fork, 1, &block);
+	DropRelFileNodeBuffers(smgr_reln, &fork, 1, &block);
 
 	PG_RETURN_BOOL(true);
 }

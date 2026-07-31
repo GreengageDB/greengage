@@ -37,7 +37,7 @@
  */
 CATALOG(pg_auth_time_constraint,6070,AuthTimeConstraintRelationId) BKI_SHARED_RELATION BKI_ROWTYPE_OID(6071,AuthTimeConstraint_Rowtype_Id) BKI_SCHEMA_MACRO
 {
-	Oid		authid;		/* foreign key to pg_authid.oid, */
+	Oid		authid BKI_LOOKUP(pg_authid);	/* foreign key to pg_authid.oid, */
 	int16	start_day;	/* [0,6] denoting start of interval */
 	time	start_time;	/* optional time denoting start of interval */
 	int16	end_day;	/* [0,6] denoting end of interval */
@@ -45,8 +45,6 @@ CATALOG(pg_auth_time_constraint,6070,AuthTimeConstraintRelationId) BKI_SHARED_RE
 } FormData_pg_auth_time_constraint;
 
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(authid REFERENCES pg_authid(oid));
 
 #undef time
 

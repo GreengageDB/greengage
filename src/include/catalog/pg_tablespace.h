@@ -30,15 +30,17 @@ CATALOG(pg_tablespace,1213,TableSpaceRelationId) BKI_SHARED_RELATION
 {
 	Oid			oid;			/* oid */
 	NameData	spcname;		/* tablespace name */
-	Oid			spcowner;		/* owner of tablespace */
+
+	/* owner of tablespace */
+	Oid			spcowner BKI_DEFAULT(POSTGRES) BKI_LOOKUP(pg_authid);
+
+
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	aclitem		spcacl[1];		/* access permissions */
 	text		spcoptions[1];	/* per-tablespace options */
 #endif
 } FormData_pg_tablespace;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(spcowner REFERENCES pg_authid(oid));
 
 /* ----------------
  *		Form_pg_tablespace corresponds to a pointer to a tuple with
@@ -51,7 +53,7 @@ DECLARE_TOAST(pg_tablespace, 4185, 4186);
 #define PgTablespaceToastTable 4185
 #define PgTablespaceToastIndex 4186
 
-DECLARE_UNIQUE_INDEX(pg_tablespace_oid_index, 2697, on pg_tablespace using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_tablespace_oid_index, 2697, on pg_tablespace using btree(oid oid_ops));
 #define TablespaceOidIndexId  2697
 DECLARE_UNIQUE_INDEX(pg_tablespace_spcname_index, 2698, on pg_tablespace using btree(spcname name_ops));
 #define TablespaceNameIndexId  2698

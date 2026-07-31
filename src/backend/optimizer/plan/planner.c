@@ -420,6 +420,7 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	glob->resultRelations = NIL;
 	glob->appendRelations = NIL;
 	glob->relationOids = NIL;
+	glob->partitionOids = NIL;
 	glob->invalItems = NIL;
 	glob->paramExecTypes = NIL;
 	glob->lastPHId = 0;
@@ -447,16 +448,16 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	/*
 	 * Assess whether it's feasible to use parallel mode for this query. We
 	 * can't do this in a standalone backend, or if the command will try to
-	 * modify any data, or if this is a cursor operation, or if GUCs are set
-	 * to values that don't permit parallelism, or if parallel-unsafe
-	 * functions are present in the query tree.
+	 * modify any data (except for Insert), or if this is a cursor operation,
+	 * or if GUCs are set to values that don't permit parallelism, or if
+	 * parallel-unsafe functions are present in the query tree.
 	 *
-	 * (Note that we do allow CREATE TABLE AS, SELECT INTO, and CREATE
-	 * MATERIALIZED VIEW to use parallel plans, but as of now, only the leader
-	 * backend writes into a completely new table.  In the future, we can
-	 * extend it to allow workers to write into the table.  However, to allow
-	 * parallel updates and deletes, we have to solve other problems,
-	 * especially around combo CIDs.)
+	 * (Note that we do allow CREATE TABLE AS, INSERT INTO...SELECT, SELECT
+	 * INTO, and CREATE MATERIALIZED VIEW to use parallel plans. However, as
+	 * of now, only the leader backend writes into a completely new table. In
+	 * the future, we can extend it to allow workers to write into the table.
+	 * However, to allow parallel updates and deletes, we have to solve other
+	 * problems, especially around combo CIDs.)
 	 *
 	 * For now, we don't try to use parallel mode if we're running inside a
 	 * parallel worker.  We might eventually be able to relax this
@@ -468,13 +469,14 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 #if 0
 	if ((cursorOptions & CURSOR_OPT_PARALLEL_OK) != 0 &&
 		IsUnderPostmaster &&
-		parse->commandType == CMD_SELECT &&
+		(parse->commandType == CMD_SELECT ||
+		 is_parallel_allowed_for_modify(parse)) &&
 		!parse->hasModifyingCTE &&
 		max_parallel_workers_per_gather > 0 &&
 		!IsParallelWorker())
 	{
 		/* all the cheap tests pass, so scan the query tree */
-		glob->maxParallelHazard = max_parallel_hazard(parse);
+		glob->maxParallelHazard = max_parallel_hazard(parse, glob);
 		glob->parallelModeOK = (glob->maxParallelHazard != PROPARALLEL_UNSAFE);
 	}
 	else
@@ -738,6 +740,19 @@ standard_planner(Query *parse, const char *query_string, int cursorOptions,
 	result->rewindPlanIDs = glob->rewindPlanIDs;
 	result->rowMarks = glob->finalrowmarks;
 	result->relationOids = glob->relationOids;
+
+	/*
+	 * Register the Oids of parallel-safety-checked partitions as plan
+	 * dependencies. This is only really needed in the case of a parallel plan
+	 * so that if parallel-unsafe properties are subsequently defined on the
+	 * partitions, the cached parallel plan will be invalidated, and a
+	 * non-parallel plan will be generated.
+	 *
+	 * We also use this list to acquire locks on partitions before executing
+	 * cached plan. See AcquireExecutorLocks().
+	 */
+	if (glob->partitionOids != NIL && glob->parallelModeNeeded)
+		result->partitionOids = glob->partitionOids;
 	result->invalItems = glob->invalItems;
 	result->paramExecTypes = glob->paramExecTypes;
 	/* utilityStmt should be null, but we might as well copy it */
@@ -2079,7 +2094,7 @@ inheritance_planner(PlannerInfo *root)
 		/* Make a dummy path, cf set_dummy_rel_pathlist() */
 		dummy_path = (Path *) create_append_path(NULL, final_rel, NIL, NIL,
 												 NIL, NULL, 0, false,
-												 NIL, -1);
+												 -1);
 
 		/* These lists must be nonempty to make a valid ModifyTable node */
 		subpaths = list_make1(dummy_path);
@@ -3056,7 +3071,7 @@ preprocess_grouping_sets(PlannerInfo *root)
 	ListCell   *lc_set;
 	grouping_sets_data *gd = palloc0(sizeof(grouping_sets_data));
 
-	parse->groupingSets = expand_grouping_sets(parse->groupingSets, -1);
+	parse->groupingSets = expand_grouping_sets(parse->groupingSets, parse->groupDistinct, -1);
 
 	gd->any_hashable = false;
 	gd->unhashable_refs = NULL;
@@ -3755,6 +3770,12 @@ remove_useless_groupby_columns(PlannerInfo *root)
 		/* Only plain relations could have primary-key constraints */
 		if (rte->rtekind != RTE_RELATION)
 			continue;
+
+		/* Ignore the primary key in catalog tables accessed with gp_dist_random */
+		if (rte->forceDistRandom)
+		{
+			continue;
+		}
 
 		/*
 		 * We must skip inheritance parent tables as some of the child rels
@@ -4652,7 +4673,6 @@ create_degenerate_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 							   NULL,
 							   0,
 							   false,
-							   NIL,
 							   -1);
 	}
 	else
@@ -8320,14 +8340,14 @@ create_partial_grouping_paths(PlannerInfo *root,
  * Generate Gather and Gather Merge paths for a grouping relation or partial
  * grouping relation.
  *
- * generate_gather_paths does most of the work, but we also consider a special
- * case: we could try sorting the data by the group_pathkeys and then applying
- * Gather Merge.
+ * generate_useful_gather_paths does most of the work, but we also consider a
+ * special case: we could try sorting the data by the group_pathkeys and then
+ * applying Gather Merge.
  *
  * NB: This function shouldn't be used for anything other than a grouped or
  * partially grouped relation not only because of the fact that it explicitly
  * references group_pathkeys but we pass "true" as the third argument to
- * generate_gather_paths().
+ * generate_useful_gather_paths().
  */
 static void
 gather_grouping_paths(PlannerInfo *root, RelOptInfo *rel)
@@ -8487,10 +8507,11 @@ apply_scanjoin_target_to_paths(PlannerInfo *root,
 	 * variations.  So we drop old paths and thereby force the work to be done
 	 * below the Append, except in the case of a non-parallel-safe target.
 	 *
-	 * Some care is needed, because we have to allow generate_gather_paths to
-	 * see the old partial paths in the next stanza.  Hence, zap the main
-	 * pathlist here, then allow generate_gather_paths to add path(s) to the
-	 * main list, and finally zap the partial pathlist.
+	 * Some care is needed, because we have to allow
+	 * generate_useful_gather_paths to see the old partial paths in the next
+	 * stanza.  Hence, zap the main pathlist here, then allow
+	 * generate_useful_gather_paths to add path(s) to the main list, and
+	 * finally zap the partial pathlist.
 	 *
 	 * GPDB: We cannot do that if this is a correlated subquery, and we need
 	 * to evaluate the correlation qual on top of the Append.

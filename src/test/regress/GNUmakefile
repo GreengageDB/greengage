@@ -183,10 +183,10 @@ query_info_hook_test:
 
 REGRESS_OPTS = --dlpath=. --max-concurrent-tests=20 --init-file=$(srcdir)/init_file $(EXTRA_REGRESS_OPTS)
 
-check: all tablespace-setup
+check: all
 	$(pg_regress_check) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(MAXCONNOPT) $(EXTRA_TESTS)
 
-check-tests: all tablespace-setup | temp-install
+check-tests: all | temp-install
 	$(pg_regress_check) $(REGRESS_OPTS) $(MAXCONNOPT) $(TESTS) $(EXTRA_TESTS)
 
 #installcheck: all tablespace-setup
@@ -199,10 +199,10 @@ installcheck-small: all tablespace-setup
 installcheck-good: all tablespace-setup twophase_pqexecparams hooktest query_info_hook_test
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule --schedule=$(srcdir)/greenplum_schedule $(EXTRA_TESTS)
 
-installcheck-parallel: all tablespace-setup
+installcheck-parallel: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(MAXCONNOPT) $(EXTRA_TESTS)
 
-installcheck-tests: all tablespace-setup
+installcheck-tests: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) $(TESTS) $(EXTRA_TESTS)
 
 ifeq ($(BUILD_TYPE),prod)
@@ -226,10 +226,10 @@ runcheck: check
 runtest: installcheck
 runtest-parallel: installcheck-parallel
 
-bigtest: all tablespace-setup
+bigtest: all
 	$(pg_regress_installcheck) $(REGRESS_OPTS) --schedule=$(srcdir)/serial_schedule numeric_big
 
-bigcheck: all tablespace-setup | temp-install
+bigcheck: all | temp-install
 	$(pg_regress_check) $(REGRESS_OPTS) --schedule=$(srcdir)/parallel_schedule $(MAXCONNOPT) numeric_big
 
 ##

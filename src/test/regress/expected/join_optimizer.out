@@ -5262,6 +5262,60 @@ where ss.stringu2 !~* ss.case1;
 (1 row)
 
 rollback;
+-- test case to expose miscomputation of required relid set for a PHV
+set enable_hashjoin = off;
+explain (verbose, costs off)
+select i8.*, ss.v, t.unique2
+  from int8_tbl i8
+    left join int4_tbl i4 on i4.f1 = 1
+    left join lateral (select i4.f1 + 1 as v) as ss on true
+    left join tenk1 t on t.unique2 = ss.v
+where q2 = 456;
+                                QUERY PLAN                                 
+---------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: i8.q1, i8.q2, ((i4.f1 + 1)), t.unique2
+   ->  Nested Loop Left Join
+         Output: i8.q1, i8.q2, ((i4.f1 + 1)), t.unique2
+         Join Filter: (t.unique2 = ((i4.f1 + 1)))
+         ->  Redistribute Motion 3:3  (slice2; segments: 3)
+               Output: i8.q1, i8.q2, ((i4.f1 + 1))
+               Hash Key: ((i4.f1 + 1))
+               ->  Nested Loop Left Join
+                     Output: i8.q1, i8.q2, (i4.f1 + 1)
+                     ->  Seq Scan on public.int8_tbl i8
+                           Output: i8.q1, i8.q2
+                           Filter: (i8.q2 = 456)
+                     ->  Materialize
+                           Output: i4.f1
+                           ->  Broadcast Motion 1:3  (slice3; segments: 1)
+                                 Output: i4.f1
+                                 ->  Seq Scan on public.int4_tbl i4
+                                       Output: i4.f1
+                                       Filter: (i4.f1 = 1)
+         ->  Materialize
+               Output: t.unique2
+               ->  Redistribute Motion 3:3  (slice4; segments: 3)
+                     Output: t.unique2
+                     Hash Key: t.unique2
+                     ->  Seq Scan on public.tenk1 t
+                           Output: t.unique2
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashjoin = 'off'
+(29 rows)
+
+select i8.*, ss.v, t.unique2
+  from int8_tbl i8
+    left join int4_tbl i4 on i4.f1 = 1
+    left join lateral (select i4.f1 + 1 as v) as ss on true
+    left join tenk1 t on t.unique2 = ss.v
+where q2 = 456;
+ q1  | q2  | v | unique2 
+-----+-----+---+---------
+ 123 | 456 |   |        
+(1 row)
+
+reset enable_hashjoin;
 -- bug #8444: we've historically allowed duplicate aliases within aliased JOINs
 select * from
   int8_tbl x join (int4_tbl x cross join int4_tbl y) j on q1 = f1; -- error
