@@ -408,6 +408,15 @@ main() {
 		${NEW_BINDIR}/pg_dumpall ${DUMP_OPTS} -f "$temp_root/dump1.sql"
 		echo done
 	fi
+
+	# Capture the old cluster's locale while it is still running so the new
+	# cluster below can be created with a matching one; otherwise pg_upgrade
+	# aborts with "lc_collate values for database ... do not match". The
+	# ambient environment is not a reliable source (in CI it is C while the
+	# old cluster is en_US.utf8).
+	OLD_LOCALE=$(${OLD_BINDIR}/psql -AtF'|' \
+		-c "SELECT datcollate, datctype FROM pg_database WHERE datname = 'postgres'" \
+		postgres 2>/dev/null)
 	
 	${OLD_BINDIR}/gpstop -a
 	
@@ -429,11 +438,16 @@ main() {
 	export COORDINATOR_DATADIR=${temp_root}
 	cp ${OLD_DATADIR}/../lalshell .
 	
-	# Note: do not force a locale (the upstream script pinned LANG=en_US.utf8
-	# here): the new cluster must be created with the same locale as the old
-	# one, or pg_upgrade aborts with "lc_collate values for database ... do
-	# not match".  Inheriting the environment guarantees that, since the old
-	# cluster was created in this same environment.
+	# Create the new cluster with the same locale as the old one (captured
+	# above), or pg_upgrade aborts on an lc_collate/lc_ctype mismatch. The
+	# ambient environment is not reliable (in CI it is C while the old
+	# cluster is en_US.utf8).
+	if [ -n "${OLD_LOCALE}" ]; then
+		unset LC_ALL
+		export LC_COLLATE="${OLD_LOCALE%%|*}"
+		export LC_CTYPE="${OLD_LOCALE##*|}"
+		export LANG="${OLD_LOCALE%%|*}"
+	fi
 	BLDWRAP_POSTGRES_CONF_ADDONS=fsync=off ${temp_root}/../../../../gpAux/gpdemo/demo_cluster.sh ${DEMOCLUSTER_OPTS}
 
 	export COORDINATOR_DATA_DIRECTORY="${NEW_DATADIR}/qddir/demoDataDir-1"
