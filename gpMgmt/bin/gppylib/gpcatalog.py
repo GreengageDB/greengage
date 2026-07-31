@@ -34,6 +34,12 @@ COORDINATOR_ONLY_TABLES = [
     'pg_statistic_ext',
     'pg_statistic_ext_data',
     'gp_partition_template',
+    # CREATE EVENT TRIGGER is not dispatched to the segments (see
+    # standard_ProcessUtility's T_CreateEventTrigStmt case), so pg_event_trigger
+    # -- and the pg_depend rows whose classid is pg_event_trigger -- exist only
+    # on the coordinator.  Marking it coordinator-only lets the missing/extraneous
+    # cross-consistency check and the pg_depend spurious-row filter skip it.
+    'pg_event_trigger',
     ]
 
 # Hard coded tables that have different values on every segment
@@ -66,7 +72,12 @@ DEPENDENCY_EXCLUSION = [
     'pg_resourcetype',
     'pg_resqueue',
     'pg_resqueuecapability',
-    'pg_tablespace'
+    'pg_tablespace',
+    # A transform gained an 'oid' column visibility here too; when its type and
+    # from/to-SQL functions are all pinned built-ins, CREATE TRANSFORM records no
+    # pg_depend row at all, so the "missing object dependencies" check would
+    # falsely flag it -- same class as pg_auth_members above.
+    'pg_transform'
     ]
 
 # ============================================================================
