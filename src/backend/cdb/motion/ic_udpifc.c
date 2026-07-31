@@ -664,13 +664,13 @@ typedef struct ICTrace
 static ICTrace* ic_trace;
 static uint32 ic_trace_idx = 0;
 
-#define IC_TRACE(o,b,now) do { \
+#define IC_TRACE(o,b,now,r) do { \
 	ICTrace *t = &ic_trace[ic_trace_idx++ % IC_TRACE_MAX_SIZE]; \
 	t->timestamp = (now); \
 	t->operation = (o); \
 	t->buf = (b); \
 	t->numOutStanding = unack_queue_ring.numOutStanding; \
-	t->route = t->buf->conn? t->buf->conn->route : -1; \
+	t->route = (r); \
 	t->seq = t->buf->pkt->seq; \
 } while(0)
 
@@ -739,7 +739,7 @@ static inline ICBuffer *icBufferListDelete(ICBufferList *list, ICBuffer *buf);
 static inline ICBuffer *icBufferListPop(ICBufferList *list);
 static void icBufferListFree(ICBufferList *list);
 static inline ICBuffer *icBufferListAppend(ICBufferList *list, ICBuffer *buf);
-static void icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now);
+static void icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now, uint16 route);
 
 static ChunkTransportState *SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable);
 static inline TupleChunkListItem RecvTupleChunkFromAnyUDPIFC_Internal(ChunkTransportState *transportStates,
@@ -2629,7 +2629,7 @@ icBufferListAppend(ICBufferList *list, ICBuffer *buf)
  *
  */
 static void
-icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now)
+icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now, uint16 route)
 {
 #ifdef USE_ASSERT_CHECKING
 	icBufferListCheck("icBufferListReturn", list);
@@ -2639,7 +2639,7 @@ icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now)
 	while ((buf = icBufferListPop(list)) != NULL)
 	{
 		if (isUnackQueue)
-			IC_TRACE(IC_OP_UNACK_QUEUE_DELETE, buf, now);
+			IC_TRACE(IC_OP_UNACK_QUEUE_DELETE, buf, now, route);
 
 		if (isUnackQueue && Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
 		{
@@ -2648,11 +2648,11 @@ icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now)
 			unack_queue_ring.numOutStanding--;
 			if (icBufferListLength(list) >= 1)
 				unack_queue_ring.numSharedOutStanding--;
-			IC_TRACE(IC_OP_RING_DELETE, buf, now);
+			IC_TRACE(IC_OP_RING_DELETE, buf, now, route);
 		}
 
 		icBufferListAppend(&snd_buffer_pool.freeList, buf);
-		IC_TRACE(IC_OP_FREELIST_APPEND, buf, now);
+		IC_TRACE(IC_OP_FREELIST_APPEND, buf, now, route);
 	}
 }
 
@@ -2769,7 +2769,7 @@ getSndBuffer(MotionConn *conn, uint64 now)
 	if (icBufferListLength(&snd_buffer_pool.freeList) > 0)
 	{
 		ret = icBufferListPop(&snd_buffer_pool.freeList);
-		IC_TRACE(IC_OP_FREELIST_DELETE, ret, now);
+		IC_TRACE(IC_OP_FREELIST_DELETE, ret, now, conn->route);
 		return ret;
 	}
 	else
@@ -3671,8 +3671,8 @@ TeardownUDPIFCInterconnect_Internal(ChunkTransportState *transportStates,
 					computeNetworkStatistics(conn->rtt, &minRtt, &maxRtt, &avgRtt);
 					computeNetworkStatistics(conn->dev, &minDev, &maxDev, &avgDev);
 
-					icBufferListReturn(&conn->sndQueue, false, now);
-					icBufferListReturn(&conn->unackQueue, true, now);
+					icBufferListReturn(&conn->sndQueue, false, now, conn->route);
+					icBufferListReturn(&conn->unackQueue, true, now, conn->route);
 
 					connDelHash(&ic_control_info.connHtab, conn);
 				}
@@ -4377,7 +4377,7 @@ handleAckedPacket(MotionConn *ackConn, ICBuffer *buf, uint64 now)
 	bool		bufIsHead = (&buf->primary == icBufferListFirst(&ackConn->unackQueue));
 
 	buf = icBufferListDelete(&ackConn->unackQueue, buf);
-	IC_TRACE(IC_OP_UNACK_QUEUE_DELETE, buf, now);
+	IC_TRACE(IC_OP_UNACK_QUEUE_DELETE, buf, now, ackConn->route);
 
 	if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
 	{
@@ -4385,7 +4385,7 @@ handleAckedPacket(MotionConn *ackConn, ICBuffer *buf, uint64 now)
 		unack_queue_ring.numOutStanding--;
 		if (icBufferListLength(&ackConn->unackQueue) >= 1)
 			unack_queue_ring.numSharedOutStanding--;
-		IC_TRACE(IC_OP_RING_DELETE, buf, now);
+		IC_TRACE(IC_OP_RING_DELETE, buf, now, ackConn->route);
 
 		ackTime = now - buf->sentTime;
 
@@ -4437,7 +4437,7 @@ handleAckedPacket(MotionConn *ackConn, ICBuffer *buf, uint64 now)
 		ackConn->state = mcsStarted;
 
 	icBufferListAppend(&snd_buffer_pool.freeList, buf);
-	IC_TRACE(IC_OP_FREELIST_APPEND, buf, now);
+	IC_TRACE(IC_OP_FREELIST_APPEND, buf, now, ackConn->route);
 
 #ifdef AMS_VERBOSE_LOGGING
 	write_log("REMOVEPKT %d from unack queue for route %d (retry %d) sndbufmaxcount %d sndbufcount %d sndbuffreelistlen %d, sntSeq %d consumedSeq %d recvAckSeq %d capacity %d, sndQ %d, unackQ %d", buf->pkt->seq, ackConn->route, buf->nRetry, snd_buffer_pool.maxCount, snd_buffer_pool.count, icBufferListLength(&snd_buffer_pool.freeList), buf->conn->sentSeq, buf->conn->consumedSeq, buf->conn->receivedAckSeq, buf->conn->capacity, icBufferListLength(&buf->conn->sndQueue), icBufferListLength(&buf->conn->unackQueue));
@@ -4879,8 +4879,8 @@ handleStopMsgs(ChunkTransportState *transportStates, ChunkTransportStateEntry *p
 			icBufferListAppend(&conn->sndQueue, conn->curBuff);
 
 			/* return all buffers */
-			icBufferListReturn(&conn->sndQueue, false, now);
-			icBufferListReturn(&conn->unackQueue, true, now);
+			icBufferListReturn(&conn->sndQueue, false, now, conn->route);
+			icBufferListReturn(&conn->unackQueue, true, now, conn->route);
 
 			conn->tupleCount = 0;
 			conn->msgSize = sizeof(conn->conn_info);
@@ -4955,7 +4955,7 @@ sendBuffers(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEnt
 		conn->capacity--;
 
 		icBufferListAppend(&conn->unackQueue, buf);
-		IC_TRACE(IC_OP_UNACK_QUEUE_APPEND, buf, now);
+		IC_TRACE(IC_OP_UNACK_QUEUE_APPEND, buf, now, conn->route);
 
 		if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
 		{
@@ -5140,7 +5140,7 @@ handleAckForDisorderPkt(ChunkTransportState *transportStates,
 			if (Gp_interconnect_fc_method == INTERCONNECT_FC_METHOD_LOSS)
 			{
 				buf = icBufferListDelete(&unack_queue_ring.slots[buf->unackQueueRingSlot], buf);
-				IC_TRACE(IC_OP_RING_DELETE, buf, now);
+				IC_TRACE(IC_OP_RING_DELETE, buf, now, conn->route);
 				putIntoUnackQueueRing(&unack_queue_ring, buf,
 									  computeExpirationPeriod(buf->conn, buf->nRetry), now);
 			}
@@ -5339,7 +5339,7 @@ checkExpiration(ChunkTransportState *transportStates,
 
 		while ((curBuf = icBufferListPop(&unack_queue_ring.slots[unack_queue_ring.idx])) != NULL)
 		{
-			IC_TRACE(IC_OP_RING_DELETE, curBuf, now);
+			IC_TRACE(IC_OP_RING_DELETE, curBuf, now, curBuf->conn->route);
 			curBuf->nRetry++;
 			putIntoUnackQueueRing(
 								  &unack_queue_ring,
@@ -6097,7 +6097,7 @@ putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64
 
 	buf->unackQueueRingSlot = idx;
 	icBufferListAppend(&unack_queue_ring.slots[idx], buf);
-	IC_TRACE(IC_OP_RING_INSERT, buf, now);
+	IC_TRACE(IC_OP_RING_INSERT, buf, now, buf->conn->route);
 }
 
 /*
