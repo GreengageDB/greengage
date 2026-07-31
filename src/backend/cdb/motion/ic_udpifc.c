@@ -739,7 +739,7 @@ static inline ICBuffer *icBufferListDelete(ICBufferList *list, ICBuffer *buf);
 static inline ICBuffer *icBufferListPop(ICBufferList *list);
 static void icBufferListFree(ICBufferList *list);
 static inline ICBuffer *icBufferListAppend(ICBufferList *list, ICBuffer *buf);
-static void icBufferListReturn(ICBufferList *list, bool isUnackQueue);
+static void icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now);
 
 static ChunkTransportState *SetupUDPIFCInterconnect_Internal(SliceTable *sliceTable);
 static inline TupleChunkListItem RecvTupleChunkFromAnyUDPIFC_Internal(ChunkTransportState *transportStates,
@@ -792,7 +792,7 @@ static void sendBuffers(ChunkTransportState *transportStates, ChunkTransportStat
 static void sendOnce(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEntry, ICBuffer *buf, MotionConn *conn);
 static inline uint64 computeExpirationPeriod(MotionConn *conn, uint32 retry);
 
-static ICBuffer *getSndBuffer(MotionConn *conn);
+static ICBuffer *getSndBuffer(MotionConn *conn, uint64 now);
 static void initSndBufferPool();
 
 static void putIntoUnackQueueRing(UnackQueueRing *uqr, ICBuffer *buf, uint64 expTime, uint64 now);
@@ -2629,13 +2629,12 @@ icBufferListAppend(ICBufferList *list, ICBuffer *buf)
  *
  */
 static void
-icBufferListReturn(ICBufferList *list, bool isUnackQueue)
+icBufferListReturn(ICBufferList *list, bool isUnackQueue, uint64 now)
 {
 #ifdef USE_ASSERT_CHECKING
 	icBufferListCheck("icBufferListReturn", list);
 #endif
 	ICBuffer   *buf = NULL;
-	uint64		now = getCurrentTime();
 
 	while ((buf = icBufferListPop(list)) != NULL)
 	{
@@ -2752,7 +2751,7 @@ cleanSndBufferPool(SendBufferPool *p)
  * 	Return NULL when no free buffer available.
  */
 static ICBuffer *
-getSndBuffer(MotionConn *conn)
+getSndBuffer(MotionConn *conn, uint64 now)
 {
 	ICBuffer   *ret = NULL;
 
@@ -2770,7 +2769,7 @@ getSndBuffer(MotionConn *conn)
 	if (icBufferListLength(&snd_buffer_pool.freeList) > 0)
 	{
 		ret = icBufferListPop(&snd_buffer_pool.freeList);
-		IC_TRACE(IC_OP_FREELIST_DELETE, ret, getCurrentTime());
+		IC_TRACE(IC_OP_FREELIST_DELETE, ret, now);
 		return ret;
 	}
 	else
@@ -2826,6 +2825,7 @@ startOutgoingUDPConnections(ChunkTransportState *transportStates,
 	Slice	   *recvSlice;
 	CdbProcess *cdbProc;
 	int			i;
+	uint64		now = getCurrentTime();
 
 	*pOutgoingCount = 0;
 
@@ -2863,7 +2863,7 @@ startOutgoingUDPConnections(ChunkTransportState *transportStates,
 			/* send buffer pool must be initialized before this. */
 			snd_buffer_pool.maxCount += Gp_interconnect_snd_queue_depth;
 			snd_control_info.cwnd += 1;
-			conn->curBuff = getSndBuffer(conn);
+			conn->curBuff = getSndBuffer(conn, now);
 
 			/* should have at least one buffer for each connection */
 			Assert(conn->curBuff != NULL);
@@ -3660,6 +3660,7 @@ TeardownUDPIFCInterconnect_Internal(ChunkTransportState *transportStates,
 			/* connection array allocation may fail in interconnect setup. */
 			if (pEntry->conns)
 			{
+				uint64		now = getCurrentTime();
 				for (i = 0; i < pEntry->numConns; i++)
 				{
 					conn = pEntry->conns + i;
@@ -3670,8 +3671,8 @@ TeardownUDPIFCInterconnect_Internal(ChunkTransportState *transportStates,
 					computeNetworkStatistics(conn->rtt, &minRtt, &maxRtt, &avgRtt);
 					computeNetworkStatistics(conn->dev, &minDev, &maxDev, &avgDev);
 
-					icBufferListReturn(&conn->sndQueue, false);
-					icBufferListReturn(&conn->unackQueue, true);
+					icBufferListReturn(&conn->sndQueue, false, now);
+					icBufferListReturn(&conn->unackQueue, true, now);
 
 					connDelHash(&ic_control_info.connHtab, conn);
 				}
@@ -4830,6 +4831,7 @@ static void
 handleStopMsgs(ChunkTransportState *transportStates, ChunkTransportStateEntry *pEntry, int16 motionId)
 {
 	int			i = 0;
+	uint64		now = getCurrentTime();
 
 #ifdef AMS_VERBOSE_LOGGING
 	elog(DEBUG3, "handleStopMsgs: node %d", motionId);
@@ -4877,8 +4879,8 @@ handleStopMsgs(ChunkTransportState *transportStates, ChunkTransportStateEntry *p
 			icBufferListAppend(&conn->sndQueue, conn->curBuff);
 
 			/* return all buffers */
-			icBufferListReturn(&conn->sndQueue, false);
-			icBufferListReturn(&conn->unackQueue, true);
+			icBufferListReturn(&conn->sndQueue, false, now);
+			icBufferListReturn(&conn->unackQueue, true, now);
 
 			conn->tupleCount = 0;
 			conn->msgSize = sizeof(conn->conn_info);
@@ -5677,7 +5679,7 @@ SendChunkUDPIFC(ChunkTransportState *transportStates,
 	ic_control_info.lastPacketSendTime = 0;
 	conn->deadlockCheckBeginTime = now;
 
-	while (doCheckExpiration || (conn->curBuff = getSndBuffer(conn)) == NULL)
+	while (doCheckExpiration || (conn->curBuff = getSndBuffer(conn, now)) == NULL)
 	{
 		int			timeout = (doCheckExpiration ? 0 : computeTimeout(conn, retry));
 
