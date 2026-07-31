@@ -3986,9 +3986,18 @@ RelationSetNewRelfilenumber(Relation relation, char persistence)
 												   NULL, persistence);
 	}
 	else
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("unexpected request for new relfilenumber in binary upgrade mode")));
+	{
+		/*
+		 * Other relkinds -- notably the append-optimized auxiliary tables
+		 * (aoseg / aovisimap / aoblkdir), but also sequences, toast tables and
+		 * matviews -- have no binary-upgrade relfilenumber override in GPDB
+		 * either, so allocate a fresh relfilenumber instead of erroring.  This
+		 * is reached, for example, by pg_upgrade's "Restoring append-only
+		 * auxiliary tables" step.
+		 */
+		newrelfilenumber = GetNewRelFileNumber(relation->rd_rel->reltablespace,
+											   NULL, persistence);
+	}
 
 	/*
 	 * Get a writable copy of the pg_class tuple for the given relation.
