@@ -643,6 +643,13 @@ set_locale_and_encoding(void)
 	/* escape literals with respect to new cluster */
 	conn_new_template1 = connectToServer(&new_cluster, "template1");
 
+	/*
+	 * GPDB doesn't allow hacking the catalogs without setting
+	 * allow_system_table_mods first.
+	 */
+	PQclear(executeQueryOrDie(conn_new_template1,
+							  "set allow_system_table_mods=true"));
+
 	datcollate_literal = PQescapeLiteral(conn_new_template1,
 										 locale->db_collate,
 										 strlen(locale->db_collate));
