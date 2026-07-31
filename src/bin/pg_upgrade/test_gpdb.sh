@@ -272,15 +272,25 @@ diff_and_exit() {
 	COORDINATOR_DATA_DIRECTORY=""; unset COORDINATOR_DATA_DIRECTORY
 	PGPORT=""; unset PGPORT
 	
+	# PG18's pg_dump brackets each dump with "\restrict <token>" / "\unrestrict
+	# <token>" psql meta-commands whose token is randomly generated on every
+	# pg_dump invocation (a psql meta-command injection guard).  dump1 and dump2
+	# therefore always differ on those lines even when the databases are
+	# identical, so strip the random token before comparing.
+	sed -E 's/^\\(restrict|unrestrict) [A-Za-z0-9]+$/\\\1/' \
+		"$temp_root/dump1.sql" > "$temp_root/dump1.cmp.sql"
+	sed -E 's/^\\(restrict|unrestrict) [A-Za-z0-9]+$/\\\1/' \
+		"$temp_root/dump2.sql" > "$temp_root/dump2.cmp.sql"
+
 	# Since we've used the same pg_dumpall binary to create both dumps, whitespace
 	# shouldn't be a cause of difference in the files but it is. Partitioning info
 	# is generated via backend functionality in the cluster being dumped, and not
 	# in pg_dump, so whitespace changes can trip up the diff.
 	# FIXME: Maybe we should not use '-w' in the future since it is too aggressive.
-	if ! diff -w "$temp_root/dump1.sql" "$temp_root/dump2.sql" >/dev/null; then
+	if ! diff -w "$temp_root/dump1.cmp.sql" "$temp_root/dump2.cmp.sql" >/dev/null; then
 		# To aid debugging in pipelines, print the diff to stdout. Ignore
 		# whitespace, as above, to avoid misdirecting the troubleshooter.
-		diff -wdu "$temp_root/dump1.sql" "$temp_root/dump2.sql" | tee regression.diffs
+		diff -wdu "$temp_root/dump1.cmp.sql" "$temp_root/dump2.cmp.sql" | tee regression.diffs
 		echo "Error: before and after dumps differ"
 		exit 1
 	fi
