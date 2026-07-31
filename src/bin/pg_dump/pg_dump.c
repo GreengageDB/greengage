@@ -21098,20 +21098,26 @@ dumpSequence(Archive *fout, const TableInfo *tbinfo)
 						  fmtQualifiedDumpable(tbinfo));
 
 		/*
-		 * Emit persistence option only if it's different from the owning
-		 * table's.  This avoids using this new syntax unnecessarily.
+		 * GPDB does not support unlogged sequences, so an identity sequence is
+		 * always logged and we must never emit UNLOGGED (the backend would
+		 * reject it with "unlogged sequences are not supported").  Force LOGGED
+		 * only when the owning table is UNLOGGED, so the sequence does not
+		 * inherit the table's UNLOGGED persistence; for a permanent table the
+		 * sequence correctly inherits permanent persistence, so emit nothing
+		 * (this also normalizes an anomalous unlogged sequence on a permanent
+		 * table back to logged).
 		 */
-		if (tbinfo->relpersistence != owning_tab->relpersistence)
-			appendPQExpBuffer(query, "    %s\n",
-							  tbinfo->relpersistence == RELPERSISTENCE_UNLOGGED ?
-							  "UNLOGGED" : "LOGGED");
+		if (owning_tab->relpersistence == RELPERSISTENCE_UNLOGGED)
+			appendPQExpBufferStr(query, "    LOGGED\n");
 	}
 	else
 	{
+		/*
+		 * GPDB does not support unlogged sequences, so never emit UNLOGGED
+		 * here (normalize any anomalous unlogged sequence back to logged).
+		 */
 		appendPQExpBuffer(query,
-						  "CREATE %sSEQUENCE %s\n",
-						  tbinfo->relpersistence == RELPERSISTENCE_UNLOGGED ?
-						  "UNLOGGED " : "",
+						  "CREATE SEQUENCE %s\n",
 						  fmtQualifiedDumpable(tbinfo));
 
 		if (seq->seqtype != SEQTYPE_BIGINT)
