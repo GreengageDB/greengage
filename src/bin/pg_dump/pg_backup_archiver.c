@@ -3958,8 +3958,20 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, const char *pfx)
 	_becomeOwner(AH, te);
 	_selectOutputSchema(AH, te->namespace);
 	_selectTablespace(AH, te->tablespace);
-	if (te->relkind != RELKIND_PARTITIONED_TABLE)
-		_selectTableAccessMethod(AH, te->tableam);
+
+	/*
+	 * GPDB: unlike upstream, emit SET default_table_access_method before the
+	 * CREATE for partitioned tables as well, not only for tables with storage.
+	 * GPDB keeps AM-specific storage options (checksum, compresslevel,
+	 * compresstype, ...) in the partitioned root's reloptions, and those are
+	 * validated against the table's access method at CREATE time.  The upstream
+	 * approach of setting a partitioned table's AM with a post-CREATE ALTER
+	 * (_printTableAccessMethodNoStorage, below) is too late: the
+	 * "CREATE TABLE ... WITH (...)" would fail with 'unrecognized parameter
+	 * "checksum"' because the root is still heap.  The post-CREATE ALTER still
+	 * runs and is a harmless no-op once the AM already matches.
+	 */
+	_selectTableAccessMethod(AH, te->tableam);
 
 	/* Emit header comment for item */
 	if (!AH->noTocComments)
