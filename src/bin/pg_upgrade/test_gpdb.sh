@@ -175,6 +175,17 @@ upgrade_qd()
 	time ${NEW_BINDIR}/pg_upgrade --mode=dispatcher --progress --old-bindir=${OLD_BINDIR} --old-datadir=$2 --new-bindir=${NEW_BINDIR} --new-datadir=$3 ${PGUPGRADE_OPTS}
 	if (( $? )) ; then
 		echo "ERROR: Failure encountered in upgrading qd node"
+		# pg_upgrade writes the per-database schema-restore diagnostics only to
+		# pg_upgrade_dump_<oid>.log under the new datadir, never to stdout, so a
+		# CI failure otherwise gives no clue about the offending statement.  Dump
+		# the tail of any restore log that recorded an error.
+		for _uplog in "$3"/pg_upgrade_output.d/*/log/pg_upgrade_dump_*.log; do
+			[ -f "$_uplog" ] || continue
+			if grep -qiE "error:|ERROR:|FATAL:" "$_uplog"; then
+				echo "===== ${_uplog} ====="
+				tail -n 50 "$_uplog"
+			fi
+		done
 		exit 1
 	fi
 	popd
