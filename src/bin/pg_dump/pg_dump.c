@@ -2198,6 +2198,28 @@ selectDumpableNamespace(NamespaceInfo *nsinfo, Archive *fout)
 		nsinfo->dobj.dump_contains = DUMP_COMPONENT_ALL;
 
 		/*
+		 * GPDB: unlike upstream, in a binary upgrade we must recreate the
+		 * public schema so that its OID is preserved -- but only when it is not
+		 * the standard initdb schema, i.e. it was dropped and recreated in the
+		 * old cluster and so has a non-default OID.  GPDB's OID preassignment is
+		 * namespace-keyed (see GetPreassignedOid()); a recreated public would
+		 * otherwise restore into the new cluster's default public (a different
+		 * OID), the OID preassignments for the types and relations it contains
+		 * would not match, and the restore would abort creating a fresh pg_type
+		 * OID during binary upgrade (assert in GetNewOidWithIndex()).  Force the
+		 * definition to be dumped; dumpNamespace() ->
+		 * binary_upgrade_set_namespace_oid() emits the DROP-and-recreate that
+		 * carries the preserved OID.  We deliberately leave the standard public
+		 * (OID PG_PUBLIC_NAMESPACE) alone so its initdb-defined ACL is unchanged.
+		 */
+		if (dopt->binary_upgrade &&
+			nsinfo->dobj.catId.oid != PG_PUBLIC_NAMESPACE)
+		{
+			nsinfo->create = true;
+			nsinfo->dobj.dump |= DUMP_COMPONENT_DEFINITION;
+		}
+
+		/*
 		 * Also, make like it has a comment even if it doesn't; this is so
 		 * that we'll emit a command to drop the comment, if appropriate.
 		 * (Without this, we'd not call dumpCommentExtended for it.)
