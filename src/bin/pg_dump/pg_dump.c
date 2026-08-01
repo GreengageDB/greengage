@@ -11083,10 +11083,19 @@ determineNotNullFlags(Archive *fout, PGresult *res, int r,
 			 * In binary upgrade of inheritance child tables, must have a
 			 * constraint name that we can UPDATE later; same if there's a
 			 * comment on the constraint.
+			 *
+			 * GPDB: also emit the name for a *local* not-null constraint (drop
+			 * the !notnull_islocal requirement) on any non-partition table.
+			 * GPDB's legacy partitioning can leave a partitioned root whose
+			 * default-named local not-null constraint collides, during the
+			 * binary-upgrade restore, with an inherited not-null of a partition
+			 * that was swapped in via EXCHANGE PARTITION (and thus carries a
+			 * different parent's constraint name).  Emitting the root's name
+			 * explicitly preserves it instead of letting the restore regenerate
+			 * it and pick a "<name>1" collision suffix.
 			 */
 			if ((dopt->binary_upgrade &&
-				 !tbinfo->ispartition &&
-				 !tbinfo->notnull_islocal[j]) ||
+				 !tbinfo->ispartition) ||
 				!PQgetisnull(res, r, i_notnull_comment))
 			{
 				tbinfo->notnull_constrs[j] =
