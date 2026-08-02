@@ -86,35 +86,40 @@ static char *
 makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 {
 	CreatedName key;
-	char *arr, *modifiedTypeName;
-	int underscores = 0;
+	char *arr, *new_arr;
+	int iteration = 0;
 
-	modifiedTypeName = palloc(NAMEDATALEN);
-	arr = makeArrayTypeName(typeName, typeNamespace);
-	MemSet(&key, 0, sizeof(CreatedName));
-	key.schema_oid = typeNamespace;
-	strlcpy(key.name, arr, NAMEDATALEN);
-	while (created_names && hash_search(created_names, &key, HASH_FIND, NULL))
+	/* Make sure that the initial name is allocated by us */
+	arr = palloc(NAMEDATALEN);
+	strlcpy(arr, typeName, NAMEDATALEN);
+
+	while (true)
 	{
-		underscores++;
-		/* 
-		 * We tried to create new name NAMEDATALEN times,
-		 * effectivly meaning that it is impossible to create one.
-		 */
-		if (underscores >= NAMEDATALEN)
-			ereport(ERROR,
-				   (errcode(ERRCODE_DUPLICATE_OBJECT),
-					errmsg("could not form array type name for type \"%s\"",
-							typeName)));
-		MemSet(modifiedTypeName, '_', underscores);
-		strlcpy(modifiedTypeName + underscores, typeName, NAMEDATALEN - underscores);
+		new_arr = makeArrayTypeName(arr, typeNamespace);
 		pfree(arr);
-		arr = makeArrayTypeName(modifiedTypeName, typeNamespace);
+		arr = new_arr;
+
 		MemSet(&key, 0, sizeof(CreatedName));
 		key.schema_oid = typeNamespace;
 		strlcpy(key.name, arr, NAMEDATALEN);
+		if (!hash_search(created_names, &key, HASH_FIND, NULL))
+			break;
+
+		if (iteration >= NAMEDATALEN)
+		{
+			/*
+			 * If we end up with a name that consists entirely of underscores
+			 * ((NAMEDATALEN - 1) underscores, and one character for a null terminator),
+			 * and it is not present in the catalog, makeArrayTypeName will return
+			 * this name over and over again, leaving us stack in an infinite loop.
+			 *
+			 * In such case, abort when we know that we've seen every possible name.
+			 */
+			break;
+		}
+
+		iteration += 1;
 	}
-	pfree(modifiedTypeName);
 
 	return arr;
 }
@@ -161,10 +166,7 @@ binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 		 * happed regardless of what we are doing here, so let's
 		 * not complicate the logic.
 		 */
-		char new_typname[NAMEDATALEN];
-		strlcpy(new_typname, typname, NAMEDATALEN);
-
-		moved_array_typname = makeArrayTypeNameUpgrade(new_typname, typnamespaceoid);
+		moved_array_typname = makeArrayTypeNameUpgrade(typname, typnamespaceoid);
 		RememberCreatedName(moved_array_typname, typnamespaceoid);
 	}
 
