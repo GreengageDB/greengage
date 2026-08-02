@@ -2239,6 +2239,14 @@ copyLocalSnapshot(Snapshot snapshot)
 	snapshot->curcid = SharedLocalSnapshotSlot->snapshot.curcid;
 	snapshot->subxcnt = -1;
 
+	/*
+	 * We just overwrote the snapshot contents in place, so the reuse token no
+	 * longer describes them. Invalidate it, exactly like the in-place fillers
+	 * in snapmgr.c (SetTransactionSnapshot(), CopySnapshot(),
+	 * RestoreSnapshot()) do.
+	 */
+	snapshot->snapXactCompletionCount = 0;
+
 	if (TransactionIdPrecedes(snapshot->xmin, TransactionXmin))
 		TransactionXmin = snapshot->xmin;
 
@@ -2883,22 +2891,85 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 */
 	LWLockAcquire(ProcArrayLock, LW_SHARED);
 
-#ifdef FAULT_INJECTOR
-	if (!IS_QUERY_DISPATCHER() && snapshot->haveDistribSnapshot &&
-		FaultInjector_InjectFaultIfSet("distributed_snapshot_skip_data_reuse",
-										DDLNotSpecified,
-										MyProcPort ? MyProcPort->database_name: "",
-										"") == FaultInjectorTypeSkip)
+	/*
+	 * GP: Snapshot reuse is deliberately never attempted on the coordinator
+	 * while it is running distributed transactions.  A coordinator snapshot
+	 * also carries the distributed snapshot built by
+	 * CreateDistributedSnapshot() further below, and its contents depend on
+	 * the lifecycle of distributed transactions, which xactCompletionCount
+	 * does not track: a read-only distributed transaction begins and ends
+	 * without ever assigning a local xid, so the counter would be unchanged
+	 * and GetSnapshotDataReuse() would hand back a stale list of in-progress
+	 * gxids.
+	 *
+	 * On a QE this is not a concern.  The distributed part of the snapshot
+	 * has already been reset by SnapshotResetDslm() and copied fresh from
+	 * QEDtxContextInfo above, so only the local part - which is exactly what
+	 * xactCompletionCount tracks - is subject to reuse.
+	 */
+	if (distributedTransactionContext != DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		GetSnapshotDataReuse(snapshot))
 	{
-		/* Skip snapshot data reuse */
-	}
-	else
-#endif
+		/*
+		 * Fetch into local variables while ProcArrayLock is held, see the
+		 * identical dance in the full computation below.
+		 */
+		replication_slot_xmin = procArray->replication_slot_xmin;
+		replication_slot_catalog_xmin = procArray->replication_slot_catalog_xmin;
 
-	if ((distributedTransactionContext != DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE ||
-		snapshot->haveDistribSnapshot) && GetSnapshotDataReuse(snapshot))
-	{
 		LWLockRelease(ProcArrayLock);
+
+		/*
+		 * GP: The local part of the snapshot is unchanged, but the
+		 * distributed snapshot we just copied from the QD is new, so the
+		 * distributed log's oldest xmin may still be able to advance.
+		 *
+		 * Maintaining it here is not an optimization.
+		 * DistributedLog_AdvanceOldestXmin() is the only caller of
+		 * DistributedLog_Truncate() - neither checkpoint nor vacuum ever
+		 * truncate the distributed log - so leaving it to the full
+		 * computation alone would make truncation of obsolete distributed log
+		 * segments depend on whether some other backend happened to commit an
+		 * xid-bearing transaction between two of our snapshots.  A workload of
+		 * single-statement sessions would then never truncate at all, because
+		 * every backend's very first snapshot (taken by the implicit "Local
+		 * Only" transaction, before any distributed snapshot has arrived)
+		 * always recomputes, absorbs all pending completions into its
+		 * baseline, and cannot truncate.
+		 *
+		 * We deliberately do not touch GlobalVis* here, matching upstream's
+		 * behaviour on the reuse path.  The horizon below is computed only to
+		 * feed DistributedLog_AdvanceOldestXmin(), and it must come out
+		 * exactly as the full computation would have produced it: advancing
+		 * the distributed log any further would raise the horizon that
+		 * GetDistOldestXmin() hands to vacuum, silently defeating
+		 * vacuum_defer_cleanup_age and the replication slot xmins.
+		 */
+		if (!IS_QUERY_DISPATCHER() && snapshot->haveDistribSnapshot)
+		{
+			TransactionId def_vis_xid;
+
+			/*
+			 * This deliberately duplicates, rather than factors out, the
+			 * def_vis_xid computation in the "maintain state for GlobalVis*"
+			 * block below: that block is verbatim upstream code and we do not
+			 * want to add merge conflicts to it.  Keep the two in sync.  Note
+			 * that both spell out the same symbols, so an upstream rename or
+			 * removal (PostgreSQL 16 drops vacuum_defer_cleanup_age, for
+			 * instance) breaks the build here too rather than passing
+			 * silently.
+			 */
+			def_vis_xid = TransactionIdRetreatedBy(snapshot->xmin,
+												   vacuum_defer_cleanup_age);
+			def_vis_xid = TransactionIdOlder(def_vis_xid,
+											 replication_slot_xmin);
+			def_vis_xid = TransactionIdOlder(replication_slot_catalog_xmin,
+											 def_vis_xid);
+
+			(void) DistributedLog_AdvanceOldestXmin(def_vis_xid,
+													ds->xminAllDistributedSnapshots);
+		}
+
 		goto ret;
 	}
 
