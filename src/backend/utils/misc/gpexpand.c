@@ -32,8 +32,12 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/gpexpand.h"
+#include "port/atomics.h"
+#include "catalog/gp_policy.h"
 
 static volatile int *gp_expand_version;
+
+volatile pg_atomic_uint32 *gp_create_table_rebalance_numsegments;
 
 /*
  * Catalog lock.
@@ -162,4 +166,27 @@ gp_expand_protect_catalog_changes(Relation relation)
 				 errmsg("cluster is expaneded from version %d to %d, "
 						"catalog changes are disallowed",
 						oldVersion, newVersion)));
+}
+
+int
+GgRebalanceNumsegmentsShmemSize(void)
+{
+	return sizeof(*gp_create_table_rebalance_numsegments);
+}
+
+void
+GgRebalanceNumsegmentsShmemInit(void)
+{
+	if (IsUnderPostmaster)
+		return;
+
+	/* only postmaster initialize it */
+	gp_create_table_rebalance_numsegments = (volatile pg_atomic_uint32 *)ShmemAlloc(GgRebalanceNumsegmentsShmemSize());
+	pg_atomic_init_u32(gp_create_table_rebalance_numsegments, GP_DEFAULT_NUMSEGMENTS_SHARED_UNSET);
+}
+
+uint32
+getRebalanceNumsegments(void)
+{
+	return pg_atomic_read_u32(gp_create_table_rebalance_numsegments);
 }

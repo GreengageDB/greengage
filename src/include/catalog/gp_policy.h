@@ -73,6 +73,10 @@ typedef FormData_gp_policy *Form_gp_policy;
  * gp_create_table_default_numsegments.
  */
 #define GP_POLICY_DEFAULT_NUMSEGMENTS()		\
+( (getRebalanceNumsegments() != GP_DEFAULT_NUMSEGMENTS_SHARED_UNSET) ? \
+   getRebalanceNumsegments() : GP_POLICY_ORIGINAL_BEHAVIOR() )
+
+#define GP_POLICY_ORIGINAL_BEHAVIOR()		\
 ( gp_create_table_default_numsegments == GP_DEFAULT_NUMSEGMENTS_FULL    ? getgpsegmentCount() \
 : gp_create_table_default_numsegments == GP_DEFAULT_NUMSEGMENTS_RANDOM  ? (1 + random() % getgpsegmentCount()) \
 : gp_create_table_default_numsegments == GP_DEFAULT_NUMSEGMENTS_MINIMAL ? 1 \
@@ -81,12 +85,14 @@ typedef FormData_gp_policy *Form_gp_policy;
 /*
  * The the default numsegments policies when creating a table.
  *
+ * - UNSET: shared value used during rebalance is not set, default variable is used
  * - FULL: all the segments;
  * - RANDOM: pick a random set of segments each time;
  * - MINIMAL: the minimal set of segments;
  */
 enum
 {
+	GP_DEFAULT_NUMSEGMENTS_SHARED_UNSET = 0x7fffffff,
 	GP_DEFAULT_NUMSEGMENTS_FULL    = -1,
 	GP_DEFAULT_NUMSEGMENTS_RANDOM  = -2,
 	GP_DEFAULT_NUMSEGMENTS_MINIMAL = -3,
@@ -180,5 +186,7 @@ extern GpPolicy *createRandomPartitionedPolicy(int numsegments);
 extern GpPolicy *createHashPartitionedPolicy(List *keys, List *opclasses, int numsegments);
 
 extern bool IsReplicatedTable(Oid relid);
+
+extern uint32 getRebalanceNumsegments(void);
 
 #endif /*_GP_POLICY_H_*/
