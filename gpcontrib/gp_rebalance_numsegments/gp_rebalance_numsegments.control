@@ -1,0 +1,5 @@
+# gp_rebalance_numsegments extension
+comment = 'functions to manage the default numsegments during ggrebalance'
+default_version = '1.0'
+schema = gp_toolkit
+relocatable = false
