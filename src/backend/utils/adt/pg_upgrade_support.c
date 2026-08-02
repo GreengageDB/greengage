@@ -154,11 +154,7 @@ binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 		 * there is already an array type with the same name
 		 * in the cluster, exising array type would be renamed,
 		 * getting the next free name via an additional call to
-		 * makeArrayType. Meaning that the next array type name
-		 * needs two makeArrayType calls to get to.
-		 *
-		 * Note, that we assume that the base type for this array type
-		 * is always created.
+		 * makeArrayType. So remember it as created too.
 		 *
 		 * Also, the whole logic descripted here works only if existing
 		 * type is an array type. If it not, it wouldn't be possible
