@@ -5698,6 +5698,8 @@ SendChunkUDPIFC(ChunkTransportState *transportStates,
 		}
 		checkExceptions(transportStates, pEntry, conn, retry++, timeout);
 		doCheckExpiration = false;
+
+		now = getCurrentTime();
 	}
 
 	conn->pBuff = (uint8 *) conn->curBuff->pkt;
