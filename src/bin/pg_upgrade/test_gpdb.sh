@@ -177,6 +177,8 @@ check_vacuum_worked()
 
 dump_database_schema()
 {
+	set -o pipefail
+
 	dump_path="$1"
 	partitions_dump_path="$2"
 	partitions_query="$3"
@@ -187,6 +189,11 @@ dump_database_schema()
 	# and dump each database by hand, because we need to be able to exclude specific
 	if (( !$perf_test )) ; then
 		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
+		if (( $? )) ; then
+			echo "ERROR: Failure encountered while dumping databases"
+			exit 1
+		fi
+
 		readarray -t databases <<< ${databases_string}
 		for database in "${databases[@]}"; do
 			# We are getting '\' symbol automatically escaped to '\\', convert is back
@@ -199,6 +206,11 @@ dump_database_schema()
 			args_to_ignore_partitions=()
 			if (( $cross_version_upgrade )); then
 				partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
+				if (( $? )) ; then
+					echo "ERROR: Failure encountered while dumping databases"
+					exit 1
+				fi
+
 				readarray -t partitions <<< ${partitions_string}
 				for partition in "${partitions[@]}"; do
 					if [ -z "${partition}" ]; then
@@ -214,20 +226,33 @@ dump_database_schema()
 				# are dumped identically.
 				# Also, sort the rows, as their order may differ between the versions.
 				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
+				if (( $? )) ; then
+					echo "ERROR: Failure encountered while dumping databases"
+					exit 1
+				fi
+
 				readarray -t queries <<< ${queries_string}
 				for query in "${queries[@]}"; do
-					result=$(PGOPTIONS="-c extra_float_digits=-3 ${pgopts}" psql "${database}" -c "${query}")
-					result=$(echo "${result}" | sort)
-
-					echo "${query}"  >> "${partitions_dump_path}"
-					echo "${result}" >> "${partitions_dump_path}"
+					echo "${query}" >> "${partitions_dump_path}"
+					PGOPTIONS="-c extra_float_digits=-3 ${pgopts}" psql "${database}" -c "${query}" | sort >> "${partitions_dump_path}"
+					if (( $? )) ; then
+						echo "ERROR: Failure encountered while dumping databases"
+						exit 1
+					fi
 				done
 			fi
 
 			PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "${dump_path}"
+			if (( $? )) ; then
+				echo "ERROR: Failure encountered while dumping databases"
+				exit 1
+			fi
+
 		done
 		echo done
 	fi
+
+	set +o pipefail
 }
 
 upgrade_qd()
