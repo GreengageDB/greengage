@@ -187,6 +187,7 @@ dump_database_schema()
 
 	# To dump schemas, use pg_dump from NEW_BINDIR. Note, that we intentionally don't use pg_dumpall,
 	# and dump each database by hand, because we need to be able to exclude specific
+	# objects from the dumps, and it is possible only with regular pg_dump.
 	if (( !$perf_test )) ; then
 		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
 		if (( $? )) ; then
