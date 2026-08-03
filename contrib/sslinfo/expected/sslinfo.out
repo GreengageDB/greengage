@@ -5,9 +5,9 @@ preparing CRTs and KEYs
 \! gpstop -arf
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Starting gpstop with args: -arf
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Gathering information and validating the environment...
-20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20260612:00:33:37:3615113 gpstop:3a76691f25e1:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
@@ -154,9 +154,9 @@ restore SSL in postgresql.conf with master only
 \! gpstop -arf
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Starting gpstop with args: -arf
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Gathering information and validating the environment...
-20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='fast'
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
 20260612:00:33:47:3615639 gpstop:3a76691f25e1:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process

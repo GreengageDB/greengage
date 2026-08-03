@@ -576,7 +576,7 @@ rollback;
 create table trigtest (i serial primary key);
 -- test that disabling RI triggers works
 create table trigtest2 (i int references trigtest(i) on delete cascade);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create function trigtest() returns trigger as $$
 begin
 	raise notice '% % % %', TG_RELNAME, TG_OP, TG_WHEN, TG_LEVEL;
@@ -940,11 +940,11 @@ DETAIL:  Tables cannot have INSTEAD OF triggers.
 -- Don't support WHEN clauses with INSTEAD OF triggers
 CREATE TRIGGER invalid_trig INSTEAD OF UPDATE ON main_view
 FOR EACH ROW WHEN (OLD.a <> NEW.a) EXECUTE PROCEDURE view_trigger('instead_of_upd');
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 -- Don't support column-level INSTEAD OF triggers
 CREATE TRIGGER invalid_trig INSTEAD OF UPDATE OF a ON main_view
 FOR EACH ROW EXECUTE PROCEDURE view_trigger('instead_of_upd');
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 -- Don't support statement-level INSTEAD OF triggers
 CREATE TRIGGER invalid_trig INSTEAD OF UPDATE ON main_view
 EXECUTE PROCEDURE view_trigger('instead_of_upd');
@@ -952,13 +952,13 @@ ERROR:  Triggers for statements are not yet supported
 -- Valid INSTEAD OF triggers
 CREATE TRIGGER instead_of_insert_trig INSTEAD OF INSERT ON main_view
 FOR EACH ROW EXECUTE PROCEDURE view_trigger('instead_of_ins');
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 CREATE TRIGGER instead_of_update_trig INSTEAD OF UPDATE ON main_view
 FOR EACH ROW EXECUTE PROCEDURE view_trigger('instead_of_upd');
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 CREATE TRIGGER instead_of_delete_trig INSTEAD OF DELETE ON main_view
 FOR EACH ROW EXECUTE PROCEDURE view_trigger('instead_of_del');
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 -- Valid BEFORE statement VIEW triggers
 CREATE TRIGGER before_ins_stmt_trig BEFORE INSERT ON main_view
 FOR EACH STATEMENT EXECUTE PROCEDURE view_trigger('before_view_ins_stmt');
@@ -1086,7 +1086,7 @@ CREATE TABLE city_table (
     population    bigint,
     country_id    int references country_table
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE VIEW city_view AS
     SELECT city_id, city_name, population, country_name, continent
     FROM city_table ci
@@ -1119,7 +1119,7 @@ end;
 $$;
 CREATE TRIGGER city_insert_trig INSTEAD OF INSERT ON city_view
 FOR EACH ROW EXECUTE PROCEDURE city_insert();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 CREATE FUNCTION city_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 begin
     DELETE FROM city_table WHERE city_id = OLD.city_id;
@@ -1129,7 +1129,7 @@ end;
 $$;
 CREATE TRIGGER city_delete_trig INSTEAD OF DELETE ON city_view
 FOR EACH ROW EXECUTE PROCEDURE city_delete();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 CREATE FUNCTION city_update() RETURNS trigger LANGUAGE plpgsql AS $$
 declare
     ctry_id int;
@@ -1158,7 +1158,7 @@ end;
 $$;
 CREATE TRIGGER city_update_trig INSTEAD OF UPDATE ON city_view
 FOR EACH ROW EXECUTE PROCEDURE city_update();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 \set QUIET false
 -- INSERT .. RETURNING
 INSERT INTO city_view(city_name) VALUES('Tokyo') RETURNING *;
@@ -1234,7 +1234,7 @@ CREATE FUNCTION no_op_trig_fn() RETURNS trigger LANGUAGE plpgsql
 AS 'begin RETURN NULL; end';
 CREATE TRIGGER no_op_trig INSTEAD OF INSERT OR UPDATE OR DELETE
 ON european_city_view FOR EACH ROW EXECUTE PROCEDURE no_op_trig_fn();
-ERROR:  INSTEAD OF triggers are not supported in Greenplum
+ERROR:  INSTEAD OF triggers are not supported in Greengage
 \set QUIET false
 INSERT INTO european_city_view VALUES (0, 'x', 10000, 'y', 'z');
 ERROR:  cannot insert into view "city_view"
@@ -1547,7 +1547,7 @@ create temp table self_ref_trigger (
     data text,
     nchildren int not null default 0
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create function self_ref_trigger_ins_func()
   returns trigger language plpgsql as
 $$
@@ -1991,13 +1991,13 @@ with ins (a) as (
   insert into parted2_stmt_trig values (1), (2) returning a
 ) insert into parted_stmt_trig select a from ins returning tableoid::regclass, a;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 with upd as (
   update parted2_stmt_trig set a = a
 ) update parted_stmt_trig  set a = a;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 delete from parted_stmt_trig;
 -- insert via copy on the parent
@@ -2498,10 +2498,10 @@ drop table parent, child1;
 -- Check processing of foreign key triggers
 create table parent (a int primary key, f int references parent)
   partition by list (a);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create table child1 partition of parent for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 select tgrelid::regclass, rtrim(tgname, '0123456789') as tgname,
   tgfoid::regproc, tgenabled
   from pg_trigger where tgrelid in ('parent'::regclass, 'child1'::regclass)
@@ -3016,18 +3016,18 @@ ERROR:  Triggers for statements are not yet supported
 with wcte as (insert into table1 values (42))
   insert into table2 values ('hello world');
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 with wcte as (insert into table1 values (43))
   insert into table1 values (44);
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 with wcte as (insert into table1 values (45))
   merge into table1 using (values (46)) as v(a) on table1.a = v.a
     when not matched then insert values (v.a);
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 select * from table1;
  a 
@@ -3141,7 +3141,7 @@ create table refd_table (a int primary key, b text);
 create table trig_table (a int, b text,
   foreign key (a) references refd_table on update cascade on delete cascade
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create trigger trig_table_before_trig
   before insert or update or delete on trig_table
   for each statement execute procedure trigger_func('trig_table');
@@ -3199,7 +3199,7 @@ drop table refd_table, trig_table;
 --
 create table refd_table (id int primary key);
 create table trig_table (fk int references refd_table initially deferred);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 begin;
 insert into trig_table values (1);
 drop table refd_table cascade;
@@ -3211,7 +3211,7 @@ drop table trig_table;
 --
 create table self_ref (a int primary key,
                        b int references self_ref(a) on delete cascade);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create trigger self_ref_before_trig
   before delete on self_ref
   for each statement execute procedure trigger_func('self_ref');
@@ -3305,7 +3305,7 @@ create table convslot_test_parent (col1 text primary key);
 create table convslot_test_child (col1 text primary key,
 	foreign key (col1) references convslot_test_parent(col1) on delete cascade on update cascade
 );
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 alter table convslot_test_child add column col2 text not null default 'tutu';
 insert into convslot_test_parent(col1) values ('1');
 insert into convslot_test_child(col1) values ('1');

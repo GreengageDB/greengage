@@ -10459,7 +10459,7 @@ insert ( 6031 1255 0 'Statistics: Number of queries that executed in queue' )
 insert ( 6032 1255 0 'Statistics: Number of queries that waited in queue' )
 insert ( 6033 1255 0 'Statistics: Elapsed seconds for queries that executed in queue' )
 insert ( 6034 1255 0 'Statistics: Elapsed seconds for queries that waited in queue' )
-insert ( 6039 1255 0 'Statistics: Greenplum session id of backend' )
+insert ( 6039 1255 0 'Statistics: Greengage session id of backend' )
 insert ( 6042 1255 0 'change priority of all the backends for a given session id' )
 insert ( 7098 1255 0 'get replication error' )
 insert ( 7154 1255 0 'terminate a server process' )
@@ -12534,7 +12534,7 @@ create gp_id 5101 shared_relation
  content = int2
  )
 open gp_id
-insert ( Greenplum -1 -1 -1 )
+insert ( Greengage -1 -1 -1 )
 close gp_id
 create gp_distribution_policy 7142
  (

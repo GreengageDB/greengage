@@ -676,7 +676,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("PREPARE TRANSACTION is not yet supported in Greenplum Database")));
+									errmsg("PREPARE TRANSACTION is not yet supported in Greengage Database")));
 
 						}
 						if (!PrepareTransactionBlock(stmt->gid))
@@ -691,7 +691,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("COMMIT PREPARED is not yet supported in Greenplum Database")));
+									errmsg("COMMIT PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "COMMIT PREPARED");
 						FinishPreparedTransaction(stmt->gid, /* isCommit */ true, /* raiseErrorIfNotFound */ true);
@@ -701,7 +701,7 @@ standard_ProcessUtility(PlannedStmt *pstmt,
 						if (Gp_role == GP_ROLE_DISPATCH)
 						{
 							ereport(ERROR, (errcode(ERRCODE_GP_COMMAND_ERROR),
-									errmsg("ROLLBACK PREPARED is not yet supported in Greenplum Database")));
+									errmsg("ROLLBACK PREPARED is not yet supported in Greengage Database")));
 						}
 						PreventInTransactionBlock(isTopLevel, "ROLLBACK PREPARED");
 						FinishPreparedTransaction(stmt->gid, /* isCommit */ false, /* raiseErrorIfNotFound */ true);
@@ -1456,7 +1456,7 @@ ProcessUtilitySlow(ParseState *pstate,
 							else
 							{
 								/*
-								 * Greenplum specific behavior
+								 * Greengage specific behavior
 								 * If intoQuery field is set, it means this is Create Matview.
 								 * To keep catalog consistent, QEs should also store the viewquery.
 								 * The call chain is:

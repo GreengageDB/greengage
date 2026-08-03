@@ -195,7 +195,7 @@ getCurrentOf(CurrentOfExpr *cexpr,
 	 * will be available as junk metadata, courtesy of preprocess_targetlist.
 	 *
 	 * Apply simply updatable check to ordinary tables. Refer to the issue:
-	 * https://github.com/greenplum-db/gpdb/issues/9838.
+	 * https://github.com/GreengageDB/greengage/issues/9838.
 	 */
 	if (!OidIsValid(queryDesc->plannedstmt->simplyUpdatableRel))
 		ereport(ERROR,

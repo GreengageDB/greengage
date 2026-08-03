@@ -60,7 +60,7 @@ LIBS += $(LDAP_LIBS_BE) $(ICU_LIBS) $(LIBURING_LIBS)
 # The backend doesn't need everything that's in LIBS, however
 LIBS := $(filter-out -lreadline -ledit -ltermcap -lncurses -lcurses, $(LIBS))
 
-# Greenplum uses threads in the backend
+# Greengage uses threads in the backend
 LIBS := $(LIBS) -lpthread
 
 ifeq ($(with_systemd),yes)

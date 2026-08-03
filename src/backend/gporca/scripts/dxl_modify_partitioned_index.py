@@ -12,7 +12,7 @@ import base64
 import hashlib
 
 # the DXL namespace used
-ns = {'dxl': 'http://greenplum.com/dxl/2010/12/'}
+ns = {'dxl': 'http://greengagedb.org/dxl/2010/12/'}
 
 # other global variables
 glob_mdp_name = ""
@@ -87,7 +87,7 @@ def get_leaf_mdid(root_mdid, part_num):
 
 
 def convert_one_mdp(input_path, output_path):
-    et.register_namespace('dxl', 'http://greenplum.com/dxl/2010/12/')
+    et.register_namespace('dxl', 'http://greengagedb.org/dxl/2010/12/')
     xml_parser = et.XMLParser(target=et.TreeBuilder(insert_comments=True))
     tree = et.parse(input_path, xml_parser)
     root = tree.getroot()

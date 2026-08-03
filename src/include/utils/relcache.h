@@ -17,7 +17,7 @@
 #define RELCACHE_H
 
 /*
- * GPDB: pull in postgres.h for the Datum typedef.  Greenplum's catalog.h
+ * GPDB: pull in postgres.h for the Datum typedef.  Greengage's catalog.h
  * (which includes this header) is included by several frontend tools for the
  * gp_dbid helpers, so relcache.h must be self-sufficient for Datum.
  */

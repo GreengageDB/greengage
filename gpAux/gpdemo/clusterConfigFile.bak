@@ -4,7 +4,7 @@ MACHINE_LIST_FILE=/home/dvoronkov/ws/gpdb/gpAux/gpdemo/hostfile
 # This names the data directories for the Segment Instances and the Entry Postmaster
 SEG_PREFIX=demoDataDir
 
-# This is the port at which to contact the resulting Greenplum database, e.g.
+# This is the port at which to contact the resulting Greengage database, e.g.
 #   psql -p $PORT_BASE -d template1
 PORT_BASE=15434
 

@@ -27,7 +27,7 @@ CREATE TABLE brintest_ao (byteacol bytea,
 	lsncol pg_lsn,
 	boxcol box
 ) WITH (appendonly = true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'byteacol' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'byteacol' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO brintest_ao SELECT
 	repeat(stringu1, 8)::bytea,
@@ -100,7 +100,7 @@ CREATE TABLE brinopers_ao (colname name, typ text,
 	op text[], value text[], matches int[],
 	check (cardinality(op) = cardinality(value)),
 	check (cardinality(op) = cardinality(matches)));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'colname' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'colname' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO brinopers_ao VALUES
 	('byteacol', 'bytea',
@@ -473,7 +473,7 @@ VACUUM brintest_ao;
 INSERT INTO brintest_ao SELECT * FROM brintest_ao;
 NOTICE:  One or more columns in the following table(s) do not have statistics: brintest_ao
 HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
--- We should have two segment files per Greenplum segment (QE). 
+-- We should have two segment files per Greengage segment (QE). 
 -- start_ignore
 SELECT segment_id, segno, tupcount, state FROM gp_toolkit.__gp_aoseg('brintest_ao');
  segment_id | segno | tupcount | state 

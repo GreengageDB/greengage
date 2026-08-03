@@ -11,7 +11,7 @@
 
 #include "access/transam.h"
 #include "catalog/pg_class_d.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "pg_upgrade.h"
 #include "pqexpbuffer.h"
 

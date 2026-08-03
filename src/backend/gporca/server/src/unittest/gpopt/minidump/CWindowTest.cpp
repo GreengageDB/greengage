@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2016 VMware, Inc. or its affiliates
 //---------------------------------------------------------------------------
 #include "unittest/gpopt/minidump/CWindowTest.h"

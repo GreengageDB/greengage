@@ -47,7 +47,7 @@ GRANT SELECT ON pg_catalog.gp_distributed_log TO PUBLIC;
 ALTER RESOURCE QUEUE pg_default WITH (priority=medium, memory_limit='-1');
 
 
--- pg_tablespace_location wrapper functions to see Greenplum cluster-wide tablespace locations
+-- pg_tablespace_location wrapper functions to see Greengage cluster-wide tablespace locations
 CREATE FUNCTION gp_tablespace_segment_location (IN tblspc_oid oid, OUT gp_segment_id int, OUT tblspc_loc text)
 RETURNS SETOF RECORD AS
 $$

@@ -140,7 +140,7 @@ SELECT DISTINCT ON (four) four,hundred
 -- the input path's ordering
 --
 CREATE TABLE distinct_on_tbl (x int, y int, z int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO distinct_on_tbl SELECT i%10, i%10, i%10 FROM generate_series(1, 1000) AS i;
 CREATE INDEX distinct_on_tbl_x_y_idx ON distinct_on_tbl (x, y);

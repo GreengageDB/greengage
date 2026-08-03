@@ -1273,7 +1273,7 @@ CREATE TABLE credit_card (
        dist_key int default 1,
        foreign key (dist_key, cid) references customer(dist_key, cid)
 ) DISTRIBUTED BY (dist_key);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE credit_usage (
        cid      int,
        ymd      date,
@@ -1281,7 +1281,7 @@ CREATE TABLE credit_usage (
        dist_key int default 1,
        foreign key (dist_key, cid) references customer(dist_key, cid)
 ) DISTRIBUTED BY (dist_key);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 -- start_ignore
 -- Force planner to use default stats
 SET gp_autostats_mode = none;

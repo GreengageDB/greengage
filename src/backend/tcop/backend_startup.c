@@ -365,7 +365,7 @@ BackendInitialize(ClientSocket *client_sock, CAC_state cac)
 						 errmsg("sorry, too many clients already")));
 				break;
 			case CAC_SUPERUSER:
-				/* Greenplum does not currently use SUPERUSER state. */
+				/* Greengage does not currently use SUPERUSER state. */
 				Assert(cac != CAC_SUPERUSER);
 				break;
 			case CAC_MIRROR_READY:

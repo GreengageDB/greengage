@@ -109,7 +109,7 @@ static DeadLockState deadlock_state = DS_NOT_YET_CHECKED;
 /*
  * GPDB: the LOCALLOCK we are currently waiting on.  Upstream PG18 moved
  * WaitOnLock() and its awaited-lock bookkeeping into lock.c, where the
- * variable now lives (made non-static there so the Greenplum resource-queue
+ * variable now lives (made non-static there so the Greengage resource-queue
  * wait path below can share it, exactly as the old proc.c-local lockAwaited
  * did).  Access it directly for the resource-queue ResProcSleep/
  * ResLockWaitCancel/CheckDeadLock paths; the regular lock path uses the

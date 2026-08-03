@@ -306,7 +306,7 @@ class PgBaseBackup(Command):
         if recovery_mode:
             cmd_tokens.append('--write-recovery-conf')
 
-        # This is needed to handle Greenplum tablespaces
+        # This is needed to handle Greengage tablespaces
         cmd_tokens.append('--target-gp-dbid')
         cmd_tokens.append(str(target_gp_dbid))
 

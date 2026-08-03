@@ -1753,7 +1753,7 @@ SPI_cursor_open_internal(const char *name, SPIPlanPtr plan,
 	}
 
 	/*
-	 * Greenplum Database needs this
+	 * Greengage Database needs this
 	 */
 	portal->is_extended_query = true;
 

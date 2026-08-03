@@ -57,7 +57,7 @@ usage(unsigned short int pager)
 	 */
 	initPQExpBuffer(&buf);
 
-	HELP0("psql is the PostgreSQL interactive terminal (Greenplum version).\n\n");
+	HELP0("psql is the PostgreSQL interactive terminal (Greengage version).\n\n");
 	HELP0("Usage:\n");
 	HELP0("  psql [OPTION]... [DBNAME [USERNAME]]\n\n");
 
@@ -756,7 +756,7 @@ helpSQL(const char *topic, unsigned short int pager)
 void
 print_copyright(void)
 {
-	puts("Greenplum Database version of PostgreSQL Database Management System\n"
+	puts("Greengage Database version of PostgreSQL Database Management System\n"
 		 "Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group\n\n"
 		 "Portions Copyright (c) 2014-Present VMware, Inc. or its affiliates.\n\n"
 		 "Portions Copyright (c) 2011-2014 EMC\n\n"

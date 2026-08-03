@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2019 VMware, Inc. or its affiliates.
 
 #include "gpopt/xforms/CXformImplementFullOuterMergeJoin.h"

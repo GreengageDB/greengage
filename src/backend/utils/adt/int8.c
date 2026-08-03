@@ -37,7 +37,7 @@ typedef struct
 /*
  * scanint8 --- try to parse a string into an int8.
  *
- * GPDB: PG15 removed the core scanint8(); it is kept here as a Greenplum
+ * GPDB: PG15 removed the core scanint8(); it is kept here as a Greengage
  * helper because several MPP call sites rely on the "soft" (errorOK) behaviour
  * that pg_strtoint64() does not provide.
  *

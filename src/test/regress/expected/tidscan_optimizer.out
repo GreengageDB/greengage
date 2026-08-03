@@ -205,7 +205,7 @@ FETCH ALL FROM c;
 (2 rows)
 
 FETCH BACKWARD 1 FROM c;
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 FETCH FIRST FROM c;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;

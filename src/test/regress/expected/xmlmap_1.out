@@ -70,7 +70,7 @@ SELECT cursor_to_xmlschema('xc'::refcursor, false, true, '');
 ERROR:  unsupported XML feature
 DETAIL:  This functionality requires the server to be built with libxml support.
 MOVE BACKWARD ALL IN xc;
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 SELECT cursor_to_xml('xc'::refcursor, 5, true, false, '');
 ERROR:  unsupported XML feature
 DETAIL:  This functionality requires the server to be built with libxml support.

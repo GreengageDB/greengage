@@ -53,7 +53,7 @@ static void pgcrypto_fips_assign(bool newval, void *extra);
 static bool pgcrypto_fips_check(bool *newval, void **extra, GucSource source);
 
 /*
- * pgcrypto.fips was a boolean GUC in Greenplum 4.3, so we need to support all
+ * pgcrypto.fips was a boolean GUC in Greengage 4.3, so we need to support all
  * the common ways to turn a boolean on/off to preserve backwards
  * compatibility.
  */

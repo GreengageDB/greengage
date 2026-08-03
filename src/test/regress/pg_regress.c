@@ -2394,7 +2394,7 @@ run_schedule(const char *schedule, test_start_function startfunc,
 			 * test name whose failure is to be ignored (downgraded to an
 			 * "ignored" result) when that test is run later on via a "test:"
 			 * line.  Upstream PostgreSQL removed this directive in PG16, but
-			 * the Greengage schedules (serial/parallel/greenplum/isolation2)
+			 * the Greengage schedules (serial/parallel/greengage/isolation2)
 			 * still rely on it, so re-graft the handling here.
 			 */
 			c = scbuf + 8;
@@ -2585,7 +2585,7 @@ run_schedule(const char *schedule, test_start_function startfunc,
 
 			/*
 			 * GPDB: a non-zero psql exit status is only logged, not treated as
-			 * a test failure.  Some Greenplum tests intentionally make psql
+			 * a test failure.  Some Greengage tests intentionally make psql
 			 * exit non-zero -- e.g. gp_connections ends by \connect'ing to a
 			 * primary segment, which is rejected on purpose, leaving psql with
 			 * no connection and an exit code of 2.  Pass/fail is decided by the

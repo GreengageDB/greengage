@@ -173,7 +173,7 @@ main(int argc, char *argv[])
 		}
 		if (strcmp(argv[1], "--gp-version") == 0)
 		{
-			fputs("postgres (Greenplum Database) " GP_VERSION "\n", stdout);
+			fputs("postgres (Greengage Database) " GP_VERSION "\n", stdout);
 			exit(0);
 		}
 		if (strcmp(argv[1], "--catalog-version") == 0 )
@@ -419,7 +419,7 @@ help(const char *progname)
 	printf(_("  --NAME=VALUE       set run-time parameter\n"));
 	printf(_("  --describe-config  describe configuration parameters, then exit\n"));
 	printf(_("  -?, --help         show this help, then exit\n"));
-	printf(_("  --gp-version       output Greenplum version information, then exit\n"));
+	printf(_("  --gp-version       output Greengage version information, then exit\n"));
 	printf(_("  --catalog-version  output the catalog version, then exit\n"));
 
 	printf(_("\nDeveloper options:\n"));

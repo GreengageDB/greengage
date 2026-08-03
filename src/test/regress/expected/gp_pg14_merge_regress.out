@@ -123,7 +123,7 @@ create unique index mv_mm_uidx on mv_mm (g, label);
 -- change one group so the concurrent refresh actually merges a diff
 insert into mv_src values (0, 'lbl0', 1000);
 refresh materialized view concurrently mv_mm;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'tid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 select g, label, total from mv_mm order by g, label;
  g | label | total 

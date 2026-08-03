@@ -127,7 +127,7 @@ drop table if exists vfheaptoast;
 NOTICE:  table "vfheaptoast" does not exist, skipping
 create table vfheaptoast (a, b, c) as
 select 1, i, array(select generate_series(1, 10000)) from generate_series(1, 100)i;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 analyze vfheaptoast;
 select pg_relation_size((select reltoastrelid from pg_class where oid = 'vfheaptoast'::regclass)) from gp_dist_random('gp_id') where gp_segment_id = 1;

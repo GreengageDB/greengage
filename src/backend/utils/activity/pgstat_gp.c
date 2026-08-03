@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * pgstat_gp.c
- *	  Greenplum-specific cumulative statistics.
+ *	  Greengage-specific cumulative statistics.
  *
  * This file collects the GPDB extensions to the cumulative statistics system
  * that used to live in the (now removed) UDP-collector pgstat.c:

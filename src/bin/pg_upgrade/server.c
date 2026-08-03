@@ -11,7 +11,7 @@
 
 #include "common/connect.h"
 #include "fe_utils/string_utils.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "libpq/pqcomm.h"
 #include "pg_upgrade.h"
 
@@ -252,13 +252,13 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 		appendPQExpBufferStr(&pgoptions, " -c synchronous_commit=off -c fsync=off -c full_page_writes=off");
 
 	/*
-	 * GPDB: version-specific server options.  Newer Greenplum clusters need
+	 * GPDB: version-specific server options.  Newer Greengage clusters need
 	 * synchronous_standby_names cleared and a relaxed xid warn limit; very old
 	 * source clusters instead need the gp_dbid/gp_contentid identity GUCs.
 	 */
 	if (GET_MAJOR_VERSION(cluster->major_version) >= 904)
 		appendPQExpBufferStr(&pgoptions, " -c synchronous_standby_names='' --xid_warn_limit=10000000");
-	else if (is_greenplum_dispatcher_mode())
+	else if (is_greengage_dispatcher_mode())
 		appendPQExpBufferStr(&pgoptions, " -c gp_dbid=1 -c gp_contentid=-1 -c gp_num_contents_in_cluster=1");
 	else
 		appendPQExpBufferStr(&pgoptions, " -c gp_dbid=1 -c gp_contentid=0 -c gp_num_contents_in_cluster=1");
@@ -271,7 +271,7 @@ start_postmaster(ClusterInfo *cluster, bool report_and_exit_on_error)
 	/*
 	 * Use -b to disable autovacuum and logical replication launcher (effective
 	 * in PG17 or later for the latter), but only for catalog versions new
-	 * enough to understand the binary-upgrade flag; older Greenplum source
+	 * enough to understand the binary-upgrade flag; older Greengage source
 	 * clusters instead need autovacuum disabled the old way.
 	 */
 	snprintf(cmd, sizeof(cmd),

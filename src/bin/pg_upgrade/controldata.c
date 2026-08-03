@@ -9,7 +9,7 @@
 
 #include "postgres_fe.h"
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include <ctype.h>
 #include <limits.h>				/* for CHAR_MIN */
 

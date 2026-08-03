@@ -324,7 +324,7 @@ extern SessionBackupState get_backup_status(void);
 /* files to signal promotion to primary */
 #define PROMOTE_SIGNAL_FILE		"promote"
 
-/* Greenplum additions */
+/* Greengage additions */
 extern bool IsCrashRecoveryOnly(void);
 extern DBState GetCurrentDBState(void);
 extern XLogRecPtr last_xlog_replay_location(void);

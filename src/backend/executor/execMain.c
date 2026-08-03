@@ -666,7 +666,7 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * queryDesc->ddesc->oidAssignments be set, these OIDs are
 			 * also dispatched to QEs.
 			 *
-			 * For details please see github issue https://github.com/greenplum-db/gpdb/issues/10760
+			 * For details please see github issue https://github.com/GreengageDB/greengage/issues/10760
 			 */
 			if (queryDesc->ddesc != NULL)
 			{
@@ -1827,12 +1827,12 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 			switch (rc->markType)
 			{
 				/*
-				 * Greenplum specific behavior:
+				 * Greengage specific behavior:
 				 * The implementation of select statement with locking clause
 				 * (for update | no key update | share | key share) in postgres
 				 * is to hold RowShareLock on tables during parsing stage, and
 				 * generate a LockRows plan node for executor to lock the tuples.
-				 * It is not easy to lock tuples in Greenplum database, since
+				 * It is not easy to lock tuples in Greengage database, since
 				 * tuples may be fetched through motion nodes.
 				 *
 				 * But when Global Deadlock Detector is enabled, and the select
@@ -2130,7 +2130,7 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation,
 			 * it's not worth great exertion to get).
 			 */
 			/*
-			 * GPDB_91_MERGE_FIXME: In Greenplum, views are treated as non
+			 * GPDB_91_MERGE_FIXME: In Greengage, views are treated as non
 			 * partitioned relations, gp_distribution_policy contains no entry
 			 * for views.  Consequently, flow of a ModifyTable node for a view
 			 * is determined such that it is not dispatched to segments.
@@ -2150,7 +2150,7 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation,
 					(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 					 errmsg("cannot change view \"%s\"",
 							RelationGetRelationName(resultRel)),
-					 errhint("changing views is not supported in Greenplum")));
+					 errhint("changing views is not supported in Greengage")));
 			break;
 		case RELKIND_MATVIEW:
 			if (!MatViewIncrementalMaintenanceIsEnabled())

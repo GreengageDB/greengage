@@ -202,7 +202,7 @@ create_gang_retry:
 			/*
 			 * GPDB_12_MERGE_FIXME: create and destroy waiteventset in each loop
 			 * may impact the performance, please see:
-			 * https://github.com/greenplum-db/gpdb/pull/13494#discussion_r874243725
+			 * https://github.com/GreengageDB/greengage/pull/13494#discussion_r874243725
 			 * Let's verify it later.
 			 */
 			/*

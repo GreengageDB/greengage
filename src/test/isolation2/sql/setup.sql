@@ -160,7 +160,7 @@ $$ language plpython3u;
 --
 -- pg_ctl_start:
 --
--- Start a specific greenplum segment
+-- Start a specific greengage segment
 --
 -- intentionally separate from pg_ctl() because it needs more information
 --

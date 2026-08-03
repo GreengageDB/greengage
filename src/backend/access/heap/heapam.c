@@ -4269,7 +4269,7 @@ l2:
 
 	/*
 	 * GPDB: hot-update counting has been disabled since the original
-	 * Greenplum import; keep passing false here (upstream passes
+	 * Greengage import; keep passing false here (upstream passes
 	 * use_hot_update), but adopt PG16's new-page accounting.
 	 */
 	pgstat_count_heap_update(relation, false, newbuf != buffer);

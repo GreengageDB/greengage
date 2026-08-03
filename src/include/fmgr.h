@@ -498,7 +498,7 @@ typedef struct
 typedef enum {
 	PgMagicProductNone		   = 0,
 	PgMagicProductPostgres	   = 1,
-	PgMagicProductGreenplum	   = 2180,     /* 'GPDB' cast to an integer */
+	PgMagicProductGreengage	   = 2180,     /* 'GPDB' cast to an integer */
 } Pg_magic_product_code;
 
 /* Macro to fill the ABI fields */
@@ -509,7 +509,7 @@ typedef enum {
 	INDEX_MAX_KEYS, \
 	NAMEDATALEN, \
 	FLOAT8PASSBYVAL, \
-	PgMagicProductGreenplum, \
+	PgMagicProductGreengage, \
 	FMGR_ABI_EXTRA, \
 }
 

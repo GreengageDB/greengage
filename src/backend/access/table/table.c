@@ -164,7 +164,7 @@ validate_relation_kind(Relation r)
  * Note3: This function may return NULL (e.g. when just before we open the table,
  *        other transaction drop the table), caller should check it.
  *
- * Greenplum only upgrade lock level for UPDATE and DELETE statement under some
+ * Greengage only upgrade lock level for UPDATE and DELETE statement under some
  * condition:
  *   1. always upgrade when gp_enable_global_deadlock_detector is not set
  *   2. when gp_enable_global_deadlock_detector is set:

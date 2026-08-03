@@ -1109,7 +1109,7 @@ ExecInitSubPlan(SubPlan *subplan, PlanState *parent)
  */
 
 /*
- * Greenplum Database Changes:
+ * Greengage Database Changes:
  * In the case where this is running on the dispatcher, and it's a parallel
  * dispatch subplan, we need to dispatch the query to the qExecs as well, like
  * in ExecutorRun. Except in this case we don't have to worry about insert

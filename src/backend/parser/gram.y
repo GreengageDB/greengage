@@ -215,7 +215,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 static Node *makeIsNotDistinctFromNode(Node *expr, int position);
 
 static bool isSetWithReorganize(List **options);
-static char *greenplumLegacyAOoptions(const char *accessMethod, List **options);
+static char *greengageLegacyAOoptions(const char *accessMethod, List **options);
 static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_t yyscanner);
 
 %}
@@ -3686,7 +3686,7 @@ alter_table_cmd:
 					else
 					{
 						n->subtype = AT_SetAccessMethod;
-						n->name = greenplumLegacyAOoptions(n->name, &$3);
+						n->name = greengageLegacyAOoptions(n->name, &$3);
 						if (!n->name)
 							ereport(ERROR,
 								(errcode(ERRCODE_SYNTAX_ERROR),
@@ -3746,7 +3746,7 @@ alter_table_cmd:
 			| SET ACCESS METHOD set_access_method_name OptWith
 				{
 					AlterTableCmd *n = makeNode(AlterTableCmd);
-					char *witham = greenplumLegacyAOoptions(n->name, &$5);
+					char *witham = greengageLegacyAOoptions(n->name, &$5);
 					n->subtype = AT_SetAccessMethod;
 					n->name = $4;
 					/*
@@ -4276,7 +4276,7 @@ alter_table_partition_cmd:
 					pelem->location  = @3;
 					pelem->isDefault = false; /* not default */
 					pelem->options = $4;
-					pelem->accessMethod = greenplumLegacyAOoptions(NULL, &pelem->options);
+					pelem->accessMethod = greengageLegacyAOoptions(NULL, &pelem->options);
 					pelem->tablespacename = $5;
 
 					pc->arg = (Node *) pelem;
@@ -4309,7 +4309,7 @@ alter_table_partition_cmd:
 					pelem->location  = @5;
 					pelem->isDefault = true;
 					pelem->options = $5;
-					pelem->accessMethod = greenplumLegacyAOoptions(NULL, &pelem->options);
+					pelem->accessMethod = greengageLegacyAOoptions(NULL, &pelem->options);
 					pelem->tablespacename = $6;
 
 					pc->arg = (Node *) pelem;
@@ -4344,7 +4344,7 @@ alter_table_partition_cmd:
 					pelem->location  = @4;
 					pelem->isDefault = false;
 					pelem->options = $5;
-					pelem->accessMethod = greenplumLegacyAOoptions(NULL, &pelem->options);
+					pelem->accessMethod = greengageLegacyAOoptions(NULL, &pelem->options);
 					pelem->tablespacename = $6;
 
 					pc->arg = (Node *) pelem;
@@ -4990,7 +4990,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = (DistributedBy *) $14;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -5022,7 +5022,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = (DistributedBy *) $17;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -5055,7 +5055,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = (DistributedBy *) $13;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -5088,7 +5088,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = (DistributedBy *) $16;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -5121,7 +5121,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = NULL;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -5154,7 +5154,7 @@ CreateStmt:	CREATE OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->distributedBy = NULL;
 					n->relKind = RELKIND_RELATION;
 
-					n->accessMethod = greenplumLegacyAOoptions(n->accessMethod, &n->options);
+					n->accessMethod = greengageLegacyAOoptions(n->accessMethod, &n->options);
 
 					$$ = (Node *)n;
 				}
@@ -6358,7 +6358,7 @@ TabPartitionBoundarySpecValList:
 
 /*
  * In PostgreSQL, the RANGE FROM is always inclusive and the RANGE TO
- * exclusive, but the old Greenplum syntax with START/END is more
+ * exclusive, but the old Greengage syntax with START/END is more
  * flexible.
  */
 OptTabPartitionRangeInclusive:
@@ -6543,7 +6543,7 @@ TabPartitionElem:
 						n->location  = @1;
 						n->isDefault = 0;
 						n->options = $3;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $4;
 						n->colencs   = $5;
 						$$ = (Node *)n;
@@ -6561,7 +6561,7 @@ TabPartitionElem:
 						n->location  = @1;
 						n->isDefault = true;
 						n->options = $2;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $3;
 						n->colencs   = $4;
 						$$ = (Node *)n;
@@ -6579,7 +6579,7 @@ TabPartitionElem:
 						n->location  = @1;
 						n->isDefault = 0;
 						n->options = $2;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $3;
 						n->colencs   = $4;
 						$$ = (Node *)n;
@@ -6604,7 +6604,7 @@ TabSubPartitionElem:
 						n->location  = @1;
 						n->isDefault = 0;
 						n->options = $3;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $4;
 						n->colencs   = $5;
 						$$ = (Node *)n;
@@ -6623,7 +6623,7 @@ TabSubPartitionElem:
 						n->location  = @1;
 						n->isDefault = true;
 						n->options = $2;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $3;
 						n->colencs   = $4;
 						$$ = (Node *)n;
@@ -6642,7 +6642,7 @@ TabSubPartitionElem:
 						n->isDefault = false;
 						n->colencs   = $4;
 						n->options = $2;
-						n->accessMethod = greenplumLegacyAOoptions(NULL, &n->options);
+						n->accessMethod = greengageLegacyAOoptions(NULL, &n->options);
 						n->tablespacename = $3;
 						$$ = (Node *)n;
 				}
@@ -6926,7 +6926,7 @@ create_as_target:
 					$$->viewQuery = NULL;
 					$$->skipData = false;		/* might get changed later */
 
-					$$->accessMethod = greenplumLegacyAOoptions($$->accessMethod, &$$->options);
+					$$->accessMethod = greengageLegacyAOoptions($$->accessMethod, &$$->options);
 				}
 		;
 
@@ -7374,7 +7374,7 @@ create_mv_target:
 					$$->viewQuery = NULL;		/* filled at analysis time */
 					$$->skipData = false;		/* might get changed later */
 
-					$$->accessMethod = greenplumLegacyAOoptions($$->accessMethod, &$$->options);
+					$$->accessMethod = greengageLegacyAOoptions($$->accessMethod, &$$->options);
 				}
 		;
 
@@ -23107,7 +23107,7 @@ isSetWithReorganize(List **options)
 
 
 /*
- * Greenplum: a thin wax off layer to keep compatibility with the legacy syntax
+ * Greengage: a thin wax off layer to keep compatibility with the legacy syntax
  * for appendoptimized options. Before the introduction of the tableam in
  * postgres, appendoptimized and column orientated tables were expressed in the
  * options list which corresponded to StdRelOptions.
@@ -23116,7 +23116,7 @@ isSetWithReorganize(List **options)
  * the corresponding accessMethod. The accessMethod takes precedence.
  */
 static char *
-greenplumLegacyAOoptions(const char *accessMethod, List **options)
+greengageLegacyAOoptions(const char *accessMethod, List **options)
 {
 	List	 *amendedOptions = NIL;
 	ListCell *lc;

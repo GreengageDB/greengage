@@ -601,7 +601,7 @@ ExecProcNodeFirst(PlanState *node)
 	 *
 	 * GPDB: Unfortunately, GPDB has a bunch of extra stuff that we need
 	 * to do on every node, so we cannot make use of this upstream optimization.
-	 * ExecProcNodeGPDB() is a wrapper that does all the Greenplum-specific
+	 * ExecProcNodeGPDB() is a wrapper that does all the Greengage-specific
 	 * extra stuff.
 	 */
 #if 0

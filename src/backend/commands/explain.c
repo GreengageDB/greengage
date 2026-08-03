@@ -192,7 +192,7 @@ static void ExplainPropertyStringInfo(const char *qlabel, ExplainState *es,
 									  pg_attribute_printf(3, 4);
 static int countLeafPartTables(Oid relId);
 
-/* Include the Greenplum EXPLAIN extensions */
+/* Include the Greengage EXPLAIN extensions */
 #include "explain_gp.c"
 
 
@@ -844,7 +844,7 @@ ExplainPrintSettings(ExplainState *es)
 	struct config_generic **gucs = NULL;
 
 	/* bail out if information about settings not requested */
-	/* Greenplum prints some GUCs when verbose too */
+	/* Greengage prints some GUCs when verbose too */
 	if (!es->settings && !es->verbose)
 		return;
 

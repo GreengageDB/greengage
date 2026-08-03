@@ -109,7 +109,7 @@ select count(*) from t_inner right join t_outer on t_inner.c2=t_outer.c2
 -- It may short cut if some previous qual is test null expr.
 -- So ExecPrefetchJoinQual has to force ExecQual for each
 -- qual expr in the joinqual list. See the Github issue
--- https://github.com/greenplum-db/gpdb/issues/8677
+-- https://github.com/GreengageDB/greengage/issues/8677
 -- for details.
 select count(*) from t_inner right join t_outer on t_inner.c2=t_outer.c2
    and (t_inner.c1 is null or not exists (select 0 from t_subplan where t_subplan.c2=t_outer.c1));

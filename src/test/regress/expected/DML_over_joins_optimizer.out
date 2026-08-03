@@ -570,7 +570,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
 create table p (a int4, b int4, c int4) 
 	partition by range (c) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into p select generate_series(1,10000), generate_series(1,10000)*3, generate_series(1,10000)%6;
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -627,7 +627,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
 create table p (a int8, b int8, c int8) 
 	partition by range (c) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into p select generate_series(1,10000), generate_series(1,10000)*3, generate_series(1,10000)%6;
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -684,7 +684,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
 create table p (a float4, b float4, c float4) 
 	partition by range (c) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into p select generate_series(1,10000), generate_series(1,10000)*3, generate_series(1,10000)%6;
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -741,7 +741,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
 create table p (a float(24), b float(24), c float(24)) 
 	partition by range (c) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into p select generate_series(1,10000), generate_series(1,10000)*3, generate_series(1,10000)%6;
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -798,7 +798,7 @@ INFO:  GPORCA failed to produce a plan, falling back to planner
 DETAIL:  Feature not supported: Unexpected target list entries in ProjectSet node
 create table p (a float(53), b float(53), c float(53)) 
 	partition by range (c) (start(1) end(5) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into p select generate_series(1,10000), generate_series(1,10000)*3, generate_series(1,10000)%6;
 INFO:  GPORCA failed to produce a plan, falling back to planner
@@ -1251,7 +1251,7 @@ CREATE TABLE update_test (
 	b INT,
 	c TEXT
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'e' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO update_test(a,b,c) VALUES (5, 10, 'foo');
 INSERT INTO update_test(b,a) VALUES (15, 10);
@@ -2323,10 +2323,10 @@ NOTICE:  table "part_eq_dis_1" does not exist, skipping
 drop table if exists part_eq_dis_2;
 NOTICE:  table "part_eq_dis_2" does not exist, skipping
 create table part_eq_dis_1 (a int4, b int4) partition by range (a) (start(1) end(20) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_eq_dis_2 (c int4, d int4) partition by range (c) (start(1) end(20) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part_eq_dis_1 select generate_series(1,40), generate_series(1,40);
 insert into part_eq_dis_2 select generate_series(1,40), generate_series(1,40);
@@ -2335,10 +2335,10 @@ NOTICE:  table "part_neq_dis_1" does not exist, skipping
 drop table if exists part_neq_dis_2;
 NOTICE:  table "part_neq_dis_2" does not exist, skipping
 create table part_neq_dis_1 (a int4, b int4) partition by range (b) (start(1) end(20) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_neq_dis_2 (c int4, d int4) partition by range (d) (start(1) end(20) every(1), default partition extra);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into part_neq_dis_1 select generate_series(1,40), generate_series(1,40);
 insert into part_neq_dis_2 select generate_series(1,40), generate_series(1,40);

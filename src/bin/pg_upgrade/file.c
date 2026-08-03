@@ -20,7 +20,7 @@
 #include <linux/fs.h>
 #endif
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "access/visibilitymapdefs.h"
 #include "common/file_perm.h"
 #include "pg_upgrade.h"

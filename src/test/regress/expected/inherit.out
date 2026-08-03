@@ -2,7 +2,7 @@
 -- Test inheritance features
 --
 CREATE TABLE a (aa TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE b (bb TEXT) INHERITS (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -549,7 +549,7 @@ CREATE TEMP TABLE z2 (b TEXT, UNIQUE(aa, b)) inherits (a);
 INSERT INTO z2 VALUES (NULL, 'text'); -- should work
 -- Check inherited UPDATE with first child excluded
 create table some_tab (f1 int, f2 int, f3 int, check (f1 < 10) no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table some_tab_child () inherits(some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -580,7 +580,7 @@ NOTICE:  drop cascades to table some_tab_child
 drop function some_tab_stmt_trig_func();
 -- Check inherited UPDATE with all children excluded
 create table some_tab (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table some_tab_child () inherits (some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -626,12 +626,12 @@ drop table some_tab cascade;
 NOTICE:  drop cascades to table some_tab_child
 -- Check UPDATE with inherited target and an inherited source table
 create temp table foo(f1 int, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table foo2(f3 int) inherits (foo);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create temp table bar(f1 int, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table bar2(f3 int) inherits (bar);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -681,14 +681,14 @@ select tableoid::regclass::text as relname, bar.* from bar order by 1,2;
 
 -- Check UPDATE with *partitioned* inherited target and an appendrel subquery
 create table some_tab (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into some_tab values (0);
 create table some_tab_child () inherits (some_tab);
 NOTICE:  table has parent, setting distribution columns to match parent table
 insert into some_tab_child values (1);
 create table parted_tab (a int, b char) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_tab_part1 partition of parted_tab for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -736,7 +736,7 @@ explain update parted_tab set a = 2 where false;
 drop table parted_tab;
 -- Check UPDATE with multi-level partitioned inherited target
 create table mlparted_tab (a int, b char, c text) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mlparted_tab_part1 partition of mlparted_tab for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -767,16 +767,16 @@ drop table some_tab cascade;
 NOTICE:  drop cascades to table some_tab_child
 /* Test multiple inheritance of column defaults */
 CREATE TABLE firstparent (tomorrow date default now()::date + 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE secondparent (tomorrow date default  now() :: date  +  1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE jointchild () INHERITS (firstparent, secondparent);  -- ok
 NOTICE:  table has parent, setting distribution columns to match parent table
 NOTICE:  merging multiple inherited definitions of column "tomorrow"
 CREATE TABLE thirdparent (tomorrow date default now()::date - 1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tomorrow' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE otherchild () INHERITS (firstparent, thirdparent);  -- not ok
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -812,10 +812,10 @@ select * from d;
 -- column; but we should reject that if any definition was inherited from
 -- an unrelated parent.
 create temp table parent1(f1 int, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table parent2(f1 int, f3 bigint);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table childtab(f4 int) inherits(parent1, parent2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -825,7 +825,7 @@ ERROR:  cannot alter inherited column "f1" of relation "childtab"
 alter table parent1 alter column f2 type bigint;  -- ok
 -- Test non-inheritable parent constraints
 create table p1(ff1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table p1 add constraint p1chk check (ff1 > 0) no inherit;
 alter table p1 add constraint p2chk check (ff1 > 10);
@@ -870,7 +870,7 @@ NOTICE:  drop cascades to table c1
 -- Tests for casting between the rowtypes of parent and child
 -- tables. See the pgsql-hackers thread beginning Dec. 4/04
 create table base (i integer);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table derived () inherits (base);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -913,10 +913,10 @@ drop table more_derived;
 drop table derived;
 drop table base;
 create table p1(ff1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ff1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f1 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create function p2text(p2) returns text as 'select $1.f1' language sql;
 create table c1(f3 int) inherits(p1,p2);
@@ -933,7 +933,7 @@ drop table c1;
 drop table p2;
 drop table p1;
 CREATE TABLE ac (aa TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'aa' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table ac add constraint ac_check check (aa is not null);
 CREATE TABLE bc (bb TEXT) INHERITS (ac);
@@ -1007,7 +1007,7 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 drop table bc;
 drop table ac;
 create table ac (a int constraint check_a check (a <> 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bc (a int constraint check_a check (a <> 0), b int constraint check_b check (b <> 0)) inherits (ac);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1024,10 +1024,10 @@ select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pg
 drop table bc;
 drop table ac;
 create table ac (a int constraint check_a check (a <> 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bc (b int constraint check_b check (b <> 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cc (c int constraint check_c check (c <> 0)) inherits (ac, bc);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1056,10 +1056,10 @@ drop table cc;
 drop table bc;
 drop table ac;
 create table p1(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table c1(f3 int) inherits(p1,p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1115,7 +1115,7 @@ drop cascades to table c2
 drop cascades to table c3
 drop table p2 cascade;
 create table pp1 (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cc1 (f2 text, f3 int) inherits (pp1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1178,10 +1178,10 @@ DETAIL:  drop cascades to table cc1
 drop cascades to table cc2
 -- Test for renaming in simple multiple inheritance
 CREATE TABLE inht1 (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inhs1 (b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inhts (d int) INHERITS (inht1, inhs1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1359,7 +1359,7 @@ CREATE TABLE test_ex_constraints (
     dkey inet,
     EXCLUDE USING gist (dkey inet_ops WITH =, c WITH &&)
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dkey' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'dkey' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE test_ex_constraints_inh () INHERITS (test_ex_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1398,9 +1398,9 @@ DROP TABLE test_ex_constraints;
 -- Test non-inheritable foreign key constraints
 CREATE TABLE test_primary_constraints(id int PRIMARY KEY);
 CREATE TABLE test_foreign_constraints(id1 int REFERENCES test_primary_constraints(id));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE test_foreign_constraints_inh () INHERITS (test_foreign_constraints);
 NOTICE:  table has parent, setting distribution columns to match parent table
 \d+ test_primary_constraints
@@ -1450,7 +1450,7 @@ DROP TABLE test_primary_constraints;
 create table inh_fk_1 (a int primary key);
 insert into inh_fk_1 values (1), (2), (3);
 create table inh_fk_2 (x int primary key, y int references inh_fk_1 on delete cascade);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 insert into inh_fk_2 values (11, 1), (22, 2), (33, 3);
 create table inh_fk_2_child () inherits (inh_fk_2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1478,7 +1478,7 @@ select * from inh_fk_2 order by 1, 2;
 drop table inh_fk_1, inh_fk_2, inh_fk_2_child;
 -- Test that parent and child CHECK constraints can be created in either order
 create table p1(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits(p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1589,19 +1589,19 @@ drop cascades to table p1_c3
 -- reverse is not allowed.
 --
 create table p1(f1 int constraint p1_a_check check (f1 > 0) not enforced);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1(f1 int constraint p1_a_check check (f1 > 0) enforced);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table p1_c1 inherit p1;
 drop table p1 cascade;
 NOTICE:  drop cascades to table p1_c1
 create table p1(f1 int constraint p1_a_check check (f1 > 0) enforced);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1(f1 int constraint p1_a_check check (f1 > 0) not enforced);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table p1_c1 inherit p1;
 ERROR:  constraint "p1_a_check" conflicts with NOT ENFORCED constraint on child table "p1_c1"
@@ -1610,7 +1610,7 @@ drop table p1, p1_c1;
 -- Test DROP behavior of multiply-defined CHECK constraints
 --
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1 (f1 int constraint f1_pos CHECK (f1 > 0)) inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1632,10 +1632,10 @@ Distributed by: (f1)
 drop table p1 cascade;
 NOTICE:  drop cascades to table p1_c1
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p2(f1 int constraint f1_pos CHECK (f1 > 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1p2_c1 (f1 int) inherits (p1, p2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1672,7 +1672,7 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table p1p2_c1
 drop cascades to table p1p2_c2
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1708,7 +1708,7 @@ DETAIL:  drop cascades to table p1_c1
 drop cascades to table p1_c2
 drop cascades to table p1_c1c2
 create table p1(f1 int constraint f1_pos CHECK (f1 > 0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table p1_c1() inherits (p1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1745,7 +1745,7 @@ drop cascades to table p1_c2
 drop cascades to table p1_c1c2
 -- Test that a valid child can have not-valid parent, but not vice versa
 create table invalid_check_con(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table invalid_check_con_child() inherits(invalid_check_con);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2094,7 +2094,7 @@ drop cascades to table matest3
 -- a plan with extraneous sorting
 --
 create table matest0 (a int, b int, c int, d int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table matest1 () inherits(matest0);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2339,10 +2339,10 @@ rollback;
 -- Check handling of MULTIEXPR SubPlans in inherited updates
 --
 create table inhpar(f1 int, f2 name);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inhcld(f2 name, f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inhcld inherit inhpar;
 insert into inhpar select x, x::text from generate_series(1,5) x;
@@ -2487,7 +2487,7 @@ drop table inhpar cascade;
 -- Check handling of a constant-null CHECK constraint
 --
 create table cnullparent (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cnullchild (check (f1 = 1 or f1 = null)) inherits(cnullparent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2514,7 +2514,7 @@ NOTICE:  drop cascades to table cnullchild
 -- Test inheritance of NOT NULL constraints
 --
 create table pp1 (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table cc1 (f2 text, f3 int) inherits (pp1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2701,10 +2701,10 @@ alter table pp1 add primary key (f1);
 -- Leave these tables around, for pg_upgrade testing
 -- test that removing inheritance of NOT NULL NO INHERIT works correctly
 create table inh_parent (f1 int not null no inherit, f2 int not null no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child (f1 int not null no inherit, f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inh_child inherit inh_parent;
 alter table inh_child no inherit inh_parent;
@@ -2721,7 +2721,7 @@ Distributed by: (f1)
 drop table inh_parent, inh_child;
 -- test that inhcount is updated correctly through multiple inheritance
 create table inh_pp1 (f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_cc1 (f2 text, f3 int) inherits (inh_pp1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2745,7 +2745,7 @@ Distributed by: (f1)
 
 drop table inh_pp1, inh_cc1, inh_cc2;
 create table inh_pp1 (f1 int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_cc1 (f2 text, f3 int) inherits (inh_pp1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2779,10 +2779,10 @@ NOTICE:  merging definition of column "i" for child "inh_grandchild"
 drop table inh_parent, inh_child, inh_grandchild;
 -- Test the same constraint name for different columns in different parents
 create table inh_parent1(a int constraint nn not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_parent2(b int constraint nn not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child1 () inherits (inh_parent1, inh_parent2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2859,7 +2859,7 @@ Distributed by: (a, b)
 drop table inh_parent1, inh_parent2, inh_child;
 -- NOT NULL NO INHERIT
 create table inh_nn_parent(a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_nn_child() inherits (inh_nn_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2904,7 +2904,7 @@ Distributed by: (a)
 
 drop table inh_nn_parent, inh_nn_child, inh_nn_child2;
 CREATE TABLE inh_nn_parent (a int, NOT NULL a NO INHERIT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inh_nn_child() INHERITS (inh_nn_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2918,7 +2918,7 @@ NOTICE:  drop cascades to table inh_nn_child
 -- Adding a PK at the top level of a hierarchy should cause all descendants
 -- to be checked for nulls, even past a no-inherit constraint
 CREATE TABLE inh_nn_lvl1 (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inh_nn_lvl2 () INHERITS (inh_nn_lvl1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2932,7 +2932,7 @@ DROP TABLE inh_nn_lvl1, inh_nn_lvl2, inh_nn_lvl3;
 CREATE TABLE inh_nn1 (a int primary key, b int, not null a no inherit);
 ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
 CREATE TABLE inh_nn1 (a int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE inh_nn2 (a int not null no inherit) INHERITS (inh_nn1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -2940,11 +2940,11 @@ NOTICE:  merging column "a" with inherited definition
 ERROR:  cannot define not-null constraint with NO INHERIT on column "a"
 DETAIL:  The column has an inherited not-null constraint.
 CREATE TABLE inh_nn3 (a int not null, b int,  not null a no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
 CREATE TABLE inh_nn4 (a int not null no inherit, b int,  not null a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  conflicting NO INHERIT declaration for not-null constraint on column "a"
 DROP TABLE IF EXISTS inh_nn1, inh_nn2, inh_nn3, inh_nn4;
@@ -2955,13 +2955,13 @@ NOTICE:  table "inh_nn4" does not exist, skipping
 -- test inherit/deinherit
 --
 create table inh_parent(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child1(f1 int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child2(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- inh_child1 should have not null constraint
 alter table inh_child1 inherit inh_parent;
@@ -3066,20 +3066,20 @@ select conrelid::regclass, conname, contype, coninhcount, conislocal
 drop table inh_parent, inh_child1, inh_child2, inh_child3;
 -- ALTER TABLE INHERIT ensures that the child has not-null constraints
 create table inh_parent (a int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child (a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inh_child inherit inh_parent; -- nope
 ERROR:  column "a" in child table "inh_child" must be marked NOT NULL
 drop table inh_parent, inh_child;
 -- Can't merge a NO INHERIT constraint with a normal one
 create table inh_parent (a int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child (a int not null no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inh_child inherit inh_parent;
 ERROR:  constraint "inh_child_a_not_null" conflicts with non-inherited constraint on child table "inh_child"
@@ -3093,7 +3093,7 @@ NOTICE:  merging column "a" with inherited definition
 -- there is no working distribution for this exclusion constraint, so omit it.
 alter table inh_parent add constraint inh_parent_uq unique (a);
 alter table inh_parent add constraint inh_parent_fk foreign key (a) references inh_parent (a);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 create table inh_child2 () inherits (inh_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table inh_child3 (like inh_parent);
@@ -3120,7 +3120,7 @@ drop table inh_parent, inh_child, inh_child2, inh_child3;
 -- test multi inheritance tree
 --
 create table inh_parent(f1 int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child1() inherits(inh_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3150,10 +3150,10 @@ drop cascades to table inh_child3
 -- test child table with inherited columns and
 -- with explicitly specified not null constraints
 create table inh_parent_1(f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_parent_2(f2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_child(f1 int not null, f2 text not null) inherits(inh_parent_1, inh_parent_2);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3176,16 +3176,16 @@ NOTICE:  drop cascades to table inh_child
 drop table inh_parent_2;
 -- test multi layer inheritance tree
 create table inh_p1(f1 int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_p2(f1 int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_p3(f2 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_p4(f1 int not null, f3 text not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_multiparent() inherits(inh_p1, inh_p2, inh_p3, inh_p4);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3236,16 +3236,16 @@ drop cascades to table inh_multiparent2
 -- Test ALTER CONSTRAINT SET [NO] INHERIT
 --
 create table inh_nn1 (f1 int not null no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_nn2 (f2 text, f3 int, f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inh_nn2 inherit inh_nn1;
 create table inh_nn3 (f4 float) inherits (inh_nn2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table inh_nn4 (f5 int, f4 float, f2 text, f3 int, f1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f5' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f5' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table inh_nn4 inherit inh_nn2, inherit inh_nn1, inherit inh_nn3;
 alter table inh_nn1 alter constraint inh_nn1_f1_not_null inherit;
@@ -3291,7 +3291,7 @@ select conrelid::regclass, conname, coninhcount, conislocal, connoinherit
 drop table inh_nn1, inh_nn2, inh_nn3, inh_nn4;
 -- Test inherit constraint and make sure it validates.
 create table inh_nn1 (f1 int not null no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_nn2 (f2 text, f3 int) inherits (inh_nn1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3322,7 +3322,7 @@ select conrelid::regclass, conname, coninhcount, conislocal, connoinherit
 drop table inh_nn1, inh_nn2, inh_nn3, inh_nn4;
 -- Test not null inherit constraint which already exists on child table.
 create table inh_nn1 (f1 int not null no inherit);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inh_nn2 (f2 text, f3 int) inherits (inh_nn1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3358,7 +3358,7 @@ select conrelid::regclass, conname, conkey, coninhcount, conislocal, connoinheri
 drop table inh_nn1, inh_nn2, inh_nn3;
 -- Negative scenarios for alter constraint .. inherit.
 create table inh_nn1 (f1 int check(f1 > 5) primary key references inh_nn1, f2 int not null);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 -- constraints other than not-null are not supported
 alter table inh_nn1 alter constraint inh_nn1_f1_check inherit;
 ERROR:  constraint "inh_nn1_f1_check" of relation "inh_nn1" is not a not-null constraint
@@ -3386,7 +3386,7 @@ grant all on schema public to regress_alice, regress_bob;
 grant regress_alice to regress_bob;
 set session authorization regress_alice;
 create table inh_parent (a int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 set session authorization regress_bob;
 create table inh_child () inherits (inh_parent);
@@ -3405,10 +3405,10 @@ drop role regress_alice, regress_bob;
 -- Check use of temporary tables with inheritance trees
 --
 create table inh_perm_parent (a1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table inh_temp_parent (a1 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create temp table inh_temp_child () inherits (inh_perm_parent); -- ok
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3446,7 +3446,7 @@ NOTICE:  drop cascades to table inh_temp_child_2
 create table list_parted (
 	a	varchar
 ) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_ab_cd partition of list_parted for values in ('ab', 'cd');
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3533,7 +3533,7 @@ create table range_list_parted (
 	a	int,
 	b	char(2)
 ) partition by range (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_1_10 partition of range_list_parted for values from (1) to (10) partition by list (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3715,7 +3715,7 @@ drop table range_list_parted;
 -- check that constraint exclusion is able to cope with the partition
 -- constraint emitted for multi-column range partitioned tables
 create table mcrparted (a int, b int, c int) partition by range (a, abs(b), c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mcrparted_def partition of mcrparted default;
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -3867,7 +3867,7 @@ explain (costs off) select * from mcrparted where a = 20 and c > 20; -- scans mc
 -- check that partitioned table Appends cope with being referenced in
 -- subplans
 create table parted_minmax (a int, b varchar(16)) partition by range (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table parted_minmax1 partition of parted_minmax for values from (1) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4022,7 +4022,7 @@ explain (costs off) select * from mcrparted where a < 20 order by a, abs(b), c;
 set enable_bitmapscan to off;
 set enable_sort to off;
 create table mclparted (a int) partition by list(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mclparted1 partition of mclparted for values in(1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4241,7 +4241,7 @@ reset enable_bitmapscan;
 drop table mcrparted;
 -- Ensure LIST partitions allow an Append to be used instead of a MergeAppend
 create table bool_lp (b bool) partition by list(b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bool_lp_true partition of bool_lp for values in(true);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4262,7 +4262,7 @@ explain (costs off) select * from bool_lp order by b;
 drop table bool_lp;
 -- Ensure const bool quals can be properly detected as redundant
 create table bool_rp (b bool, a int) partition by range(b,a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table bool_rp_false_1k partition of bool_rp for values from (false,0) to (false,1000);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4338,7 +4338,7 @@ drop table bool_rp;
 -- Ensure an Append scan is chosen when the partition order is a subset of
 -- the required order.
 create table range_parted (a int, b int, c int) partition by range(a, b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table range_parted1 partition of range_parted for values from (0,0) to (10,10);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -4588,14 +4588,14 @@ DETAIL:  Partition key of the failing row contains (partid) = (30).
 DROP TABLE errtst_parent;
 -- Check that we have the correct tuples estimate for an appendrel
 create table tuplesest_parted (a int, b int, c float) partition by range(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table tuplesest_parted1 partition of tuplesest_parted for values from (0) to (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table tuplesest_parted2 partition of tuplesest_parted for values from (100) to (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table tuplesest_tab (a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into tuplesest_parted select i%200, i%300, i%400 from generate_series(1, 1000)i;
 insert into tuplesest_tab select i, i from generate_series(1, 100)i;

@@ -6,7 +6,7 @@
 -- create required tables
 --
 CREATE TABLE FLOAT8_NUMER_TBL(i INT DEFAULT 1, f1 float8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('0.0');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-34.84');
@@ -14,7 +14,7 @@ INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1004.30');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1.2345678901234e+200');
 INSERT INTO FLOAT8_NUMER_TBL(f1) VALUES ('-1.2345678901234e-200');
 CREATE TABLE INT2_NUMER_TBL(f1 int2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('0   ');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('  1234 ');
@@ -22,7 +22,7 @@ INSERT INTO INT2_NUMER_TBL(f1) VALUES ('    -1234');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('32767');
 INSERT INTO INT2_NUMER_TBL(f1) VALUES ('-32767');
 CREATE TABLE INT4_NUMER_TBL(f1 int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO INT4_NUMER_TBL(f1) VALUES ('   0  ');
 INSERT INTO INT4_NUMER_TBL(f1) VALUES ('123456     ');
@@ -382,7 +382,7 @@ LINE 1: PREPARE p1 AS SELECT $0_1;
 --  so let's try explicit conversions for now - tgl 97/05/07
 --
 CREATE TABLE TEMP_FLOAT (f1 FLOAT8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEMP_FLOAT (f1)
   SELECT float8(f1) FROM INT4_NUMER_TBL;
@@ -406,7 +406,7 @@ SELECT f1 FROM TEMP_FLOAT
 
 -- int4
 CREATE TABLE TEMP_INT4 (f1 INT4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEMP_INT4 (f1)
   SELECT int4(f1) FROM FLOAT8_NUMER_TBL
@@ -430,7 +430,7 @@ SELECT f1 FROM TEMP_INT4
 
 -- int2
 CREATE TABLE TEMP_INT2 (f1 INT2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEMP_INT2 (f1)
   SELECT int2(f1) FROM FLOAT8_NUMER_TBL
@@ -453,7 +453,7 @@ SELECT f1 FROM TEMP_INT2
 -- Group-by combinations
 --
 CREATE TABLE TEMP_GROUP (f1 INT4, f2 INT4, f3 FLOAT8);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO TEMP_GROUP
   SELECT 1, (- i.f1), (- f.f1)

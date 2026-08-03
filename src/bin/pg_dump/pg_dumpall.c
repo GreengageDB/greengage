@@ -314,7 +314,7 @@ main(int argc, char *argv[])
 				break;
 
 			/*
-			 * Both Greenplum and PostgreSQL have used -r but for different
+			 * Both Greengage and PostgreSQL have used -r but for different
 			 * options, disallow the short option entirely to avoid confusion
 			 * and require the use of long options for the conflicting pair.
 			 */
@@ -644,7 +644,7 @@ main(int argc, char *argv[])
 	if (quote_all_identifiers)
 		executeCommand(conn, "SET quote_all_identifiers = true");
 
-	fprintf(OPF,"--\n-- Greenplum Database cluster dump\n--\n\n");
+	fprintf(OPF,"--\n-- Greengage Database cluster dump\n--\n\n");
 	if (verbose)
 		dumpTimestamp("Started on");
 
@@ -679,7 +679,7 @@ main(int argc, char *argv[])
 	if (binary_upgrade)
 	{
 		/*
-		 * Greenplum doesn't allow altering system catalogs without
+		 * Greengage doesn't allow altering system catalogs without
 		 * setting the allow_system_table_mods GUC first.
 		 */
 		fprintf(OPF, "SET allow_system_table_mods = true;\n");
@@ -827,8 +827,8 @@ help(void)
 	printf(_("  --use-set-session-authorization\n"
 			 "                               use SET SESSION AUTHORIZATION commands instead of\n"
 			 "                               ALTER OWNER commands to set ownership\n"));
-	printf(_("  --gp-syntax                  dump with Greenplum Database syntax (default if gpdb)\n"));
-	printf(_("  --no-gp-syntax               dump without Greenplum Database syntax (default if postgresql)\n"));
+	printf(_("  --gp-syntax                  dump with Greengage Database syntax (default if gpdb)\n"));
+	printf(_("  --no-gp-syntax               dump without Greengage Database syntax (default if postgresql)\n"));
 
 	printf(_("\nConnection options:\n"));
 	printf(_("  -d, --dbname=CONNSTR     connect using connection string\n"));
@@ -1269,7 +1269,7 @@ dumpRoles(PGconn *conn)
 	int			i;
 	bool		exttab_auth = (server_version >= 80214);
 	/*
-	 * Support for gphdfs was removed in Greenplum 6
+	 * Support for gphdfs was removed in Greengage 6
 	 */
 	bool		hdfs_auth = (server_version >= 80215 && server_version < 80400);
 	char	   *resq_col = resource_queues ? ", (SELECT rsqname FROM pg_resqueue WHERE "
@@ -1950,7 +1950,7 @@ dumpTablespaces(PGconn *conn)
 	 * pg_xxx)
 	 *
 	 * [FIXME] the queries need to be slightly different if the backend isn't
-	 * Greenplum, and the dump format should vary depending on if the dump is
+	 * Greengage, and the dump format should vary depending on if the dump is
 	 * --gp-syntax or --no-gp-syntax.
 	 */
 	if (server_version >= 90200)

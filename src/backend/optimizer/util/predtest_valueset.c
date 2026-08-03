@@ -175,7 +175,7 @@ DeletePossibleValueSetData(PossibleValueSet *pvs)
 /**
  * basic operation on PossibleValueSet:  add a value to the set field of PossibleValueSet
  *
- * The caller must verify that the valueToCopy is greenplum hashable
+ * The caller must verify that the valueToCopy is greengage hashable
  */
 static void
 AddValue(PossibleValueSet *pvs, Const *valueToCopy)

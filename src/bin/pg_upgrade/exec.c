@@ -13,7 +13,7 @@
 
 #include "pg_upgrade.h"
 
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 
 static void check_data_dir(ClusterInfo *cluster);
 static void check_bin_dir(ClusterInfo *cluster);
@@ -52,8 +52,8 @@ get_bin_version(ClusterInfo *cluster)
 		pg_fatal("could not get pg_ctl version data using %s: %s",
 				 cmd, wait_result_to_str(rc));
 
-	/* GPDB: binaries report "(Greenplum Database)" version strings */
-	if (sscanf(cmd_output, "%*s (Greenplum Database) %d.%d", &v1, &v2) < 1)
+	/* GPDB: binaries report "(Greengage Database)" version strings */
+	if (sscanf(cmd_output, "%*s (Greengage Database) %d.%d", &v1, &v2) < 1)
 		pg_fatal("could not get pg_ctl version output from %s", cmd);
 
 	if (v1 < 10)
@@ -451,8 +451,8 @@ gpdb_validate_exec(const char *dir, const char *cmdName)
 
 	/*
 	 * GPDB: upstream's check_exec() optionally compares the binary's "-V"
-	 * output against "<program> (PostgreSQL) " PG_VERSION.  Greenplum
-	 * binaries report "(Greenplum Database)" version strings, and pg_upgrade
+	 * output against "<program> (PostgreSQL) " PG_VERSION.  Greengage
+	 * binaries report "(Greengage Database)" version strings, and pg_upgrade
 	 * must accept source-cluster binaries from older major versions, so we
 	 * do not perform that version-equality check (target-cluster checks can
 	 * also be skipped entirely, see is_skip_target_check()).

@@ -4692,7 +4692,7 @@ ExecEndAgg(AggState *node)
 }
 
 /*
- * It's quite different from upstream, because Greenplum share some same works
+ * It's quite different from upstream, because Greengage share some same works
  * with ExecEagerFreeAgg() here.
  */
 void

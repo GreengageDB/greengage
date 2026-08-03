@@ -135,7 +135,7 @@ DROP TABLE t_concurrent_update;
 -- to follow the update link to fetch the new tuple. The
 -- other transaction should raise error for such case.
 -- the following case should be tested with GDD enabled.
--- See github issue: https://github.com/greenplum-db/gpdb/issues/8919
+-- See github issue: https://github.com/GreengageDB/greengage/issues/8919
 
 0:create table t_splitupdate_raise_error (a int, b int) distributed by (a);
 0:insert into t_splitupdate_raise_error values (1, 1);

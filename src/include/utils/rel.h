@@ -730,7 +730,7 @@ RelationCloseSmgr(Relation relation)
 #define RelationUsesLocalBuffers(relation) false
 
 /*
- * Greenplum: a separate implementation of the SMGR API is used for
+ * Greengage: a separate implementation of the SMGR API is used for
  * append-optimized relations.  This implementation is intended for relations
  * that do not use shared/local buffers.
  */

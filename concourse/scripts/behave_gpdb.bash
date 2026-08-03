@@ -9,7 +9,7 @@ function gen_env(){
     cat > /opt/run_test.sh <<-EOF
 		set -ex
 
-		source /usr/local/greenplum-db-devel/greenplum_path.sh
+		source /usr/local/greengage-db-devel/greengage_path.sh
 
 		cd "\${1}/gpdb_src/gpAux"
 		source gpdemo/gpdemo-env.sh
@@ -38,7 +38,7 @@ function _main() {
     time ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash
 
     # Run inside a subshell so it does not pollute the environment after
-    # sourcing greenplum_path
+    # sourcing greengage_path
     time (make_cluster)
 
     time install_python_requirements_on_single_host ./gpdb_src/gpMgmt/requirements-dev.txt

@@ -384,7 +384,7 @@ _copyOidAssignment(const OidAssignment *from)
 
 /*
  * GPDB: PathTarget is excluded from generated copy support upstream
- * (pg_node_attr no_copy_equal), but Greenplum's grouping-set planner
+ * (pg_node_attr no_copy_equal), but Greengage's grouping-set planner
  * (cdbgroupingpaths.c) copyObject()'s a PathTarget, so provide a copy
  * function by hand.  Deep-copies exprs, matching the prior behavior.
  */

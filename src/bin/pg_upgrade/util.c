@@ -12,7 +12,7 @@
 #include <signal.h>
 
 #include "common/username.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "pg_upgrade.h"
 
 LogOpts		log_opts;

@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 VMware, Inc. or its affiliates.
 //
 //	Implementation of the SAX parse handler class for parsing part list

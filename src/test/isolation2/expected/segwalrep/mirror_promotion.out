@@ -33,9 +33,9 @@
 -- start_ignore
 20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Starting gpstop with args: -u
 20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Gathering information and validating the environment...
-20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
 20260621:22:44:47:2271090 gpstop:b40467422d7d:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore
@@ -89,11 +89,11 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 !\retcode gprecoverseg -aF --no-progress;
 -- start_ignore
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
-20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
 20260621:22:44:52:2271144 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -226,11 +226,11 @@ CREATE
 !\retcode gprecoverseg -aF  --no-progress;
 -- start_ignore
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -aF --no-progress
-20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
 20260621:22:45:14:2271517 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -305,9 +305,9 @@ select content, preferred_role, role, status, mode from gp_segment_configuration
 -- start_ignore
 20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Starting gpstop with args: -u
 20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Gathering information and validating the environment...
-20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Greengage Coordinator catalog information
 20260621:22:45:21:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20260621:22:45:22:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:22:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
 20260621:22:45:22:2274355 gpstop:b40467422d7d:gpadmin-[INFO]:-Signalling all postmaster processes to reload
 
 -- end_ignore

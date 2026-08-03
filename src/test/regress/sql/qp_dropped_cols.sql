@@ -8328,7 +8328,7 @@ EXPLAIN (costs off) SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2
 SELECT * FROM ds_main, non_part2 WHERE ds_main.c = non_part2.e AND a IN ( SELECT a FROM non_part1) order by a;
 
 -- As of this writing, pg_dump creates an invalid dump for some of the tables
--- here. See https://github.com/greenplum-db/gpdb/issues/3598. So we must drop
+-- here. See https://github.com/GreengageDB/greengage/issues/3598. So we must drop
 -- the tables, or the pg_upgrade test fails.
 set client_min_messages='warning';
 drop schema qp_dropped_cols cascade;

@@ -25,7 +25,7 @@ sudo yum install -y \
     xerces-c-devel \
     zlib-devel
 
-# Needed for pygresql, or you can source greenplum_path.sh after compiling database and installing python-dependencies then
+# Needed for pygresql, or you can source greengage_path.sh after compiling database and installing python-dependencies then
 sudo yum install -y \
     postgresql \
     postgresql-devel
@@ -53,7 +53,7 @@ EOF
 sudo sysctl -p
 
 sudo mkdir -p /etc/security/limits.d
-sudo tee -a /etc/security/limits.d/90-greenplum.conf << EOF
+sudo tee -a /etc/security/limits.d/90-greengage.conf << EOF
 * soft nofile 1048576
 * hard nofile 1048576
 * soft nproc 1048576

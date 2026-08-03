@@ -594,7 +594,7 @@ like($psql_out, qr/^$/,
 	'postgres_fdw does not work with delegated credentials and with passfile'
 );
 
-# Greenplum tests for expiration, remove if upstream adds the similar tests
+# Greengage tests for expiration, remove if upstream adds the similar tests
 # Rewrite the pg_hba.conf to allow us doing the "ALTER USER" commands
 unlink($node->data_dir . '/pg_hba.conf');
 $node->append_conf('pg_hba.conf', qq{local all all trust});

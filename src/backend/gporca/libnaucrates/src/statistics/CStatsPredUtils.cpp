@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright 2014 VMware, Inc. or its affiliates.
 //
 //	@filename:

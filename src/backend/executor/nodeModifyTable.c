@@ -4523,7 +4523,7 @@ ExecModifyTable(PlanState *pstate)
 	if (Gp_role == GP_ROLE_EXECUTE && !Gp_is_writer)
 	{
 		/*
-		 * Current Greenplum MPP architecture only support one writer gang, and
+		 * Current Greengage MPP architecture only support one writer gang, and
 		 * only writer gang can execute DML nodes. There is no code path to reach
 		 * here. For writable CTE case as below:
 		 *

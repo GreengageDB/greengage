@@ -1065,10 +1065,10 @@ select * from foo where
 
 -- When creating plan with subquery and CTE, it sets the useless flow for the plan.
 -- But we only need flow for the topmost plan and child of the motion. See commit
--- https://github.com/greenplum-db/gpdb/commit/93abe741cd67f04958e2951edff02b45ab6e280f for detail
+-- https://github.com/GreengageDB/greengage/commit/93abe741cd67f04958e2951edff02b45ab6e280f for detail
 -- The extra flow will cause subplan set wrong motionType and cause an ERROR
 -- unexpected gang size: XX
--- This related to issue: https://github.com/greenplum-db/gpdb/issues/12371
+-- This related to issue: https://github.com/GreengageDB/greengage/issues/12371
 create table extra_flow_dist(a int, b int, c date);
 create table extra_flow_dist1(a int, b int);
 
@@ -1180,7 +1180,7 @@ explain (verbose, costs off) select * from (
 extra_flow_dist1
 where dt < '2010-01-01'::date;
 
--- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/greenplum-db/gpdb/issues/12656.
+-- Check DISTINCT ON clause and ORDER BY clause in SubLink, See https://github.com/GreengageDB/greengage/issues/12656.
 -- For EXISTS SubLink, we don’t need to care about the data deduplication problem, we can delete DISTINCT ON clause and
 -- ORDER BY clause with confidence, because we only care about whether the data exists.
 -- But for ANY SubLink, wo can't do this, because we not only care about the existence of data, but also the content of

@@ -539,7 +539,7 @@ bring_to_outer_query(PlannerInfo *root, RelOptInfo *rel, List *outer_quals)
 
 			/*
 			 * param_info cannot cover the case that an index path's orderbyclauses
-			 * See github issue: https://github.com/greenplum-db/gpdb/issues/9733
+			 * See github issue: https://github.com/GreengageDB/greengage/issues/9733
 			 */
 			if (IsA(origpath, IndexPath))
 			{
@@ -621,7 +621,7 @@ bring_to_singleQE(PlannerInfo *root, RelOptInfo *rel)
 
 			/*
 			 * param_info cannot cover the case that an index path's orderbyclauses
-			 * See github issue: https://github.com/greenplum-db/gpdb/issues/9733
+			 * See github issue: https://github.com/GreengageDB/greengage/issues/9733
 			 */
 			if (IsA(origpath, IndexPath))
 			{
@@ -754,7 +754,7 @@ set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel,
 	}
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * Change the path in pathlist if it is a general or segmentgeneral
 	 * path that contains volatile restrictions.
 	 */
@@ -2983,7 +2983,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 			config->force_singleQE = true;
 
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 * config->may_rescan is used to guide if
 		 * we should add materialize path over motion
 		 * in the left tree of a join.
@@ -3086,7 +3086,7 @@ set_subquery_pathlist(PlannerInfo *root, RelOptInfo *rel,
 												 pathkeys, locus, required_outer);
 
 		/*
-		 * Greenplum specific behavior:
+		 * Greengage specific behavior:
 		 * If the path is general or segmentgeneral locus and contains
 		 * volatile target list of havingQual, we should turn it into
 		 * singleQE.

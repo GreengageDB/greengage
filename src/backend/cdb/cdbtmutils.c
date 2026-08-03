@@ -41,9 +41,9 @@ dtxDeformGid(
 		 * Returning without an error here allows tests inheritied from
 		 * upstream PostgreSQL to run without errors.  These tests execute
 		 * PREPARE TRANSACTION command with a GID that doesn't conform to the
-		 * Greenplum specific format.  Note that DTM messages sent from QD
+		 * Greengage specific format.  Note that DTM messages sent from QD
 		 * cannot be processed in utility mode.  Therefore, we can safely
-		 * allow non-Greenplum GIDs only in utility mode.
+		 * allow non-Greengage GIDs only in utility mode.
 		 */
 		if (Gp_role == GP_ROLE_UTILITY)
 			*distribXid = 0;

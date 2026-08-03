@@ -62,7 +62,7 @@
  *
  * sizeof(Datum) == sizeof(void *) == 4 or 8
  *
- *  Greenplum CDB:
+ *  Greengage CDB:
  *     Datum is always 8 bytes, regardless if it is 32bit or 64bit machine.
  *  so may be > sizeof(void *). To align with postgres, which defines Datum as
  *  uintptr_t type, it is defined as a uintptr_t to make sure the raw Datum
@@ -91,7 +91,7 @@ typedef struct NullableDatum
 	/* due to alignment padding this could be used for flags for free */
 } NullableDatum;
 
-/* GPDB: always 8, not SIZEOF_VOID_P; see the "Greenplum CDB" note above. */
+/* GPDB: always 8, not SIZEOF_VOID_P; see the "Greengage CDB" note above. */
 #define SIZEOF_DATUM 8
 
 /*

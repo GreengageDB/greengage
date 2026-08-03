@@ -142,7 +142,7 @@ transformMergeStmt(ParseState *pstate, MergeStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("writable CTE queries cannot be themselves writable"),
-					 errdetail("Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context."),
+					 errdetail("Greengage Database currently only support CTEs with one writable clause, called in a non-writable context."),
 					 errhint("Rewrite the query to only include one writable clause.")));
 	}
 

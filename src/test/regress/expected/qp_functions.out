@@ -678,10 +678,10 @@ CREATE or REPLACE FUNCTION concat_text (text, text) RETURNS text AS '
 		RETURN $1 || $2;
 	END;
 ' LANGUAGE 'plpgsql';
-select concat_text('Green','plum');
+select concat_text('Green','gage');
  concat_text 
 -------------
- Greenplum
+ Greengage
 (1 row)
 
 CREATE or REPLACE FUNCTION sales_tax(subtotal real) RETURNS real AS $$

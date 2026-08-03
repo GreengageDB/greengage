@@ -802,7 +802,7 @@ create_collation_from_locale(const char *locale, int nspid,
 		return -1;				/* C/POSIX are already in the catalog */
 
 	/*
-	 * GPDB: Greenplum specific behavior: this function in Greenplum can only
+	 * GPDB: Greengage specific behavior: this function in Greengage can only
 	 * be called after a full cluster is built, this is different from Postgres
 	 * which might call this function during initdb.  When reaching here, it
 	 * must be in a database session, we can just ignore the collations not

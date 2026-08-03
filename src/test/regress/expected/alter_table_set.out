@@ -1,4 +1,4 @@
--- https://github.com/greenplum-db/gpdb/issues/1109
+-- https://github.com/GreengageDB/greengage/issues/1109
 --
 -- ALTER TABLE ... SET WITH (REORGANIZE = true); should always redistribute the
 -- data even with matching distribution policy
@@ -62,7 +62,7 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 
 -- ALTER TABLE ... SET for partition tables
 CREATE TABLE part_relopt(a int, b int) WITH (fillfactor=90) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_relopt_1 partition OF part_relopt FOR VALUES FROM (1) to (100);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -384,7 +384,7 @@ SELECT count(*) FROM part_relopt;
 
 -- with empty segfiles
 CREATE TABLE aoco_relopt(a int, b int) WITH (appendoptimized = true, orientation = column);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE aoco_relopt ALTER COLUMN a SET ENCODING (compresstype=rle_type, compresslevel=4), ALTER COLUMN b SET ENCODING (compresstype=zlib, compresslevel=5);
 SELECT c.relname, a.attname, e.attoptions FROM pg_attribute_encoding e, pg_class c, pg_attribute a
@@ -398,7 +398,7 @@ WHERE e.attrelid = c.oid AND e.attnum = a.attnum and e.attrelid = a.attrelid AND
 DROP TABLE aoco_relopt;
 -- Check mixed AMs in the partition hierarchy. Currently we error out.
 CREATE TABLE part_relopt2(a int, b int) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_relopt2_1 partition OF part_relopt2 FOR VALUES FROM (100) to (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -446,7 +446,7 @@ SELECT c.relname, c.reloptions FROM pg_class c WHERE c.relname = 'part_relopt2_1
 DROP TABLE part_relopt2;
 -- Check mixed AM aoco column encoding
 CREATE TABLE part_relopt3(a int, b int) WITH (appendoptimized = true, orientation = column, compresstype=zlib, compresslevel=5) PARTITION BY RANGE(a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE part_relopt3_1 partition OF part_relopt3 FOR VALUES FROM (100) to (200);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -555,7 +555,7 @@ CREATE TEMP TABLE relfilebeforeredo AS
 SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'part_relopt3%'
 UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
 WHERE relname LIKE 'part_relopt3%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE part_relopt3 ALTER COLUMN a SET ENCODING (compresslevel=4, compresstype=rle_type);
 SELECT c.relname, a.attname, e.attoptions FROM pg_attribute_encoding e, pg_class c, pg_attribute a
@@ -576,7 +576,7 @@ CREATE TEMP TABLE relfileafterredo AS
 SELECT -1 segid, relname, relfilenode FROM pg_class WHERE relname LIKE 'part_relopt3%'
 UNION SELECT gp_segment_id segid, relname, relfilenode FROM gp_dist_random('pg_class')
 WHERE relname LIKE 'part_relopt3%' ORDER BY segid;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'segid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Alter table shouldn't have rewritten the table since the options aren't changing
 SELECT * FROM relfilebeforeredo EXCEPT SELECT * FROM relfileafterredo;

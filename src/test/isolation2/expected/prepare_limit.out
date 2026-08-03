@@ -1,6 +1,6 @@
 -- test to verify a bug that causes standby startup fatal with message like
 -- "the limit of xxx distributed transactions has been reached".
--- Refer comment in https://github.com/greenplum-db/gpdb/issues/9207 for the
+-- Refer comment in https://github.com/GreengageDB/greengage/issues/9207 for the
 -- context.
 
 -- We will reset the value to 250 finally so sanity check the current value here.

@@ -265,7 +265,7 @@ ROLLBACK;
 
 -- make sure refresh mat view will dispatch oid at the final
 -- execution of the mat view's body query. See Github Issue
--- https://github.com/greenplum-db/gpdb/issues/11956 for details.
+-- https://github.com/GreengageDB/greengage/issues/11956 for details.
 
 create table t_github_issue_11956(a int, b int) distributed randomly;
 insert into t_github_issue_11956 values (1, 1);

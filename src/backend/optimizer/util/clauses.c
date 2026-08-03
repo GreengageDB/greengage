@@ -166,7 +166,7 @@ static Node *substitute_actual_srf_parameters_mutator(Node *node,
 static bool pull_paramids_walker(Node *node, Bitmapset **context);
 
 /*
- * Greenplum specific functions
+ * Greengage specific functions
  */
 static bool should_eval_stable_functions(PlannerInfo *root);
 
@@ -4788,7 +4788,7 @@ evaluate_function(Oid funcid, Oid result_type, int32 result_typmod,
 		return NULL;
 
 	/*
-	 * https://github.com/greenplum-db/gpdb/issues/14499
+	 * https://github.com/GreengageDB/greengage/issues/14499
 	 * Don't pre-evaluate when it's a stable function which prorettype==ANY
 	 * If it's in the FROM clause, pre-evaluting it will cause an ERROR, example:
 	 * ```

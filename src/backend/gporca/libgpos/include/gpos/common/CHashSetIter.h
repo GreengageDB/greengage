@@ -1,4 +1,4 @@
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 VMware, Inc. or its affiliates
 //
 //	Hash set iterator

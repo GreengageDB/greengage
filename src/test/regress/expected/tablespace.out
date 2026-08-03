@@ -76,7 +76,7 @@ REINDEX (TABLESPACE pg_global) TABLE CONCURRENTLY pg_authid;
 ERROR:  cannot reindex system catalogs concurrently
 -- table with toast relation
 CREATE TABLE regress_tblspace_test_tbl (num1 bigint, num2 double precision, t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'num1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO regress_tblspace_test_tbl (num1, num2, t)
   SELECT round(random()*100), random(), 'text'
@@ -174,7 +174,7 @@ DROP TABLE regress_tblspace_test_tbl;
 -- Create a partition tree and check the set of relations reindexed
 -- with their new tablespace.
 CREATE TABLE tbspace_reindex_part (c1 int, c2 int) PARTITION BY RANGE (c1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE tbspace_reindex_part_0 PARTITION OF tbspace_reindex_part
   FOR VALUES FROM (0) TO (10) PARTITION BY list (c2);
@@ -217,7 +217,7 @@ CREATE TEMP TABLE reindex_temp_before AS
   SELECT oid, relname, relfilenode, reltablespace
   FROM pg_class
     WHERE relname ~ 'tbspace_reindex_part_index';
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'oid' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 REINDEX (TABLESPACE regress_tblspace, CONCURRENTLY) TABLE tbspace_reindex_part;
 NOTICE:  concurrent reindex of "tbspace_reindex_part" is not supported in Greenplum, reindexing non-concurrently instead
@@ -244,7 +244,7 @@ DROP TABLE tbspace_reindex_part;
 CREATE SCHEMA testschema;
 -- try a table
 CREATE TABLE testschema.foo (i int) TABLESPACE regress_tblspace;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c
     where c.reltablespace = t.oid AND c.relname = 'foo';
@@ -257,7 +257,7 @@ INSERT INTO testschema.foo VALUES(1);
 INSERT INTO testschema.foo VALUES(2);
 -- tables from dynamic sources
 CREATE TABLE testschema.asselect TABLESPACE regress_tblspace AS SELECT 1;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c
     where c.reltablespace = t.oid AND c.relname = 'asselect';
@@ -269,7 +269,7 @@ SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c
 PREPARE selectsource(int) AS SELECT $1;
 CREATE TABLE testschema.asexecute TABLESPACE regress_tblspace
     AS EXECUTE selectsource(2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named '?column?' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT relname, spcname FROM pg_catalog.pg_tablespace t, pg_catalog.pg_class c
     where c.reltablespace = t.oid AND c.relname = 'asexecute';
@@ -310,7 +310,7 @@ Tablespace: "regress_tblspace"
 -- partitioned table
 --
 CREATE TABLE testschema.part (a int) PARTITION BY LIST (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET default_tablespace TO pg_global;
 CREATE TABLE testschema.part_1 PARTITION OF testschema.part FOR VALUES IN (1);
@@ -326,7 +326,7 @@ SET default_tablespace TO pg_global;
 CREATE TABLE testschema.part_3 PARTITION OF testschema.part FOR VALUES IN (3);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  only shared relations can be placed in pg_global tablespace
--- GPDB: Greenplum's ALTER TABLE .. SET TABLESPACE command recurses by
+-- GPDB: Greengage's ALTER TABLE .. SET TABLESPACE command recurses by
 -- default, hence add ONLY to achieve the same results for SELECT.
 ALTER TABLE ONLY testschema.part SET TABLESPACE regress_tblspace;
 CREATE TABLE testschema.part_3 PARTITION OF testschema.part FOR VALUES IN (3);
@@ -337,7 +337,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE testschema.part_56 PARTITION OF testschema.part FOR VALUES IN (5, 6)
   PARTITION BY LIST (a);
 NOTICE:  table has parent, setting distribution columns to match parent table
--- GPDB: Greenplum's ALTER TABLE .. SET TABLESPACE command recurses by
+-- GPDB: Greengage's ALTER TABLE .. SET TABLESPACE command recurses by
 -- default, hence add ONLY to achieve the same results for SELECT.
 ALTER TABLE ONLY testschema.part SET TABLESPACE pg_default;
 CREATE TABLE testschema.part_78 PARTITION OF testschema.part FOR VALUES IN (7, 8)
@@ -371,7 +371,7 @@ RESET default_tablespace;
 DROP TABLE testschema.part;
 -- partitioned index
 CREATE TABLE testschema.part (a int) PARTITION BY LIST (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testschema.part1 PARTITION OF testschema.part FOR VALUES IN (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -467,7 +467,7 @@ CREATE TABLE testschema.dflt2 (a int PRIMARY KEY) PARTITION BY LIST (a);
 DROP TABLE testschema.dflt, testschema.dflt2;
 -- check that default_tablespace doesn't affect ALTER TABLE index rebuilds
 CREATE TABLE testschema.test_default_tab(id bigint) TABLESPACE regress_tblspace;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO testschema.test_default_tab VALUES (1);
 CREATE INDEX test_index1 on testschema.test_default_tab (id);
@@ -667,7 +667,7 @@ DROP TABLE testschema.test_default_tab;
 -- (this time with a partitioned table)
 CREATE TABLE testschema.test_default_tab_p(id bigint, val bigint)
     PARTITION BY LIST (id) TABLESPACE regress_tblspace;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 CREATE TABLE testschema.test_default_tab_p1 PARTITION OF testschema.test_default_tab_p
     FOR VALUES IN (1);
@@ -874,7 +874,7 @@ Tablespace: "regress_tblspace"
 DROP TABLE testschema.test_default_tab_p;
 -- check that default_tablespace affects index additions in ALTER TABLE
 CREATE TABLE testschema.test_tab(id int) TABLESPACE regress_tblspace;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO testschema.test_tab VALUES (1);
 SET default_tablespace TO regress_tblspace;
@@ -906,7 +906,7 @@ DROP TABLE testschema.test_tab;
 -- check that default_tablespace is handled correctly by multi-command
 -- ALTER TABLE that includes a tablespace-preserving rewrite
 CREATE TABLE testschema.test_tab(a int, b int, c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET default_tablespace TO regress_tblspace;
 ALTER TABLE testschema.test_tab ADD CONSTRAINT test_tab_unique UNIQUE (a);
@@ -966,7 +966,7 @@ btree, for table "testschema.test_tab"
 DROP TABLE testschema.test_tab;
 -- let's try moving a table from one place to another
 CREATE TABLE testschema.atable AS VALUES (1), (2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table testschema.atable set with (reorganize=true) distributed by (column1);
 CREATE UNIQUE INDEX anindex ON testschema.atable(column1);
@@ -988,7 +988,7 @@ SELECT COUNT(*) FROM testschema.atable;		-- checks heap
 
 -- let's try moving a materialized view from one place to another
 CREATE MATERIALIZED VIEW testschema.amv AS SELECT * FROM testschema.atable;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER MATERIALIZED VIEW testschema.amv SET TABLESPACE regress_tblspace;
 REFRESH MATERIALIZED VIEW testschema.amv;
@@ -1003,7 +1003,7 @@ CREATE TABLESPACE regress_badspace LOCATION '/no/such/location';
 ERROR:  directory "/no/such/location" does not exist
 -- No such tablespace
 CREATE TABLE bar (i int) TABLESPACE regress_nosuchspace;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  tablespace "regress_nosuchspace" does not exist
 -- Fail, in use for some partitioned object
@@ -1026,14 +1026,14 @@ NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT USAGE ON SCHEMA testschema TO regress_tablespace_user2;
 ALTER TABLESPACE regress_tblspace OWNER TO regress_tablespace_user1;
 CREATE TABLE testschema.tablespace_acl (c int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- new owner lacks permission to create this index from scratch
 CREATE INDEX k ON testschema.tablespace_acl (c) TABLESPACE regress_tblspace;
 ALTER TABLE testschema.tablespace_acl OWNER TO regress_tablespace_user2;
 SET SESSION ROLE regress_tablespace_user2;
 CREATE TABLE tablespace_table (i int) TABLESPACE regress_tblspace; -- fail
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  permission denied for tablespace regress_tblspace
 ALTER TABLE testschema.tablespace_acl ALTER c TYPE bigint;
@@ -1105,7 +1105,7 @@ DROP ROLE regress_tablespace_user1;
 DROP ROLE regress_tablespace_user2;
 -- Test that altering tablespace of a partition table should recurse into its child tables unless ONLY is specified.
 CREATE TABLE tablespace_part(a int, b int) PARTITION BY RANGE(a) (partition t1 START (1) END (100));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SET allow_in_place_tablespaces = true;
 CREATE TABLESPACE myts LOCATION '';
@@ -1120,7 +1120,7 @@ SELECT c.relname, t.spcname FROM pg_class c LEFT JOIN pg_tablespace t ON c.relta
 
 DROP TABLE tablespace_part;
 CREATE TABLE tablespace_part(a int, b int) PARTITION BY RANGE(a) (partition t1 START (1) END (100));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE ONLY tablespace_part SET TABLESPACE myts;
 -- Only the parent table uses the new tablespace

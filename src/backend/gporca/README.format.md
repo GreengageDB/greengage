@@ -81,7 +81,7 @@ there will inevitably be a number of patches that were started well before the f
 and these patches will now need to conform to the new format.
 The following steps are used to convert in-flight branches to the new format.
 
-1. Fetch the inflight PR. Let's say its greenplum-db/gpdb#20042
+1. Fetch the inflight PR. Let's say its GreengageDB/greengage#20042
 
    ```sh
    git fetch origin refs/pull/20042/head

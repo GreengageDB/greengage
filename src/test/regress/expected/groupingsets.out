@@ -2257,7 +2257,7 @@ select g%1000 as g1000, g%100 as g100, g%10 as g10, g
    from generate_series(0,1999) g;
 analyze gs_data_1;
 alter table gs_data_1 set (autovacuum_enabled = 'false');
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SET allow_system_table_mods = true;
 update pg_class set reltuples = 10 where relname='gs_data_1';
 RESET allow_system_table_mods;

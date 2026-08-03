@@ -2674,7 +2674,7 @@ declare cur SCROLL CURSOR for select 1 from list_part where a > (select 1) and a
 move 3 from cur;
 -- Ensure we get two rows.
 fetch backward all from cur;
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 commit;
 begin;
 -- Test run-time pruning using stable functions
@@ -5195,7 +5195,7 @@ with t as (
 )
 insert into part_abc_log select * from t returning *;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 with t as (
   merge into part_abc_view pt

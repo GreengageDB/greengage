@@ -418,7 +418,7 @@ static void postgresGetForeignUpperPaths(PlannerInfo *root,
 										 RelOptInfo *input_rel,
 										 RelOptInfo *output_rel,
 										 void *extra);
-static int greenplumCheckIsGreenplum(UserMapping *user);
+static int greengageCheckIsGreengage(UserMapping *user);
 static bool postgresIsForeignPathAsyncCapable(ForeignPath *path);
 static void postgresForeignAsyncRequest(AsyncRequest *areq);
 static void postgresForeignAsyncConfigureWait(AsyncRequest *areq);
@@ -2355,12 +2355,12 @@ postgresIsForeignRelUpdatable(Relation rel)
 		return 0;
 
 	/*
-	 * Greenplum only supports INSERT, because UPDATE/DELETE SELECT requires
+	 * Greengage only supports INSERT, because UPDATE/DELETE SELECT requires
 	 * the hidden column gp_segment_id and the other "ModifyTable mixes
 	 * distributed and entry-only tables" issue.
 	 */
 	UserMapping *user = GetUserMapping(rel->rd_rel->relowner, table->serverid);
-	if (greenplumCheckIsGreenplum(user))
+	if (greengageCheckIsGreengage(user))
 		return (1 << CMD_INSERT);
 	else
 		return (1 << CMD_INSERT) | (1 << CMD_UPDATE) | (1 << CMD_DELETE);
@@ -7969,7 +7969,7 @@ find_em_for_rel_target(PlannerInfo *root, EquivalenceClass *ec,
 }
 
 static int
-greenplumCheckIsGreenplum(UserMapping *user)
+greengageCheckIsGreengage(UserMapping *user)
 {
 	PGconn     *conn;
 	PGresult   *res;
@@ -7986,7 +7986,7 @@ greenplumCheckIsGreenplum(UserMapping *user)
 	if (PQntuples(res) == 0)
 		pgfdw_report_error(ERROR, res, conn, true, query);
 
-	ret = strstr(PQgetvalue(res, 0, 0), "Greenplum Database") ? 1 : 0;
+	ret = strstr(PQgetvalue(res, 0, 0), "Greengage Database") ? 1 : 0;
 
 	PQclear(res);
 	ReleaseConnection(conn);

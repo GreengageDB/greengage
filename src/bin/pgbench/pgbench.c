@@ -4959,7 +4959,7 @@ initCreateTables(PGconn *con)
 		/*
 		 * GPDB: emit WITH storage options (fillfactor only on real tables),
 		 * then TABLESPACE, then DISTRIBUTED BY, then PARTITION BY -- this is
-		 * the order required by the Greenplum CREATE TABLE grammar.
+		 * the order required by the Greengage CREATE TABLE grammar.
 		 */
 		if (ddl->declare_fillfactor)
 			appendPQExpBuffer(&query, " with (fillfactor=%d, %s)",

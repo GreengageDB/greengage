@@ -8,7 +8,7 @@
 -- insert with DEFAULT in the target_list
 --
 create table inserttest (col1 int4, col2 int4 NOT NULL, col3 text default 'testing');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'col1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttest (col1, col2, col3) values (DEFAULT, DEFAULT, DEFAULT);
 ERROR:  null value in column "col2" of relation "inserttest" violates not-null constraint  (seg0 172.17.0.4:7002 pid=1159065)
@@ -93,7 +93,7 @@ drop table inserttest;
 -- tuple larger than fillfactor
 --
 CREATE TABLE large_tuple_test (a int, b text) WITH (fillfactor = 10);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ALTER TABLE large_tuple_test ALTER COLUMN b SET STORAGE plain;
 -- create page w/ free space in range [nearlyEmptyFreeSpace, MaxHeapTupleSize)
@@ -120,7 +120,7 @@ DROP TABLE large_tuple_test;
 create type insert_test_type as (if1 int, if2 text[]);
 create table inserttest (f1 int, f2 int[],
                          f3 insert_test_type, f4 insert_test_type[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttest (f2[1], f2[2]) values (1,2);
 insert into inserttest (f2[1], f2[2]) values (3,4), (5,6);
@@ -165,7 +165,7 @@ select * from inserttest;
 
 -- also check reverse-listing
 create table inserttest2 (f1 bigint, f2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create rule irule1 as on insert to inserttest2 do also
   insert into inserttest (f3.if2[1], f3.if2[2])
@@ -200,10 +200,10 @@ create domain insert_pos_ints as int[] check (value[1] > 0);
 create domain insert_test_domain as insert_test_type
   check ((value).if2[1] is not null);
 create table inserttesta (f1 int, f2 insert_pos_ints);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table inserttestb (f3 insert_test_domain, f4 insert_test_domain[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f3' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f3' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttesta (f2[1], f2[2]) values (1,2);
 insert into inserttesta (f2[1], f2[2]) values (3,4), (5,6);
@@ -265,7 +265,7 @@ select * from inserttestb;
 
 -- also check reverse-listing
 create table inserttest2 (f1 bigint, f2 text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create rule irule1 as on insert to inserttest2 do also
   insert into inserttestb (f3.if2[1], f3.if2[2])
@@ -305,13 +305,13 @@ create domain insert_nnarray as int[]
 create domain insert_test_domain as insert_test_type
   check ((value).if1 is not null and (value).if2 is not null);
 create table inserttesta (f1 insert_nnarray);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttesta (f1[1]) values (1);  -- fail
 ERROR:  value for domain insert_nnarray violates check constraint "insert_nnarray_check"  (seg2 slice1 172.17.0.4:7004 pid=1159241)
 insert into inserttesta (f1[1], f1[2]) values (1, 2);
 create table inserttestb (f1 insert_test_domain);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into inserttestb (f1.if1) values (1);  -- fail
 ERROR:  value for domain insert_test_domain violates check constraint "insert_test_domain_check"  (seg2 slice1 172.17.0.4:7004 pid=1159246)
@@ -326,7 +326,7 @@ create table range_parted (
 	a text,
 	b int
 ) partition by range (a, (b+0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- no partitions, so fail
 insert into range_parted values ('a', 11);
@@ -370,7 +370,7 @@ create table list_parted (
 	a text,
 	b int
 ) partition by list (lower(a));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_aa_bb partition of list_parted FOR VALUES IN ('aa', 'bb');
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -581,7 +581,7 @@ select tableoid::regclass::text, a, min(b) as min_b, max(b) as max_b from list_p
 create table hash_parted (
 	a int
 ) partition by hash (a part_test_int4_ops);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table hpart0 partition of hash_parted for values with (modulus 4, remainder 0);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -644,7 +644,7 @@ drop table hash_parted;
 -- test that a default partition added as the first partition accepts any value
 -- including null
 create table list_parted (a int) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table part_default partition of list_parted default;
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -672,10 +672,10 @@ select tableoid::regclass, a from list_parted;
 drop table list_parted;
 -- more tests for certain multi-level partitioning scenarios
 create table mlparted (a int, b int) partition by range (a, b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mlparted1 (b int not null, a int not null) partition by range ((b+0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mlparted11 (like mlparted1);
 NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
@@ -744,7 +744,7 @@ ERROR:  new row for relation "mlparted1" violates partition constraint  (seg0 17
 DETAIL:  Failing row contains (3, 2).
 -- check routing error through a list partitioned table when the key is null
 create table lparted_nonullpart (a int, b char) partition by list (b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table lparted_nonullpart_a partition of lparted_nonullpart for values in ('a');
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -757,7 +757,7 @@ alter table mlparted drop constraint check_b;
 create table mlparted12 partition of mlparted1 for values from (5) to (10);
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mlparted2 (b int not null, a int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mlparted2 set distributed by (a);
 alter table mlparted attach partition mlparted2 for values from (1, 10) to (1, 20);
@@ -784,11 +784,11 @@ with ins (a, b, c) as
 
 alter table mlparted add c text;
 create table mlparted5 (c text, a int not null, b int not null) partition by list (c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mlparted5 set distributed by (a);
 create table mlparted5a (a int not null, c text, b int not null);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mlparted5 attach partition mlparted5a for values in ('a');
 alter table mlparted attach partition mlparted5 for values from (1, 40) to (1, 50);
@@ -853,7 +853,7 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 create table mlparted5_a partition of mlparted5_ab for values in ('a');
 NOTICE:  table has parent, setting distribution columns to match parent table
 create table mlparted5_b (d int, b int, c text, a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'd' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table mlparted5_b set distributed by (a);
 alter table mlparted5_ab attach partition mlparted5_b for values in ('b');
@@ -902,7 +902,7 @@ drop table mlparted5;
 -- check that message shown after failure to find a partition shows the
 -- appropriate key description (or none) in various situations
 create table key_desc (a int, b int) partition by list ((a+0));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table key_desc_1 partition of key_desc for values in (1) partition by range (b);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -932,7 +932,7 @@ drop role regress_insert_other_user;
 drop table key_desc, key_desc_1;
 -- test minvalue/maxvalue restrictions
 create table mcrparted (a int, b int, c int) partition by range (a, abs(b), c);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mcrparted0 partition of mcrparted for values from (minvalue, 0, 0) to (1, maxvalue, maxvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1019,7 +1019,7 @@ select tableoid::regclass::text, * from mcrparted order by 1;
 drop table mcrparted;
 -- check that a BR constraint can't make partition contain violating rows
 create table brtrigpartcon (a int, b text) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table brtrigpartcon1 partition of brtrigpartcon for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1034,7 +1034,7 @@ DETAIL:  Failing row contains (2, hi there).
 -- check that the message shows the appropriate column description in a
 -- situation where the partitioned table is not the primary ModifyTable node
 create table inserttest3 (f1 text default 'foo', f2 text default 'bar', f3 int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create role regress_coldesc_role;
 NOTICE:  resource queue required -- using default resource queue "pg_default"
@@ -1045,7 +1045,7 @@ set role regress_coldesc_role;
 with result as (insert into brtrigpartcon values (1, 'hi there') returning 1)
   insert into inserttest3 (f3) select * from result;
 ERROR:  writable CTE queries cannot be themselves writable
-DETAIL:  Greenplum Database currently only support CTEs with one writable clause, called in a non-writable context.
+DETAIL:  Greengage Database currently only support CTEs with one writable clause, called in a non-writable context.
 HINT:  Rewrite the query to only include one writable clause.
 reset role;
 -- cleanup
@@ -1057,14 +1057,14 @@ drop table brtrigpartcon;
 drop function brtrigpartcon1trigf();
 -- check that "do nothing" BR triggers work with tuple-routing
 create table donothingbrtrig_test (a int, b text) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table donothingbrtrig_test1 (b text, a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table donothingbrtrig_test1 set distributed by (a);
 create table donothingbrtrig_test2 (c text, b text, a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table donothingbrtrig_test2 set distributed by (a);
 alter table donothingbrtrig_test2 drop column c;
@@ -1089,7 +1089,7 @@ drop table donothingbrtrig_test;
 drop function donothingbrtrig_func();
 -- check multi-column range partitioning with minvalue/maxvalue constraints
 create table mcrparted (a text, b int) partition by range(a, b);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table mcrparted1_lt_b partition of mcrparted for values from (minvalue, minvalue) to ('b', minvalue);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1226,7 +1226,7 @@ select tableoid::regclass, * from mcrparted order by a, b;
 drop table mcrparted;
 -- check that wholerow vars in the RETURNING list work with partitioned tables
 create table returningwrtest (a int) partition by list (a);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create table returningwrtest1 partition of returningwrtest for values in (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -1239,7 +1239,7 @@ insert into returningwrtest values (1) returning returningwrtest;
 -- check also that the wholerow vars in RETURNING list are converted as needed
 alter table returningwrtest add b text;
 create table returningwrtest2 (b text, c int, a int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'b' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 alter table returningwrtest2 set distributed by (a);
 alter table returningwrtest2 drop c;

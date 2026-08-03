@@ -1,7 +1,7 @@
 -- Simple create
 CREATE TABLE reloptions_test(i INT) WITH (FiLLFaCToR=30,
 	autovacuum_enabled = false, autovacuum_analyze_scale_factor = 0.2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                                   reloptions                                  
@@ -11,82 +11,82 @@ SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
 
 -- Fail min/max values check
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor=2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value 2 out of bounds for option "fillfactor"
 DETAIL:  Valid values are between "10" and "100".
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor=110);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value 110 out of bounds for option "fillfactor"
 DETAIL:  Valid values are between "10" and "100".
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_analyze_scale_factor = -10.0);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -10.0 out of bounds for option "autovacuum_analyze_scale_factor"
 DETAIL:  Valid values are between "0.000000" and "100.000000".
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_analyze_scale_factor = 110.0);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value 110.0 out of bounds for option "autovacuum_analyze_scale_factor"
 DETAIL:  Valid values are between "0.000000" and "100.000000".
 -- Fail when option and namespace do not exist
 CREATE TABLE reloptions_test2(i INT) WITH (not_existing_option=2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "not_existing_option"
 CREATE TABLE reloptions_test2(i INT) WITH (not_existing_namespace.fillfactor=2);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter namespace "not_existing_namespace"
 -- Fail while setting improper values
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor=-30.1);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  value -30.1 out of bounds for option "fillfactor"
 DETAIL:  Valid values are between "10" and "100".
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor='string');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for integer option "fillfactor": string
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for integer option "fillfactor": true
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_enabled=12);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for boolean option "autovacuum_enabled": 12
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_enabled=30.5);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for boolean option "autovacuum_enabled": 30.5
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_enabled='string');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for boolean option "autovacuum_enabled": string
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_analyze_scale_factor='string');
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for floating point option "autovacuum_analyze_scale_factor": string
 CREATE TABLE reloptions_test2(i INT) WITH (autovacuum_analyze_scale_factor=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for floating point option "autovacuum_analyze_scale_factor": true
 -- Fail if option is specified twice
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor=30, fillfactor=40);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  parameter "fillfactor" specified more than once
 -- Specifying name only for a non-Boolean option should fail
 CREATE TABLE reloptions_test2(i INT) WITH (fillfactor);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  invalid value for integer option "fillfactor": true
 -- Simple ALTER TABLE
 ALTER TABLE reloptions_test SET (fillfactor=31,
 	autovacuum_analyze_scale_factor = 0.3);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                                   reloptions                                  
 ------------------------------------------------------------------------------
@@ -95,7 +95,7 @@ SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
 
 -- Set boolean option to true without specifying value
 ALTER TABLE reloptions_test SET (autovacuum_enabled, fillfactor=32);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                                  reloptions                                  
 -----------------------------------------------------------------------------
@@ -113,8 +113,8 @@ SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
 -- Resetting all values causes the column to become null
 ALTER TABLE reloptions_test RESET (autovacuum_enabled,
 	autovacuum_analyze_scale_factor);
-WARNING:  autovacuum is not supported in Greenplum
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass AND
        reloptions IS NULL;
  reloptions 
@@ -143,7 +143,7 @@ CREATE TEMP TABLE reloptions_test(i INT NOT NULL, j text)
 	WITH (vacuum_truncate=false,
 	toast.vacuum_truncate=false,
 	autovacuum_enabled=false);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                     reloptions                    
@@ -192,7 +192,7 @@ SELECT pg_relation_size('reloptions_test') = 0;
 DROP TABLE reloptions_test;
 CREATE TABLE reloptions_test (s VARCHAR)
 	WITH (toast.autovacuum_vacuum_cost_delay = 23);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT reltoastrelid as toast_oid
 	FROM pg_class WHERE oid = 'reloptions_test'::regclass \gset
@@ -203,7 +203,7 @@ SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
 (1 row)
 
 ALTER TABLE reloptions_test SET (toast.autovacuum_vacuum_cost_delay = 24);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
             reloptions             
 -----------------------------------
@@ -211,7 +211,7 @@ SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
 (1 row)
 
 ALTER TABLE reloptions_test RESET (toast.autovacuum_vacuum_cost_delay);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
  reloptions 
 ------------
@@ -220,7 +220,7 @@ SELECT reloptions FROM pg_class WHERE oid = :toast_oid;
 
 -- Fail on non-existent options in toast namespace
 CREATE TABLE reloptions_test2 (i int) WITH (toast.not_existing_option = 42);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  unrecognized parameter "not_existing_option"
 -- Mix TOAST & heap
@@ -228,7 +228,7 @@ DROP TABLE reloptions_test;
 CREATE TABLE reloptions_test (s VARCHAR) WITH
 	(toast.autovacuum_vacuum_cost_delay = 23,
 	autovacuum_vacuum_cost_delay = 24, fillfactor = 40);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 's' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT reloptions FROM pg_class WHERE oid = 'reloptions_test'::regclass;
                    reloptions                    

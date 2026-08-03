@@ -105,7 +105,7 @@ try_relation_open(Oid relationId, LOCKMODE lockmode, bool noWait)
 		else
 		{
 			/*
-			 * noWait is a Greenplum addition to the open_relation code
+			 * noWait is a Greengage addition to the open_relation code
 			 * basically to support INSERT ... FOR UPDATE NOWAIT.  Our NoWait
 			 * handling needs to be more tolerant of failed locks than standard
 			 * postgres largely due to the fact that we have to promote certain

@@ -20,7 +20,7 @@ m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
-AC_INIT([Greenplum Database], [8.0.0-alpha.0], [support@greenplum.org], [], [https://greengagedb.org/])
+AC_INIT([Greengage Database], [8.0.0-alpha.0], [support@greengagedb.org], [], [https://greengagedb.org/])
 [PG_PACKAGE_VERSION=18.4]
 AC_SUBST(PG_PACKAGE_VERSION)
 
@@ -44,7 +44,7 @@ AC_DEFINE_UNQUOTED(PG_MINORVERSION_NUM, $PG_MINORVERSION, [PostgreSQL minor vers
 
 [PG_VERSION="$PG_PACKAGE_VERSION"]
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version], [], [])
-AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greenplum Database is based on])
+AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greengage Database is based on])
 
 AC_CANONICAL_HOST
 
@@ -85,7 +85,7 @@ PostgreSQL has apparently not been ported to your platform yet.
 To try a manual configuration, look into the src/template directory
 for a similar platform and use the '--with-template=' option.
 
-Please also contact <bugs@greenplum.org> to see about
+Please also contact <bugs@greengagedb.org> to see about
 rectifying this.  Include the above 'checking host system type...'
 line.
 *******************************************************************
@@ -143,12 +143,12 @@ PGAC_ARG_BOOL(enable, integer-datetimes, yes, [obsolete option, no longer suppor
 #
 # NLS
 #
-# NLS is not supported in Greenplum. There's no fundamental reason for it,
+# NLS is not supported in Greengage. There's no fundamental reason for it,
 # but no-one's kept the translations up-to-date. The .po files have been
 # removed from the repository, so it won't work if you just uncomment the
 # below block. If we wanted to enable NLS support, we should come up with a
 # scheme to use the upstream PostgreSQL .po files as is, to make merging
-# easier, and provide additional .po files for all the Greenplum-specific
+# easier, and provide additional .po files for all the Greengage-specific
 # strings.
 # to the users to let them build with very incomplete translations.
 #AC_MSG_CHECKING([whether NLS is wanted])
@@ -632,7 +632,7 @@ if test "$GCC" = yes -a "$ICC" = no; then
   # avoid the specific headers that use "register" once we merge with Postgres
   # 12
 
-  # Greenplum's ORCA translator includes a lot of C headers, and Clang will
+  # Greengage's ORCA translator includes a lot of C headers, and Clang will
   # warn us about the use of the "register" keyword in Postgres' inline
   # functions which we can do nothing about. Silence it.
   NOT_THE_CXXFLAGS=""
@@ -859,7 +859,7 @@ PGAC_ARG_BOOL(enable, cassert, no, [enable assertion checks (for debugging)],
 #
 PGAC_ARG_BOOL(enable, orca, yes, [disable ORCA optimizer],
               [AC_DEFINE([USE_ORCA], 1,
-                         [Define to 1 to build with Greenplum ORCA optimizer. (--enable-orca)])])
+                         [Define to 1 to build with Greengage ORCA optimizer. (--enable-orca)])])
 AC_MSG_RESULT([checking whether to build with ORCA... $enable_orca])
 AC_SUBST(enable_orca)
 
@@ -878,10 +878,10 @@ fi
 #
 # --enable-mapreduce enables GPMapreduce support
 #
-PGAC_ARG_BOOL(enable, mapreduce, no, [enable Greenplum Mapreduce support],
+PGAC_ARG_BOOL(enable, mapreduce, no, [enable Greengage Mapreduce support],
               [AC_DEFINE([USE_MAPREDUCE], 1,
 			             [Define to 1 to build with Mapreduce capabilities (--enable-mapreduce)])])
-AC_MSG_RESULT([checking whether to build with Greenplum Mapreduce... $enable_mapreduce])
+AC_MSG_RESULT([checking whether to build with Greengage Mapreduce... $enable_mapreduce])
 AC_SUBST(enable_mapreduce)
 
 #
@@ -1581,7 +1581,7 @@ fi
 
 if test "$enable_mapreduce" = yes ; then
   _LIBS="$LIBS"
-  AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_ERROR([libyaml is required for Greenplum Mapreduce])])
+  AC_SEARCH_LIBS(yaml_parser_initialize, [yaml], [have_yaml=yes; YAML_LIBS=" -lyaml"], [AC_MSG_ERROR([libyaml is required for Greengage Mapreduce])])
   AC_SUBST(YAML_LIBS)
   AC_SUBST(have_yaml)
   LIBS="$_LIBS"
@@ -1973,9 +1973,9 @@ fi
 
 if test "$enable_mapreduce" = yes; then
   if test "$with_perl" = no; then
-    AC_MSG_ERROR([Greenplum Mapreduce requires Perl, reconfigure with --with-perl])
+    AC_MSG_ERROR([Greengage Mapreduce requires Perl, reconfigure with --with-perl])
   fi
-  AC_CHECK_HEADERS(yaml.h, [], [AC_MSG_ERROR([header file <yaml.h> is required for Greenplum Mapreduce])])
+  AC_CHECK_HEADERS(yaml.h, [], [AC_MSG_ERROR([header file <yaml.h> is required for Greengage Mapreduce])])
 fi
 
 if test "$PORTNAME" = "win32" ; then
@@ -2149,7 +2149,7 @@ AC_CHECK_FUNCS(m4_normalize([
 	getifaddrs
 	inet_ntop
 ]), [], [
-	AC_MSG_ERROR([getifaddrs and inet_ntop are required for Greenplum])
+	AC_MSG_ERROR([getifaddrs and inet_ntop are required for Greengage])
 ])
 
 # These typically are compiler builtins, for which AC_CHECK_FUNCS fails.
@@ -2837,7 +2837,7 @@ fi
 [BLD_ARCH=`echo $BLD_ARCH`]
 AC_SUBST(BLD_ARCH)
 
-# Get the Greenplum version string from VERSION
+# Get the Greengage version string from VERSION
 
 GP_VERSION_LONG=`bash ./getversion`
 
@@ -2865,11 +2865,11 @@ fi
 
 AC_DEFINE_UNQUOTED(GP_VERSION,
                    ["$GP_VERSION"],
-                   [A string containing the Greenplum version number])
+                   [A string containing the Greengage version number])
 
 [GP_MAJORVERSION=`expr "$GP_VERSION" : '\([0-9][0-9]*\)'`]
 AC_SUBST(GP_MAJORVERSION)
-AC_DEFINE_UNQUOTED(GP_MAJORVERSION, "$GP_MAJORVERSION", [Greenplum major version as a string])
+AC_DEFINE_UNQUOTED(GP_MAJORVERSION, "$GP_MAJORVERSION", [Greengage major version as a string])
 
 # Create compiler version string
 if test x"$GCC" = x"yes" ; then
@@ -2882,7 +2882,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["PostgreSQL $PG_VERSION (Greenplum Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["PostgreSQL $PG_VERSION (Greengage Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons
@@ -2907,7 +2907,7 @@ AC_SUBST(PG_SYSROOT)
 [GP_VERSION_NUM="`echo "$PACKAGE_VERSION" | sed 's/[A-Za-z].*$//' |
 tr '.' '	' |
 $AWK '{printf "%d%02d%02d", $1, $2, (NF >= 3) ? $3 : 0}'`"]
-AC_DEFINE_UNQUOTED(GP_VERSION_NUM, $GP_VERSION_NUM, [Greenplum version as a number])
+AC_DEFINE_UNQUOTED(GP_VERSION_NUM, $GP_VERSION_NUM, [Greengage version as a number])
 
 
 # Begin output steps

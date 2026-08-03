@@ -43,7 +43,7 @@ struct List;
  * is to explore if the performance benefit of larger bitmapwords can still be
  * availed by distinguishing on-disk bitmap usage from strictly in-memory
  * bitmap usage.  E.g. define a new type bitmapword32 and use it in
- * appendoptimized code.  On a related note, tbm_bitmapword is Greenplum
+ * appendoptimized code.  On a related note, tbm_bitmapword is Greengage
  * specific 64-bit wide type used for TID bitmaps.  Can we start using
  * bitmapword for TID bitmaps, just like upastream, and eliminate
  * tbm_bitmapword?

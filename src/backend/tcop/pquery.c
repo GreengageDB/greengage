@@ -1730,7 +1730,7 @@ DoPortalRunFetch(Portal portal,
 				/* until we enable backward scan - bail out here */
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("backward scan is not supported in this version of Greenplum Database")));
+						 errmsg("backward scan is not supported in this version of Greengage Database")));
 			}
 			/* fall out of switch to share code with FETCH_BACKWARD */
 			break;
@@ -1745,7 +1745,7 @@ DoPortalRunFetch(Portal portal,
 				/* until we enable backward scan - bail out here */
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("backward scan is not supported in this version of Greenplum Database")));
+						 errmsg("backward scan is not supported in this version of Greengage Database")));
 			}
 			/* fall out of switch to share code with FETCH_FORWARD */
 			break;
@@ -1774,7 +1774,7 @@ DoPortalRunFetch(Portal portal,
 					if(portal->portalPos > 0)
 						ereport(ERROR,
 								(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-								 errmsg("backward scan is not supported in this version of Greenplum Database")));
+								 errmsg("backward scan is not supported in this version of Greengage Database")));
 					
 					DoPortalRewind(portal);
 					if (count > 1)
@@ -1809,7 +1809,7 @@ DoPortalRunFetch(Portal portal,
 				/* until we enable backward scan - bail out here */
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("backward scan is not supported in this version of Greenplum Database")));
+						 errmsg("backward scan is not supported in this version of Greengage Database")));
 				
 				PortalRunSelect(portal, true, FETCH_ALL, None_Receiver);
 				if (count < -1)
@@ -1823,7 +1823,7 @@ DoPortalRunFetch(Portal portal,
 				/* until we enable backward scan - bail out here */
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("backward scan is not supported in this version of Greenplum Database")));
+						 errmsg("backward scan is not supported in this version of Greengage Database")));
 				
 				/* Rewind to start, return zero rows */
 				DoPortalRewind(portal);
@@ -1850,7 +1850,7 @@ DoPortalRunFetch(Portal portal,
 				/* until we enable backward scan - bail out here */
 				ereport(ERROR,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("backward scan is not supported in this version of Greenplum Database")));				
+						 errmsg("backward scan is not supported in this version of Greengage Database")));				
 				
 				if (count < -1)
 					PortalRunSelect(portal, false, -count - 1, None_Receiver);
@@ -1918,7 +1918,7 @@ DoPortalRunFetch(Portal portal,
 		/* until we enable backward scan - bail out here */
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("backward scan is not supported in this version of Greenplum Database")));
+				 errmsg("backward scan is not supported in this version of Greengage Database")));
 		
 		if (result > 0 && !portal->atEnd)
 			result--;

@@ -74,7 +74,7 @@
 typedef union FakeAlignedBlock
 {
 	/*
-	 * Greenplum uses char * so it could suspend and resume, to give the hash
+	 * Greengage uses char * so it could suspend and resume, to give the hash
 	 * table as much space as possible.
 	 */
 	char *data;
@@ -246,7 +246,7 @@ extendBufFile(BufFile *file)
 	file->numFiles++;
 
 	/*
-	 * Register the file as a "work file", so that the Greenplum workfile
+	 * Register the file as a "work file", so that the Greengage workfile
 	 * limits apply to it.
 	 *
 	 * Note: The GUC gp_workfile_limit_files_per_query is used to control the
@@ -297,7 +297,7 @@ BufFileCreateTempInSet(char *operation_name, bool interXact, workfile_set *work_
 	file->isInterXact = interXact;
 
 	/*
-	 * Register the file as a "work file", so that the Greenplum workfile
+	 * Register the file as a "work file", so that the Greengage workfile
 	 * limits apply to it.
 	 */
 	if (work_set)
@@ -382,7 +382,7 @@ BufFileCreateFileSet(FileSet *fileset, const char *name, workfile_set *work_set)
 	file->files[0] = MakeNewFileSetSegment(file, 0);
 	file->readOnly = false;
 	/*
-	 * Register the file as a "work file", so that the Greenplum workfile
+	 * Register the file as a "work file", so that the Greengage workfile
 	 * limits apply to it.
 	 */
 	file->work_set = work_set;

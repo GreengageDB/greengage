@@ -1470,8 +1470,8 @@ INSERT INTO rw_view2 VALUES (50); -- ok, but not in view
 MERGE INTO rw_view2 t USING (VALUES (60)) AS v(a) ON t.a = v.a
   WHEN NOT MATCHED THEN INSERT VALUES (v.a); -- ok, but not in view
 UPDATE rw_view2 SET a = a - 10; -- should fail
--- Greenplum doesn't fail because nothing was inserted into view, which is
--- because Greenplum doesn't support INSTEAD OF triggers.
+-- Greengage doesn't fail because nothing was inserted into view, which is
+-- because Greengage doesn't support INSTEAD OF triggers.
 MERGE INTO rw_view2 t USING (VALUES (6)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a - 10; -- should fail
 SELECT * FROM base_tbl;

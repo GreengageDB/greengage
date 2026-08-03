@@ -1459,7 +1459,7 @@ SELECT user_name FROM users_test_1_prt_p2020;
 -- Expect C
 SELECT user_name FROM users_test_1_prt_extra;
 
--- Github issue: https://github.com/greenplum-db/gpdb/issues/9460
+-- Github issue: https://github.com/GreengageDB/greengage/issues/9460
 -- When creating unique or primary key index on Partition table,
 -- the cols in index must contain all partition keys.
 CREATE TABLE t_idx_col_contain_partkey(a int, b int) DISTRIBUTED BY (a)

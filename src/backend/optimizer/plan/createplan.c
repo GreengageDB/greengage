@@ -2330,12 +2330,12 @@ create_projection_plan(PlannerInfo *root, ProjectionPath *best_path, int flags)
 	}
 
 	/*
-	 * Greenplum specific behavior:
+	 * Greengage specific behavior:
 	 * We may use the Result plan with resconstantqual to be
 	 * One-Time Filter: (gp_execution_segment() = <some segid>).
 	 * We should re-consider direct dispatch info in this case.
 	 * See function `set_append_path_locus` and Github Issue
-	 * https://github.com/greenplum-db/gpdb/issues/9874 for more
+	 * https://github.com/GreengageDB/greengage/issues/9874 for more
 	 * detailed info.
 	 */
 	if (best_path->direct_dispath_contentIds)

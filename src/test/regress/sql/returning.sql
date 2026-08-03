@@ -280,7 +280,7 @@ UPDATE joinview SET f3 = f3 + 1 WHERE f3 = 57
 UPDATE joinview SET f3 = f3 + 1 WHERE f3 = 57
   RETURNING old.*, new.*, *, new.f3 - old.f3 AS delta_f3;
 
--- GPDB: INSTEAD OF triggers are not supported in Greenplum, so the upstream
+-- GPDB: INSTEAD OF triggers are not supported in Greengage, so the upstream
 -- "UPDATE on view with INSTEAD OF trigger" sub-block (CREATE TRIGGER and the
 -- two joinview UPDATEs that rely on it) is dropped here.
 
@@ -353,5 +353,5 @@ DELETE FROM foo_parted
 DROP TABLE foo_parted CASCADE;
 
 -- GPDB: the upstream "Test deparsing" case uses multiple writable CTEs in a
--- single query, which Greenplum does not support (only one modifying WITH clause
+-- single query, which Greengage does not support (only one modifying WITH clause
 -- is allowed per query), so that deparse test is dropped here.

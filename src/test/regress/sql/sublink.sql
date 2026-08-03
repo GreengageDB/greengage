@@ -44,7 +44,7 @@ FROM cte_b as first, cte_b as second;
 
 --
 -- Test GROUP BY IN exists subquery
--- More details can be found in https://github.com/greenplum-db/gpdb/issues/11849
+-- More details can be found in https://github.com/GreengageDB/greengage/issues/11849
 --
 create table group_by_sublink(a int);
 insert into group_by_sublink select i from generate_series(1, 5) i;

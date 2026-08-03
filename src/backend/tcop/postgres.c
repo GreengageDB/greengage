@@ -500,7 +500,7 @@ SocketBackend(StringInfo inBuf)
 			doing_extended_query_message = false;
 			break;
 
-		case 'M':				/* Greenplum Database dispatched statement from QD */
+		case 'M':				/* Greengage Database dispatched statement from QD */
 
 			/* The dispatched 'M' message carries the serialized plan/query
 			 * and can be large, like 'Q'.  Without this PG14 added a default
@@ -518,7 +518,7 @@ SocketBackend(StringInfo inBuf)
 
 			break;
 
-		case 'T':				/* Greenplum Database dispatched transaction protocol from QD */
+		case 'T':				/* Greengage Database dispatched transaction protocol from QD */
 
 			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
@@ -572,7 +572,7 @@ SocketBackend(StringInfo inBuf)
 
 		case PqMsg_CopyDone:
 		case PqMsg_CopyFail:
-		case '?':				/* Greenplum sequence response */
+		case '?':				/* Greengage sequence response */
 			maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 			break;
@@ -2217,7 +2217,7 @@ exec_parse_message(const char *query_string,	/* string to execute */
 			 * If the subsequent 'E' message requests only a specific number
 			 * of rows to be fetched, the command must be executed like a
 			 * cursor and LockRows plan node cannot be executed within a
-			 * reader gang (cursors in Greenplum must be executed by a reader gang).
+			 * reader gang (cursors in Greengage must be executed by a reader gang).
 			 * For details please refer the mailing list:
 			 * https://groups.google.com/a/greenplum.org/forum/#!msg/gpdb-dev/ugsZca1qLXU/CtUmzEa7CAAJ
 			 */
@@ -6406,7 +6406,7 @@ PostgresMain(const char *dbname, const char *username)
 				 * is still sending data.
 				 */
 				break;
-			case '?':			/* Greenplum sequence response */
+			case '?':			/* Greengage sequence response */
 				/*
 				 * Accept but ignore this message, when QE process nextval
 				 * it sends NOTIFY to QD and asks QD to send nextval back to

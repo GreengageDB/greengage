@@ -83,7 +83,7 @@ typedef struct varatt_expanded
  *
  * GPDB: In PostgreSQL VARTAG_ONDISK is set to 18 in order to match the
  * historic (VARHDRSZ_EXTERNAL + sizeof(struct varatt_external)) value of the
- * pointer datum's length. In Greenplum VARHDRSZ_EXTERNAL is two bytes longer
+ * pointer datum's length. In Greengage VARHDRSZ_EXTERNAL is two bytes longer
  * than PostgreSQL due to extra padding in varattrib_1b_e, so VARTAG_ONDISK has
  * to be set to 20.
  */
@@ -171,12 +171,12 @@ typedef struct
  * In TOAST pointers the va_tag field (see varattrib_1b_e) is used to discern
  * the specific type and length of the pointer datum.
  *
- * GPDB: Greenplum historically stored the 4-byte varlena header in network
+ * GPDB: Greengage historically stored the 4-byte varlena header in network
  * byte order, so that it always looked big-endian in the tuple ("this is a
  * bit ugly, but changing it would require all our customers to initdb").
  * On big-endian machines that is the same as the native big-endian layout
  * above, and current code uses the native layouts on both endiannesses,
- * exactly as upstream PostgreSQL.  The remaining Greenplum on-disk
+ * exactly as upstream PostgreSQL.  The remaining Greengage on-disk
  * differences are the two bytes of padding in varattrib_1b_e and
  * VARTAG_ONDISK = 20 (instead of 18); see above.
  */

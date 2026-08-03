@@ -39,19 +39,19 @@ ifeq ($(with_gssapi),yes)
 OBJS += be-gssapi-common.o be-secure-gssapi.o
 endif
 
-# Greenplum objects follow
+# Greengage objects follow
 OBJS += fe-protocol3.o fe-connect.o fe-cancel.o \
         fe-exec.o libpq-events.o pqexpbuffer.o fe-auth.o fe-misc.o fe-secure.o fe-trace.o \
 	fe-auth-scram.o \
 	fe-auth-oauth.o \
         $(filter getpeereid.o, $(LIBOBJS))
 
-# Greenplum OpenSSL objects follow
+# Greengage OpenSSL objects follow
 ifeq ($(with_ssl),openssl)
 OBJS += fe-secure-common.o fe-secure-openssl.o
 endif
 
-# Greenplum GSSAPI objects follow
+# Greengage GSSAPI objects follow
 ifeq ($(with_gssapi),yes)
 OBJS += fe-gssapi-common.o fe-secure-gssapi.o
 endif
@@ -62,7 +62,7 @@ fe-protocol3.c fe-connect.c fe-cancel.c fe-exec.c libpq-events.c pqexpbuffer.c f
 getpeereid.c: % : $(top_srcdir)/src/port/%
 	rm -f $@ && $(LN_S) $< .
 
-# Greenplum: the backend's dispatch libpq never runs the client OAuth flow, so
+# Greengage: the backend's dispatch libpq never runs the client OAuth flow, so
 # build fe-auth-oauth with the dynamic (dlopen/dlsym) path.  That avoids a
 # link-time dependency on the curl-based libpq-oauth flow (pg_fe_run_oauth_flow),
 # which is not built into the backend, while still providing pg_oauth_mech.

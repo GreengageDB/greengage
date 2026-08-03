@@ -7612,7 +7612,7 @@ CreateCheckPoint(int flags)
 	XLogBeginInsert();
 	XLogRegisterData(&checkPoint, sizeof(checkPoint));
 
-	/* Greenplum checkpoints have extra info */
+	/* Greengage checkpoints have extra info */
 	XLogRegisterData(dtxCheckPointInfo, dtxCheckPointInfoSize);
 
 

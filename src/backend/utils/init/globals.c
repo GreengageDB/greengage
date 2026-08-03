@@ -127,7 +127,7 @@ bool		IsPostmasterEnvironment = false;
 bool		IsUnderPostmaster = false;
 bool		IsBinaryUpgrade = false;
 
-/* Greenplum seeds the creation of a segment from a copy of the master segment
+/* Greengage seeds the creation of a segment from a copy of the master segment
  * directory.  However, the first time the segment starts up small adjustments
  * need to be made to complete the transformation to a segment directory, and
  * these changes will be triggered by this global.

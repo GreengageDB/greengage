@@ -63,7 +63,7 @@ CREATE TABLE test_tsvector(
 	t text,
 	a tsvector
 );
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set filename :abs_srcdir '/data/tsearch.data'
 COPY test_tsvector FROM :'filename';
@@ -2183,7 +2183,7 @@ SELECT ts_headline('english', 'foo barbar', to_tsquery('english', 'foo'),
 ERROR:  value for "FragmentDelimiter" is too long
 --Rewrite sub system
 CREATE TABLE test_tsquery (txtkeyword TEXT, txtsample TEXT);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtkeyword' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'txtkeyword' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \set ECHO none
 ALTER TABLE test_tsquery ADD COLUMN keyword tsquery;

@@ -6,7 +6,7 @@ labels: "type: bug"
 
 ## Bug Report
 
-### Greenplum version or build
+### Greengage version or build
 
 ### OS version and uname -a
 

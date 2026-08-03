@@ -1,6 +1,6 @@
--- pg_dump / restore Greenplum MPP round-trip regression test.
+-- pg_dump / restore Greengage MPP round-trip regression test.
 --
--- Builds a schema exercising the Greenplum-specific storage and distribution
+-- Builds a schema exercising the Greengage-specific storage and distribution
 -- features, dumps it with pg_dump, drops it, restores it from the plain-SQL
 -- dump, and asserts that the restored schema is byte-for-byte equivalent to the
 -- original in every MPP-relevant attribute:

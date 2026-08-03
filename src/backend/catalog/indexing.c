@@ -369,7 +369,7 @@ CatalogTupleDelete(Relation heapRel, ItemPointer tid)
 }
 
 /*
- * Greenplum: this interface is used to insert tuples into gp_fastsequence
+ * Greengage: this interface is used to insert tuples into gp_fastsequence
  * and aoseg relations during an appendoptimized (row as well as column)
  * insert transaction.
  */

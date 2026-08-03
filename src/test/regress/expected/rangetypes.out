@@ -253,7 +253,7 @@ select * from pg_input_error_info('[2000-01-01,5874897-12-31]', 'daterange');
 -- create some test data and test the operators
 --
 CREATE TABLE numrange_test (nr NUMRANGE);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test_btree on numrange_test(nr);
 INSERT INTO numrange_test VALUES('[,)');
@@ -608,7 +608,7 @@ select range_intersect_agg(nr) from numrange_test where nr @> 4.0;
 
 analyze numrange_test;
 create table numrange_test2(nr numrange);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'nr' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index numrange_test2_hash_idx on numrange_test2 using hash (nr);
 INSERT INTO numrange_test2 VALUES('[, 5)');
@@ -679,7 +679,7 @@ DROP TABLE numrange_test2;
 -- Apply a subset of the above tests on a collatable type, too
 --
 CREATE TABLE textrange_test (tr textrange);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tr' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'tr' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index textrange_test_btree on textrange_test(tr);
 INSERT INTO textrange_test VALUES('[,)');
@@ -858,7 +858,7 @@ select daterange('2000-01-01'::date, 'infinity'::date, '[]');
 
 -- test GiST index that's been built incrementally
 create table test_range_gist(ir int4range);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_gist_idx on test_range_gist using gist (ir);
 insert into test_range_gist select int4range(g, g+10) from generate_series(1,2000) g;
@@ -1246,7 +1246,7 @@ select count(*) from test_range_gist where ir -|- int4multirange(int4range(100,2
 
 -- test SP-GiST index that's been built incrementally
 create table test_range_spgist(ir int4range);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'ir' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_spgist_idx on test_range_spgist using spgist (ir);
 insert into test_range_spgist select int4range(g, g+10) from generate_series(1,2000) g;
@@ -1492,7 +1492,7 @@ RESET enable_indexscan;
 RESET enable_bitmapscan;
 -- test elem <@ range operator
 create table test_range_elem(i int4);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index test_range_elem_idx on test_range_elem (i);
 insert into test_range_elem select i from generate_series(1,100) i;
@@ -1589,7 +1589,7 @@ select '[123.001, 5.e9)'::float8range @> 888.882::float8;
 (1 row)
 
 create table float8range_test(f8r float8range, i int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f8r' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f8r' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into float8range_test values(float8range(-100.00007, '1.111113e9'), 42);
 select * from float8range_test;
@@ -1736,7 +1736,7 @@ select ARRAY[numrange(1.1, 1.2), numrange(12.3, 155.5)];
 (1 row)
 
 create table i8r_array (f1 int, f2 int8range[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into i8r_array values (42, array[int8range(1,10), int8range(2,20)]);
 select * from i8r_array;
@@ -2068,7 +2068,7 @@ create type textrange_supp as range (
    subtype_opclass = text_pattern_ops
 );
 create temp table text_support_test (t text collate "C");
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into text_support_test values ('a'), ('c'), ('d'), ('ch');
 explain (costs off)

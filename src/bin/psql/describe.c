@@ -93,7 +93,7 @@ static bool isGPDB(void)
 		return false;
 
 	ver = PQgetvalue(res, 0, 0);
-	if (strstr(ver, "Greenplum") != NULL)
+	if (strstr(ver, "Greengage") != NULL)
 	{
 		PQclear(res);
 		talking_to_gpdb = gpdb_yes;
@@ -179,7 +179,7 @@ static bool
 isGPDB6000OrLater(void)
 {
 	if (!isGPDB())
-		return false;		/* Not Greenplum at all. */
+		return false;		/* Not Greengage at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion >= 90400;
@@ -189,7 +189,7 @@ static bool
 isGPDB6000OrBelow(void)
 {
 	if (!isGPDB())
-		return false;		/* Not Greenplum at all. */
+		return false;		/* Not Greengage at all. */
 
 	/* GPDB 6 is based on PostgreSQL 9.4 */
 	return pset.sversion <= 90400;
@@ -199,7 +199,7 @@ static bool
 isGPDB7000OrLater(void)
 {
 	if (!isGPDB())
-		return false;		/* Not Greenplum at all. */
+		return false;		/* Not Greengage at all. */
 
 	/* GPDB 7 is based on PostgreSQL v12 */
 	return pset.sversion >= 120000;
@@ -1833,7 +1833,7 @@ describeTableDetails(const char *pattern, bool verbose, bool showSystem)
 }
 
 static inline bool
-greenplum_is_ao_row(const char olddesc, const char *newdesc)
+greengage_is_ao_row(const char olddesc, const char *newdesc)
 {
 	if (olddesc == 'a')
 		return true;
@@ -1845,7 +1845,7 @@ greenplum_is_ao_row(const char olddesc, const char *newdesc)
 }
 
 static inline bool
-greenplum_is_ao_column(const char olddesc, const char *newdesc)
+greengage_is_ao_column(const char olddesc, const char *newdesc)
 {
 	if (olddesc == 'c')
 		return true;
@@ -2251,8 +2251,8 @@ describeOneTableDetails(const char *schemaname,
 	}
 
 	if (tableinfo.relkind != RELKIND_PARTITIONED_TABLE &&
-		(greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam)
-			|| greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam)))
+		(greengage_is_ao_column(tableinfo.relstorage, tableinfo.relam)
+			|| greengage_is_ao_row(tableinfo.relstorage, tableinfo.relam)))
 	{
 		PGresult *result = NULL;
 		/* Get Append Only information
@@ -2377,7 +2377,7 @@ describeOneTableDetails(const char *schemaname,
 			attstattarget_col = cols++;
 		}
 
-		if (greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam))
+		if (greengage_is_ao_column(tableinfo.relstorage, tableinfo.relam))
 		{
 			if (isGE42 == true)
 			{
@@ -2513,7 +2513,7 @@ describeOneTableDetails(const char *schemaname,
 	if (attstattarget_col >= 0)
 		headers[cols++] = gettext_noop("Stats target");
 
-	if (verbose && greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam))
+	if (verbose && greengage_is_ao_column(tableinfo.relstorage, tableinfo.relam))
 	{
 		headers[cols++] = gettext_noop("Compression Type");
 		headers[cols++] = gettext_noop("Compression Level");
@@ -2622,7 +2622,7 @@ describeOneTableDetails(const char *schemaname,
 			printTableAddCell(&cont, PQgetvalue(res, i, attstattarget_col),
 							  false, false);
 
-		if (greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam)
+		if (greengage_is_ao_column(tableinfo.relstorage, tableinfo.relam)
 				&& attoptions_col >= 0)
 		{
 			/* The compression type, compression level, and block size are all in the next column.
@@ -2916,10 +2916,10 @@ describeOneTableDetails(const char *schemaname,
 
 		/* print append only table information */
 		if (tableinfo.relkind != RELKIND_PARTITIONED_TABLE &&
-			(greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam) ||
-			greenplum_is_ao_column(tableinfo.relstorage, tableinfo.relam)))
+			(greengage_is_ao_row(tableinfo.relstorage, tableinfo.relam) ||
+			greengage_is_ao_column(tableinfo.relstorage, tableinfo.relam)))
 		{
-			if (greenplum_is_ao_row(tableinfo.relstorage, tableinfo.relam))
+			if (greengage_is_ao_row(tableinfo.relstorage, tableinfo.relam))
 			{
 				printfPQExpBuffer(&buf, _("Compression Type: %s"), tableinfo.compressionType);
 				printTableAddFooter(&cont, buf.data);
@@ -4774,7 +4774,7 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 	int			conns;
 	const char	align = 'l';
 	char	  **attr;
-	const int   numgreenplumspecificattrs = 3;
+	const int   numgreengagespecificattrs = 3;
 
 	myopt.default_footer = false;
 
@@ -4786,7 +4786,7 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 					  "  r.rolconnlimit, r.rolvaliduntil");
 
 	/*
-	 * GPDB: append the Greenplum-specific role attributes (columns 9, 10, 11)
+	 * GPDB: append the Greengage-specific role attributes (columns 9, 10, 11)
 	 * unconditionally, so that both \du and \du+ produce the same column layout
 	 * that the result loop below reads.  The PG15 merge moved these into a
 	 * verbose-only branch (along with a duplicate query and a duplicate FROM
@@ -4860,10 +4860,10 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 
 
 		/*
-		 * output Greenplum specific attributes.
+		 * output Greengage specific attributes.
 		 *
 		 * PG17 removed the "memberof" column (index 8) from this query -- it now
-		 * lives in the separate \drg command -- so the Greenplum-specific
+		 * lives in the separate \drg command -- so the Greengage-specific
 		 * rolcreaterextgpfd / rolcreatewextgpfd / rolcreaterexthttp columns are
 		 * at indexes 8, 9, 10 (previously 9, 10, 11).
 		 */
@@ -4875,19 +4875,19 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 
 		if (strcmp(PQgetvalue(res, i, 10), "t") == 0)
 			add_role_attribute(&buf, _("Ext http Table"));
-		/* end Greenplum specific attributes */
+		/* end Greengage specific attributes */
 
 
 		if (strcmp(PQgetvalue(res, i, 5), "t") != 0)
 			add_role_attribute(&buf, _("Cannot login"));
 
-		/* +numgreenplumspecificattrs is due to additional Greenplum specific attributes */
-		if (strcmp(PQgetvalue(res, i, (verbose ? 9 + numgreenplumspecificattrs : 8 + numgreenplumspecificattrs)), "t") == 0)
+		/* +numgreengagespecificattrs is due to additional Greengage specific attributes */
+		if (strcmp(PQgetvalue(res, i, (verbose ? 9 + numgreengagespecificattrs : 8 + numgreengagespecificattrs)), "t") == 0)
 			add_role_attribute(&buf, _("Replication"));
 
 		if (pset.sversion >= 90500)
-			/* +numgreenplumspecificattrs is due to additional Greenplum specific attributes */
-			if (strcmp(PQgetvalue(res, i, (verbose ? 10 + numgreenplumspecificattrs : 9 + numgreenplumspecificattrs)), "t") == 0)
+			/* +numgreengagespecificattrs is due to additional Greengage specific attributes */
+			if (strcmp(PQgetvalue(res, i, (verbose ? 10 + numgreengagespecificattrs : 9 + numgreengagespecificattrs)), "t") == 0)
 				add_role_attribute(&buf, _("Bypass RLS"));
 
 		conns = atoi(PQgetvalue(res, i, 6));
@@ -4918,7 +4918,7 @@ describeRoles(const char *pattern, bool verbose, bool showSystem)
 		printTableAddCell(&cont, attr[i], false, false);
 
 		if (verbose)
-			printTableAddCell(&cont, PQgetvalue(res, i, 8 + numgreenplumspecificattrs), false, false);
+			printTableAddCell(&cont, PQgetvalue(res, i, 8 + numgreengagespecificattrs), false, false);
 	}
 	termPQExpBuffer(&buf);
 

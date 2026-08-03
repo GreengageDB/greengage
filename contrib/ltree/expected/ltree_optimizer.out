@@ -1447,7 +1447,7 @@ WHERE  hash_ltree(v)::bit(32) != hash_ltree_extended(v, 0)::bit(32)
 (0 rows)
 
 CREATE TABLE ltreetest (t ltree);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \copy ltreetest FROM 'data/ltree.data'
 SELECT count(*) from ltreetest;
@@ -8012,7 +8012,7 @@ SELECT count(*) FROM ltreetest WHERE t ? '{23.*.1,23.*.2}';
 (1 row)
 
 create table _ltreetest (t ltree[]);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 \copy _ltreetest FROM 'data/_ltree.data'
 SELECT count(*) FROM _ltreetest WHERE t @> '1.1.1' ;

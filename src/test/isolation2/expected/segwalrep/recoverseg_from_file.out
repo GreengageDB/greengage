@@ -96,11 +96,11 @@ select generate_recover_config_file( (select datadir from gp_segment_configurati
 !\retcode gprecoverseg -a -i /tmp/recover_config_file1;
 -- start_ignore
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a -i /tmp/recover_config_file1
-20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery from configuration -i option supplied
 20260621:22:45:36:2274477 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -160,11 +160,11 @@ select dbid from gp_segment_configuration where dbid=2;
 !\retcode gprecoverseg -a -i /tmp/recover_config_file2;
 -- start_ignore
 20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a -i /tmp/recover_config_file2
-20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:45:39:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery from configuration -i option supplied
 20260621:22:45:40:2274782 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -221,11 +221,11 @@ SET
 !\retcode gprecoverseg -a;
 -- start_ignore
 20260621:22:46:42:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -a
-20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
 20260621:22:46:43:2277690 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -274,10 +274,10 @@ select wait_until_all_segments_synchronized();
 !\retcode gprecoverseg -ar;
 -- start_ignore
 20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting gprecoverseg with args: -ar
-20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Rebalance
 20260621:22:46:50:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
@@ -322,11 +322,11 @@ select wait_until_all_segments_synchronized();
 20260621:22:46:51:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Triggering segment reconfiguration
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Starting segment synchronization
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-=============================START ANOTHER RECOVER=========================================
-20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database) 8.0.0-alpha.0 build dev'
-20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greenplum Version: 'PostgreSQL 15beta2 (Greenplum Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-local Greengage Version: 'postgres (Greengage Database) 8.0.0-alpha.0 build dev'
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-coordinator Greengage Version: 'PostgreSQL 15beta2 (Greengage Database 8.0.0-alpha.0 build dev) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Jun 20 2026 18:57:35 (with assert checking)'
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greenplum instance recovery parameters
+20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Greengage instance recovery parameters
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:-Recovery type              = Standard
 20260621:22:46:58:2280389 gprecoverseg:b40467422d7d:gpadmin-[INFO]:----------------------------------------------------------

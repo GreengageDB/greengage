@@ -66,7 +66,7 @@ pg_backup_start(PG_FUNCTION_ARGS)
 
 	ereport(NOTICE,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("pg_start_backup() is not supported in Greenplum Database"),
+			 errmsg("pg_start_backup() is not supported in Greengage Database"),
 			 errhint("Contact support to get more information and resolve the issue")));
 
 	backupidstr = text_to_cstring(backupid);

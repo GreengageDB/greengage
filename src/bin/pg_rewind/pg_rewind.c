@@ -1083,7 +1083,7 @@ get_target_dbid(const char *argv0)
 
 	/* locate postgres binary */
 	if ((ret = find_other_exec(argv0, "postgres",
-							   "postgres (Greenplum Database) " PG_VERSION "\n",
+							   "postgres (Greengage Database) " PG_VERSION "\n",
 							   exec_path)) < 0)
 	{
 		char        full_path[MAXPGPATH];

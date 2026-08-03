@@ -3433,7 +3433,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3450,7 +3450,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();  -- fails because of NO SCROLL specification
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3467,7 +3467,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3484,7 +3484,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3502,7 +3502,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 7 at FETCH
 create or replace function sc_test() returns setof integer as $$
 declare
@@ -3546,7 +3546,7 @@ begin
 end;
 $$ language plpgsql;
 select * from sc_test();
-ERROR:  backward scan is not supported in this version of Greenplum Database
+ERROR:  backward scan is not supported in this version of Greengage Database
 CONTEXT:  PL/pgSQL function sc_test() line 8 at FETCH
 drop function sc_test();
 -- test qualified variable names

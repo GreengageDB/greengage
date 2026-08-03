@@ -1202,7 +1202,7 @@ PinBufferForBlock(Relation rel,
 	IOContext	io_context;
 	IOObject	io_object;
 	/*
-	 * Temp tables in Greenplum use shared buffers so that backends executing
+	 * Temp tables in Greengage use shared buffers so that backends executing
 	 * multiple slices of the same query can share them.
 	 */
 	bool		isLocalBuf = false; /* SmgrIsTemp(smgr); */
@@ -2687,7 +2687,7 @@ ExtendBufferedRelCommon(BufferManagerRelation bmr,
 										 extend_by);
 
 	/*
-	 * Temp tables in Greenplum use shared buffers so that backends executing
+	 * Temp tables in Greengage use shared buffers so that backends executing
 	 * multiple slices of the same query can share them.  Unlike upstream, we
 	 * therefore never extend a temp relation via local buffers
 	 * (ExtendBufferedRelLocal asserts it is unreachable); the shared path
@@ -3518,7 +3518,7 @@ BufferSync(int flags)
 		buf_state = LockBufHdr(bufHdr);
 
 		/*
-		 * Temp tables in Greenplum use shared buffers.  Filter buffers
+		 * Temp tables in Greengage use shared buffers.  Filter buffers
 		 * belonging to temp tables out during checkpoint.
 		 */
 		if ((buf_state & mask) == mask && !(buf_state & BM_TEMP))
@@ -4713,7 +4713,7 @@ DropRelationBuffers(SMgrRelation smgr_reln, ForkNumber *forkNum,
 
 	rlocator = smgr_reln->smgr_rlocator;
 
-	/* Temp tables use shared buffers in Greenplum */
+	/* Temp tables use shared buffers in Greengage */
 	/* If it's a local relation, it's localbuf.c's problem. */
 #if 0
 	if (RelFileLocatorBackendIsTemp(rlocator))
@@ -4844,7 +4844,7 @@ DropRelationsAllBuffers(SMgrRelation *smgr_reln, int nlocators)
 
 	rels = palloc(sizeof(SMgrRelation) * nlocators);	/* non-local relations */
 
-	/* Temp tables use shared buffers in Greenplum */
+	/* Temp tables use shared buffers in Greengage */
 	/* If it's a local relation, it's localbuf.c's problem. */
 	for (i = 0; i < nlocators; i++)
 	{

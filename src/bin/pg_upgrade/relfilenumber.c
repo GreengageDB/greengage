@@ -16,7 +16,7 @@
 #include "common/file_utils.h"
 #include "common/int.h"
 #include "common/logging.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "pg_upgrade.h"
 
 #include "access/aomd.h"

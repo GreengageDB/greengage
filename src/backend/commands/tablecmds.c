@@ -950,7 +950,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		ownerId = GetUserId();
 
 	/*
-	 * Greenplum: the accessMethod is necessary to extract, transform and
+	 * Greengage: the accessMethod is necessary to extract, transform and
 	 * validate the reloptions.
 	 */
 
@@ -1022,7 +1022,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 									 true, false);
 
 	/*
-	 * Greenplum: special case checks for reloptions that correspond to
+	 * Greengage: special case checks for reloptions that correspond to
 	 * appendonly relations. This check can not be performed earlier because it
 	 * is needed to know the access method.
 	 */
@@ -6065,7 +6065,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 								ATT_MATVIEW | ATT_INDEX | ATT_PARTITIONED_INDEX);
 			/*
 			 * GPDB: This command never recurses in upstream Postgres, however,
-			 * it recurses in Greenplum.
+			 * it recurses in Greengage.
 			 */
 			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
 			ATPrepSetTableSpace(tab, rel, cmd->name, lockmode);
@@ -9269,7 +9269,7 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		 * column-oriented tables to avoid the rewrite, but it does not apply to
 		 * row-oriented tables. Eventually it would be nice to remove this
 		 * workaround; see GitHub issue
-		 *     https://github.com/greenplum-db/gpdb/issues/3756
+		 *     https://github.com/GreengageDB/greengage/issues/3756
 		 *
 		 * GPDB_12_MERGE_FIXME: we used to do this only if no default was given,
 		 * but starting with PostgreSQL v11, a table doesn't need to be rewritten
@@ -15721,7 +15721,7 @@ validateForeignKeyConstraint(char *conname,
 			(errmsg_internal("validating foreign key constraint \"%s\"", conname)));
 
 	/*
-	 * Greenplum Database: foreign keys are not enforced, so skip the initial
+	 * Greengage Database: foreign keys are not enforced, so skip the initial
 	 * validation entirely (with a warning on the coordinator).  Besides being
 	 * pointless when the constraint will never be enforced, running the
 	 * RI_Initial_Check() probe query here is actively harmful:
@@ -15742,7 +15742,7 @@ validateForeignKeyConstraint(char *conname,
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 		ereport(WARNING,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced")));
+				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced")));
 	return;
 
 	/*
@@ -15900,13 +15900,13 @@ createForeignKeyActionTriggers(Oid myRelOid, Oid refRelOid, Constraint *fkconstr
 	ObjectAddress trigAddress;
 
 	/*
-	 * Special for Greenplum Database: Ignore foreign keys for now, with warning
+	 * Special for Greengage Database: Ignore foreign keys for now, with warning
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH || Gp_role == GP_ROLE_UTILITY)
 	{
 		ereport(WARNING,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced")));
+				 errmsg("referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced")));
 	}
 
 	/*
@@ -17708,7 +17708,7 @@ ATPostAlterTypeCleanup(List **wqueue, AlteredTableInfo *tab, LOCKMODE lockmode)
 			 * The drop currently only performs on master which lead error when
 			 * recreating index (since recreate index will dispatch to segments and
 			 * there still old constraint index exists)
-			 * Related issue: https://github.com/greenplum-db/gpdb/issues/10561.
+			 * Related issue: https://github.com/GreengageDB/greengage/issues/10561.
 			 */
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -19016,7 +19016,7 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 			DefElem    *def = lfirst(cell);
 
 			/*
-			 * Autovacuum on user tables is not enabled in Greenplum.  Move on
+			 * Autovacuum on user tables is not enabled in Greengage.  Move on
 			 * with a warning.  The decision to not error out is in favor of
 			 * DDL compatibility with external BI tools.
 			 */
@@ -19025,7 +19025,7 @@ ATExecSetRelOptions(Relation rel, List *defList, AlterTableType operation,
 							   strlen("autovaccum")) == 0)
 				ereport(WARNING,
 						(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-						 errmsg("autovacuum is not supported in Greenplum")));
+						 errmsg("autovacuum is not supported in Greengage")));
 		}
 	}
 

@@ -931,7 +931,7 @@ array_agg_finalfn(PG_FUNCTION_ARGS)
 
 
 
-/* Greenplum Database Additions: */
+/* Greengage Database Additions: */
 
 
 /*-----------------------------------------------------------------------------

@@ -36,7 +36,7 @@ vacuum spgist_point_tbl;
 -- traverse stack is non-empty
 
 -- GPDB: 'unlogged' dropped here (incidental to the SP-GiST test; unlogged
--- sequences from the serial column are not supported in Greenplum).
+-- sequences from the serial column are not supported in Greengage).
 create table spgist_box_tbl(id serial, b box);
 insert into spgist_box_tbl(b)
 select box(point(i,j),point(i+s,j+s))
@@ -86,7 +86,7 @@ select * from spgist_domain_tbl where f1 = 'fo';
 
 -- test an unlogged table, mostly to get coverage of spgistbuildempty
 -- GPDB: 'serial' -> 'int' (unlogged sequences from the serial column are not
--- supported in Greenplum); the unlogged table itself gives spgistbuildempty
+-- supported in Greengage); the unlogged table itself gives spgistbuildempty
 -- coverage, and the id column is incidental.
 create unlogged table spgist_unlogged_tbl(id int, b box);
 create index spgist_unlogged_idx on spgist_unlogged_tbl using spgist (b);

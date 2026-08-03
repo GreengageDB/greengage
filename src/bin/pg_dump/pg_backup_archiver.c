@@ -459,7 +459,7 @@ RestoreArchive(Archive *AHX)
 	if (ropt->filename || ropt->compression_spec.algorithm != PG_COMPRESSION_NONE)
 		SetOutput(AH, ropt->filename, ropt->compression_spec);
 
-	ahprintf(AH, "--\n-- Greenplum Database database dump\n--\n\n");
+	ahprintf(AH, "--\n-- Greengage Database database dump\n--\n\n");
 
 	/*
 	 * If generating plain-text output, enter restricted mode to block any
@@ -820,7 +820,7 @@ RestoreArchive(Archive *AHX)
 	if (AH->public.verbose)
 		dumpTimestamp(AH, "Completed on", time(NULL));
 
-	ahprintf(AH, "--\n-- Greenplum Database database dump complete\n--\n\n");
+	ahprintf(AH, "--\n-- Greengage Database database dump complete\n--\n\n");
 
 	/*
 	 * If generating plain-text output, exit restricted mode at the very end
@@ -3243,7 +3243,7 @@ _tocEntryRequired(TocEntry *te, teSection curSection, ArchiveHandle *AH)
 				strcmp(te->desc, "MATERIALIZED VIEW DATA") == 0 ||
 				strcmp(te->desc, "SEQUENCE") == 0 ||
 				strcmp(te->desc, "SEQUENCE SET") == 0 ||
-				/* Greenplum additions */
+				/* Greengage additions */
 				strcmp(te->desc, "EXTERNAL TABLE") == 0)
 			{
 				if (!ropt->selTable)
@@ -3897,7 +3897,7 @@ _getObjectDescription(PQExpBuffer buf, const TocEntry *te)
 			 strcmp(type, "OPERATOR CLASS") == 0 ||
 			 strcmp(type, "OPERATOR FAMILY") == 0 ||
 			 strcmp(type, "PROCEDURE") == 0 ||
-			 /* Greenplum Additions */
+		/* Greengage Additions */
 			 strcmp(type, "PROTOCOL") == 0)
 	{
 		/* Chop "DROP " off the front and make a modifiable copy */

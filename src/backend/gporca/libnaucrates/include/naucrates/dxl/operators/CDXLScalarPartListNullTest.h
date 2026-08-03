@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
+//	Greengage Database
 //	Copyright (C) 2017 VMware, Inc. or its affiliates.
 //
 //	Class for representing DXL Part list null test expressions

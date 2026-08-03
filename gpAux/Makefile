@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------
-# Makefile for Greenplum Database
+# Makefile for Greengage Database
 #---------------------------------------------------------------------
 
 # keep the default target above any targets from included makefiles
@@ -65,9 +65,9 @@ GPMGMT=../gpMgmt
 BUILDDIR=$(GPPGDIR)
 
 RELEASE=devel
-GPDIR=greenplum-db-$(RELEASE)
-PLRDIR=greenplum-plr-$(RELEASE)
-CLIENTSDIR=greenplum-clients-$(RELEASE)
+GPDIR=greengage-db-$(RELEASE)
+PLRDIR=greengage-plr-$(RELEASE)
+CLIENTSDIR=greengage-clients-$(RELEASE)
 
 DISTPATH=$(GPROOT)/$(GPDIR)
 CLIENTSDISTPATH=$(GPROOT)/$(CLIENTSDIR)
@@ -217,7 +217,7 @@ define BUILD_STEPS
 	cd $(BUILDDIR) && PYGRESQL_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../../lib -Wl,--enable-new-dtags' QUICKLZ_LDFLAGS='-Wl,-rpath,\$$$$ORIGIN/../../lib -Wl,--enable-new-dtags' $(MAKE) $(PARALLEL_MAKE_OPTS) install
 	cd $(BUILDDIR)/src/pl/plpython && $(MAKE) clean && echo 'LDFLAGS += -Wl,-rpath,\$$$$ORIGIN/../../ext/python/lib/ -Wl,--enable-new-dtags' >> Makefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
 	cd $(BUILDDIR)/src/pl/plperl && $(MAKE) clean && echo "LDFLAGS += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && echo "LDFLAGS_SL += -Wl,-rpath,$(perl_archlibexp)/CORE -Wl,--enable-new-dtags" >> GNUmakefile && $(MAKE) $(PARALLEL_MAKE_OPTS) install && cd $(BUILDDIR)
-	#@$(MAKE) greenplum_path INSTLOC=$(INSTLOC)
+	#@$(MAKE) greengage_path INSTLOC=$(INSTLOC)
 	#@$(MAKE) mgmtcopy INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
@@ -229,7 +229,7 @@ endef
 ifeq "$(BLD_GPDB_BUILDSET)" "partial"
 define BUILD_STEPS
 	rm -rf $(DESTDIR)$(INSTLOC)
-	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greenplum_path_file
+	cd $(BUILDDIR)/gpMgmt/ && $(MAKE) generate_greengage_path_file
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/parser/gram.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/errcodes.h
 	cd $(BUILDDIR)/src/backend/ && $(MAKE) ../../src/include/utils/fmgroids.h
@@ -342,7 +342,7 @@ CLIENTS_HOME_DIR=$(GPROOT)
 else
 CLIENTS_HOME_DIR=$(BLD_HOME)
 endif
-CLIENTSINSTLOC=$(CLIENTS_HOME_DIR)/greenplum-clients
+CLIENTSINSTLOC=$(CLIENTS_HOME_DIR)/greengage-clients
 CLIENTSINSTLOC_BIN=$(CLIENTSINSTLOC)/bin
 CLIENTSINSTLOC_BINEXT=$(CLIENTSINSTLOC)/bin/ext/
 CLIENTSINSTLOC_EXT=$(CLIENTSINSTLOC)/ext
@@ -428,7 +428,7 @@ endif
  endif
 	# ---- copy scripts fileset ----
 	mkdir -p $(CLIENTSINSTLOC)
-	cp -f client/scripts/greenplum_$@_path$(SCRIPT) $(CLIENTSINSTLOC)/
+	cp -f client/scripts/greengage_$@_path$(SCRIPT) $(CLIENTSINSTLOC)/
 
 	# ---- updating the version in required packages ----
 	@$(MAKE) set_scripts_version INSTLOC=$(CLIENTSINSTLOC)

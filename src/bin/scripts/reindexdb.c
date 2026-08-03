@@ -298,7 +298,7 @@ reindex_one_database(ConnParams *cparams, ReindexType type,
 
 	/*
 	 * GPDB_12_MERGE_FIXME: do we still report this as PostgreSQL 12 or should
-	 * it say Greenplum 7?
+	 * it say Greengage 7?
 	 */
 	if (concurrently && PQserverVersion(conn) < 120000)
 	{

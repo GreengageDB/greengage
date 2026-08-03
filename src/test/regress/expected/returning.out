@@ -3,7 +3,7 @@
 --
 -- Simple cases
 CREATE TEMP TABLE foo (f1 serial, f2 text, f3 int default 42);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- GPDB: otherwise the UPDATE tests fail with:
 -- ERROR:  Cannot parallelize an UPDATE statement that updates the distribution columns
@@ -351,7 +351,7 @@ DROP FUNCTION foo_f();
 DROP TYPE foo_t;
 -- Try a join case
 CREATE TEMP TABLE joinme (f2j text, other int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2j' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'f2j' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO joinme VALUES('more', 12345);
 INSERT INTO joinme VALUES('zoo2', 54321);
@@ -741,7 +741,7 @@ UPDATE joinview SET f3 = f3 + 1 WHERE f3 = 57
   3 | zoo2 | 57 | 99 | 54321 |  3 | zoo2 | 58 | 99 | 54321 |  3 | zoo2 | 58 | 99 | 54321 |        1
 (1 row)
 
--- GPDB: INSTEAD OF triggers are not supported in Greenplum, so the upstream
+-- GPDB: INSTEAD OF triggers are not supported in Greengage, so the upstream
 -- "UPDATE on view with INSTEAD OF trigger" sub-block (CREATE TRIGGER and the
 -- two joinview UPDATEs that rely on it) is dropped here.
 -- Test wholerow & dropped column handling
@@ -790,7 +790,7 @@ DELETE FROM zerocol
 DROP TABLE zerocol;
 -- Test schema-qualified table name in RETURNING list
 CREATE TABLE public.tt(a int, b int);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO public.tt VALUES (1, 10);
 UPDATE public.tt SET b = b * 2 RETURNING a, b, old.b, new.b, tt.b, public.tt.b;
@@ -882,5 +882,5 @@ DELETE FROM foo_parted
 DROP TABLE foo_parted CASCADE;
 NOTICE:  drop cascades to view foo_parted_v
 -- GPDB: the upstream "Test deparsing" case uses multiple writable CTEs in a
--- single query, which Greenplum does not support (only one modifying WITH clause
+-- single query, which Greengage does not support (only one modifying WITH clause
 -- is allowed per query), so that deparse test is dropped here.

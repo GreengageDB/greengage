@@ -2762,7 +2762,7 @@ dblink_connstr_has_pw(const char *connstr)
  * non-superusers. In case of SCRAM pass-through insist that the connstr
  * has the required SCRAM pass-through options.
  *
- * For Greenplum, dblink uses built libpq to construct conninfo, whose user is
+ * For Greengage, dblink uses built libpq to construct conninfo, whose user is
  * environment variable PGUSER, which is wrong, modifies this function to add
  * the session's username into connstr (and hence returns the possibly
  * modified connection string).  Greenplum also insists that non-superusers

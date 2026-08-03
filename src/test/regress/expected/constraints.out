@@ -681,7 +681,7 @@ CREATE TABLE parted_fk_naming (
     PRIMARY KEY (id)
 )
 PARTITION BY LIST (id);
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 CREATE TABLE parted_fk_naming_1 (
     id bigint NOT NULL default 1,
     id_abc bigint,
@@ -689,8 +689,8 @@ CREATE TABLE parted_fk_naming_1 (
     CONSTRAINT dummy_constr CHECK (true)
 );
 ALTER TABLE parted_fk_naming ATTACH PARTITION parted_fk_naming_1 FOR VALUES IN ('1');
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
-WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greenplum Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
+WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 SELECT conname FROM pg_constraint WHERE conrelid = 'parted_fk_naming_1'::regclass AND contype = 'f';
     conname     
 ----------------

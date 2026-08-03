@@ -124,7 +124,7 @@ MultiExecBitmapOr(BitmapOrState *node)
 	int			nplans;
 	int			i;
 	/*
-	 * Greenplum uses result for TIDBitmap result, and node->bitmap for
+	 * Greengage uses result for TIDBitmap result, and node->bitmap for
 	 * StreamBitmap result if there is any StreamBitmap.
 	 *
 	 * At last it will union them and return.
@@ -151,7 +151,7 @@ MultiExecBitmapOr(BitmapOrState *node)
 
 		/*
 		 * Note for further merge iteration:
-		 *     Greenplum's BitmapIndexScan returns a StreamBitmap
+		 *     Greengage's BitmapIndexScan returns a StreamBitmap
 		 */
 		subresult = MultiExecProcNode(subnode);
 

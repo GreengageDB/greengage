@@ -503,7 +503,7 @@ CREATE INDEX ON atest12 (a);
 CREATE INDEX ON atest12 (abs(a));
 -- results below depend on having quite accurate stats for atest12, so...
 ALTER TABLE atest12 SET (autovacuum_enabled = off);
-WARNING:  autovacuum is not supported in Greenplum
+WARNING:  autovacuum is not supported in Greengage
 SET default_statistics_target = 10000;
 VACUUM ANALYZE atest12;
 RESET default_statistics_target;
@@ -1949,7 +1949,7 @@ SELECT brin_desummarize_range('sro_brin', 0);
 (1 row)
 
 SELECT brin_summarize_range('sro_brin', 0);
-ERROR:  Greenplum could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=1644355)
+ERROR:  Greengage could not summarize indicated page range  (seg0 slice1 172.17.0.2:7002 pid=1644355)
 CONTEXT:  SQL function "brin_summarize_range" statement 1
 DROP TABLE sro_tab;
 -- Check with a partitioned table
@@ -3198,7 +3198,7 @@ QUERY:  INSERT INTO sro_trojan_table DEFAULT VALUES; SELECT true
 CONTEXT:  SQL function "mv_action" statement 1
 DROP OWNED BY regress_sro_user;
 DROP ROLE regress_sro_user;
--- Test sandbox escape with CVE-2020-25695 on Greenplum.
+-- Test sandbox escape with CVE-2020-25695 on Greengage.
 --
 -- The idea of CVE-2020-25695 is to make superuser fire a defered
 -- trigger with security invoker function that executes some malicious

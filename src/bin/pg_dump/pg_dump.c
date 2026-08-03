@@ -1128,7 +1128,7 @@ main(int argc, char **argv)
 		case GPS_ENABLED:
 			dopt.dumpGpPolicy = dopt.isGPbackend;
 			if (!dopt.isGPbackend)
-				pg_log_warning("server is not a Greenplum Database instance; --gp-syntax option ignored");
+				pg_log_warning("server is not a Greengage Database instance; --gp-syntax option ignored");
 			break;
 	}
 
@@ -1506,8 +1506,8 @@ help(const char *progname)
 			 "                               ALTER OWNER commands to set ownership\n"));
 
 	/* START MPP ADDITION */
-	printf(_("  --gp-syntax                  dump with Greenplum Database syntax (default if gpdb)\n"));
-	printf(_("  --no-gp-syntax               dump without Greenplum Database syntax (default if postgresql)\n"));
+	printf(_("  --gp-syntax                  dump with Greengage Database syntax (default if gpdb)\n"));
+	printf(_("  --no-gp-syntax               dump without Greengage Database syntax (default if postgresql)\n"));
 	printf(_("  --function-oids              dump only function(s) of given list of oids\n"));
 	printf(_("  --relation-oids              dump only relation(s) of given list of oids\n"));
 	/* END MPP ADDITION */
@@ -7934,7 +7934,7 @@ getTables(Archive *fout, int *numTables)
 	 * we cannot correctly identify inherited columns, owned sequences, etc.
 	 *
 	 * GPDB keeps the version-branched query shape (it must dump from older
-	 * Greenplum servers), but adopts the PG18 statistics columns
+	 * Greengage servers), but adopts the PG18 statistics columns
 	 * (reltuples/relallvisible/relallfrozen) that getTables() now populates.
 	 */
 
@@ -19567,7 +19567,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 			bool		firstitem_extra;
 
 			/*
-			 * Greenplum doesn't allow altering system catalogs without
+			 * Greengage doesn't allow altering system catalogs without
 			 * setting the allow_system_table_mods GUC first.
 			 */
 			appendPQExpBuffer(q, "SET allow_system_table_mods = true;\n");
@@ -22430,7 +22430,7 @@ findDumpableDependencies(ArchiveHandle *AH, const DumpableObject *dobj,
 }
 
 /*
- * isGPbackend - returns true if the connected backend is a GreenPlum DB backend.
+ * isGPbackend - returns true if the connected backend is a Greengage DB backend.
  */
 static void
 testGPbackend(Archive *fout)

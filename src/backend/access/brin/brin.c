@@ -1539,7 +1539,7 @@ brin_summarize_range_internal(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("Greenplum could not summarize indicated page range")));
+				 errmsg("Greengage could not summarize indicated page range")));
 	}
 	heapBlk = (BlockNumber) heapBlk64;
 

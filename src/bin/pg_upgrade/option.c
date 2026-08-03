@@ -17,7 +17,7 @@
 #include "fe_utils/option_utils.h"
 #include "getopt_long.h"
 #include "pg_upgrade.h"
-#include "greenplum/pg_upgrade_greenplum.h"
+#include "greengage/pg_upgrade_greengage.h"
 #include "utils/pidfile.h"
 
 static void usage(void);
@@ -65,8 +65,8 @@ parseCommandLine(int argc, char *argv[])
 		{"set-char-signedness", required_argument, NULL, 6},
 		{"swap", no_argument, NULL, 7},
 
-		/* Greenplum specific parameters */
-		GREENPLUM_OPTIONS
+		/* Greengage specific parameters */
+		GREENGAGE_OPTIONS
 
 		{NULL, 0, NULL, 0}
 	};
@@ -88,7 +88,7 @@ parseCommandLine(int argc, char *argv[])
 
 	os_user_effective_id = get_user_info(&os_info.user);
 
-	initialize_greenplum_user_options();
+	initialize_greengage_user_options();
 
 	/* we override just the database user name;  we got the OS id above */
 	if (getenv("PGUSER"))
@@ -242,7 +242,7 @@ parseCommandLine(int argc, char *argv[])
 				break;
 
 			default:
-				if (!process_greenplum_option(option))
+				if (!process_greengage_option(option))
 				{
 					fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
 							os_info.progname);
@@ -315,7 +315,7 @@ parseCommandLine(int argc, char *argv[])
 static void
 usage(void)
 {
-	printf(_("pg_upgrade upgrades a Greenplum cluster to a different major version.\n\n"));
+	printf(_("pg_upgrade upgrades a Greengage cluster to a different major version.\n\n"));
 	printf(_("Usage:\n"));
 	printf(_("  pg_upgrade [OPTION]...\n\n"));
 	printf(_("Options:\n"));

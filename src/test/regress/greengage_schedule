@@ -1,4 +1,4 @@
-# Greenplum-specific tests
+# Greengage-specific tests
 #
 # The order of the tests is fairly random, but there are a couple of things
 # to consider when placing a new test:

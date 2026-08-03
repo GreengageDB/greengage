@@ -1298,7 +1298,7 @@ retry:
 	relation->rd_smgr = NULL;
 
     /*
-     * initialize Greenplum Database partitioning info
+     * initialize Greengage Database partitioning info
      */
 	if ((relation->rd_rel->relkind == RELKIND_RELATION && !IsSystemRelation(relation)) ||
 		relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||
@@ -1904,7 +1904,7 @@ RelationInitTableAccessMethod(Relation relation)
 		relation->rd_amhandler = aform->amhandler;
 		ReleaseSysCache(tuple);
 		/*
-		 * Greenplum: append-optimized relations should not have a valid
+		 * Greengage: append-optimized relations should not have a valid
 		 * relfrozenxid.
 		 */
 		Assert (!RelationIsAppendOptimized(relation) ||
@@ -3838,13 +3838,13 @@ RelationBuildLocalRelation(const char *relname,
 
 
 	/*
-	 * Further deviation in Greenplum: A new relfilenumber must be generated
+	 * Further deviation in Greengage: A new relfilenumber must be generated
 	 * even for a mapped relation.  OIDs and relfilenumbers are generated
 	 * using two separate counters.  If OID is reused as relfilenumber, like
 	 * in upstream, without bumping the relfilenumber counter, it may lead to
 	 * a reuse of this value as relfilenumber in future.  E.g. if this is a
 	 * non-temp relation and the future relation happens to be a temp
-	 * relation.  Shared buffer manager in Greenplum breaks if this happens,
+	 * relation.  Shared buffer manager in Greengage breaks if this happens,
 	 * see GPDB_91_MERGE_FIXME in GetNewRelFileNumber() for details.
 	 */
 	if (relfilenumber == 1 || mapped_relation)

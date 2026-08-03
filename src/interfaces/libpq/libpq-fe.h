@@ -293,7 +293,7 @@ typedef struct _PQconninfoOption
 	int			dispsize;		/* Field size in characters for dialog	*/
 #ifndef FRONTEND  /* modules other than backend have this macro */
 	off_t		connofs;		/* Offset into PGconn struct, -1 if not there
-								 * (Greenplum specified) */
+								 * (Greengage specified) */
 #endif
 } PQconninfoOption;
 

@@ -1,4 +1,4 @@
-#include "pg_upgrade_greenplum.h"
+#include "pg_upgrade_greengage.h"
 
 typedef enum
 {
@@ -11,29 +11,29 @@ typedef struct {
 	segmentMode segment_mode;
 	bool continue_check_on_fatal;
 	bool skip_target_check;
-} GreenplumUserOpts;
+} GreengageUserOpts;
 
-static GreenplumUserOpts greenplum_user_opts;
+static GreengageUserOpts greengage_user_opts;
 static bool check_fatal_occurred;
 
 void
-initialize_greenplum_user_options(void)
+initialize_greengage_user_options(void)
 {
-	greenplum_user_opts.segment_mode = SEGMENT;
-	greenplum_user_opts.continue_check_on_fatal = false;
-	greenplum_user_opts.skip_target_check = false;
+	greengage_user_opts.segment_mode = SEGMENT;
+	greengage_user_opts.continue_check_on_fatal = false;
+	greengage_user_opts.skip_target_check = false;
 }
 
 bool
-process_greenplum_option(greenplumOption option)
+process_greengage_option(greengageOption option)
 {
 	switch (option)
 	{
-		case GREENPLUM_MODE_OPTION:        /* --mode={dispatcher|segment} */
+		case GREENGAGE_MODE_OPTION:        /* --mode={dispatcher|segment} */
 			if (pg_strcasecmp("dispatcher", optarg) == 0)
-				greenplum_user_opts.segment_mode = DISPATCHER;
+				greengage_user_opts.segment_mode = DISPATCHER;
 			else if (pg_strcasecmp("segment", optarg) == 0)
-				greenplum_user_opts.segment_mode = SEGMENT;
+				greengage_user_opts.segment_mode = SEGMENT;
 			else
 			{
 				pg_log(PG_FATAL, "invalid segment configuration\n");
@@ -41,14 +41,14 @@ process_greenplum_option(greenplumOption option)
 			}
 			break;
 
-		case GREENPLUM_PROGRESS_OPTION:        /* --progress */
-			greenplum_user_opts.progress = true;
+		case GREENGAGE_PROGRESS_OPTION:        /* --progress */
+			greengage_user_opts.progress = true;
 			break;
 
-		case GREENPLUM_CONTINUE_CHECK_ON_FATAL:
+		case GREENGAGE_CONTINUE_CHECK_ON_FATAL:
 			if (user_opts.check)
 			{
-				greenplum_user_opts.continue_check_on_fatal = true;
+				greengage_user_opts.continue_check_on_fatal = true;
 				check_fatal_occurred = false;
 			}
 			else
@@ -59,9 +59,9 @@ process_greenplum_option(greenplumOption option)
 			}
 			break;
 
-		case GREENPLUM_SKIP_TARGET_CHECK:
+		case GREENGAGE_SKIP_TARGET_CHECK:
 			if (user_opts.check)
-					greenplum_user_opts.skip_target_check = true;
+					greengage_user_opts.skip_target_check = true;
 			else
 			{
 					pg_log(PG_FATAL,
@@ -78,21 +78,21 @@ process_greenplum_option(greenplumOption option)
 }
 
 bool
-is_greenplum_dispatcher_mode()
+is_greengage_dispatcher_mode()
 {
-	return greenplum_user_opts.segment_mode == DISPATCHER;
+	return greengage_user_opts.segment_mode == DISPATCHER;
 }
 
 bool
 is_show_progress_mode(void)
 {
-	return greenplum_user_opts.progress;
+	return greengage_user_opts.progress;
 }
 
 bool
 is_continue_check_on_fatal(void)
 {
-	return greenplum_user_opts.continue_check_on_fatal;
+	return greengage_user_opts.continue_check_on_fatal;
 }
 
 void
@@ -110,5 +110,5 @@ get_check_fatal_occurred(void)
 bool
 is_skip_target_check(void)
 {
-	return greenplum_user_opts.skip_target_check;
+	return greengage_user_opts.skip_target_check;
 }

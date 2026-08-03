@@ -1,7 +1,7 @@
 drop table •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£;
 ERROR:  table "•ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£" does not exist
 create table •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£ (‘ÓÃ•ë£ text, ‘·Ö•ùË‘¥³’¡¼‘¥É varchar, •Ş¬‘¿¼1A‘¤À‘¤è char(16));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '‘ÓÃ•ë£' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '‘ÓÃ•ë£' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£index1 on •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£ using btree (‘ÓÃ•ë£);
 create index •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£index2 on •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£ using hash (‘·Ö•ùË‘¥³’¡¼‘¥É);
@@ -90,7 +90,7 @@ select *,substring(‘ÓÃ•ë£ from 10 for 4) from •ÓÓ‘Ëã•ñ¢‘ÓÃ•ë£;
 drop table ‘¼Æ‘Ëã‘»ú‘Êõ‘Óï;
 ERROR:  table "‘¼Æ‘Ëã‘»ú‘Êõ‘Óï" does not exist
 create table ‘¼Æ‘Ëã‘»ú‘Êõ‘Óï(‘Êõ‘Óï text, ‘·Ö‘Àà‘ºÅ varchar, ‘±¸‘×¢1A char(16));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '‘Êõ‘Óï' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '‘Êõ‘Óï' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index ‘¼Æ‘Ëã‘»ú‘Êõ‘Óïindex1 on ‘¼Æ‘Ëã‘»ú‘Êõ‘Óï using btree(‘Êõ‘Óï);
 create index ‘¼Æ‘Ëã‘»ú‘Êõ‘Óïindex2 on ‘¼Æ‘Ëã‘»ú‘Êõ‘Óï using btree(‘·Ö‘Àà‘ºÅ);
@@ -179,7 +179,7 @@ select *,substring(‘Êõ‘Óï from 3 for 4) from ‘¼Æ‘Ëã‘»ú‘Êõ‘Óï;
 drop table •ÓÓ‘Ëã•ñ¢“¿ë“¾î;
 ERROR:  table "•ÓÓ‘Ëã•ñ¢“¿ë“¾î" does not exist
 create table •ÓÓ‘Ëã•ñ¢“¿ë“¾î (“¿ë“¾î text, ‘·Ö•ùË“ÄÚ“µå varchar, “ºñ“°í1A“¶ó“±¸ char(16));
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '“¿ë“¾î' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named '“¿ë“¾î' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 create index •ÓÓ‘Ëã•ñ¢“¿ë“¾îindex1 on •ÓÓ‘Ëã•ñ¢“¿ë“¾î using btree (“¿ë“¾î);
 create index •ÓÓ‘Ëã•ñ¢“¿ë“¾îindex2 on •ÓÓ‘Ëã•ñ¢“¿ë“¾î using hash (‘·Ö•ùË“ÄÚ“µå);
@@ -268,7 +268,7 @@ select *,substring(“¿ë“¾î from 3 for 4) from •ÓÓ‘Ëã•ñ¢“¿ë“¾î;
 drop table test;
 ERROR:  table "test" does not exist
 create table test (t text);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greenplum Database data distribution key for this table.
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 't' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 insert into test values('ENGLISH');
 insert into test values('FRANÇAIS');

@@ -250,7 +250,7 @@ typedef struct CopyStateData
 	int			raw_buf_index;	/* next byte to process */
 	int			raw_buf_len;	/* total # of bytes stored */
 
-	/* Greenplum specific variables */
+	/* Greengage specific variables */
 	bool		escape_off;
 	int			first_qe_processed_field;
 	List	   *qd_attnumlist;

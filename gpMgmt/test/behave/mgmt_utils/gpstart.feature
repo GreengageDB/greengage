@@ -76,8 +76,8 @@ Feature: gpstart behave tests
 
 
     # NOTE: On GP-7x, There are couple of open bugs existing for utility mode connections (gpstart -m & gpstart -mR)
-    # https://github.com/greenplum-db/gpdb/issues/12217 : "gpstart -m" accepts connections without checking "gp_role=utility"
-    # https://github.com/greenplum-db/gpdb/issues/12566 :  Non-superuser should not be able to connect via utility mode
+    # https://github.com/GreengageDB/greengage/issues/12217 : "gpstart -m" accepts connections without checking "gp_role=utility"
+    # https://github.com/GreengageDB/greengage/issues/12566 :  Non-superuser should not be able to connect via utility mode
 
     # Expected result of below test cases might change based on above issues fix
     @concourse_cluster

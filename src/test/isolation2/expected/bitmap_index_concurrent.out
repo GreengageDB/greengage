@@ -14,7 +14,7 @@
 -- saved next tid. But actually `PAGE_NEXT` now contains words used to belong in `PAGE_FULL`.
 -- This causes the real next tid less than the expected next tid. But our scan keeps increasing
 -- the wrong tid. And then this leads to a wrong result.
--- This related to issue: https://github.com/greenplum-db/gpdb/issues/11308
+-- This related to issue: https://github.com/GreengageDB/greengage/issues/11308
 --
 
 -- Here we use append optimized table to speed up create full bitmap pages
