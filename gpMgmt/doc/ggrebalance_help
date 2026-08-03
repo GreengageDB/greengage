@@ -1,0 +1,268 @@
+COMMAND NAME: ggrebalance
+
+Rebalance a Greengage Database cluster by redistributing segments across hosts.
+
+******************************************************
+Synopsis
+******************************************************
+
+ggrebalance -x <segment_count>
+    [-n <parallel_processes>] [-B <batch_size>]
+    [{-H <hostname_1>,<hostname_2>,...,<hostname_N> | --target-hosts-file <filename>} |
+     {{-A <hostname_1>,<hostname_2>,...,<hostname_N> | --add-hosts-file <filename>}
+      {-R <hostname_1>,<hostname_2>,...,<hostname_N> | --remove-hosts-file <filename>}}]
+    [{-d "<target_primary_datadir>,<target_mirror_datadir>" | --target-datadirs-file <filename>}]
+    [-m grouped|spread] [--inplace-swap-roles]
+    [--skip-resource-estimation] [--skip-rebalance]
+    [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
+    [{-D | -S | --no-progress}]
+    [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
+    [--seed <planner_seed>]
+
+ggrebalance
+    [-n <parallel_processes>] [-B <batch_size>]
+    [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
+    [{-D | -S | --no-progress}]
+    [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
+
+ggrebalance -r
+    [-n <parallel_processes>] [-B <batch_size>]
+    [{-T hh:mm:ss | -E 'YYYY-MM-DD hh:mm:ss'}]
+    [{-D | -S | --no-progress}]
+    [--hba-hostnames] [--replay-lag <replay_lag>] [-a]
+    [--non-interactive-mode] [--approve-swap-roles] [-l <log_dir>] [-q] [-v]
+
+ggrebalance -c
+
+ggrebalance -? | -h | --help | --usage
+
+ggrebalance --version
+
+******************************************************
+DESCRIPTION
+******************************************************
+
+The ggrebalance tool is responsible for:
+ - adding/removing hosts and segments;
+ - rebalancing segments between sets of hosts.
+
+NOTE: expand is not supported in the current version. It will be added later.
+For now, gpexpand tool can be used for expanding a cluster.
+
+ggrebalance supports only mirrored cluster configurations. If the cluster has no
+mirrors, ggrebalance will error out during the cluster validation stage.
+
+Possible scenarios available with the tool:
+ - add new hosts to a cluster without changing the segment count;
+ - add new hosts to a cluster and add new segments;
+ - remove hosts from a cluster without changing the segment count;
+ - remove hosts from a cluster and remove existing segments from the cluster;
+ - move segments to a completely new set of hosts without changing the segment count;
+ - move segments to a completely new set of hosts while changing the segment count;
+ - change the mirroring strategy;
+ - remove existing segments without changing the host set;
+ - add new segments without changing the host set.
+
+As the first step, ggrebalance will create a rebalance plan. If the plan with
+given parameters is feasible (meaning that the tool can end up with a balanced
+cluster configuration), it will continue execution.
+Next, the tool will create a 'ggrebalance' schema in the cluster to track its
+status. The plan is also saved in the schema. The schema is created in the
+'postgres' database.
+Then ggrebalance will perform cluster shrink or expand, if the target number
+of segments differs from the current one. During this phase, the tool will
+execute ALTER TABLE ... REBALANCE operations on the existing tables
+and materialized views in the cluster.
+Finally, ggrebalance will perform segment movements according to the plan.
+
+Note: after the operation is successfully completed, the schema still exists.
+The user needs to remove the schema by executing 'ggrebalance -c' before starting
+a new rebalance operation.
+
+If the tool operation is interrupted and rolled back, the schema is removed as a
+result of the rollback operation.
+
+If options '--detailed-progress' or '--simple-progress' are used, a view called
+'rebalance_progress' is created in the 'ggrebalance' schema. It allows to track
+the status of current operation of the tool.
+
+******************************************************
+OPTIONS
+******************************************************
+
+-x, --target-segment-count <segment_count>
+ Set the target number of segments for the whole cluster (only primary segments
+ are taken into account). This number may be less than or greater than the current
+ segment number. ggrebalance will perform shrink or expand in these
+ respective cases. Valid values are 1 - 4096.
+ Note: must always be specified when the user starts a new rebalance session.
+ If this parameter is not set, the tool will try to continue the previous
+ interrupted operation (normal rebalance or rollback).
+
+-H, --target-hosts <hostname_1>,<hostname_2>,...,<hostname_N>
+ Set the target hosts list. This list defines the set of hosts on which the
+ --target-segment-count segments should be deployed. The full set of desired
+ hosts must be passed.
+
+--target-hosts-file <filename>
+ Target hosts list passed as a file.
+ Hosts list file format: one host per line.
+
+-d, --target-datadirs "<target_primary_datadir>,<target_mirror_datadir>"
+ Set the target segment data directories (primary and mirror) if the cluster is
+ expanded or if any new hosts are included in the cluster and segment data
+ directories should be created on the hosts. Both paths for primary and
+ for mirror should be specified.
+
+--target-datadirs-file <filename>
+ Target segment data directories passed as a file.
+ File format: one datadir per line.
+
+-m, --mirror-mode grouped|spread
+ Set the type of mirroring to be used after rebalance is complete.
+
+-p, --show-plan
+ Only show the segment movement plan and halt the tool's work without changing
+ the cluster.
+
+-c, --clean
+ Delete the ggrebalance schema and all previously created ggrebalance
+ files (except logs).
+
+-r, --rollback
+ Perform rollback of the interrupted operation if possible.
+ If the previous session of ggrebalance was interrupted during shrink or expand,
+ then the shrink (or expand) operation will be rolled back, and the previously
+ planned consequent rebalance will not be executed.
+ If the previous session of ggrebalance was interrupted during cluster rebalance,
+ then the rebalance operation will be rolled back. However, if the shrink (or expand)
+ operation had already been executed prior to the interrupted rebalance, this
+ shrink (or expand) will not be rolled back.
+
+-T, --duration hh:mm:ss
+ Set the duration of the rebalance session from beginning to end.
+
+-E, --end 'YYYY-MM-DD hh:mm:ss'
+ Set the ending date and time for the rebalance session.
+
+-D, --detailed-progress
+ Show a detailed progress view.
+
+-S, --simple-progress
+ Show a simple progress view.
+
+--no-progress
+ Suppress progress reports.
+
+--hba-hostnames
+ Use hostnames when updating the pg_hba.conf file.
+
+--replay-lag <replay_lag>
+ Set the replay lag (in GB) allowed on mirrors when rebalancing the segments.
+
+-l, --log-dir <log_dir>
+ Use the specified directory to write the log file. Defaults to ~/gpAdminLogs.
+
+-A, --add-hosts <hostname_1>,<hostname_2>,...,<hostname_N>
+ Host(s) that the user wants to add to the cluster.
+
+--add-hosts-file <filename>
+ Host(s) that the user wants to add to the cluster, passed as a file.
+ Hosts list file format: one host per line.
+
+-R, --remove-hosts <hostname_1>,<hostname_2>,...,<hostname_N>
+ Host(s) that the user wants to remove from the cluster.
+
+--remove-hosts-file <filename>
+ Host(s) that the user wants to remove from the cluster, passed as a file.
+ Hosts list file format: one host per line.
+
+-a, --analyze
+ If this option is set, the tool will run 'ANALYZE' to update table statistics
+ for all tables after their redistribution.
+ Ignored if no shrink or expand has been performed.
+
+--non-interactive-mode
+ If this option is set, the tool does not ask the user for input and applies
+ default options when interaction with the user is required.
+ At the cluster shrink operation, in the interactive mode the shrunken segments
+ are stopped via 'smart' mode, and in non-interactive mode they are stopped via
+ 'fast' mode.
+
+-y, --approve-swap-roles
+ If this option is set, in the interactive mode, the tool does not ask the user
+ to acknowledge role swap ('primary' to 'mirror' and vice versa) for a segment
+ during cluster rebalance.
+
+--inplace-swap-roles
+ If this option is set, it is permitted to temporarily place primary and
+ mirror segments on the same host. By default, this situation is avoided by using
+ a third, transitional host.
+
+--skip-resource-estimation
+ If this option is set, then ggrebalance skips checking if enough storage is
+ available.
+
+-n, --parallel <parallel_processes>
+ If ggrebalance is performing segment rebalance and the plan permits parallel
+ execution, this parameter sets the number of hosts to work on in parallel.
+ If ggrebalance is performing table redistribution (expand or shrink), then
+ this parameter sets the number of tables that should be redistributed
+ simultaneously. Valid values are 1 - 96.
+ Each table redistribution process requires a database connection. Before
+ increasing -n, check the current value of the server configuration
+ parameter max_connections and make sure the maximum connection limit
+ is not exceeded.
+
+-B, --batch_size <batch_size>
+ If ggrebalance is performing segment rebalance, this parameter sets
+ the maximum number of segments per host to operate on in parallel. Valid values
+ are 1 - 128.
+
+--skip-rebalance
+ Skip rebalance entirely even if the cluster is unbalanced. If this option is set,
+ then ggrebalance does not try to plan rebalance at all. This option makes sense
+ only if shrink or expand is needed and the user wants to skip rebalance.
+
+--seed
+ Passing seed value guarantees stable plan generation through several
+ ggrebalance runs. Valid values are any non-negative integer.
+
+-q, --quiet
+ Run in quiet mode. Command output is not displayed on
+ the screen, but it is still written to the log file.
+
+-v, --verbose
+ Set logging output to verbose.
+
+--version
+ Display the version of this utility.
+
+-?, -h, --help, --usage
+ Display the online help.
+
+******************************************************
+EXAMPLES
+******************************************************
+
+Given a 9-segment cluster on 3 segment hosts (sdw1, sdw2, sdw3).
+
+Shrink to a 4-segment cluster on 2 segment hosts:
+
+ $ ggrebalance -x 4 --remove-hosts sdw3 -d '/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast, /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/dbfast_mirror'
+
+If the operation was interrupted, you can continue via:
+
+ $ ggrebalance
+
+Or rollback via:
+
+ $ ggrebalance -r
+
+******************************************************
+SEE ALSO
+******************************************************
+
+gprecoverseg, gpmovemirrors, gpexpand

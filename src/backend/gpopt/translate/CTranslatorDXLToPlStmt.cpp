@@ -6365,6 +6365,13 @@ CTranslatorDXLToPlStmt::TranslateDXLPhyCtasToDistrPolicy(
 		num_of_distr_cols_alloc = num_of_distr_cols;
 	}
 
+	if (gpdb::GetGPTargetSegmentCount() != gpdb::GetGPSegmentCount())
+	{
+		// GPORCA does not support partially distributed tables yet
+		GPOS_RAISE(gpdxl::ExmaMD, gpdxl::ExmiDXLInvalidAttributeValue,
+				   GPOS_WSZ_LIT("Partially Distributed Data"));
+	}
+
 	// always set numsegments to ALL for CTAS
 	GpPolicy *distr_policy =
 		gpdb::MakeGpPolicy(POLICYTYPE_PARTITIONED, num_of_distr_cols_alloc,

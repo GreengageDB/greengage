@@ -24,6 +24,10 @@ extern void gp_expand_protect_catalog_changes(Relation relation);
 
 extern Datum gp_expand_bump_version(PG_FUNCTION_ARGS);
 
+extern volatile pg_atomic_uint32	*gp_create_table_rebalance_numsegments;
+
+extern void GgRebalanceNumsegmentsShmemInit(void);
+extern int GgRebalanceNumsegmentsShmemSize(void);
 
 #endif   /* GPEXPAND_H */
 

@@ -381,6 +381,7 @@ test: brin_heap
 
 # Intensive tests for BRIN
 test: uao/brin_chain_row uao/brin_chain_column
+test: rebalance_numsegments
 
 test: lock_status
 # Test 'dependency' drops plpython3u language by its design.

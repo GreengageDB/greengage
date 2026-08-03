@@ -26,12 +26,14 @@ try:
     from gppylib.commands.gp import *
     from gppylib.db import dbconn
     from gppylib.userinput import *
+    from gppylib.system.environment import GpCoordinatorEnvironment
     from gpconfig_modules.segment_guc import SegmentGuc
     from gpconfig_modules.database_segment_guc import DatabaseSegmentGuc
     from gpconfig_modules.file_segment_guc import FileSegmentGuc
     from gpconfig_modules.guc_collection import GucCollection
     from gppylib.gpresgroup import GpResGroup
     from gpconfig_modules.parse_guc_metadata import ParseGuc
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema
 except ImportError as err:
     sys.exit('Cannot import modules.  Please check that you have sourced '
              'greengage_path.sh.  Detail: ' + str(err))
@@ -146,7 +148,7 @@ class Guc:
         self.min_val = row[6]
         self.max_val = row[7]
 
-    def validate(self, newval, newcoordinatorval, options):
+    def validate(self, newval, newcoordinatorval, options, conn):
         # todo add code here...
         # be careful 128KB in postgresql.conf is translated into 32KB units
 
@@ -165,7 +167,8 @@ class Guc:
                 if msg is not None:
                     return msg
             elif newval == "'group-v2'":
-                msg = GpResGroup().validate_v2()
+                cgroup_parent = Guc(dbconn.queryRow(conn, GucQuery("gp_resource_group_cgroup_parent").query))
+                msg = GpResGroup().validate_v2(cgroup_parent.setting)
                 if msg is not None:
                     return msg
             elif newval != "'queue'" and newval != "'none'":
@@ -452,7 +455,7 @@ def validate_change_options(options, conn, guc):
         raise Exception(msg)
 
     if options.value:
-        msg = guc.validate(options.value, options.coordinatorvalue, options)
+        msg = guc.validate(options.value, options.coordinatorvalue, options, conn)
         if msg != "ok":
             msg = "new GUC value failed validation: " + msg
             LOGGER.fatal(msg)
@@ -549,6 +552,20 @@ def check_gpexpand():
         LOGGER.error(msg)
         sys.exit(1)
 
+def check_ggrebalance():
+    if is_ggrebalance_running():
+        LOGGER.error("ERROR: Using gpconfig is not supported during cluster rebalancing")
+        sys.exit(1)
+
+def is_ggrebalance_running():
+    coordinator_data_directory = get_coordinatordatadir()
+    # Checks if there is an instance of ggrebalance running
+    if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
+        return True
+    # Checks if ggrebalance was interrupted and didn't finish its work
+    gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, False, verbose=False)
+    return RebalanceSchema.checkOperationInProgress(gpEnv)
+
 def do_main():
     options = parseargs()
     _set_gparray()
@@ -562,6 +579,8 @@ def do_main():
         # gpconfig should check gpexpand running status when
         # it wants to modify configurations
         check_gpexpand()
+        # and gpconfig also should check ggrebalance running status
+        check_ggrebalance()
 
         do_change(options)
 

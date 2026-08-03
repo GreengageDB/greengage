@@ -837,7 +837,7 @@ static void check_expressions_in_partition_key(PartitionSpec *spec, core_yyscan_
 	QUEUE
 
 	RANDOMLY READABLE READS REJECT_P REPACK REPLICATED
-	RESOURCE ROOTPARTITION
+	RESOURCE ROOTPARTITION REBALANCE
 
 	SCATTER SEGMENT SEGMENTS SPLIT SUBPARTITION
 
@@ -3331,6 +3331,22 @@ alter_table_cmd:
 				{
 					AlterTableCmd *n = makeNode(AlterTableCmd);
 					n->subtype = AT_ExpandPartitionTablePrepare;
+					$$ = (Node *)n;
+				}
+			/* ALTER TABLE <name> REBALANCE*/
+			| REBALANCE
+				{
+					AlterTableCmd *n = makeNode(AlterTableCmd);
+					n->subtype = AT_Rebalance;
+					n->def = (Node *) makeInteger(0);
+					$$ = (Node *)n;
+				}
+			/* ALTER TABLE <name> REBALANCE <SignedIconst>*/
+			| REBALANCE SignedIconst
+				{
+					AlterTableCmd *n = makeNode(AlterTableCmd);
+					n->subtype = AT_Rebalance;
+					n->def = (Node *) makeInteger($2);
 					$$ = (Node *)n;
 				}
 			/* ALTER TABLE <name> OF <type_name> */
@@ -18314,6 +18330,7 @@ unreserved_keyword:
 			| READABLE
 			| READS
 			| REASSIGN
+			| REBALANCE
 			| RECHECK
 			| RECURSIVE
 			| REF_P

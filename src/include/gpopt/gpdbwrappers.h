@@ -292,8 +292,11 @@ Oid GetTypeRelid(Oid typid);
 // name of the type with the given oid
 char *GetTypeName(Oid typid);
 
-// number of GP segments
+// total number of GP segments
 int GetGPSegmentCount(void);
+
+// target number of GP segments to use
+int GetGPTargetSegmentCount(void);
 
 // heap attribute is null
 bool HeapAttIsNull(HeapTuple tup, int attnum);
