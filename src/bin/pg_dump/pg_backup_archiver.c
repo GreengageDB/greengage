@@ -3950,10 +3950,10 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, const char *pfx)
 	RestoreOptions *ropt = AH->public.ropt;
 
 	/*
-	 * Select owner, schema, tablespace and default AM as necessary. The
-	 * default access method for partitioned tables is handled after
-	 * generating the object definition, as it requires an ALTER command
-	 * rather than SET.
+	 * Select owner, schema, tablespace and default AM as necessary.  For a
+	 * partitioned table the default access method is also re-applied after
+	 * generating the object definition, via a post-CREATE ALTER (see the GPDB
+	 * note below, which explains why a SET is additionally emitted here).
 	 */
 	_becomeOwner(AH, te);
 	_selectOutputSchema(AH, te->namespace);

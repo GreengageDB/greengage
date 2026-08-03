@@ -2907,17 +2907,6 @@ grouping_planner(PlannerInfo *root, double tuple_fraction,
 		}
 		
 		/*
-		 * Collect statistics about aggregates for estimating costs, and mark
-		 * all the aggregates with resolved aggtranstypes.  We must do this
-		 * before slicing and dicing the tlist into various pathtargets, else
-		 * some copies of the Aggref nodes might escape being marked with the
-		 * correct transtypes.
-		 *
-		 * Note: currently, we do not detect duplicate aggregates here.  This
-		 * may result in somewhat-overestimated cost, which is fine for our
-		 * purposes since all Paths will get charged the same.  But at some
-		 * point we might wish to do that detection in the planner, rather
-		 * than during executor startup.
 		 * Mark all the aggregates with resolved aggtranstypes, and detect
 		 * aggregates that are duplicates or can share transition state.  We
 		 * must do this before slicing and dicing the tlist into various
