@@ -33,7 +33,9 @@
  * Builds a restore command to retrieve a file from WAL archives, replacing
  * the supported aliases with values supplied by the caller as defined by
  * the GUC parameter restore_command: xlogpath for %p, xlogfname for %f and
- * lastRestartPointFname for %r.
+ * lastRestartPointFname for %r.  GPDB additionally supports %c, the segment's
+ * contentId, which is derived internally and is available only in the backend
+ * (not in frontend programs).
  *
  * The result is a palloc'd string for the restore command built.  The
  * caller is responsible for freeing it.  If any of the required arguments

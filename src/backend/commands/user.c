@@ -3023,7 +3023,7 @@ ExtractAuthIntervalClause(DefElem *defel, authInterval *interval)
 }
 
 /*
- * TransferAuthInterpretDay -- Interpret day of week from parse node
+ * ExtractAuthInterpretDay -- Interpret day of week from parse node
  *
  * day: node which dictates a day of week;
  *		may be either an integer in [0, 6]

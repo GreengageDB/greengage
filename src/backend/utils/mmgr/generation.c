@@ -1162,7 +1162,7 @@ GenerationCheck(MemoryContext context)
 
 			nchunks += 1;
 
-			/* chunks have both block and context pointers, so check both */
+			/* the chunk's block link is encoded in the chunk header; verify it points back to this block */
 			if (chunkblock != block)
 				elog(WARNING, "problem in Generation %s: bogus block link in block %p, chunk %p",
 					 name, block, chunk);

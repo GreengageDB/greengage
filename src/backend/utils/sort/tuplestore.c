@@ -518,7 +518,8 @@ tuplestore_clear(Tuplestorestate *state)
 		/*
 		 * GPDB: once the tuplestore has spilled to disk, availMem intentionally
 		 * drifts away from allowedMem -- GPDB tracks the real footprint via
-		 * spilledBytes (used by the workmem accounting in tuplestore_get_stats)
+		 * spilledBytes (used by the EXPLAIN ANALYZE workmem-wanted accounting in
+		 * tuplestore_end)
 		 * while still FREEMEM'ing written tuples, so the upstream
 		 * "availMem == allowedMem" invariant only holds for a tuplestore that
 		 * never spilled.  usedDisk is sticky (set in tuplestore_updatemax, which

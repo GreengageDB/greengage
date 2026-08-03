@@ -282,10 +282,13 @@ typedef struct
 	 *
 	 * 'relid' is the target relation's OID. Normally, the same as
 	 * cstate->relid, but for a partitioned relation, it indicates the target
-	 * partition. Note: this must be the first field, because InvalidOid means
-	 * that this is actually a 'copy_from_dispatch_error' struct.
+	 * partition.
 	 *
-	 * 'lineno' is the input line number, for error reporting.
+	 * 'lineno' is the input line number, for error reporting. Note: lineno
+	 * must be the first field, because a value of -1 here means that this is
+	 * actually a 'copy_from_dispatch_error' struct, whose first field
+	 * error_marker is a constant -1 (see the frame.lineno == -1 check in
+	 * NextCopyFromExecute).
 	 */
 	int64		lineno;
 	Oid			relid;
@@ -2091,12 +2094,6 @@ ProcessCopyOptions(ParseState *pstate,
  *
  * Iff <binary>, unload or reload in the binary format, as opposed to the
  * more wasteful but more robust and portable text format.
- *
- * Iff <oids>, unload or reload the format that includes OID information.
- * On input, we accept OIDs whether or not the table has an OID column,
- * but silently drop them if it does not.  On output, we report an error
- * if the user asks for OIDs in a table that has none (not providing an
- * OID column might seem friendlier, but could seriously confuse programs).
  *
  * If in the text format, delimit columns with delimiter <delim> and print
  * NULL values as <null_print>.

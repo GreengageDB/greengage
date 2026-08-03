@@ -140,7 +140,7 @@
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
 
-#include "cdb/cdbgang.h"                /* cdbgang_parse_gpqeid_params */
+#include "cdb/cdbgang.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbendpoint.h"

@@ -5878,7 +5878,6 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	}
 
 	/*
-	 * Compute cost & rowcount as sum of subpath costs & rowcounts.
 	 * Compute cost & rowcount as subpath cost & rowcount (if RETURNING)
 	 *
 	 * Currently, we don't charge anything extra for the actual table

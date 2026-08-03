@@ -351,13 +351,6 @@ _outDatum(StringInfo str, Datum value, int typlen, bool typbyval)
 #include "catalog/gp_distribution_policy.h"
 
 
-/*
- * outfuncs.c is compiled normally into outfuncs.o, but it's also
- * #included from outfast.c. When #included, outfast.c defines
- * COMPILING_BINARY_FUNCS, and provides replacements WRITE_* macros. See
- * comments at top of readfast.c.
- */
-
 #define booltostr(x)  ((x) ? "true" : "false")
 
 

@@ -5599,10 +5599,6 @@ PostgresMain(const char *dbname, const char *username)
 		 */
 		InvalidateCatalogSnapshotConditionally();
 
-		/*
-		 * Also consider releasing our catalog snapshot if any, so that it's
-		 * not preventing advance of global xmin while we wait for the client.
-		 */
 		InvalidateCatalogSnapshotConditionally();
 
 		/*
@@ -5826,7 +5822,7 @@ PostgresMain(const char *dbname, const char *username)
 		DoingCommandRead = false;
 
 		/*
-		 * (5) turn off the idle-in-transaction and idle-session timeouts, if
+		 * (5b) turn off the idle-in-transaction and idle-gang timeouts, if
 		 * active.
 		 *
 		 * At most one of these two will be active, so there's no need to

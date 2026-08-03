@@ -2951,7 +2951,9 @@ appendBoolResult(JsonPathExecContext *cxt, JsonPathItem *jsp,
 /*
  * Convert jsonpath's scalar or variable node to actual jsonb value.
  *
- * If node is a variable then its id returned, otherwise 0 returned.
+ * For a variable node, the referenced value and its base object are resolved
+ * via getJsonPathVariable(), which records the base object id through
+ * setBaseObject().
  */
 static void
 getJsonPathItem(JsonPathExecContext *cxt, JsonPathItem *item,

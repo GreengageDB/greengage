@@ -914,7 +914,7 @@ heap_fetch_toast_slice(Relation toastrel, Oid valueid, int32 attrsize,
 			 *
 			 * Only perform this check on the first chunk (the max size isn't
 			 * allowed to change partway through), and only if we expect more
-			 * chunks to come after this based on ressize.
+			 * chunks to come after this based on attrsize.
 			 */
 			elog(DEBUG4, "readjusting max chunk size from %d to %d for toast value %u in %s",
 				 actual_max_chunk_size, chunksize, valueid,

@@ -435,7 +435,7 @@ pg_neg_u16_overflow(uint16 a, int16 *result)
 }
 
 /*
- * INT32
+ * UINT32
  */
 static inline bool
 pg_add_u32_overflow(uint32 a, uint32 b, uint32 *result)

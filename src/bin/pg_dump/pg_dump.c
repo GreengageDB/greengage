@@ -2133,12 +2133,6 @@ checkExtensionMembership(DumpableObject *dobj, Archive *fout)
 /*
  * selectDumpableNamespace: policy-setting subroutine
  *		Mark a namespace as to be dumped or not
- *
- * Normally, we dump all extensions, or none of them if include_everything
- * is false (i.e., a --schema or --table switch was given).  However, in
- * binary-upgrade mode it's necessary to skip built-in extensions, since we
- * assume those will already be installed in the target database.  We identify
- * such extensions by their having OIDs in the range reserved for initdb.
  */
 static void
 selectDumpableNamespace(NamespaceInfo *nsinfo, Archive *fout)

@@ -243,14 +243,6 @@ static const char *read_str_ptr;
 #include "catalog/gp_distribution_policy.h"
 
 /*
- * readfuncs.c is compiled normally into readfuncs.o, but it's also
- * #included from readfast.c. When #included, readfuncs.c defines
- * COMPILING_BINARY_FUNCS, and provides replacements READ_* macros. See
- * comments at top of readfast.c.
- */
-
-
-/*
  * _readNotifyStmt
  */
 static NotifyStmt *

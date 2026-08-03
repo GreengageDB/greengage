@@ -329,8 +329,6 @@ ProcessQuery(Portal portal,
  * The list elements can be Querys or PlannedStmts.
  * That's more general than portals need, but plancache.c uses this too.
  *
- * The list elements can be Querys, PlannedStmts, or utility statements.
- *
  * See the comments in portal.h.
  */
 PortalStrategy

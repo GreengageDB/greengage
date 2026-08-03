@@ -77,7 +77,7 @@ my $sha224_count = (() = $sha224_manifest =~ /SHA224/mig);
 cmp_ok($sha224_count,
 	'>', 100, "SHA224 is mentioned many times in SHA224 manifest");
 
-# Verify that SHA224 is mentioned in the SHA224 manifest lots of times.
+# Verify that Checksum-Algorithm is not mentioned in the no-checksum manifest.
 my $nocsum_manifest =
   slurp_file($node->backup_dir . '/csum_none/backup_manifest');
 my $nocsum_count = (() = $nocsum_manifest =~ /Checksum-Algorithm/mig);

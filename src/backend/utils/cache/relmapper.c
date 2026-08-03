@@ -77,10 +77,11 @@
  * can raise it as necessary if we end up with more mapped relations.
  *
  * In Postgres, MAX_MAPPINGS is 64, but GPDB has exceeded this number due to
- * additional GPDB specific shared relations. Increased to 126 to occupy
- * exactly 1 kilobyte.
+ * additional GPDB specific shared relations, so it is raised to 126.
  *
- * New math: 126 * 8 + 16 = 1024
+ * Size: 126 * 8 + 12 = 1020 bytes (magic + num_mappings + crc = 12 bytes of
+ * overhead; the old 'int32 pad' field that padded the struct to a round 1
+ * kilobyte was removed upstream).
  */
 #define MAX_MAPPINGS			126
 

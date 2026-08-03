@@ -727,8 +727,7 @@ tbm_begin_private_iterate(TIDBitmap *tbm)
 	Assert(tbm->iterating != TBM_ITERATING_SHARED);
 
 	/*
-	 * Create the TBMPrivateIterator struct, with enough trailing space to
-	 * serve the needs of the TBMIterateResult sub-struct.
+	 * Create the TBMPrivateIterator struct.
 	 */
 	iterator = (TBMPrivateIterator *) palloc(sizeof(TBMPrivateIterator));
 	iterator->tbm = tbm;
@@ -1774,8 +1773,7 @@ tbm_attach_shared_iterate(dsa_area *dsa, dsa_pointer dp)
 	TBMSharedIteratorState *istate;
 
 	/*
-	 * Create the TBMSharedIterator struct, with enough trailing space to
-	 * serve the needs of the TBMIterateResult sub-struct.
+	 * Create the TBMSharedIterator struct.
 	 */
 	iterator = (TBMSharedIterator *) palloc0(sizeof(TBMSharedIterator));
 

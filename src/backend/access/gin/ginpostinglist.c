@@ -22,29 +22,28 @@
 
 /*
  * For encoding purposes, item pointers are represented as 64-bit unsigned
- * integers. The lowest 11 bits represent the offset number, and the next
- * lowest 32 bits are the block number. That leaves 21 bits unused, i.e.
- * only 43 low bits are used.
+ * integers. The lowest 16 bits represent the offset number, and the next
+ * lowest 32 bits are the block number. That leaves 16 bits unused, i.e.
+ * only 48 low bits are used.
  *
- * 11 bits is enough for the offset number, because MaxHeapTuplesPerPage <
- * 2^11 on all supported block sizes. We are frugal with the bits, because
- * smaller integers use fewer bytes in the varbyte encoding, saving disk
- * space. (If we get a new table AM in the future that wants to use the full
- * range of possible offset numbers, we'll need to change this.)
+ * Greenplum uses the full 16-bit OffsetNumber range for its append-only
+ * tables, so it removes the storage optimization Postgres makes for heap
+ * tables (where 11 offset bits suffice because MaxHeapTuplesPerPage < 2^11);
+ * see the "Greenplum modification" note on MaxHeapTuplesPerPageBits below.
  *
- * These 43-bit integers are encoded using varbyte encoding. In each byte,
+ * These 48-bit integers are encoded using varbyte encoding. In each byte,
  * the 7 low bits contain data, while the highest bit is a continuation bit.
  * When the continuation bit is set, the next byte is part of the same
- * integer, otherwise this is the last byte of this integer. 43 bits need
+ * integer, otherwise this is the last byte of this integer. 48 bits need
  * at most 7 bytes in this encoding:
  *
  * 0XXXXXXX
- * 1XXXXXXX 0XXXXYYY
- * 1XXXXXXX 1XXXXYYY 0YYYYYYY
- * 1XXXXXXX 1XXXXYYY 1YYYYYYY 0YYYYYYY
- * 1XXXXXXX 1XXXXYYY 1YYYYYYY 1YYYYYYY 0YYYYYYY
- * 1XXXXXXX 1XXXXYYY 1YYYYYYY 1YYYYYYY 1YYYYYYY 0YYYYYYY
- * 1XXXXXXX 1XXXXYYY 1YYYYYYY 1YYYYYYY 1YYYYYYY 1YYYYYYY 0uuuuuuY
+ * 1XXXXXXX 0XXXXXXX
+ * 1XXXXXXX 1XXXXXXX 0YYYYYXX
+ * 1XXXXXXX 1XXXXXXX 1YYYYYXX 0YYYYYYY
+ * 1XXXXXXX 1XXXXXXX 1YYYYYXX 1YYYYYYY 0YYYYYYY
+ * 1XXXXXXX 1XXXXXXX 1YYYYYXX 1YYYYYYY 1YYYYYYY 0YYYYYYY
+ * 1XXXXXXX 1XXXXXXX 1YYYYYXX 1YYYYYYY 1YYYYYYY 1YYYYYYY 0uYYYYYY
  *
  * X = bits used for offset number
  * Y = bits used for block number

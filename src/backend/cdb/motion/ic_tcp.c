@@ -1960,8 +1960,8 @@ TeardownTCPInterconnect(ChunkTransportState *transportStates, bool hasErrors)
 	 * during by SetupInterconnect().  So we only expect to have entries here
 	 * if SetupInterconnect() did not finish correctly.
 	 *
-	 * NOTE: we don't use foreach() here because we want to trim from the list
-	 * as we go.
+	 * NOTE: we use foreach()/foreach_delete_current() here so we can safely
+	 * trim each entry from the list as we go.
 	 */
 	if (transportStates->incompleteConns &&
 		gp_log_interconnect >= GPVARS_VERBOSITY_DEBUG)

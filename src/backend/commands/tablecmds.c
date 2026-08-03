@@ -6426,10 +6426,6 @@ ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode,
 
 /*
  * ATExecCmd: dispatch a subcommand to appropriate execution routine
- *
- * NOTE: we need to use a pointer to Relation here since the relation
- * address may be changed by ATPExecPartSplit(). This is different
- * behavior from Postgres upstream.
  */
 static void
 ATExecCmd(List **wqueue, AlteredTableInfo *tab,
@@ -22188,9 +22184,11 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 			}
 
 			/*
-			 * Step (d) - tell the seg nodes about the temporary relation. We use
-			 * the global 'qe_data' variable to pass this information up to the
-			 * caller, so that it can be included when the command is dispatched.
+			 * Step (d) - tell the seg nodes about the temporary relation. Store
+			 * the dispatch info (the QD backend id) in the command node
+			 * (cmd->backendId) so that it gets sent to the QEs when the command
+			 * is dispatched. We add one so that '0' is not a valid value, making
+			 * it easy to sanity-check that it was set on the QE.
 			 */
 			cmd->backendId = MyProcNumber + 1;
 		}
@@ -22323,7 +22321,7 @@ make_distributedby_for_rel(Relation rel)
 
 	if (GpPolicyIsReplicated(policy))
 	{
-		/* must be random distribution */
+		/* replicated distribution: no distribution key columns */
 		dist->ptype = POLICYTYPE_REPLICATED;
 		dist->numsegments = policy->numsegments;
 		dist->keyCols = NIL;

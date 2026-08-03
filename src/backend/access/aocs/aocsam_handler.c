@@ -55,8 +55,10 @@
  * the proj array accordingly. It is later, during the actual fetching of the
  * tuple, that the corresponding fetch descriptor will be lazily initialized.
  *
- * Finally, in this struct, state between next_block and next_tuple calls is
- * kept, in order to minimize the work that is done in the latter.
+ * Finally, this struct keeps per-bitmap-page state across successive
+ * scan_bitmap_next_tuple() calls. Since PG18 removed the separate
+ * scan_bitmap_next_block callback, block advancement is now folded into
+ * next_tuple; the retained state avoids redoing per-page setup for every tuple.
  */
 typedef struct AOCSBitmapScanData
 {

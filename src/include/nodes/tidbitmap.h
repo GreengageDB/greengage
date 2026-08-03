@@ -66,7 +66,6 @@ struct Instrumentation;                 /* #include "executor/instrument.h" */
  */
 #define PAGES_PER_CHUNK  (BLCKSZ / 32)
 
-/* A -1 ntuples in TBMIterateResult indicates a lossy bitmap page */
 #define BITMAP_IS_LOSSY -1
 
 /* The bitmap unit size can be adjusted by changing these declarations: */
@@ -213,7 +212,7 @@ struct StreamBMIterator
 	bool    	      (*pull)(struct StreamBMIterator *self, PagetableEntry *e);
 	void			  (*end_iterate)(struct StreamBMIterator *self);
 
-	TBMIterateResult	output;		/* MUST BE LAST (because variable-size) */
+	TBMIterateResult	output;		/* result of the current iterate step */
 };
 
 /* function prototypes in nodes/tidbitmap.c */

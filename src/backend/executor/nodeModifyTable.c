@@ -5420,7 +5420,6 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			table_dml_init(resultRelInfo->ri_RelationDesc);
 
 		/* Also let FDWs init themselves for foreign-table result rels */
-		/* Let FDWs init themselves for foreign-table result rels */
 		if (!resultRelInfo->ri_usesFdwDirectModify &&
 			resultRelInfo->ri_FdwRoutine != NULL &&
 			resultRelInfo->ri_FdwRoutine->BeginForeignModify != NULL)
@@ -5540,8 +5539,6 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 	 * second time.
 	 */
 	/*
-	 * If it's not a partitioned table after all, UPDATE tuple routing should
-	 * not be attempted.
 	 * If this is an inherited update/delete, there will be a junk attribute
 	 * named "tableoid" present in the subplan's targetlist.  It will be used
 	 * to identify the result relation for a given tuple to be

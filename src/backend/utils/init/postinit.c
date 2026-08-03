@@ -931,21 +931,12 @@ InitPostgres(const char *in_dbname, Oid dboid,
 	}
 
 	/*
-	 * Start a new transaction here before first access to db, and get a
-	 * snapshot.  We don't have a use for the snapshot itself, but we're
-	 * interested in the secondary effect that it sets RecentGlobalXmin. (This
-	 * is critical for anything that reads heap pages, because HOT may decide
-	 * to prune them even if the process doesn't attempt to modify any
-	 * tuples.)
+	 * Start a new transaction here before first access to db.
 	 *
 	 * Skip these steps if we are responding to a FTS message on mirror.
 	 * Mirror operates in standby mode and is not ready to start a
 	 * transaction or create a snapshot.  Neither are they required to
 	 * respond to a FTS message.
-	 *
-	 * FIXME: This comment is inaccurate / the code buggy. A snapshot that is
-	 * not pushed/active does not reliably prevent HOT pruning (->xmin could
-	 * e.g. be cleared when cache invalidations are processed).
 	 */
 	if (!bootstrap && !am_mirror)
 	{

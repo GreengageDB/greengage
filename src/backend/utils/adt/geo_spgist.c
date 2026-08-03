@@ -735,7 +735,7 @@ spg_box_quad_inner_consistent(PG_FUNCTION_ARGS)
 }
 
 /*
- * SP-GiST inner consistent function
+ * SP-GiST leaf consistent function
  */
 Datum
 spg_box_quad_leaf_consistent(PG_FUNCTION_ARGS)

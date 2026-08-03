@@ -1711,10 +1711,6 @@ cdb_make_distkey_for_expr(PlannerInfo *root,
 	if (get_typtype(lefttype) == 'd')
 		lefttype = getBaseType(lefttype);
 
-	/*
-	 * It should be OK to set nullable_relids = NULL, since this eclass is only
-	 * used for DistributionKey, so it would not participate in qual deduction.
-	 */
 	eclass = get_eclass_for_sort_expr(root, (Expr *) expr,
 									  mergeopfamilies,
 									  lefttype,
@@ -1825,8 +1821,8 @@ cdb_pull_up_eclass(PlannerInfo *root,
 		return NULL;
 
 	/*
-	 * It should be OK to set nullable_relids = NULL, since this eclass is only
-	 * used for DistributionKey, so it would not participate in qual deduction.
+	 * This eclass is only used for DistributionKey, so it would not participate
+	 * in qual deduction.
 	 */
 	outer_ec = get_eclass_for_sort_expr(root,
 										newexpr,

@@ -854,10 +854,11 @@ entryGetItem(GinState *ginstate, GinScanEntry entry,
 																 TBM_MAX_TUPLES_PER_PAGE);
 
 				/*
-				 * Reset counter to the beginning of entry->matchResult. Note:
-				 * entry->offset is still greater than matchResult.ntuples if
-				 * matchResult is lossy.  So, on next call we will get next
-				 * result from TIDBitmap.
+				 * Reset counter to the beginning of the page's offsets. Note:
+				 * for a lossy matchResult we don't populate/use matchNtuples at
+				 * all; the '!matchResult.lossy' guard in the loop condition
+				 * handles lossy pages, so on the next call we simply fetch the
+				 * next result from the TIDBitmap.
 				 */
 				entry->offset = 0;
 			}

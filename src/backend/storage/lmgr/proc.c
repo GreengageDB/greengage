@@ -2101,7 +2101,7 @@ CheckDeadLock(void)
 		{
 			/*
 			 * If there are no other locked portals resident in this backend
-			 * (i.e. nLocks == 0), lockAwaited's lock/proclock pointers are dangling
+			 * (i.e. nLocks == 0), awaitedLock's lock/proclock pointers are dangling
 			 * after the following call to ResRemoveFromWaitQueue(). So clean up the
 			 * locallock as well, to avoid de-referencing them in the eventual
 			 * ResLockRelease() in ResLockPortal()/ResLockUtilityPortal().
@@ -2597,7 +2597,7 @@ ResLockWaitCancel(void)
 
 		/*
 		 * If there are no other locked portals resident in this backend
-		 * (i.e. nLocks == 0), lockAwaited's lock/proclock pointers are dangling
+		 * (i.e. nLocks == 0), awaitedLock's lock/proclock pointers are dangling
 		 * after the following call to ResRemoveFromWaitQueue(). So clean up the
 		 * locallock as well, to avoid de-referencing them in the eventual
 		 * ResLockRelease() in ResLockPortal()/ResLockUtilityPortal().

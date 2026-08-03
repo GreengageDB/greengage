@@ -280,7 +280,7 @@ ExecuteQuery(ParseState *pstate,
 	 * than what you get if you run the plain SELECT from the master; in that
 	 * case all the output rows will be fetched into the master. Because of
 	 * that, we also have to pass the into-clause to
-	 * RevalidateCachedPlanWithParams. (MPP-8135)
+	 * GetCachedPlan. (MPP-8135)
 	 */
 	if (intoClause)
 	{

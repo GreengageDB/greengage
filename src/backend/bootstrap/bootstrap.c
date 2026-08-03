@@ -646,8 +646,9 @@ DefineAttr(char *name, char *type, int attnum, int nullness)
 /* ----------------
  *		InsertOneTuple
  *
- * If objectid is not zero, it is a specific OID to assign to the tuple.
- * Otherwise, an OID will be assigned (if necessary) by heap_insert.
+ * Form a tuple from the current attribute values (attrtypes/values/Nulls)
+ * and insert it into the currently-open bootstrap relation via
+ * simple_heap_insert, then reset the null markers for the next tuple.
  * ----------------
  */
 void

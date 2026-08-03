@@ -5945,7 +5945,7 @@ pgstat_fetch_stat_queueentry(Oid queueid)
 	backend_read_statsfile();
 
 	/*
-	 * Lookup the requested database; return NULL if not found
+	 * Lookup the requested resource queue; return NULL if not found
 	 */
 	return (PgStat_StatQueueEntry *) hash_search(pgStatQueueHash,
 											  (void *) &queueid,

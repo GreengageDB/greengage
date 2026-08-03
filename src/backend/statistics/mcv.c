@@ -40,10 +40,10 @@
  *
  * Each serialized item stores (in this order):
  *
- * - indexes to values	  (ndim * sizeof(uint16))
  * - null flags			  (ndim * sizeof(bool))
  * - frequency			  (sizeof(double))
  * - base_frequency		  (sizeof(double))
+ * - indexes to values	  (ndim * sizeof(uint16))
  *
  * There is no alignment padding within an MCV item.
  * So in total each MCV item requires this many bytes:

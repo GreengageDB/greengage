@@ -10192,8 +10192,9 @@ wait_for_mirror()
  * running as superuser; (2) No data pages need to be accessed by this backend
  * - no snapshot / transaction needed.
  *
- * The recovery.conf file is renamed to recovery.done at the end of xlog
- * replay.  Normal backends can be created thereafter.
+ * The standby.signal file is present while the mirror is in standby/recovery
+ * mode and is removed once recovery completes; normal backends can be created
+ * thereafter.
  */
 bool
 IsRoleMirror()

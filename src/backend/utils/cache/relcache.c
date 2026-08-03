@@ -1156,7 +1156,7 @@ retry:
 
 	/*
 	 * allocate storage for the relation descriptor, and copy pg_class_tuple
-	 * to relation->rd_rel and new fields into relation->rd_newfields.
+	 * to relation->rd_rel.
 	 */
 	relation = AllocateRelationDesc(relp);
 

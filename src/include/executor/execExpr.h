@@ -605,7 +605,7 @@ typedef struct ExprEvalStep
 			ErrorSaveContext *escontext;
 		}			domaincheck;
 
-		/* for EEOP_HASH_SET_INITVAL */
+		/* for EEOP_HASHDATUM_SET_INITVAL */
 		struct
 		{
 			Datum		init_value;

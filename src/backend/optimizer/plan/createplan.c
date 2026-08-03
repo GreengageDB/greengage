@@ -7729,10 +7729,6 @@ prepare_sort_from_pathkeys(Plan *lefttree, List *pathkeys,
  *	  'lefttree' is the node which yields input tuples
  *	  'pathkeys' is the list of pathkeys by which the result is to be sorted
  *	  'relids' is the set of relations required by prepare_sort_from_pathkeys()
- *	  'add_keys_to_targetlist' is true if it is ok to append to the subplan's
- *				targetlist or insert a Result node atop the subplan to
- *				evaluate sort key exprs that are not already present in the
- *				subplan's tlist.
  */
 Sort *
 make_sort_from_pathkeys(Plan *lefttree, List *pathkeys, Relids relids)

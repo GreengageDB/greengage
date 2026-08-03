@@ -129,7 +129,7 @@ typedef enum
 } HTSV_Result;
 
 /*
- * heap_prepare_freeze_tuple may request that heap_freeze_execute_prepared
+ * heap_prepare_freeze_tuple may request that heap_freeze_prepared_tuples
  * check any tuple's to-be-frozen xmin and/or xmax status using pg_xact
  */
 #define		HEAP_FREEZE_CHECK_XMIN_COMMITTED	0x01
@@ -182,7 +182,7 @@ typedef struct HeapPageFreeze
 	/*
 	 * "Freeze" NewRelfrozenXid/NewRelminMxid trackers.
 	 *
-	 * Trackers used when heap_freeze_execute_prepared freezes, or when there
+	 * Trackers used when heap_freeze_prepared_tuples freezes, or when there
 	 * are zero freeze plans for a page.  It is always valid for vacuumlazy.c
 	 * to freeze any page, by definition.  This even includes pages that have
 	 * no tuples with storage to consider in the first place.  That way the

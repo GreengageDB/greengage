@@ -1145,10 +1145,10 @@ test_config_settings(void)
 	 * This macro defines the default value of autovacuum_worker_slots we want
 	 * for a given max_connections value.  Note that it has been carefully
 	 * crafted to provide specific values for the associated values in
-	 * trial_conns.  We want it to return autovacuum_worker_slots's initial
-	 * default value (16) for the maximum value in trial_conns[] (100), while
-	 * it mustn't return less than the default value of autovacuum_max_workers
-	 * (3) for the minimum value in trial_conns[].
+	 * trial_conns.  GPDB widened trial_conns[] to {200, ..., 10}, so it now
+	 * returns 33 for the maximum value in trial_conns[] (200), and 1 for the
+	 * minimum value in trial_conns[] (10) -- below autovacuum_max_workers's
+	 * default value of 3.
 	 */
 #define AV_SLOTS_FOR_CONNS(nconns)	((nconns) / 6)
 

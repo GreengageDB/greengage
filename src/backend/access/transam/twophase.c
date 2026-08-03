@@ -995,11 +995,13 @@ TwoPhaseFilePath(char *path, TransactionId xid)
  *	4. RelFileNodePendingDelete[] (relation files to be deleted at abort)
  *	5. DbDirNode[] (database oid directories to be deleted at commit)
  *	6. DbDirNode[] (database oid directories to be deleted at abort)
- *	7. SharedInvalidationMessage[] (inval messages to be sent at commit)
- *	8. TwoPhaseRecordOnDisk
- *	9. ...
- *	10. TwoPhaseRecordOnDisk (end sentinel, rmid == TWOPHASE_RM_END_ID)
- *	11. checksum (CRC-32C)
+ *	7. xl_xact_stats_item[] (pgstat entries to drop at commit)
+ *	8. xl_xact_stats_item[] (pgstat entries to drop at abort)
+ *	9. SharedInvalidationMessage[] (inval messages to be sent at commit)
+ *	10. TwoPhaseRecordOnDisk
+ *	11. ...
+ *	12. TwoPhaseRecordOnDisk (end sentinel, rmid == TWOPHASE_RM_END_ID)
+ *	13. checksum (CRC-32C)
  *
  * Each segment except the final checksum is MAXALIGN'd.
  */

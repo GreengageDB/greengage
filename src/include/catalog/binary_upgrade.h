@@ -17,8 +17,10 @@
 #include "common/relpath.h"
 
 /*
- * These are not used in GPDB. We use the generic OID pre-assignment
- * machinery instead.
+ * These variables are honored during binary upgrade, matching upstream.
+ * (GPDB additionally uses its generic OID pre-assignment machinery for
+ * ordinary OID assignment, but the relfilenumber overrides and the
+ * pg_type/enum/authid and record_init_privs variables below are used here.)
  */
 extern PGDLLIMPORT Oid binary_upgrade_next_pg_tablespace_oid;
 

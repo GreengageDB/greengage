@@ -173,8 +173,8 @@ extern bool Test_print_prefetch_joinqual;
  * the two expressions from the original clause.
  *
  * In addition to the expressions themselves, the planner passes the btree
- * opfamily OID, collation OID, btree strategy number (BTLessStrategyNumber or
- * BTGreaterStrategyNumber), and nulls-first flag that identify the intended
+ * opfamily OID, collation OID, reversal flag (true when the sort order is
+ * reversed/descending), and nulls-first flag that identify the intended
  * sort ordering for each merge key.  The mergejoinable operator is an
  * equality operator in the opfamily, and the two inputs are guaranteed to be
  * ordered in either increasing or decreasing (respectively) order according

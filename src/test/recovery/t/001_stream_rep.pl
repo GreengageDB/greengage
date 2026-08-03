@@ -554,9 +554,10 @@ $node_primary->safe_psql('postgres',
 my $phys_slot = 'phys_slot';
 $node_primary->safe_psql('postgres',
 	"SELECT pg_create_physical_replication_slot('$phys_slot', true);");
-# Generate some WAL, and switch to a new segment, used to check that
-# the previous segment is correctly getting recycled as the slot advancing
-# would recompute the minimum LSN calculated across all slots.
+# Generate some WAL, and switch to a new segment.  Slot advancing recomputes
+# the minimum LSN across all slots; unlike upstream, GPDB uses the checkpoint
+# redo location prior to restart_lsn as the cut-off, so the previous segment is
+# retained (not recycled) here.
 my $segment_removed = $node_primary->safe_psql('postgres',
 	'SELECT pg_walfile_name(pg_current_wal_lsn())');
 chomp($segment_removed);
@@ -581,8 +582,9 @@ chomp($phys_restart_lsn_post);
 ok( ($phys_restart_lsn_pre cmp $phys_restart_lsn_post) == 0,
 	"physical slot advance persists across restarts");
 
-# Check if the previous segment gets correctly recycled after the
-# server stopped cleanly, causing a shutdown checkpoint to be generated.
+# Check that the previous segment is NOT recycled after the server
+# stopped cleanly: in GPDB the shutdown checkpoint's redo location
+# (prior to restart_lsn) is the cut-off, so the segment is retained.
 my $primary_data = $node_primary->data_dir;
 # GPDB never uses restart_lsn as lowest cut-off point. Instead always
 # will use Checkpoint redo location prior to restart_lsn as cut-off

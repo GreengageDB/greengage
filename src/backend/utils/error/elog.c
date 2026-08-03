@@ -649,13 +649,6 @@ errfinish(const char *filename, int lineno, const char *funcname)
 		PG_RE_THROW();
 	}
 
-	/*
-	 * If we are doing FATAL or PANIC, abort any old-style COPY OUT in
-	 * progress, so that we can report the message before dying.  (Without
-	 * this, pq_putmessage will refuse to send the message at all, which is
-	 * what we want for NOTICE messages, but not for fatal exits.) This hack
-	 * is necessary because of poor design of old-style copy protocol.
-	 */
 	/* CDB: If fatal internal error, linger so user can attach a debugger. */
 	if (elevel == FATAL &&
 		edata->sqlerrcode == ERRCODE_INTERNAL_ERROR &&

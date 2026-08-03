@@ -299,7 +299,7 @@ CreateCachedPlanForQuery(Query *analyzed_parse_tree,
  *
  * raw_parse_tree: output of raw_parser(), or NULL if empty query
  * query_string: original query text
- * commandTag: command tag for query, or NULL if empty query
+ * commandTag: command tag for query, or UNKNOWN if empty query
  */
 CachedPlanSource *
 CreateOneShotCachedPlan(RawStmt *raw_parse_tree,

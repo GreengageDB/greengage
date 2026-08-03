@@ -356,9 +356,10 @@ cluster_multiple_rels(ClusterStmt *stmt, List *rtcs, ClusterParams *params)
  * instead of index order.  This is the new implementation of VACUUM FULL,
  * and error messages should refer to the operation as VACUUM not CLUSTER.
  *
- * Note that we don't support clustering on an AO table. If printError is true,
- * this function errors out when the relation is an AO table. Otherwise, this
- * functions prints out a warning message when the relation is an AO table.
+ * GPDB also handles append-optimized tables here: VACUUM FULL on an AO table
+ * rewrites the table and recurses into its heap-backed auxiliary relations
+ * (aoseg, block directory, visimap) via cluster_rel(); those GPDB-specific
+ * relkinds are accepted below.
  */
 void
 cluster_rel(Relation OldHeap, Oid indexOid, ClusterParams *params)

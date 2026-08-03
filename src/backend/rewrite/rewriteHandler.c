@@ -3021,7 +3021,6 @@ relation_is_updatable(Oid reloid,
 	}
 
 	/* If the relation is a table, it is always updatable */
-	/* GPDB: except if it's an external table, which we checked above */
 	if (rel->rd_rel->relkind == RELKIND_RELATION ||
 		rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 	{

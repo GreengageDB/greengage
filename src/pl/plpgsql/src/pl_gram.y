@@ -3064,7 +3064,7 @@ make_execsql_stmt(int firsttoken, int location, PLword *word, YYSTYPE *yylvalp, 
 	 *
 	 * Because INTO is sometimes used in the main SQL grammar, we have to be
 	 * careful not to take any such usage of INTO as a PL/pgSQL INTO clause.
-	 * There are currently three such cases:
+	 * There are currently four such cases:
 	 *
 	 * 1. SELECT ... INTO.  We don't care, we just override that with the
 	 * PL/pgSQL definition.
@@ -3075,7 +3075,11 @@ make_execsql_stmt(int firsttoken, int location, PLword *word, YYSTYPE *yylvalp, 
 	 * *not* fully reserved, so that means there is a chance of a false match;
 	 * but it's not very likely.
 	 *
-	 * 3. IMPORT FOREIGN SCHEMA ... INTO.  This is not allowed in CREATE RULE
+	 * 3. MERGE INTO.  Like INSERT INTO, this is recognized by the two adjacent
+	 * keywords; MERGE is not fully reserved either, so a false match is possible
+	 * but unlikely.
+	 *
+	 * 4. IMPORT FOREIGN SCHEMA ... INTO.  This is not allowed in CREATE RULE
 	 * or WITH, so we just check for IMPORT as the command's first token. (If
 	 * IMPORT FOREIGN SCHEMA returned data someone might wish to capture with
 	 * an INTO-variables clause, we'd have to work much harder here.)

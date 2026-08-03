@@ -143,8 +143,9 @@ typedef struct catctup
  * object contains links to cache entries for all the table rows satisfying
  * the partial key.  (Note: none of these will be negative cache entries.)
  *
- * A CatCList is only a member of a per-cache list; we do not currently
- * divide them into hash buckets.
+ * A CatCList is stored in a hash bucket of its owning cache (cc_lbucket),
+ * selected by the hash of its lookup keys; the bucket array is enlarged as
+ * the number of lists grows (see RehashCatCacheLists).
  *
  * A list marked "dead" must not be returned by subsequent searches.
  * However, it won't be physically deleted from the cache until its

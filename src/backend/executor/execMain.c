@@ -1785,15 +1785,12 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	ExecDoInitialPruning(estate);
 
 	/*
-	 * Initialize ResultRelInfo data structures, and open the result rels.
+	 * Result relations are initialized lazily via ExecGetResultRelation()
+	 * (execUtils.c); nothing is opened here.
 	 *
-	 * CDB: Note that we need this info even if we aren't the slice that will be doing
-	 * the actual updating, since it's where we learn things, such as if the row needs to
-	 * contain OIDs or not.
-	 */
-	/*
-	 * In PG14, result relations are initialized lazily via
-	 * ExecGetResultRelation() in execUtils.c.
+	 * CDB: the ResultRelInfo is still needed even on slices that do not perform
+	 * the modification, since it carries per-target-relation info consulted at
+	 * plan-init time.
 	 */
 
 	/*

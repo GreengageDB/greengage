@@ -373,9 +373,8 @@ retry:
 		 * catalog scan that retrieved them, whereas that in the latter is
 		 * defined by canonicalized representation of the partition bounds.
 		 *
-		 * Also record leaf-ness of each partition.  For this we use
-		 * get_rel_relkind() which may leak memory, so be sure to run it in
-		 * the temporary context.
+		 * Also record leaf-ness of each partition (already computed via
+		 * get_rel_relkind() while collecting the bound specs above).
 		 */
 		MemoryContextSwitchTo(rbcontext);
 		for (i = 0; i < nparts; i++)
