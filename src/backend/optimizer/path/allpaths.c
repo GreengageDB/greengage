@@ -980,6 +980,8 @@ set_rel_consider_parallel(PlannerInfo *root, RelOptInfo *rel,
 			 * Not sure if parallelizing a "no-op" void RTE makes sense, but
 			 * it's no reason to disable parallelization.
 			 */
+			break;
+
 		case RTE_NAMEDTUPLESTORE:
 
 			/*
