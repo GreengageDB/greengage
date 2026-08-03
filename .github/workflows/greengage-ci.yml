@@ -18,15 +18,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_os: [ubuntu]
+        include:
+          - target_os: ubuntu
+          - target_os: rockylinux
+            target_os_version: "8"
+          - target_os: rockylinux
+            target_os_version: "9"
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v33
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v42
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 

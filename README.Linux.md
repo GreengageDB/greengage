@@ -1,14 +1,25 @@
-## For RHEL/Rocky8:
+## For RHEL/Rocky (versions 8 or 9):
 
-  - For EL versions (> 8.0):
-    - Install git
-      ```bash
-      sudo yum install git
-      ```
-  - Install dependencies using README.Rhel-Rocky.bash script.
-       ```bash
-       ./README.Rhel-Rocky.bash
-       ```
+- Install dependencies using README.Rhel-Rocky.bash script:
+
+  ```bash
+  sudo ./README.Rhel-Rocky.bash
+  ```
+
+- Create a symbolic link to Python in `/usr/bin` and install `future` v0.16:
+
+  - Rocky 8:
+
+    ```bash
+    sudo ln -s python2 /usr/bin/python
+    sudo python -m pip install --no-cache-dir future==0.16
+    ```
+
+  - Rocky 9:
+
+    ```bash
+    sudo ln -s python3 /usr/bin/python
+    ```
 
 ## For Ubuntu:
 
