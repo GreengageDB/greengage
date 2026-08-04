@@ -65,7 +65,7 @@ dnf -y install \
     libxml2-devel \
     libxslt-devel \
     libyaml-devel \
-    llvm14-devel \
+    llvm-devel \
     lsof \
     net-tools \
     openldap-devel \
