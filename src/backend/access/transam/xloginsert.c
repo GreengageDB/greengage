@@ -30,6 +30,7 @@
 #include "replication/origin.h"
 #include "storage/bufmgr.h"
 #include "storage/proc.h"
+#include "utils/faultinjector.h"
 #include "utils/memutils.h"
 #include "pg_trace.h"
 
@@ -853,6 +854,15 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 	if (!cxt)
 	{
 		cxt = ZSTD_createCCtx();
+
+#ifdef FAULT_INJECTOR
+		/*
+		 * Forget the context to imitate context creation failure, producing 
+		 * an out of memory log record.
+		 */
+		if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block") == FaultInjectorTypeSkip)
+			cxt = NULL;
+#endif
 		if (!cxt)
 		{
 			if (!compression_failure_logged)
@@ -865,8 +875,20 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 		compression_failure_logged = false;
 	}
 
+	size_t dest_capacity = BLCKSZ;
+
+#ifdef FAULT_INJECTOR
+	/*
+	 * Shrink the output buffer so ZSTD_compressCCtx() genuinely returns
+	 * ZSTD_error_dstSize_tooSmall below, regardless of how compressible
+	 * the input actually is.
+	 */
+	if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block_dstsize_too_small") == FaultInjectorTypeSkip)
+		dest_capacity = 1;
+#endif
+
 	len = ZSTD_compressCCtx(cxt,
-							dest, BLCKSZ,
+							dest, dest_capacity,
 							source, orig_len,
 							COMPRESS_LEVEL);
 
