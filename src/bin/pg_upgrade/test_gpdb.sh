@@ -179,23 +179,26 @@ dump_database_schema()
 {
 	set -o pipefail
 
-	dump_path="$1"
-	partitions_dump_path="$2"
-	partitions_query="$3"
-	queries_query="$4"
-	pgopts="$5"
+	local dump_path="$1"
+	local partitions_dump_path="$2"
+	local partitions_query="$3"
+	local queries_query="$4"
+	local pgopts="$5"
 
 	# To dump schemas, use pg_dump from NEW_BINDIR. Note, that we intentionally don't use pg_dumpall,
 	# and dump each database by hand, because we need to be able to exclude specific
 	# objects from the dumps, and it is possible only with regular pg_dump.
 	if (( !$perf_test )) ; then
-		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
+		local databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
 		if (( $? )) ; then
 			echo "ERROR: Failure encountered while dumping databases"
 			exit 1
 		fi
 
+		local -a databases
 		readarray -t databases <<< ${databases_string}
+
+		local database
 		for database in "${databases[@]}"; do
 			# We are getting '\' symbol automatically escaped to '\\', convert is back
 			database=$(echo "${database}" | sed 's/\\\\/\\/g')
@@ -204,15 +207,18 @@ dump_database_schema()
 			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
 			# on the version of the source cluster. So, make pg_dump ignore them and compare
 			# them seperately.
-			args_to_ignore_partitions=()
+			local -a args_to_ignore_partitions=()
 			if (( $cross_version_upgrade )); then
-				partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
+				local partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
 				if (( $? )) ; then
 					echo "ERROR: Failure encountered while dumping databases"
 					exit 1
 				fi
 
+				local -a partitions
 				readarray -t partitions <<< ${partitions_string}
+
+				local partition
 				for partition in "${partitions[@]}"; do
 					if [ -z "${partition}" ]; then
 						continue
@@ -226,13 +232,16 @@ dump_database_schema()
 				# Use the --extra-float-digits option to make sure that floats
 				# are dumped identically.
 				# Also, sort the rows, as their order may differ between the versions.
-				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
+				local queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
 				if (( $? )) ; then
 					echo "ERROR: Failure encountered while dumping databases"
 					exit 1
 				fi
 
+				local -a queries
 				readarray -t queries <<< ${queries_string}
+
+				local query
 				for query in "${queries[@]}"; do
 					echo "${query}" >> "${partitions_dump_path}"
 					PGOPTIONS="-c extra_float_digits=-3 ${pgopts}" psql "${database}" -c "${query}" | sort >> "${partitions_dump_path}"
@@ -357,9 +366,9 @@ diff_and_exit() {
 	export COORDINATOR_DATA_DIRECTORY="${NEW_DATADIR}/qddir/demoDataDir-1"
 	${NEW_BINDIR}/gpstart -a ${args}
 
-	dump_path="$temp_root/dump2.sql"
-	partitions_dump_path="$temp_root/dump_partitions2.sql"
-	partitions_query=$(cat <<- EOF
+	local dump_path="$temp_root/dump2.sql"
+	local partitions_dump_path="$temp_root/dump_partitions2.sql"
+	local partitions_query=$(cat <<- EOF
 		COPY (
 			WITH partitions AS (
 				SELECT DISTINCT (pg_partition_tree(oid)).relid
@@ -372,7 +381,7 @@ diff_and_exit() {
 		) TO STDOUT;
 	EOF
 	)
-	queries_query=$(cat <<- EOF
+	local queries_query=$(cat <<- EOF
 		COPY (
 			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
 			FROM (
@@ -562,10 +571,10 @@ main() {
 		fi
 	fi
 
-	dump_path="$temp_root/dump1.sql"
-	partitions_dump_path="$temp_root/dump_partitions1.sql"
+	local dump_path="$temp_root/dump1.sql"
+	local partitions_dump_path="$temp_root/dump_partitions1.sql"
 	# Queries to get all partitioned tables, used in cross-version upgrade
-	partitions_query=$(cat <<- EOF
+	local partitions_query=$(cat <<- EOF
 		COPY (
 			SELECT DISTINCT FORMAT('%s.%s', quote_ident(schemaname), quote_ident(tablename)) out
 			FROM pg_partitions
@@ -573,7 +582,7 @@ main() {
 		) TO STDOUT;
 	EOF
 	)
-	queries_query=$(cat <<- EOF
+	local queries_query=$(cat <<- EOF
 		COPY (
 			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
 			FROM (
