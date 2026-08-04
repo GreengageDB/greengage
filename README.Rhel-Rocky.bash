@@ -35,6 +35,7 @@ dnf -y install \
     autoconf \
     bison \
     bzip2-devel \
+    clang \
     cmake \
     expat-devel \
     flex \
@@ -60,6 +61,7 @@ dnf -y install \
     libxml2-devel \
     libxslt-devel \
     libyaml-devel \
+    llvm-devel \
     lsof \
     net-tools \
     openldap-devel \
