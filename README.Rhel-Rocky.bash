@@ -89,17 +89,18 @@ rm -rf zstd-1.4.4
 # For all Greengage Database host systems running RHEL, CentOs or Rocky
 # SELinux must either be Disabled or configured to allow unconfined access
 # to Greengage processes, directories, and the gpadmin user.
-setenforce 0
-tee -a /etc/selinux/config << EOF
-SELINUX=disabled
-EOF
+
+# Disable SELinux
+setenforce 0 || true
+sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
 
 # To prevent SELinux-related SSH authentication denials that could occur even with SELinux deactivated
-tee -a /etc/sssd/sssd.conf << EOF
-selinux_provider=none
-EOF
+if [ -f /etc/sssd/sssd.conf ]; then
+    echo 'selinux_provider=none' >> /etc/sssd/sssd.conf
+fi
 
-systemctl stop firewalld.service
+# Stop firewall
+systemctl disable --now firewalld.service || true
 
 # Configure kernel settings so the system is optimized for Greengage Database.
 tee -a /etc/sysctl.d/10-gpdb.conf << EOF
