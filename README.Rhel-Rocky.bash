@@ -91,7 +91,7 @@ rm -rf zstd-1.4.4
 #---------------------------------------------------------------------
 # Bare-metal only configuration
 #---------------------------------------------------------------------
-if [ ! -f /.dockerenv ]; then
+if [[ ! -f /.dockerenv && -z "$IS_DOCKER_BUILD" ]]; then
 
     # Disable SELinux
     setenforce 0 || true

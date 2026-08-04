@@ -13,7 +13,7 @@ ENV OS_VERSION=${OS_VERSION}
 
 COPY README.Rhel-Rocky.bash ./
 RUN set -eux; \
-    ./README.Rhel-Rocky.bash; \
+    IS_DOCKER_BUILD=true ./README.Rhel-Rocky.bash; \
     rm README.Rhel-Rocky.bash; \
 # Set Python as default based on OS version
     case "$OS_VERSION" in \
