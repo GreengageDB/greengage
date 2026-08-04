@@ -45,7 +45,7 @@ DUMP_OPTIONS=${DUMP_OPTIONS:-}
 if [ -z "${DUMP_OPTIONS}" ]; then
     echo "DUMP_OPTIONS environment variable is not set. No additional options will be passed to pg_dump."
 else
-    echo "DUMP_OPTIONS is set. This test will pass ${DUMP_OPTIONS} to pg_dumpall."
+    echo "DUMP_OPTIONS is set. This test will pass ${DUMP_OPTIONS} to pg_dump."
 fi
 
 set -x
