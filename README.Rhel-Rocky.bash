@@ -12,15 +12,14 @@ dnf -y install epel-release
 # Detect OS version if not already set
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
-perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
-python_packages="python3.9 python3.9-devel python3.9-future"
-
 case "$OS_VERSION" in
     8)
         dnf config-manager --set-enabled powertools
+        python_version='39' # as 3.9; default: 3 is 3.6 as 36; also, available: 38, 3.11, 3.12
         ;;
     9)
         dnf config-manager --set-enabled crb
+        python_version='3' # as default 3.9; also, available: 3.11, 3.12, 3.13, 3.14
         perl_packages="$perl_packages  perl-FindBin perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
         ;;
     *)
@@ -28,6 +27,10 @@ case "$OS_VERSION" in
         exit 1
         ;;
 esac
+
+perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
+python_packages="python$python_version python$python_version-devel python$python_version-future"
+
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
     apr-devel \
