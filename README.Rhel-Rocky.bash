@@ -1,9 +1,9 @@
 #!/bin/bash
 # FILE:    README.Rhel-Rocky.bash
-# CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build
+# CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build,
 #          or run directly on a bare-metal host
 # PURPOSE: Install build dependencies, compile zstd static library,
-#          configure system for Greengage
+#          configure system for Greengage (bare-metal only)
 
 set -euxo pipefail
 
@@ -86,24 +86,28 @@ make -j"$(nproc)" -C zstd-1.4.4
 make install PREFIX=/usr/local -C zstd-1.4.4
 rm -rf zstd-1.4.4
 
-# For all Greengage Database host systems running RHEL, CentOs or Rocky
-# SELinux must either be Disabled or configured to allow unconfined access
-# to Greengage processes, directories, and the gpadmin user.
+#---------------------------------------------------------------------
+# Bare-metal only configuration
+#---------------------------------------------------------------------
+if [[ ! -f /.dockerenv && -z "$IS_DOCKER_BUILD" ]]; then
 
-# Disable SELinux
-setenforce 0 || true
-sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+    # Disable SELinux
+    setenforce 0 || true
+    if [ -f /etc/selinux/config ]; then
+        sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+    fi
 
-# To prevent SELinux-related SSH authentication denials that could occur even with SELinux deactivated
-if [ -f /etc/sssd/sssd.conf ]; then
-    echo 'selinux_provider=none' >> /etc/sssd/sssd.conf
-fi
+    # Disable sssd SELinux provider
+    if [ -f /etc/sssd/sssd.conf ]; then
+        echo 'selinux_provider=none' >> /etc/sssd/sssd.conf
+    fi
 
-# Stop firewall
-systemctl disable --now firewalld.service || true
+    # Stop firewall
+    systemctl stop firewalld.service || true
+    systemctl disable --now firewalld.service || true
 
-# Configure kernel settings so the system is optimized for Greengage Database.
-tee -a /etc/sysctl.d/10-gpdb.conf << EOF
+    # Configure kernel parameters
+    cat >> /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536
 kernel.msgmni = 2048
@@ -143,24 +147,27 @@ vm.dirty_writeback_centisecs = 100
 vm.zone_reclaim_mode = 0
 EOF
 
-RAM_IN_KB=$(cat /proc/meminfo | grep MemTotal | awk '{print $2}')
-RAM_IN_BYTES=$(($RAM_IN_KB*1024))
-echo "vm.min_free_kbytes = $(($RAM_IN_BYTES*3/100/1024))" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-echo "kernel.shmall = $(($RAM_IN_BYTES/2/4096))" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-echo "kernel.shmmax = $(($RAM_IN_BYTES/2))" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-if [ $RAM_IN_BYTES -le $((64*1024*1024*1024)) ]; then
-    echo "vm.dirty_background_ratio = 3" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_ratio = 10" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-else
-    echo "vm.dirty_background_ratio = 0" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_ratio = 0" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_background_bytes = 1610612736 # 1.5GB" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_bytes = 4294967296 # 4GB" | tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-fi
+    RAM_IN_KB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+    RAM_IN_BYTES=$((RAM_IN_KB * 1024))
+    {
+        echo "vm.min_free_kbytes = $((RAM_IN_BYTES * 3 / 100 / 1024))"
+        echo "kernel.shmall = $((RAM_IN_BYTES / 2 / 4096))"
+        echo "kernel.shmmax = $((RAM_IN_BYTES / 2))"
+        if [ "$RAM_IN_BYTES" -le $((64 * 1024 * 1024 * 1024)) ]; then
+            echo "vm.dirty_background_ratio = 3"
+            echo "vm.dirty_ratio = 10"
+        else
+            echo "vm.dirty_background_ratio = 0"
+            echo "vm.dirty_ratio = 0"
+            echo "vm.dirty_background_bytes = 1610612736 # 1.5GB"
+            echo "vm.dirty_bytes = 4294967296 # 4GB"
+        fi
+    } >> /etc/sysctl.d/10-gpdb.conf
 
-sysctl -p
+    sysctl -p /etc/sysctl.d/10-gpdb.conf
 
-tee -a /etc/security/limits.d/10-nproc.conf << EOF
+    # Configure system limits
+    cat >> /etc/security/limits.d/10-nproc.conf << EOF
 * soft nofile 524288
 * hard nofile 524288
 * soft nproc 131072
@@ -168,5 +175,4 @@ tee -a /etc/security/limits.d/10-nproc.conf << EOF
 * soft core unlimited
 EOF
 
-
-ulimit -n 65536 65536
+fi
