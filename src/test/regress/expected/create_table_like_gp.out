@@ -55,7 +55,7 @@ WHERE
 ------------+--------+-----------------------------------------------------
  t_ao_enc   |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
  t_ao_enc   |      1 | {compresstype=none,blocksize=32768,compresslevel=0}
- t_ao_enc_a |      2 | {compresstype=none,blocksize=32768,compresslevel=0}
+ t_ao_enc_a |      2 | {compresstype=zlib,compresslevel=1,blocksize=32768}
  t_ao_enc_a |      1 | {compresstype=none,blocksize=32768,compresslevel=0}
 (4 rows)
 

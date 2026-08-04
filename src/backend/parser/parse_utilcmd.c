@@ -1315,6 +1315,17 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 				ReleaseSysCache(tuple);
 			}
 		}
+
+		/*
+		 * GPDB: also carry over the source table's per-column AO/AOCS ENCODING
+		 * directives (compresstype/compresslevel/blocksize).  These live in
+		 * pg_attribute_encoding rather than pg_class.reloptions, so the
+		 * reloptions carryover above cannot reach them.  rel_get_column_encodings()
+		 * returns NIL for non-column-oriented relations, so this is a no-op for
+		 * heap and AO-row sources.
+		 */
+		cxt->attr_encodings = list_union(cxt->attr_encodings,
+										 rel_get_column_encodings(relation));
 	}
 
 	/*
