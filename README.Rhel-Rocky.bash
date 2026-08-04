@@ -12,6 +12,8 @@ dnf -y install epel-release
 # Detect OS version if not already set
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
+perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
+
 case "$OS_VERSION" in
     8)
         dnf config-manager --set-enabled powertools
@@ -28,7 +30,6 @@ case "$OS_VERSION" in
         ;;
 esac
 
-perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
 python_packages="python$python_version python$python_version-devel python$python_version-future"
 
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
