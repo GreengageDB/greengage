@@ -31,7 +31,7 @@ RUN set -eux; \
       coverage~=4.5 \
       gsutil \
       'mock<=5.0.0' \
-      protobuf; \
+      protobuf==3.20.0; \
 # Cleanup to reduce image size
     dnf clean all; \
     rm -rf /tmp/* /var/tmp/* /var/cache/man/

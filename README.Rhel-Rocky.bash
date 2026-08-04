@@ -13,7 +13,7 @@ dnf -y install epel-release
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
 perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
-python_packages="python3 python3-devel python3-setuptools python3-pip python3-future"
+python_packages="python3.9 python3.9-devel python3.9-future"
 
 case "$OS_VERSION" in
     8)
