@@ -24,7 +24,6 @@ RUN set -eux; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
 # Upgrade pip to support current package versions
-    python3 --version ; \
     python3 -m pip install --no-cache-dir --upgrade pip; \
 # Install Python packages
     python3 -m pip install --no-cache-dir allure-behave==2.4.0 \
