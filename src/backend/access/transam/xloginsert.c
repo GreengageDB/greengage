@@ -36,6 +36,7 @@
 #ifdef USE_ZSTD
 /* Zstandard library is provided */
 #include <zstd.h>
+#include <zstd_errors.h>
 /* zstandard compression level to use. */
 #define COMPRESS_LEVEL 3
 #endif
@@ -824,6 +825,7 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 {
 #ifdef USE_ZSTD
 	static ZSTD_CCtx  *cxt = NULL;      /* ZSTD compression context */
+	static bool	compression_failure_logged = false;
 	int32		orig_len = BLCKSZ - hole_length;
 	int32		len;
 	int32		extra_bytes = 0;
@@ -853,9 +855,14 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 		cxt = ZSTD_createCCtx();
 		if (!cxt)
 		{
-			elog(LOG, "out of memory");
+			if (!compression_failure_logged)
+			{
+				elog(LOG, "out of memory while allocating ZSTD compression context");
+				compression_failure_logged = true;
+			}
 			return false;
 		}
+		compression_failure_logged = false;
 	}
 
 	len = ZSTD_compressCCtx(cxt,
@@ -865,10 +872,17 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 
 	if (ZSTD_isError(len))
 	{
-		elog(LOG, "compression failed: %s uncompressed len %d",
-			 ZSTD_getErrorName(len), orig_len);
-		len = -1;		/* failure */
+		if (ZSTD_getErrorCode(len) != ZSTD_error_dstSize_tooSmall && !compression_failure_logged)
+		{
+			elog(LOG, "compression failed: %s uncompressed len %d",
+				ZSTD_getErrorName(len), orig_len);
+
+			compression_failure_logged = true;
+		}
+		return false;
 	}
+
+	compression_failure_logged = false;
 
 	/*
 	 * We recheck the actual size even if ZSTD reports success and
