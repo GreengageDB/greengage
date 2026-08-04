@@ -39,7 +39,6 @@ dnf -y install \
     autoconf \
     bison \
     bzip2-devel \
-    clang \
     cmake \
     expat-devel \
     flex \
@@ -85,6 +84,11 @@ dnf -y install \
     xerces-c-devel \
     zlib-devel \
     $python_packages $perl_packages
+
+# Default LLVM 21 is incompatible; use llvm14 and provide llvm-config
+if [ -f /usr/bin/llvm-config-14 ] && [ ! -f /usr/bin/llvm-config ]; then
+    ln -s /usr/bin/llvm-config-14 /usr/bin/llvm-config
+fi
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
