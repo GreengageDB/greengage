@@ -21,7 +21,7 @@ case "$OS_VERSION" in
         ;;
     9)
         dnf config-manager --set-enabled crb
-        perl_packages="$perl_packages perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
+        perl_packages="$perl_packages  perl-FindBin perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
         ;;
     *)
         echo "Unsupported Rocky Linux version: $OS_VERSION"
