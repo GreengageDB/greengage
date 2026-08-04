@@ -39,7 +39,7 @@ dnf -y install \
     autoconf \
     bison \
     bzip2-devel \
-    clang \
+    clang-14 \
     cmake \
     expat-devel \
     flex \
