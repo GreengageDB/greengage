@@ -189,7 +189,8 @@ dump_database_schema()
 	# and dump each database by hand, because we need to be able to exclude specific
 	# objects from the dumps, and it is possible only with regular pg_dump.
 	if (( !$perf_test )) ; then
-		local databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
+		local databases_string
+		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
 		if (( $? )) ; then
 			echo "ERROR: Failure encountered while dumping databases"
 			exit 1
@@ -209,7 +210,8 @@ dump_database_schema()
 			# them seperately.
 			local -a args_to_ignore_partitions=()
 			if (( $cross_version_upgrade )); then
-				local partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
+				local partitions_string
+				partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
 				if (( $? )) ; then
 					echo "ERROR: Failure encountered while dumping databases"
 					exit 1
@@ -232,7 +234,8 @@ dump_database_schema()
 				# Use the --extra-float-digits option to make sure that floats
 				# are dumped identically.
 				# Also, sort the rows, as their order may differ between the versions.
-				local queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
+				local queries_string
+				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
 				if (( $? )) ; then
 					echo "ERROR: Failure encountered while dumping databases"
 					exit 1
