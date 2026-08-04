@@ -30,7 +30,7 @@ case "$OS_VERSION" in
         ;;
 esac
 
-python_packages="python$python_version python$python_version-devel python$python_version-future"
+python_packages="python$python_version python$python_version-devel python$python_version-pip python$python_version-setuptools python$python_version-future"
 
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
