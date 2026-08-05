@@ -1089,7 +1089,8 @@ WHEN MATCHED THEN
 	UPDATE SET b = s.b, a = t.a + 1
 WHEN NOT MATCHED THEN
 	INSERT VALUES (a, b);
-ERROR:  permission denied for table mtarget
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 -- fail (no SELECT on t.b)
 MERGE INTO mtarget t USING msource s ON t.a = s.a
 WHEN MATCHED AND t.b IS NOT NULL THEN

@@ -2414,19 +2414,27 @@ SELECT * FROM base_tbl_child ORDER BY a;
 
 MERGE INTO rw_view1 t USING (VALUES (-200), (10)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -199 and 11
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 MERGE INTO ONLY rw_view1 t USING (VALUES (-100), (20)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -99 and 21
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 MERGE INTO rw_view2 t USING (VALUES (-40), (3)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -39 only
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 MERGE INTO ONLY rw_view2 t USING (VALUES (-30), (4)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a+1; -- Should produce -29 only
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 SELECT * FROM ONLY base_tbl_parent ORDER BY a;
   a   
 ------
- -199
-  -99
-  -39
-  -29
+ -200
+ -100
+  -40
+  -30
   -20
   -10
   100
@@ -2440,8 +2448,8 @@ SELECT * FROM base_tbl_child ORDER BY a;
   4
   7
   8
- 11
- 21
+ 10
+ 20
 (6 rows)
 
 CREATE TABLE other_tbl_parent (id int);
@@ -2478,10 +2486,10 @@ UPDATE rw_view1 SET a = a + 1000 FROM other_tbl_parent WHERE a = id;
 SELECT * FROM ONLY base_tbl_parent ORDER BY a;
   a   
 ------
- -199
-  -99
-  -39
-  -29
+ -200
+ -100
+  -40
+  -30
   -20
   -10
  1100
@@ -2493,8 +2501,8 @@ SELECT * FROM base_tbl_child ORDER BY a;
 ------
     3
     4
-   11
-   21
+   10
+   20
  1007
  1008
 (6 rows)
@@ -2567,15 +2575,17 @@ ERROR:  new row violates check option for view "rw_view1"  (seg2 172.17.0.2:7004
 DETAIL:  Failing row contains (11, 10).
 MERGE INTO rw_view1 t USING (VALUES (1)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a - 1; -- ok
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 MERGE INTO rw_view1 t USING (VALUES (2)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a + 1; -- should fail
-ERROR:  new row violates check option for view "rw_view1"  (seg0 172.17.0.2:7002 pid=164984)
-DETAIL:  Failing row contains (3, 3).
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 SELECT * FROM base_tbl ORDER BY a, b;
  a  | b  
 ----+----
-  0 |  2
   1 | -1
+  1 |  2
   2 |  3
   3 |  5
   9 | 10
@@ -2883,6 +2893,8 @@ UPDATE rw_view2 SET a = a - 10; -- should fail
 -- because Greengage doesn't support INSTEAD OF triggers.
 MERGE INTO rw_view2 t USING (VALUES (6)) AS v(a) ON t.a = v.a
   WHEN MATCHED THEN UPDATE SET a = t.a - 10; -- should fail
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 SELECT * FROM base_tbl;
  a  | b 
 ----+---

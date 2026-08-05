@@ -2691,7 +2691,8 @@ create_motion_path_for_merge(PlannerInfo *root, Index rti, GpPolicy *policy,
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("MERGE with an UPDATE action that modifies a distribution key column is not supported"),
-					 errdetail("The updated row would have to move to a different segment.")));
+					 errdetail("The updated row would have to move to a different segment."),
+					 errhint("Use a separate UPDATE statement, which can move rows between segments.")));
 	}
 	else if (policyType == POLICYTYPE_REPLICATED)
 	{

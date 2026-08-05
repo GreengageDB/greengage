@@ -2080,6 +2080,8 @@ ERROR:  UPDATE on distributed key column not allowed on relation with update tri
 -- update action in merge should behave the same
 merge into parted_trig using (select 1) as ss on true
   when matched and a = 2 then update set a = 1;
+DETAIL:  The updated row would have to move to a different segment.
+ERROR:  MERGE with an UPDATE action that modifies a distribution key column is not supported
 drop table parted_trig;
 -- Verify propagation of trigger arguments to partitions
 create table parted_trig (a int) partition by list (a);
