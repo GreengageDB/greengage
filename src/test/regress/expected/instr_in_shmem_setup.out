@@ -3,6 +3,14 @@
 -- After all tests finished, the last test check_instr_in_shmem
 -- will check for leaks of instrumentation slots in shmem.
 -- start_ignore
-\! gpconfig -c gp_enable_query_metrics -v on 
-\! PGDATESTYLE="" gpstop -rai
+\! gpconfig -c gp_enable_query_metrics -v on
+-- gpstop -rai does an immediate (crash) shutdown; on a busy cluster the
+-- following gpstart can briefly serve in gp_role=utility (admin) mode while
+-- crash recovery still replays, or refuse connections outright ("the database
+-- system is not accepting connections"), which aborts the whole schedule at
+-- the next test.  After the restart (whose exit code can be a nonzero
+-- warning, e.g. about the standby), block until a DISPATCHED query reaches
+-- every primary and the coordinator is stably in dispatch mode (same barrier
+-- as bfv_preload_auto_explain).
+\! PGDATESTYLE="" gpstop -rai; segs=$(psql -d postgres -Atc "select count(*) from gp_segment_configuration where role='p' and content>=0" 2>/dev/null); n=0; for i in $(seq 1 120); do [ "$(psql -d postgres -Atc 'show gp_role' 2>/dev/null)" = dispatch ] && [ "$(psql -d postgres -Atc "select count(*) from gp_dist_random('gp_id')" 2>/dev/null)" = "$segs" ] && n=$((n+1)) || n=0; [ "$n" -ge 3 ] && break; sleep 1; done
 -- end_ignore
