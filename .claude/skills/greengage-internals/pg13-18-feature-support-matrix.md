@@ -62,9 +62,9 @@ Status legend: ✅ works · 🚫 clean explicit gate · 💥 incidental/late err
 | 17 | EXPLAIN (MEMORY, SERIALIZE) | ✅ | ✅ | n/a |
 | 18 | RETURNING NEW.* | ✅ | ✅ | ↩ (any RETURNING falls back) |
 | 18 | RETURNING OLD.* — UPDATE | ✅ (gated for split updates) | ✅ **implemented** via wholerow junk column (split-update case still gated) | ↩ |
-| 18 | RETURNING OLD.* — DELETE | ✅ | 💥 AM error from `fetch_row_version` (pre-existing, tested; wholerow route applicable as follow-up) | ↩ |
+| 18 | RETURNING OLD.* — DELETE (and any DELETE ... RETURNING) | ✅ | ✅ **implemented** via wholerow junk column | ↩ |
 | 18 | Virtual generated columns | ✅ | ✅ in principle (❓ AOCS: vpinfo slot per attno, pg_attribute_encoding doesn't filter virtual — untested) | ✅ pre-expanded in `orca.c` |
-| 18 | Temporal PK/UNIQUE WITHOUT OVERLAPS | ✅ | ❓ likely broken: forces GiST; AO unique enforcement (`index_fetch_tuple_exists`) is btree/blkdir-oriented; AO unique gate doesn't consider GiST | n/a |
+| 18 | Temporal PK/UNIQUE WITHOUT OVERLAPS | ✅ **works** (after the `IndexStmt.iswithoutoverlaps` outfast/readfast dispatch fix — it was rejected on QEs before; upstream `without_overlaps` test stays deferred only because its DDL lacks DISTRIBUTED BY) | 🚫 **gated**: the exclusion-style recheck cannot see same-command AO inserts — two conflicting rows in one statement were both accepted (verified). Plain EXCLUDE on AO gated for the same (pre-existing) hole. | n/a |
 | 18 | FOR PORTION OF | — not merged (absent from tree) | — | — |
 | 18 | COPY REJECT_LIMIT | ✅ | ✅ (❓ untested) | n/a |
 | 18 | NOT NULL constraints (named / NOT VALID) | ✅ | ✅ | safe (convalidated filter) |
@@ -80,7 +80,7 @@ Adjacent pre-PG13 features re-audited because MERGE/RETURNING paths lean on them
 | Row UPDATE/DELETE triggers | 🚫 rejected at CREATE TRIGGER |
 | TABLESAMPLE | 🚫 "Sampling is only supported in heap tables" (untested) |
 | Index-only scans | off by design (relallvisible kept 0) |
-| Logical replication of AO | 🐛 silent: AO rmgr has NULL decode callback; publication accepts AO tables and replicates nothing |
+| Logical replication of AO | 🚫 **gated**: explicit FOR TABLE errors; AO excluded from FOR ALL TABLES / IN SCHEMA enumeration (AO rmgr has no decode callback) |
 | Parallel seqscan | 🚫 elog stub |
 
 ## Dispositions and implementation routes
@@ -138,12 +138,16 @@ ExclusiveLock serialization ⇒ speculative protocol degenerates to check-then-i
   RETURNING OLD/NEW, same-command dups ⇒ cardinality, serializable gate), isolation2
   `on_conflict_ao` (concurrent serialization).
 
-### 3. Test-first (unknown correctness)
+### 3. Test-first — ✅ RESOLVED (covered by `gp_ao_pg18_features`)
 
-WITHOUT OVERLAPS on AO (GiST uniqueness), virtual generated columns on AOCS (encoding/vpinfo
-interaction), UNIQUE NULLS NOT DISTINCT on AO, COPY ON_ERROR/REJECT_LIMIT on AO (+ SREH
-interaction and the missing ON_ERROR-vs-SREH mutual-exclusion validation), multirange columns
-under ORCA, DETACH PARTITION CONCURRENTLY (untested even on heap).
+- UNIQUE NULLS NOT DISTINCT on AO/AOCS: **works** (same blockdir/visimap machinery).
+- COPY ON_ERROR / REJECT_LIMIT into AO/AOCS: **works**; note REJECT_LIMIT is enforced
+  **per segment** in Greengage, not globally.
+- Virtual generated columns on AO/AOCS: **work**, including ALTER ADD COLUMN ... VIRTUAL and
+  UPDATE on AOCS.
+- WITHOUT OVERLAPS: works on heap (dispatch fix), gated on AO — see the matrix rows.
+- Still open: multirange columns under ORCA (believed OK, unverified), DETACH PARTITION
+  CONCURRENTLY (untested even on heap), ON_ERROR-vs-SREH mutual-exclusion validation.
 
 ### 4. Keep as-is, documented
 

@@ -1,0 +1,155 @@
+-- PG13-18 feature combinations on append-optimized tables that previously
+-- had no coverage: UNIQUE NULLS NOT DISTINCT, COPY ON_ERROR / REJECT_LIMIT,
+-- virtual generated columns, temporal (WITHOUT OVERLAPS) and exclusion
+-- constraints.
+create schema ao_pg18_features;
+set search_path = ao_pg18_features;
+-- ============================================================
+-- PG15 UNIQUE NULLS NOT DISTINCT on AO: enforced through the same
+-- blockdir/visimap unique machinery as ordinary AO unique indexes.
+-- ============================================================
+create table unnd_ao (a int, b int, unique nulls not distinct (a, b)) with (appendonly=true) distributed by (a);
+insert into unnd_ao values (1, null);
+insert into unnd_ao values (1, null);
+ERROR:  duplicate key value violates unique constraint "unnd_ao_a_b_key"  (seg1 172.17.0.4:25435 pid=1701940)
+DETAIL:  Key (a, b)=(1, null) already exists.
+insert into unnd_ao values (2, null);
+select count(*) from unnd_ao;
+ count 
+-------
+     2
+(1 row)
+
+create table unnd_aoco (a int, b int, unique nulls not distinct (a, b)) using ao_column distributed by (a);
+insert into unnd_aoco values (1, null);
+insert into unnd_aoco values (1, null);
+ERROR:  duplicate key value violates unique constraint "unnd_aoco_a_b_key"  (seg1 172.17.0.4:25435 pid=1701940)
+DETAIL:  Key (a, b)=(1, null) already exists.
+-- default NULLS DISTINCT still admits duplicate NULLs on AO
+create table und_ao (a int, b int, unique (a, b)) with (appendonly=true) distributed by (a);
+insert into und_ao values (1, null), (1, null);
+select count(*) from und_ao;
+ count 
+-------
+     2
+(1 row)
+
+-- ============================================================
+-- PG17 COPY ON_ERROR IGNORE / PG18 REJECT_LIMIT into AO and AOCS
+-- (the skipped rows never reach the AO insert path)
+-- ============================================================
+create table copy_ao (a int, b int) with (appendonly=true) distributed by (a);
+copy copy_ao from stdin with (on_error ignore);
+NOTICE:  1 row was skipped due to data type incompatibility
+select * from copy_ao order by a;
+ a | b 
+---+---
+ 1 | 1
+ 3 | 3
+(2 rows)
+
+create table copy_aoco (a int, b int) using ao_column distributed by (a);
+copy copy_aoco from stdin with (on_error ignore, reject_limit 2);
+NOTICE:  2 rows were skipped due to data type incompatibility
+select * from copy_aoco order by a;
+ a | b 
+---+---
+ 1 | 1
+ 4 | 4
+(2 rows)
+
+-- exceeding REJECT_LIMIT aborts the COPY.  Note: in Greengage the limit is
+-- enforced per segment, so use the same distribution key for both bad rows
+-- to make the excess deterministic.
+copy copy_aoco from stdin with (on_error ignore, reject_limit 1);
+ERROR:  skipped more than REJECT_LIMIT (1) rows due to data type incompatibility
+CONTEXT:  COPY copy_aoco, line 3: "6	oops"
+select count(*) from copy_aoco;
+ count 
+-------
+     2
+(1 row)
+
+-- ============================================================
+-- PG18 virtual generated columns on AO and AOCS
+-- ============================================================
+create table vgen_ao (a int, b int generated always as (a * 2) virtual) with (appendonly=true) distributed by (a);
+insert into vgen_ao values (1), (2);
+select a, b from vgen_ao order by a;
+ a | b 
+---+---
+ 1 | 2
+ 2 | 4
+(2 rows)
+
+alter table vgen_ao add column c int generated always as (a + 100) virtual;
+select a, b, c from vgen_ao order by a;
+ a | b |  c  
+---+---+-----
+ 1 | 2 | 101
+ 2 | 4 | 102
+(2 rows)
+
+create table vgen_aoco (a int, b int generated always as (a * 3) virtual, c int) using ao_column distributed by (a);
+insert into vgen_aoco values (1, default, 10), (2, default, 20);
+select a, b, c from vgen_aoco order by a;
+ a | b | c  
+---+---+----
+ 1 | 3 | 10
+ 2 | 6 | 20
+(2 rows)
+
+update vgen_aoco set c = c + 1 where a = 1;
+select a, b, c from vgen_aoco order by a;
+ a | b | c  
+---+---+----
+ 1 | 3 | 11
+ 2 | 6 | 20
+(2 rows)
+
+-- ============================================================
+-- Logical replication: AO tables cannot be published -- the Appendonly
+-- resource manager has no decode routine, so a publication would accept
+-- them and then silently replicate nothing.
+-- ============================================================
+create table pub_ao (a int) with (appendonly=true) distributed by (a);
+create publication pub_ao_fail for table pub_ao;
+ERROR:  cannot add relation "pub_ao" to publication
+DETAIL:  Append-optimized tables do not support logical replication.
+-- ============================================================
+-- PG18 temporal constraints (WITHOUT OVERLAPS) and exclusion constraints
+-- are rejected on AO: their recheck cannot see rows inserted by the same
+-- command, so conflicting rows in one statement would both be accepted.
+-- ============================================================
+create table two_ao (id int, valid_at daterange, constraint two_ao_pk primary key (id, valid_at without overlaps)) with (appendonly=true) distributed by (id);
+ERROR:  append-optimized tables do not support WITHOUT OVERLAPS constraints
+DETAIL:  The constraint could not detect conflicting rows inserted by the same command.
+create table excl_ao (id int, r daterange, exclude using gist (id with =, r with &&)) with (appendonly=true) distributed by (id);
+ERROR:  append-optimized tables do not support exclusion constraints
+DETAIL:  The constraint could not detect conflicting rows inserted by the same command.
+-- ... and on heap they work (QD->QE dispatch of IndexStmt.iswithoutoverlaps):
+-- range keys only, to stay within core GiST opclasses
+create table two_heap (id int4range, valid_at daterange, constraint two_heap_pk primary key (id, valid_at without overlaps)) distributed by (id);
+insert into two_heap values (int4range(1,2), daterange('2020-01-01','2020-06-01')),
+                            (int4range(1,2), daterange('2020-06-01','2021-01-01'));
+insert into two_heap values (int4range(1,2), daterange('2020-03-01','2020-04-01'));
+ERROR:  conflicting key value violates exclusion constraint "two_heap_pk"  (seg2 172.17.0.4:25436 pid=1701941)
+DETAIL:  Key (id, valid_at)=([1,2), [03-01-2020,04-01-2020)) conflicts with existing key (id, valid_at)=([1,2), [01-01-2020,06-01-2020)).
+select count(*) from two_heap;
+ count 
+-------
+     2
+(1 row)
+
+set search_path = public;
+drop schema ao_pg18_features cascade;
+NOTICE:  drop cascades to 9 other objects
+DETAIL:  drop cascades to table ao_pg18_features.unnd_ao
+drop cascades to table ao_pg18_features.unnd_aoco
+drop cascades to table ao_pg18_features.und_ao
+drop cascades to table ao_pg18_features.copy_ao
+drop cascades to table ao_pg18_features.copy_aoco
+drop cascades to table ao_pg18_features.vgen_ao
+drop cascades to table ao_pg18_features.vgen_aoco
+drop cascades to table ao_pg18_features.pub_ao
+drop cascades to table ao_pg18_features.two_heap

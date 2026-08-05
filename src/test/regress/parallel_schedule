@@ -108,10 +108,11 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 # psql depends on create_am
 # amutils depends on geometry, create_index_spgist, hash_index, brin
 # ----------
-# GPDB: without_overlaps deferred -- PG18 temporal WITHOUT OVERLAPS PRIMARY KEY/FOREIGN KEY
-# requires a GiST-exclusion (&&) distribution key, which is incompatible with Greengage's hash
-# distribution rule; there is no single working distribution for the test on MPP. Tracked as a
-# known feature gap (see rowsecurity-class deferrals). Re-enable if temporal PK/FK gains MPP support.
+# GPDB: without_overlaps deferred -- the temporal WITHOUT OVERLAPS machinery itself works on
+# heap tables (the IndexStmt.iswithoutoverlaps QD->QE dispatch fix made enforcement functional;
+# see gp_ao_pg18_features for positive coverage), but this upstream test creates its tables
+# without DISTRIBUTED BY, so Greengage's distribution-key-must-be-in-PK rule rejects most of the
+# DDL and the rest cascades. Re-enabling needs a curated GPDB variant of the test.
 test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.utf8 collate.icu.utf8 incremental_sort generated_virtual
 
 # collate.*.utf8 tests cannot be run in parallel with each other
