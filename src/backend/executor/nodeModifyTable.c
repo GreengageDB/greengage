@@ -169,6 +169,9 @@ static TupleTableSlot *ExecPrepareTupleRouting(ModifyTableState *mtstate,
 											   TupleTableSlot *slot,
 											   ResultRelInfo **partRelInfo);
 
+static bool ExecAORestoreOldTupleFromWholerow(TupleTableSlot *planSlot,
+											  ResultRelInfo *resultRelInfo,
+											  TupleTableSlot *oldSlot);
 static TupleTableSlot *ExecMerge(ModifyTableContext *context,
 								 ResultRelInfo *resultRelInfo,
 								 ItemPointer tupleid,
@@ -2961,6 +2964,53 @@ ExecInhRebuildNewTuple(ModifyTableState *mtstate,
 }
 
 /*
+ * ExecAORestoreOldTupleFromWholerow
+ *
+ * GPDB: an append-optimized table cannot fetch the old tuple by TID
+ * (appendonly_fetch_row_version is unsupported), so when the old tuple is
+ * needed -- MERGE MATCHED / NOT MATCHED BY SOURCE actions, RETURNING OLD --
+ * the planner ships it in a "wholerow" junk column (add_row_identity_columns)
+ * and we deform it into the result relation's old-tuple slot here.
+ *
+ * Returns false when the plan carries no wholerow column (the planner only
+ * adds it when something reads the old tuple); the caller decides whether
+ * that is acceptable.
+ */
+static bool
+ExecAORestoreOldTupleFromWholerow(TupleTableSlot *planSlot,
+								  ResultRelInfo *resultRelInfo,
+								  TupleTableSlot *oldSlot)
+{
+	Datum		wrdatum;
+	bool		wrisnull;
+	HeapTupleHeader wrheader;
+	HeapTupleData wrtuple;
+
+	if (!AttributeNumberIsValid(resultRelInfo->ri_wholerow_attno))
+		return false;
+
+	wrdatum = ExecGetJunkAttribute(planSlot,
+								   resultRelInfo->ri_wholerow_attno,
+								   &wrisnull);
+	if (wrisnull)
+		elog(ERROR, "wholerow is NULL");
+
+	wrheader = DatumGetHeapTupleHeader(wrdatum);
+	wrtuple.t_len = HeapTupleHeaderGetDatumLength(wrheader);
+	ItemPointerSetInvalid(&wrtuple.t_self);
+	wrtuple.t_tableOid = InvalidOid;
+	wrtuple.t_data = wrheader;
+
+	ExecClearTuple(oldSlot);
+	heap_deform_tuple(&wrtuple,
+					  RelationGetDescr(resultRelInfo->ri_RelationDesc),
+					  oldSlot->tts_values,
+					  oldSlot->tts_isnull);
+	ExecStoreVirtualTuple(oldSlot);
+	return true;
+}
+
+/*
  * Insert the new tuple version of a Split Update
  *
  * We have to check if this UPDATE also moves the row to
@@ -3428,6 +3478,20 @@ ExecMergeMatched(ModifyTableContext *context, ResultRelInfo *resultRelInfo,
 		ExecForceStoreHeapTuple(oldtuple, resultRelInfo->ri_oldTupleSlot,
 								false);
 	}
+	else if (RelationIsAppendOptimized(resultRelInfo->ri_RelationDesc))
+	{
+		/*
+		 * GPDB: an append-optimized table cannot fetch the old tuple by TID;
+		 * the planner ships it in the wholerow junk column whenever the MERGE
+		 * has WHEN MATCHED / WHEN NOT MATCHED BY SOURCE actions (see
+		 * add_row_identity_columns()).
+		 */
+		if (!ExecAORestoreOldTupleFromWholerow(context->planSlot,
+											   resultRelInfo,
+											   resultRelInfo->ri_oldTupleSlot))
+			elog(ERROR, "no wholerow junk column for MERGE on append-optimized table \"%s\"",
+				 RelationGetRelationName(resultRelInfo->ri_RelationDesc));
+	}
 	else
 	{
 		if (resultRelInfo->ri_needLockTagTuple)
@@ -3638,7 +3702,22 @@ lmerge_matched:
 				 * it; and it would be no better to allow the original MERGE
 				 * action while discarding the updates that it triggered.  So
 				 * throwing an error is the only safe course.
+				 *
+				 * GPDB: the append-optimized visimap reports TM_SelfModified
+				 * only for a tuple already modified by the *current command*
+				 * (its dirty-list check; tmfd.cmax is set to the current cid
+				 * and tmfd.xmax is not filled in at all), so on AO this is
+				 * always the same-command case: this MERGE matched the same
+				 * target row twice.
 				 */
+				if (RelationIsAppendOptimized(resultRelInfo->ri_RelationDesc))
+					ereport(ERROR,
+							(errcode(ERRCODE_CARDINALITY_VIOLATION),
+					/* translator: %s is a SQL command name */
+							 errmsg("%s command cannot affect row a second time",
+									"MERGE"),
+							 errhint("Ensure that not more than one source row matches any one target row.")));
+
 				if (context->tmfd.cmax != estate->es_output_cid)
 					ereport(ERROR,
 							(errcode(ERRCODE_TRIGGERED_DATA_CHANGE_VIOLATION),
@@ -4979,37 +5058,18 @@ ExecModifyTable(PlanState *pstate)
 					 * preprocess_targetlist() expanded the targetlist to every
 					 * column -- so usually no old-tuple merge is required.
 					 *
-					 * The exception is an old-style inheritance child with
-					 * columns the (nominal) root doesn't have: those are not
-					 * in the expanded targetlist, so the update projection
-					 * reads them from the old tuple.  The planner ships the
-					 * old tuple in the "wholerow" junk column for AO
-					 * inheritance updates; restore it into the old slot.
+					 * When the old tuple IS needed -- an old-style inheritance
+					 * child with columns the (nominal) root doesn't have, or a
+					 * RETURNING clause that references OLD -- the planner
+					 * ships it in the "wholerow" junk column (see
+					 * add_row_identity_columns()); restore it into the old
+					 * slot.
 					 */
-					if (AttributeNumberIsValid(resultRelInfo->ri_wholerow_attno))
+					if (ExecAORestoreOldTupleFromWholerow(context.planSlot,
+														  resultRelInfo,
+														  oldSlot))
 					{
-						Datum		wrdatum;
-						bool		wrisnull;
-						HeapTupleHeader wrheader;
-						HeapTupleData wrtuple;
-
-						wrdatum = ExecGetJunkAttribute(context.planSlot,
-													   resultRelInfo->ri_wholerow_attno,
-													   &wrisnull);
-						if (wrisnull)
-							elog(ERROR, "wholerow is NULL");
-						wrheader = DatumGetHeapTupleHeader(wrdatum);
-						wrtuple.t_len = HeapTupleHeaderGetDatumLength(wrheader);
-						ItemPointerSetInvalid(&wrtuple.t_self);
-						wrtuple.t_tableOid = InvalidOid;
-						wrtuple.t_data = wrheader;
-
-						ExecClearTuple(oldSlot);
-						heap_deform_tuple(&wrtuple,
-										  RelationGetDescr(resultRelInfo->ri_RelationDesc),
-										  oldSlot->tts_values,
-										  oldSlot->tts_isnull);
-						ExecStoreVirtualTuple(oldSlot);
+						/* old tuple restored from the wholerow junk column */
 					}
 					else
 					{
@@ -5017,10 +5077,12 @@ ExecModifyTable(PlanState *pstate)
 						 * GPDB: no old tuple is available or needed -- the
 						 * expanded targetlist supplies every column from the
 						 * subplan, so the update projection (ExecGetUpdateNewTuple
-						 * below) reads only planSlot, never oldSlot.  Store a
-						 * valid all-NULL tuple rather than leaving the slot empty
-						 * so that ExecGetUpdateNewTuple's !TTS_EMPTY(oldSlot)
-						 * assert holds; these NULL values are never read.
+						 * below) reads only planSlot, never oldSlot, and nothing
+						 * downstream reads OLD (the planner adds wholerow
+						 * whenever RETURNING references it).  Store a valid
+						 * all-NULL tuple rather than leaving the slot empty so
+						 * that ExecGetUpdateNewTuple's !TTS_EMPTY(oldSlot)
+						 * assert holds.
 						 */
 						ExecStoreAllNullTuple(oldSlot);
 					}

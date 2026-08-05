@@ -18,7 +18,6 @@
 
 #include <math.h>
 
-#include "catalog/pg_am.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "nodes/extensible.h"
@@ -5728,37 +5727,6 @@ create_lockrows_path(PlannerInfo *root, RelOptInfo *rel,
 }
 
 /*
- * split_update_returning_old_walker
- *	  Detect a RETURNING clause that references OLD row values (a Var with
- *	  varreturningtype VAR_RETURNING_OLD, or an already-rewritten ReturningExpr
- *	  carrying OLD).  Unlike contain_vars_returning_old_or_new(), NEW references
- *	  are ignored: a Split Update's INSERT half carries the new tuple, so
- *	  RETURNING NEW works; only OLD is unavailable where RETURNING is evaluated.
- */
-static bool
-split_update_returning_old_walker(Node *node, void *context)
-{
-	if (node == NULL)
-		return false;
-	if (IsA(node, Var))
-	{
-		Var		   *var = (Var *) node;
-
-		return (var->varlevelsup == 0 &&
-				var->varreturningtype == VAR_RETURNING_OLD);
-	}
-	if (IsA(node, ReturningExpr))
-	{
-		ReturningExpr *rexpr = (ReturningExpr *) node;
-
-		if (rexpr->retlevelsup == 0 && rexpr->retold)
-			return true;
-		return false;
-	}
-	return expression_tree_walker(node, split_update_returning_old_walker, context);
-}
-
-/*
  * create_modifytable_path
  *	  Creates a pathnode that represents performing INSERT/UPDATE/DELETE/MERGE
  *	  mods
@@ -5817,41 +5785,23 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	 * would silently come back NULL.  Reject it explicitly rather than return
 	 * wrong data.  (RETURNING NEW is fine and is left alone.)
 	 *
-	 * The same applies to an append-optimized result relation even without a
-	 * Split Update: AO tables cannot fetch the previous version of a row by
-	 * TID, so ExecModifyTable substitutes an all-NULL old slot.  That is fine
-	 * for computing the new tuple (the targetlist was expanded to all
-	 * columns), but RETURNING OLD would read those NULLs.
+	 * (A plain append-optimized UPDATE is fine: when RETURNING references
+	 * OLD, add_row_identity_columns() ships the old tuple in the wholerow
+	 * junk column and the executor restores it into the old slot.)
 	 */
 	if (operation == CMD_UPDATE && returningLists != NIL)
 	{
 		ListCell   *lcr;
 		ListCell   *lcs;
-		ListCell   *lcrr;
 
-		forthree(lcr, returningLists, lcs, is_split_updates,
-				 lcrr, resultRelations)
+		forboth(lcr, returningLists, lcs, is_split_updates)
 		{
-			Oid			relam;
-			RangeTblEntry *rte;
-
-			if (!split_update_returning_old_walker((Node *) lfirst(lcr), NULL))
-				continue;
-
-			if (lfirst_int(lcs))
+			if (lfirst_int(lcs) &&
+				contain_vars_returning_old((Node *) lfirst(lcr)))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("RETURNING OLD is not supported for an UPDATE that changes the distribution key"),
 						 errdetail("The updated row is moved between segments, so its previous values are not available.")));
-
-			rte = planner_rt_fetch(lfirst_int(lcrr), root);
-			relam = get_rel_relam(rte->relid);
-			if (relam == AO_ROW_TABLE_AM_OID || relam == AO_COLUMN_TABLE_AM_OID)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("RETURNING OLD is not supported for an UPDATE on append-optimized table \"%s\"",
-								get_rel_name(rte->relid)),
-						 errdetail("Append-optimized tables cannot fetch the previous version of a row.")));
 		}
 	}
 

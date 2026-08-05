@@ -82,6 +82,7 @@ static bool pull_vars_walker(Node *node, pull_vars_context *context);
 static bool contain_var_clause_walker(Node *node, void *context);
 static bool contain_vars_of_level_walker(Node *node, int *sublevels_up);
 static bool contain_vars_returning_old_or_new_walker(Node *node, void *context);
+static bool contain_vars_returning_old_walker(Node *node, void *context);
 static bool locate_var_of_level_walker(Node *node,
 									   locate_var_of_level_context *context);
 static bool pull_var_clause_walker(Node *node,
@@ -622,6 +623,40 @@ contain_vars_returning_old_or_new_walker(Node *node, void *context)
 		return false;
 	}
 	return expression_tree_walker(node, contain_vars_returning_old_or_new_walker,
+								  context);
+}
+
+/*
+ * contain_vars_returning_old
+ *	  Like contain_vars_returning_old_or_new(), but detects only OLD
+ *	  references (a Var with varreturningtype VAR_RETURNING_OLD, or a
+ *	  rewritten ReturningExpr carrying OLD).  NEW references are ignored:
+ *	  several plan shapes (Split Update, append-optimized UPDATE) have the
+ *	  new tuple where RETURNING is evaluated but not the old one.
+ */
+bool
+contain_vars_returning_old(Node *node)
+{
+	return contain_vars_returning_old_walker(node, NULL);
+}
+
+static bool
+contain_vars_returning_old_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, Var))
+	{
+		return (((Var *) node)->varlevelsup == 0 &&
+				((Var *) node)->varreturningtype == VAR_RETURNING_OLD);
+	}
+	if (IsA(node, ReturningExpr))
+	{
+		ReturningExpr *rexpr = (ReturningExpr *) node;
+
+		return (rexpr->retlevelsup == 0 && rexpr->retold);
+	}
+	return expression_tree_walker(node, contain_vars_returning_old_walker,
 								  context);
 }
 

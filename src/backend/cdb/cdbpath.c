@@ -2606,6 +2606,68 @@ create_motion_path_for_upddel(PlannerInfo *root, Index rti, GpPolicy *policy,
  * corrupting data.  Lifting this restriction needs a split-style Motion that
  * routes matched rows by gp_segment_id and not-matched rows by the INSERT hash.
  */
+/*
+ * Does any WHEN MATCHED ... UPDATE action of the MERGE modify a distribution
+ * key column of the target?
+ *
+ * Same changed-column test as check_splitupdate(): a SET column whose new
+ * value is not simply a Var referencing that same attribute of the target
+ * relation counts as changed.  MERGE performs its updates in place (there is
+ * no SplitUpdate path for MERGE), so a changed distribution key would leave
+ * the row on the wrong segment.
+ */
+static bool
+merge_updates_distribution_key(PlannerInfo *root, Index rti, GpPolicy *policy)
+{
+	if (policy->nattrs == 0)
+		return false;
+
+	foreach_node(MergeAction, action, root->parse->mergeActionList)
+	{
+		ListCell   *lc;
+		ListCell   *lcc;
+
+		if (action->commandType != CMD_UPDATE)
+			continue;
+
+		/*
+		 * preprocess_targetlist() renumbered the action targetlist to be
+		 * consecutive, so a tlist entry's resno no longer identifies the SET
+		 * column; the real target attribute numbers live in updateColnos,
+		 * paired with the non-junk tlist entries in order.
+		 */
+		lcc = list_head(action->updateColnos);
+		foreach(lc, action->targetList)
+		{
+			TargetEntry *tle = (TargetEntry *) lfirst(lc);
+			AttrNumber	attno;
+			int			i;
+
+			if (tle->resjunk)
+				continue;
+			if (lcc == NULL)
+				break;
+			attno = lfirst_int(lcc);
+			lcc = lnext(action->updateColnos, lcc);
+
+			if (IsA(tle->expr, Var))
+			{
+				Var		   *var = (Var *) tle->expr;
+
+				if (var->varno == rti && var->varattno == attno)
+					continue;	/* SET col = col: unchanged */
+			}
+
+			for (i = 0; i < policy->nattrs; i++)
+			{
+				if (policy->attrs[i] == attno)
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
 Path *
 create_motion_path_for_merge(PlannerInfo *root, Index rti, GpPolicy *policy,
 							 Path *subpath)
@@ -2619,6 +2681,17 @@ create_motion_path_for_merge(PlannerInfo *root, Index rti, GpPolicy *policy,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("MERGE on a distributed table is not supported when the join requires redistributing the target table"),
 					 errhint("Use a join condition that includes the target table's distribution key column(s), or distribute the source table so that it is co-located with the target.")));
+
+		/*
+		 * MERGE updates rows in place (no SplitUpdate is planned for MERGE),
+		 * so an UPDATE action that changes a distribution key column would
+		 * silently leave the updated row on the wrong segment.  Reject it.
+		 */
+		if (merge_updates_distribution_key(root, rti, policy))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("MERGE with an UPDATE action that modifies a distribution key column is not supported"),
+					 errdetail("The updated row would have to move to a different segment.")));
 	}
 	else if (policyType == POLICYTYPE_REPLICATED)
 	{

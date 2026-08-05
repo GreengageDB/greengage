@@ -49,15 +49,18 @@ INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
 
 --
--- PG18 RETURNING OLD is not supported on AO tables: the previous row
--- version cannot be fetched, so it is rejected at plan time (rather than
--- silently returning NULLs).  RETURNING NEW and plain RETURNING work.
+-- PG18 RETURNING OLD on AO tables: the old tuple cannot be fetched by TID,
+-- so the planner ships it in the wholerow junk column when RETURNING
+-- references OLD.
 --
 CREATE TEMP TABLE returning_ao_old (id int4, t text) WITH (appendonly=true) DISTRIBUTED BY (id);
 INSERT INTO returning_ao_old VALUES (1, 'a');
 UPDATE returning_ao_old SET t = 'b' RETURNING old.t, new.t;
 UPDATE returning_ao_old SET t = 'b' RETURNING new.t;
 UPDATE returning_ao_old SET t = 'c' RETURNING t;
+-- ... but a distribution-key UPDATE is a Split Update, where the previous
+-- values are not available: still rejected
+UPDATE returning_ao_old SET id = id + 1 RETURNING old.id;
 -- column-oriented AO behaves identically
 CREATE TEMP TABLE returning_aoco_old (id int4, t text) USING ao_column DISTRIBUTED BY (id);
 INSERT INTO returning_aoco_old VALUES (1, 'a');

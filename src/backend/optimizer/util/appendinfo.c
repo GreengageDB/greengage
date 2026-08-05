@@ -24,6 +24,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_inherits.h"
 #include "optimizer/appendinfo.h"
+#include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "parser/parsetree.h"
@@ -1091,6 +1092,7 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 		{
 			RangeTblEntry *rootRte = planner_rt_fetch(root->parse->resultRelation,
 													  root);
+			bool		need_wholerow = false;
 
 			/*
 			 * Note: this function is called for each leaf target relation
@@ -1101,6 +1103,58 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 			if (rootRte->inh && rootRte->relkind == RELKIND_RELATION &&
 				(gp_update_may_move_row(root, rootRte->relid) ||
 				 gp_inh_tree_has_ao(rootRte->relid)))
+				need_wholerow = true;
+
+			/*
+			 * GPDB: an append-optimized target cannot fetch the old tuple by
+			 * TID, so when RETURNING references OLD the old tuple must be
+			 * carried through the plan instead (ExecModifyTable restores it
+			 * into the old slot from this junk column).
+			 */
+			if (!need_wholerow &&
+				RelationIsAppendOptimized(target_relation) &&
+				contain_vars_returning_old((Node *) root->parse->returningList))
+				need_wholerow = true;
+
+			if (need_wholerow)
+			{
+				var = makeVar(rtindex,
+							  InvalidAttrNumber,
+							  RECORDOID,
+							  -1,
+							  InvalidOid,
+							  0);
+				add_row_identity_var(root, var, rtindex, "wholerow");
+			}
+		}
+		else if (commandType == CMD_MERGE && relkind == RELKIND_RELATION &&
+				 RelationIsAppendOptimized(target_relation))
+		{
+			/*
+			 * GPDB: ExecMergeMatched needs the old target tuple -- to
+			 * evaluate the WHEN conditions and action projections (unchanged
+			 * columns come from it) -- before executing any WHEN MATCHED /
+			 * WHEN NOT MATCHED BY SOURCE action, and an append-optimized
+			 * table cannot fetch it by TID.  Carry it in a whole-row junk
+			 * column instead.  An INSERT-only MERGE never looks at the old
+			 * tuple, so skip the overhead unless RETURNING references OLD.
+			 */
+			bool		need_wholerow = false;
+
+			foreach_node(MergeAction, action, root->parse->mergeActionList)
+			{
+				if (action->matchKind != MERGE_WHEN_NOT_MATCHED_BY_TARGET)
+				{
+					need_wholerow = true;
+					break;
+				}
+			}
+
+			if (!need_wholerow &&
+				contain_vars_returning_old((Node *) root->parse->returningList))
+				need_wholerow = true;
+
+			if (need_wholerow)
 			{
 				var = makeVar(rtindex,
 							  InvalidAttrNumber,

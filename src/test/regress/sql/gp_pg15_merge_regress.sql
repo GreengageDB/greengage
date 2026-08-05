@@ -99,10 +99,10 @@ merge into mp_tgt t using mp_src s on t.k = s.k
 select k, v from mp_tgt order by k;
 
 -- ============================================================
--- 7. MERGE into an append-optimized target.  AO supports INSERT, so
---    a WHEN NOT MATCHED action appends the not-matched source rows on
---    the segment where their distribution key hashes (AO update/delete
---    via MERGE is a separate, currently unsupported, path).
+-- 7. MERGE into an append-optimized target.  WHEN NOT MATCHED INSERT is
+--    plain insertion; WHEN MATCHED / WHEN NOT MATCHED BY SOURCE actions
+--    read the old target tuple from the wholerow junk column (AO cannot
+--    fetch a row by TID), and updates run as visimap-delete + insert.
 -- ============================================================
 create table mao_tgt (k int, v int) with (appendonly = true) distributed by (k);
 create table mao_src (k int, v int) distributed by (k);
@@ -112,32 +112,68 @@ merge into mao_tgt t using mao_src s on t.k = s.k
   when not matched then insert (k, v) values (s.k, s.v);
 select k, v from mao_tgt order by k;
 
--- WHEN MATCHED / WHEN NOT MATCHED BY SOURCE actions need to fetch the
--- target tuple by TID, which append-optimized tables cannot do.  They are
--- rejected at executor startup, so the error is not data-dependent.
+-- WHEN MATCHED UPDATE (all rows match now)
 merge into mao_tgt t using mao_src s on t.k = s.k
   when matched then update set v = s.v
   when not matched then insert (k, v) values (s.k, s.v);
+select k, v from mao_tgt order by k;
+
+-- WHEN MATCHED with a condition, DELETE action
 merge into mao_tgt t using mao_src s on t.k = s.k
-  when matched then delete;
+  when matched and s.k <= 5 then delete;
+select k, v from mao_tgt order by k;
+
+-- WHEN NOT MATCHED BY SOURCE (PG17) combined with MATCHED UPDATE
+delete from mao_src where k > 8;
 merge into mao_tgt t using mao_src s on t.k = s.k
   when not matched by source then delete
-  when not matched then insert (k, v) values (s.k, s.v);
--- even a DO NOTHING action with an empty source (no row can ever match)
--- is rejected: the gate is static, not driven by which rows happen to
--- match (before the gate this silently succeeded on an empty match set)
+  when matched then update set v = -1;
+select k, v from mao_tgt order by k;
+
+-- a DO NOTHING action with an empty source is a no-op
 create table mao_empty_src (k int, v int) distributed by (k);
 merge into mao_tgt t using mao_empty_src s on t.k = s.k
   when matched then do nothing;
+
+-- two source rows matching one target row: cardinality violation
+insert into mao_src values (7, 777);
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v;
+delete from mao_src where v = 777;
+
+-- an UPDATE action that modifies the distribution key is rejected
+-- (MERGE updates in place; there is no SplitUpdate path for MERGE)
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set k = t.k + 1;
+-- ... but SET k = k (self-assignment) does not count as a change
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set k = t.k, v = t.v + 1;
+select k, v from mao_tgt order by k;
+
+-- PG17 RETURNING with merge_action(), and PG18 OLD/NEW, work on AO
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched and t.k = 6 then update set v = 66
+  when not matched then insert values (s.k, s.v)
+  returning merge_action(), old.v as old_v, new.v as new_v, t.k;
+select k, v from mao_tgt order by k;
+
+-- MERGE update/delete actions on AO are not allowed in serializable
+-- transactions (same visibility limitation as plain UPDATE/DELETE)
+begin transaction isolation level serializable;
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = 0;
+rollback;
+
 -- column-oriented AO behaves identically
 create table maoco_tgt (k int, v int) using ao_column distributed by (k);
 insert into maoco_tgt select i, i from generate_series(1, 3) i;
 merge into maoco_tgt t using mao_src s on t.k = s.k
-  when matched then update set v = s.v;
--- ... and INSERT-only MERGE still works on it
-merge into maoco_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v
   when not matched then insert (k, v) values (s.k, s.v);
-select count(*) from maoco_tgt;
+select k, v from maoco_tgt order by k;
+merge into maoco_tgt t using mao_src s on t.k = s.k
+  when matched and t.k > 6 then delete;
+select k, v from maoco_tgt order by k;
 
 -- ============================================================
 -- 8. PG15 enable_group_by_reordering (default on): the planner may
