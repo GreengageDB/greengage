@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 try:
     from pygresql import pg as pygresql
     from gppylib.commands import unix, gp, pg
+    from gppylib.commands.base import ExecutionError
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging, get_logger_if_verbose
@@ -132,7 +133,7 @@ def parseargs():
 
     # There shouldn't be any args
     if len(args) > 0:
-        logger.error('Unknown arguments:')
+        logger.error('Unknown arguments: ')
         for arg in args:
             logger.error('  %s' % arg)
         parser.exit(2, None)
@@ -173,7 +174,6 @@ def print_summary(options):
     """Print summary of the action and asks user if they want to
     continue with the activation."""
 
-    warnings_generated = False
     require_force = False
     
     # check the standby master
@@ -196,14 +196,11 @@ def print_summary(options):
     if require_force and not options.force:
         logger.warning('If you wish to continue you must use the -f option to force')
         logger.warning('the activation process.')
-        warnings_generated = True
         raise GpActivateStandbyException('Force activation required')
     if options.confirm:
         yn = ask_yesno(None, 'Do you want to continue with standby master activation?', 'N')
         if not yn:
             raise GpActivateStandbyException('User canceled') 
-
-    return warnings_generated
 
 #-------------------------------------------------------------------------
 def check_original_master_status(options):
@@ -340,8 +337,33 @@ def promote_standby(master_data_dir):
 
 
 #-------------------------------------------------------------------------
+def check_standby_activation(options_, array_=None):
+    """
+    Check if coordinator postmaster is running.
+    """
+
+    # If array is empty, it means that we failed even before/in process of
+    # execution of get_config() and something nasty happened.
+    if not array_:
+        return False
+
+    # Here we check that gpstop accidentally hasn't stopped our promoted standby
+    pid = gp.get_postmaster_pid_locally(options_.coordinator_data_dir)
+    if pid > 0:
+        return True
+    else:
+        return False
+
+#-------------------------------------------------------------------------
 # Main
 #-------------------------------------------------------------------------
+
+"""
+Return codes:
+  0 - Standby activated successfully
+  1 - Standby activated successfully but exceptions were encountered
+  2 - Standby activation failed
+"""
 
 # setup logging
 logger = get_default_logger()
@@ -355,7 +377,7 @@ if options_.logfile:
     setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options_.logfile)
 
 try:
-    warnings_generated_ = print_summary(options_)
+    print_summary(options_)
 
 
     # disable keyboard interrupt to prevent users from canceling
@@ -388,14 +410,21 @@ try:
     signal.signal(signal.SIGINT, signal.default_int_handler)
     
     print_results(array_, unix.getLocalHostname(), options_)
-    
-    if warnings_generated_:
-        sys.exit(1)
-    else:
-        sys.exit(0)
-    
-except Exception as e_:
-    logger.fatal('Error activating standby master: %s' % str(e_))
+
+except ExecutionError as e:
+    errStr = str(e)
+
+    # Even with ExecutionError we still can have promoted standby.
+    # User need to be notified about this with separate return code.  
+    if (errStr.startswith("ExecutionError: 'non-zero rc: 2'")):
+        if (check_standby_activation(options_, array_)):
+            logger.warning('Standby activated with exception', exc_info=e)
+            sys.exit(1)
+        else:
+            logger.fatal('Error activating standby coordinator: %s' % str(e))
+            sys.exit(2)
+except Exception as e:
+    logger.fatal('Error activating standby coordinator: %s' % str(e))
     sys.exit(2)
 
 sys.exit(0)
