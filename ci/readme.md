@@ -187,8 +187,7 @@ To run `pg_upgrade_run_6X_to_7X_migration.bash` locally, it is necessary to spec
 - SQL_SCHEMA - optional path to an sql file that will be loaded before performing the upgrade. If it is not specified,
   the upgrade will be performed on an empty cluster.
 - CLEANUP_SCRIPT - optional path to an sql file that will be executed after loading SQL_SCHEMA, before performing pg_upgrade. It can be used to remove deprecated or otherwise failing objects from SQL_SCHEMA. If it is not specified, no cleanup will occur.
-- DUMP_OPTIONS - optional parameters that will be passed to pg_dump to collect pre- and post-upgrade dumps. These dumps are compared at the end of the test, to determine whether it was successful. If this option is not specified, pg_dump will be executed with no parameters.
-
+- DUMP_OPTIONS - optional parameters that will be passed to pg_dump to collect pre- and post-upgrade dumps. These dumps are compared at the end of the test, to determine whether it was successful. If this option is not specified, pg_dump will be executed with no parameters. Please note that partitioned tables are not affected by this option, because they are excluded from the dump and their data is compared seperately.
 For example:
 ```bash
 export GREENGAGE6_SRC=/home/gpadmin/ggdb6_src
@@ -197,7 +196,7 @@ export GREENGAGE6_INSTALLATION=/usr/local/greengage-db-6X
 export GREENGAGE7_INSTALLATION=/usr/local/greengage-db-7X
 export SQL_SCHEMA=/home/gpadmin/dump.sql
 export CLEANUP_SCRIPT=/home/gpadmin/cleanup.sql
-export DUMP_OPTIONS="--data-only"
+export DUMP_OPTIONS='--data-only --extra-float-digits=-3'
 bash   ${GREENGAGE7_SRC}/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash
 ```
 
@@ -254,7 +253,7 @@ docker run --rm \
 	 (exit \$test_exit_code);"
 ```
 
-To run pg_upgrade tests with the regression dump, it is necessary to specify `cleanup_regression_dump_from_6X.sql` cleanup script. Also, only --data-only dumps can be compared without any difference. The --extra-float-digits option is specified to synchronize the formatting of floats in the dumps.
+To run pg_upgrade tests with the regression dump, it is necessary to specify `cleanup_regression_dump_from_6X.sql` cleanup script. Also, with the current pg_dump state, DDL for many objects is dumped based on the source cluster version and would cause pre- and post-upgrade dumps to differ. So, we compare schemaless --data-only dumps. The --extra-float-digits option is specified to synchronize the formatting of floats in the dumps.
 ```bash
 mkdir logs
 docker run --rm \
