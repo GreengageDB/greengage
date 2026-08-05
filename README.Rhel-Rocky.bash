@@ -87,10 +87,6 @@ if [ -f /usr/bin/llvm-config-14 ] && [ ! -f /usr/bin/llvm-config ]; then
     ln -s /usr/bin/llvm-config-14 /usr/bin/llvm-config
 fi
 
-python3 --version
-# Upgrade pip to support current package versions
-python3 -m pip install --no-cache-dir --upgrade pip
-
 # 'future' is not available as a system package for python3.12
 python3 -m pip install --no-cache-dir future
 
