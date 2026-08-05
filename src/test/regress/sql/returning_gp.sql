@@ -42,11 +42,16 @@ delete from returning_parttab where partkey = 14 returning *;
 select * from returning_parttab;
 
 --
--- DELETE RETURNING is currently not supported on AO tables.
+-- DELETE ... RETURNING on AO tables reads the deleted row from the wholerow
+-- junk column (AO cannot fetch a row by TID).
 --
 CREATE TEMP TABLE returning_aotab (id int4) WITH (appendonly=true);
 INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
+-- PG18 OLD/NEW on DELETE: OLD is the deleted row, NEW is all-NULL
+INSERT INTO returning_aotab VALUES (2);
+DELETE FROM returning_aotab RETURNING old.id, new.id;
+SELECT count(*) FROM returning_aotab;
 
 --
 -- PG18 RETURNING OLD on AO tables: the old tuple cannot be fetched by TID,
@@ -66,6 +71,7 @@ CREATE TEMP TABLE returning_aoco_old (id int4, t text) USING ao_column DISTRIBUT
 INSERT INTO returning_aoco_old VALUES (1, 'a');
 UPDATE returning_aoco_old SET t = 'b' RETURNING old.t;
 UPDATE returning_aoco_old SET t = 'b' RETURNING id, t;
+DELETE FROM returning_aoco_old RETURNING id, t;
 
 
 --

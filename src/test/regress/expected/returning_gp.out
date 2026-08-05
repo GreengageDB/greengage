@@ -96,14 +96,33 @@ HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For 
 (11 rows)
 
 --
--- DELETE RETURNING is currently not supported on AO tables.
+-- DELETE ... RETURNING on AO tables reads the deleted row from the wholerow
+-- junk column (AO cannot fetch a row by TID).
 --
 CREATE TEMP TABLE returning_aotab (id int4) WITH (appendonly=true);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'id' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
-ERROR:  feature not supported on appendoptimized relations  (seg1 slice1 172.17.0.3:7003 pid=1070004)
+ id 
+----
+  1
+(1 row)
+
+-- PG18 OLD/NEW on DELETE: OLD is the deleted row, NEW is all-NULL
+INSERT INTO returning_aotab VALUES (2);
+DELETE FROM returning_aotab RETURNING old.id, new.id;
+ id | id 
+----+----
+  2 |   
+(1 row)
+
+SELECT count(*) FROM returning_aotab;
+ count 
+-------
+     0
+(1 row)
+
 --
 -- PG18 RETURNING OLD on AO tables: the old tuple cannot be fetched by TID,
 -- so the planner ships it in the wholerow junk column when RETURNING
@@ -144,6 +163,12 @@ UPDATE returning_aoco_old SET t = 'b' RETURNING old.t;
 (1 row)
 
 UPDATE returning_aoco_old SET t = 'b' RETURNING id, t;
+ id | t 
+----+---
+  1 | b
+(1 row)
+
+DELETE FROM returning_aoco_old RETURNING id, t;
  id | t 
 ----+---
   1 | b

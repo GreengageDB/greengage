@@ -1960,6 +1960,19 @@ ldelete:
 			{
 				ExecForceStoreHeapTuple(oldtuple, slot, false);
 			}
+			else if (RelationIsAppendOptimized(resultRelationDesc))
+			{
+				/*
+				 * GPDB: an append-optimized table cannot fetch the deleted
+				 * tuple by TID; the planner ships it in the wholerow junk
+				 * column whenever the DELETE (or the MERGE/UPDATE this
+				 * delete is part of) has a RETURNING clause that needs it.
+				 */
+				if (!ExecAORestoreOldTupleFromWholerow(context->planSlot,
+													   resultRelInfo, slot))
+					elog(ERROR, "no wholerow junk column for DELETE RETURNING on append-optimized table \"%s\"",
+						 RelationGetRelationName(resultRelationDesc));
+			}
 			else
 			{
 				if (!table_tuple_fetch_row_version(resultRelationDesc, tupleid,

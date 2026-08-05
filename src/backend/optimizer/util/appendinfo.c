@@ -1127,6 +1127,24 @@ add_row_identity_columns(PlannerInfo *root, Index rtindex,
 				add_row_identity_var(root, var, rtindex, "wholerow");
 			}
 		}
+		else if (commandType == CMD_DELETE && relkind == RELKIND_RELATION &&
+				 RelationIsAppendOptimized(target_relation) &&
+				 root->parse->returningList != NIL)
+		{
+			/*
+			 * GPDB: DELETE ... RETURNING reads the deleted row's values, and
+			 * an append-optimized table cannot fetch them by TID -- carry the
+			 * old tuple in a whole-row junk column instead (ExecDelete
+			 * restores it into the returning slot).
+			 */
+			var = makeVar(rtindex,
+						  InvalidAttrNumber,
+						  RECORDOID,
+						  -1,
+						  InvalidOid,
+						  0);
+			add_row_identity_var(root, var, rtindex, "wholerow");
+		}
 		else if (commandType == CMD_MERGE && relkind == RELKIND_RELATION &&
 				 RelationIsAppendOptimized(target_relation))
 		{
