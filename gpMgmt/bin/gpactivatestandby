@@ -337,22 +337,24 @@ def promote_standby(master_data_dir):
 
 
 #-------------------------------------------------------------------------
-def check_standby_activation(options_, array_=None):
+def check_standby_activation(options_):
     """
-    Check if coordinator postmaster is running.
+    Check if standby was promoted and running.
     """
 
-    # If array is empty, it means that we failed even before/in process of
-    # execution of get_config() and something nasty happened.
-    if not array_:
-        return False
-
-    # Here we check that gpstop accidentally hasn't stopped our promoted standby
+    # Here we check that gpstop or something else accidentally hasn't stopped
+    # our standby we're activating.
     pid = gp.get_postmaster_pid_locally(options_.coordinator_data_dir)
     if pid > 0:
-        return True
-    else:
-        return False
+        # We should wrap this in try/catch because we could get here after
+        # unsuccessful promotion and standby may not be able to accept queries
+        try:
+            array = get_config()
+        except Exception as e:
+            return False
+        if array.coordinator.isSegmentCoordinator(current_role=True):
+            return True
+    return False
 
 #-------------------------------------------------------------------------
 # Main
@@ -411,18 +413,17 @@ try:
     
     print_results(array_, unix.getLocalHostname(), options_)
 
-except ExecutionError as e:
-    errStr = str(e)
+except (ExecutionError, GpActivateStandbyException) as e:
 
-    # Even with ExecutionError we still can have promoted standby.
-    # User need to be notified about this with separate return code.  
-    if (errStr.startswith("ExecutionError: 'non-zero rc: 2'")):
-        if (check_standby_activation(options_, array_)):
-            logger.warning('Standby activated with exception', exc_info=e)
-            sys.exit(1)
-        else:
-            logger.fatal('Error activating standby coordinator: %s' % str(e))
-            sys.exit(2)
+    # Even with raised exceptions we still could have promoted standby.
+    # User need to be notified about this with separate return code.
+    if (check_standby_activation(options_)):
+        logger.warning('Encountered exception: ', exc_info=e)
+        logger.warning('The specified standby coordinator at directory %s acts as primary.' % options_.coordinator_data_dir)
+        sys.exit(1)
+    else:
+        logger.fatal('Error activating standby coordinator: %s' % str(e))
+        sys.exit(2)
 except Exception as e:
     logger.fatal('Error activating standby coordinator: %s' % str(e))
     sys.exit(2)
