@@ -10,6 +10,9 @@ planner inserts **Motion** nodes to move tuples, and **ORCA** (optimizer=on,
 primary for ADB) and the **Postgres planner** (optimizer=off) are two separate
 planning paths. Full map of GGDB-vs-vanilla differences (components, where they
 live, what merges break): [greengage-vs-postgres.md](greengage-vs-postgres.md).
+Per-feature support status of PG13→18 statement constructions on AO/AOCS tables
+and in ORCA (what works, what's gated, implementation routes):
+[pg13-18-feature-support-matrix.md](pg13-18-feature-support-matrix.md).
 
 ## Merge re-graft tell-tales (#1 source of merge bugs)
 
