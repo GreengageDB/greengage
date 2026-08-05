@@ -21,6 +21,7 @@
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_am.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/partition.h"
@@ -87,6 +88,18 @@ check_publication_add_relation(Relation targetrel)
 				 errmsg("cannot add relation \"%s\" to publication",
 						RelationGetRelationName(targetrel)),
 				 errdetail("This operation is not supported for unlogged tables.")));
+
+	/*
+	 * GPDB: append-optimized tables cannot be logically decoded (the
+	 * Appendonly resource manager has no decode routine), so a publication
+	 * would accept them and then silently replicate nothing.
+	 */
+	if (RelationIsAppendOptimized(targetrel))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot add relation \"%s\" to publication",
+						RelationGetRelationName(targetrel)),
+				 errdetail("Append-optimized tables do not support logical replication.")));
 }
 
 /*
@@ -139,7 +152,15 @@ is_publishable_class(Oid relid, Form_pg_class reltuple)
 			reltuple->relkind == RELKIND_PARTITIONED_TABLE) &&
 		!IsCatalogRelationOid(relid) &&
 		reltuple->relpersistence == RELPERSISTENCE_PERMANENT &&
-		relid >= FirstNormalObjectId;
+		relid >= FirstNormalObjectId &&
+		/*
+		 * GPDB: append-optimized tables cannot be logically decoded; keep
+		 * them out of FOR ALL TABLES / FOR TABLES IN SCHEMA publications so
+		 * subscribers don't initial-sync tables that will never stream
+		 * changes.
+		 */
+		reltuple->relam != AO_ROW_TABLE_AM_OID &&
+		reltuple->relam != AO_COLUMN_TABLE_AM_OID;
 }
 
 /*

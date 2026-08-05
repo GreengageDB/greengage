@@ -1083,6 +1083,24 @@ DefineIndex(Oid tableId,
 			ValidateRelationVersionForUniqueIndex(rel);
 	}
 
+	/*
+	 * GPDB: exclusion constraints -- including temporal PRIMARY KEY / UNIQUE
+	 * ... WITHOUT OVERLAPS (PG18), which reuse the exclusion recheck -- are
+	 * enforced by scanning the index and fetching candidate rows with a
+	 * dirty snapshot.  An append-optimized fetch cannot see rows the current
+	 * command has inserted but not yet flushed, so two conflicting rows in
+	 * one statement would both be accepted, silently violating the
+	 * constraint.  (Btree uniqueness on AO takes a different, blockdir-based
+	 * path and is fine.)
+	 */
+	if (RelationIsAppendOptimized(rel) &&
+		(stmt->iswithoutoverlaps || stmt->excludeOpNames != NIL))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("append-optimized tables do not support %s constraints",
+						stmt->iswithoutoverlaps ? "WITHOUT OVERLAPS" : "exclusion"),
+				 errdetail("The constraint could not detect conflicting rows inserted by the same command.")));
+
 	amcanorder = amRoutine->amcanorder;
 	amoptions = amRoutine->amoptions;
 	amissummarizing = amRoutine->amsummarizing;
