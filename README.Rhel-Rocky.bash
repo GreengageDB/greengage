@@ -13,7 +13,7 @@ dnf -y install epel-release
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
 perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
-python_packages="python3.12 python3.12-devel python3.12-future"
+python_packages="python3.12 python3.12-devel"
 
 case "$OS_VERSION" in
     8)
@@ -86,6 +86,9 @@ dnf -y install \
 if [ -f /usr/bin/llvm-config-14 ] && [ ! -f /usr/bin/llvm-config ]; then
     ln -s /usr/bin/llvm-config-14 /usr/bin/llvm-config
 fi
+
+# 'future' is not available as a system package for python3.12
+python3 -m pip install --no-cache-dir future
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
