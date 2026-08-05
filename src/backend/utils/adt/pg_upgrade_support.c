@@ -101,7 +101,7 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 		key = (CreatedName) {0};
 		key.schema_oid = typeNamespace;
 		strlcpy(key.name, arr, NAMEDATALEN);
-		if (!hash_search(created_names, &key, HASH_FIND, NULL))
+		if (!created_names || !hash_search(created_names, &key, HASH_FIND, NULL))
 			break;
 
 		if (iteration >= NAMEDATALEN)
