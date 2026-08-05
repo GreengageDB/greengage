@@ -66,11 +66,10 @@ InitCreatedArrayNamesHash()
 static void
 RememberCreatedName(char *typname, Oid schema)
 {
-	CreatedName key;
+	/* Zero out padding bytes for HASH_BLOBS */
+	CreatedName key = {0};
 	if (created_names == NULL)
 		InitCreatedArrayNamesHash();
-	/* Zero out padding bytes for HASH_BLOBS */
-	MemSet(&key, 0, sizeof(CreatedName));
 	key.schema_oid = schema;
 	strlcpy(key.name, typname, NAMEDATALEN);
 	hash_search(created_names, &key, HASH_ENTER, NULL);
@@ -99,7 +98,7 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 		pfree(arr);
 		arr = new_arr;
 
-		MemSet(&key, 0, sizeof(CreatedName));
+		key = (CreatedName) {0};
 		key.schema_oid = typeNamespace;
 		strlcpy(key.name, arr, NAMEDATALEN);
 		if (!hash_search(created_names, &key, HASH_FIND, NULL))
@@ -127,7 +126,7 @@ makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
 Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {
-	CreatedName   key;
+	CreatedName   key = {0};
 	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
@@ -144,7 +143,6 @@ binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 	in_catalog = OidIsValid(old_type_oid);
 
 	oldctx = MemoryContextSwitchTo(TopMemoryContext);
-	MemSet(&key, 0, sizeof(CreatedName));
 	key.schema_oid = typnamespaceoid;
 	strlcpy(key.name, typname, NAMEDATALEN);
 	if (in_catalog || (created_names && hash_search(created_names, &key, HASH_FIND, NULL)))
