@@ -720,6 +720,7 @@ _readIndexStmt(void)
 	READ_BOOL_FIELD(nulls_not_distinct);
 	READ_BOOL_FIELD(primary);
 	READ_BOOL_FIELD(isconstraint);
+	READ_BOOL_FIELD(iswithoutoverlaps);
 	READ_BOOL_FIELD(deferrable);
 	READ_BOOL_FIELD(initdeferred);
 	READ_BOOL_FIELD(transformed);

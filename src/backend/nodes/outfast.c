@@ -2668,6 +2668,7 @@ _outIndexStmt(StringInfo str, const IndexStmt *node)
 	WRITE_BOOL_FIELD(nulls_not_distinct);
 	WRITE_BOOL_FIELD(primary);
 	WRITE_BOOL_FIELD(isconstraint);
+	WRITE_BOOL_FIELD(iswithoutoverlaps);
 	WRITE_BOOL_FIELD(deferrable);
 	WRITE_BOOL_FIELD(initdeferred);
 	WRITE_BOOL_FIELD(transformed);
