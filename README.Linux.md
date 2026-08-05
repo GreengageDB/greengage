@@ -47,7 +47,7 @@ then run command `ldconfig`.
 
    manually create ssh keys so you can do ssh localhost without a password, e.g., 
    
-   ```
+   ```bash
    ssh-keygen
    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
    chmod 600 ~/.ssh/authorized_keys
