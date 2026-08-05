@@ -112,6 +112,33 @@ merge into mao_tgt t using mao_src s on t.k = s.k
   when not matched then insert (k, v) values (s.k, s.v);
 select k, v from mao_tgt order by k;
 
+-- WHEN MATCHED / WHEN NOT MATCHED BY SOURCE actions need to fetch the
+-- target tuple by TID, which append-optimized tables cannot do.  They are
+-- rejected at executor startup, so the error is not data-dependent.
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert (k, v) values (s.k, s.v);
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then delete;
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when not matched by source then delete
+  when not matched then insert (k, v) values (s.k, s.v);
+-- even a DO NOTHING action with an empty source (no row can ever match)
+-- is rejected: the gate is static, not driven by which rows happen to
+-- match (before the gate this silently succeeded on an empty match set)
+create table mao_empty_src (k int, v int) distributed by (k);
+merge into mao_tgt t using mao_empty_src s on t.k = s.k
+  when matched then do nothing;
+-- column-oriented AO behaves identically
+create table maoco_tgt (k int, v int) using ao_column distributed by (k);
+insert into maoco_tgt select i, i from generate_series(1, 3) i;
+merge into maoco_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v;
+-- ... and INSERT-only MERGE still works on it
+merge into maoco_tgt t using mao_src s on t.k = s.k
+  when not matched then insert (k, v) values (s.k, s.v);
+select count(*) from maoco_tgt;
+
 -- ============================================================
 -- 8. PG15 enable_group_by_reordering (default on): the planner may
 --    reorder GROUP BY keys by ndistinct/sort cost.  The reordered

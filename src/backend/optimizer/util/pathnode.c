@@ -18,6 +18,7 @@
 
 #include <math.h>
 
+#include "catalog/pg_am.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "nodes/extensible.h"
@@ -5815,20 +5816,42 @@ create_modifytable_path(PlannerInfo *root, RelOptInfo *rel,
 	 * segment, which has the new tuple but not the old one, so RETURNING OLD
 	 * would silently come back NULL.  Reject it explicitly rather than return
 	 * wrong data.  (RETURNING NEW is fine and is left alone.)
+	 *
+	 * The same applies to an append-optimized result relation even without a
+	 * Split Update: AO tables cannot fetch the previous version of a row by
+	 * TID, so ExecModifyTable substitutes an all-NULL old slot.  That is fine
+	 * for computing the new tuple (the targetlist was expanded to all
+	 * columns), but RETURNING OLD would read those NULLs.
 	 */
 	if (operation == CMD_UPDATE && returningLists != NIL)
 	{
 		ListCell   *lcr;
 		ListCell   *lcs;
+		ListCell   *lcrr;
 
-		forboth(lcr, returningLists, lcs, is_split_updates)
+		forthree(lcr, returningLists, lcs, is_split_updates,
+				 lcrr, resultRelations)
 		{
-			if (lfirst_int(lcs) &&
-				split_update_returning_old_walker((Node *) lfirst(lcr), NULL))
+			Oid			relam;
+			RangeTblEntry *rte;
+
+			if (!split_update_returning_old_walker((Node *) lfirst(lcr), NULL))
+				continue;
+
+			if (lfirst_int(lcs))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("RETURNING OLD is not supported for an UPDATE that changes the distribution key"),
 						 errdetail("The updated row is moved between segments, so its previous values are not available.")));
+
+			rte = planner_rt_fetch(lfirst_int(lcrr), root);
+			relam = get_rel_relam(rte->relid);
+			if (relam == AO_ROW_TABLE_AM_OID || relam == AO_COLUMN_TABLE_AM_OID)
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("RETURNING OLD is not supported for an UPDATE on append-optimized table \"%s\"",
+								get_rel_name(rte->relid)),
+						 errdetail("Append-optimized tables cannot fetch the previous version of a row.")));
 		}
 	}
 

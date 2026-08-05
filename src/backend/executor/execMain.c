@@ -2098,7 +2098,27 @@ CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation,
 			 */
 			if (operation == CMD_MERGE)
 				foreach_node(MergeAction, action, mergeActions)
+				{
+					/*
+					 * GPDB: ExecMergeMatched must fetch the target tuple by
+					 * TID before evaluating any WHEN MATCHED / WHEN NOT
+					 * MATCHED BY SOURCE action (even DO NOTHING), and
+					 * append-optimized tables cannot fetch a row version by
+					 * TID.  Reject such actions here so the failure is not
+					 * data-dependent: the AM callback would only error once a
+					 * source row actually matched.  WHEN NOT MATCHED ... THEN
+					 * INSERT is plain insertion and remains allowed.
+					 */
+					if (action->matchKind != MERGE_WHEN_NOT_MATCHED_BY_TARGET &&
+						RelationIsAppendOptimized(resultRel))
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table \"%s\"",
+										RelationGetRelationName(resultRel)),
+								 errhint("Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.")));
+
 					CheckCmdReplicaIdentity(resultRel, action->commandType);
+				}
 			else
 				CheckCmdReplicaIdentity(resultRel, operation);
 

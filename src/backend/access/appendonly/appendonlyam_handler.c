@@ -808,15 +808,20 @@ appendonly_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 								CommandId cid, int options,
 								BulkInsertState bistate, uint32 specToken)
 {
- 	/* GPDB_12_MERGE_FIXME: not supported. Can this function be left out completely? Or ereport()? */
-	elog(ERROR, "speculative insertion not supported on AO tables");
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
+					RelationGetRelationName(relation))));
 }
 
 static void
 appendonly_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 								  uint32 specToken, bool succeeded)
 {
-	elog(ERROR, "speculative insertion not supported on AO tables");
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
+					RelationGetRelationName(relation))));
 }
 
 /*
@@ -923,8 +928,10 @@ appendonly_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 				  LockWaitPolicy wait_policy, uint8 flags,
 				  TM_FailureData *tmfd)
 {
- 	/* GPDB_12_MERGE_FIXME: not supported. Can this function be left out completely? Or ereport()? */
-	elog(ERROR, "speculative insertion not supported on AO tables");
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("row-level locking is not supported on append-optimized table \"%s\"",
+					RelationGetRelationName(relation))));
 }
 
 static void

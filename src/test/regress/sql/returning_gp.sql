@@ -48,6 +48,22 @@ CREATE TEMP TABLE returning_aotab (id int4) WITH (appendonly=true);
 INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
 
+--
+-- PG18 RETURNING OLD is not supported on AO tables: the previous row
+-- version cannot be fetched, so it is rejected at plan time (rather than
+-- silently returning NULLs).  RETURNING NEW and plain RETURNING work.
+--
+CREATE TEMP TABLE returning_ao_old (id int4, t text) WITH (appendonly=true) DISTRIBUTED BY (id);
+INSERT INTO returning_ao_old VALUES (1, 'a');
+UPDATE returning_ao_old SET t = 'b' RETURNING old.t, new.t;
+UPDATE returning_ao_old SET t = 'b' RETURNING new.t;
+UPDATE returning_ao_old SET t = 'c' RETURNING t;
+-- column-oriented AO behaves identically
+CREATE TEMP TABLE returning_aoco_old (id int4, t text) USING ao_column DISTRIBUTED BY (id);
+INSERT INTO returning_aoco_old VALUES (1, 'a');
+UPDATE returning_aoco_old SET t = 'b' RETURNING old.t;
+UPDATE returning_aoco_old SET t = 'b' RETURNING id, t;
+
 
 --
 -- Test UPDATE RETURNING with a split update, i.e. an update of the distribution

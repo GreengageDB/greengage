@@ -5398,6 +5398,23 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("deletes on append-only tables are not "
 								"supported in serializable transactions")));
+			else if (operation == CMD_MERGE)
+			{
+				/*
+				 * MERGE update/delete actions have the same visibility
+				 * problem.  (CheckValidResultRel currently rejects them on
+				 * AO tables regardless of isolation level; this keeps the
+				 * isolation gate correct if that restriction is lifted.)
+				 * INSERT-only MERGE remains allowed.
+				 */
+				foreach_node(MergeAction, action, mergeActions)
+					if (action->commandType == CMD_UPDATE ||
+						action->commandType == CMD_DELETE)
+						ereport(ERROR,
+								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								 errmsg("MERGE actions that update or delete rows on append-only tables are not "
+										"supported in serializable transactions")));
+			}
 		}
 
 		resultRelInfo++;

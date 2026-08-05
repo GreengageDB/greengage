@@ -203,6 +203,47 @@ select k, v from mao_tgt order by k;
  10 | 1000
 (10 rows)
 
+-- WHEN MATCHED / WHEN NOT MATCHED BY SOURCE actions need to fetch the
+-- target tuple by TID, which append-optimized tables cannot do.  They are
+-- rejected at executor startup, so the error is not data-dependent.
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v
+  when not matched then insert (k, v) values (s.k, s.v);
+ERROR:  WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table "mao_tgt"
+HINT:  Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when matched then delete;
+ERROR:  WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table "mao_tgt"
+HINT:  Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.
+merge into mao_tgt t using mao_src s on t.k = s.k
+  when not matched by source then delete
+  when not matched then insert (k, v) values (s.k, s.v);
+ERROR:  WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table "mao_tgt"
+HINT:  Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.
+-- even a DO NOTHING action with an empty source (no row can ever match)
+-- is rejected: the gate is static, not driven by which rows happen to
+-- match (before the gate this silently succeeded on an empty match set)
+create table mao_empty_src (k int, v int) distributed by (k);
+merge into mao_tgt t using mao_empty_src s on t.k = s.k
+  when matched then do nothing;
+ERROR:  WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table "mao_tgt"
+HINT:  Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.
+-- column-oriented AO behaves identically
+create table maoco_tgt (k int, v int) using ao_column distributed by (k);
+insert into maoco_tgt select i, i from generate_series(1, 3) i;
+merge into maoco_tgt t using mao_src s on t.k = s.k
+  when matched then update set v = s.v;
+ERROR:  WHEN MATCHED or WHEN NOT MATCHED BY SOURCE clauses of MERGE are not supported on append-optimized table "maoco_tgt"
+HINT:  Only WHEN NOT MATCHED ... THEN INSERT actions can be used with an append-optimized target table.
+-- ... and INSERT-only MERGE still works on it
+merge into maoco_tgt t using mao_src s on t.k = s.k
+  when not matched then insert (k, v) values (s.k, s.v);
+select count(*) from maoco_tgt;
+ count 
+-------
+    10
+(1 row)
+
 -- ============================================================
 -- 8. PG15 enable_group_by_reordering (default on): the planner may
 --    reorder GROUP BY keys by ndistinct/sort cost.  The reordered
@@ -284,7 +325,7 @@ select count(*) as strs from sao_t
 -- cleanup
 set search_path = public;
 drop schema merge_pg15 cascade;
-NOTICE:  drop cascades to 18 other objects
+NOTICE:  drop cascades to 20 other objects
 DETAIL:  drop cascades to table merge_pg15.w_rc
 drop cascades to table merge_pg15.m_tgt
 drop cascades to table merge_pg15.m_src
@@ -298,6 +339,8 @@ drop cascades to table merge_pg15.mp_tgt
 drop cascades to table merge_pg15.mp_src
 drop cascades to table merge_pg15.mao_tgt
 drop cascades to table merge_pg15.mao_src
+drop cascades to table merge_pg15.mao_empty_src
+drop cascades to table merge_pg15.maoco_tgt
 drop cascades to table merge_pg15.gbr
 drop cascades to table merge_pg15.un_d
 drop cascades to table merge_pg15.un_nd

@@ -105,6 +105,40 @@ INSERT INTO returning_aotab VALUES (1);
 DELETE FROM returning_aotab RETURNING *;
 ERROR:  feature not supported on appendoptimized relations  (seg1 slice1 172.17.0.3:7003 pid=1070004)
 --
+-- PG18 RETURNING OLD is not supported on AO tables: the previous row
+-- version cannot be fetched, so it is rejected at plan time (rather than
+-- silently returning NULLs).  RETURNING NEW and plain RETURNING work.
+--
+CREATE TEMP TABLE returning_ao_old (id int4, t text) WITH (appendonly=true) DISTRIBUTED BY (id);
+INSERT INTO returning_ao_old VALUES (1, 'a');
+UPDATE returning_ao_old SET t = 'b' RETURNING old.t, new.t;
+ERROR:  RETURNING OLD is not supported for an UPDATE on append-optimized table "returning_ao_old"
+DETAIL:  Append-optimized tables cannot fetch the previous version of a row.
+UPDATE returning_ao_old SET t = 'b' RETURNING new.t;
+ t 
+---
+ b
+(1 row)
+
+UPDATE returning_ao_old SET t = 'c' RETURNING t;
+ t 
+---
+ c
+(1 row)
+
+-- column-oriented AO behaves identically
+CREATE TEMP TABLE returning_aoco_old (id int4, t text) USING ao_column DISTRIBUTED BY (id);
+INSERT INTO returning_aoco_old VALUES (1, 'a');
+UPDATE returning_aoco_old SET t = 'b' RETURNING old.t;
+ERROR:  RETURNING OLD is not supported for an UPDATE on append-optimized table "returning_aoco_old"
+DETAIL:  Append-optimized tables cannot fetch the previous version of a row.
+UPDATE returning_aoco_old SET t = 'b' RETURNING id, t;
+ id | t 
+----+---
+  1 | b
+(1 row)
+
+--
 -- Test UPDATE RETURNING with a split update, i.e. an update of the distribution
 -- key.
 --
