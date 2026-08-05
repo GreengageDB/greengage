@@ -18,7 +18,6 @@ PL/Perl anonymous code block
 --
 \c -
 CREATE ROLE regress_plperl_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_plperl_user;
 -- this succeeds, since the GUC isn't known yet
 SET SESSION plperl.on_plperl_init = 'test';

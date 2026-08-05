@@ -3856,7 +3856,6 @@ END;
 REINDEX SCHEMA CONCURRENTLY schema_to_reindex;
 -- Failure for unauthorized user
 CREATE ROLE regress_reindexuser NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION ROLE regress_reindexuser;
 REINDEX SCHEMA schema_to_reindex;
 ERROR:  must be owner of schema schema_to_reindex

@@ -621,7 +621,6 @@ DROP TABLE mvtest_v CASCADE;
 NOTICE:  drop cascades to materialized view mvtest_mv_v
 -- make sure running as superuser works when MV owned by another role (bug #11208)
 CREATE ROLE regress_user_mvtest;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_user_mvtest;
 -- this test case also checks for ambiguity in the queries issued by
 -- refresh_by_match_merge(), by choosing column names that intentionally
@@ -722,7 +721,6 @@ drop table t_github_issue_11956;
 -- INSERT privileges if relation owner is not allowed to insert.
 CREATE SCHEMA matview_schema;
 CREATE USER regress_matview_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER DEFAULT PRIVILEGES FOR ROLE regress_matview_user
   REVOKE INSERT ON TABLES FROM regress_matview_user;
 GRANT ALL ON SCHEMA matview_schema TO public;

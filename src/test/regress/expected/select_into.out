@@ -24,7 +24,6 @@ DROP TABLE sitmp1;
 --
 CREATE SCHEMA selinto_schema;
 CREATE USER regress_selinto_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER DEFAULT PRIVILEGES FOR ROLE regress_selinto_user
 	  REVOKE INSERT ON TABLES FROM regress_selinto_user;
 GRANT ALL ON SCHEMA selinto_schema TO public;

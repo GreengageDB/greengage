@@ -2,13 +2,9 @@
 -- DEPENDENCIES
 --
 CREATE USER regress_dep_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE GROUP regress_dep_group;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE deptest (f1 serial primary key, f2 text) DISTRIBUTED BY (f1);
 GRANT SELECT ON TABLE deptest TO GROUP regress_dep_group;
 GRANT ALL ON TABLE deptest TO regress_dep_user, regress_dep_user2;
@@ -46,11 +42,8 @@ DROP TABLE deptest;
 DROP USER regress_dep_user3;
 -- Test DROP OWNED
 CREATE USER regress_dep_user0;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_dep_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_dep_user0;
 -- permission denied
 DROP OWNED BY regress_dep_user1;

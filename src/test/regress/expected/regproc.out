@@ -3,7 +3,6 @@
 --
 /* If objects exist, return oids */
 CREATE ROLE regress_regrole_test;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- without schemaname
 -- GPDB: Use -|- instead of ||/ in the test, because ||/ is not unique in GPDB
 -- (there's an extra ||/ operator for complex datatype)

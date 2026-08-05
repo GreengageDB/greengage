@@ -1020,9 +1020,7 @@ BEGIN;
 GRANT ALL ON TABLESPACE regress_tblspace TO PUBLIC;
 ROLLBACK;
 CREATE ROLE regress_tablespace_user1 login;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_tablespace_user2 login;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT USAGE ON SCHEMA testschema TO regress_tablespace_user2;
 ALTER TABLESPACE regress_tblspace OWNER TO regress_tablespace_user1;
 CREATE TABLE testschema.tablespace_acl (c int);

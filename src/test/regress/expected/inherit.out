@@ -3379,9 +3379,7 @@ drop table inh_nn1, inh_nn2;
 -- Mixed ownership inheritance tree
 --
 create role regress_alice;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create role regress_bob;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 grant all on schema public to regress_alice, regress_bob;
 grant regress_alice to regress_bob;
 set session authorization regress_alice;
@@ -4380,7 +4378,6 @@ insert into permtest_parent
   select 1, 'a', left(fipshash(i::text), 5) from generate_series(0, 100) i;
 analyze permtest_parent;
 create role regress_no_child_access;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 revoke all on permtest_grandchild from regress_no_child_access;
 NOTICE:  no privileges could be revoked
 grant select on permtest_parent to regress_no_child_access;

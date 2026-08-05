@@ -597,7 +597,6 @@ NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE vacowned_part2 PARTITION OF vacowned_parted FOR VALUES IN (2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE ROLE regress_vacuum;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_vacuum;
 -- Simple table
 VACUUM vacowned;

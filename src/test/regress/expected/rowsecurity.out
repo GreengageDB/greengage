@@ -17,19 +17,12 @@ DROP SCHEMA IF EXISTS regress_rls_schema CASCADE;
 SET client_min_messages TO 'notice';
 -- initial setup
 CREATE USER regress_rls_alice NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_rls_bob NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_rls_carol NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_rls_dave NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_rls_exempt_user BYPASSRLS NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_rls_group1 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_rls_group2 NOLOGIN;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT regress_rls_group1 TO regress_rls_bob;
 GRANT regress_rls_group2 TO regress_rls_carol;
 CREATE SCHEMA regress_rls_schema;
@@ -4314,9 +4307,7 @@ ROLLBACK;
 RESET SESSION AUTHORIZATION;
 BEGIN;
 CREATE ROLE regress_rls_eve;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_rls_frank;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE tbl1 (c) AS VALUES ('bar'::text);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'column1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -4773,9 +4764,7 @@ SELECT count(*) = 0 FROM pg_depend
 -- DROP OWNED BY testing
 RESET SESSION AUTHORIZATION;
 CREATE ROLE regress_rls_dob_role1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_rls_dob_role2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE dob_t1 (c1 int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'c1' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.

@@ -176,7 +176,6 @@ select rsqname, rsqcountlimit, rsqcostlimit, rsqovercommit, rsqignorecostlimit f
 CREATE ROLE aryan with LOGIN RESOURCE QUEUE sameera;
 -- ALTER Resource Queue
 ALTER ROLE aryan RESOURCE QUEUE none;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- select role, resource queue details from pg_roles and pg_resqueue tables
 SELECT rolname, rsqname FROM pg_roles AS r,pg_resqueue AS q WHERE r.rolresqueue=q.oid and rolname='aryan';
  rolname |  rsqname   

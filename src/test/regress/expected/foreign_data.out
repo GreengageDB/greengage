@@ -31,14 +31,10 @@ RESET client_min_messages;
 CREATE ROLE regress_foreign_data_user LOGIN SUPERUSER;
 SET SESSION AUTHORIZATION 'regress_foreign_data_user';
 CREATE ROLE regress_test_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_test_role2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_test_role_super SUPERUSER;
 CREATE ROLE regress_test_indirect;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_unprivileged_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE FOREIGN DATA WRAPPER dummy;
 COMMENT ON FOREIGN DATA WRAPPER dummy IS 'useless';
 CREATE FOREIGN DATA WRAPPER postgresql VALIDATOR postgresql_fdw_validator;

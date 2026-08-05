@@ -311,7 +311,6 @@ WHERE pg_class.oid=indexrelid
 CLUSTER pg_toast.pg_toast_826 USING pg_toast_826_index;
 -- Verify that clustering all tables does in fact cluster the right ones
 CREATE USER regress_clstr_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE clstr_1 (a INT PRIMARY KEY);
 CREATE TABLE clstr_2 (a INT PRIMARY KEY);
 CREATE TABLE clstr_3 (a INT PRIMARY KEY);
@@ -518,7 +517,6 @@ CREATE INDEX ptnowner_i_idx ON ptnowner(i);
 CREATE TABLE ptnowner1 PARTITION OF ptnowner FOR VALUES IN (1);
 NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE ROLE regress_ptnowner;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE ptnowner2 PARTITION OF ptnowner FOR VALUES IN (2);
 NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE ptnowner1 OWNER TO regress_ptnowner;

@@ -86,7 +86,6 @@ create event trigger regress_event_trigger2 on ddl_command_start
 comment on event trigger regress_event_trigger is 'test comment';
 -- drop as non-superuser should fail
 create role regress_evt_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 set role regress_evt_user;
 create event trigger regress_event_trigger_noperms on ddl_command_start
    execute procedure test_event_trigger();

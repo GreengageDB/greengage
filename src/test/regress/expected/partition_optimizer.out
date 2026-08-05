@@ -161,7 +161,6 @@ ALTER TABLE two_level_pt ALTER PARTITION FOR (1)
 ERROR:  child table is missing column "b"
 -- different owner 
 create role part_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table bar_p (i int, j int) distributed by (i);
 set session authorization part_role;
 -- should fail
@@ -252,7 +251,6 @@ select * from bar_d;
 drop table foo_p, bar_d;
 -- permissions
 create role part_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table foo_p (i int) partition by range(i) (start(1) end(10) every(1));
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -289,7 +287,6 @@ select has_table_privilege('part_role', 'bar_p'::regclass, 'select');
 
 -- the ONLY keyword will affect just the partition root for both grant/revoke
 create role part_role2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 grant select on only foo_p to part_role2;
 select has_table_privilege('part_role2', 'foo_p'::regclass, 'select');
  has_table_privilege 
@@ -1467,7 +1464,6 @@ LINE 2: end('f'::bool));
             ^
 -- see that grant and revoke cascade to children
 create role part_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table granttest (i int, j int) partition by range(i) 
 subpartition by list(j) subpartition template (values(1, 2, 3))
 (start(1) end(4) every(1));
@@ -2028,7 +2024,6 @@ drop table k;
 -- ADD and SPLIT must get inherit permissions of the partition they're
 -- modifying
 create role part_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create table a (a int, b int, c int) partition by range(a) subpartition by
 range(b) subpartition template (subpartition h start(1) end(10)) 
 subpartition by range(c)
@@ -6002,7 +5997,6 @@ NOTICE:  table "t_part_acl" does not exist, skipping
 DROP ROLE IF EXISTS user_prt_acl;
 NOTICE:  role "user_prt_acl" does not exist, skipping
 CREATE ROLE user_prt_acl;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO user_prt_acl;
 CREATE TABLE public.t_part_acl (dt date)
 PARTITION BY RANGE (dt)
@@ -6143,15 +6137,10 @@ DROP TABLE unexpanded_attach2;
 --
 -- set owner for partition root (should be inherited except for ATTACH, EXCHANGE)
 CREATE ROLE part_inherit_role CREATEROLE;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE part_inherit_other_role IN ROLE part_inherit_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE part_inherit_priv_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE part_inherit_attach_priv_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE part_inherit_exchange_out_priv_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE part_inherit_role;
 CREATE TABLE part_inherit (
     a int,

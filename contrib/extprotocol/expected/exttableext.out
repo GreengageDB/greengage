@@ -1558,7 +1558,6 @@ ERROR:  protocol attribute "validatorproc" not recognized
     -- Create a non-privileged user demoprot_nopriv
     drop role if exists demoprot_nopriv;
     create role demoprot_nopriv with login ;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- start_matchsubs
 -- m/^ERROR:  internal error: demoprot called with a different protocol \(demoprot_new\).*/
 -- s/^ERROR:  internal error: demoprot called with a different protocol \(demoprot_new\).*/ERROR:  internal error: demoprot called with a different protocol \(demoprot_new\)/

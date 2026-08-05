@@ -3,9 +3,7 @@
 --
 CREATE ROLE regress_publication_user LOGIN SUPERUSER;
 CREATE ROLE regress_publication_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_publication_user_dummy LOGIN NOSUPERUSER;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION 'regress_publication_user';
 -- suppress warning that depends on wal_level
 SET client_min_messages = 'ERROR';
@@ -1363,7 +1361,6 @@ DROP PUBLICATION testpub2;
 DROP PUBLICATION testpub3;
 SET ROLE regress_publication_user;
 CREATE ROLE regress_publication_user3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT regress_publication_user2 TO regress_publication_user3;
 SET client_min_messages = 'ERROR';
 CREATE PUBLICATION testpub4 FOR TABLES IN SCHEMA pub_test;

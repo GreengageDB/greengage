@@ -1357,11 +1357,8 @@ DETAIL:  drop cascades to view rw_view1
 drop cascades to function rw_view1_aa(rw_view1)
 -- permissions checks
 CREATE USER regress_view_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_view_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_view_user3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_view_user1;
 CREATE TABLE base_tbl(a int, b text, c float);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
@@ -4005,9 +4002,7 @@ drop view uv_iocu_view;
 drop table uv_iocu_tab;
 -- ON CONFLICT DO UPDATE permissions checks
 create user regress_view_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create user regress_view_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 set session authorization regress_view_user1;
 create table base_tbl(a int unique, b text, c float);
 insert into base_tbl values (1,'xxx',1.0);

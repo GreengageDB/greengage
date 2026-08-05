@@ -597,7 +597,6 @@ ALTER TABLE gtest10a DROP COLUMN b;
 INSERT INTO gtest10a (a) VALUES (1);
 -- privileges
 CREATE USER regress_user11;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE gtest11 (a int PRIMARY KEY, b int, c int GENERATED ALWAYS AS (b * 2) VIRTUAL);
 INSERT INTO gtest11 VALUES (1, 10), (2, 20);
 GRANT SELECT (a, c) ON gtest11 TO regress_user11;

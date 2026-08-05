@@ -515,7 +515,6 @@ ALTER TABLE itest7 ALTER COLUMN a RESTART;
 ALTER TABLE itest7 ALTER COLUMN a DROP IDENTITY;
 -- privileges
 CREATE USER regress_identity_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE itest8 (a int GENERATED ALWAYS AS IDENTITY, b text);
 GRANT SELECT, INSERT ON itest8 TO regress_identity_user1;
 SET ROLE regress_identity_user1;

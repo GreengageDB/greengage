@@ -39,6 +39,7 @@
 
 typedef enum
 {
+	RESOURCE_MANAGER_POLICY_NONE,			/* Do not use any resource manager*/
 	RESOURCE_MANAGER_POLICY_QUEUE,
 	RESOURCE_MANAGER_POLICY_GROUP,
 } ResourceManagerPolicy;

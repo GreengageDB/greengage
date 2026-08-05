@@ -5,9 +5,7 @@
 -- a non-superuser is allowed to install plperl (but not plperlu) when
 -- suitable permissions have been granted.
 CREATE USER regress_plperl_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_plperl_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_plperl_user1;
 CREATE EXTENSION plperl;  -- fail
 ERROR:  permission denied to create extension "plperl"

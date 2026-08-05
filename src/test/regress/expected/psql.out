@@ -3002,7 +3002,6 @@ Type                | func
 \pset expanded off
 CREATE SCHEMA tableam_display;
 CREATE ROLE regress_display_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER SCHEMA tableam_display OWNER TO regress_display_role;
 SET search_path TO tableam_display;
 CREATE ACCESS METHOD heap_psql TYPE TABLE HANDLER heap_tableam_handler;
@@ -5089,7 +5088,6 @@ reset debug_parallel_query;
 \unset FETCH_COUNT
 create schema testpart;
 create role regress_partitioning_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 alter schema testpart owner to regress_partitioning_role;
 set role to regress_partitioning_role;
 -- run test inside own schema and hide other partitions
@@ -6962,13 +6960,9 @@ cross-database references are not implemented: "no.such.database"."no.such.schem
 cross-database references are not implemented: "no.such.database"."no.such.schema"."no.such.extended.statistics"
 -- check \drg and \du
 CREATE ROLE regress_du_role0;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_du_role1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_du_role2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_du_admin;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT regress_du_role0 TO regress_du_admin WITH ADMIN TRUE;
 GRANT regress_du_role1 TO regress_du_admin WITH ADMIN TRUE;
 GRANT regress_du_role2 TO regress_du_admin WITH ADMIN TRUE;
@@ -7008,7 +7002,6 @@ DROP ROLE regress_du_admin;
 BEGIN;
 -- Create an owner for tested objects because output contains owner name.
 CREATE ROLE regress_zeropriv_owner;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET LOCAL ROLE regress_zeropriv_owner;
 CREATE DOMAIN regress_zeropriv_domain AS int;
 REVOKE ALL ON DOMAIN regress_zeropriv_domain FROM CURRENT_USER, PUBLIC;

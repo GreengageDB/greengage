@@ -6,7 +6,6 @@ SET client_min_messages TO 'warning';
 DROP ROLE IF EXISTS regress_addr_user;
 RESET client_min_messages;
 CREATE USER regress_addr_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- Test generic object addressing/identification functions
 CREATE SCHEMA addr_nsp;
 SET search_path TO 'addr_nsp';

@@ -3470,9 +3470,7 @@ drop function f();
 -- Test who runs deferred trigger functions
 -- setup
 create role regress_caller;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create role regress_fn_owner;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 create function whoami() returns trigger language plpgsql
 as $$
 begin

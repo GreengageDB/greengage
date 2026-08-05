@@ -5,7 +5,6 @@
 --
 -- All objects made in this test are in temp_func_test schema
 CREATE USER regress_unpriv_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE SCHEMA temp_func_test;
 GRANT ALL ON SCHEMA temp_func_test TO public;
 SET search_path TO temp_func_test, public;

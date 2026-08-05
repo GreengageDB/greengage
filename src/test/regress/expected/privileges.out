@@ -29,29 +29,18 @@ SELECT lo_unlink(oid) FROM pg_largeobject_metadata WHERE oid >= 1000 AND oid < 3
 RESET client_min_messages;
 -- test proper begins here
 CREATE USER regress_priv_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user4;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user5;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user5;	-- duplicate
 ERROR:  role "regress_priv_user5" already exists
 CREATE USER regress_priv_user6;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user7;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user8;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user9;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user10;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_priv_role;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- circular ADMIN OPTION grants should be disallowed
 GRANT regress_priv_user1 TO regress_priv_user2 WITH ADMIN OPTION;
 GRANT regress_priv_user1 TO regress_priv_user3 WITH ADMIN OPTION GRANTED BY regress_priv_user2;
@@ -128,15 +117,10 @@ DETAIL:  privileges for membership of role regress_priv_user6 in role regress_pr
 DROP ROLE regress_priv_user1, regress_priv_user5; -- ok, despite order
 -- recreate the roles we just dropped
 CREATE USER regress_priv_user1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user4;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE USER regress_priv_user5;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT pg_read_all_data TO regress_priv_user6;
 GRANT pg_write_all_data TO regress_priv_user7;
 GRANT pg_read_all_settings TO regress_priv_user8 WITH ADMIN OPTION;
@@ -237,9 +221,7 @@ DROP USER regress_priv_user10;
 DROP USER regress_priv_user9;
 DROP USER regress_priv_user8;
 CREATE GROUP regress_priv_group1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE GROUP regress_priv_group2 WITH ADMIN regress_priv_user1 USER regress_priv_user2;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 ALTER GROUP regress_priv_group1 ADD USER regress_priv_user4;
 GRANT regress_priv_group2 TO regress_priv_user2 GRANTED BY regress_priv_user1;
 SET SESSION AUTHORIZATION regress_priv_user3;
@@ -1949,7 +1931,6 @@ SELECT has_table_privilege('regress_priv_user1', 'atest4', 'SELECT WITH GRANT OP
 -- security-restricted operations
 \c -
 CREATE ROLE regress_sro_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- Check that index expressions and predicates are run as the table's owner
 -- A dummy index function checking current_user
 CREATE FUNCTION sro_ifun(int) RETURNS int AS $$
@@ -3214,7 +3195,6 @@ drop table dep_priv_test;
 -- security-restricted operations
 \c -
 CREATE ROLE regress_sro_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_sro_user;
 CREATE FUNCTION unwanted_grant() RETURNS void LANGUAGE sql AS
 	'GRANT regress_priv_group2 TO regress_sro_user';
@@ -3287,7 +3267,6 @@ DROP ROLE regress_sro_user;
 -- we give superuser to our unprivileged user on segments (not on coordinator node).
 \c -
 CREATE ROLE regress_sro_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET SESSION AUTHORIZATION regress_sro_user;
 CREATE TABLE executor (s varchar) DISTRIBUTED REPLICATED;
 CREATE TABLE trap (a int) WITH(appendonly = true) DISTRIBUTED REPLICATED;
@@ -3398,7 +3377,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE pg_read_all_settings
 	REVOKE USAGE ON TYPES FROM pg_read_all_settings;
 -- permissions with LOCK TABLE
 CREATE USER regress_locktable_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE lock_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -3497,7 +3475,6 @@ DROP USER regress_locktable_user;
 -- switch to superuser
 \c -
 CREATE ROLE regress_readallstats;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SELECT has_table_privilege('regress_readallstats','pg_aios','SELECT'); -- no
  has_table_privilege 
 ---------------------
@@ -3572,13 +3549,9 @@ RESET ROLE;
 DROP ROLE regress_readallstats;
 -- test role grantor machinery
 CREATE ROLE regress_group;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_group_direct_manager;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_group_indirect_manager;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_group_member;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT regress_group TO regress_group_direct_manager WITH INHERIT FALSE, ADMIN TRUE;
 GRANT regress_group_direct_manager TO regress_group_indirect_manager;
 SET SESSION AUTHORIZATION regress_group_direct_manager;
@@ -3608,11 +3581,8 @@ DROP ROLE regress_group_indirect_manager;
 DROP ROLE regress_group_member;
 -- test SET and INHERIT options with object ownership changes
 CREATE ROLE regress_roleoption_protagonist;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_roleoption_donor;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_roleoption_recipient;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE SCHEMA regress_roleoption;
 GRANT CREATE, USAGE ON SCHEMA regress_roleoption TO PUBLIC;
 GRANT regress_roleoption_donor TO regress_roleoption_protagonist WITH INHERIT TRUE, SET FALSE;
@@ -3650,11 +3620,8 @@ DROP ROLE regress_roleoption_donor;
 DROP ROLE regress_roleoption_recipient;
 -- MAINTAIN
 CREATE ROLE regress_no_maintain;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_maintain;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_maintain_all IN ROLE pg_maintain;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE maintain_test (a INT);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
@@ -3713,11 +3680,8 @@ DROP ROLE regress_maintain;
 DROP ROLE regress_maintain_all;
 -- grantor selection
 CREATE ROLE regress_grantor1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_grantor2 ROLE regress_grantor1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_grantor3;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE TABLE grantor_test1 ();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
 CREATE TABLE grantor_test2 ();

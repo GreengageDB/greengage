@@ -611,7 +611,6 @@ ERROR:  cannot execute setval() in a read-only transaction
 ROLLBACK;
 -- privileges tests
 CREATE USER regress_seq_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 -- nextval
 BEGIN;
 SET LOCAL SESSION AUTHORIZATION regress_seq_user;

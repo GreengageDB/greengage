@@ -1,7 +1,6 @@
 -- Test maintenance commands that visit every eligible relation.  Run as a
 -- non-superuser, to skip other users' tables.
 CREATE ROLE regress_maintain;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 SET ROLE regress_maintain;
 -- Test database-wide ANALYZE ("use_own_xacts" mode) setting relhassubclass=f
 -- for non-partitioning inheritance, w/ ON COMMIT DELETE ROWS building an

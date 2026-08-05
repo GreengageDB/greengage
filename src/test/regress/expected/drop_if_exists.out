@@ -67,11 +67,8 @@ ERROR:  type "test_domain_exists" does not exist
 --- role/user/group
 ---
 CREATE USER regress_test_u1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE ROLE regress_test_r1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE GROUP regress_test_g1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP USER regress_test_u2;
 ERROR:  role "regress_test_u2" does not exist
 DROP USER IF EXISTS regress_test_u1, regress_test_u2;

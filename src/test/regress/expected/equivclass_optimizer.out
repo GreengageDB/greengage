@@ -439,7 +439,6 @@ set enable_mergejoin = off;
 alter table ec1 enable row level security;
 create policy p1 on ec1 using (f1 < '5'::int8alias1);
 create user regress_user_ectest;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 grant select on ec0 to regress_user_ectest;
 grant select on ec1 to regress_user_ectest;
 -- without any RLS, we'll treat {a.ff, b.ff, 43} as an EquivalenceClass

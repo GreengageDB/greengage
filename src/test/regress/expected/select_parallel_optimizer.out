@@ -1157,7 +1157,6 @@ DROP function make_record(n int);
 drop role if exists regress_parallel_worker;
 NOTICE:  role "regress_parallel_worker" does not exist, skipping
 create role regress_parallel_worker;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 set role regress_parallel_worker;
 reset session authorization;
 drop role regress_parallel_worker;

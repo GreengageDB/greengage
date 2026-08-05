@@ -1317,7 +1317,6 @@ drop table mpp4582;
 -- commands don't vary depending on current user.
 DROP USER IF EXISTS mpp3641_user;
 CREATE USER mpp3641_user;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT ALL ON SCHEMA bfv_partition TO mpp3641_user;
 SET ROLE mpp3641_user;
 CREATE TABLE mpp3641a (
@@ -3021,10 +3020,8 @@ select relid, level, pg_get_expr(template, relid) from gp_partition_template whe
 --
 DROP ROLE IF EXISTS part_acl_owner;
 CREATE ROLE part_acl_owner;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 DROP ROLE IF EXISTS part_acl_u1;
 CREATE ROLE part_acl_u1;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 GRANT ALL ON SCHEMA bfv_partition to part_acl_owner;
 SET ROLE part_acl_owner;
 CREATE TABLE part_acl_test (id int4) PARTITION BY LIST (id) (PARTITION p1 VALUES (1));

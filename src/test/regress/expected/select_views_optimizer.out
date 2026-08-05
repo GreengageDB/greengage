@@ -1251,7 +1251,6 @@ SELECT * FROM toyemp WHERE name = 'sharon';
 -- Test for Leaky view scenario
 --
 CREATE ROLE regress_alice;
-NOTICE:  resource queue required -- using default resource queue "pg_default"
 CREATE FUNCTION f_leak (text)
        RETURNS bool LANGUAGE 'plpgsql' COST 0.0000001
        AS 'BEGIN RAISE NOTICE ''f_leak => %'', $1; RETURN true; END';
