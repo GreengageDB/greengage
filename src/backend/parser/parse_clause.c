@@ -308,6 +308,27 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 		setup_parser_errposition_callback(&pcbstate, pstate, relation->location);
 		pstate->p_target_relation = table_openrv(relation, RowExclusiveLock);
 		cancel_parser_errposition_callback(&pcbstate);
+
+		/*
+		 * GPDB: INSERT ... ON CONFLICT DO NOTHING on an append-optimized
+		 * table must serialize concurrent writers just like DO UPDATE:
+		 * concurrent AO inserts go to separate segment files and there is
+		 * no real speculative-insertion protocol, so without the
+		 * ExclusiveLock two sessions could both pass the arbiter pre-check
+		 * and insert the same key.  Close and reopen with the upgraded
+		 * lock (the same dance, including the benign drop race, as
+		 * CdbTryOpenTable does for AO UPDATE/DELETE).
+		 */
+		if (pstate->p_has_on_conflict &&
+			Gp_role == GP_ROLE_DISPATCH &&
+			RelationIsAppendOptimized(pstate->p_target_relation))
+		{
+			Oid			relid = RelationGetRelid(pstate->p_target_relation);
+
+			table_close(pstate->p_target_relation, RowExclusiveLock);
+			pstate->p_target_relation = table_open(relid, ExclusiveLock);
+			lockUpgraded = true;
+		}
 	}
 	else
 	{

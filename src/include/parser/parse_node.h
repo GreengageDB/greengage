@@ -234,6 +234,7 @@ struct ParseState
 	bool		p_hasModifyingCTE;
 	Node	   *p_last_srf;		/* most recent set-returning func/op found */
 	bool        p_is_on_conflict_update;
+	bool        p_has_on_conflict;	/* INSERT has any ON CONFLICT clause */
 	bool        p_canOptSelectLockingClause; /* Whether can do some optimization on select with locking clause */
 	LockingClause *p_lockclause_from_parent;
 

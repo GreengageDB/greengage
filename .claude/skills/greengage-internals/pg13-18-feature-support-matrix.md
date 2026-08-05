@@ -12,10 +12,10 @@ Most gaps trace to a handful of stubbed tableam callbacks in `appendonlyam_handl
 
 | callback | behavior | breaks |
 |---|---|---|
-| `tuple_fetch_row_version` | ereport "feature not supported on appendoptimized relations" | MERGE MATCHED, DELETE RETURNING, RETURNING OLD, EvalPlanQual refetch, ON CONFLICT DO UPDATE |
-| `tuple_lock` | bare elog (copy-pasted "speculative insertion" text) | MERGE TM_Updated retry, ON CONFLICT DO UPDATE, LockRows (unreached — parse-time degrade) |
-| `tuple_insert_speculative` / `tuple_complete_speculative` | bare elog | ON CONFLICT with any arbiter index |
-| `tuple_satisfies_snapshot` | ereport | ExecCheckTupleVisible (ON CONFLICT under RR/SSI) |
+| `tuple_fetch_row_version` | ereport "feature not supported on appendoptimized relations" | DELETE RETURNING, EvalPlanQual refetch (MERGE MATCHED and RETURNING OLD now avoid it via the wholerow junk column) |
+| `tuple_lock` | ✅ implemented: AO fetch by TID (needs arbiter blockdir; ExclusiveLock makes row locks moot) | — (LockRows still unreached — parse-time degrade) |
+| `tuple_insert_speculative` / `tuple_complete_speculative` | ✅ implemented: plain insert / visimap-delete kill | — |
+| `tuple_satisfies_snapshot` | ereport | ExecCheckTupleVisible (ON CONFLICT under RR/SSI — gated) |
 | `scan_set_tidrange` (absent) | planner never builds TidRangeScan | ctid range quals degrade to seqscan filter |
 
 Key structural facts:
@@ -74,7 +74,7 @@ Adjacent pre-PG13 features re-audited because MERGE/RETURNING paths lean on them
 
 | Feature | AO/AOCS status |
 |---|---|
-| ON CONFLICT (any arbiter) | 💥 bare elog "speculative insertion not supported" from AM stub; no early gate, no errcode |
+| ON CONFLICT (any arbiter) | ✅ **implemented** — check-then-insert under the ExclusiveLock upgrade (see disposition 2) |
 | SELECT … FOR UPDATE | degraded by design: parse-time ExclusiveLock table lock, no LockRows |
 | WHERE CURRENT OF | 🚫 "is not simply updatable" |
 | Row UPDATE/DELETE triggers | 🚫 rejected at CREATE TRIGGER |
@@ -111,12 +111,32 @@ The old tuple is carried through the plan instead of fetched by TID (which would
 - Follow-up left open: `DELETE … RETURNING` on AO (same wholerow route would work; today it
   errors via the AM callback), and cross-partition MERGE + RETURNING OLD (errors via AM callback).
 
-### 2. Implementable on AO — ON CONFLICT
+### 2. ✅ IMPLEMENTED on AO — ON CONFLICT (DO NOTHING and DO UPDATE)
 
-Feasible because the pieces line up: an arbiter requires a unique index ⇒ blockdir exists ⇒ TID
-fetch possible; the ExclusiveLock upgrade serializes writers ⇒ the speculative protocol
-degenerates to check-then-insert (`index_fetch_tuple_exists` is already the AO unique check);
-`tuple_lock` can be fetch-and-return. Until then the stubs should ereport properly.
+The pieces lined up as predicted: arbiter unique index ⇒ blockdir exists ⇒ TID fetch possible;
+ExclusiveLock serialization ⇒ speculative protocol degenerates to check-then-insert.
+
+- `tuple_insert_speculative` = plain insert; `tuple_complete_speculative(false)` = visimap-delete
+  (defensive; unreachable under the lock); `tuple_lock` = per-call AO fetch by TID —
+  **ExecMaterializeSlot before tearing the fetch descriptor down** (the datums point into its
+  buffers; freeing first yields 0x7F-clobber garbage in `SET ... = oca.col` / RETURNING OLD).
+- Invisible-under-snapshot lock target ⇒ TM_Invisible ⇒ ExecOnConflictUpdate's AO branch raises
+  the cardinality violation directly (AO slots have no xmin syscolumn to inspect).
+- `setTargetTable()` upgrades ANY ON CONFLICT on an AO target to ExclusiveLock (new
+  `p_has_on_conflict` ParseState flag): concurrent AO inserts use separate segfiles, so DO
+  NOTHING without the lock could double-insert a key.  Verified via pg_locks.
+- **Pre-check fix in `check_exclusion_or_unique_constraint()`**: the fetch-based dirty scan
+  cannot see rows the current command buffered but not yet flushed — ON CONFLICT would loop
+  forever inserting+killing the same tuple.  AO unique constraints use an existence-only scan
+  (`index_getnext_tid` + `table_index_fetch_tuple_exists`, the blockdir-placeholder machinery).
+- **Descriptor-ordering fix in `get_or_create_unique_check_desc()`** (both AMs): when the delete
+  descriptor appears after the unique-check descriptor (pre-check runs before the DO UPDATE's
+  delete), rebind the visimap to the delete half's — otherwise same-command deletes are missed
+  and the update's re-insert raises spurious unique violations.
+- ON CONFLICT on AO under RR/SSI is gated (visimap cannot answer `tuple_satisfies_snapshot`).
+- Tests: `gp_on_conflict_ao` (regress, both AMs: DO NOTHING/DO UPDATE, EXCLUDED + existing refs,
+  RETURNING OLD/NEW, same-command dups ⇒ cardinality, serializable gate), isolation2
+  `on_conflict_ao` (concurrent serialization).
 
 ### 3. Test-first (unknown correctness)
 

@@ -405,6 +405,23 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 		state->uniqueCheckDesc = uniqueCheckDesc;
 		MemoryContextSwitchTo(oldcxt);
 	}
+	else if (state->deleteDesc &&
+			 state->uniqueCheckDesc->visimap != &state->deleteDesc->visibilityMap)
+	{
+		/*
+		 * A delete descriptor appeared after the unique-check descriptor was
+		 * created -- INSERT ... ON CONFLICT DO UPDATE does this: the arbiter
+		 * pre-check runs (creating this descriptor) before the conflicting
+		 * row is updated (creating the delete descriptor).  Switch to the
+		 * delete half's visimap so that tuples deleted earlier in this
+		 * command are recognized as dead; our own visimap cannot see the
+		 * delete descriptor's in-memory dirty list and would raise spurious
+		 * unique violations for the old row versions.
+		 */
+		AppendOnlyVisimap_Finish_forUniquenessChecks(state->uniqueCheckDesc->visimap);
+		pfree(state->uniqueCheckDesc->visimap);
+		state->uniqueCheckDesc->visimap = &state->deleteDesc->visibilityMap;
+	}
 
 	return state->uniqueCheckDesc;
 }
@@ -803,25 +820,42 @@ appendonly_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	appendonly_free_memtuple(mtuple);
 }
 
+/*
+ * "Speculative" insertion on an append-optimized table.
+ *
+ * GPDB serializes concurrent writers of an AO table with an ExclusiveLock
+ * upgrade on the QD (CdbTryOpenTable; the parser requests it for any
+ * INSERT ... ON CONFLICT targeting an AO table -- see setTargetTable()), so
+ * the window the heap speculative-insertion protocol closes -- a concurrent
+ * session inserting a conflicting key between ExecCheckIndexConstraints()
+ * and the index insertion -- cannot occur.  A plain insert therefore
+ * implements the contract; the speculative token is ignored.
+ */
 static void
 appendonly_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 								CommandId cid, int options,
 								BulkInsertState bistate, uint32 specToken)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	appendonly_tuple_insert(relation, slot, cid, options, bistate);
 }
 
+/*
+ * Finish "speculative" insertion: on success there is nothing to do.  The
+ * failure path -- a conflict detected during index insertion -- should be
+ * unreachable under the ExclusiveLock serialization, but honor the contract
+ * anyway by marking the just-inserted tuple deleted through the visimap.
+ */
 static void
 appendonly_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 								  uint32 specToken, bool succeeded)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	if (!succeeded)
+	{
+		AppendOnlyDeleteDesc deleteDesc;
+
+		deleteDesc = get_or_create_delete_descriptor(relation, false);
+		(void) appendonly_delete(deleteDesc, (AOTupleId *) &slot->tts_tid);
+	}
 }
 
 /*
@@ -922,16 +956,56 @@ appendonly_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slo
 	return result;
 }
 
+/*
+ * "Lock" a tuple of an append-optimized table.
+ *
+ * There is nothing to lock at row level: concurrent AO writers are
+ * serialized by the ExclusiveLock upgrade on the QD, so fetching the row
+ * into the slot is sufficient.  This is only reachable from INSERT ... ON
+ * CONFLICT DO UPDATE (ExecOnConflictUpdate); the arbiter unique index
+ * guarantees the block directory needed to fetch by TID exists.  The fetch
+ * descriptor is built per call: conflicting rows are the exception path.
+ */
 static TM_Result
 appendonly_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 				  TupleTableSlot *slot, CommandId cid, LockTupleMode mode,
 				  LockWaitPolicy wait_policy, uint8 flags,
 				  TM_FailureData *tmfd)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("row-level locking is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	AppendOnlyFetchDesc aofetch;
+	Snapshot	metaSnapshot;
+
+	metaSnapshot = snapshot;
+	if (metaSnapshot == SnapshotAny)
+		metaSnapshot = GetTransactionSnapshot();
+
+	aofetch = appendonly_fetch_init(relation, snapshot, metaSnapshot);
+	appendonly_fetch(aofetch, (AOTupleId *) tid, slot);
+
+	/*
+	 * The fetched datums point into the fetch descriptor's buffers; copy
+	 * them into slot-private storage before tearing the descriptor down.
+	 */
+	if (!TupIsNull(slot))
+		ExecMaterializeSlot(slot);
+	appendonly_fetch_finish(aofetch);
+	pfree(aofetch);
+
+	if (TupIsNull(slot))
+	{
+		/*
+		 * The caller found this TID via a dirty-snapshot index check, but
+		 * the tuple is not visible to the given snapshot.  Under the
+		 * ExclusiveLock serialization that means it was inserted or
+		 * replaced by the current command (e.g. two rows with the same
+		 * conflicting key proposed in one command).  ExecOnConflictUpdate
+		 * turns TM_Invisible into the cardinality-violation error.
+		 */
+		return TM_Invisible;
+	}
+
+	slot->tts_tableOid = RelationGetRelid(relation);
+	return TM_Ok;
 }
 
 static void

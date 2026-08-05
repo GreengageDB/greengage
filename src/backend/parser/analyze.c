@@ -750,6 +750,7 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	qry->commandType = CMD_INSERT;
 	pstate->p_is_insert = true;
 	pstate->p_is_on_conflict_update = false;
+	pstate->p_has_on_conflict = false;
 
 	/* process the WITH clause independently of all else */
 	if (stmt->withClause)
@@ -821,9 +822,11 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 	 * Greengage specific behavior.
 	 * conflict update may lock tuples on segments and behaves like
 	 * update. So we might consider if to upgrade lockmode for this
-	 * case.
+	 * case.  ON CONFLICT DO NOTHING needs the upgrade too, but only on an
+	 * append-optimized target (see setTargetTable()).
 	 */
 	pstate->p_is_on_conflict_update = isOnConflictUpdate;
+	pstate->p_has_on_conflict = (stmt->onConflictClause != NULL);
 
 	/*
 	 * Must get write lock on INSERT target table before scanning SELECT, else

@@ -3147,7 +3147,21 @@ ExecOnConflictUpdate(ModifyTableContext *context,
 			 * occurring.  These problems are why the SQL standard similarly
 			 * specifies that for SQL MERGE, an exception must be raised in
 			 * the event of an attempt to update the same row twice.
+			 *
+			 * GPDB: an append-optimized slot has no xmin system column, and
+			 * under the ExclusiveLock serialization of AO writers an
+			 * invisible conflict row can only have been inserted by the
+			 * current command -- so on AO this is always the
+			 * cardinality-violation case.
 			 */
+			if (RelationIsAppendOptimized(relation))
+				ereport(ERROR,
+						(errcode(ERRCODE_CARDINALITY_VIOLATION),
+				/* translator: %s is a SQL command name */
+						 errmsg("%s command cannot affect row a second time",
+								"ON CONFLICT DO UPDATE"),
+						 errhint("Ensure that no rows proposed for insertion within the same command have duplicate constrained values.")));
+
 			xminDatum = slot_getsysattr(existing,
 										MinTransactionIdAttributeNumber,
 										&isnull);
@@ -5464,10 +5478,7 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 			{
 				/*
 				 * MERGE update/delete actions have the same visibility
-				 * problem.  (CheckValidResultRel currently rejects them on
-				 * AO tables regardless of isolation level; this keeps the
-				 * isolation gate correct if that restriction is lifted.)
-				 * INSERT-only MERGE remains allowed.
+				 * problem.  INSERT-only MERGE remains allowed.
 				 */
 				foreach_node(MergeAction, action, mergeActions)
 					if (action->commandType == CMD_UPDATE ||
@@ -5476,6 +5487,20 @@ ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
 								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								 errmsg("MERGE actions that update or delete rows on append-only tables are not "
 										"supported in serializable transactions")));
+			}
+			else if (operation == CMD_INSERT &&
+					 node->onConflictAction != ONCONFLICT_NONE)
+			{
+				/*
+				 * ON CONFLICT needs tuple_satisfies_snapshot for its
+				 * conflicting-tuple visibility recheck under a fixed
+				 * transaction snapshot, which the AO visimap cannot answer;
+				 * DO UPDATE additionally updates rows.
+				 */
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("INSERT ... ON CONFLICT on append-only tables is not "
+								"supported in serializable transactions")));
 			}
 		}
 

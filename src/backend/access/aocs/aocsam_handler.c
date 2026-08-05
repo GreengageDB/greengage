@@ -458,6 +458,23 @@ get_or_create_unique_check_desc(Relation relation, Snapshot snapshot)
 		state->uniqueCheckDesc = uniqueCheckDesc;
 		MemoryContextSwitchTo(oldcxt);
 	}
+	else if (state->deleteDesc &&
+			 state->uniqueCheckDesc->visimap != &state->deleteDesc->visibilityMap)
+	{
+		/*
+		 * A delete descriptor appeared after the unique-check descriptor was
+		 * created -- INSERT ... ON CONFLICT DO UPDATE does this: the arbiter
+		 * pre-check runs (creating this descriptor) before the conflicting
+		 * row is updated (creating the delete descriptor).  Switch to the
+		 * delete half's visimap so that tuples deleted earlier in this
+		 * command are recognized as dead; our own visimap cannot see the
+		 * delete descriptor's in-memory dirty list and would raise spurious
+		 * unique violations for the old row versions.
+		 */
+		AppendOnlyVisimap_Finish_forUniquenessChecks(state->uniqueCheckDesc->visimap);
+		pfree(state->uniqueCheckDesc->visimap);
+		state->uniqueCheckDesc->visimap = &state->deleteDesc->visibilityMap;
+	}
 
 	return state->uniqueCheckDesc;
 }
@@ -950,25 +967,38 @@ aoco_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	pgstat_count_heap_insert(relation, 1);
 }
 
+/*
+ * "Speculative" insertion on an append-optimized column-oriented table.
+ *
+ * See appendonly_tuple_insert_speculative(): the ExclusiveLock upgrade on
+ * the QD serializes concurrent AO writers, so a plain insert implements the
+ * contract and the speculative token is ignored.
+ */
 static void
 aoco_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
                                     CommandId cid, int options,
                                     BulkInsertState bistate, uint32 specToken)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	aoco_tuple_insert(relation, slot, cid, options, bistate);
 }
 
+/*
+ * Finish "speculative" insertion: on success there is nothing to do.  The
+ * failure path should be unreachable under the ExclusiveLock serialization,
+ * but honor the contract anyway by marking the just-inserted tuple deleted
+ * through the visimap.
+ */
 static void
 aoco_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
                                       uint32 specToken, bool succeeded)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("ON CONFLICT is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	if (!succeeded)
+	{
+		AOCSDeleteDesc deleteDesc;
+
+		deleteDesc = get_or_create_delete_descriptor(relation, false);
+		(void) aocs_delete(deleteDesc, (AOTupleId *) &slot->tts_tid);
+	}
 }
 
 /*
@@ -1064,16 +1094,60 @@ aoco_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	return result;
 }
 
+/*
+ * "Lock" a tuple of an append-optimized column-oriented table.
+ *
+ * See appendonly_tuple_lock(): nothing to lock at row level (the
+ * ExclusiveLock upgrade serializes writers); fetch the row into the slot.
+ * Only reachable from INSERT ... ON CONFLICT DO UPDATE, whose arbiter
+ * unique index guarantees the block directory exists.
+ */
 static TM_Result
 aoco_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
                       TupleTableSlot *slot, CommandId cid, LockTupleMode mode,
                       LockWaitPolicy wait_policy, uint8 flags,
                       TM_FailureData *tmfd)
 {
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			 errmsg("row-level locking is not supported on append-optimized table \"%s\"",
-					RelationGetRelationName(relation))));
+	AOCSFetchDesc aocofetch;
+	Snapshot	metaSnapshot;
+	bool	   *proj;
+	int			natts;
+	bool		found;
+
+	metaSnapshot = snapshot;
+	if (metaSnapshot == SnapshotAny)
+		metaSnapshot = GetTransactionSnapshot();
+
+	natts = RelationGetNumberOfAttributes(relation);
+	proj = palloc(natts * sizeof(*proj));
+	MemSet(proj, true, natts * sizeof(*proj));
+
+	aocofetch = aocs_fetch_init(relation, snapshot, metaSnapshot, proj);
+	ExecClearTuple(slot);
+	found = aocs_fetch(aocofetch, (AOTupleId *) tid, slot);
+	if (found)
+	{
+		/*
+		 * The fetched datums point into the fetch descriptor's buffers;
+		 * copy them into slot-private storage before tearing the
+		 * descriptor down.
+		 */
+		ExecStoreVirtualTuple(slot);
+		ExecMaterializeSlot(slot);
+	}
+	aocs_fetch_finish(aocofetch);
+	pfree(aocofetch);
+	pfree(proj);
+
+	if (!found)
+	{
+		/* see appendonly_tuple_lock(): same-command conflict */
+		return TM_Invisible;
+	}
+
+	slot->tts_tid = *tid;
+	slot->tts_tableOid = RelationGetRelid(relation);
+	return TM_Ok;
 }
 
 static void

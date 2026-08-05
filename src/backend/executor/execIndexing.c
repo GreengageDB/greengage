@@ -834,6 +834,87 @@ retry:
 	index_scan = index_beginscan(heap, index, &DirtySnapshot, NULL, indnkeyatts, 0);
 	index_rescan(index_scan, scankeys, indnkeyatts, NULL, 0);
 
+	/*
+	 * GPDB: an append-optimized fetch cannot see rows the current command has
+	 * inserted but not yet flushed to disk, so the fetch-based loop below
+	 * would miss them -- ON CONFLICT's pre-check would then loop forever
+	 * inserting and speculatively killing the same tuple.  For a unique
+	 * constraint no value recheck against the fetched tuple is needed (the
+	 * btree entry's keys are exact; AO has no HOT chains), so existence and
+	 * visibility can be answered by the same block-directory/visimap check
+	 * that _bt_check_unique() uses, which does see in-flight rows through
+	 * the placeholder block-directory entry.
+	 */
+	if (RelationIsAppendOptimized(heap) && !indexInfo->ii_ExclusionOps)
+	{
+		ItemPointer tid;
+
+		while ((tid = index_getnext_tid(index_scan, ForwardScanDirection)) != NULL)
+		{
+			TransactionId xwait;
+			char	   *error_new;
+
+			/*
+			 * Ignore the entry for the tuple we're trying to check.
+			 */
+			if (ItemPointerIsValid(tupleid) &&
+				ItemPointerEquals(tupleid, tid))
+			{
+				if (found_self)	/* should not happen */
+					elog(ERROR, "found self tuple multiple times in index \"%s\"",
+						 RelationGetRelationName(index));
+				found_self = true;
+				continue;
+			}
+
+			DirtySnapshot.xmin = InvalidTransactionId;
+			DirtySnapshot.xmax = InvalidTransactionId;
+			if (!table_index_fetch_tuple_exists(heap, tid, &DirtySnapshot, NULL))
+				continue;		/* dead to everyone */
+
+			/*
+			 * As in the loop below: if an in-progress transaction affects
+			 * the visibility of this tuple, wait for it and restart.  (With
+			 * AO writers serialized by the ExclusiveLock upgrade this is
+			 * only reachable in utility mode.)
+			 */
+			xwait = TransactionIdIsValid(DirtySnapshot.xmin) ?
+				DirtySnapshot.xmin : DirtySnapshot.xmax;
+
+			if (TransactionIdIsValid(xwait) && waitMode == CEOUC_WAIT)
+			{
+				index_endscan(index_scan);
+				XactLockTableWait(xwait, heap, tid, XLTW_InsertIndex);
+				goto retry;
+			}
+
+			if (violationOK)
+			{
+				conflict = true;
+				if (conflictTid)
+					*conflictTid = *tid;
+				break;
+			}
+
+			error_new = BuildIndexValueDescription(index, values, isnull);
+			ereport(ERROR,
+					(errcode(ERRCODE_UNIQUE_VIOLATION),
+					 errmsg("duplicate key value violates unique constraint \"%s\"",
+							RelationGetRelationName(index)),
+					 error_new ? errdetail("Key %s already exists.", error_new) :
+					 errdetail("Key already exists."),
+					 errtableconstraint(heap,
+										RelationGetRelationName(index))));
+		}
+
+		index_endscan(index_scan);
+
+		econtext->ecxt_scantuple = save_scantuple;
+		ExecDropSingleTupleTableSlot(existing_slot);
+
+		return !conflict;
+	}
+
 	while (index_getnext_slot(index_scan, ForwardScanDirection, existing_slot))
 	{
 		TransactionId xwait;
