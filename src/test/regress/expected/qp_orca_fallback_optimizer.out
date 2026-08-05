@@ -315,3 +315,16 @@ DETAIL:  Feature not supported: Partitioned table with external/foreign partitio
 -- Keep this table around once this is fixed
 drop table ext_part;
 -- end_ignore
+-- PG17 JSON_TABLE: a non-lateral table function in FROM is an RTE_TABLEFUNC,
+-- which ORCA does not translate.  It must fall back cleanly; in a production
+-- (non-cassert) build this used to reach __builtin_unreachable() in
+-- CTranslatorQueryToDXL::UnsupportedRTEKind.
+select * from json_table('[{"a":1},{"a":2}]'::jsonb, '$[*]' columns (a int path '$.a')) jt;
+INFO:  GPORCA failed to produce a plan, falling back to planner
+DETAIL:  Feature not supported: JSON_TABLE or XMLTABLE
+ a 
+---
+ 1
+ 2
+(2 rows)
+

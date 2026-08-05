@@ -758,8 +758,11 @@ CTranslatorQueryToDXL::TranslateQueryToDXL()
 					   GPOS_WSZ_LIT("MERGE"));
 
 		default:
-			GPOS_ASSERT(!"Statement type not supported");
-			return nullptr;
+			// Raise rather than assert-and-return-nullptr: a NULL DXL tree
+			// crashes CTranslatorDXLToExpr::Pexpr in production builds (see
+			// the CMD_MERGE case above).
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("unrecognized statement type"));
 	}
 }
 
@@ -3334,8 +3337,14 @@ CTranslatorQueryToDXL::UnsupportedRTEKind(RTEKind rtekind)
 	{
 		default:
 		{
-			GPOS_ASSERT(!"Unrecognized RTE kind");
-			__builtin_unreachable();
+			// Unlike the cases below, this arm used to be GPOS_ASSERT +
+			// __builtin_unreachable().  GPOS_ASSERT is compiled out of a
+			// production (non-cassert) build, so any RTE kind reaching here
+			// executed __builtin_unreachable() -- undefined behavior -- while
+			// a cassert build silently fell back via the assert exception.
+			// Raise like every other arm so both builds fall back cleanly.
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("RangeTableEntry of unrecognized type"));
 		}
 		case RTE_JOIN:
 		{
@@ -3351,6 +3360,29 @@ CTranslatorQueryToDXL::UnsupportedRTEKind(RTEKind rtekind)
 		{
 			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
 					   GPOS_WSZ_LIT("RangeTableEntry of type Table Function"));
+		}
+		case RTE_TABLEFUNC:
+		{
+			// non-lateral JSON_TABLE (PG17) or XMLTABLE in FROM
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("JSON_TABLE or XMLTABLE"));
+		}
+		case RTE_NAMEDTUPLESTORE:
+		{
+			// trigger transition tables
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("RangeTableEntry of type Named Tuplestore"));
+		}
+		case RTE_RESULT:
+		{
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("RangeTableEntry of type Result"));
+		}
+		case RTE_GROUP:
+		{
+			// normally stripped by flatten_group_rte_mutator() before ORCA
+			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature,
+					   GPOS_WSZ_LIT("RangeTableEntry of type Group"));
 		}
 	}
 }
