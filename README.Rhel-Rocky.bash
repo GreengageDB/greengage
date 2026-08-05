@@ -93,8 +93,8 @@ alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 alternatives --set python3 /usr/bin/python3.12
 
 # pip3 and pip may be regular files on Rocky 9 — remove before registering
-if [ ! -L /usr/bin/pip3 ]; then rm /usr/bin/pip3; fi
-if [ ! -L /usr/bin/pip ]; then rm /usr/bin/pip; fi
+if [ ! -L /usr/bin/pip3 ]; then rm -f /usr/bin/pip3; fi
+if [ ! -L /usr/bin/pip ];  then rm -f /usr/bin/pip;  fi
 alternatives --install  /usr/bin/pip3 pip3 /usr/bin/pip3.12 1
 alternatives --install  /usr/bin/pip  pip  /usr/bin/pip3.12 1
 alternatives --set pip3 /usr/bin/pip3.12
