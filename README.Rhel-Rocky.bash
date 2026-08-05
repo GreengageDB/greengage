@@ -13,7 +13,7 @@ dnf -y install epel-release
 export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
 
 perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
-python_packages="python3.12 python3.12-devel python3 python3-devel python3-pip python3-setuptools python3-future"
+python_packages="python3.12 python3.12-devel python3.12-pip python3.12-setuptools"
 
 case "$OS_VERSION" in
     8)
@@ -88,8 +88,29 @@ if [ -f /usr/bin/llvm-config-14 ] && [ ! -f /usr/bin/llvm-config ]; then
     ln -s /usr/bin/llvm-config-14 /usr/bin/llvm-config
 fi
 
-# Debug Python3
+# Register python3.12 as default python3 via alternatives
+alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+alternatives --set python3 /usr/bin/python3.12
+
+# pip3 and pip may be regular files on Rocky 9 — remove before registering
+if [ ! -L /usr/bin/pip3 ]; then rm /usr/bin/pip3; fi
+if [ ! -L /usr/bin/pip ]; then rm /usr/bin/pip; fi
+alternatives --install  /usr/bin/pip3 pip3 /usr/bin/pip3.12 1
+alternatives --install  /usr/bin/pip  pip  /usr/bin/pip3.12 1
+alternatives --set pip3 /usr/bin/pip3.12
+alternatives --set pip  /usr/bin/pip3.12
+ln -sf ./pip3.12 /usr/bin/pip-3
+
+# Debug
 python3 --version
+pip3    --version
+pip     --version
+
+# Upgrade pip to support current package versions
+python3 -m pip install --no-cache-dir --upgrade pip
+
+# 'future' is not available as a system package for python3.12
+python3 -m pip install --no-cache-dir future
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
