@@ -49,7 +49,7 @@
 
 #define SEGNO_SUFFIX_LENGTH 12
 
-static void mdunlink_ao_base_relfile(void *ctx);
+static void mdunlink_ao_base_relfile(void *ctx, bool isRelFileNodeBackendTemp);
 static bool mdunlink_ao_perFile(const int segno, void *ctx);
 static bool copy_append_only_data_perFile(const int segno, void *ctx);
 static bool truncate_ao_perFile(const int segno, void *ctx);
@@ -277,7 +277,7 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 		unlinkFiles.segPath = segPath;
 		unlinkFiles.segpathSuffixPosition = segPathSuffixPosition;
 
-		mdunlink_ao_base_relfile(&unlinkFiles);
+		mdunlink_ao_base_relfile(&unlinkFiles, RelFileNodeBackendIsTemp(rnode));
 
 		ao_foreach_extent_file(mdunlink_ao_perFile, &unlinkFiles);
 
@@ -294,7 +294,7 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
  * relfilenode.  See also: ao_foreach_extent_file.
  */
 static void
-mdunlink_ao_base_relfile(void *ctx)
+mdunlink_ao_base_relfile(void *ctx, bool isRelFileNodeBackendTemp)
 {
 	FileTag tag;
 	struct mdunlink_ao_callback_ctx *unlinkFiles =
@@ -303,7 +303,7 @@ mdunlink_ao_base_relfile(void *ctx)
 	const char *baserel = unlinkFiles->segPath;
 
 	*unlinkFiles->segpathSuffixPosition = '\0';
-	if (unlinkFiles->isRedo)
+	if (unlinkFiles->isRedo || isRelFileNodeBackendTemp)
 	{
 		/* First, forget any pending sync requests for the first segment */
 		INIT_FILETAG(tag, unlinkFiles->rnode, MAIN_FORKNUM, 0,
