@@ -106,14 +106,6 @@ python3 -m pip install --no-cache-dir --upgrade pip
 # 'future' is not available as a system package for python3.12
 python3 -m pip install --no-cache-dir future
 
-# Default LLVM 21 is incompatible; use llvm and clang v14
-clang_llvm_archive='clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4'
-wget https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/$clang_llvm_archive.tar.xz
-tar -C /opt -xf $clang_llvm_archive.tar.xz
-rm -f $clang_llvm_archive.tar.xz
-mv /opt/$clang_llvm_archive /opt/llvm
-export PATH=/opt/llvm/bin:$PATH
-
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
 make -j"$(nproc)" -C zstd-1.4.4

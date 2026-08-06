@@ -6,20 +6,9 @@
   sudo ./README.Rhel-Rocky.bash
   ```
 
-- Create a symbolic link to Python in `/usr/bin` and install `future` v0.16:
-
-  - Rocky 8:
-
-    ```bash
-    sudo ln -s python2 /usr/bin/python
-    sudo python -m pip install --no-cache-dir future==0.16
-    ```
-
-  - Rocky 9:
-
-    ```bash
-    sudo ln -s python3 /usr/bin/python
-    ```
+- LLVM 21 provided by current Rocky/RHEL releases is not compatible with
+  Greengage 7. When building in the provided Docker environment, LLVM/Clang
+  14 is installed automatically.
 
 ## For Ubuntu:
 
