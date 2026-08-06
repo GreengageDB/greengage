@@ -142,12 +142,17 @@ def parseargs():
 
 
 #-------------------------------------------------------------------------
-def print_results(array, hostname, options):
+def print_results(array, hostname, options, successfully=False):
     """Prints out the summary of the operation."""
     
     logger.info('-----------------------------------------------------')
-    logger.info('The activation of the standby master has completed successfully.')
-    logger.info('%s is now the new primary master.' % hostname)
+    if successfully:
+        logger.info('The activation of the standby coordinator has completed successfully.')
+    else:
+        logger.info('The activation of the standby coordinator has completed.')
+        logger.warning('Some non-critical exceptions were encountered during activation process.')
+        logger.warning('Cluster state needs to be analyzed before proceeding with further instructions.')
+    logger.info('%s is now the new primary coordinator.' % hostname)
     logger.info('You will need to update your user access mechanism to reflect')
     logger.info('the change of master hostname.')
     logger.info('Do not re-start the failed master while the fail-over master is')
@@ -337,7 +342,7 @@ def promote_standby(master_data_dir):
 
 
 #-------------------------------------------------------------------------
-def check_standby_activation(options_):
+def check_standby_activation(options_, err):
     """
     Check if standby was promoted and running.
     """
@@ -353,6 +358,8 @@ def check_standby_activation(options_):
         except Exception as e:
             return False
         if array.coordinator.isSegmentCoordinator(current_role=True):
+            logger.warning('Encountered exception: %s.' %str(err))
+            print_results(array, unix.getLocalHostname(), options_, False)
             return True
     return False
 
@@ -411,15 +418,13 @@ try:
     # keyboard interrupt.
     signal.signal(signal.SIGINT, signal.default_int_handler)
     
-    print_results(array_, unix.getLocalHostname(), options_)
+    print_results(array_, unix.getLocalHostname(), options_, True)
 
 except (ExecutionError, GpActivateStandbyException) as e:
 
     # Even with raised exceptions we still could have promoted standby.
     # User need to be notified about this with separate return code.
-    if (check_standby_activation(options_)):
-        logger.warning('Encountered exception: ', exc_info=e)
-        logger.warning('The specified standby coordinator at directory %s acts as primary.' % options_.coordinator_data_dir)
+    if (check_standby_activation(options_, e)):
         sys.exit(1)
     else:
         logger.fatal('Error activating standby coordinator: %s' % str(e))
