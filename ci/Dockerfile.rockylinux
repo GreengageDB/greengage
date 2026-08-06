@@ -67,5 +67,3 @@ FROM base AS test
 COPY --from=code  /home/gpadmin/gpdb_src gpdb_src
 COPY --from=build /home/gpadmin/bin_gpdb bin_gpdb
 COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src
-
-RUN make -C gpdb_src/src/tools/entab install clean
