@@ -36,7 +36,6 @@ dnf -y install \
     autoconf \
     bison \
     bzip2-devel \
-    clang \
     cmake \
     expat-devel \
     flex \
@@ -63,7 +62,6 @@ dnf -y install \
     libxslt-devel \
     libyaml-devel \
     libzstd-devel \
-    llvm14-devel \
     lsof \
     net-tools \
     openldap-devel \
@@ -83,11 +81,6 @@ dnf -y install \
     xerces-c-devel \
     zlib-devel \
     $python_packages $perl_packages
-
-# Default LLVM 21 is incompatible; use llvm14 and provide llvm-config
-if [ -f /usr/bin/llvm-config-14 ] && [ ! -f /usr/bin/llvm-config ]; then
-    ln -s /usr/bin/llvm-config-14 /usr/bin/llvm-config
-fi
 
 # Register python3.12 as default python3 via alternatives
 alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
@@ -112,6 +105,14 @@ python3 -m pip install --no-cache-dir --upgrade pip
 
 # 'future' is not available as a system package for python3.12
 python3 -m pip install --no-cache-dir future
+
+# Default LLVM 21 is incompatible; use llvm and clang v14
+clang_llvm_archive='clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4'
+wget https://github.com/llvm/llvm-project/releases/download/$clang_llvm_archive.tar.xz
+tar -C /opt -xf $clang_llvm_archive.tar.xz
+rm -f $clang_llvm_archive.tar.xz
+mv /opt/$clang_llvm_archive /opt/llvm
+export PATH=/opt/llvm/bin:$PATH
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
