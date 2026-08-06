@@ -385,6 +385,7 @@ def impl(context, env_var):
 
 
 @given('all files in pg_wal directory are deleted from data directory of preferred primary of content {content_ids}')
+@when('all files in pg_wal directory are deleted from data directory of preferred primary of content {content_ids}')
 def impl(context, content_ids):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
     segments = filter(lambda seg: seg.getSegmentPreferredRole() == ROLE_PRIMARY and
@@ -1506,6 +1507,7 @@ def stop_segments(context, where_clause):
 
 
 @given('user immediately stops all {segment_type} processes for content {content}')
+@when('user immediately stops all {segment_type} processes for content {content}')
 @then('user immediately stops all {segment_type} processes for content {content}')
 def stop_all_primary_or_mirror_segments(context, segment_type, content):
     if segment_type not in ("primary", "mirror"):
