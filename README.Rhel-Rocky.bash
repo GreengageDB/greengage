@@ -108,7 +108,7 @@ python3 -m pip install --no-cache-dir future
 
 # Default LLVM 21 is incompatible; use llvm and clang v14
 clang_llvm_archive='clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4'
-wget https://github.com/llvm/llvm-project/releases/download/$clang_llvm_archive.tar.xz
+wget https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/$clang_llvm_archive.tar.xz
 tar -C /opt -xf $clang_llvm_archive.tar.xz
 rm -f $clang_llvm_archive.tar.xz
 mv /opt/$clang_llvm_archive /opt/llvm
