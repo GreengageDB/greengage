@@ -30,12 +30,14 @@
 #include "replication/origin.h"
 #include "storage/bufmgr.h"
 #include "storage/proc.h"
+#include "utils/faultinjector.h"
 #include "utils/memutils.h"
 #include "pg_trace.h"
 
 #ifdef USE_ZSTD
 /* Zstandard library is provided */
 #include <zstd.h>
+#include <zstd_errors.h>
 /* zstandard compression level to use. */
 #define COMPRESS_LEVEL 3
 #endif
@@ -824,6 +826,7 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 {
 #ifdef USE_ZSTD
 	static ZSTD_CCtx  *cxt = NULL;      /* ZSTD compression context */
+	static bool	compression_failure_logged = false;
 	int32		orig_len = BLCKSZ - hole_length;
 	int32		len;
 	int32		extra_bytes = 0;
@@ -851,18 +854,57 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 	if (!cxt)
 	{
 		cxt = ZSTD_createCCtx();
+
+#ifdef FAULT_INJECTOR
+		/*
+		 * Forget the context to imitate context creation failure, producing 
+		 * an out of memory log record.
+		 */
+		if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block") == FaultInjectorTypeSkip)
+			cxt = NULL;
+#endif
 		if (!cxt)
-			elog(ERROR, "out of memory");
+		{
+			if (!compression_failure_logged)
+			{
+				elog(LOG, "out of memory while allocating ZSTD compression context");
+				compression_failure_logged = true;
+			}
+			return false;
+		}
+		compression_failure_logged = false;
 	}
 
+	size_t dest_capacity = BLCKSZ;
+
+#ifdef FAULT_INJECTOR
+	/*
+	 * Shrink the output buffer so ZSTD_compressCCtx() genuinely returns
+	 * ZSTD_error_dstSize_tooSmall below, regardless of how compressible
+	 * the input actually is.
+	 */
+	if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block_dstsize_too_small") == FaultInjectorTypeSkip)
+		dest_capacity = 1;
+#endif
+
 	len = ZSTD_compressCCtx(cxt,
-							dest, BLCKSZ,
+							dest, dest_capacity,
 							source, orig_len,
 							COMPRESS_LEVEL);
 
 	if (ZSTD_isError(len))
-		elog(ERROR, "compression failed: %s uncompressed len %d",
-			 ZSTD_getErrorName(len), orig_len);
+	{
+		if (ZSTD_getErrorCode(len) != ZSTD_error_dstSize_tooSmall && !compression_failure_logged)
+		{
+			elog(LOG, "compression failed: %s uncompressed len %d",
+				ZSTD_getErrorName(len), orig_len);
+
+			compression_failure_logged = true;
+		}
+		return false;
+	}
+
+	compression_failure_logged = false;
 
 	/*
 	 * We recheck the actual size even if ZSTD reports success and
