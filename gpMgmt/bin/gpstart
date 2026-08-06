@@ -13,6 +13,7 @@ from gppylib.mainUtils import *
 
 try:
     import pickle
+    import time
 
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker
@@ -420,12 +421,39 @@ class GpStart:
 
         logger.info("Obtaining Segment details from coordinator...")
         self.dburl = dbconn.DbURL(port=self.port, dbname='template1')
-        self.gparray = GpArray.initFromCatalog(self.dburl, utility=True)
+        self.gparray = self._init_from_catalog_with_retry()
 
         logger.info("Setting new coordinator era")
         e = GpEraFile(self.coordinator_datadir, logger=get_logger_if_verbose())
         e.new_era(self.gparray.coordinator.hostname, self.port, time.strftime('%y%m%d%H%M%S'))
         self.era = e.era
+
+    ######
+    def _init_from_catalog_with_retry(self, retries=60):
+        """
+        Read gp_segment_configuration from the just-started coordinator.
+
+        pg_ctl -w can return before the coordinator finishes crash recovery
+        (e.g. right after an immediate-mode shutdown), in which case the
+        first connection attempts are rejected with "the database system is
+        not accepting connections" / "is starting up" for a moment.  Losing
+        that race used to abort gpstart entirely, leaving the coordinator
+        running with no segments started.  Retry the transient rejections
+        instead of giving up.
+        """
+        for attempt in range(retries):
+            try:
+                return GpArray.initFromCatalog(self.dburl, utility=True)
+            except Exception as ex:
+                msg = str(ex)
+                transient = ("not accepting connections" in msg or
+                             "the database system is starting up" in msg or
+                             "the database system is in recovery mode" in msg)
+                if not transient or attempt == retries - 1:
+                    raise
+                if attempt == 0:
+                    logger.info("Coordinator is still starting up; waiting...")
+                time.sleep(1)
 
     ######
     def _start(self, segmentsToStart, invalidSegments):
