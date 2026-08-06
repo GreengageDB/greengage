@@ -2,113 +2,163 @@
 
 set -eox pipefail
 
-./ccp_src/scripts/setup_ssh_to_cluster.sh
+CWDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CWDIR}/common.bash"
 
-CLUSTER_NAME=$(cat ./cluster_env_files/terraform/name)
+CGROUP_BASEDIR=${CGROUP_BASEDIR:-/sys/fs/cgroup}
+OPTIMIZER=${OPTIMIZER:-off}
+STATEMENT_MEM=${STATEMENT_MEM:-125MB}
+TEST_OS=${TEST_OS:-ubuntu}
 
-CGROUP_BASEDIR=/sys/fs/cgroup
+GPDB_DEMO_DATADIRS=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs
+ISOLATION2_TESTTABLESPACE=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace
 
-if [ "$TEST_OS" = centos7 ]; then
-    CGROUP_AUTO_MOUNTED=1
-fi
+fatal() {
+    echo "FATAL: $*" >&2
+    exit 1
+}
 
-enable_cgroup_subtree_control() {
-    local gpdb_host_alias=$1
+record_exitcode() {
+    local exitcode=$?
+
+    if [ -d /logs ] && [ -w /logs ]; then
+        echo "$exitcode" > /logs/.exitcode || true
+    fi
+
+    exit "$exitcode"
+}
+
+trap record_exitcode EXIT
+
+assert_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        fatal "resource group v2 tests must run as root inside a privileged Docker container"
+    fi
+}
+
+assert_real_filesystem() {
+    local path=$1
+    local fs_type
+
+    mkdir -p "$path"
+    fs_type=$(stat -f -c %T "$path")
+
+    case "$fs_type" in
+        overlayfs|tmpfs)
+            fatal "$path is on $fs_type; bind mount it from a regular host filesystem for IO_LIMIT tests"
+            ;;
+    esac
+}
+
+enable_cgroup_controller() {
+    local controller=$1
     local basedir=$CGROUP_BASEDIR
 
-    ssh $gpdb_host_alias sudo -n bash -ex <<EOF
-        chmod -R 777 $basedir/
-        # create required cgroup controllers (cpu cpuset io memory) via a transient service,
-        # this can avoid systemd from trimming unused controllers before gpdb startup.
-        systemd-run --unit=cgroup-holder --service=oneshot -r -p Delegate=yes true
-        mkdir $basedir/gpdb
-        chmod -R 777 $basedir/gpdb
-EOF
-}
-
-run_resgroup_test() {
-    local gpdb_master_alias=$1
-
-    ssh $gpdb_master_alias bash -ex <<EOF
-        source /usr/local/greengage-db-devel/greengage_path.sh
-        export PGPORT=5432
-        export COORDINATOR_DATA_DIRECTORY=/data/gpdata/coordinator/gpseg-1
-        export LDFLAGS="-L\${GPHOME}/lib"
-        export CPPFLAGS="-I\${GPHOME}/include"
-
-        cd /home/gpadmin/gpdb_src
-        PYTHON=python3.11 ./configure --prefix=/usr/local/greengage-db-devel \
-            --without-zlib --without-rt --without-libcurl \
-            --without-libedit-preferred --without-readline \
-            --disable-gpcloud --disable-gpfdist --disable-orca \
-            --without-python PKG_CONFIG_PATH="\${GPHOME}/lib/pkgconfig" ${CONFIGURE_FLAGS}
-
-        make -C /home/gpadmin/gpdb_src/src/test/regress
-        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/regress </dev/null
-        ssh sdw1 mkdir -p /home/gpadmin/gpdb_src/src/test/isolation2 </dev/null
-        scp /home/gpadmin/gpdb_src/src/test/regress/regress.so \
-            gpadmin@sdw1:/home/gpadmin/gpdb_src/src/test/regress/
-
-        make PGOPTIONS="-c optimizer=off" installcheck-resgroup-v2 || (
-            errcode=\$?
-            find src/test/isolation2 -name regression.diffs \
-            | while read diff; do
-                cat <<EOF1
-
-======================================================================
-DIFF FILE: \$diff
-----------------------------------------------------------------------
-
-EOF1
-                cat \$diff
-              done
-            exit \$errcode
-        )
-EOF
-}
-
-setup_binary_swap_test() {
-    local gpdb_master_alias=$1
-
-    if [ "${TEST_BINARY_SWAP}" != "true" ]; then
-        return 0
+    if ! grep -qw "$controller" "$basedir/cgroup.controllers"; then
+        fatal "cgroup v2 controller '$controller' is not available in $basedir/cgroup.controllers"
     fi
 
-    ssh $gpdb_master_alias mkdir -p /tmp/local/greengage-db-devel
-    ssh $gpdb_master_alias tar -zxf - -C /tmp/local/greengage-db-devel \
-        < binary_swap_gpdb/bin_gpdb.tar.gz
-    ssh $gpdb_master_alias sed -i -e "s@/usr/local@/tmp/local@" \
-        /tmp/local/greengage-db-devel/greengage_path.sh
+    if ! grep -qw "$controller" "$basedir/cgroup.subtree_control"; then
+        if ! echo "+$controller" > "$basedir/cgroup.subtree_control"; then
+            fatal "failed to enable cgroup v2 controller '$controller'; run Docker with --privileged, --cgroupns=host and a rw /sys/fs/cgroup mount"
+        fi
+    fi
 }
 
-run_binary_swap_test() {
-    local gpdb_master_alias=$1
+setup_cgroup_v2() {
+    local basedir=$CGROUP_BASEDIR
+    local gpdb_cgroup=$basedir/gpdb
+    local controller
 
-    if [ "${TEST_BINARY_SWAP}" != "true" ]; then
-        return 0
+    if [ ! -f "$basedir/cgroup.controllers" ]; then
+        fatal "$basedir is not a cgroup v2 mount"
     fi
 
-    scp -r /tmp/build/*/binary_swap_gpdb/ $gpdb_master_alias:/home/gpadmin/
-    ssh $gpdb_master_alias bash -ex <<EOF
-        source /usr/local/greengage-db-devel/greengage_path.sh
-        export PGPORT=5432
-        export COORDINATOR_DATA_DIRECTORY=/data/gpdata/coordinator/gpseg-1
-        export BINARY_SWAP_VARIANT=_resgroup
+    if [ ! -w "$basedir/cgroup.subtree_control" ]; then
+        fatal "$basedir/cgroup.subtree_control is not writable; mount /sys/fs/cgroup rw and use --cgroupns=host"
+    fi
 
-        cd /home/gpadmin
-        time ./gpdb_src/concourse/scripts/test_binary_swap_gpdb.bash
-EOF
+    for controller in cpu cpuset io memory pids; do
+        enable_cgroup_controller "$controller"
+    done
+
+    mkdir -p "$gpdb_cgroup"
+    chmod a+rwx "$basedir" "$gpdb_cgroup"
+    chmod -R a+rwX "$gpdb_cgroup"
+
+    for controller in cpu cpuset io memory pids; do
+        if ! grep -qw "$controller" "$gpdb_cgroup/cgroup.controllers"; then
+            fatal "controller '$controller' is not available below $gpdb_cgroup after enabling subtree control"
+        fi
+    done
+
+    for file in cpu.max cpu.weight cpuset.cpus cpuset.mems io.max memory.max cgroup.subtree_control; do
+        if [ ! -e "$gpdb_cgroup/$file" ]; then
+            fatal "required cgroup v2 file $gpdb_cgroup/$file is missing"
+        fi
+    done
 }
 
-enable_cgroup_subtree_control ccp-${CLUSTER_NAME}-0
-enable_cgroup_subtree_control ccp-${CLUSTER_NAME}-1
-run_resgroup_test cdw
+gen_env() {
+    cat > /opt/run_test.sh <<-EOF
+		trap look4diffs ERR
 
-#
-# below is for binary swap test
-#
+		function look4diffs() {
+		    diff_files=\`find .. -name regression.diffs\`
 
-# deploy the binaries for binary swap test
-setup_binary_swap_test sdw1
-# run it
-run_binary_swap_test cdw
+		    for diff_file in \${diff_files}; do
+		        if [ -f "\${diff_file}" ]; then
+		            cat <<-FEOF
+
+					======================================================================
+					DIFF FILE: \${diff_file}
+					----------------------------------------------------------------------
+
+					\$(cat "\${diff_file}")
+
+				FEOF
+		        fi
+		    done
+		    exit 1
+		}
+
+		source /usr/local/greengage-db-devel/greengage_path.sh
+		cd "\${1}/gpdb_src"
+		source gpAux/gpdemo/gpdemo-env.sh
+
+		make -C src/test/regress
+		make PGOPTIONS="-c optimizer=${OPTIMIZER} -c statement_mem=${STATEMENT_MEM}" \
+		    installcheck-resgroup-v2
+	EOF
+
+    chmod a+x /opt/run_test.sh
+}
+
+setup_gpadmin_user() {
+    ./gpdb_src/concourse/scripts/setup_gpadmin_user.bash "$TEST_OS"
+}
+
+_main() {
+    assert_root
+
+    if [ -z "$TEST_OS" ]; then
+        fatal "TEST_OS is not set"
+    fi
+
+    if [[ "$TEST_OS" != centos* && "$TEST_OS" != ubuntu* ]]; then
+        fatal "TEST_OS is set to an invalid value: $TEST_OS; configure TEST_OS to be centos or ubuntu"
+    fi
+
+    cd /home/gpadmin
+    assert_real_filesystem "$GPDB_DEMO_DATADIRS"
+    assert_real_filesystem "$ISOLATION2_TESTTABLESPACE"
+    setup_cgroup_v2
+
+    time install_and_configure_gpdb
+    time setup_gpadmin_user
+    time make_cluster
+    time gen_env
+    time run_test
+}
+
+_main "$@"

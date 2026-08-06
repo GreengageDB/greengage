@@ -72,6 +72,40 @@ for Rocky Linux:
 
 To use gdb inside the container, add the `--privileged` flag to the run command.
 
+## Resource group v2 isolation tests
+
+Resource group v2 tests require a Linux host with cgroup v2 enabled.
+`gpdemo-datadirs` and `testtablespace` must be directories on a regular host
+filesystem, not Docker overlay or tmpfs.
+
+For Ubuntu:
+```bash
+mkdir -p gpdemo-datadirs testtablespace
+chmod -R 777 gpdemo-datadirs testtablespace
+
+docker run --name gpdb7_resgroup_v2 --rm -it -e TEST_OS=ubuntu \
+  --sysctl "kernel.sem=500 1024000 200 4096" \
+  --privileged \
+  --cgroupns=host \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -v "$PWD/gpdemo-datadirs":/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs:rw \
+  -v "$PWD/testtablespace":/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace:rw \
+  gpdb7_u22:latest \
+  /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb_resgroup_v2.bash
+```
+
+Required Docker options:
+
+* `--privileged` allows cgroup controller and process-management operations that
+  are otherwise blocked by Docker isolation.
+* `--cgroupns=host` makes `/sys/fs/cgroup` paths refer to the host cgroup
+  namespace instead of a private container namespace.
+* `-v /sys/fs/cgroup:/sys/fs/cgroup:rw` gives the container writable access to
+  the host cgroup v2 filesystem.
+* `gpdemo-datadirs` and `testtablespace` mounts keep database files used by
+  IO_LIMIT tests on the host filesystem, where cgroup v2 can resolve real block
+  devices.
+
 ## ORCA linter
 
 ```bash
