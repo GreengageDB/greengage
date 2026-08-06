@@ -138,7 +138,7 @@ ALTER DATABASE dsp1 RESET gp_default_storage_options;
 ALTER DATABASE dsp2 RESET gp_default_storage_options;
 
 
--- The way how tsquery is displayed was chagned between versions, so is may differ between dumps.
+-- The way how tsquery is displayed was changed between versions, so is may differ between dumps.
 -- See "tsqueryout" and "infix" functions for more details.
 \c regression
 DROP TABLE public.test_tsquery;

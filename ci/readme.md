@@ -187,7 +187,7 @@ To run `pg_upgrade_run_6X_to_7X_migration.bash` locally, it is necessary to spec
 - SQL_SCHEMA - optional path to an sql file that will be loaded before performing the upgrade. If it is not specified,
   the upgrade will be performed on an empty cluster.
 - CLEANUP_SCRIPT - optional path to an sql file that will be executed after loading SQL_SCHEMA, before performing pg_upgrade. It can be used to remove deprecated or otherwise failing objects from SQL_SCHEMA. If it is not specified, no cleanup will occur.
-- DUMP_OPTIONS - optional parameters that will be passed to pg_dump to collect pre- and post-upgrade dumps. These dumps are compared at the end of the test, to determine whether it was successful. If this option is not specified, pg_dump will be executed with no parameters. Please note that partitioned tables are not affected by this option, because they are excluded from the dump and their data is compared seperately.
+- DUMP_OPTIONS - optional parameters that will be passed to pg_dump to collect pre- and post-upgrade dumps. These dumps are compared at the end of the test, to determine whether it was successful. If this option is not specified, pg_dump will be executed with no parameters. Please note that partitioned tables are not affected by this option, because they are excluded from the dump and their data is compared separately.
 For example:
 ```bash
 export GREENGAGE6_SRC=/home/gpadmin/ggdb6_src

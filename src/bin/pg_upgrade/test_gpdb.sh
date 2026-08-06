@@ -66,7 +66,7 @@ retain_tempdir=0
 perf_test=0
 
 # This script is run to test pg_upgrade from Greengage 6, to Greengage 7,
-# so perform additional steps to enusure that it completes successfully
+# so perform additional steps to ensure that it completes successfully
 # (for example, avoid dumping partitioned tables with pg_dump)
 cross_version_upgrade=0
 
@@ -207,7 +207,7 @@ dump_database_schema()
 			# When upgrading Greengage 6 to Greengage 7, partitioned tables would cause
 			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
 			# on the version of the source cluster. So, make pg_dump ignore them and compare
-			# them seperately.
+			# them separately.
 			local -a args_to_ignore_partitions=()
 			if (( $cross_version_upgrade )); then
 				local partitions_string
