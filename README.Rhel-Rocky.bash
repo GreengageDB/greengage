@@ -113,6 +113,12 @@ python3 -m pip install --no-cache-dir --upgrade pip
 # 'future' is not available as a system package for python3.12
 python3 -m pip install --no-cache-dir future
 
+# Build zstd with static library (not available as a package on Rocky)
+curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
+make -j"$(nproc)" -C zstd-1.4.4
+make install PREFIX=/usr/local -C zstd-1.4.4
+rm -rf zstd-1.4.4
+
 #---------------------------------------------------------------------
 # Bare-metal only configuration
 #---------------------------------------------------------------------
