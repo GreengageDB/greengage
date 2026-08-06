@@ -1,32 +1,23 @@
+-- Switch the cluster to the resource-queue manager for the resqueue test
+-- block that follows in the schedule.
+--
+-- Use a fast-mode (not immediate) restart: an immediate shutdown leaves
+-- crash-recovery debt, and losing the race against the recovering
+-- coordinator wedges the cluster for every suite that runs after this one.
 -- start_ignore
 \! gpconfig -c gp_resource_manager -v queue
-20230109:22:58:10:221578 gpconfig:ubuntu:gpadmin-[INFO]:-completed successfully with parameters '-c gp_resource_manager -v queue'
 -- end_ignore
 \! echo $?
 0
 -- start_ignore
-\! gpstop -rai
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Starting gpstop with args: -rai
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Gathering information and validating the environment...
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Obtaining Greenplum Coordinator catalog information
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Obtaining Segment details from coordinator...
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.0.0-alpha.0+dev.16117.g367b82d8d9 build dev'
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Commencing Coordinator instance shutdown with mode='immediate'
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Coordinator segment instance directory=/home/gpadmin/zxj/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Attempting forceful termination of any leftover coordinator process
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/zxj/workspace/gpdb/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-No standby coordinator host configured
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Targeting dbid [2, 3, 4] for shutdown
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-Commencing parallel segment instance shutdown, please wait...
-20230109:22:58:10:221895 gpstop:ubuntu:gpadmin-[INFO]:-0.00% of jobs completed
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-100.00% of jobs completed
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-----------------------------------------------------
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-   Segments stopped successfully      = 3
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-   Segments with errors during stop   = 0
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-----------------------------------------------------
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-Successfully shutdown 3 of 3 segment instances 
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
-20230109:22:58:11:221895 gpstop:ubuntu:gpadmin-[INFO]:-Restarting System...
+\! gpstop -ra -M fast
 -- end_ignore
 \! echo $?
 0
+-- Barrier: do not let the schedule continue until the restarted cluster
+-- dispatches to all segments and the new setting is in effect.  (This must
+-- stay a shell psql: this test's own connection died with the restart.)
+\! for i in $(seq 1 120); do psql -X -Atq -d postgres -c "select count(*) from gp_dist_random('gp_id')" >/dev/null 2>&1 && { echo "cluster ready"; break; }; sleep 1; done
+cluster ready
+\! psql -X -Atq -d postgres -c "show gp_resource_manager"
+queue
