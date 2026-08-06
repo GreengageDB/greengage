@@ -75,7 +75,7 @@ echo 'CREATE DATABASE regression;' | psql template1 -f-
 # And finally, run the test
 pushd ${GREENGAGE7_SRC}/src/bin/pg_upgrade
 ./test_gpdb.sh \
-    -r -v \
+    -r -x \
     -b ${GREENGAGE7_INSTALLATION}/bin \
     -B ${GREENGAGE6_INSTALLATION}/bin \
     -O ${GREENGAGE6_SRC}/gpAux/gpdemo/datadirs/ \

@@ -202,7 +202,7 @@ dump_database_schema()
 		local database
 		for database in "${databases[@]}"; do
 			# We are getting '\' symbol automatically escaped to '\\', convert is back
-			database=$(echo "${database}" | sed 's/\\\\/\\/g')
+			database=$(sed 's/\\\\/\\/g' <<< "${database}")
 
 			# When upgrading Greengage 6 to Greengage 7, partitioned tables would cause
 			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
@@ -323,7 +323,7 @@ usage()
 	echo " -m           Upgrade mirrors"
 	echo " -r           Retain temporary installation after test, even on success"
 	echo " -p           pg_upgrade performance checking only"
-	echo " -v           test pg_upgrade from Greengage 6 to Greengage 7"
+	echo " -x           test pg_upgrade from Greengage 6 to Greengage 7"
 	exit 0
 }
 
@@ -475,7 +475,7 @@ main() {
 	local temp_root=`pwd`/tmp_check
 	local base_dir=`pwd`
 	
-	while getopts ":O:b:B:f:d:sCkKmrpv" opt; do
+	while getopts ":O:b:B:f:d:sCkKmrpx" opt; do
 		case ${opt} in
 			O )
 				realpath OLD_DATADIR "${OPTARG}"
@@ -511,7 +511,7 @@ main() {
 				gpcheckcat=0
 				run_check_vacuum_worked=0
 				;;
-			v )
+			x )
 				cross_version_upgrade=1
 				;;
 			* )
