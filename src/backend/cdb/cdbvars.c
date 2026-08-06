@@ -278,6 +278,7 @@ int			gp_motion_slice_noop = 0;
 
 /* Greengage Database Experimental Feature GUCs */
 int			gp_distinct_grouping_sets_threshold = 32;
+bool		gp_enable_explain_rows_out = FALSE;
 bool		gp_enable_explain_allstat = FALSE;
 bool		gp_enable_motion_deadlock_sanity = FALSE;	/* planning time sanity
 														 * check */
