@@ -34,6 +34,37 @@ ssh_keyscan_for_user() {
   } >> "${home_dir}/.ssh/known_hosts"
 }
 
+chown_if_needed() {
+    local dir="$1"
+    [ -d "$dir" ] || return 0
+
+    local last_fixed=""
+    while IFS= read -r bad_dir; do
+        # skip directories already covered by a previously-fixed ancestor
+        if [ -n "$last_fixed" ] && [[ "$bad_dir" == "$last_fixed"/* ]]; then
+            continue
+        fi
+        echo "WARNING: wrong ownership on '$bad_dir', running chown -R gpadmin:gpadmin" >&2
+        chown -R gpadmin:gpadmin "$bad_dir"
+        last_fixed="$bad_dir"
+    done < <(find "$dir" -xdev -type d \( ! -user gpadmin -o ! -group gpadmin \))
+}
+
+
+transfer_ownership() {
+    # There are dependent projects which are rely on changing ownership of files
+    # lets make this optional.
+
+    chmod a+w gpdb_src
+    find gpdb_src -type d -exec chmod a+w {} \;
+    # Needed for the gpload test
+    [ -f gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv ] && chown gpadmin:gpadmin gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv
+
+    chown_if_needed /usr/local/gpdb
+    chown_if_needed /usr/local/greenplum-db-devel
+    chown_if_needed /home/gpadmin
+}
+
 set_limits() {
   # Currently same as what's recommended in install guide
   if [ -d /etc/security/limits.d ]; then
@@ -80,6 +111,7 @@ add_gpadmin_user() {
 setup_gpadmin_user() {
   # Perform actions when the container starts
   setup_ssh_for_user gpadmin
+  transfer_ownership
 }
 
 setup_sshd() {
