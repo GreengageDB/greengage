@@ -76,20 +76,6 @@ Feature: gpactivatestandby
           And the tablespace is valid on the standby master
           And clean up and revert back to original master
 
-    Scenario: master can be made on dir with trailing slash
-        Given the database is running
-          And the standby is not initialized
-
-         When the user runs gpinitstandby with options "-S /tmp/standby_data/"
-         Then gpinitstandby should return a return code of 0
-          And verify the standby master entries in catalog
-        
-         When the master goes down
-          And the user runs gpactivatestandby with options "-d /tmp/standby_data/"
-         Then gpactivatestandby should return a return code of 0
-          And verify the standby master is now acting as master
-          And clean up and revert back to original master
-
     Scenario: activation still happens when non-critical exception is thrown
         Given the database is running
           And the standby is not initialized
@@ -112,6 +98,20 @@ Feature: gpactivatestandby
          Then gprecoverseg should return a return code of 0
           And the user runs command "gprecoverseg -a -s -r" from standby coordinator
           And gprecoverseg should return a return code of 0
+          And clean up and revert back to original coordinator
+
+    Scenario: coordinator can be made on dir with trailing slash
+        Given the database is running
+          And the standby is not initialized
+
+         When the user runs gpinitstandby with options "-S /tmp/standby_data/"
+         Then gpinitstandby should return a return code of 0
+          And verify the standby coordinator entries in catalog
+        
+         When the coordinator goes down
+          And the user runs gpactivatestandby with options "-d /tmp/standby_data/"
+         Then gpactivatestandby should return a return code of 0
+          And verify the standby coordinator is now acting as coordinator
           And clean up and revert back to original coordinator
 
 ########################### @concourse_cluster tests ###########################
