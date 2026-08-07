@@ -132,7 +132,7 @@ def parseargs():
 
     # There shouldn't be any args
     if len(args) > 0:
-        logger.error('Unknown arguments: ')
+        logger.error('Unknown arguments:')
         for arg in args:
             logger.error('  %s' % arg)
         parser.exit(2, None)
@@ -363,6 +363,7 @@ def check_standby_activation(options_, err):
         try:
             array = get_config()
         except Exception as e:
+            logger.warning("Couldn't get cluster configuration.")
             return False
         if array.coordinator.isSegmentCoordinator(current_role=True):
             logger.warning('Encountered exception: %s.' %str(err))
