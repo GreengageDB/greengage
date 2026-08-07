@@ -41,7 +41,7 @@ Feature: gpactivatestandby
         Then gpinitstandby should return a return code of 0
         And verify the standby master entries in catalog
         And the user runs gpactivatestandby with options "-d invalid_directory"
-        Then gpactivatestandby should return a return code of 2
+        Then gpactivatestandby should return a return code of 1
 
     Scenario: gpstate after running gpactivatestandby works
         Given the database is running
@@ -82,37 +82,37 @@ Feature: gpactivatestandby
 
          When the user runs gpinitstandby with options " "
          Then gpinitstandby should return a return code of 0
-          And verify the standby coordinator entries in catalog
+          And verify the standby master entries in catalog
         
          When user immediately stops all primary processes for content 1 
          And all files in pg_wal directory are deleted from data directory of preferred primary of content 1
-         And the standby coordinator goes down
-         Then the coordinator goes down
+         And the standby master goes down
+         Then the master goes down
          
          When the user runs gpactivatestandby with options "-f"
          Then gpactivatestandby should return a return code of 1
-          And verify the standby coordinator is now acting as coordinator
+          And verify the standby master is now acting as master
           And gpactivatestandby should print a "Encountered exception" warning
 
-         When the user runs command "gprecoverseg -a --differential" from standby coordinator
+         When the user runs command "gprecoverseg -a --differential" from standby master
          Then gprecoverseg should return a return code of 0
-          And the user runs command "gprecoverseg -a -s -r" from standby coordinator
+          And the user runs command "gprecoverseg -a -s -r" from standby master
           And gprecoverseg should return a return code of 0
-          And clean up and revert back to original coordinator
+          And clean up and revert back to original master
 
-    Scenario: coordinator can be made on dir with trailing slash
+    Scenario: master can be made on dir with trailing slash
         Given the database is running
           And the standby is not initialized
 
          When the user runs gpinitstandby with options "-S /tmp/standby_data/"
          Then gpinitstandby should return a return code of 0
-          And verify the standby coordinator entries in catalog
+          And verify the standby master entries in catalog
         
-         When the coordinator goes down
+         When the master goes down
           And the user runs gpactivatestandby with options "-d /tmp/standby_data/"
          Then gpactivatestandby should return a return code of 0
-          And verify the standby coordinator is now acting as coordinator
-          And clean up and revert back to original coordinator
+          And verify the standby master is now acting as master
+          And clean up and revert back to original master
 
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster
