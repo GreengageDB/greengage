@@ -30,6 +30,7 @@ try:
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging
     from gppylib import gparray
+    from gppylib import pgconf
     from gppylib.userinput import ask_yesno
 except Exception as e:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
@@ -187,7 +188,7 @@ def print_summary(options):
         
     logger.info('-----------------------------------------------------')
     logger.info('Standby data directory    = %s' % options.coordinator_data_dir)
-    logger.info('Standby port              = %s' % str(os.getenv('PGPORT')))
+    logger.info('Standby port              = %s' % options.standby_port)
     if options.logfile:
         logger.info('Log directory             = %s' % options.logfile)
     logger.info('Standby running           = %s' % ('yes' if standby_running else 'no'))
@@ -237,13 +238,19 @@ def check_original_coordinator_status(options):
         logger.warn('Need to delete these files')
         logger.warn('Then call this utility again.')
         raise GpActivateStandbyException('Active postgres process on coordinator')
- 
+
 #-------------------------------------------------------------------------
-def get_config():
+def read_standby_port_from_postgresqlconf(options):
+        logger.info("Obtaining standby's port from standby data directory")
+        pgconf_dict = pgconf.readfile(options.coordinator_data_dir + "/postgresql.conf")
+        options.standby_port = pgconf_dict.int('port')
+
+#-------------------------------------------------------------------------
+def get_config(port=0):
     """Retrieves configuration information from the catalog."""
     
     logger.info('Reading current configuration...')
-    dburl = dbconn.DbURL()
+    dburl = dbconn.DbURL(port=port)
     array = gparray.GpArray.initFromCatalog(dburl, utility=True)
     
     return array
@@ -313,7 +320,7 @@ def stop_coordinator():
     gp.GpStop.local('Stop GPDB', coordinatorOnly=True, fast=True)
  
 #-------------------------------------------------------------------------
-def promote_standby(coordinator_data_dir):
+def promote_standby(coordinator_data_dir, port):
     """Promote standby"""
 
     logger.info('Promoting standby...')
@@ -337,7 +344,7 @@ def promote_standby(coordinator_data_dir):
     logger.debug('forcing CHECKPOINT to reflect new TimeLineID...')
     for i in range(600):
         try:
-            dburl = dbconn.DbURL()
+            dburl = dbconn.DbURL(port=port)
             conn = dbconn.connect(dburl, utility=True, logConn=False)
             dbconn.execSQL(conn, 'CHECKPOINT')
             conn.close()
@@ -349,25 +356,25 @@ def promote_standby(coordinator_data_dir):
     return False
 
 #-------------------------------------------------------------------------
-def check_standby_activation(options_, err):
+def check_standby_activation(options, err):
     """
     Check if standby was promoted and running.
     """
 
     # Here we check that gpstop or something else accidentally hasn't stopped
     # our standby we're activating.
-    pid = gp.get_postmaster_pid_locally(options_.coordinator_data_dir)
+    pid = gp.get_postmaster_pid_locally(options.coordinator_data_dir)
     if pid > 0:
         # We should wrap this in try/catch because we could get here after
         # unsuccessful promotion and standby may not be able to accept queries
         try:
-            array = get_config()
+            array = get_config(options.standby_port)
         except Exception as e:
             logger.warning("Couldn't get cluster configuration.")
             return False
         if array.coordinator.isSegmentCoordinator(current_role=True):
             logger.warning('Encountered exception: %s.' %str(err))
-            print_results(array, unix.getLocalHostname(), options_, False)
+            print_results(array, unix.getLocalHostname(), options, False)
             return True
     return False
 
@@ -388,6 +395,7 @@ setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 
 # parse args and options
 (options_, args_) = parseargs()
+read_standby_port_from_postgresqlconf(options_)
 
 # if we got a new log dir, we can now set it up.
 if options_.logfile:
@@ -408,13 +416,13 @@ try:
 
     # promote standby, only if the standby is running in recovery
     if not requires_restart:
-        res = promote_standby(options_.coordinator_data_dir)
+        res = promote_standby(options_.coordinator_data_dir, options_.standby_port)
         if not res:
             raise GpActivateStandbyException('Timed out waiting for promoted coordinator to accept database connections.')
 
     # now we can access the catalog.  promote action has already updated
     # catalog, so array.coordinator is the old (promoted) standby at this point.
-    array_ = get_config()
+    array_ = get_config(options_.standby_port)
 
     # If we forced to start utility coordinator, this is the time to restart
     # cluster so that the new coordinator becomes dispatch mode.
