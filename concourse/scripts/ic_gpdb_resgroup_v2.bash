@@ -7,11 +7,12 @@ source "${CWDIR}/common.bash"
 
 CGROUP_BASEDIR=${CGROUP_BASEDIR:-/sys/fs/cgroup}
 OPTIMIZER=${OPTIMIZER:-off}
-STATEMENT_MEM=${STATEMENT_MEM:-125MB}
+RESGROUP_STATEMENT_MEM=${STATEMENT_MEM:-125MB}
 TEST_OS=${TEST_OS:-ubuntu}
 
 GPDB_DEMO_DATADIRS=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs
 ISOLATION2_TESTTABLESPACE=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace
+ISOLATION2_TESTTABLESPACE_2=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace_2
 
 fatal() {
     echo "FATAL: $*" >&2
@@ -133,7 +134,7 @@ gen_env() {
 		source gpAux/gpdemo/gpdemo-env.sh
 
 		make -C src/test/regress
-		make PGOPTIONS="-c optimizer=${OPTIMIZER} -c statement_mem=${STATEMENT_MEM}" \
+		make PGOPTIONS="-c optimizer=${OPTIMIZER} -c statement_mem=${RESGROUP_STATEMENT_MEM}" \
 		    installcheck-resgroup-v2 -C src/test/isolation2
 	EOF
 
