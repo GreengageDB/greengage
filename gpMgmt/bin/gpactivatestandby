@@ -379,11 +379,12 @@ setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 
 # parse args and options
 (options_, args_) = parseargs()
-read_standby_port_from_postgresqlconf(options_)
 
 # if we got a new log dir, we can now set it up.
 if options_.logfile:
     setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options_.logfile)
+
+read_standby_port_from_postgresqlconf(options_)
 
 try:
     print_summary(options_)
