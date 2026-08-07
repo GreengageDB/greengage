@@ -37,6 +37,7 @@ dnf -y install \
     bison \
     bzip2-devel \
     cmake \
+    clang \
     expat-devel \
     flex \
     gcc-c++ \
@@ -61,6 +62,7 @@ dnf -y install \
     libxslt-devel \
     libyaml-devel \
     libzstd-devel \
+    llvm-devel \
     lsof \
     net-tools \
     openldap-devel \
