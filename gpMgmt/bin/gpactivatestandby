@@ -118,12 +118,6 @@ def parseargs():
     # We have to normalize this path for a later comparison
     options.master_data_dir = os.path.abspath(options.master_data_dir)
 
-    # check if PGPORT environment variable is set.
-    env_pgport = os.getenv('PGPORT', None)
-    if not env_pgport:
-        logger.fatal('PGPORT environment variable not set.')
-        parser.exit(2, None)
-
     if options.logfile and not os.path.exists(options.logfile):
         logger.fatal('Log directory %s does not exist.' % options.logfile)
         parser.exit(2, None)
