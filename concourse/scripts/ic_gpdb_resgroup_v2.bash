@@ -128,7 +128,7 @@ gen_env() {
 
 		make -C src/test/regress
 		make PGOPTIONS="-c optimizer=${OPTIMIZER} -c statement_mem=${STATEMENT_MEM}" \
-		    installcheck-resgroup-v2
+		    installcheck-resgroup-v2 -C src/test/isolation2
 	EOF
 
     chmod a+x /opt/run_test.sh
