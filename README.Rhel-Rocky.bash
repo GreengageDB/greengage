@@ -46,7 +46,6 @@ dnf -y install \
     indent \
     iproute \
     iputils \
-    java-11-openjdk-devel \
     jq \
     krb5-devel \
     krb5-server \
