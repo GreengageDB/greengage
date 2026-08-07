@@ -79,7 +79,7 @@ Feature: gpactivatestandby
           And the tablespace is valid on the standby coordinator
           And clean up and revert back to original coordinator
 
-    Scenario: activation still happens when non-critical exception is thrown
+        Scenario: activation still happens when non-critical exception is thrown
         Given the database is running
           And the standby is not initialized
 
@@ -87,9 +87,8 @@ Feature: gpactivatestandby
          Then gpinitstandby should return a return code of 0
           And verify the standby coordinator entries in catalog
         
-         When user immediately stops all primary processes for content 1 
-         And all files in pg_wal directory are deleted from data directory of preferred primary of content 1
-         And the standby coordinator goes down
+         When all files in pg_wal directory are deleted from data directory of preferred primary of content 1
+          And the standby coordinator goes down
          Then the coordinator goes down
          
          When the user runs gpactivatestandby with options "-f"
