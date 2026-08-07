@@ -426,8 +426,8 @@ def impl(context, env_var):
     del context.orig_env[env_var]
 
 
-@given('all files in pg_wal directory are deleted from data directory of preferred primary of content {content_ids}')
-@when('all files in pg_wal directory are deleted from data directory of preferred primary of content {content_ids}')
+@given('all files in pg_xlog directory are deleted from data directory of preferred primary of content {content_ids}')
+@when('all files in pg_xlog directory are deleted from data directory of preferred primary of content {content_ids}')
 def impl(context, content_ids):
     all_segments = GpArray.initFromCatalog(dbconn.DbURL()).getDbList()
     segments = [seg for seg in all_segments if seg.getSegmentPreferredRole() == ROLE_PRIMARY and
