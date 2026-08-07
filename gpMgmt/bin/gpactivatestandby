@@ -32,6 +32,7 @@ try:
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging, get_logger_if_verbose
     from gppylib import gparray
+    from gppylib import pgconf
     from gppylib.userinput import ask_yesno
 except ImportError as e_:
     sys.exit('ERROR: Cannot import modules.  Please check that you '
@@ -147,12 +148,12 @@ def print_results(array, hostname, options, successfully=False):
     
     logger.info('-----------------------------------------------------')
     if successfully:
-        logger.info('The activation of the standby coordinator has completed successfully.')
+        logger.info('The activation of the standby master has completed successfully.')
     else:
-        logger.info('The activation of the standby coordinator has completed.')
+        logger.info('The activation of the standby master has completed.')
         logger.warning('Some non-critical exceptions were encountered during activation process.')
         logger.warning('Cluster state needs to be analyzed before proceeding with further instructions.')
-    logger.info('%s is now the new primary coordinator.' % hostname)
+    logger.info('%s is now the new primary master.' % hostname)
     logger.info('You will need to update your user access mechanism to reflect')
     logger.info('the change of master hostname.')
     logger.info('Do not re-start the failed master while the fail-over master is')
@@ -188,7 +189,7 @@ def print_summary(options):
         
     logger.info('-----------------------------------------------------')
     logger.info('Standby data directory    = %s' % options.master_data_dir)
-    logger.info('Standby port              = %s' % str(os.getenv('PGPORT')))
+    logger.info('Standby port              = %s' % options.standby_port)
     if options.logfile:
         logger.info('Log directory             = %s' % options.logfile)
     logger.info('Standby running           = %s' % ('yes' if standby_running else 'no'))
@@ -239,11 +240,17 @@ def check_original_master_status(options):
         raise GpActivateStandbyException('Active postgres process on master')
  
 #-------------------------------------------------------------------------
-def get_config():
+def read_standby_port_from_postgresqlconf(options):
+        logger.info("Obtaining standby's port from standby data directory")
+        pgconf_dict = pgconf.readfile(options.master_data_dir + "/postgresql.conf")
+        options.standby_port = pgconf_dict.int('port')
+
+#-------------------------------------------------------------------------
+def get_config(port=0):
     """Retrieves configuration information from the catalog."""
     
     logger.info('Reading current configuration...')
-    dburl = dbconn.DbURL()
+    dburl = dbconn.DbURL(port=port)
     array = gparray.GpArray.initFromCatalog(dburl, utility=True)
     
     return array
@@ -315,7 +322,7 @@ def stop_master():
     gp.GpStop.local('Stop GPDB', masterOnly=True, fast=True)
  
 #-------------------------------------------------------------------------
-def promote_standby(master_data_dir):
+def promote_standby(master_data_dir, port):
     """Promote standby"""
 
     logger.info('Promoting standby...')
@@ -326,13 +333,10 @@ def promote_standby(master_data_dir):
     logger.debug('Waiting for connection...')
     for i in range(600):
         try:
-            dburl = dbconn.DbURL()
-            with dbconn.connect(dburl, utility=True, logConn=False) as conn:
-                # When the new master is available for connections, we should
-                # run a CHECKPOINT to force the new TimeLineID to be written to
-                # the pg_control file.
-                dbconn.execSQL(conn, 'CHECKPOINT')
-            logger.info('Standby master is promoted')
+            dburl = dbconn.DbURL(port=port)
+            conn = dbconn.connect(dburl, utility=True, logConn=False)
+            dbconn.execSQL(conn, 'CHECKPOINT')
+            conn.close()
             return True
         except pygresql.InternalError as e:
             pass
@@ -342,25 +346,25 @@ def promote_standby(master_data_dir):
 
 
 #-------------------------------------------------------------------------
-def check_standby_activation(options_, err):
+def check_standby_activation(options, err):
     """
     Check if standby was promoted and running.
     """
 
     # Here we check that gpstop or something else accidentally hasn't stopped
     # our standby we're activating.
-    pid = gp.get_postmaster_pid_locally(options_.coordinator_data_dir)
+    pid = gp.get_postmaster_pid_locally(options.master_data_dir)
     if pid > 0:
         # We should wrap this in try/catch because we could get here after
         # unsuccessful promotion and standby may not be able to accept queries
         try:
-            array = get_config()
+            array = get_config(options.standby_port)
         except Exception as e:
             logger.warning("Couldn't get cluster configuration.")
             return False
-        if array.coordinator.isSegmentCoordinator(current_role=True):
+        if array.master.isSegmentMaster(current_role=True):
             logger.warning('Encountered exception: %s.' %str(err))
-            print_results(array, unix.getLocalHostname(), options_, False)
+            print_results(array, unix.getLocalHostname(), options, False)
             return True
     return False
 
@@ -381,6 +385,7 @@ setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 
 # parse args and options
 (options_, args_) = parseargs()
+read_standby_port_from_postgresqlconf(options_)
 
 # if we got a new log dir, we can now set it up.
 if options_.logfile:
@@ -401,14 +406,14 @@ try:
 
     # promote standby, only if the standby is running in recovery
     if not requires_restart:
-        res = promote_standby(options_.master_data_dir)
+        res = promote_standby(options_.master_data_dir, options_.standby_port)
         if not res:
             raise GpActivateStandbyException('Either the set port is incorrect or '
                                              'the postmaster could not come up.')
 
     # now we can access the catalog.  promote action has already updated
     # catalog, so array.master is the old (promoted) standby at this point.
-    array_ = get_config()
+    array_ = get_config(options_.standby_port)
 
     # If we forced to start utility master, this is the time to restart
     # cluster so that the new master becomes dispatch mode.
@@ -428,10 +433,10 @@ except (ExecutionError, GpActivateStandbyException) as e:
     if (check_standby_activation(options_, e)):
         sys.exit(1)
     else:
-        logger.fatal('Error activating standby coordinator: %s' % str(e))
+        logger.fatal('Error activating standby master: %s' % str(e))
         sys.exit(2)
 except Exception as e:
-    logger.fatal('Error activating standby coordinator: %s' % str(e))
+    logger.fatal('Error activating standby master: %s' % str(e))
     sys.exit(2)
 
 sys.exit(0)
