@@ -78,6 +78,8 @@ setup_cgroup_v2() {
         fatal "$basedir/cgroup.subtree_control is not writable; mount /sys/fs/cgroup rw and use --cgroupns=host"
     fi
 
+    chmod a+rw "$basedir/cgroup.procs"
+
     for controller in cpu cpuset io memory pids; do
         enable_cgroup_controller "$controller"
     done
@@ -86,13 +88,17 @@ setup_cgroup_v2() {
     chmod a+rwx "$basedir" "$gpdb_cgroup"
     chmod -R a+rwX "$gpdb_cgroup"
 
+    if [ ! -w "$basedir/cgroup.procs" ]; then
+        fatal "$basedir/cgroup.procs is not writable; cgroup v2 process migration may fail"
+    fi
+
     for controller in cpu cpuset io memory pids; do
         if ! grep -qw "$controller" "$gpdb_cgroup/cgroup.controllers"; then
             fatal "controller '$controller' is not available below $gpdb_cgroup after enabling subtree control"
         fi
     done
 
-    for file in cpu.max cpu.weight cpuset.cpus cpuset.mems io.max memory.max cgroup.subtree_control; do
+    for file in cgroup.procs cpu.max cpu.weight cpuset.cpus cpuset.mems io.max memory.max cgroup.subtree_control; do
         if [ ! -e "$gpdb_cgroup/$file" ]; then
             fatal "required cgroup v2 file $gpdb_cgroup/$file is missing"
         fi
