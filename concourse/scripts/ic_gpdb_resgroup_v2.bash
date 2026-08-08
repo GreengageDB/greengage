@@ -66,6 +66,30 @@ enable_cgroup_controller() {
     fi
 }
 
+gpdb_cgroup_ready() {
+    local basedir=$CGROUP_BASEDIR
+    local gpdb_cgroup=$basedir/gpdb
+    local controller
+    local file
+
+    [ -w "$basedir/cgroup.procs" ] || return 1
+    [ -f "$gpdb_cgroup/cgroup.controllers" ] || return 1
+
+    for controller in cpu cpuset io memory pids; do
+        grep -qw "$controller" "$gpdb_cgroup/cgroup.controllers" || return 1
+    done
+
+    for file in cgroup.procs cpu.max cpu.weight cpuset.cpus cpuset.mems io.max memory.max cgroup.subtree_control; do
+        [ -e "$gpdb_cgroup/$file" ] || return 1
+    done
+}
+
+assert_gpdb_cgroup_ready() {
+    gpdb_cgroup_ready || fatal "$CGROUP_BASEDIR/gpdb is not ready for resource group v2; required controllers/files are missing or $CGROUP_BASEDIR/cgroup.procs is not writable"
+}
+
+# Create the GPDB cgroup, use it as-is if ready, otherwise enable parent
+# controllers and fail if the subtree is still unusable.
 setup_cgroup_v2() {
     local basedir=$CGROUP_BASEDIR
     local gpdb_cgroup=$basedir/gpdb
@@ -75,35 +99,25 @@ setup_cgroup_v2() {
         fatal "$basedir is not a cgroup v2 mount"
     fi
 
-    if [ ! -w "$basedir/cgroup.subtree_control" ]; then
-        fatal "$basedir/cgroup.subtree_control is not writable; mount /sys/fs/cgroup rw and use --cgroupns=host"
-    fi
-
     chmod a+rw "$basedir/cgroup.procs"
-
-    for controller in cpu cpuset io memory pids; do
-        enable_cgroup_controller "$controller"
-    done
 
     mkdir -p "$gpdb_cgroup"
     chmod a+rwx "$basedir" "$gpdb_cgroup"
     chmod -R a+rwX "$gpdb_cgroup"
 
-    if [ ! -w "$basedir/cgroup.procs" ]; then
-        fatal "$basedir/cgroup.procs is not writable; cgroup v2 process migration may fail"
+    if ! gpdb_cgroup_ready; then
+        if [ ! -w "$basedir/cgroup.subtree_control" ]; then
+            fatal "$basedir/cgroup.subtree_control is not writable; mount /sys/fs/cgroup rw and use --cgroupns=host"
+        fi
+
+        for controller in cpu cpuset io memory pids; do
+            enable_cgroup_controller "$controller"
+        done
+
+        chmod -R a+rwX "$gpdb_cgroup"
     fi
 
-    for controller in cpu cpuset io memory pids; do
-        if ! grep -qw "$controller" "$gpdb_cgroup/cgroup.controllers"; then
-            fatal "controller '$controller' is not available below $gpdb_cgroup after enabling subtree control"
-        fi
-    done
-
-    for file in cgroup.procs cpu.max cpu.weight cpuset.cpus cpuset.mems io.max memory.max cgroup.subtree_control; do
-        if [ ! -e "$gpdb_cgroup/$file" ]; then
-            fatal "required cgroup v2 file $gpdb_cgroup/$file is missing"
-        fi
-    done
+    assert_gpdb_cgroup_ready
 }
 
 gen_env() {
