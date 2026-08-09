@@ -94,6 +94,7 @@ extern LLVMTypeRef StructExprState;
 extern LLVMTypeRef StructAggState;
 extern LLVMTypeRef StructAggStatePerTransData;
 extern LLVMTypeRef StructAggStatePerGroupData;
+extern LLVMTypeRef StructBitmapset;
 
 extern LLVMValueRef AttributeTemplate;
 extern LLVMValueRef ExecEvalSubroutineTemplate;

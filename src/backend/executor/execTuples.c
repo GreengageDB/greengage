@@ -1052,7 +1052,10 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.get_heap_tuple = NULL,
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
-	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple
+	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsHeapTuple = {
@@ -1069,7 +1072,10 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	/* A heap tuple table slot can not "own" a minimal tuple. */
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_heap_copy_heap_tuple,
-	.copy_minimal_tuple = tts_heap_copy_minimal_tuple
+	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsMinimalTuple = {
@@ -1086,7 +1092,10 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.get_heap_tuple = NULL,
 	.get_minimal_tuple = tts_minimal_get_minimal_tuple,
 	.copy_heap_tuple = tts_minimal_copy_heap_tuple,
-	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple
+	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 const TupleTableSlotOps TTSOpsBufferHeapTuple = {
@@ -1103,7 +1112,10 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	/* A buffer heap tuple table slot can not "own" a minimal tuple. */
 	.get_minimal_tuple = NULL,
 	.copy_heap_tuple = tts_buffer_heap_copy_heap_tuple,
-	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple
+	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
+
+	.gettargetattr = NULL,
+	.is_attr_valid = NULL
 };
 
 
@@ -1933,6 +1945,22 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 		slot_getmissingattrs(slot, slot->tts_nvalid, attnum);
 		slot->tts_nvalid = attnum;
 	}
+}
+
+/*
+ * slot_gettargetattr - fetch exactly the given (possibly sparse) set of
+ * attributes, for slot types that support it (see TupleTableSlotOps).
+ *
+ * Returns false, doing nothing, if the slot type has no gettargetattr
+ * callback, so the caller can fall back to slot_getsomeattrs().
+ */
+bool
+slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	if (slot->tts_ops->gettargetattr == NULL)
+		return false;
+
+	return slot->tts_ops->gettargetattr(slot, attrs);
 }
 
 /* ----------------------------------------------------------------
