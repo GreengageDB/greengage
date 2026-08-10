@@ -32,7 +32,7 @@ trap record_exitcode EXIT
 
 assert_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        fatal "resource group v2 tests must run as root inside a privileged Docker container"
+        fatal "resource group v2 tests must run as root to configure cgroup v2"
     fi
 }
 
@@ -43,11 +43,9 @@ assert_real_filesystem() {
     mkdir -p "$path"
     fs_type=$(stat -f -c %T "$path")
 
-    case "$fs_type" in
-        overlayfs|tmpfs)
-            fatal "$path is on $fs_type; bind mount it from a regular host filesystem for IO_LIMIT tests"
-            ;;
-    esac
+    if [ "$fs_type" = "overlayfs" ] || [ "$fs_type" = "tmpfs" ]; then
+        fatal "$path is on $fs_type; bind mount it from a regular host filesystem for IO_LIMIT tests"
+    fi
 }
 
 enable_cgroup_controller() {
@@ -60,7 +58,7 @@ enable_cgroup_controller() {
 
     if ! grep -qw "$controller" "$basedir/cgroup.subtree_control"; then
         if ! echo "+$controller" > "$basedir/cgroup.subtree_control"; then
-            fatal "failed to enable cgroup v2 controller '$controller'; run Docker with --privileged, --cgroupns=host and a rw /sys/fs/cgroup mount"
+            fatal "failed to enable cgroup v2 controller '$controller'"
         fi
     fi
 }
@@ -84,7 +82,7 @@ gpdb_cgroup_ready() {
 }
 
 assert_gpdb_cgroup_ready() {
-    gpdb_cgroup_ready || fatal "$CGROUP_BASEDIR/gpdb is not ready for resource group v2; required controllers/files are missing or $CGROUP_BASEDIR/cgroup.procs is not writable"
+    gpdb_cgroup_ready || fatal "$CGROUP_BASEDIR/gpdb is not ready for resource group v2"
 }
 
 # Create the GPDB cgroup, use it as-is if ready, otherwise enable parent
@@ -106,7 +104,7 @@ setup_cgroup_v2() {
 
     if ! gpdb_cgroup_ready; then
         if [ ! -w "$basedir/cgroup.subtree_control" ]; then
-            fatal "$basedir/cgroup.subtree_control is not writable; mount /sys/fs/cgroup rw and use --cgroupns=host"
+            fatal "$basedir/cgroup.subtree_control is not writable"
         fi
 
         for controller in cpu cpuset io memory pids; do
