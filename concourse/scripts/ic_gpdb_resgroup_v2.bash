@@ -99,7 +99,7 @@ setup_cgroup_v2() {
     chmod a+rw "$basedir/cgroup.procs"
 
     mkdir -p "$gpdb_cgroup"
-    chmod a+rwx "$basedir" "$gpdb_cgroup"
+    chmod a+rwx "$gpdb_cgroup"
     chmod -R a+rwX "$gpdb_cgroup"
 
     if ! gpdb_cgroup_ready; then
