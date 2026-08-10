@@ -140,6 +140,7 @@
 		"optimizer_jit_above_cost",
 		"optimizer_jit_inline_above_cost",
 		"optimizer_jit_optimize_above_cost",
+		"output_plugin_libraries",
 		"pljava_classpath",
 		"pljava_release_lingering_savepoints",
 		"pljava_statement_cache_size",
