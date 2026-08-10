@@ -79,7 +79,7 @@ Feature: gpactivatestandby
           And the tablespace is valid on the standby coordinator
           And clean up and revert back to original coordinator
 
-        Scenario: activation still happens when non-critical exception is thrown
+    Scenario: activation still happens when non-critical exception is thrown
         Given the database is running
           And the standby is not initialized
 
@@ -92,7 +92,7 @@ Feature: gpactivatestandby
          Then the coordinator goes down
          
          When the user runs gpactivatestandby with options "-f"
-         Then gpactivatestandby should return a return code of 1
+         Then gpactivatestandby should return a return code of 3
           And verify the standby coordinator is now acting as coordinator
           And gpactivatestandby should print a "Encountered exception" warning
 
