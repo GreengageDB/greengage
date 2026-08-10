@@ -44,7 +44,7 @@ assert_real_filesystem() {
     fs_type=$(stat -f -c %T "$path")
 
     if [ "$fs_type" = "overlayfs" ] || [ "$fs_type" = "tmpfs" ]; then
-        fatal "$path is on $fs_type; bind mount it from a regular host filesystem for IO_LIMIT tests"
+        fatal "$path is on $fs_type; IO_LIMIT tests require a regular filesystem"
     fi
 }
 
