@@ -363,7 +363,7 @@ def check_standby_activation(options, err):
         try:
             array = get_config(options.standby_port)
         except Exception as e:
-            logger.warning("Couldn't get cluster configuration.")
+            logger.warning("Couldn't get cluster configuration: %s." % str(e))
             return False
         if array.master.isSegmentMaster(current_role=True):
             logger.warning('Encountered exception: %s.' %str(err))
@@ -378,8 +378,9 @@ def check_standby_activation(options, err):
 """
 Return codes:
   0 - Standby activated successfully
-  1 - Standby activated successfully but exceptions were encountered
+  1 - Command encountered an unexpected internal failure that couldn't be handled by the normal error-handling path
   2 - Standby activation failed
+  3 - Standby activated successfully but exceptions were encountered
 """
 
 # setup logging
@@ -433,9 +434,9 @@ try:
 except (ExecutionError, GpActivateStandbyException) as e:
 
     # Even with raised exceptions we still could have promoted standby.
-    # User need to be notified about this with separate return code.
+    # User needs to be notified about this with separate return code.
     if (check_standby_activation(options_, e)):
-        sys.exit(1)
+        sys.exit(3)
     else:
         logger.fatal('Error activating standby master: %s' % str(e))
         sys.exit(2)

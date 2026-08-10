@@ -89,7 +89,7 @@ Feature: gpactivatestandby
          Then the master goes down
          
          When the user runs gpactivatestandby with options "-f"
-         Then gpactivatestandby should return a return code of 1
+         Then gpactivatestandby should return a return code of 3
           And verify the standby master is now acting as master
           And gpactivatestandby should print a "Encountered exception" warning
 
