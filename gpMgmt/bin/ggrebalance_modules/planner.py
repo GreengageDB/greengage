@@ -384,7 +384,7 @@ class PortAllocator:
                 ctxt=REMOTE,
                 remoteHost=host.address
             )
-            cmd.run()
+            cmd.run(validateAfter=True)
             
             is_available = cmd.is_port_available()
             
@@ -395,9 +395,7 @@ class PortAllocator:
             return is_available
             
         except Exception as e:
-            self.logger.warning(f"Failed to verify port {port} on {host.hostname}: {e}. Assuming available.")
-            # On error, assume available
-            return True
+            raise PlanningError(f"Failed to verify port {port} on {host.hostname}: {e}.")
     
     def _verify_and_allocate_port(self, host: Host, preferred_port: int) -> int:
         """
