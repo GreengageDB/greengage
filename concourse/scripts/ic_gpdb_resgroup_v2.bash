@@ -12,7 +12,6 @@ TEST_OS=${TEST_OS:-ubuntu}
 
 GPDB_DEMO_DATADIRS=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs
 ISOLATION2_TESTTABLESPACE=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace
-ISOLATION2_TESTTABLESPACE_2=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace_2
 
 fatal() {
     echo "FATAL: $*" >&2
