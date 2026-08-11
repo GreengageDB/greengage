@@ -90,7 +90,7 @@ ISCONFIG=$(GPPGDIR)/GNUmakefile
 ## On these platforms, we do the full build including the server. On other
 ## platforms, we do a client-only build.
 ##
-SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 ol8_x86_64 linux_x86_64
+SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 rocky9_x86_64 ol8_x86_64 linux_x86_64
 
 #---------------------------------------------------------------------
 # Compiler options
@@ -341,6 +341,7 @@ PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print 
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
 ARTIFACTS_DIR := $(CURDIR)/../Package
+RPM_TOPDIR := $(CURDIR)/../RPM
 
 ../VERSION :
 	@echo "Update $@"
@@ -350,23 +351,21 @@ ARTIFACTS_DIR := $(CURDIR)/../Package
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
 	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
-	$(eval DISTRO_CODENAME := $(shell lsb_release -sc))
+	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
-	$(eval STABILITY := $(if $(filter yes,$(IS_RELEASE)),stable,unstable))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
 version-info : version-vars
 	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
 	@echo "FULL_VERSION: $(FULL_VERSION)"
-	@echo "DISTRO_CODENAME: $(DISTRO_CODENAME)"
+	@echo "VERSION_CODENAME: $(VERSION_CODENAME)"
 	@echo "IS_RELEASE: $(IS_RELEASE)"
-	@echo "STABILITY: $(STABILITY)"
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
 changelog : debian/changelog
 debian/changelog : version-vars
-	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(DISTRO_CODENAME); urgency=low" > $@
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
 	@echo "  * $(BUILD_TYPE)" >> $@
 	@echo "" >> $@
@@ -393,7 +392,25 @@ pkg-deb : debian/changelog debian/install
 											-o -name "*.changes" \) \
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
-.PHONY: pkg pkg-deb changelog version-vars version-info
+# Build RPM package
+pkg-rpm : GPROOT = /opt/greengagedb
+pkg-rpm : GPDIR  = $(PACKAGE_NAME)
+pkg-rpm : version-vars
+	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+	rpmbuild -bb \
+		--define "_topdir $(RPM_TOPDIR)" \
+		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "gpdb_release 1" \
+		--define "gproot $(GPROOT)" \
+		--define "gpdir $(GPDIR)" \
+		--define "sourcedir $(CURDIR)/.." \
+		rpm/greengage7.spec
+	@mkdir -p $(ARTIFACTS_DIR)
+	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
+		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+
+.PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
@@ -448,6 +465,7 @@ rhel6_x86_64_MPP_ARCH=RHEL6-x86_64
 rhel7_x86_64_MPP_ARCH=RHEL7-x86_64
 rhel8_x86_64_MPP_ARCH=RHEL8-x86_64
 rocky8_x86_64_MPP_ARCH=ROCKY8-x86_64
+rocky9_x86_64_MPP_ARCH=ROCKY9-x86_64
 ol8_x86_64_MPP_ARCH=OL8-x86_64
 ifneq "$($(BLD_ARCH)_MPP_ARCH)" ""
 export MPP_ARCH=$($(BLD_ARCH)_MPP_ARCH)
