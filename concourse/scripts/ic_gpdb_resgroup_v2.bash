@@ -72,7 +72,7 @@ gpdb_cgroup_ready() {
     [ -w "$basedir/cgroup.procs" ] || return 1
     [ -f "$gpdb_cgroup/cgroup.controllers" ] || return 1
 
-    for controller in cpu cpuset io memory pids; do
+    for controller in cpu cpuset io memory; do
         grep -qw "$controller" "$gpdb_cgroup/cgroup.controllers" || return 1
     done
 
@@ -107,7 +107,7 @@ setup_cgroup_v2() {
             fatal "$basedir/cgroup.subtree_control is not writable"
         fi
 
-        for controller in cpu cpuset io memory pids; do
+        for controller in cpu cpuset io memory; do
             enable_cgroup_controller "$controller"
         done
 
