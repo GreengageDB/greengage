@@ -448,7 +448,7 @@ except (ExecutionError, GpActivateStandbyException) as e:
         sys.exit(3)
     else:
         logger.fatal('Error activating standby coordinator: %s' % str(e))
-        sys.exit(2)
+        sys.exit(1)
 except Exception as e:
     logger.fatal('Error activating standby coordinator: %s' % str(e))
     sys.exit(2)
