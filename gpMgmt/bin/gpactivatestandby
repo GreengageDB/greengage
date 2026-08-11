@@ -45,6 +45,11 @@ LOG_TIME_THRESHOLD_MINS = 120
 
 GP_RECOVERY_CONF_FILE = "recovery.conf"
 
+GPACTIVATESTANDBY_SUCCESS = 0
+GPACTIVATESTANDBY_INTERNAL_FAILURE = 1
+GPACTIVATESTANDBY_FAILED = 2
+GPACTIVATESTANDBY_SUCCESS_WITH_EXCEPTIONS = 3
+
 _description = sys.modules[__name__].__doc__
 _usage = "\n"
 
@@ -357,19 +362,29 @@ def check_standby_activation(options, err):
     # Here we check that gpstop or something else accidentally hasn't stopped
     # our standby we're activating.
     pid = gp.get_postmaster_pid_locally(options.master_data_dir)
-    if pid > 0:
-        # We should wrap this in try/catch because we could get here after
-        # unsuccessful promotion and standby may not be able to accept queries
-        try:
-            array = get_config(options.standby_port)
-        except Exception as e:
-            logger.warning("Couldn't get cluster configuration: %s." % str(e))
-            return False
-        if array.master.isSegmentMaster(current_role=True):
-            logger.warning('Encountered exception: %s.' %str(err))
-            print_results(array, unix.getLocalHostname(), options, False)
-            return True
-    return False
+
+    if pid <= 0:
+        logger.fatal('Internal error activating standby master: %s' % str(err))
+        return GPACTIVATESTANDBY_INTERNAL_FAILURE
+    
+    # We should wrap this in try/catch because we could get here after
+    # unsuccessful promotion and standby may not be able to accept queries
+    try:
+        array = get_config(options.standby_port)
+    except Exception as e:
+        logger.warning("Couldn't get cluster configuration: %s." % str(e))
+        logger.fatal('Internal error activating standby master: %s' % str(err))
+        return GPACTIVATESTANDBY_INTERNAL_FAILURE
+    
+    if not array.master.isSegmentMaster(current_role=True):
+        logger.fatal('Error activating standby master: %s' % str(err))
+        return GPACTIVATESTANDBY_FAILED
+
+    logger.warning('Encountered exception: %s.' %str(err))
+    print_results(array, unix.getLocalHostname(), options, False)
+
+    return GPACTIVATESTANDBY_SUCCESS_WITH_EXCEPTIONS
+    
 
 #-------------------------------------------------------------------------
 # Main
@@ -431,17 +446,24 @@ try:
     
     print_results(array_, unix.getLocalHostname(), options_, True)
 
-except (ExecutionError, GpActivateStandbyException) as e:
+# Even with raised exceptions we still could have promoted standby.
+# User needs to be notified about this with separate return code.
+except ExecutionError as e:
+    return_code = check_standby_activation(options_, e)
+    sys.exit(return_code)
 
-    # Even with raised exceptions we still could have promoted standby.
-    # User needs to be notified about this with separate return code.
-    if (check_standby_activation(options_, e)):
-        sys.exit(3)
-    else:
-        logger.fatal('Error activating standby master: %s' % str(e))
-        sys.exit(1)
+except GpActivateStandbyException as e:
+    # We still can possibly get GPACTIVATESTANDBY_INTERNAL_FAILURE
+    if "the postmaster could not come up" in str(e):
+        return_code = check_standby_activation(options_, e)
+        sys.exit(return_code)
+
+    logger.fatal('Error activating standby master: %s' % str(e))
+    sys.exit(GPACTIVATESTANDBY_FAILED)
+
+
 except Exception as e:
     logger.fatal('Error activating standby master: %s' % str(e))
-    sys.exit(2)
+    sys.exit(GPACTIVATESTANDBY_FAILED)
 
-sys.exit(0)
+sys.exit(GPACTIVATESTANDBY_SUCCESS)
