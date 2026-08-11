@@ -59,8 +59,12 @@ In spite of this, we have added a 6.x to 7.x migration test to the core
 Greengage repository. The reason being that is it simply more convenient
 to test pg_upgrade from the same repository where it is located.
 
-For a more detailed overview of the existing tests, see README.test.md
-and TESTING files
+In total, Greengage-specific testing files include:
+
+- `test_gpdb.sh` - the core script mentioned above, which does all the heavy lifting.
+- `pg_upgrade_run_6X_to_7X_migration.bash` - small wrapper to run the above test between Greengage6 and Greengage7.
+- `Dockerfile.pg_upgrade` - creates an image intended to run the above tests on the CI.
+- `cleanup_regression_dump_from_6X.sql` - a script which deletes/changes objects that cause `pg_upgrade_run_6X_to_7X_migration.bash` test with the regression dump to fail.
 
 
 GPDB Merge notice:
