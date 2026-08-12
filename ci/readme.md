@@ -76,7 +76,8 @@ To use gdb inside the container, add the `--privileged` flag to the run command.
 
 Resource group v2 tests require a Linux host with cgroup v2 enabled.
 `gpdemo-datadirs` and `testtablespace` must be directories on a regular host
-filesystem, not Docker overlay or tmpfs.
+filesystem, not Docker overlay or tmpfs. Note that the script changes host
+cgroup settings.
 
 For Ubuntu:
 ```bash

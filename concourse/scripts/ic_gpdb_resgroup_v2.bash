@@ -47,7 +47,7 @@ assert_real_filesystem() {
     fi
 }
 
-# Create the GPDB cgroup, enable parent controllers, and grant gpadmin access.
+# Create GPDB cgroup, enable parent controllers, and grant gpadmin access.
 setup_cgroup_v2() {
     if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
         fatal "/sys/fs/cgroup is not a cgroup v2 mount"
@@ -65,10 +65,6 @@ setup_cgroup_v2() {
 
     chown -R gpadmin:gpadmin /sys/fs/cgroup/gpdb
     chmod a+w /sys/fs/cgroup/cgroup.procs
-
-    if [ ! -w /sys/fs/cgroup/cgroup.procs ] || [ ! -w /sys/fs/cgroup/gpdb ]; then
-        fatal "/sys/fs/cgroup/gpdb is not ready for resource group v2"
-    fi
 }
 
 gen_env() {
