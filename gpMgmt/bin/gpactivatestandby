@@ -245,7 +245,7 @@ def read_standby_port_from_postgresqlconf(options):
         options.standby_port = pgconf_dict.int('port')
 
 #-------------------------------------------------------------------------
-def get_config(port=0):
+def get_config(port):
     """Retrieves configuration information from the catalog."""
     
     logger.info('Reading current configuration...')
