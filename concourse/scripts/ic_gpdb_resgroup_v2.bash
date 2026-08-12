@@ -17,18 +17,6 @@ fatal() {
     exit 1
 }
 
-record_exitcode() {
-    local exitcode=$?
-
-    if [ -d /logs ] && [ -w /logs ]; then
-        echo "$exitcode" > /logs/.exitcode || true
-    fi
-
-    exit "$exitcode"
-}
-
-trap record_exitcode EXIT
-
 assert_root() {
     if [ "$(id -u)" -ne 0 ]; then
         fatal "resource group v2 tests must run as root to configure cgroup v2"

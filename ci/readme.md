@@ -81,8 +81,8 @@ cgroup settings.
 
 For Ubuntu:
 ```bash
-mkdir -p gpdemo-datadirs testtablespace logs
-chmod -R 777 gpdemo-datadirs testtablespace logs
+mkdir -p gpdemo-datadirs testtablespace
+chmod -R 777 gpdemo-datadirs testtablespace
 
 docker run --name gpdb7_resgroup_v2 --rm -it -e TEST_OS=ubuntu \
   --sysctl "kernel.sem=500 1024000 200 4096" \
@@ -91,7 +91,6 @@ docker run --name gpdb7_resgroup_v2 --rm -it -e TEST_OS=ubuntu \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   -v "$PWD/gpdemo-datadirs":/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs:rw \
   -v "$PWD/testtablespace":/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace:rw \
-  -v "$PWD/logs":/logs:rw \
   gpdb7_u22:latest \
   /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb_resgroup_v2.bash
 ```
@@ -107,8 +106,6 @@ Required Docker options:
 * `gpdemo-datadirs` and `testtablespace` mounts keep database files used by
   IO_LIMIT tests on the host filesystem, where cgroup v2 can resolve real block
   devices.
-* `logs` is optional and lets the script write `/logs/.exitcode` for CI wrappers
-  or local debugging.
 
 ## ORCA linter
 
