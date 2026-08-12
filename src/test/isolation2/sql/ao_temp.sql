@@ -19,10 +19,12 @@ AS $$
 1q:
 
 -- Wait some time until file cleanup
-select wait_until_segment_synchronized(0);
+2: select pg_sleep(10);
 
-! sh /tmp/check_ao_relfile_t2.sh; 
-! sh /tmp/check_ao_relfile_t3.sh; 
+2: ! sh /tmp/check_ao_relfile_t2.sh; 
+2: ! sh /tmp/check_ao_relfile_t3.sh; 
+
+2q:
 
 -- Cleanup
 DROP FUNCTION relfile_test_cmd(tbl regclass);
