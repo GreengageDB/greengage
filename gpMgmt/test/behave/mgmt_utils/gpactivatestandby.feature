@@ -44,7 +44,7 @@ Feature: gpactivatestandby
         Then gpinitstandby should return a return code of 0
         And verify the standby coordinator entries in catalog
         And the user runs gpactivatestandby with options "-d invalid_directory"
-        Then gpactivatestandby should return a return code of 1
+        Then gpactivatestandby should return a return code of 2
 
     Scenario: gpstate after running gpactivatestandby works
         Given the database is running

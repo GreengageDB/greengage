@@ -376,8 +376,18 @@ def check_standby_activation(options, err):
         logger.warning("Couldn't get cluster configuration: %s." % str(e))
         logger.fatal('Internal error activating standby coordinator: %s' % str(err))
         return GPACTIVATESTANDBY_INTERNAL_FAILURE
-    
-    if not array.coordinator.isSegmentCoordinator(current_role=True):
+
+    coordinator_hostname = array.coordinator.getSegmentHostName()
+    coordinator_data_dir = os.path.normpath(array.coordinator.getSegmentDataDirectory())
+    coordinator_port = array.coordinator.getSegmentPort()
+
+    standby_hostname = unix.getLocalHostname()
+    standby_data_dir = os.path.normpath(options.coordinator_data_dir)
+    standby_port = options.standby_port
+
+    if not (coordinator_hostname == standby_hostname and
+            coordinator_data_dir == standby_data_dir and
+            coordinator_port == standby_port):
         logger.fatal('Error activating standby coordinator: %s' % str(err))
         return GPACTIVATESTANDBY_FAILED
 
@@ -410,9 +420,9 @@ setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 if options_.logfile:
     setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options_.logfile)
 
-read_standby_port_from_postgresqlconf(options_)
-
 try:
+    read_standby_port_from_postgresqlconf(options_)
+
     print_summary(options_)
 
 
