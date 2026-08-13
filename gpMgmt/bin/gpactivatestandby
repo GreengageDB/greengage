@@ -370,7 +370,17 @@ def check_standby_activation(options, err):
         logger.fatal('Internal error activating standby master: %s' % str(err))
         return GPACTIVATESTANDBY_INTERNAL_FAILURE
     
-    if not array.master.isSegmentMaster(current_role=True):
+    master_hostname = array.master.getSegmentHostName()
+    master_data_dir = os.path.normpath(array.master.getSegmentDataDirectory())
+    master_port = array.master.getSegmentPort()
+
+    standby_hostname = unix.getLocalHostname()
+    standby_data_dir = os.path.normpath(options.master_data_dir)
+    standby_port = options.standby_port
+
+    if not (master_hostname == standby_hostname and
+            master_data_dir == standby_data_dir and
+            master_port == standby_port):
         logger.fatal('Error activating standby master: %s' % str(err))
         return GPACTIVATESTANDBY_FAILED
 
@@ -403,9 +413,9 @@ setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName())
 if options_.logfile:
     setup_tool_logging(EXECNAME, unix.getLocalHostname(), unix.getUserName(), logdir=options_.logfile)
 
-read_standby_port_from_postgresqlconf(options_)
-
 try:
+    read_standby_port_from_postgresqlconf(options_)
+
     print_summary(options_)
 
 
