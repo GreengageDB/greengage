@@ -183,6 +183,7 @@ class TestResourceEstimator(GpTestCase):
         self.options.skip_rebalance = False
         self.options.skip_resource_estimation = False
         self.options.batch_size = 16
+        self.options.solver_seed = 42
     
     @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_segment_sizes_from_unbalanced_cluster(self, mock_dbconn):
