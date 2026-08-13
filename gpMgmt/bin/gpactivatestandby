@@ -249,19 +249,10 @@ def get_config(port):
     """Retrieves configuration information from the catalog."""
     
     logger.info('Reading current configuration...')
-    array = None
-    last_error = None
-    for i in range(600):
-        try:
-            dburl = dbconn.DbURL(port=port)
-            array = gparray.GpArray.initFromCatalog(dburl, utility=True)
-            return array
-        except (psycopg2.InternalError, psycopg2.OperationalError) as e:
-            last_error = e
-            pass
-        time.sleep(1)
-    # Shouldn't be able to get here in normal execution.
-    raise last_error
+    dburl = dbconn.DbURL(port=port)
+    array = gparray.GpArray.initFromCatalog(dburl, utility=True)
+    
+    return array
 
 #-------------------------------------------------------------------------
 def check_standby_running(options):
