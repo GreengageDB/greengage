@@ -97,8 +97,15 @@
 /* Define to 1 to build ORCA for MacOS (GPOS_Darwin=1) */
 #undef GPOS_Darwin
 
+/* Override the exported name of the builtin hashable equality helper for
+   extension ABI compatibility */
+#undef GP_HASHABLE_EQ_SYMBOL
+
 /* Greengage major version as a string */
 #undef GP_MAJORVERSION
+
+/* Product name used in version strings */
+#undef GP_PRODUCT_NAME
 
 /* A string containing the Greengage version number */
 #undef GP_VERSION
@@ -873,7 +880,7 @@
    compilations where static inline functions are defined but not called. */
 #undef PG_USE_INLINE
 
-/* Postgres version Greengage Database is based on */
+/* PostgreSQL version this product is based on */
 #undef PG_VERSION
 
 /* PostgreSQL version as a number */

@@ -73,6 +73,15 @@ PGAC_ARG_REQ(with, env-script-aliases, [NAMES],
 GP_ENV_SCRIPT_ALIASES=$with_env_script_aliases
 AC_SUBST(GP_ENV_SCRIPT_ALIASES)
 
+PGAC_ARG_REQ(with, hashable-eq-symbol, [SYMBOL],
+             [export the builtin hashable equality helper under SYMBOL],
+             [], [])
+if test -n "$with_hashable_eq_symbol"; then
+  AC_DEFINE_UNQUOTED(GP_HASHABLE_EQ_SYMBOL, [$with_hashable_eq_symbol],
+                     [Override the exported name of the builtin hashable
+                      equality helper for extension ABI compatibility])
+fi
+
 template=
 AC_MSG_CHECKING([which template to use])
 

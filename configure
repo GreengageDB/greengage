@@ -785,6 +785,7 @@ enable_gpfdist
 enable_rpath
 default_port
 PORTNAME
+GP_ENV_SCRIPT_ALIASES
 host_os
 host_vendor
 host_cpu
@@ -838,6 +839,9 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 with_extra_version
+with_product_name
+with_env_script_aliases
+with_hashable_eq_symbol
 with_template
 with_includes
 with_libraries
@@ -1561,6 +1565,15 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
+  --with-product-name=NAME
+                          product name used in version strings (default:
+                          Greengage Database)
+  --with-env-script-aliases=NAMES
+                          space separated extra symlinks to greengage_path.sh
+                          in GPHOME
+  --with-hashable-eq-symbol=SYMBOL
+                          export the builtin hashable equality helper under
+                          SYMBOL
   --with-template=NAME    override operating system template
   --with-includes=DIRS    look for additional header files in DIRS
   --with-libraries=DIRS   look for additional libraries in DIRS
@@ -2935,6 +2948,108 @@ IFS=$ac_save_IFS
 case $host_os in *\ *) host_os=`echo "$host_os" | sed 's/ /-/g'`;; esac
 
 
+
+
+
+
+# Check whether --with-product-name was given.
+if test "${with_product_name+set}" = set; then :
+  withval=$with_product_name;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-product-name option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-product-name option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+fi
+
+
+: ${with_product_name:="Greengage Database"}
+
+case $with_product_name in
+  Green*\ Database) ;;
+  *) { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: gpMgmt parses version() with a \"Green... Database\" pattern
+                  (gpMgmt/bin/gppylib/gpversion.py); other product names will
+                  break version detection in the management utilities" >&5
+$as_echo "$as_me: WARNING: gpMgmt parses version() with a \"Green... Database\" pattern
+                  (gpMgmt/bin/gppylib/gpversion.py); other product names will
+                  break version detection in the management utilities" >&2;} ;;
+esac
+
+
+cat >>confdefs.h <<_ACEOF
+#define GP_PRODUCT_NAME "$with_product_name"
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PACKAGE_NAME "$with_product_name"
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PACKAGE_STRING "$with_product_name $PACKAGE_VERSION"
+_ACEOF
+
+
+
+
+
+# Check whether --with-env-script-aliases was given.
+if test "${with_env_script_aliases+set}" = set; then :
+  withval=$with_env_script_aliases;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-env-script-aliases option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-env-script-aliases option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+fi
+
+
+GP_ENV_SCRIPT_ALIASES=$with_env_script_aliases
+
+
+
+
+
+# Check whether --with-hashable-eq-symbol was given.
+if test "${with_hashable_eq_symbol+set}" = set; then :
+  withval=$with_hashable_eq_symbol;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-hashable-eq-symbol option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-hashable-eq-symbol option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+fi
+
+
+if test -n "$with_hashable_eq_symbol"; then
+
+cat >>confdefs.h <<_ACEOF
+#define GP_HASHABLE_EQ_SYMBOL $with_hashable_eq_symbol
+_ACEOF
+
+fi
 
 template=
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking which template to use" >&5
@@ -19608,7 +19723,7 @@ fi
 
 
 cat >>confdefs.h <<_ACEOF
-#define PG_VERSION_STR "PostgreSQL $PG_VERSION (Greengage Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
+#define PG_VERSION_STR "PostgreSQL $PG_VERSION ($with_product_name $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
 _ACEOF
 
 
