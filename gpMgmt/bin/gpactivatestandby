@@ -464,7 +464,7 @@ except ExecutionError as e:
 
 except GpActivateStandbyException as e:
     # We still can possibly get GPACTIVATESTANDBY_INTERNAL_FAILURE
-    if "the postmaster could not come up" in str(e):
+    if "Timed out waiting for promoted coordinator" in str(e):
         return_code = check_standby_activation(options_, e)
         sys.exit(return_code)
 
