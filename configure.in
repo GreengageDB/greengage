@@ -40,9 +40,38 @@ AC_DEFINE_UNQUOTED(PG_MAJORVERSION, "$PG_MAJORVERSION", [PostgreSQL major versio
 
 [PG_VERSION="$PG_PACKAGE_VERSION"]
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version], [], [])
-AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greengage Database is based on])
+AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [PostgreSQL version this product is based on])
 
 AC_CANONICAL_HOST
+
+dnl ---------------------------------------------------------------------
+dnl Product naming.  Lets distributions set the product name at build time
+dnl instead of patching the sources.  Defaults reproduce the stock build.
+dnl ---------------------------------------------------------------------
+PGAC_ARG_REQ(with, product-name, [NAME],
+             [product name used in version strings (default: Greengage Database)],
+             [], [])
+: ${with_product_name:="Greengage Database"}
+
+case $with_product_name in
+  Green*\ Database) ;;
+  *) AC_MSG_WARN([gpMgmt parses version() with a "Green... Database" pattern
+                  (gpMgmt/bin/gppylib/gpversion.py); other product names will
+                  break version detection in the management utilities]) ;;
+esac
+
+AC_DEFINE_UNQUOTED(GP_PRODUCT_NAME, ["$with_product_name"],
+                   [Product name used in version strings])
+AC_DEFINE_UNQUOTED(PACKAGE_NAME, ["$with_product_name"],
+                   [Define to the full name of this package.])
+AC_DEFINE_UNQUOTED(PACKAGE_STRING, ["$with_product_name $PACKAGE_VERSION"],
+                   [Define to the full name and version of this package.])
+
+PGAC_ARG_REQ(with, env-script-aliases, [NAMES],
+             [space separated extra symlinks to greengage_path.sh in GPHOME],
+             [], [])
+GP_ENV_SCRIPT_ALIASES=$with_env_script_aliases
+AC_SUBST(GP_ENV_SCRIPT_ALIASES)
 
 template=
 AC_MSG_CHECKING([which template to use])
@@ -2749,7 +2778,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["PostgreSQL $PG_VERSION (Greengage Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["PostgreSQL $PG_VERSION ($with_product_name $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons

@@ -46,6 +46,10 @@ PG_MAJORVERSION = @PG_MAJORVERSION@
 GP_VERSION = @GP_VERSION_SHORT@
 GP_MAJORVERSION = @GP_MAJORVERSION@
 
+# Extra symlinks to greengage_path.sh created in $GPHOME
+# (--with-env-script-aliases)
+GP_ENV_SCRIPT_ALIASES = @GP_ENV_SCRIPT_ALIASES@
+
 # Set top_srcdir, srcdir, and VPATH.
 ifdef PGXS
 top_srcdir = $(top_builddir)

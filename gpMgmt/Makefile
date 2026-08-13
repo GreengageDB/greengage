@@ -10,6 +10,9 @@ generate_greengage_path_file:
 	mkdir -p $(DESTDIR)$(prefix)
 	unset LIBPATH; \
 	bin/generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh
+	@for alias in $(GP_ENV_SCRIPT_ALIASES); do \
+	    cd $(DESTDIR)$(prefix) && ln -sf greengage_path.sh $$alias; \
+	done
 
 install: generate_greengage_path_file
 	mkdir -p $(DESTDIR)$(prefix)/lib/python
