@@ -171,6 +171,14 @@ See [how to enable plpython3u](src/pl/plpython/README.md) for details.
 
 See [Building GPDB client tools on Windows](README.windows.md) for details.
 
+### Building GPDB under a different product name
+
+The product name used in version strings, the extra symlinks placed next to
+`$GPHOME/greengage_path.sh` and the exported name of the builtin hashable
+equality helper can all be set at configure time.
+
+See [Setting the product name at build time](README.product-naming.md) for details.
+
 ## Development with Docker
 
 See [README.docker.md](README.docker.md).
