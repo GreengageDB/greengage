@@ -1404,7 +1404,13 @@ Use --without-zlib to disable zlib support.])])
 fi
 
 if test "$with_zstd" = yes; then
-  AC_CHECK_LIB(:libzstd.a, ZSTD_compressCCtx, [],
+  dnl Spell out the action-if-found: the library is linked as -l:libzstd.a, so
+  dnl the name autoconf would derive for the automatic define does not match
+  dnl the HAVE_LIBZSTD the tree actually tests for.
+  AC_CHECK_LIB(:libzstd.a, ZSTD_compressCCtx,
+               [AC_DEFINE(HAVE_LIBZSTD, 1,
+                          [Define to 1 if you have the `zstd' library (-lzstd).])
+                LIBS="-l:libzstd.a $LIBS"],
                [AC_MSG_ERROR([zstd library not found
 If you have libzstd already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.

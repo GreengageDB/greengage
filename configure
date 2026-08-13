@@ -269,10 +269,10 @@ fi
     $as_echo "$0: be upgraded to zsh 4.3.4 or later."
   else
     $as_echo "$0: Please tell bug-autoconf@gnu.org and
-$0: support@greengagedb.org about your system, including any
-$0: error possibly output before this message. Then install
-$0: a modern shell, or manually run the script under such a
-$0: shell if you do have one."
+$0: support@greengagedb.org about your system, including
+$0: any error possibly output before this message. Then
+$0: install a modern shell, or manually run the script
+$0: under such a shell if you do have one."
   fi
   exit 1
 fi
@@ -1934,9 +1934,9 @@ $as_echo "$as_me: WARNING: $2: see the Autoconf documentation" >&2;}
 $as_echo "$as_me: WARNING: $2:     section \"Present But Cannot Be Compiled\"" >&2;}
     { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: proceeding with the compiler's result" >&5
 $as_echo "$as_me: WARNING: $2: proceeding with the compiler's result" >&2;}
-( $as_echo "## ------------------------------------ ##
+( $as_echo "## -------------------------------------- ##
 ## Report this to support@greengagedb.org ##
-## ------------------------------------ ##"
+## -------------------------------------- ##"
      ) | sed "s/^/$as_me: WARNING:     /" >&2
     ;;
 esac
@@ -3311,6 +3311,8 @@ else
 fi
 
 
+
+
 #
 # include debug extensions in gpcontrib
 #
@@ -3393,6 +3395,7 @@ else
   enable_gpperfmon=no
 
 fi
+
 
 
 
@@ -6801,7 +6804,6 @@ $as_echo "$as_me: No compiler with C++11 support was found" >&6;}
 $as_echo "#define HAVE_CXX11 1" >>confdefs.h
 
   fi
-
 
 
 
@@ -11182,12 +11184,11 @@ fi
 fi
 
 if test "$with_zstd" = yes; then
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for ZSTD_compressCCtx in -l:libzstd.a" >&5
-printf %s "checking for ZSTD_compressCCtx in -l:libzstd.a... " >&6; }
-if test ${ac_cv_lib__libzstd_a_ZSTD_compressCCtx+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
+        { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_compressCCtx in -l:libzstd.a" >&5
+$as_echo_n "checking for ZSTD_compressCCtx in -l:libzstd.a... " >&6; }
+if ${ac_cv_lib__libzstd_a_ZSTD_compressCCtx+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
   ac_check_lib_save_LIBS=$LIBS
 LIBS="-l:libzstd.a  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
@@ -11196,36 +11197,35 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* Override any GCC internal prototype to avoid an error.
    Use char because int might match the return type of a GCC
    builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
 char ZSTD_compressCCtx ();
 int
-main (void)
+main ()
 {
 return ZSTD_compressCCtx ();
   ;
   return 0;
 }
 _ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
+if ac_fn_c_try_link "$LINENO"; then :
   ac_cv_lib__libzstd_a_ZSTD_compressCCtx=yes
-else $as_nop
+else
   ac_cv_lib__libzstd_a_ZSTD_compressCCtx=no
 fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
+rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&5
-printf "%s\n" "$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&6; }
-if test "x$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" = xyes
-then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&5
+$as_echo "$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" >&6; }
+if test "x$ac_cv_lib__libzstd_a_ZSTD_compressCCtx" = xyes; then :
 
-	LIBS="-l:libzstd.a $LIBS"
+$as_echo "#define HAVE_LIBZSTD 1" >>confdefs.h
 
-printf "%s\n" "#define HAVE_LIBZSTD 1" >>confdefs.h
-
-
-else $as_nop
+                LIBS="-l:libzstd.a $LIBS"
+else
   as_fn_error $? "zstd library not found
 If you have libzstd already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
@@ -18411,8 +18411,6 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking which random number source to use" >&5
 $as_echo_n "checking which random number source to use... " >&6; }
 
-
-
 if test x"$USE_OPENSSL_RANDOM" = x"1" ; then
 
 $as_echo "#define USE_OPENSSL_RANDOM 1" >>confdefs.h
@@ -18443,6 +18441,7 @@ if test "$PORTNAME" != "win32"; then
 else
   LATCH_IMPLEMENTATION="src/backend/port/win32_latch.c"
 fi
+
 
 # If not set in template file, set bytes to use libc memset()
 if test x"$MEMSET_LOOP_LIMIT" = x"" ; then
