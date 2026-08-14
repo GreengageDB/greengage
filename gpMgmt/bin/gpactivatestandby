@@ -347,7 +347,7 @@ def promote_standby(coordinator_data_dir, port):
     logger.debug('forcing CHECKPOINT to reflect new TimeLineID...')
     for i in range(600):
         try:
-            dburl = dbconn.DbURL(port=port)
+            dburl = dbconn.DbURL(port=port, hostname='localhost')
             conn = dbconn.connect(dburl, utility=True, logConn=False)
             dbconn.execSQL(conn, 'CHECKPOINT')
             conn.close()
