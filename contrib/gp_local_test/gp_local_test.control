@@ -1,0 +1,7 @@
+# gp_local_test.control
+comment = 'Sample extension to test coordinator-only (LOCAL) semantics'
+default_version = '1.0'
+module_pathname = '$libdir/gp_local_test'
+relocatable = false
+schema = 'ext_local_test'
+
