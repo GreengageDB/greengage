@@ -35,6 +35,13 @@ assert_real_filesystem() {
     fi
 }
 
+# Restore cgroup.procs mode on exit.
+cleanup_cgroup_v2() {
+    local rc=$?
+    chmod "$ORIG_CGROUP_PROCS_MODE" /sys/fs/cgroup/cgroup.procs 2>/dev/null || true
+    return "$rc"
+}
+
 # Create GPDB cgroup, enable parent controllers, and grant gpadmin access.
 setup_cgroup_v2() {
     if [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
@@ -52,6 +59,8 @@ setup_cgroup_v2() {
     fi
 
     chown -R gpadmin:gpadmin /sys/fs/cgroup/gpdb
+    ORIG_CGROUP_PROCS_MODE=$(stat -c %a /sys/fs/cgroup/cgroup.procs)
+    trap cleanup_cgroup_v2 EXIT
     chmod a+w /sys/fs/cgroup/cgroup.procs
 }
 
@@ -60,7 +69,7 @@ gen_env() {
 		trap look4diffs ERR
 
 		function look4diffs() {
-		    diff_files=\`find .. -name regression.diffs\`
+		    diff_files=\$(find .. -name regression.diffs)
 
 		    for diff_file in \${diff_files}; do
 		        if [ -f "\${diff_file}" ]; then
