@@ -253,7 +253,7 @@ def get_config(port):
     """Retrieves configuration information from the catalog."""
     
     logger.info('Reading current configuration...')
-    dburl = dbconn.DbURL(port=port)
+    dburl = dbconn.DbURL(port=port, hostname='localhost')
     array = gparray.GpArray.initFromCatalog(dburl, utility=True)
     
     return array
