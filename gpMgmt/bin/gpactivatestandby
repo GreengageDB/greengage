@@ -16,6 +16,7 @@ tables to make the standby coordinator instance as the new coordinator.
 import os
 import sys
 import signal
+import socket
 import glob
 import time
 import shutil
@@ -28,6 +29,7 @@ try:
     from gppylib.commands.base import ExecutionError
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
+    from gppylib.commands.base import LOCAL
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging
     from gppylib import gparray
     from gppylib import pgconf
@@ -381,11 +383,13 @@ def check_standby_activation(options, err):
     coordinator_data_dir = os.path.normpath(array.coordinator.getSegmentDataDirectory())
     coordinator_port = array.coordinator.getSegmentPort()
 
-    standby_hostname = unix.getLocalHostname()
+    standby_hostname = socket.gethostname()
+    standby_fqdn = socket.getfqdn()
     standby_data_dir = os.path.normpath(options.coordinator_data_dir)
     standby_port = options.standby_port
 
-    if not (coordinator_hostname == standby_hostname and
+    if not ((coordinator_hostname == standby_hostname or
+            coordinator_hostname == standby_fqdn) and
             coordinator_data_dir == standby_data_dir and
             coordinator_port == standby_port):
         logger.fatal('Error activating standby coordinator: %s' % str(err))
