@@ -17,6 +17,7 @@ from builtins import range
 import os
 import sys
 import signal
+import socket
 import glob
 import time
 import shutil
@@ -374,11 +375,13 @@ def check_standby_activation(options, err):
     master_data_dir = os.path.normpath(array.master.getSegmentDataDirectory())
     master_port = array.master.getSegmentPort()
 
-    standby_hostname = unix.getLocalHostname()
+    standby_hostname = socket.gethostname()
+    standby_fqdn = socket.getfqdn()
     standby_data_dir = os.path.normpath(options.master_data_dir)
     standby_port = options.standby_port
 
-    if not (master_hostname == standby_hostname and
+    if not ((master_hostname == standby_hostname or
+            master_hostname == standby_fqdn) and
             master_data_dir == standby_data_dir and
             master_port == standby_port):
         logger.fatal('Error activating standby master: %s' % str(err))
