@@ -242,7 +242,10 @@ def check_original_coordinator_status(options):
 #-------------------------------------------------------------------------
 def read_standby_port_from_postgresqlconf(options):
         logger.info("Obtaining standby's port from standby data directory")
-        pgconf_dict = pgconf.readfile(options.coordinator_data_dir + "/postgresql.conf")
+        try:
+            pgconf_dict = pgconf.readfile(options.coordinator_data_dir + "/postgresql.conf")
+        except Exception as e:
+            raise GpActivateStandbyException("Couldn't read postgresql.conf in specified directory: %s." % str(e))
         options.standby_port = pgconf_dict.int('port')
 
 #-------------------------------------------------------------------------
@@ -477,6 +480,6 @@ except GpActivateStandbyException as e:
 
 except Exception as e:
     logger.fatal('Error activating standby coordinator: %s' % str(e))
-    sys.exit(GPACTIVATESTANDBY_FAILED)
+    sys.exit(GPACTIVATESTANDBY_INTERNAL_FAILURE)
 
 sys.exit(GPACTIVATESTANDBY_SUCCESS)
