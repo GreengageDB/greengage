@@ -29,7 +29,6 @@ try:
     from gppylib.commands.base import ExecutionError
     from gppylib.db import dbconn
     from gppylib.gpparseopts import OptParser, OptChecker, OptionGroup, SUPPRESS_HELP
-    from gppylib.commands.base import LOCAL
     from gppylib.gplog import get_default_logger, setup_tool_logging, enable_verbose_logging
     from gppylib import gparray
     from gppylib import pgconf
