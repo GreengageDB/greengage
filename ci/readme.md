@@ -184,3 +184,101 @@ All tests are run in one way or another on the demo cluster, wherever possible.
 For example, cross_subnet tests or tests with tag `concourse_cluster` currently not worked because of too complex cluster preconditions.
 
 Tests in a docker-compose cluster use the same ssh keys for `gpadmin` user and pre-add the cluster hosts to `.ssh/know_hosts` and `/etc/hosts`.
+
+## Running pg_upgrade test locally
+
+To run `pg_upgrade_run_6X_to_7X_migration.bash` locally, it is necessary to specify the following environment variables:
+- GREENGAGE6_SRC - directory of the Greengage6 source code.
+- GREENGAGE7_SRC - directory of the Greengage7 source code.
+- GREENGAGE6_INSTALLATION - directory where the Greengage6 installation is located (i.e., after make install).
+- GREENGAGE7_INSTALLATION - directory where the Greengage7 installation is located (i.e., after make install).
+- SQL_SCHEMA - optional path to an sql file that will be loaded before performing the upgrade. If it is not specified,
+  the upgrade will be performed on an empty cluster.
+- CLEANUP_SCRIPT - optional path to an sql file that will be executed after loading SQL_SCHEMA, before performing pg_upgrade. It can be used to remove deprecated or otherwise failing objects from SQL_SCHEMA. If it is not specified, no cleanup will occur.
+- DUMP_OPTIONS - optional parameters that will be passed to pg_dump to collect pre- and post-upgrade dumps. These dumps are compared at the end of the test, to determine whether it was successful. If this option is not specified, pg_dump will be executed with no parameters. Please note that partitioned tables are not affected by this option, because they are excluded from the dump and their data is compared separately.
+For example:
+```bash
+export GREENGAGE6_SRC=/home/gpadmin/ggdb6_src
+export GREENGAGE7_SRC=/home/gpadmin/gpdb7_src
+export GREENGAGE6_INSTALLATION=/usr/local/greengage-db-6X
+export GREENGAGE7_INSTALLATION=/usr/local/greengage-db-7X
+export SQL_SCHEMA=/home/gpadmin/dump.sql
+export CLEANUP_SCRIPT=/home/gpadmin/cleanup.sql
+export DUMP_OPTIONS='--data-only --extra-float-digits=-3'
+bash   ${GREENGAGE7_SRC}/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash
+```
+
+## Running pg_upgrade test from the docker image
+
+Docker image already has all the necessary environment variables set to run the test WITHOUT a schema. The only thing left is to setup gpadmin user:
+```bash
+docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest .
+docker run --rm \
+    gpdb7_pgupgrade bash -c \
+    "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+     su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash"
+```
+
+Note, that the command above will pull the latest Greengage images from the github repository, meaning that they wouldn't have your local changes.
+Therefore, when building the pg_upgrade image, it is possible to provide locally built Greengage images via `GGDB6_IMAGE` and `GGDB7_IMAGE` build arguments. Any combination of images (e.g., none, only Greengage 6, only Greengage 7, or both Greengage 6 and Greengage 7) will work. Here is an example how to specify a local Greengage 7 image:
+```bash
+# Assuming that the current directory is the root of the Greengage 7 source code
+docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
+docker build -f ci/Dockerfile.pg_upgrade -t gpdb7_pgupgrade:latest --build-arg GGDB7_IMAGE=gpdb7_u22:latest .
+docker run --rm \
+    gpdb7_pgupgrade bash -c \
+    "gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+     su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash"
+```
+
+To specify a schema, mount a directory with it into the docker image:
+```bash
+mkdir dump_dir
+echo "create database test2;" > dump_dir/dump.sql
+docker run --rm \
+	-v $(pwd)/dump_dir:/dump_dir \
+	gpdb7_pgupgrade bash -c \
+	"export SQL_SCHEMA=/dump_dir/dump.sql; \
+	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash;"
+```
+
+To collect execution logs, mount an additional volume. Note that the test exit code is saved before collecting logs. Also, '.diffs' files are not created on a successful run, so it is expected that 'cp' commands might produce errors:
+```bash
+mkdir logs
+docker run --rm \
+	-v $(pwd)/dump_dir:/dump_dir \
+	-v $(pwd)/logs:/logs \
+	gpdb7_pgupgrade bash -c \
+	"export SQL_SCHEMA=/dump_dir/dump.sql; \
+	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
+	 test_exit_code=\$?; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs; \
+	 (exit \$test_exit_code);"
+```
+
+To run pg_upgrade tests with the regression dump, it is necessary to specify `cleanup_regression_dump_from_6X.sql` cleanup script. Also, with the current pg_dump state, DDL for many objects is dumped based on the source cluster version and would cause pre- and post-upgrade dumps to differ. So, we compare schemaless --data-only dumps. The --extra-float-digits option is specified to synchronize the formatting of floats in the dumps.
+```bash
+mkdir logs
+docker run --rm \
+	-v $(pwd)/dump_dir:/dump_dir \
+	-v $(pwd)/logs:/logs \
+	gpdb7_pgupgrade bash -c \
+	"export SQL_SCHEMA=/dump_dir/dump.sql; \
+	 export CLEANUP_SCRIPT=/home/gpadmin/gpdb_src/src/bin/pg_upgrade/cleanup_regression_dump_from_6X.sql; \
+	 export DUMP_OPTIONS='--data-only --extra-float-digits=-3'; \
+	 gpdb_src/concourse/scripts/setup_gpadmin_user.bash; \
+	 su gpadmin /home/gpadmin/gpdb_src/ci/scripts/pg_upgrade_run_6X_to_7X_migration.bash; \
+	 test_exit_code=\$?; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump1.sql /logs/dump1.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump2.sql /logs/dump2.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions1.sql /logs/dump_partitions1.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/tmp_check/dump_partitions2.sql /logs/dump_partitions2.sql; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/regression.diffs /logs/regression.diffs; \
+	 cp /home/gpadmin/gpdb_src/src/bin/pg_upgrade/partitions_regression.diffs /logs/partitions_regression.diffs; \
+	 (exit \$test_exit_code);"
+```

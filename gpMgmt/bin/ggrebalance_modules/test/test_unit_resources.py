@@ -183,6 +183,7 @@ class TestResourceEstimator(GpTestCase):
         self.options.skip_rebalance = False
         self.options.skip_resource_estimation = False
         self.options.batch_size = 16
+        self.options.solver_seed = 42
     
     @patch('ggrebalance_modules.planner.dbconn')
     def test_estimate_segment_sizes_from_unbalanced_cluster(self, mock_dbconn):
@@ -1386,6 +1387,21 @@ class TestPortAllocator(GpTestCase):
         # Should return True without checking
         self.assertTrue(result)
         mock_port_is_available.assert_not_called()
+
+    def test_check_port_on_unavailable_host(self):
+        """Test port checking on the host which is not available"""
+        segments = []
+        gparray_mock = self._create_mock_gparray(segments)
+        allocator = PortAllocator(gparray_mock, self.logger, verify_ports=True)
+
+        host = Host(hostname='host1', address='10.0.0.1', status=HostStatus.NEW)
+        exception_occured = False
+        try:
+            allocator._check_port_on_host(host, 6000)
+        except Exception:
+            exception_occured = True
+        if not exception_occured:
+            self.fail()
     
     @patch('ggrebalance_modules.planner.PortIsAvailable')
     def test_verify_and_allocate_port_preferred_available(self, mock_port_is_available):
