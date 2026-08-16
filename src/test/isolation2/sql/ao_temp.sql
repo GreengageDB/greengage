@@ -6,27 +6,27 @@ AS $$
          (SELECT setting FROM pg_settings WHERE name = 'data_directory')
          || '/' || pg_relation_filepath(tbl)); $$ LANGUAGE sql;
 
-1: CREATE TEMP TABLE t2 (a int) WITH (APPENDONLY = TRUE, ORIENTATION = ROW);
-1: CREATE TEMP TABLE t3 (a int) WITH (APPENDONLY = TRUE, ORIENTATION = COLUMN);
+1: CREATE TEMP TABLE temp_relfile_aoro (a int) WITH (APPENDONLY = TRUE, ORIENTATION = ROW);
+1: CREATE TEMP TABLE temp_relfile_aoco (a int) WITH (APPENDONLY = TRUE, ORIENTATION = COLUMN);
 
-1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/check_ao_relfile_t2.sh' :
-     select * from relfile_test_cmd('t2');
-1: ! sh /tmp/check_ao_relfile_t2.sh;
-1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/check_ao_relfile_t3.sh' :
-     select * from relfile_test_cmd('t3');
-1: ! sh /tmp/check_ao_relfile_t3.sh;
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/check_ao_relfile_aoro.sh' :
+     select * from relfile_test_cmd('temp_relfile_aoro');
+1: ! sh /tmp/check_ao_relfile_aoro.sh;
+1: @post_run 'echo "${RAW_STR}" | awk \'NR==3\' >> /tmp/check_ao_relfile_aoco.sh' :
+     select * from relfile_test_cmd('temp_relfile_aoco');
+1: ! sh /tmp/check_ao_relfile_aoco.sh;
 
 1q:
 
 -- Wait some time until file cleanup
 2: select pg_sleep(10);
 
-2: ! sh /tmp/check_ao_relfile_t2.sh; 
-2: ! sh /tmp/check_ao_relfile_t3.sh; 
+2: ! sh /tmp/check_ao_relfile_aoro.sh; 
+2: ! sh /tmp/check_ao_relfile_aoco.sh; 
 
 2q:
 
 -- Cleanup
 DROP FUNCTION relfile_test_cmd(tbl regclass);
-! rm /tmp/check_ao_relfile_t2.sh;
-! rm /tmp/check_ao_relfile_t3.sh;
+! rm /tmp/check_ao_relfile_aoro.sh;
+! rm /tmp/check_ao_relfile_aoco.sh;
