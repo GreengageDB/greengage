@@ -119,8 +119,6 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 					  List *updateVersions);
 static char *read_whole_file(const char *filename, int *length);
 
-static void SetExtensionLocal(Oid extensionOid);
-
 static bool IsExtensionLocal(Oid extensionOid);
 
 
@@ -1269,7 +1267,7 @@ find_update_path(List *evi_list,
 	return result;
 }
 
-static void SetExtensionLocal(Oid extensionOid)
+void SetExtensionLocal(Oid extensionOid)
 {
     ObjectAddress extAddr;
     extAddr.classId = ExtensionRelationId;

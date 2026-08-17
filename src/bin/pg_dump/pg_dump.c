@@ -8439,6 +8439,8 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 			}
 		}
 		appendPQExpBufferStr(q, "]::pg_catalog.text[]");
+		appendPQExpBufferStr(q, ", ");
+		appendPQExpBuffer(q, "%s", extinfo->local ? "true" : "false");
 		appendPQExpBufferStr(q, ");\n");
 	}
 
