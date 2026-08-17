@@ -119,6 +119,21 @@ cluster_conn_opts(ClusterInfo *cluster)
 }
 
 /*
+ * A common way to exit() if a query has failed.
+ * The caller is responsible for checking ExecStatusType.
+ */
+void
+dieOnQueryFailure(PGconn *conn, PGresult *result, const char *query)
+{
+	pg_log(PG_REPORT, "SQL command failed\n%s\n%s", query,
+		   PQerrorMessage(conn));
+	PQclear(result);
+	PQfinish(conn);
+	printf(_("Failure, exiting\n"));
+	exit(1);
+}
+
+/*
  * executeQueryOrDieLog()
  *
  *	Formats a query string from the given arguments and executes the
@@ -137,16 +152,9 @@ executeQueryOrDieLog(PGconn *conn, bool add_log, const char *query)
 	status = PQresultStatus(result);
 
 	if ((status != PGRES_TUPLES_OK) && (status != PGRES_COMMAND_OK))
-	{
-		pg_log(PG_REPORT, "SQL command failed\n%s\n%s", query,
-			   PQerrorMessage(conn));
-		PQclear(result);
-		PQfinish(conn);
-		printf(_("Failure, exiting\n"));
-		exit(1);
-	}
-	else
-		return result;
+		dieOnQueryFailure(conn, result, query);
+
+	return result;
 }
 
 /*
@@ -171,7 +179,7 @@ executeQueryOrDie(PGconn *conn, const char *fmt,...)
 
 /*
  * executeQueryOrDieWithoutLog()
- *Ы
+ *
  *     Formats a query string from the given arguments and executes the
  *     resulting query.  If the query fails, this function logs an error
  *     message and calls exit() to kill the program.

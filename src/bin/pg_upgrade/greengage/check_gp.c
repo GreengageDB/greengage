@@ -20,6 +20,7 @@
 #include "access/nbtree.h"
 
 #define RELSTORAGE_EXTERNAL	'x'
+#define ERRCODE_UNDEFINED_FUNCTION_STRING "42883"
 
 static void check_external_partition(void);
 static void check_covering_aoindex(void);
@@ -1557,6 +1558,7 @@ check_views_with_removed_columns()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  no_support_function = false;
 	prep_status("Checking for views with removed columns");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
@@ -1571,19 +1573,39 @@ check_views_with_removed_columns()
 		PGconn	 *conn;
 		int       i_viewname;
 		int       i_removed_columns;
+		ExecStatusType status;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* Install check support function */
+		const char *create_support_function_query = "CREATE OR REPLACE FUNCTION "
+													"public.get_removed_columns(OID) "
+													"RETURNS TEXT "
+													"AS '$libdir/pg_upgrade_support' "
+													"LANGUAGE C STRICT;";
+		res = PQexec(conn, create_support_function_query);
+		status = PQresultStatus(res);
+		if (status != PGRES_COMMAND_OK)
+		{
+			/*
+			 * Required support function may be absent in the older
+			 * versions, so skip the check in this case.
+			 */
+			char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+			if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
+			{
+				no_support_function = true;
+				PQclear(res);
+				PQfinish(conn);
+				break;
+			}
+			dieOnQueryFailure(conn, res, create_support_function_query);
+		}
+		PQclear(res);
 
 		/* track_counts is disables for the same reason as above */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "public.get_removed_columns(OID) "
-								  "RETURNS TEXT "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT badviewname, removed_columns FROM ("
 								"	SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname, "
@@ -1638,7 +1660,12 @@ check_views_with_removed_columns()
 	if (script)
 		fclose(script);
 
-	if (found)
+	if (no_support_function)
+	{
+		pg_log(PG_REPORT, "skipped (required function was not found)\n");
+		fflush(stdout);
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1662,6 +1689,7 @@ check_views_with_removed_relations()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  no_support_function = false;
 	prep_status("Checking for views with removed relations");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
@@ -1676,19 +1704,39 @@ check_views_with_removed_relations()
 		PGconn	 *conn;
 		int       i_viewname;
 		int       i_removed_tables;
+		ExecStatusType status;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
+
+		/* Install check support function */
+		const char *create_support_function_query = "CREATE OR REPLACE FUNCTION "
+													"public.get_removed_tables(OID) "
+													"RETURNS TEXT "
+													"AS '$libdir/pg_upgrade_support' "
+													"LANGUAGE C STRICT;";
+		res = PQexec(conn, create_support_function_query);
+		status = PQresultStatus(res);
+		if (status != PGRES_COMMAND_OK)
+		{
+			/*
+			 * Required support function may be absent in the older
+			 * versions, so skip the check in this case.
+			 */
+			char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+			if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
+			{
+				no_support_function = true;
+				PQclear(res);
+				PQfinish(conn);
+				break;
+			}
+			dieOnQueryFailure(conn, res, create_support_function_query);
+		}
+		PQclear(res);
 
 		/* track_counts is disables for the same reason as above */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "public.get_removed_tables(OID) "
-								  "RETURNS TEXT "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT badviewname, removed_tables FROM ("
 								"	SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname, "
@@ -1742,7 +1790,12 @@ check_views_with_removed_relations()
 	if (script)
 		fclose(script);
 
-	if (found)
+	if (no_support_function)
+	{
+		pg_log(PG_REPORT, "skipped (required function was not found)\n");
+		fflush(stdout);
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
