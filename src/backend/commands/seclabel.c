@@ -492,6 +492,11 @@ register_label_provider(const char *provider_name, check_object_relabel_type hoo
 	LabelProvider *provider;
 	MemoryContext oldcxt;
 
+	if (strcmp(provider_name, "gp_local_ext") == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("'gp_local_ext' name is reserved and can't be registered as the provider name")));
+
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	provider = palloc(sizeof(LabelProvider));
 	provider->provider_name = pstrdup(provider_name);
