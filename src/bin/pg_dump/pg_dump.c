@@ -4574,7 +4574,7 @@ getFuncs(Archive *fout, int *numFuncs)
 		appendPQExpBufferStr(query,
 								"\n  AND NOT EXISTS (SELECT 1 FROM pg_depend "
 								"WHERE classid = 'pg_proc'::regclass AND "
-								"objid = p.oid AND deptype = 'i')");
+								"objid = p.oid AND (deptype = 'i' OR deptype = 'e'))");
 
 	appendPQExpBuffer(query,
 							"\n  AND ("
