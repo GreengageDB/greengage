@@ -1619,6 +1619,8 @@ selectDumpableType(TypeInfo *tyinfo)
 static void
 selectDumpableFunction(FuncInfo *finfo)
 {
+	if (checkExtensionMembership(&finfo->dobj))
+		return;					/* extension membership overrides all else */
 	/*
 	 * If specific functions are being dumped, dump just those functions; else, dump
 	 * according to the parent namespace's dump flag if parent namespace is not null;
@@ -4602,7 +4604,7 @@ getFuncs(Archive *fout, int *numFuncs)
 		appendPQExpBufferStr(query,
 								"\n  AND NOT EXISTS (SELECT 1 FROM pg_depend "
 								"WHERE classid = 'pg_proc'::regclass AND "
-								"objid = p.oid AND (deptype = 'i' OR deptype = 'e'))");
+								"objid = p.oid AND deptype = 'i')");
 
 	appendPQExpBuffer(query,
 							"\n  AND ("
