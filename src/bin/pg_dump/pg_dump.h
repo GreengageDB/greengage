@@ -373,6 +373,7 @@ typedef struct _tableDataInfo
 	TableInfo  *tdtable;		/* link to table to dump */
 	bool		oids;			/* include OIDs in data? */
 	char	   *filtercond;		/* WHERE condition to limit rows dumped */
+	bool		isCoordOnly;	/* the table has data only on coordinator */
 } TableDataInfo;
 
 typedef struct _indxInfo

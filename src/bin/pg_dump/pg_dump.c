@@ -2099,7 +2099,7 @@ dumpTableData(Archive *fout, TableDataInfo *tdinfo)
 	DataDumperPtr dumpFn;
 	char	   *copyStmt;
 
-	if (!dump_inserts)
+	if (!dump_inserts && !tdinfo->isCoordOnly)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
@@ -2252,6 +2252,7 @@ makeTableDataInfo(TableInfo *tbinfo, bool oids)
 	tdinfo->tdtable = tbinfo;
 	tdinfo->oids = oids;
 	tdinfo->filtercond = NULL;	/* might get set later */
+	tdinfo->isCoordOnly = false;/* might get set later */
 	addObjectDependency(&tdinfo->dobj, tbinfo->dobj.dumpId);
 
 	tbinfo->dataObj = tdinfo;
@@ -15918,6 +15919,8 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 					{
 						if (strlen(extconditionarray[j]) > 0)
 							configtbl->dataObj->filtercond = pg_strdup(extconditionarray[j]);
+
+						configtbl->dataObj->isCoordOnly = curext->local;
 					}
 				}
 			}
