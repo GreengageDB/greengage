@@ -1223,16 +1223,21 @@ def impl(context):
 
 def init_standby(context, coordinator_hostname, options, segment_hostname):
     remote = (coordinator_hostname != segment_hostname)
+    opts = _options_as_list(options)
     # -n option assumes gpinitstandby already ran and put standby in catalog
-    if "-n" not in options:
-        if "-S" in options:
-            opts = _options_as_list(options)
+    if "-n" not in opts:
+        if "-S" in opts:
             standby_data_dir = _get_option_value(opts, '-S')
-            context.standby_data_dir = standby_data_dir
+            context.standby_data_dir = os.path.normpath(standby_data_dir)
         elif remote:
             context.standby_data_dir = coordinator_data_dir
         else:
             context.standby_data_dir = tempfile.mkdtemp() + "/standby_datadir"
+
+        if "-P" in opts:
+            standby_port = _get_option_value(opts, '-P')
+            context.standby_port = standby_port
+
     run_gpinitstandby(context, context.standby_hostname, context.standby_port, context.standby_data_dir, options,
                       remote)
     context.coordinator_hostname = coordinator_hostname
@@ -1427,9 +1432,8 @@ def impl(context):
     coordinator.run()
 
     cmd = "gpactivatestandby -a -d %s" % coordinator_data_dir
-    rc, error, _ = run_gpcommand(context, cmd)
-    if (rc != 0):
-        raise Exception('Error executing to return previous coordinator: %s.' % error)
+    run_gpcommand(context, cmd)
+    check_return_code(context, 0)
 
 # from https://stackoverflow.com/questions/2838244/get-open-tcp-port-in-python/2838309#2838309
 def get_open_port():
