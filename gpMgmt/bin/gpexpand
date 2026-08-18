@@ -1467,11 +1467,31 @@ class gpexpand(object):
                                      , port=seg.getSegmentPort()
                                      , dbname=database[0]
                                      )
+
+                url = copy.deepcopy(self.dburl)
+                url.pgdb = database[0]
+                with closing (dbconn.connect(url, encoding='UTF8')) as conn:
+                    localExtTablesSql = '''select quote_ident(n.nspname) || '.' || quote_ident(c.relname) as fq_name from
+                        pg_class c
+                        join pg_namespace n on c.relnamespace = n.oid
+                        left join pg_depend d on c.oid = d.objid
+                        left join pg_seclabel s on d.refobjid = s.objoid
+                        where
+                        c.relkind = 'r' and
+                        s.provider = 'gp_local_ext' and
+                        s.classoid = 'pg_extension'::regclass and
+                        d.deptype = 'e' and
+                        d.classid = 'pg_class'::regclass and
+                        d.refclassid = 'pg_extension'::regclass'''
+                    cursor = dbconn.execSQL(conn, localExtTablesSql)
+                    db_statements = statements + ["delete from %s" % row[0] for row in cursor]
+
                 name = "gpexpand execute segment cleanup commands. seg dbid = %s, command = %s" % (
-                    seg.getSegmentDbId(), str(statements))
+                    seg.getSegmentDbId(), str(db_statements))
+
                 execSQLCmd = ExecuteSQLStatementsCommand(name=name
                                                          , url=dburl
-                                                         , sqlCommandList=statements
+                                                         , sqlCommandList=db_statements
                                                          )
                 self.pool.addCommand(execSQLCmd)
 
