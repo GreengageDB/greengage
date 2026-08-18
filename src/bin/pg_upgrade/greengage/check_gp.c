@@ -1583,6 +1583,7 @@ check_views_with_removed_columns()
 													"RETURNS TEXT "
 													"AS '$libdir/pg_upgrade_support' "
 													"LANGUAGE C STRICT;";
+		pg_log(PG_VERBOSE, "executing: %s\n", create_support_function_query);
 		res = PQexec(conn, create_support_function_query);
 		status = PQresultStatus(res);
 		if (status != PGRES_COMMAND_OK)
@@ -1663,7 +1664,6 @@ check_views_with_removed_columns()
 	if (no_support_function)
 	{
 		pg_log(PG_REPORT, "skipped (required function was not found)\n");
-		fflush(stdout);
 	}
 	else if (found)
 	{
@@ -1714,6 +1714,7 @@ check_views_with_removed_relations()
 													"RETURNS TEXT "
 													"AS '$libdir/pg_upgrade_support' "
 													"LANGUAGE C STRICT;";
+		pg_log(PG_VERBOSE, "executing: %s\n", create_support_function_query);
 		res = PQexec(conn, create_support_function_query);
 		status = PQresultStatus(res);
 		if (status != PGRES_COMMAND_OK)
@@ -1793,7 +1794,6 @@ check_views_with_removed_relations()
 	if (no_support_function)
 	{
 		pg_log(PG_REPORT, "skipped (required function was not found)\n");
-		fflush(stdout);
 	}
 	else if (found)
 	{
