@@ -111,6 +111,10 @@ test: pqsignal
 
 test: fsync_ao
 
+# Tests on xlog compression errors
+test: xlog_compress_backup_block_fail
+test: xlog_compress_backup_block_dstsize_too_small
+
 # Disable auto-vacuum for below tests
 test: disable_autovacuum
 
