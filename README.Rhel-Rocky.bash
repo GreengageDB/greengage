@@ -104,8 +104,9 @@ pip     --version
 # Upgrade pip to support current package versions
 python3 -m pip install --no-cache-dir --upgrade pip
 
-# 'future' is not available as a system package for python3.12
-python3 -m pip install --no-cache-dir future
+# future, psutil, pyyaml, psycopg2 are not available as a system package
+# for Python3.12; psycopg2-binary avoids requiring libpq headers at this point
+python3 -m pip install --no-cache-dir future psutil pyyaml psycopg2-binary
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
