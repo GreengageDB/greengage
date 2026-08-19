@@ -80,6 +80,12 @@ class ForeignKeyCheck:
         self.logger.info('Building %d queries to check FK constraint on table %s' % (len(fkeylist), catname))
         issue_list = list()
         for fkeydef in fkeylist:
+            
+            # Skip foreign keys that are arrays, and if there is more than one key.
+            # The current infrastructure is not ready to verify them.
+            if fkeydef.isArray() or len(fkeydef.getColumns()) != 1:
+                continue
+            
             castedFkey = [c + self.autoCast.get(coltypes[c], '') for c in fkeydef.getColumns()]
             fkeystr = ', '.join(castedFkey)
             pkeystr = ', '.join(fkeydef.getPKey())

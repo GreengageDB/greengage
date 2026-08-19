@@ -46,8 +46,8 @@ SELECT port FROM gp_segment_configuration
 -- during startup. The host/ip/port are environment-dependent, so mask
 -- them out.
 -- start_matchsubs
--- m/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/
--- s/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/could not connect to host "HOST", port PORT:/
+-- m/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/
+-- s/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/connection to server at "HOST", port PORT failed:/
 -- end_matchsubs
 \connect - - - :port
 

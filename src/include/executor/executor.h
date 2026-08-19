@@ -211,7 +211,7 @@ extern void CheckValidResultRel(ResultRelInfo *resultRelInfo, CmdType operation)
 extern void InitResultRelInfo(ResultRelInfo *resultRelInfo,
 							  Relation resultRelationDesc,
 							  Index resultRelationIndex,
-							  Relation partition_root,
+							  ResultRelInfo *partition_root_rri,
 							  int instrument_options);
 extern ResultRelInfo *ExecGetTriggerResultRel(EState *estate, Oid relid);
 extern void ExecConstraints(ResultRelInfo *resultRelInfo,
@@ -597,7 +597,7 @@ extern Relation ExecGetRangeTableRelation(EState *estate, Index rti);
 extern void ExecInitResultRelation(EState *estate, ResultRelInfo *resultRelInfo,
 								   Index rti);
 
-extern void executor_errposition(EState *estate, int location);
+extern int	executor_errposition(EState *estate, int location);
 
 extern void RegisterExprContextCallback(ExprContext *econtext,
 										ExprContextCallbackFunction function,
@@ -618,6 +618,11 @@ extern TupleTableSlot *ExecGetTriggerOldSlot(EState *estate, ResultRelInfo *relI
 extern TupleTableSlot *ExecGetTriggerNewSlot(EState *estate, ResultRelInfo *relInfo);
 extern TupleTableSlot *ExecGetReturningSlot(EState *estate, ResultRelInfo *relInfo);
 
+extern Bitmapset *ExecGetInsertedCols(ResultRelInfo *relinfo, EState *estate);
+extern Bitmapset *ExecGetUpdatedCols(ResultRelInfo *relinfo, EState *estate);
+extern Bitmapset *ExecGetExtraUpdatedCols(ResultRelInfo *relinfo, EState *estate);
+extern Bitmapset *ExecGetAllUpdatedCols(ResultRelInfo *relinfo, EState *estate);
+
 /*
  * prototypes from functions in execIndexing.c
  */
@@ -625,6 +630,7 @@ extern void ExecOpenIndices(ResultRelInfo *resultRelInfo, bool speculative);
 extern void ExecCloseIndices(ResultRelInfo *resultRelInfo);
 extern List *ExecInsertIndexTuples(ResultRelInfo *resultRelInfo,
 								   TupleTableSlot *slot, EState *estate,
+								   bool update,
 								   bool noDupErr,
 								   bool *specConflict, List *arbiterIndexes);
 extern bool ExecCheckIndexConstraints(ResultRelInfo *resultRelInfo,

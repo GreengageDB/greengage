@@ -11,13 +11,13 @@ use lib $FindBin::RealBin;
 
 use SSLServer;
 
-if ($ENV{with_openssl} eq 'yes')
+if ($ENV{with_ssl} ne 'openssl')
 {
-	plan tests => 93;
+	plan skip_all => 'OpenSSL not supported by this build';
 }
 else
 {
-	plan skip_all => 'SSL not supported by this build';
+	plan tests => 100;
 }
 
 #### Some configuration
@@ -134,7 +134,7 @@ switch_server_cert($node, 'server-cn-only');
 # Set of default settings for SSL parameters in connection string.  This
 # makes the tests protected against any defaults the environment may have
 # in ~/.postgresql/.
-my $default_ssl_connstr = "sslkey=invalid sslcert=invalid sslrootcert=invalid sslcrl=invalid";
+my $default_ssl_connstr = "sslkey=invalid sslcert=invalid sslrootcert=invalid sslcrl=invalid sslcrldir=invalid";
 
 $common_connstr =
   "$default_ssl_connstr user=ssltestuser dbname=trustdb hostaddr=$SERVERHOSTADDR host=common-name.pg-ssltest.test";
@@ -220,11 +220,25 @@ test_connect_fails(
 	qr/SSL error/,
 	"CRL belonging to a different CA");
 
+# The same for CRL directory.  sslcrl='' is added here to override the
+# invalid default, so as this does not interfere with this case.
+test_connect_fails(
+	$common_connstr,
+	"sslcrl='' sslrootcert=ssl/root+server_ca.crt sslmode=verify-ca sslcrldir=ssl/client-crldir",
+	qr/SSL error/,
+	"directory CRL belonging to a different CA");
+
 # With the correct CRL, succeeds (this cert is not revoked)
 test_connect_ok(
 	$common_connstr,
 	"sslrootcert=ssl/root+server_ca.crt sslmode=verify-ca sslcrl=ssl/root+server.crl",
 	"CRL with a non-revoked cert");
+
+# The same for CRL directory
+test_connect_ok(
+	$common_connstr,
+	"sslrootcert=ssl/root+server_ca.crt sslmode=verify-ca sslcrldir=ssl/root+server-crldir",
+	"directory CRL with a non-revoked cert");
 
 # Check that connecting with verify-full fails, when the hostname doesn't
 # match the hostname in the server's certificate.
@@ -351,7 +365,14 @@ test_connect_fails(
 	$common_connstr,
 	"sslrootcert=ssl/root+server_ca.crt sslmode=verify-ca sslcrl=ssl/root+server.crl",
 	qr/SSL error/,
-	"does not connect with client-side CRL");
+	"does not connect with client-side CRL file");
+# sslcrl='' is added here to override the invalid default, so as this
+# does not interfere with this case.
+test_connect_fails(
+	$common_connstr,
+	"sslcrl='' sslrootcert=ssl/root+server_ca.crt sslmode=verify-ca sslcrldir=ssl/root+server-crldir",
+	qr/SSL error/,
+	"does not connect with client-side CRL directory");
 
 # pg_stat_ssl
 command_like(
@@ -363,8 +384,8 @@ command_like(
 		"$common_connstr sslrootcert=invalid", '-c',
 		"SELECT * FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
 	],
-	qr{^pid,ssl,version,cipher,bits,compression,client_dn,client_serial,issuer_dn\r?\n
-				^\d+,t,TLSv[\d.]+,[\w-]+,\d+,f,_null_,_null_,_null_\r?$}mx,
+	qr{^pid,ssl,version,cipher,bits,client_dn,client_serial,issuer_dn\r?\n
+				^\d+,t,TLSv[\d.]+,[\w-]+,\d+,_null_,_null_,_null_\r?$}mx,
 	'pg_stat_ssl view without client certificate');
 
 # Test min/max SSL protocol versions.
@@ -480,8 +501,8 @@ command_like(
 		'-c',
 		"SELECT * FROM pg_stat_ssl WHERE pid = pg_backend_pid()"
 	],
-	qr{^pid,ssl,version,cipher,bits,compression,client_dn,client_serial,issuer_dn\r?\n
-				^\d+,t,TLSv[\d.]+,[\w-]+,\d+,f,/CN=ssltestuser,1,\Q/CN=Test CA for PostgreSQL SSL regression test client certs\E\r?$}mx,
+	qr{^pid,ssl,version,cipher,bits,client_dn,client_serial,issuer_dn\r?\n
+				^\d+,t,TLSv[\d.]+,[\w-]+,\d+,/CN=ssltestuser,1,\Q/CN=Test CA for PostgreSQL SSL regression test client certs\E\r?$}mx,
 	'pg_stat_ssl with client certificate');
 
 # client key with wrong permissions
@@ -549,6 +570,16 @@ test_connect_ok(
 	"intermediate client certificate is provided by client");
 test_connect_fails($common_connstr, "sslmode=require sslcert=ssl/client.crt",
 	qr/SSL error/, "intermediate client certificate is missing");
+
+# test server-side CRL directory
+switch_server_cert($node, 'server-cn-only', undef, undef, 'root+client-crldir');
+
+# revoked client cert
+test_connect_fails(
+	$common_connstr,
+	"user=ssltestuser sslcert=ssl/client-revoked.crt sslkey=ssl/client-revoked_tmp.key",
+	qr/SSL error/,
+	"certificate authorization fails with revoked client cert with server-side CRL directory");
 
 # clean up
 foreach my $key (@keys)

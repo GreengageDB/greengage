@@ -2179,8 +2179,7 @@ CREATE TABLE concur_reindex_tab (c1 int);
 REINDEX TABLE concur_reindex_tab; -- notice
 NOTICE:  table "concur_reindex_tab" has no indexes to reindex
 REINDEX (CONCURRENTLY) TABLE concur_reindex_tab; -- notice
-NOTICE:  table "concur_reindex_tab" has no indexes that can be reindexed concurrently
-ERROR:  could not serialize current snapshot, ActiveSnapshot not set
+ERROR:  REINDEX CONCURRENTLY is not supported
 ALTER TABLE concur_reindex_tab ADD COLUMN c2 text; -- add toast index
 -- Normal index with integer column
 CREATE UNIQUE INDEX concur_reindex_ind1 ON concur_reindex_tab(c1);
@@ -2743,6 +2742,7 @@ CREATE UNIQUE INDEX concur_exprs_index_pred ON concur_exprs_tab (c1)
 CREATE UNIQUE INDEX concur_exprs_index_pred_2
   ON concur_exprs_tab (c1, (1 / c1))
   WHERE ('-H') >= (c2::TEXT) COLLATE "C";
+ALTER INDEX concur_exprs_index_expr ALTER COLUMN 2 SET STATISTICS 100;
 ANALYZE concur_exprs_tab;
 SELECT starelid::regclass, count(*) FROM pg_statistic WHERE starelid IN (
   'concur_exprs_index_expr'::regclass,
@@ -2822,6 +2822,22 @@ SELECT starelid::regclass, count(*) FROM pg_statistic WHERE starelid IN (
 -------------------------+-------
  concur_exprs_index_expr |     1
 (1 row)
+
+-- attstattarget should remain intact
+SELECT attrelid::regclass, attnum, attstattarget
+  FROM pg_attribute WHERE attrelid IN (
+    'concur_exprs_index_expr'::regclass,
+    'concur_exprs_index_pred'::regclass,
+    'concur_exprs_index_pred_2'::regclass)
+  ORDER BY attrelid::regclass::text, attnum;
+         attrelid          | attnum | attstattarget 
+---------------------------+--------+---------------
+ concur_exprs_index_expr   |      1 |            -1
+ concur_exprs_index_expr   |      2 |           100
+ concur_exprs_index_pred   |      1 |            -1
+ concur_exprs_index_pred_2 |      1 |            -1
+ concur_exprs_index_pred_2 |      2 |            -1
+(5 rows)
 
 DROP TABLE concur_exprs_tab;
 -- Temporary tables and on-commit actions, where CONCURRENTLY is ignored.

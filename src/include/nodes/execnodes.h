@@ -409,12 +409,15 @@ typedef struct OnConflictSetState
  * relation, and perhaps also fire triggers.  ResultRelInfo holds all the
  * information needed about a result relation, including indexes.
  *
- * Normally, a ResultRelInfo refers to a table that is in the query's
- * range table; then ri_RangeTableIndex is the RT index and ri_RelationDesc
- * is just a copy of the relevant es_relations[] entry.  But sometimes,
- * in ResultRelInfos used only for triggers, ri_RangeTableIndex is zero
- * and ri_RelationDesc is a separately-opened relcache pointer that needs
- * to be separately closed.  See ExecGetTriggerResultRel.
+ * Normally, a ResultRelInfo refers to a table that is in the query's range
+ * table; then ri_RangeTableIndex is the RT index and ri_RelationDesc is
+ * just a copy of the relevant es_relations[] entry.  However, in some
+ * situations we create ResultRelInfos for relations that are not in the
+ * range table, namely for targets of tuple routing in a partitioned table,
+ * and when firing triggers in tables other than the target tables (See
+ * ExecGetTriggerResultRel).  In these situations, ri_RangeTableIndex is 0
+ * and ri_RelationDesc is a separately-opened relcache pointer that needs to
+ * be separately closed.
  */
 typedef struct ResultRelInfo
 {
@@ -460,6 +463,12 @@ typedef struct ResultRelInfo
 
 	/* true when modifying foreign table directly */
 	bool		ri_usesFdwDirectModify;
+
+	/* batch insert stuff */
+	int			ri_NumSlots;		/* number of slots in the array */
+	int			ri_BatchSize;		/* max slots inserted in a single batch */
+	TupleTableSlot **ri_Slots;		/* input tuples for batch insert */
+	TupleTableSlot **ri_PlanSlots;
 
 	/* list of WithCheckOption's to be checked */
 	List	   *ri_WithCheckOptions;
@@ -507,12 +516,16 @@ typedef struct ResultRelInfo
 	/*
 	 * Information needed by tuple routing target relations
 	 *
-	 * PartitionRoot gives the target relation mentioned in the query.
+	 * RootResultRelInfo gives the target relation mentioned in the query, if
+	 * it's a partitioned table. It is not set if the target relation
+	 * mentioned in the query is an inherited table, nor when tuple routing is
+	 * not needed.
+	 *
 	 * RootToPartitionMap and PartitionTupleSlot, initialized by
 	 * ExecInitRoutingInfo, are non-NULL if partition has a different tuple
 	 * format than the root table.
 	 */
-	Relation	ri_PartitionRoot;
+	struct ResultRelInfo *ri_RootResultRelInfo;
 	TupleConversionMap *ri_RootToPartitionMap;
 	TupleTableSlot *ri_PartitionTupleSlot;
 
@@ -1861,6 +1874,24 @@ typedef struct TidScanState
 	ItemPointerData *tss_TidList;
 	HeapTupleData tss_htup;
 } TidScanState;
+
+/* ----------------
+ *	 TidRangeScanState information
+ *
+ *		trss_tidexprs		list of TidOpExpr structs (see nodeTidrangescan.c)
+ *		trss_mintid			the lowest TID in the scan range
+ *		trss_maxtid			the highest TID in the scan range
+ *		trss_inScan			is a scan currently in progress?
+ * ----------------
+ */
+typedef struct TidRangeScanState
+{
+	ScanState	ss;				/* its first field is NodeTag */
+	List	   *trss_tidexprs;
+	ItemPointerData trss_mintid;
+	ItemPointerData trss_maxtid;
+	bool		trss_inScan;
+} TidRangeScanState;
 
 /* ----------------
  *	 SubqueryScanState information

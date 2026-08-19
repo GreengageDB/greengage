@@ -120,6 +120,8 @@ typedef struct PlannedStmt
 
 	List	   *relationOids;	/* OIDs of relations the plan depends on */
 
+	List	   *partitionOids;	/* OIDs of partitions the plan depends on */
+
 	List	   *invalItems;		/* other dependencies, as PlanInvalItems */
 
 	List	   *paramExecTypes; /* type OIDs for PARAM_EXEC Params */
@@ -779,6 +781,19 @@ typedef struct TidScan
 	Scan		scan;
 	List	   *tidquals;		/* qual(s) involving CTID = something */
 } TidScan;
+
+/* ----------------
+ *		tid range scan node
+ *
+ * tidrangequals is an implicitly AND'ed list of qual expressions of the form
+ * "CTID relop pseudoconstant", where relop is one of >,>=,<,<=.
+ * ----------------
+ */
+typedef struct TidRangeScan
+{
+	Scan		scan;
+	List	   *tidrangequals;	/* qual(s) involving CTID op something */
+} TidRangeScan;
 
 /* ----------------
  *		subquery scan node

@@ -669,6 +669,7 @@ apr_cflags
 apr_link_ld_libs
 apr_includes
 APR_1_CONFIG
+with_ssl
 PTHREAD_CFLAGS
 PTHREAD_LIBS
 PTHREAD_CC
@@ -729,12 +730,10 @@ XML2_LIBS
 XML2_CFLAGS
 XML2_CONFIG
 with_libxml
-UUID_EXTRA_OBJS
 with_uuid
 with_readline
 with_systemd
 with_selinux
-with_openssl
 with_ldap
 with_krb_srvnam
 krb_srvtab
@@ -896,7 +895,6 @@ with_pam
 with_bsd_auth
 with_ldap
 with_bonjour
-with_openssl
 with_selinux
 with_systemd
 with_readline
@@ -914,6 +912,8 @@ with_rt
 with_libcurl
 with_apr_config
 with_gnu_ld
+with_ssl
+with_openssl
 enable_largefile
 '
       ac_precious_vars='build_alias
@@ -1616,7 +1616,6 @@ Optional Packages:
   --with-bsd-auth         build with BSD Authentication support
   --with-ldap             build with LDAP support
   --with-bonjour          build with Bonjour support
-  --with-openssl          build with OpenSSL support
   --with-selinux          build with SELinux support
   --with-systemd          build with systemd support
   --without-readline      do not use GNU Readline nor BSD Libedit for editing
@@ -1637,6 +1636,8 @@ Optional Packages:
   --without-libcurl       do not use libcurl
   --with-apr-config=PATH  path to apr-1-config utility
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
+  --with-ssl=LIB          use LIB for SSL/TLS support (openssl)
+  --with-openssl          obsolete spelling of --with-ssl=openssl
 
 Some influential environment variables:
   CC          C compiler command
@@ -9057,41 +9058,6 @@ $as_echo "$with_bonjour" >&6; }
 
 
 #
-# OpenSSL
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with OpenSSL support" >&5
-$as_echo_n "checking whether to build with OpenSSL support... " >&6; }
-
-
-
-# Check whether --with-openssl was given.
-if test "${with_openssl+set}" = set; then :
-  withval=$with_openssl;
-  case $withval in
-    yes)
-
-$as_echo "#define USE_OPENSSL 1" >>confdefs.h
-
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-openssl option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_openssl=no
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_openssl" >&5
-$as_echo "$with_openssl" >&6; }
-
-
-#
 # SELinux
 #
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with SELinux support" >&5
@@ -9288,27 +9254,23 @@ if test "$with_ossp_uuid" = yes ; then
   with_uuid=ossp
 fi
 
-if test "$with_uuid" = bsd ; then
+if test "$with_uuid" != no ; then
+  if test "$with_uuid" = bsd ; then
 
 $as_echo "#define HAVE_UUID_BSD 1" >>confdefs.h
 
-  UUID_EXTRA_OBJS="sha1.o"
-elif test "$with_uuid" = e2fs ; then
+  elif test "$with_uuid" = e2fs ; then
 
 $as_echo "#define HAVE_UUID_E2FS 1" >>confdefs.h
 
-  UUID_EXTRA_OBJS="sha1.o"
-elif test "$with_uuid" = ossp ; then
+  elif test "$with_uuid" = ossp ; then
 
 $as_echo "#define HAVE_UUID_OSSP 1" >>confdefs.h
 
-  UUID_EXTRA_OBJS=""
-elif test "$with_uuid" = no ; then
-  UUID_EXTRA_OBJS=""
-else
-  as_fn_error $? "--with-uuid must specify one of bsd, e2fs, or ossp" "$LINENO" 5
+  else
+    as_fn_error $? "--with-uuid must specify one of bsd, e2fs, or ossp" "$LINENO" 5
+  fi
 fi
-
 
 
 
@@ -13231,6 +13193,65 @@ if test "$ac_res" != no; then :
 fi
 
 
+if test "$enable_thread_safety" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing pthread_barrier_wait" >&5
+$as_echo_n "checking for library containing pthread_barrier_wait... " >&6; }
+if ${ac_cv_search_pthread_barrier_wait+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_func_search_save_LIBS=$LIBS
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char pthread_barrier_wait ();
+int
+main ()
+{
+return pthread_barrier_wait ();
+  ;
+  return 0;
+}
+_ACEOF
+for ac_lib in '' pthread; do
+  if test -z "$ac_lib"; then
+    ac_res="none required"
+  else
+    ac_res=-l$ac_lib
+    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+  fi
+  if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_search_pthread_barrier_wait=$ac_res
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext
+  if ${ac_cv_search_pthread_barrier_wait+:} false; then :
+  break
+fi
+done
+if ${ac_cv_search_pthread_barrier_wait+:} false; then :
+
+else
+  ac_cv_search_pthread_barrier_wait=no
+fi
+rm conftest.$ac_ext
+LIBS=$ac_func_search_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_pthread_barrier_wait" >&5
+$as_echo "$ac_cv_search_pthread_barrier_wait" >&6; }
+ac_res=$ac_cv_search_pthread_barrier_wait
+if test "$ac_res" != no; then :
+  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+
+fi
+
+fi
+
 if test "$with_readline" = yes; then
 
 
@@ -13882,7 +13903,64 @@ fi
   LIBS="$_LIBS"
 fi
 
+#
+# SSL Library
+#
+# There is currently only one supported SSL/TLS library: OpenSSL.
+#
+
+
+
+# Check whether --with-ssl was given.
+if test "${with_ssl+set}" = set; then :
+  withval=$with_ssl;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-ssl option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-ssl option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+fi
+
+
+if test x"$with_ssl" = x"" ; then
+  with_ssl=no
+fi
+
+
+
+# Check whether --with-openssl was given.
+if test "${with_openssl+set}" = set; then :
+  withval=$with_openssl;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-openssl option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_openssl=no
+
+fi
+
+
 if test "$with_openssl" = yes ; then
+  with_ssl=openssl
+fi
+
+if test "$with_ssl" = openssl ; then
     # Minimum required OpenSSL version is 1.0.1
 
 $as_echo "#define OPENSSL_API_COMPAT 0x10001000L" >>confdefs.h
@@ -14143,6 +14221,11 @@ _ACEOF
 fi
 done
 
+
+$as_echo "#define USE_OPENSSL 1" >>confdefs.h
+
+elif test "$with_ssl" != no ; then
+  as_fn_error $? "--with-ssl must specify openssl" "$LINENO" 5
 fi
 
 if test "$with_rt" = yes ; then
@@ -15441,7 +15524,7 @@ done
 
 fi
 
-if test "$with_openssl" = yes ; then
+if test "$with_ssl" = openssl ; then
   ac_fn_c_check_header_mongrel "$LINENO" "openssl/ssl.h" "ac_cv_header_openssl_ssl_h" "$ac_includes_default"
 if test "x$ac_cv_header_openssl_ssl_h" = xyes; then :
 
@@ -17440,7 +17523,7 @@ fi
 LIBS_including_readline="$LIBS"
 LIBS=`echo "$LIBS" | sed -e 's/-ledit//g' -e 's/-lreadline//g'`
 
-for ac_func in backtrace_symbols clock_gettime copyfile fdatasync getifaddrs getpeerucred getrlimit kqueue mbstowcs_l memset_s poll posix_fallocate ppoll pread preadv pstat pthread_is_threaded_np pwrite pwritev readlink readv setproctitle setproctitle_fast setsid shm_open strchrnul strsignal symlink sync_file_range uselocale wcstombs_l writev
+for ac_func in backtrace_symbols clock_gettime copyfile fdatasync getifaddrs getpeerucred getrlimit kqueue mbstowcs_l memset_s poll posix_fallocate ppoll pstat pthread_is_threaded_np readlink readv setproctitle setproctitle_fast setsid shm_open strchrnul strsignal symlink sync_file_range uselocale wcstombs_l writev
 do :
   as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
 ac_fn_c_check_func "$LINENO" "$ac_func" "$as_ac_var"
@@ -18138,6 +18221,58 @@ esac
 
 fi
 
+ac_fn_c_check_func "$LINENO" "pread" "ac_cv_func_pread"
+if test "x$ac_cv_func_pread" = xyes; then :
+  $as_echo "#define HAVE_PREAD 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" pread.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS pread.$ac_objext"
+ ;;
+esac
+
+fi
+
+ac_fn_c_check_func "$LINENO" "preadv" "ac_cv_func_preadv"
+if test "x$ac_cv_func_preadv" = xyes; then :
+  $as_echo "#define HAVE_PREADV 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" preadv.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS preadv.$ac_objext"
+ ;;
+esac
+
+fi
+
+ac_fn_c_check_func "$LINENO" "pwrite" "ac_cv_func_pwrite"
+if test "x$ac_cv_func_pwrite" = xyes; then :
+  $as_echo "#define HAVE_PWRITE 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" pwrite.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS pwrite.$ac_objext"
+ ;;
+esac
+
+fi
+
+ac_fn_c_check_func "$LINENO" "pwritev" "ac_cv_func_pwritev"
+if test "x$ac_cv_func_pwritev" = xyes; then :
+  $as_echo "#define HAVE_PWRITEV 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" pwritev.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS pwritev.$ac_objext"
+ ;;
+esac
+
+fi
+
 ac_fn_c_check_func "$LINENO" "random" "ac_cv_func_random"
 if test "x$ac_cv_func_random" = xyes; then :
   $as_echo "#define HAVE_RANDOM 1" >>confdefs.h
@@ -18217,6 +18352,23 @@ esac
 fi
 
 
+
+if test "$enable_thread_safety" = yes; then
+  ac_fn_c_check_func "$LINENO" "pthread_barrier_wait" "ac_cv_func_pthread_barrier_wait"
+if test "x$ac_cv_func_pthread_barrier_wait" = xyes; then :
+  $as_echo "#define HAVE_PTHREAD_BARRIER_WAIT 1" >>confdefs.h
+
+else
+  case " $LIBOBJS " in
+  *" pthread_barrier_wait.$ac_objext "* ) ;;
+  *) LIBOBJS="$LIBOBJS pthread_barrier_wait.$ac_objext"
+ ;;
+esac
+
+fi
+
+
+fi
 
 if test "$PORTNAME" = "win32" -o "$PORTNAME" = "cygwin"; then
 	# Cygwin and (apparently, based on test results) Mingw both
@@ -20640,7 +20792,7 @@ fi
 # will be used.
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking which random number source to use" >&5
 $as_echo_n "checking which random number source to use... " >&6; }
-if test x"$with_openssl" = x"yes" ; then
+if test x"$with_ssl" = x"openssl" ; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: OpenSSL" >&5
 $as_echo "OpenSSL" >&6; }
 elif test x"$PORTNAME" = x"win32" ; then

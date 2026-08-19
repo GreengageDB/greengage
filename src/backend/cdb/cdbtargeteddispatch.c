@@ -500,6 +500,7 @@ DirectDispatchUpdateContentIdsFromPlan(PlannerInfo *root, Plan *plan)
 			/* no change to dispatchInfo */
 			break;
 		case T_TidScan:
+		case T_TidRangeScan:
 		case T_FunctionScan:
 		case T_TableFuncScan:
 		case T_WorkTableScan:

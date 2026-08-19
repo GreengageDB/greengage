@@ -40,7 +40,7 @@
  stavalues4  | anyarray |           |          |         | extended |              | 
  stavalues5  | anyarray |           |          |         | extended |              | 
 Indexes:
-    "pg_statistic_relid_att_inh_index" UNIQUE, btree (starelid, staattnum, stainherit)
+    "pg_statistic_relid_att_inh_index" PRIMARY KEY, btree (starelid, staattnum, stainherit)
 
 --------------------------------------------------------------------------------
 -- Scenario: User table without hll flag
@@ -289,8 +289,8 @@ SET
 SET
 psql:data/minirepro.sql:46: ERROR:  only shared relations can be placed in pg_global tablespace
 psql:data/minirepro.sql:48: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:55: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:62: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:56: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:64: ERROR:  permission denied: "pg_tablespace" is a system catalog
 SET
 UPDATE 1
 DELETE 1

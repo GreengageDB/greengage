@@ -1679,7 +1679,7 @@ TransactionIdIsActive(TransactionId xid)
  * well as "internally" by GlobalVisUpdate() (see comment above struct
  * GlobalVisState).
  *
- * See the definition of ComputedXidHorizonsResult for the various computed
+ * See the definition of ComputeXidHorizonsResult for the various computed
  * horizons.
  *
  * For VACUUM separate horizons (used to decide which deleted tuples must
@@ -1688,7 +1688,13 @@ TransactionIdIsActive(TransactionId xid)
  * relations that's not required, since only backends in my own database could
  * ever see the tuples in them. Also, we can ignore concurrently running lazy
  * VACUUMs because (a) they must be working on other tables, and (b) they
- * don't need to do snapshot-based lookups.
+ * don't need to do snapshot-based lookups.  Similarly, for the non-catalog
+ * horizon, we can ignore CREATE INDEX CONCURRENTLY and REINDEX CONCURRENTLY
+ * when they are working on non-partial, non-expressional indexes, for the
+ * same reasons and because they can't run in transaction blocks.  (They are
+ * not possible to ignore for catalogs, because CIC and RC do some catalog
+ * operations.)  Do note that this means that CIC and RC must use a lock level
+ * that conflicts with VACUUM.
  *
  * This also computes a horizon used to truncate pg_subtrans. For that
  * backends in all databases have to be considered, and concurrently running
@@ -1745,9 +1751,6 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 	bool		in_recovery = RecoveryInProgress();
 	TransactionId *other_xids = ProcGlobal->xids;
 
-	/* inferred after ProcArrayLock is released */
-	h->catalog_oldest_nonremovable = InvalidTransactionId;
-
 	LWLockAcquire(ProcArrayLock, LW_SHARED);
 
 	h->latest_completed = ShmemVariableCache->latestCompletedXid;
@@ -1767,6 +1770,7 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 
 		h->oldest_considered_running = initial;
 		h->shared_oldest_nonremovable = initial;
+		h->catalog_oldest_nonremovable = initial;
 		h->data_oldest_nonremovable = initial;
 
 		/*
@@ -1837,7 +1841,7 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 		if (statusFlags & (PROC_IN_VACUUM | PROC_IN_LOGICAL_DECODING))
 			continue;
 
-		/* shared tables need to take backends in all database into account */
+		/* shared tables need to take backends in all databases into account */
 		h->shared_oldest_nonremovable =
 			TransactionIdOlder(h->shared_oldest_nonremovable, xmin);
 
@@ -1858,10 +1862,25 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 			MyDatabaseId == InvalidOid || proc->databaseId == MyDatabaseId ||
 			proc->databaseId == 0)	/* always include WalSender */
 		{
-			h->data_oldest_nonremovable =
-				TransactionIdOlder(h->data_oldest_nonremovable, xmin);
+			/*
+			 * We can ignore this backend if it's running CREATE INDEX
+			 * CONCURRENTLY or REINDEX CONCURRENTLY on a "safe" index -- but
+			 * only on vacuums of user-defined tables.
+			 */
+			if (!(statusFlags & PROC_IN_SAFE_IC))
+				h->data_oldest_nonremovable =
+					TransactionIdOlder(h->data_oldest_nonremovable, xmin);
+
+			/* Catalog tables need to consider all backends in this db */
+			h->catalog_oldest_nonremovable =
+				TransactionIdOlder(h->catalog_oldest_nonremovable, xmin);
+
 		}
 	}
+
+	/* catalog horizon should never be later than data */
+	Assert(TransactionIdPrecedesOrEquals(h->catalog_oldest_nonremovable,
+										 h->data_oldest_nonremovable));
 
 	/*
 	 * If in recovery fetch oldest xid in KnownAssignedXids, will be applied
@@ -1884,6 +1903,8 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 			TransactionIdOlder(h->shared_oldest_nonremovable, kaxmin);
 		h->data_oldest_nonremovable =
 			TransactionIdOlder(h->data_oldest_nonremovable, kaxmin);
+		h->catalog_oldest_nonremovable =
+			TransactionIdOlder(h->catalog_oldest_nonremovable, kaxmin);
 		/* temp relations cannot be accessed in recovery */
 	}
 	else
@@ -1910,6 +1931,9 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 		h->data_oldest_nonremovable =
 			TransactionIdRetreatedBy(h->data_oldest_nonremovable,
 									 vacuum_defer_cleanup_age);
+		h->catalog_oldest_nonremovable =
+			TransactionIdRetreatedBy(h->catalog_oldest_nonremovable,
+									 vacuum_defer_cleanup_age);
 		/* defer doesn't apply to temp relations */
 	}
 
@@ -1932,7 +1956,9 @@ ComputeXidHorizons(ComputeXidHorizonsResult *h)
 	h->shared_oldest_nonremovable =
 		TransactionIdOlder(h->shared_oldest_nonremovable,
 						   h->slot_catalog_xmin);
-	h->catalog_oldest_nonremovable = h->data_oldest_nonremovable;
+	h->catalog_oldest_nonremovable =
+		TransactionIdOlder(h->catalog_oldest_nonremovable,
+						   h->slot_xmin);
 	h->catalog_oldest_nonremovable =
 		TransactionIdOlder(h->catalog_oldest_nonremovable,
 						   h->slot_catalog_xmin);
@@ -2212,6 +2238,14 @@ copyLocalSnapshot(Snapshot snapshot)
 
 	snapshot->curcid = SharedLocalSnapshotSlot->snapshot.curcid;
 	snapshot->subxcnt = -1;
+
+	/*
+	 * We just overwrote the snapshot contents in place, so the reuse token no
+	 * longer describes them. Invalidate it, exactly like the in-place fillers
+	 * in snapmgr.c (SetTransactionSnapshot(), CopySnapshot(),
+	 * RestoreSnapshot()) do.
+	 */
+	snapshot->snapXactCompletionCount = 0;
 
 	if (TransactionIdPrecedes(snapshot->xmin, TransactionXmin))
 		TransactionXmin = snapshot->xmin;
@@ -2696,7 +2730,7 @@ GetSnapshotDataReuse(Snapshot snapshot)
 	 * holding ProcArrayLock) exclusively). Thus the xactCompletionCount check
 	 * ensures we would detect if the snapshot would have changed.
 	 *
-	 * As the snapshot contents are the same as it was before, it is is safe
+	 * As the snapshot contents are the same as it was before, it is safe
 	 * to re-enter the snapshot's xmin into the PGPROC array. None of the rows
 	 * visible under the snapshot could already have been removed (that'd
 	 * require the set of running transactions to change) and it fulfills the
@@ -2857,22 +2891,85 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 */
 	LWLockAcquire(ProcArrayLock, LW_SHARED);
 
-#ifdef FAULT_INJECTOR
-	if (!IS_QUERY_DISPATCHER() && snapshot->haveDistribSnapshot &&
-		FaultInjector_InjectFaultIfSet("distributed_snapshot_skip_data_reuse",
-										DDLNotSpecified,
-										MyProcPort ? MyProcPort->database_name: "",
-										"") == FaultInjectorTypeSkip)
+	/*
+	 * GP: Snapshot reuse is deliberately never attempted on the coordinator
+	 * while it is running distributed transactions.  A coordinator snapshot
+	 * also carries the distributed snapshot built by
+	 * CreateDistributedSnapshot() further below, and its contents depend on
+	 * the lifecycle of distributed transactions, which xactCompletionCount
+	 * does not track: a read-only distributed transaction begins and ends
+	 * without ever assigning a local xid, so the counter would be unchanged
+	 * and GetSnapshotDataReuse() would hand back a stale list of in-progress
+	 * gxids.
+	 *
+	 * On a QE this is not a concern.  The distributed part of the snapshot
+	 * has already been reset by SnapshotResetDslm() and copied fresh from
+	 * QEDtxContextInfo above, so only the local part - which is exactly what
+	 * xactCompletionCount tracks - is subject to reuse.
+	 */
+	if (distributedTransactionContext != DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
+		GetSnapshotDataReuse(snapshot))
 	{
-		/* Skip snapshot data reuse */
-	}
-	else
-#endif
+		/*
+		 * Fetch into local variables while ProcArrayLock is held, see the
+		 * identical dance in the full computation below.
+		 */
+		replication_slot_xmin = procArray->replication_slot_xmin;
+		replication_slot_catalog_xmin = procArray->replication_slot_catalog_xmin;
 
-	if ((distributedTransactionContext != DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE ||
-		snapshot->haveDistribSnapshot) && GetSnapshotDataReuse(snapshot))
-	{
 		LWLockRelease(ProcArrayLock);
+
+		/*
+		 * GP: The local part of the snapshot is unchanged, but the
+		 * distributed snapshot we just copied from the QD is new, so the
+		 * distributed log's oldest xmin may still be able to advance.
+		 *
+		 * Maintaining it here is not an optimization.
+		 * DistributedLog_AdvanceOldestXmin() is the only caller of
+		 * DistributedLog_Truncate() - neither checkpoint nor vacuum ever
+		 * truncate the distributed log - so leaving it to the full
+		 * computation alone would make truncation of obsolete distributed log
+		 * segments depend on whether some other backend happened to commit an
+		 * xid-bearing transaction between two of our snapshots.  A workload of
+		 * single-statement sessions would then never truncate at all, because
+		 * every backend's very first snapshot (taken by the implicit "Local
+		 * Only" transaction, before any distributed snapshot has arrived)
+		 * always recomputes, absorbs all pending completions into its
+		 * baseline, and cannot truncate.
+		 *
+		 * We deliberately do not touch GlobalVis* here, matching upstream's
+		 * behaviour on the reuse path.  The horizon below is computed only to
+		 * feed DistributedLog_AdvanceOldestXmin(), and it must come out
+		 * exactly as the full computation would have produced it: advancing
+		 * the distributed log any further would raise the horizon that
+		 * GetDistOldestXmin() hands to vacuum, silently defeating
+		 * vacuum_defer_cleanup_age and the replication slot xmins.
+		 */
+		if (!IS_QUERY_DISPATCHER() && snapshot->haveDistribSnapshot)
+		{
+			TransactionId def_vis_xid;
+
+			/*
+			 * This deliberately duplicates, rather than factors out, the
+			 * def_vis_xid computation in the "maintain state for GlobalVis*"
+			 * block below: that block is verbatim upstream code and we do not
+			 * want to add merge conflicts to it.  Keep the two in sync.  Note
+			 * that both spell out the same symbols, so an upstream rename or
+			 * removal (PostgreSQL 16 drops vacuum_defer_cleanup_age, for
+			 * instance) breaks the build here too rather than passing
+			 * silently.
+			 */
+			def_vis_xid = TransactionIdRetreatedBy(snapshot->xmin,
+												   vacuum_defer_cleanup_age);
+			def_vis_xid = TransactionIdOlder(def_vis_xid,
+											 replication_slot_xmin);
+			def_vis_xid = TransactionIdOlder(replication_slot_catalog_xmin,
+											 def_vis_xid);
+
+			(void) DistributedLog_AdvanceOldestXmin(def_vis_xid,
+													ds->xminAllDistributedSnapshots);
+		}
+
 		goto ret;
 	}
 
@@ -5077,7 +5174,7 @@ GlobalVisTestNonRemovableHorizon(GlobalVisState *state)
  * GlobalVisTestIsRemovableFullXid(), see their comments.
  */
 bool
-GlobalVisIsRemovableFullXid(Relation rel, FullTransactionId fxid)
+GlobalVisCheckRemovableFullXid(Relation rel, FullTransactionId fxid)
 {
 	GlobalVisState *state;
 

@@ -677,7 +677,7 @@ convert_EXPR_to_join(PlannerInfo *root, OpExpr *opexp)
 
 /* check if NOT IN conversion to antijoin is possible */
 static bool
-safe_to_convert_NOTIN(SubLink *sublink, Relids available_rels)
+safe_to_convert_NOTIN(PlannerInfo *root, SubLink *sublink, Relids available_rels)
 {
 	Query	   *subselect = (Query *) sublink->subselect;
 	Relids		left_varnos;
@@ -701,7 +701,7 @@ safe_to_convert_NOTIN(SubLink *sublink, Relids available_rels)
 	}
 
 	/* Left-hand expressions must contain some Vars of the current */
-	left_varnos = pull_varnos(sublink->testexpr);
+	left_varnos = pull_varnos(root, sublink->testexpr);
 	if (bms_is_empty(left_varnos))
 		return false;
 
@@ -1511,7 +1511,7 @@ convert_IN_to_antijoin(PlannerInfo *root, SubLink *sublink,
 	Query	   *parse = root->parse;
 	Query	   *subselect = (Query *) sublink->subselect;
 
-	if (safe_to_convert_NOTIN(sublink, available_rels))
+	if (safe_to_convert_NOTIN(root, sublink, available_rels))
 	{
 		/* Delete ORDER BY and DISTINCT.
 		 *

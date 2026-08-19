@@ -29,14 +29,11 @@
  */
 CATALOG(pg_proc_callback,7176,ProcCallbackRelationId)
 {
-	regproc	profnoid;		/* oid of the main function */
-	regproc	procallback;	/* oid of the callback function */
+	regproc	profnoid BKI_LOOKUP(pg_proc);		/* oid of the main function */
+	regproc	procallback BKI_LOOKUP(pg_proc);	/* oid of the callback function */
 	char	promethod;		/* role the callback function is performing */
 } FormData_pg_proc_callback;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(profnoid REFERENCES pg_proc(oid));
-FOREIGN_KEY(procallback REFERENCES pg_proc(oid));
 
 /* ----------------
  *		Form_pg_proc_callback corresponds to a pointer to a tuple with
@@ -45,7 +42,7 @@ FOREIGN_KEY(procallback REFERENCES pg_proc(oid));
  */
 typedef FormData_pg_proc_callback *Form_pg_proc_callback;
 
-DECLARE_UNIQUE_INDEX(pg_proc_callback_profnoid_promethod_index, 9926, on pg_proc_callback using btree(profnoid oid_ops, promethod char_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_proc_callback_profnoid_promethod_index, 9926, on pg_proc_callback using btree(profnoid oid_ops, promethod char_ops));
 #define ProcCallbackProfnoidPromethodIndexId	9926
 
 /* values for promethod */

@@ -202,6 +202,9 @@ typedef ItemPointerData *ItemPointer;
 
 extern bool ItemPointerEquals(ItemPointer pointer1, ItemPointer pointer2);
 extern int32 ItemPointerCompare(ItemPointer arg1, ItemPointer arg2);
+extern void ItemPointerInc(ItemPointer pointer);
+extern void ItemPointerDec(ItemPointer pointer);
+
 extern char *ItemPointerToString(ItemPointer tid);
 extern char *ItemPointerToString2(ItemPointer tid);
 

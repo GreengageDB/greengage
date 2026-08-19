@@ -33,7 +33,7 @@ CATALOG(pg_rewrite,2618,RewriteRelationId)
 {
 	Oid			oid;			/* oid */
 	NameData	rulename;
-	Oid			ev_class;
+	Oid			ev_class BKI_LOOKUP(pg_class);
 	char		ev_type;
 	char		ev_enabled;
 	bool		is_instead;
@@ -44,8 +44,6 @@ CATALOG(pg_rewrite,2618,RewriteRelationId)
 #endif
 } FormData_pg_rewrite;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(ev_class REFERENCES pg_class(oid));
 
 /* ----------------
  *		Form_pg_rewrite corresponds to a pointer to a tuple with
@@ -56,7 +54,7 @@ typedef FormData_pg_rewrite *Form_pg_rewrite;
 
 DECLARE_TOAST(pg_rewrite, 2838, 2839);
 
-DECLARE_UNIQUE_INDEX(pg_rewrite_oid_index, 2692, on pg_rewrite using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_rewrite_oid_index, 2692, on pg_rewrite using btree(oid oid_ops));
 #define RewriteOidIndexId  2692
 DECLARE_UNIQUE_INDEX(pg_rewrite_rel_rulename_index, 2693, on pg_rewrite using btree(ev_class oid_ops, rulename name_ops));
 #define RewriteRelRulenameIndexId  2693

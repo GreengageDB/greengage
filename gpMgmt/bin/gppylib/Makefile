@@ -3,7 +3,7 @@
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
-SUBDIRS= commands data db gpMgmttest operations programs system util
+SUBDIRS= commands db gpMgmttest operations programs system util
 
 $(recurse)
 

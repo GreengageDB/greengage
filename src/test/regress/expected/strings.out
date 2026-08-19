@@ -1148,6 +1148,30 @@ SELECT 'indio' NOT LIKE 'in_o' AS "true";
  t
 (1 row)
 
+SELECT 'abc'::name LIKE '_b_' AS "true";
+ true 
+------
+ t
+(1 row)
+
+SELECT 'abc'::name NOT LIKE '_b_' AS "false";
+ false 
+-------
+ f
+(1 row)
+
+SELECT 'abc'::bytea LIKE '_b_'::bytea AS "true";
+ true 
+------
+ t
+(1 row)
+
+SELECT 'abc'::bytea NOT LIKE '_b_'::bytea AS "false";
+ false 
+-------
+ f
+(1 row)
+
 -- unused escape character
 SELECT 'hawkeye' LIKE 'h%' ESCAPE '#' AS "true";
  true 
@@ -1271,6 +1295,18 @@ SELECT 'i_dio' NOT LIKE 'i$_d%o' ESCAPE '$' AS "false";
  f
 (1 row)
 
+SELECT 'a_c'::bytea LIKE 'a$__'::bytea ESCAPE '$'::bytea AS "true";
+ true 
+------
+ t
+(1 row)
+
+SELECT 'a_c'::bytea NOT LIKE 'a$__'::bytea ESCAPE '$'::bytea AS "false";
+ false 
+-------
+ f
+(1 row)
+
 -- escape character same as pattern character
 SELECT 'maca' LIKE 'm%aca' ESCAPE '%' AS "true";
  true 
@@ -1379,6 +1415,18 @@ SELECT 'Hawkeye' ILIKE 'h%' AS "true";
 (1 row)
 
 SELECT 'Hawkeye' NOT ILIKE 'h%' AS "false";
+ false 
+-------
+ f
+(1 row)
+
+SELECT 'ABC'::name ILIKE '_b_' AS "true";
+ true 
+------
+ t
+(1 row)
+
+SELECT 'ABC'::name NOT ILIKE '_b_' AS "false";
  false 
 -------
  f
@@ -2251,6 +2299,18 @@ SELECT trim(E'\\000'::bytea from E'\\000Tom\\000'::bytea);
  btrim 
 -------
  Tom
+(1 row)
+
+SELECT trim(leading E'\\000'::bytea from E'\\000Tom\\000'::bytea);
+  ltrim  
+---------
+ Tom\000
+(1 row)
+
+SELECT trim(trailing E'\\000'::bytea from E'\\000Tom\\000'::bytea);
+  rtrim  
+---------
+ \000Tom
 (1 row)
 
 SELECT btrim(E'\\000trim\\000'::bytea, E'\\000'::bytea);

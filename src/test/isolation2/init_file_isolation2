@@ -68,16 +68,16 @@ s/for session id -?[0-9]+/for session id xxx/
 m/\(cdbendpointretrieve\.c\:\d+\)/
 s/\(cdbendpointretrieve\.c:\d+\)/\(cdbendpointretrieve\.c:LINE_NUM\)/
 
-# Newer libpq prefixes connection failures with "could not connect to
-# host ..., port ...:" even when the failure is a FATAL from the server
+# Newer libpq prefixes connection failures with "connection to server at
+# host ..., port ... failed:" even when the failure is a FATAL from the server
 # during startup. Mask both fields unconditionally with wildcards (rather
 # than matching the literal host_id/port_id placeholder text) since this
 # static init file's rules run before the per-test dynamic host_id/port_id
 # substitution, so the real hostname/IP/port is still what's on the line
 # at this point. libpq also sometimes shows the resolved IP in parens
 # after the hostname; that's covered by the same optional group.
-m/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/
-s/could not connect to host "[^"]*"(?: \([^)]*\))?, port \d+:/could not connect to host "HOST", port PORT:/
+m/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/
+s/connection to server at "[^"]*"(?: \([^)]*\))?, port \d+ failed:/connection to server at "HOST", port PORT failed:/
 
 # skip specific PID in: ERROR:  another session (pid: 46988) used the
 # endpoint and completed retrieving

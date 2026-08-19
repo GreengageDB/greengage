@@ -37,8 +37,6 @@ CATALOG(pg_attribute_encoding,6231,AttributeEncodingRelationId)
 #endif
 } FormData_pg_attribute_encoding;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(attrelid REFERENCES pg_attribute(attrelid));
 
 /* ----------------
  *		Form_pg_attribute_encoding corresponds to a pointer to a tuple with
@@ -47,11 +45,13 @@ FOREIGN_KEY(attrelid REFERENCES pg_attribute(attrelid));
  */
 typedef FormData_pg_attribute_encoding *Form_pg_attribute_encoding;
 
+DECLARE_FOREIGN_KEY((attrelid, attnum), pg_attribute, (attrelid, attnum));
+
 DECLARE_TOAST(pg_attribute_encoding, 6233, 6234);
 
 DECLARE_INDEX(pg_attribute_encoding_attrelid_index, 6236, on pg_attribute_encoding using btree(attrelid oid_ops));
 #define AttributeEncodingAttrelidIndexId	6236
-DECLARE_UNIQUE_INDEX(pg_attribute_encoding_attrelid_attnum_index, 6237, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_attribute_encoding_attrelid_attnum_index, 6237, on pg_attribute_encoding using btree(attrelid oid_ops, attnum int2_ops));
 #define AttributeEncodingAttrelidAttnumIndexId	6237
 
 

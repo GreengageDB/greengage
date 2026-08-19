@@ -342,10 +342,6 @@ pgoutput_begin_txn(LogicalDecodingContext *ctx, ReorderBufferTXN *txn)
 	{
 		char	   *origin;
 
-		/* Message boundary */
-		OutputPluginWrite(ctx, false);
-		OutputPluginPrepareWrite(ctx, true);
-
 		/*----------
 		 * XXX: which behaviour do we want here?
 		 *
@@ -357,7 +353,13 @@ pgoutput_begin_txn(LogicalDecodingContext *ctx, ReorderBufferTXN *txn)
 		 *----------
 		 */
 		if (replorigin_by_oid(txn->origin_id, true, &origin))
+		{
+			/* Message boundary */
+			OutputPluginWrite(ctx, false);
+			OutputPluginPrepareWrite(ctx, true);
 			logicalrep_write_origin(ctx->out, origin, txn->origin_lsn);
+		}
+
 	}
 
 	OutputPluginWrite(ctx, true);
@@ -502,6 +504,7 @@ pgoutput_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 	MemoryContext old;
 	RelationSyncEntry *relentry;
 	TransactionId xid = InvalidTransactionId;
+	Relation	ancestor = NULL;
 
 	if (!is_publishable_relation(relation))
 		return;
@@ -552,7 +555,8 @@ pgoutput_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				if (relentry->publish_as_relid != RelationGetRelid(relation))
 				{
 					Assert(relation->rd_rel->relispartition);
-					relation = RelationIdGetRelation(relentry->publish_as_relid);
+					ancestor = RelationIdGetRelation(relentry->publish_as_relid);
+					relation = ancestor;
 					/* Convert tuple if needed. */
 					if (relentry->map)
 						tuple = execute_attr_map_tuple(tuple, relentry->map);
@@ -574,7 +578,8 @@ pgoutput_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				if (relentry->publish_as_relid != RelationGetRelid(relation))
 				{
 					Assert(relation->rd_rel->relispartition);
-					relation = RelationIdGetRelation(relentry->publish_as_relid);
+					ancestor = RelationIdGetRelation(relentry->publish_as_relid);
+					relation = ancestor;
 					/* Convert tuples if needed. */
 					if (relentry->map)
 					{
@@ -598,7 +603,8 @@ pgoutput_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 				if (relentry->publish_as_relid != RelationGetRelid(relation))
 				{
 					Assert(relation->rd_rel->relispartition);
-					relation = RelationIdGetRelation(relentry->publish_as_relid);
+					ancestor = RelationIdGetRelation(relentry->publish_as_relid);
+					relation = ancestor;
 					/* Convert tuple if needed. */
 					if (relentry->map)
 						oldtuple = execute_attr_map_tuple(oldtuple, relentry->map);
@@ -614,6 +620,12 @@ pgoutput_change(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
 			break;
 		default:
 			Assert(false);
+	}
+
+	if (RelationIsValid(ancestor))
+	{
+		RelationClose(ancestor);
+		ancestor = NULL;
 	}
 
 	/* Cleanup */
@@ -770,12 +782,13 @@ pgoutput_stream_start(struct LogicalDecodingContext *ctx,
 	{
 		char	   *origin;
 
-		/* Message boundary */
-		OutputPluginWrite(ctx, false);
-		OutputPluginPrepareWrite(ctx, true);
-
 		if (replorigin_by_oid(txn->origin_id, true, &origin))
+		{
+			/* Message boundary */
+			OutputPluginWrite(ctx, false);
+			OutputPluginPrepareWrite(ctx, true);
 			logicalrep_write_origin(ctx->out, origin, InvalidXLogRecPtr);
+		}
 	}
 
 	OutputPluginWrite(ctx, true);
@@ -1169,5 +1182,16 @@ rel_sync_cache_publication_cb(Datum arg, int cacheid, uint32 hashvalue)
 	 */
 	hash_seq_init(&status, RelationSyncCache);
 	while ((entry = (RelationSyncEntry *) hash_seq_search(&status)) != NULL)
+	{
 		entry->replicate_valid = false;
+
+		/*
+		 * There might be some relations dropped from the publication so we
+		 * don't need to publish the changes for them.
+		 */
+		entry->pubactions.pubinsert = false;
+		entry->pubactions.pubupdate = false;
+		entry->pubactions.pubdelete = false;
+		entry->pubactions.pubtruncate = false;
+	}
 }

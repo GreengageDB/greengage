@@ -198,33 +198,33 @@ extern bool errstart(int elevel, const char *domain);
 extern pg_attribute_cold bool errstart_cold(int elevel, const char *domain);
 extern void errfinish(const char *filename, int lineno, const char *funcname);
 
-extern void errcode(int sqlerrcode);
+extern int	errcode(int sqlerrcode);
 
-extern void errcode_for_file_access(void);
-extern void errcode_for_socket_access(void);
+extern int	errcode_for_file_access(void);
+extern int	errcode_for_socket_access(void);
 
 extern int sqlstate_to_errcode(const char *sqlstate);
 extern void errcode_to_sqlstate(int errcode, char outbuf[6]);
 
-extern void errmsg(const char *fmt,...) pg_attribute_printf(1, 2);
-extern void errmsg_internal(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int errmsg(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int errmsg_internal(const char *fmt,...) pg_attribute_printf(1, 2);
 
-extern void errmsg_plural(const char *fmt_singular, const char *fmt_plural,
+extern int	errmsg_plural(const char *fmt_singular, const char *fmt_plural,
 						  unsigned long n,...) pg_attribute_printf(1, 4) pg_attribute_printf(2, 4);
 
-extern void errdetail(const char *fmt,...) pg_attribute_printf(1, 2);
-extern void errdetail_internal(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errdetail(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errdetail_internal(const char *fmt,...) pg_attribute_printf(1, 2);
 
-extern void errdetail_log(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errdetail_log(const char *fmt,...) pg_attribute_printf(1, 2);
 
-extern void errdetail_log_plural(const char *fmt_singular,
+extern int	errdetail_log_plural(const char *fmt_singular,
 								 const char *fmt_plural,
 								 unsigned long n,...) pg_attribute_printf(1, 4) pg_attribute_printf(2, 4);
 
-extern void errdetail_plural(const char *fmt_singular, const char *fmt_plural,
+extern int	errdetail_plural(const char *fmt_singular, const char *fmt_plural,
 							 unsigned long n,...) pg_attribute_printf(1, 4) pg_attribute_printf(2, 4);
 
-extern void errhint(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errhint(const char *fmt,...) pg_attribute_printf(1, 2);
 
 /*
  * errcontext() is typically called in error context callback functions, not
@@ -236,24 +236,23 @@ extern void errhint(const char *fmt,...) pg_attribute_printf(1, 2);
  */
 #define errcontext	set_errcontext_domain(TEXTDOMAIN),	errcontext_msg
 
-extern void set_errcontext_domain(const char *domain);
+extern int	set_errcontext_domain(const char *domain);
 
-extern void errcontext_msg(const char *fmt,...) pg_attribute_printf(1, 2);
+extern int	errcontext_msg(const char *fmt,...) pg_attribute_printf(1, 2);
 
-extern void errhidestmt(bool hide_stmt);
-extern void errhidecontext(bool hide_ctx);
+extern int	errhidestmt(bool hide_stmt);
+extern int	errhidecontext(bool hide_ctx);
 
 extern int	errprintstack(bool printstack);
 
 extern int	errbacktrace(void);
 
-extern void errfunction(const char *funcname);
-extern void errposition(int cursorpos);
+extern int	errposition(int cursorpos);
 
-extern void internalerrposition(int cursorpos);
-extern void internalerrquery(const char *query);
+extern int	internalerrposition(int cursorpos);
+extern int	internalerrquery(const char *query);
 
-extern void err_generic_string(int field, const char *str);
+extern int	err_generic_string(int field, const char *str);
 
 extern int	geterrcode(void);
 extern int	geterrposition(void);
@@ -418,9 +417,8 @@ typedef struct ErrorData
 	int			elevel;			/* error level */
 	bool		output_to_server;	/* will report to server log? */
 	bool		output_to_client;	/* will report to client? */
-	bool		show_funcname;	/* true to force funcname inclusion */
-    bool        omit_location;  /* GPDB: don't add filename:line# and stack trace */
-    bool        fatal_return;   /* GPDB: true => return instead of proc_exit() */
+	bool		omit_location;	/* GPDB: don't add filename:line# and stack trace */
+	bool		fatal_return;	/* GPDB: true => return instead of proc_exit() */
 	bool		hide_stmt;		/* true to prevent STATEMENT: inclusion */
 	bool		hide_ctx;		/* true to prevent CONTEXT: inclusion */
 	const char *filename;		/* __FILE__ of ereport() call */
@@ -576,7 +574,6 @@ extern void write_message_to_server_log(int elevel,
 										const char *internalquery,
 										const char *context,
 										const char *funcname,
-										bool show_funcname,
 										const char *filename,
 										int lineno,
 										int stacktracesize,

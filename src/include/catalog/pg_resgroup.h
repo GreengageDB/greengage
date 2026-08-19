@@ -41,7 +41,7 @@ CATALOG(pg_resgroup,6436,ResGroupRelationId) BKI_SHARED_RELATION
  */
 typedef FormData_pg_resgroup *Form_pg_resgroup;
 
-DECLARE_UNIQUE_INDEX(pg_resgroup_oid_index, 6447, on pg_resgroup using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_resgroup_oid_index, 6447, on pg_resgroup using btree(oid oid_ops));
 #define ResGroupOidIndexId	6447
 DECLARE_UNIQUE_INDEX(pg_resgroup_rsgname_index, 6444, on pg_resgroup using btree(rsgname name_ops));
 #define ResGroupRsgnameIndexId	6444

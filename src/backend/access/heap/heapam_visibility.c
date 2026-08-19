@@ -689,8 +689,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 	{
 		if (HEAP_XMAX_IS_LOCKED_ONLY(tuple->t_infomask))
 			return TM_Ok;
-		if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-			HeapTupleHeaderIndicatesMovedPartitions(tuple))
+		if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 			return TM_Updated;	/* updated by other */
 		else
 			return TM_Deleted;	/* deleted by other */
@@ -735,8 +734,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 
 		if (TransactionIdDidCommit(xmax))
 		{
-			if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-				HeapTupleHeaderIndicatesMovedPartitions(tuple))
+			if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 				return TM_Updated;
 			else
 				return TM_Deleted;
@@ -796,8 +794,7 @@ HeapTupleSatisfiesUpdate(Relation relation, HeapTuple htup, CommandId curcid,
 
 	SetHintBits(tuple, buffer, relation, HEAP_XMAX_COMMITTED,
 				HeapTupleHeaderGetRawXmax(tuple));
-	if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid) ||
-		HeapTupleHeaderIndicatesMovedPartitions(tuple))
+	if (!ItemPointerEquals(&htup->t_self, &tuple->t_ctid))
 		return TM_Updated;		/* updated by other */
 	else
 		return TM_Deleted;		/* deleted by other */

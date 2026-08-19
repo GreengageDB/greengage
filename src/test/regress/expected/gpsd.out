@@ -40,7 +40,7 @@
  stavalues4  | anyarray |           |          |         | extended |              | 
  stavalues5  | anyarray |           |          |         | extended |              | 
 Indexes:
-    "pg_statistic_relid_att_inh_index" UNIQUE, btree (starelid, staattnum, stainherit)
+    "pg_statistic_relid_att_inh_index" PRIMARY KEY, btree (starelid, staattnum, stainherit)
 
 --------------------------------------------------------------------------------
 -- Scenario: Table without hll flag

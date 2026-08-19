@@ -102,7 +102,7 @@ main(int argc, char **argv)
 		switch (opt)
 		{
 			case 'V':
-				puts("isolationtester (PostgreSQL) " PG_VERSION);
+				puts("isolationtester (Greenplum Database) " PG_VERSION);
 				exit(0);
 			default:
 				fprintf(stderr, "Usage: isolationtester [CONNINFO]\n");

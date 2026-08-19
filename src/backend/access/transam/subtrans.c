@@ -198,6 +198,7 @@ SUBTRANSShmemInit(void)
 	SimpleLruInit(SubTransCtl, "Subtrans", NUM_SUBTRANS_BUFFERS, 0,
 				  SubtransSLRULock, "pg_subtrans",
 				  LWTRANCHE_SUBTRANS_BUFFER, SYNC_HANDLER_NONE);
+	SlruPagePrecedesUnitTests(SubTransCtl, SUBTRANS_XACTS_PER_PAGE);
 }
 
 /*
@@ -361,13 +362,8 @@ TruncateSUBTRANS(TransactionId oldestXact)
 
 
 /*
- * Decide which of two SUBTRANS page numbers is "older" for truncation purposes.
- *
- * We need to use comparison of TransactionIds here in order to do the right
- * thing with wraparound XID arithmetic.  However, if we are asked about
- * page number zero, we don't want to hand InvalidTransactionId to
- * TransactionIdPrecedes: it'll get weird about permanent xact IDs.  So,
- * offset both xids by FirstNormalTransactionId to avoid that.
+ * Decide whether a SUBTRANS page number is "older" for truncation purposes.
+ * Analogous to CLOGPagePrecedes().
  */
 static bool
 SubTransPagePrecedes(int page1, int page2)
@@ -375,10 +371,11 @@ SubTransPagePrecedes(int page1, int page2)
 	TransactionId xid1;
 	TransactionId xid2;
 
-	xid1 = ((uint32) page1) * SUBTRANS_XACTS_PER_PAGE;
-	xid1 += FirstNormalTransactionId;
-	xid2 = ((uint32) page2) * SUBTRANS_XACTS_PER_PAGE;
-	xid2 += FirstNormalTransactionId;
+	xid1 = ((TransactionId) page1) * SUBTRANS_XACTS_PER_PAGE;
+	xid1 += FirstNormalTransactionId + 1;
+	xid2 = ((TransactionId) page2) * SUBTRANS_XACTS_PER_PAGE;
+	xid2 += FirstNormalTransactionId + 1;
 
-	return TransactionIdPrecedes(xid1, xid2);
+	return (TransactionIdPrecedes(xid1, xid2) &&
+			TransactionIdPrecedes(xid1, xid2 + SUBTRANS_XACTS_PER_PAGE - 1));
 }

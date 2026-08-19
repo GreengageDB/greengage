@@ -660,6 +660,34 @@ select * from (select * from t order by a) s order by a, b limit 70;
  9 | 70
 (70 rows)
 
+-- Checks case where we hit a group boundary at the last tuple of a batch.
+-- Because the full sort state is bounded, we scan 64 tuples (the mode
+-- transition point) but only retain 5. Thus when we transition modes, all
+-- tuples in the full sort state have different prefix keys.
+-- GPORCA has no incremental sort node.
+explain (costs off) select * from (select * from t order by a) s order by a, b limit 5;
+                   QUERY PLAN                   
+------------------------------------------------
+ Limit
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Merge Key: a, b
+         ->  Limit
+               ->  Sort
+                     Sort Key: a, b
+                     ->  Seq Scan on t
+ Optimizer: Pivotal Optimizer (GPORCA)
+(8 rows)
+
+select * from (select * from t order by a) s order by a, b limit 5;
+ a | b 
+---+---
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 9 | 5
+(5 rows)
+
 -- Test rescan.
 begin;
 -- We force the planner to choose a plan with incremental sort on the right side

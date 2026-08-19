@@ -1989,6 +1989,7 @@ heapam_index_validate_scan(Relation heapRelation,
 						 heapRelation,
 						 indexInfo->ii_Unique ?
 						 UNIQUE_CHECK_YES : UNIQUE_CHECK_NO,
+						 false,
 						 indexInfo);
 
 			state->tups_inserted += 1;
@@ -2575,6 +2576,9 @@ static const TableAmRoutine heapam_methods = {
 	.scan_rescan = heap_rescan,
 	.scan_getnextslot = heap_getnextslot,
 
+	.scan_set_tidrange = heap_set_tidrange,
+	.scan_getnextslot_tidrange = heap_getnextslot_tidrange,
+
 	.parallelscan_estimate = table_block_parallelscan_estimate,
 	.parallelscan_initialize = table_block_parallelscan_initialize,
 	.parallelscan_reinitialize = table_block_parallelscan_reinitialize,
@@ -2599,7 +2603,7 @@ static const TableAmRoutine heapam_methods = {
 	.tuple_get_latest_tid = heap_get_latest_tid,
 	.tuple_tid_valid = heapam_tuple_tid_valid,
 	.tuple_satisfies_snapshot = heapam_tuple_satisfies_snapshot,
-	.compute_xid_horizon_for_tuples = heap_compute_xid_horizon_for_tuples,
+	.index_delete_tuples = heap_index_delete_tuples,
 
 	.relation_set_new_filenode = heapam_relation_set_new_filenode,
 	.relation_nontransactional_truncate = heapam_relation_nontransactional_truncate,

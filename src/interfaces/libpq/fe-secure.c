@@ -13,12 +13,6 @@
  * IDENTIFICATION
  *	  src/interfaces/libpq/fe-secure.c
  *
- * NOTES
- *
- *	  We don't provide informational callbacks here (like
- *	  info_cb() in be-secure.c), since there's no good mechanism to
- *	  display such information to the user.
- *
  *-------------------------------------------------------------------------
  */
 
@@ -172,12 +166,12 @@ PQinitOpenSSL(int do_ssl, int do_crypto)
  *	Initialize global SSL context
  */
 int
-pqsecure_initialize(PGconn *conn)
+pqsecure_initialize(PGconn *conn, bool do_ssl, bool do_crypto)
 {
 	int			r = 0;
 
 #ifdef USE_SSL
-	r = pgtls_init(conn);
+	r = pgtls_init(conn, do_ssl, do_crypto);
 #endif
 
 	return r;
@@ -204,8 +198,7 @@ void
 pqsecure_close(PGconn *conn)
 {
 #ifdef USE_SSL
-	if (conn->ssl_in_use)
-		pgtls_close(conn);
+	pgtls_close(conn);
 #endif
 }
 
@@ -434,6 +427,13 @@ PQsslAttributeNames(PGconn *conn)
 
 	return result;
 }
+#endif							/* USE_SSL */
+
+/*
+ * Dummy versions of OpenSSL key password hook functions, when built without
+ * OpenSSL.
+ */
+#ifndef USE_OPENSSL
 
 PQsslKeyPassHook_OpenSSL_type
 PQgetSSLKeyPassHook_OpenSSL(void)
@@ -452,7 +452,7 @@ PQdefaultSSLKeyPassHook_OpenSSL(char *buf, int size, PGconn *conn)
 {
 	return 0;
 }
-#endif							/* USE_SSL */
+#endif							/* USE_OPENSSL */
 
 /* Dummy version of GSSAPI information functions, when built without GSS support */
 #ifndef ENABLE_GSS

@@ -45,14 +45,16 @@ CATALOG(pg_depend,2608,DependRelationId)
 	 *
 	 * These fields are all zeroes for a DEPENDENCY_PIN entry.
 	 */
-	Oid			classid;		/* OID of table containing object */
+	Oid			classid BKI_LOOKUP_OPT(pg_class);	/* OID of table containing
+													 * object */
 	Oid			objid;			/* OID of object itself */
 	int32		objsubid;		/* column number, or 0 if not used */
 
 	/*
 	 * Identification of the independent (referenced) object.
 	 */
-	Oid			refclassid;		/* OID of table containing object */
+	Oid			refclassid BKI_LOOKUP(pg_class);	/* OID of table containing
+													 * object */
 	Oid			refobjid;		/* OID of object itself */
 	int32		refobjsubid;	/* column number, or 0 if not used */
 
@@ -66,9 +68,6 @@ CATALOG(pg_depend,2608,DependRelationId)
 #endif
 } FormData_pg_depend;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(classid REFERENCES pg_class(oid));
-FOREIGN_KEY(refclassid REFERENCES pg_class(oid));
 
 /* ----------------
  *		Form_pg_depend corresponds to a pointer to a row with

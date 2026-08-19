@@ -54,6 +54,7 @@
 #include "executor/nodeSubplan.h"
 #include "executor/nodeSubqueryscan.h"
 #include "executor/nodeTableFuncscan.h"
+#include "executor/nodeTidrangescan.h"
 #include "executor/nodeTidscan.h"
 #include "executor/nodeTupleSplit.h"
 #include "executor/nodeUnique.h"
@@ -245,6 +246,10 @@ ExecReScan(PlanState *node)
 
 		case T_TidScanState:
 			ExecReScanTidScan((TidScanState *) node);
+			break;
+
+		case T_TidRangeScanState:
+			ExecReScanTidRangeScan((TidRangeScanState *) node);
 			break;
 
 		case T_SubqueryScanState:
@@ -640,6 +645,7 @@ ExecSupportsBackwardScan(Plan *node)
 
 		case T_SeqScan:
 		case T_TidScan:
+		case T_TidRangeScan:
 		case T_FunctionScan:
 		case T_ValuesScan:
 		case T_CteScan:
@@ -797,6 +803,7 @@ ExecSquelchNode(PlanState *node)
 		case T_TableFuncScanState:
 		case T_ValuesScanState:
 		case T_TidScanState:
+		case T_TidRangeScanState:
 		case T_TableFunctionState:
 		case T_SampleScanState:
 			break;

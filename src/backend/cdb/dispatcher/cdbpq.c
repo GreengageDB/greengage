@@ -7,9 +7,17 @@ int
 PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonblock)
 {
 	int ret;
+	PGcmdQueueEntry *entry = NULL;
+
+	/* TODO: only PQ_PIPELINE_OFF is supported here for now */
+	Assert(conn->pipelineStatus == PQ_PIPELINE_OFF);
 
 	if (!PQsendQueryStart(conn, true))
 		return 0;
+
+	entry = pqAllocCmdQueueEntry(conn);
+	if (entry == NULL)
+		return 0;				/* error msg already set */
 
 	if (!shared_query)
 	{
@@ -39,7 +47,9 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 	conn->outCount = query_len;
 
 	/* remember we are using simple query protocol */
-	conn->queryclass = PGQUERY_SIMPLE;
+	entry->queryclass = PGQUERY_SIMPLE;
+	/* don't set query to not accidentally free the buffer */
+	entry->query = NULL;
 
 	/*
 	 * Give the data a push.  In nonblock mode, don't complain if we're unable
@@ -52,9 +62,12 @@ PQsendGpQuery_shared(PGconn *conn, char *shared_query, int query_len, bool nonbl
 
 	if (ret < 0)
 	{
+		pqRecycleCmdQueueEntry(conn, entry);
 		/* error message should be set up already */
 		return 0;
 	}
+
+	pqAppendCmdQueueEntry(conn, entry);
 
 	/* OK, it's launched! */
 	conn->asyncStatus = PGASYNC_BUSY;

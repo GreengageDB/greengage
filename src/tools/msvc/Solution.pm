@@ -62,7 +62,7 @@ sub DeterminePlatform
 	if ($^O eq "MSWin32")
 	{
 		# Examine CL help output to determine if we are in 32 or 64-bit mode.
-		my $output = `cl /? 2>&1`;
+		my $output = `cl /help 2>&1`;
 		$? >> 8 == 0 or die "cl command not found";
 		$self->{platform} =
 		  ($output =~ /^\/favor:<.+AMD64/m) ? 'x64' : 'Win32';
@@ -340,6 +340,7 @@ sub GenerateFiles
 		HAVE_PSTAT                  => undef,
 		HAVE_PS_STRINGS             => undef,
 		HAVE_PTHREAD                => undef,
+		HAVE_PTHREAD_BARRIER_WAIT   => undef,
 		HAVE_PTHREAD_IS_THREADED_NP => undef,
 		HAVE_PTHREAD_PRIO_INHERIT   => undef,
 		HAVE_PWRITE                 => undef,
@@ -674,16 +675,6 @@ sub GenerateFiles
 		);
 	}
 
-	if (IsNewer(
-			'src/backend/utils/sort/qsort_tuple.c',
-			'src/backend/utils/sort/gen_qsort_tuple.pl'))
-	{
-		print "Generating qsort_tuple.c...\n";
-		system(
-			'perl src/backend/utils/sort/gen_qsort_tuple.pl > src/backend/utils/sort/qsort_tuple.c'
-		);
-	}
-
 	if (IsNewer('src/bin/psql/sql_help.h', 'src/bin/psql/create_help.pl'))
 	{
 		print "Generating sql_help.h...\n";
@@ -827,6 +818,9 @@ EOF
 		copyFile(
 			'src/backend/catalog/schemapg.h',
 			'src/include/catalog/schemapg.h');
+		copyFile(
+			'src/backend/catalog/system_fk_info.h',
+			'src/include/catalog/system_fk_info.h');
 		open(my $chs, '>', 'src/include/catalog/header-stamp')
 		  || confess "Could not touch header-stamp";
 		close($chs);
@@ -1175,7 +1169,7 @@ sub GetFakeConfigure
 	$cfg .= ' --with-ldap'        if ($self->{options}->{ldap});
 	$cfg .= ' --without-zlib' unless ($self->{options}->{zlib});
 	$cfg .= ' --with-extra-version' if ($self->{options}->{extraver});
-	$cfg .= ' --with-openssl'       if ($self->{options}->{openssl});
+	$cfg .= ' --with-ssl=openssl'   if ($self->{options}->{openssl});
 	$cfg .= ' --with-uuid'          if ($self->{options}->{uuid});
 	$cfg .= ' --with-libxml'        if ($self->{options}->{xml});
 	$cfg .= ' --with-libxslt'       if ($self->{options}->{xslt});

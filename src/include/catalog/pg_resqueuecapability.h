@@ -30,16 +30,13 @@
 
 CATALOG(pg_resqueuecapability,6060,ResQueueCapabilityRelationId) BKI_SHARED_RELATION
 {
-	Oid		resqueueid;	/* OID of the queue with this capability  */
+	Oid		resqueueid BKI_LOOKUP(pg_resqueue);	/* OID of the queue with this capability  */
 	int16	restypid;	/* resource type id (key to pg_resourcetype)  */
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text	ressetting;	/* resource setting (opaque type)  */
 #endif
 } FormData_pg_resqueuecapability;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(resqueueid REFERENCES pg_resqueue(oid));
-FOREIGN_KEY(restypid REFERENCES pg_resourcetype(restypid));
 
 /* ----------------
  *		Form_pg_resqueuecapability corresponds to a pointer to a tuple with
@@ -47,6 +44,8 @@ FOREIGN_KEY(restypid REFERENCES pg_resourcetype(restypid));
  * ----------------
  */
 typedef FormData_pg_resqueuecapability *Form_pg_resqueuecapability;
+
+DECLARE_FOREIGN_KEY((restypid), pg_resourcetype, (restypid));
 
 DECLARE_INDEX(pg_resqueuecapability_resqueueid_index, 6442, on pg_resqueuecapability using btree(resqueueid oid_ops));
 #define ResQueueCapabilityResqueueidIndexId	6442

@@ -320,7 +320,8 @@ _bitmap_open_lov_heapandindex(Relation rel pg_attribute_unused(), BMMetaPage met
  */
 void
 _bitmap_insert_lov(Relation lovHeap, Relation lovIndex, Datum *datum,
-				   bool *nulls, bool use_wal pg_attribute_unused())
+				   bool *nulls, bool use_wal pg_attribute_unused(),
+				   bool indexUnchanged)
 {
 	TupleDesc	tupDesc;
 	HeapTuple	tuple;
@@ -340,7 +341,8 @@ _bitmap_insert_lov(Relation lovHeap, Relation lovIndex, Datum *datum,
 	memcpy(indexDatum, datum, (tupDesc->natts - 2) * sizeof(Datum));
 	memcpy(indexNulls, nulls, (tupDesc->natts - 2) * sizeof(bool));
 	result = index_insert(lovIndex, indexDatum, indexNulls,
-					 	  &(tuple->t_self), lovHeap, true, NULL);
+						  &(tuple->t_self), lovHeap, UNIQUE_CHECK_YES,
+						  indexUnchanged, NULL);
 
 	pfree(indexDatum);
 	pfree(indexNulls);

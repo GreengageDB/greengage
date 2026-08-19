@@ -11,7 +11,7 @@ use TestLib;
 use Test::More;
 use File::Copy;
 
-if ($ENV{with_openssl} eq 'yes')
+if ($ENV{with_ssl} eq 'openssl')
 {
     plan tests => 3;
 }
@@ -71,7 +71,7 @@ $node->stop;
 #         client connected using SSL                     #
 ##########################################################
 
-if ($ENV{with_openssl} eq 'yes')
+if ($ENV{with_ssl} eq 'openssl')
 {
     # The client's private key must not be world-readable, so take a copy
     # of the key stored in the code tree and update its permissions.

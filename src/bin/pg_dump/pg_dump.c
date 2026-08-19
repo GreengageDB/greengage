@@ -331,9 +331,9 @@ static void binary_upgrade_extension_member(PQExpBuffer upgrade_buffer,
 static const char *getAttrName(int attrnum, const TableInfo *tblInfo);
 static const char *fmtCopyColumnList(const TableInfo *ti, PQExpBuffer buffer);
 static bool nonemptyReloptions(const char *reloptions);
-static void appendIndexCollationVersion(PQExpBuffer buffer, IndxInfo *indxinfo,
+static void appendIndexCollationVersion(PQExpBuffer buffer, const IndxInfo *indxinfo,
 										int enc, bool coll_unknown,
-										Archive *fount);
+										Archive *fout);
 static void appendReloptionsArrayAH(PQExpBuffer buffer, const char *reloptions,
 									const char *prefix, Archive *fout);
 static char *get_synchronized_snapshot(Archive *fout);
@@ -502,7 +502,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_dump (PostgreSQL) " PG_VERSION);
+			puts("pg_dump (Greenplum Database) " PG_VERSION);
 			exit_nicely(0);
 		}
 	}
@@ -4381,6 +4381,9 @@ dumpPublicationTable(Archive *fout, const PublicationRelInfo *pubrinfo)
 	PQExpBuffer query;
 	char	   *tag;
 
+	if (!(pubrinfo->dobj.dump & DUMP_COMPONENT_DEFINITION))
+		return;
+
 	tag = psprintf("%s %s", pubinfo->dobj.name, tbinfo->dobj.name);
 
 	query = createPQExpBuffer();
@@ -4397,14 +4400,13 @@ dumpPublicationTable(Archive *fout, const PublicationRelInfo *pubrinfo)
 	 * owner field anyway to ensure that the command is run by the correct
 	 * role at restore time.
 	 */
-	if (pubrinfo->dobj.dump & DUMP_COMPONENT_DEFINITION)
-		ArchiveEntry(fout, pubrinfo->dobj.catId, pubrinfo->dobj.dumpId,
-					 ARCHIVE_OPTS(.tag = tag,
-								  .namespace = tbinfo->dobj.namespace->dobj.name,
-								  .owner = pubinfo->rolname,
-								  .description = "PUBLICATION TABLE",
-								  .section = SECTION_POST_DATA,
-								  .createStmt = query->data));
+	ArchiveEntry(fout, pubrinfo->dobj.catId, pubrinfo->dobj.dumpId,
+				 ARCHIVE_OPTS(.tag = tag,
+							  .namespace = tbinfo->dobj.namespace->dobj.name,
+							  .owner = pubinfo->rolname,
+							  .description = "PUBLICATION TABLE",
+							  .section = SECTION_POST_DATA,
+							  .createStmt = query->data));
 
 	free(tag);
 	destroyPQExpBuffer(query);
@@ -8792,9 +8794,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	for (int i = 0; i < numTables; i++)
 	{
 		TableInfo  *tbinfo = &tblinfo[i];
-		PGresult   *res;
-		int			ntups;
-		bool		hasdefaults;
 
 		/* Don't bother to collect info for sequences */
 		if (tbinfo->relkind == RELKIND_SEQUENCE)
@@ -11720,8 +11719,8 @@ dumpDomain(Archive *fout, const TypeInfo *tyinfo)
 	if (dopt->binary_upgrade)
 		binary_upgrade_set_type_oids_by_type_oid(fout, q,
 												 tyinfo,
-												 true, /* force array type */
-												 false); /* force multirange type */
+												 true,	/* force array type */
+												 false);	/* force multirange type */
 
 	qtypname = pg_strdup(fmtId(tyinfo->dobj.name));
 	qualtypname = pg_strdup(fmtQualifiedDumpable(tyinfo));
@@ -20118,7 +20117,7 @@ nonemptyReloptions(const char *reloptions)
  * cluster, during a binary upgrade.
  */
 static void
-appendIndexCollationVersion(PQExpBuffer buffer, IndxInfo *indxinfo, int enc,
+appendIndexCollationVersion(PQExpBuffer buffer, const IndxInfo *indxinfo, int enc,
 							bool coll_unknown, Archive *fout)
 {
 	char	   *inddependcollnames = indxinfo->inddependcollnames;

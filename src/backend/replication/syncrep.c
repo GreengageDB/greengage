@@ -290,7 +290,7 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 		new_status = (char *) palloc(len + 32 + 12 + 1);
 		memcpy(new_status, old_status, len);
 		sprintf(new_status + len, " waiting for %X/%X replication",
-				(uint32) (lsn >> 32), (uint32) lsn);
+				LSN_FORMAT_ARGS(lsn));
 		set_ps_display(new_status);
 		new_status[len] = '\0'; /* truncate off " waiting ..." */
 	}
@@ -530,7 +530,7 @@ SyncRepInitConfig(void)
 		SpinLockRelease(&MyWalSnd->mutex);
 
 		ereport(DEBUG1,
-				(errmsg("standby \"%s\" now has synchronous standby priority %u",
+				(errmsg_internal("standby \"%s\" now has synchronous standby priority %u",
 						application_name, priority)));
 	}
 }
@@ -640,9 +640,9 @@ SyncRepReleaseWaiters(void)
 
 	elogif(debug_walrepl_syncrep, LOG,
 		 "released %d procs up to write %X/%X, %d procs up to flush %X/%X, %d procs up to apply %X/%X",
-		 numwrite, (uint32) (writePtr >> 32), (uint32) writePtr,
-		 numflush, (uint32) (flushPtr >> 32), (uint32) flushPtr,
-		 numapply, (uint32) (applyPtr >> 32), (uint32) applyPtr);
+		 numwrite, LSN_FORMAT_ARGS(writePtr),
+		 numflush, LSN_FORMAT_ARGS(flushPtr),
+		 numapply, LSN_FORMAT_ARGS(applyPtr));
 }
 
 /*

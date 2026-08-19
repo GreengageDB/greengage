@@ -517,6 +517,7 @@ _outQuery(StringInfo str, Query *node)
 	WRITE_NODE_FIELD(onConflict);
 	WRITE_NODE_FIELD(returningList);
 	WRITE_NODE_FIELD(groupClause);
+	WRITE_BOOL_FIELD(groupDistinct);
 	WRITE_NODE_FIELD(groupingSets);
 	WRITE_NODE_FIELD(havingQual);
 	WRITE_NODE_FIELD(windowClause);
@@ -1035,6 +1036,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_TidScan:
 				_outTidScan(str, obj);
+				break;
+			case T_TidRangeScan:
+				_outTidRangeScan(str, obj);
 				break;
 			case T_SubqueryScan:
 				_outSubqueryScan(str, obj);
@@ -1572,6 +1576,12 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_WithClause:
 				_outWithClause(str, obj);
+				break;
+			case T_CTESearchClause:
+				_outCTESearchClause(str, obj);
+				break;
+			case T_CTECycleClause:
+				_outCTECycleClause(str, obj);
 				break;
 			case T_CommonTableExpr:
 				_outCommonTableExpr(str, obj);

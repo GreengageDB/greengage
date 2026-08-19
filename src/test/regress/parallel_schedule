@@ -31,7 +31,7 @@ test: strings numerology point lseg line box path polygon circle date time timet
 # geometry depends on point, lseg, box, path, polygon and circle
 # horology depends on interval, timetz, timestamp, timestamptz
 # ----------
-test: geometry horology regex oidjoins type_sanity opr_sanity misc_sanity comments expressions unicode xid
+test: geometry horology regex type_sanity opr_sanity misc_sanity comments expressions unicode xid
 
 # ----------
 # These four each depend on the previous one
@@ -107,7 +107,7 @@ test: brin gin gist spgist privileges init_privs security_label collate matview 
 # ----------
 # Another group of parallel tests
 # ----------
-test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tidscan collate.icu.utf8 incremental_sort
+test: create_table_like alter_generic alter_operator misc async dbsize misc_functions sysviews tsrf tid tidscan tidrangescan collate.icu.utf8 incremental_sort
 
 # rules cannot run concurrently with any test that creates
 # a view or rule in the public schema
@@ -126,6 +126,7 @@ test: psql psql_crosstab amutils stats_ext collate.linux.utf8
 # run by itself so it can run parallel workers
 test: select_parallel
 test: write_parallel
+test: insert_parallel
 
 # no relation related tests can be put in this group
 test: publication subscription
@@ -161,7 +162,8 @@ test: gp_foreign_data
 test: partition_join partition_prune reloptions hash_part indexing partition_aggregate partition_info tuplesort explain
 
 # event triggers cannot run concurrently with any test that runs DDL
-test: event_trigger
+# oidjoins is read-only, though, and should run late for best coverage
+test: event_trigger oidjoins
 # this test also uses event triggers, so likewise run it by itself
 test: fast_default
 

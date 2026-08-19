@@ -121,7 +121,11 @@ extern void heap_endscan(TableScanDesc scan);
 extern HeapTuple heap_getnext(TableScanDesc scan, ScanDirection direction);
 extern bool heap_getnextslot(TableScanDesc sscan,
 							 ScanDirection direction, struct TupleTableSlot *slot);
-
+extern void heap_set_tidrange(TableScanDesc sscan, ItemPointer mintid,
+							  ItemPointer maxtid);
+extern bool heap_getnextslot_tidrange(TableScanDesc sscan,
+									  ScanDirection direction,
+									  TupleTableSlot *slot);
 extern bool heap_fetch(Relation relation, Snapshot snapshot,
 					   HeapTuple tuple, Buffer *userbuf);
 extern bool heap_hot_search_buffer(ItemPointer tid, Relation relation,
@@ -167,17 +171,16 @@ extern void simple_heap_delete(Relation relation, ItemPointer tid);
 extern void simple_heap_update(Relation relation, ItemPointer otid,
 							   HeapTuple tup);
 
-extern TransactionId heap_compute_xid_horizon_for_tuples(Relation rel,
-														 ItemPointerData *items,
-														 int nitems);
+extern TransactionId heap_index_delete_tuples(Relation rel,
+											  TM_IndexDeleteOp *delstate);
 
 /* in heap/pruneheap.c */
 struct GlobalVisState;
 extern void heap_page_prune_opt(Relation relation, Buffer buffer);
 extern int	heap_page_prune(Relation relation, Buffer buffer,
 							struct GlobalVisState *vistest,
-							TransactionId limited_oldest_xmin,
-							TimestampTz limited_oldest_ts,
+							TransactionId old_snap_xmin,
+							TimestampTz old_snap_ts_ts,
 							bool report_stats, TransactionId *latestRemovedXid,
 							OffsetNumber *off_loc);
 extern void heap_page_prune_execute(Buffer buffer,

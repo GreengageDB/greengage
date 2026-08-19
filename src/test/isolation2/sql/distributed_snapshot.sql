@@ -23,9 +23,6 @@ CREATE TABLE distributed_snapshot_test1 (a int);
 
 -- Hold after walking over ProcArray in GetSnpashotData(), right at start of
 -- DistributedLog_AdvanceOldestXmin()
-1: SELECT gp_inject_fault('distributed_snapshot_skip_data_reuse', 'skip',
-   '', 'postgres', '', 1, -1, 5, dbid) from gp_segment_configuration
-   where content = 0 and role = 'p';
 1: SELECT gp_inject_fault('distributedlog_advance_oldest_xmin', 'suspend',
    '', 'postgres', '', 1, -1, 5, dbid) from gp_segment_configuration
    where content = 0 and role = 'p';
@@ -38,8 +35,6 @@ CREATE TABLE distributed_snapshot_test1 (a int);
 1: INSERT INTO distributed_snapshot_test1 values(1);
 -- let session 3 now move forward to compute distributed oldest xmin
 1: SELECT gp_inject_fault('distributedlog_advance_oldest_xmin', 'reset', dbid)
-   from gp_segment_configuration where content = 0 and role = 'p';
-1: SELECT gp_inject_fault('distributed_snapshot_skip_data_reuse', 'reset', dbid)
    from gp_segment_configuration where content = 0 and role = 'p';
 3<:
 

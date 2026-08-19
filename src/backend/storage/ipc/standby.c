@@ -226,17 +226,26 @@ WaitExceedsMaxStandbyDelay(uint32 wait_event_info)
  * wait_start is the timestamp when the caller started to wait.
  * now is the timestamp when this function has been called.
  * wait_list is the list of virtual transaction ids assigned to
- * conflicting processes.
+ * conflicting processes. still_waiting indicates whether
+ * the startup process is still waiting for the recovery conflict
+ * to be resolved or not.
  */
 void
 LogRecoveryConflict(ProcSignalReason reason, TimestampTz wait_start,
-					TimestampTz now, VirtualTransactionId *wait_list)
+					TimestampTz now, VirtualTransactionId *wait_list,
+					bool still_waiting)
 {
 	long		secs;
 	int			usecs;
 	long		msecs;
 	StringInfoData buf;
 	int			nprocs = 0;
+
+	/*
+	 * There must be no conflicting processes when the recovery conflict has
+	 * already been resolved.
+	 */
+	Assert(still_waiting || wait_list == NULL);
 
 	TimestampDifference(wait_start, now, &secs, &usecs);
 	msecs = secs * 1000 + usecs / 1000;
@@ -275,12 +284,21 @@ LogRecoveryConflict(ProcSignalReason reason, TimestampTz wait_start,
 	 * conflicting backends in a detail message. Note that if all the backends
 	 * in the list are not active, no detail message is logged.
 	 */
-	ereport(LOG,
-			errmsg("recovery still waiting after %ld.%03d ms: %s",
-				   msecs, usecs, _(get_recovery_conflict_desc(reason))),
-			nprocs > 0 ? errdetail_log_plural("Conflicting process: %s.",
-											  "Conflicting processes: %s.",
-											  nprocs, buf.data) : 0);
+	if (still_waiting)
+	{
+		ereport(LOG,
+				errmsg("recovery still waiting after %ld.%03d ms: %s",
+					   msecs, usecs, _(get_recovery_conflict_desc(reason))),
+				nprocs > 0 ? errdetail_log_plural("Conflicting process: %s.",
+												  "Conflicting processes: %s.",
+												  nprocs, buf.data) : 0);
+	}
+	else
+	{
+		ereport(LOG,
+				errmsg("recovery finished waiting after %ld.%03d ms: %s",
+					   msecs, usecs, _(get_recovery_conflict_desc(reason))));
+	}
 
 	if (nprocs > 0)
 		pfree(buf.data);
@@ -394,13 +412,12 @@ ResolveRecoveryConflictWithVirtualXIDs(VirtualTransactionId *waitlist,
 
 				/*
 				 * Emit the log message if the startup process is waiting
-				 * longer than deadlock_timeout for recovery conflict on
-				 * buffer pin.
+				 * longer than deadlock_timeout for recovery conflict.
 				 */
 				if (maybe_log_conflict &&
 					TimestampDifferenceExceeds(waitStart, now, DeadlockTimeout))
 				{
-					LogRecoveryConflict(reason, waitStart, now, waitlist);
+					LogRecoveryConflict(reason, waitStart, now, waitlist, true);
 					logged_recovery_conflict = true;
 				}
 			}
@@ -416,6 +433,14 @@ ResolveRecoveryConflictWithVirtualXIDs(VirtualTransactionId *waitlist,
 		/* The virtual transaction is gone now, wait for the next one */
 		waitlist++;
 	}
+
+	/*
+	 * Emit the log message if recovery conflict was resolved but the startup
+	 * process waited longer than deadlock_timeout for it.
+	 */
+	if (logged_recovery_conflict)
+		LogRecoveryConflict(reason, waitStart, GetCurrentTimestamp(),
+							NULL, false);
 
 	/* Reset ps display if we changed it */
 	if (new_status)
@@ -451,6 +476,34 @@ ResolveRecoveryConflictWithSnapshot(TransactionId latestRemovedXid, RelFileNode 
 										   PROCSIG_RECOVERY_CONFLICT_SNAPSHOT,
 										   WAIT_EVENT_RECOVERY_CONFLICT_SNAPSHOT,
 										   true);
+}
+
+/*
+ * Variant of ResolveRecoveryConflictWithSnapshot that works with
+ * FullTransactionId values
+ */
+void
+ResolveRecoveryConflictWithSnapshotFullXid(FullTransactionId latestRemovedFullXid,
+										   RelFileNode node)
+{
+	/*
+	 * ResolveRecoveryConflictWithSnapshot operates on 32-bit TransactionIds,
+	 * so truncate the logged FullTransactionId.  If the logged value is very
+	 * old, so that XID wrap-around already happened on it, there can't be any
+	 * snapshots that still see it.
+	 */
+	FullTransactionId nextXid = ReadNextFullTransactionId();
+	uint64			  diff;
+
+	diff = U64FromFullTransactionId(nextXid) -
+		U64FromFullTransactionId(latestRemovedFullXid);
+	if (diff < MaxTransactionId / 2)
+	{
+		TransactionId latestRemovedXid;
+
+		latestRemovedXid = XidFromFullTransactionId(latestRemovedFullXid);
+		ResolveRecoveryConflictWithSnapshot(latestRemovedXid, node);
+	}
 }
 
 void
@@ -541,12 +594,34 @@ void
 ResolveRecoveryConflictWithLock(LOCKTAG locktag, bool logging_conflict)
 {
 	TimestampTz ltime;
+	TimestampTz now;
 
 	Assert(InHotStandby);
 
 	ltime = GetStandbyLimitTime();
+	now = GetCurrentTimestamp();
 
-	if (GetCurrentTimestamp() >= ltime && ltime != 0)
+	/*
+	 * Update waitStart if first time through after the startup process
+	 * started waiting for the lock. It should not be updated every time
+	 * ResolveRecoveryConflictWithLock() is called during the wait.
+	 *
+	 * Use the current time obtained for comparison with ltime as waitStart
+	 * (i.e., the time when this process started waiting for the lock). Since
+	 * getting the current time newly can cause overhead, we reuse the
+	 * already-obtained time to avoid that overhead.
+	 *
+	 * Note that waitStart is updated without holding the lock table's
+	 * partition lock, to avoid the overhead by additional lock acquisition.
+	 * This can cause "waitstart" in pg_locks to become NULL for a very short
+	 * period of time after the wait started even though "granted" is false.
+	 * This is OK in practice because we can assume that users are likely to
+	 * look at "waitstart" when waiting for the lock for a long time.
+	 */
+	if (pg_atomic_read_u64(&MyProc->waitStart) == 0)
+		pg_atomic_write_u64(&MyProc->waitStart, now);
+
+	if (now >= ltime && ltime != 0)
 	{
 		/*
 		 * We're already behind, so clear a path as quickly as possible.
@@ -1241,7 +1316,7 @@ LogCurrentRunningXacts(RunningTransactions CurrRunningXacts)
 		elog(trace_recovery(DEBUG2),
 			 "snapshot of %u running transactions overflowed (lsn %X/%X oldest xid %u latest complete %u next xid %u)",
 			 CurrRunningXacts->xcnt,
-			 (uint32) (recptr >> 32), (uint32) recptr,
+			 LSN_FORMAT_ARGS(recptr),
 			 CurrRunningXacts->oldestRunningXid,
 			 CurrRunningXacts->latestCompletedXid,
 			 CurrRunningXacts->nextXid);
@@ -1249,7 +1324,7 @@ LogCurrentRunningXacts(RunningTransactions CurrRunningXacts)
 		elog(trace_recovery(DEBUG2),
 			 "snapshot of %u+%u running transaction ids (lsn %X/%X oldest xid %u latest complete %u next xid %u)",
 			 CurrRunningXacts->xcnt, CurrRunningXacts->subxcnt,
-			 (uint32) (recptr >> 32), (uint32) recptr,
+			 LSN_FORMAT_ARGS(recptr),
 			 CurrRunningXacts->oldestRunningXid,
 			 CurrRunningXacts->latestCompletedXid,
 			 CurrRunningXacts->nextXid);

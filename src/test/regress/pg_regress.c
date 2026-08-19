@@ -795,24 +795,22 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 
 	snprintf(testtablespace, MAXPGPATH, "%s/testtablespace", tablespacedir);
 
-#ifdef WIN32
-
 	/*
-	 * On Windows only, clean out the test tablespace dir, or create it if it
-	 * doesn't exist so as it is possible to run the regression tests as a
-	 * Windows administrative user account with the restricted token obtained
-	 * when starting pg_regress.  On other platforms we expect the Makefile to
-	 * take care of that.
+	 * Clean out the test tablespace dir, or create it if it doesn't exist. On
+	 * Windows, doing this cleanup here makes possible to run the regression
+	 * tests as a Windows administrative user account with the restricted
+	 * token obtained when starting pg_regress.
 	 */
 	if (directory_exists(testtablespace))
+	{
 		if (!rmtree(testtablespace, true))
 		{
 			fprintf(stderr, _("\n%s: could not remove test tablespace \"%s\"\n"),
 					progname, testtablespace);
 			exit(2);
 		}
+	}
 	make_directory(testtablespace);
-#endif
 
 	memset(cgroup_mnt_point, 0, sizeof(cgroup_mnt_point));
 	if (!detectCgroupMountPoint(cgroup_mnt_point,
@@ -2856,7 +2854,7 @@ regression_main(int argc, char *argv[],
 				help();
 				exit(0);
 			case 'V':
-				puts("pg_regress (PostgreSQL) " PG_VERSION);
+				puts("pg_regress (Greenplum Database) " PG_VERSION);
 				exit(0);
 			case 1:
 

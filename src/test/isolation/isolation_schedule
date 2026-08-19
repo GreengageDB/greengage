@@ -107,6 +107,7 @@ test: update-locked-tuple
 #test: tuplelock-conflict
 #test: tuplelock-update
 #test: tuplelock-upgrade-no-deadlock
+#test: tuplelock-partition
 #test: freeze-the-dead
 #test: nowait
 #test: nowait-2

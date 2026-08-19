@@ -803,7 +803,8 @@ Where column_reference_storage_directive is:
      <para>
       <literal>SHARE UPDATE EXCLUSIVE</literal> lock will be taken for
       fillfactor, toast and autovacuum storage parameters, as well as the
-      planner parameter <varname>parallel_workers</varname>.
+      planner parameters <varname>parallel_workers</varname> and
+      <varname>parallel_insert_enabled</varname>.
      </para>
     </listitem>
    </varlistentry>

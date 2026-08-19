@@ -77,15 +77,9 @@ CATALOG(pg_amop,2602,AccessMethodOperatorRelationId)
 	Oid			amopmethod BKI_LOOKUP(pg_am);
 
 	/* ordering opfamily OID, or 0 if search op */
-	Oid			amopsortfamily BKI_DEFAULT(0) BKI_LOOKUP(pg_opfamily);
+	Oid			amopsortfamily BKI_DEFAULT(0) BKI_LOOKUP_OPT(pg_opfamily);
 } FormData_pg_amop;
 
-/* GPDB added foreign key definitions for gpcheckcat. */
-FOREIGN_KEY(amopfamily REFERENCES pg_opfamily(oid));
-FOREIGN_KEY(amoplefttype REFERENCES pg_type(oid));
-FOREIGN_KEY(amoprighttype REFERENCES pg_type(oid));
-FOREIGN_KEY(amopopr REFERENCES pg_operator(oid));
-FOREIGN_KEY(amopmethod REFERENCES pg_am(oid));
 
 /* ----------------
  *		Form_pg_amop corresponds to a pointer to a tuple with
@@ -98,7 +92,7 @@ DECLARE_UNIQUE_INDEX(pg_amop_fam_strat_index, 2653, on pg_amop using btree(amopf
 #define AccessMethodStrategyIndexId  2653
 DECLARE_UNIQUE_INDEX(pg_amop_opr_fam_index, 2654, on pg_amop using btree(amopopr oid_ops, amoppurpose char_ops, amopfamily oid_ops));
 #define AccessMethodOperatorIndexId  2654
-DECLARE_UNIQUE_INDEX(pg_amop_oid_index, 2756, on pg_amop using btree(oid oid_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_amop_oid_index, 2756, on pg_amop using btree(oid oid_ops));
 #define AccessMethodOperatorOidIndexId	2756
 
 #ifdef EXPOSE_TO_CLIENT_CODE

@@ -161,8 +161,8 @@ PgStat_MsgWal WalStats;
 
 /*
  * WAL usage counters saved from pgWALUsage at the previous call to
- * pgstat_send_wal(). This is used to calculate how much WAL usage
- * happens between pgstat_send_wal() calls, by substracting
+ * pgstat_report_wal(). This is used to calculate how much WAL usage
+ * happens between pgstat_report_wal() calls, by substracting
  * the previous counters from the current ones.
  */
 static WalUsage prevWalUsage;
@@ -273,6 +273,9 @@ static int	pgStatXactCommit = 0;
 static int	pgStatXactRollback = 0;
 PgStat_Counter pgStatBlockReadTime = 0;
 PgStat_Counter pgStatBlockWriteTime = 0;
+static PgStat_Counter pgStatActiveTime = 0;
+static PgStat_Counter pgStatTransactionIdleTime = 0;
+SessionEndType pgStatSessionEndCause = DISCONNECT_NORMAL;
 
 /* Record that's written to 2PC state file when pgstat state is persisted */
 typedef struct TwoPhasePgStatRecord
@@ -376,6 +379,7 @@ static void pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg);
 static void pgstat_send_funcstats(void);
 static void pgstat_send_slru(void);
 static HTAB *pgstat_collect_oids(Oid catalogid, AttrNumber anum_oid);
+static void pgstat_send_connstats(bool disconnect, TimestampTz last_report);
 
 static PgStat_TableStatus *get_tabstat_entry(Oid rel_id, bool isshared);
 
@@ -412,6 +416,7 @@ static void pgstat_recv_funcpurge(PgStat_MsgFuncpurge *msg, int len);
 static void pgstat_recv_recoveryconflict(PgStat_MsgRecoveryConflict *msg, int len);
 static void pgstat_recv_deadlock(PgStat_MsgDeadlock *msg, int len);
 static void pgstat_recv_checksum_failure(PgStat_MsgChecksumFailure *msg, int len);
+static void pgstat_recv_connstat(PgStat_MsgConn *msg, int len);
 static void pgstat_recv_replslot(PgStat_MsgReplSlot *msg, int len);
 static void pgstat_recv_tempfile(PgStat_MsgTempFile *msg, int len);
 
@@ -890,10 +895,14 @@ allow_immediate_pgstat_restart(void)
  *	per-table and function usage statistics to the collector.  Note that this
  *	is called only when not within a transaction, so it is fair to use
  *	transaction stop time as an approximation of current time.
+ *
+ *	"disconnect" is "true" only for the last call before the backend
+ *	exits.  This makes sure that no data is lost and that interrupted
+ *	sessions are reported correctly.
  * ----------
  */
 void
-pgstat_report_stat(bool force)
+pgstat_report_stat(bool disconnect)
 {
 	/* we assume this inits to all zeroes: */
 	static const PgStat_TableCounts all_zeroes;
@@ -908,17 +917,22 @@ pgstat_report_stat(bool force)
 	/* Don't expend a clock check if nothing to do */
 	if ((pgStatTabList == NULL || pgStatTabList->tsa_used == 0) &&
 		pgStatXactCommit == 0 && pgStatXactRollback == 0 &&
-		!have_function_stats)
+		!have_function_stats && !disconnect)
 		return;
 
 	/*
 	 * Don't send a message unless it's been at least PGSTAT_STAT_INTERVAL
-	 * msec since we last sent one, or the caller wants to force stats out.
+	 * msec since we last sent one, or the backend is about to exit.
 	 */
 	now = GetCurrentTransactionStopTimestamp();
-	if (!force &&
+	if (!disconnect &&
 		!TimestampDifferenceExceeds(last_report, now, PGSTAT_STAT_INTERVAL))
 		return;
+
+	/* for backends, send connection statistics */
+	if (MyBackendType == B_BACKEND)
+		pgstat_send_connstats(disconnect, last_report);
+
 	last_report = now;
 
 	/*
@@ -996,7 +1010,7 @@ pgstat_report_stat(bool force)
 	pgstat_send_funcstats();
 
 	/* Send WAL statistics */
-	pgstat_send_wal();
+	pgstat_report_wal();
 
 	/* Finally send SLRU statistics */
 	pgstat_send_slru();
@@ -1384,6 +1398,48 @@ pgstat_drop_relation(Oid relid)
 	pgstat_send(&msg, len);
 }
 #endif							/* NOT_USED */
+
+
+/* ----------
+ * pgstat_send_connstats() -
+ *
+ *	Tell the collector about session statistics.
+ *	The parameter "disconnect" will be true when the backend exits.
+ *	"last_report" is the last time we were called (0 if never).
+ * ----------
+ */
+static void
+pgstat_send_connstats(bool disconnect, TimestampTz last_report)
+{
+	PgStat_MsgConn msg;
+	long		secs;
+	int			usecs;
+
+	if (pgStatSock == PGINVALID_SOCKET || !pgstat_track_counts)
+		return;
+
+	pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_CONNECTION);
+	msg.m_databaseid = MyDatabaseId;
+
+	/* session time since the last report */
+	TimestampDifference(((last_report == 0) ? MyStartTimestamp : last_report),
+						GetCurrentTimestamp(),
+						&secs, &usecs);
+	msg.m_session_time = secs * 1000000 + usecs;
+
+	msg.m_disconnect = disconnect ? pgStatSessionEndCause : DISCONNECT_NOT_YET;
+
+	msg.m_active_time = pgStatActiveTime;
+	pgStatActiveTime = 0;
+
+	msg.m_idle_in_xact_time = pgStatTransactionIdleTime;
+	pgStatTransactionIdleTime = 0;
+
+	/* report a new session only the first time */
+	msg.m_count = (last_report == 0) ? 1 : 0;
+
+	pgstat_send(&msg, sizeof(PgStat_MsgConn));
+}
 
 
 /* ----------
@@ -3097,7 +3153,7 @@ pgstat_initialize(void)
 	}
 
 	/*
-	 * Initialize prevWalUsage with pgWalUsage so that pgstat_send_wal() can
+	 * Initialize prevWalUsage with pgWalUsage so that pgstat_report_wal() can
 	 * calculate how much pgWalUsage counters are increased by substracting
 	 * prevWalUsage from pgWalUsage.
 	 */
@@ -3196,7 +3252,6 @@ pgstat_bestart(void)
 	{
 		lbeentry.st_ssl = true;
 		lsslstatus.ssl_bits = be_tls_get_cipher_bits(MyProcPort);
-		lsslstatus.ssl_compression = be_tls_get_compression(MyProcPort);
 		strlcpy(lsslstatus.ssl_version, be_tls_get_version(MyProcPort), NAMEDATALEN);
 		strlcpy(lsslstatus.ssl_cipher, be_tls_get_cipher(MyProcPort), NAMEDATALEN);
 		be_tls_get_peer_subject_name(MyProcPort, lsslstatus.ssl_client_dn, NAMEDATALEN);
@@ -3391,6 +3446,30 @@ pgstat_report_activity(BackendState state, const char *cmd_str)
 		len = Min(strlen(cmd_str), pgstat_track_activity_query_size - 1);
 	}
 	current_timestamp = GetCurrentTimestamp();
+
+	/*
+	 * If the state has changed from "active" or "idle in transaction",
+	 * calculate the duration.
+	 */
+	if ((beentry->st_state == STATE_RUNNING ||
+		 beentry->st_state == STATE_FASTPATH ||
+		 beentry->st_state == STATE_IDLEINTRANSACTION ||
+		 beentry->st_state == STATE_IDLEINTRANSACTION_ABORTED) &&
+		state != beentry->st_state)
+	{
+		long		secs;
+		int			usecs;
+
+		TimestampDifference(beentry->st_state_start_timestamp,
+							current_timestamp,
+							&secs, &usecs);
+
+		if (beentry->st_state == STATE_RUNNING ||
+			beentry->st_state == STATE_FASTPATH)
+			pgStatActiveTime += secs * 1000000 + usecs;
+		else
+			pgStatTransactionIdleTime += secs * 1000000 + usecs;
+	}
 
 	/*
 	 * Now update the status entry
@@ -4054,6 +4133,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 		case WAIT_EVENT_BTREE_PAGE:
 			event_name = "BtreePage";
 			break;
+		case WAIT_EVENT_BUFFER_IO:
+			event_name = "BufferIO";
+			break;
 		case WAIT_EVENT_CHECKPOINT_DONE:
 			event_name = "CheckpointDone";
 			break;
@@ -4164,6 +4246,9 @@ pgstat_get_wait_ipc(WaitEventIPC w)
 			break;
 		case WAIT_EVENT_SYNC_REP:
 			event_name = "SyncRep";
+			break;
+		case WAIT_EVENT_WALRCV_EXIT:
+			event_name = "WalrcvExit";
 			break;
 		case WAIT_EVENT_XACT_GROUP_UPDATE:
 			event_name = "XactGroupUpdate";
@@ -4977,17 +5062,17 @@ pgstat_combine_from_qe(CdbDispatchResults *results, int writerSliceIndex)
 }
 
 /* ----------
- * pgstat_send_wal() -
+ * pgstat_report_wal() -
  *
- *		Send WAL statistics to the collector
+ * Calculate how much WAL usage counters are increased and send
+ * WAL statistics to the collector.
+ *
+ * Must be called by processes that generate WAL.
  * ----------
  */
 void
-pgstat_send_wal(void)
+pgstat_report_wal(void)
 {
-	/* We assume this initializes to zeroes */
-	static const PgStat_MsgWal all_zeroes;
-
 	WalUsage	walusage;
 
 	/*
@@ -5003,12 +5088,55 @@ pgstat_send_wal(void)
 	WalStats.m_wal_bytes = walusage.wal_bytes;
 
 	/*
+	 * Send WAL stats message to the collector.
+	 */
+	if (!pgstat_send_wal(true))
+		return;
+
+	/*
+	 * Save the current counters for the subsequent calculation of WAL usage.
+	 */
+	prevWalUsage = pgWalUsage;
+}
+
+/* ----------
+ * pgstat_send_wal() -
+ *
+ *	Send WAL statistics to the collector.
+ *
+ * If 'force' is not set, WAL stats message is only sent if enough time has
+ * passed since last one was sent to reach PGSTAT_STAT_INTERVAL.
+ *
+ * Return true if the message is sent, and false otherwise.
+ * ----------
+ */
+bool
+pgstat_send_wal(bool force)
+{
+	/* We assume this initializes to zeroes */
+	static const PgStat_MsgWal all_zeroes;
+	static TimestampTz sendTime = 0;
+
+	/*
 	 * This function can be called even if nothing at all has happened. In
 	 * this case, avoid sending a completely empty message to the stats
 	 * collector.
 	 */
 	if (memcmp(&WalStats, &all_zeroes, sizeof(PgStat_MsgWal)) == 0)
-		return;
+		return false;
+
+	if (!force)
+	{
+		TimestampTz now = GetCurrentTimestamp();
+
+		/*
+		 * Don't send a message unless it's been at least PGSTAT_STAT_INTERVAL
+		 * msec since we last sent one.
+		 */
+		if (!TimestampDifferenceExceeds(sendTime, now, PGSTAT_STAT_INTERVAL))
+			return false;
+		sendTime = now;
+	}
 
 	/*
 	 * Prepare and send the message
@@ -5017,14 +5145,11 @@ pgstat_send_wal(void)
 	pgstat_send(&WalStats, sizeof(WalStats));
 
 	/*
-	 * Save the current counters for the subsequent calculation of WAL usage.
-	 */
-	prevWalUsage = pgWalUsage;
-
-	/*
 	 * Clear out the statistics buffer, so it can be re-used.
 	 */
 	MemSet(&WalStats, 0, sizeof(WalStats));
+
+	return true;
 }
 
 /* ----------
@@ -5313,6 +5438,10 @@ PgstatCollectorMain(int argc, char *argv[])
 					pgstat_recv_replslot(&msg.msg_replslot, len);
 					break;
 
+				case PGSTAT_MTYPE_CONNECTION:
+					pgstat_recv_connstat(&msg.msg_conn, len);
+					break;
+
 				default:
 					break;
 			}
@@ -5387,6 +5516,13 @@ reset_dbentry_counters(PgStat_StatDBEntry *dbentry)
 	dbentry->last_checksum_failure = 0;
 	dbentry->n_block_read_time = 0;
 	dbentry->n_block_write_time = 0;
+	dbentry->n_sessions = 0;
+	dbentry->total_session_time = 0;
+	dbentry->total_active_time = 0;
+	dbentry->total_idle_in_xact_time = 0;
+	dbentry->n_sessions_abandoned = 0;
+	dbentry->n_sessions_fatal = 0;
+	dbentry->n_sessions_killed = 0;
 
 	dbentry->stat_reset_timestamp = GetCurrentTimestamp();
 	dbentry->stats_timestamp = 0;
@@ -5853,7 +5989,9 @@ pgstat_read_statsfiles(Oid onlydb, bool permanent, bool deep)
 	pgStatQueueHash = queuehash;
 
 	/* Allocate the space for replication slot statistics */
-	replSlotStats = palloc0(max_replication_slots * sizeof(PgStat_ReplSlotStats));
+	replSlotStats = MemoryContextAllocZero(pgStatLocalContext,
+										   max_replication_slots
+										   * sizeof(PgStat_ReplSlotStats));
 	nReplSlotStats = 0;
 
 	/*
@@ -6658,6 +6796,8 @@ pgstat_clear_snapshot(void)
 	pgStatDBHash = NULL;
 	localBackendStatusTable = NULL;
 	localNumBackends = 0;
+	replSlotStats = NULL;
+	nReplSlotStats = 0;
 }
 
 
@@ -7464,6 +7604,10 @@ pgstat_recv_wal(PgStat_MsgWal *msg, int len)
 	walStats.wal_fpi += msg->m_wal_fpi;
 	walStats.wal_bytes += msg->m_wal_bytes;
 	walStats.wal_buffers_full += msg->m_wal_buffers_full;
+	walStats.wal_write += msg->m_wal_write;
+	walStats.wal_sync += msg->m_wal_sync;
+	walStats.wal_write_time += msg->m_wal_write_time;
+	walStats.wal_sync_time += msg->m_wal_sync_time;
 }
 
 /* ----------
@@ -7604,6 +7748,41 @@ pgstat_recv_replslot(PgStat_MsgReplSlot *msg, int len)
 		replSlotStats[idx].stream_txns += msg->m_stream_txns;
 		replSlotStats[idx].stream_count += msg->m_stream_count;
 		replSlotStats[idx].stream_bytes += msg->m_stream_bytes;
+	}
+}
+
+/* ----------
+ * pgstat_recv_connstat() -
+ *
+ *  Process connection information.
+ * ----------
+ */
+static void
+pgstat_recv_connstat(PgStat_MsgConn *msg, int len)
+{
+	PgStat_StatDBEntry *dbentry;
+
+	dbentry = pgstat_get_db_entry(msg->m_databaseid, true);
+
+	dbentry->n_sessions += msg->m_count;
+	dbentry->total_session_time += msg->m_session_time;
+	dbentry->total_active_time += msg->m_active_time;
+	dbentry->total_idle_in_xact_time += msg->m_idle_in_xact_time;
+	switch (msg->m_disconnect)
+	{
+		case DISCONNECT_NOT_YET:
+		case DISCONNECT_NORMAL:
+			/* we don't collect these */
+			break;
+		case DISCONNECT_CLIENT_EOF:
+			dbentry->n_sessions_abandoned++;
+			break;
+		case DISCONNECT_FATAL:
+			dbentry->n_sessions_fatal++;
+			break;
+		case DISCONNECT_KILLED:
+			dbentry->n_sessions_killed++;
+			break;
 	}
 }
 

@@ -28,16 +28,14 @@
  */
 CATALOG(pg_largeobject,2613,LargeObjectRelationId)
 {
-	Oid			loid;			/* Identifier of large object */
+	Oid			loid BKI_LOOKUP(pg_largeobject_metadata);	/* Identifier of large
+															 * object */
 	int32		pageno;			/* Page number (starting from 0) */
 
 	/* data has variable length, but we allow direct access; see inv_api.c */
 	bytea		data BKI_FORCE_NOT_NULL;	/* Data for page (may be
 											 * zero-length) */
 } FormData_pg_largeobject;
-
-/* GPDB added foreign key definitions for gpcheckcat. */
-/* none */
 
 /* ----------------
  *		Form_pg_largeobject corresponds to a pointer to a tuple with
@@ -46,7 +44,7 @@ CATALOG(pg_largeobject,2613,LargeObjectRelationId)
  */
 typedef FormData_pg_largeobject *Form_pg_largeobject;
 
-DECLARE_UNIQUE_INDEX(pg_largeobject_loid_pn_index, 2683, on pg_largeobject using btree(loid oid_ops, pageno int4_ops));
+DECLARE_UNIQUE_INDEX_PKEY(pg_largeobject_loid_pn_index, 2683, on pg_largeobject using btree(loid oid_ops, pageno int4_ops));
 #define LargeObjectLOidPNIndexId  2683
 
 extern Oid	LargeObjectCreate(Oid loid);

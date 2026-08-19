@@ -1398,6 +1398,7 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 											qry->sortClause,
 											EXPR_KIND_GROUP_BY,
 											false /* allow SQL92 rules */ );
+	qry->groupDistinct = stmt->groupDistinct;
 
 	/*
 	 * SCATTER BY clause on a table function TableValueExpr subquery.
@@ -1966,6 +1967,33 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 		parseCheckAggregates(pstate, qry);
 
 	return qry;
+}
+
+/*
+ * Make a SortGroupClause node for a SetOperationStmt's groupClauses
+ */
+SortGroupClause *
+makeSortGroupClauseForSetOp(Oid rescoltype)
+{
+	SortGroupClause *grpcl = makeNode(SortGroupClause);
+	Oid			sortop;
+	Oid			eqop;
+	bool		hashable;
+
+	/* determine the eqop and optional sortop */
+	get_sort_group_operators(rescoltype,
+							 false, true, false,
+							 &sortop, &eqop, NULL,
+							 &hashable);
+
+	/* we don't have a tlist yet, so can't assign sortgrouprefs */
+	grpcl->tleSortGroupRef = 0;
+	grpcl->eqop = eqop;
+	grpcl->sortop = sortop;
+	grpcl->nulls_first = false; /* OK with or without sortop */
+	grpcl->hashable = hashable;
+
+	return grpcl;
 }
 
 /*
@@ -2564,31 +2592,15 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 			 */
 			if (op->op != SETOP_UNION || !op->all)
 			{
-				SortGroupClause *grpcl = makeNode(SortGroupClause);
-				Oid			sortop;
-				Oid			eqop;
-				bool		hashable;
 				ParseCallbackState pcbstate;
 
 				setup_parser_errposition_callback(&pcbstate, pstate,
 												  bestlocation);
 
-				/* determine the eqop and optional sortop */
-				get_sort_group_operators(rescoltype,
-										 false, true, false,
-										 &sortop, &eqop, NULL,
-										 &hashable);
+				op->groupClauses = lappend(op->groupClauses,
+										   makeSortGroupClauseForSetOp(rescoltype));
 
 				cancel_parser_errposition_callback(&pcbstate);
-
-				/* we don't have a tlist yet, so can't assign sortgrouprefs */
-				grpcl->tleSortGroupRef = 0;
-				grpcl->eqop = eqop;
-				grpcl->sortop = sortop;
-				grpcl->nulls_first = false; /* OK with or without sortop */
-				grpcl->hashable = hashable;
-
-				op->groupClauses = lappend(op->groupClauses, grpcl);
 			}
 
 			/*
@@ -2936,7 +2948,7 @@ transformPLAssignStmt(ParseState *pstate, PLAssignStmt *stmt)
 
 	/*
 	 * The rest mostly matches transformSelectStmt, except that we needn't
-	 * consider WITH or DISTINCT, and we build a targetlist our own way.
+	 * consider WITH or INTO, and we build a targetlist our own way.
 	 */
 	qry->commandType = CMD_SELECT;
 	pstate->p_is_insert = false;
@@ -3060,10 +3072,29 @@ transformPLAssignStmt(ParseState *pstate, PLAssignStmt *stmt)
 											EXPR_KIND_GROUP_BY,
 											false /* allow SQL92 rules */ );
 
-	/* No DISTINCT clause */
-	Assert(!sstmt->distinctClause);
-	qry->distinctClause = NIL;
-	qry->hasDistinctOn = false;
+	if (sstmt->distinctClause == NIL)
+	{
+		qry->distinctClause = NIL;
+		qry->hasDistinctOn = false;
+	}
+	else if (linitial(sstmt->distinctClause) == NULL)
+	{
+		/* We had SELECT DISTINCT */
+		qry->distinctClause = transformDistinctClause(pstate,
+													  &qry->targetList,
+													  qry->sortClause,
+													  false);
+		qry->hasDistinctOn = false;
+	}
+	else
+	{
+		/* We had SELECT DISTINCT ON */
+		qry->distinctClause = transformDistinctOnClause(pstate,
+														sstmt->distinctClause,
+														&qry->targetList,
+														qry->sortClause);
+		qry->hasDistinctOn = true;
+	}
 
 	/* transform LIMIT */
 	qry->limitOffset = transformLimitClause(pstate, sstmt->limitOffset,

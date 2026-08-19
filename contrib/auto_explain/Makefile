@@ -8,6 +8,7 @@ PGFILEDESC = "auto_explain - logging facility for execution plans"
 
 REGRESS = auto_explain bfv_preload_auto_explain
 REGRESS_OPTS = --init-file=init_file
+TAP_TESTS = 1
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config

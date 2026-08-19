@@ -11,20 +11,24 @@ indexes, and toast table and toast indexes if they exist.  Finally, any
 new catalog table header must be listed in the
 Postgres .bki source file dependencies in the catalog Makefile.
 
-In addition to the Postgres macros, you should declare any "foreign
-key" references in a table with a FOREIGN_KEY line. Those declarations
-are only used by gpcheckcat, they are not used for anything by the
-server itself.
+Foreign key relationships in system catalogs are declared using
+BKI_LOOKUP and DECLARE_FOREIGN_KEY annotations in the catalog header
+files.  genbki.pl processes these to generate system_fk_info.h,
+which is used by the pg_get_catalog_foreign_keys() SQL function.
 
-For example, the Greenplum resource queue capability table is a shared
-table with a unique index and two subsidiary indexes.  It also has a
-foreign key relationship with pg_resqueue and pg_resourcetype.  The
-FOREIGN_KEY definition is:
+Single-column OID references to another catalog should be marked with
+BKI_LOOKUP(catalog) on the column definition.  Use BKI_LOOKUP_OPT if
+the column can be zero (InvalidOid) instead of a valid reference.
 
-FOREIGN_KEY(resqueueid REFERENCES pg_resqueue(oid));
-FOREIGN_KEY(restypid REFERENCES pg_resourcetype(restypid));
+For example:
+        regproc         compcompressor BKI_LOOKUP(pg_proc);
+        Oid             segrelid BKI_LOOKUP_OPT(pg_class);
 
-If you modify any foreign key declarations, you must re-generate
-gpMgmt/bin/gppylib/data/<version>.json file. The src/backend/catalog
-Makefile contains a target to automatically regenerate the file on
-"make all".
+Multi-column foreign keys or non-OID references require explicit
+DECLARE_FOREIGN_KEY annotations.  For example:
+
+        DECLARE_FOREIGN_KEY((attrelid, attnum), pg_attribute, (attrelid, attnum));
+
+See the upstream src/include/catalog/genbki.h for the full list of
+foreign key declaration macros.
+

@@ -1138,12 +1138,22 @@ aoco_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 }
 
 static TransactionId
-aoco_compute_xid_horizon_for_tuples(Relation rel,
-                                          ItemPointerData *tids,
-                                          int nitems)
+aoco_index_delete_tuples(Relation rel,
+						 TM_IndexDeleteOp *delstate)
 {
-	// GPDB_12_MERGE_FIXME: vacuum related call back.
-	elog(ERROR, "not implemented yet");
+	/*
+	 * Tell the index AM that none of its TIDs can be deleted.  See the
+	 * matching comment in appendonly_index_delete_tuples(): we never set
+	 * all_dead in index_fetch_tuple() for appendoptimized tables, so no index
+	 * tuple over one is ever marked LP_DEAD, which leaves bottom-up deletion
+	 * as the only caller that can get here, and it copes with us finding
+	 * nothing deletable.
+	 */
+	Assert(delstate->bottomup);
+
+	delstate->ndeltids = 0;
+
+	return InvalidTransactionId;
 }
 
 /* ------------------------------------------------------------------------
@@ -2157,7 +2167,7 @@ static const TableAmRoutine ao_column_methods = {
 	.tuple_get_latest_tid = aoco_get_latest_tid,
 	.tuple_tid_valid = aoco_tuple_tid_valid,
 	.tuple_satisfies_snapshot = aoco_tuple_satisfies_snapshot,
-	.compute_xid_horizon_for_tuples = aoco_compute_xid_horizon_for_tuples,
+	.index_delete_tuples = aoco_index_delete_tuples,
 
 	.relation_set_new_filenode = aoco_relation_set_new_filenode,
 	.relation_nontransactional_truncate = aoco_relation_nontransactional_truncate,

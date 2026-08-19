@@ -136,7 +136,8 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 	relation = table_open(relationObjectId, NoLock);
 
 	/* Temporary and unlogged relations are inaccessible during recovery. */
-	if (!RelationNeedsWAL(relation) && RecoveryInProgress())
+	if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT &&
+		RecoveryInProgress())
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot access temporary or unlogged relations during recovery")));
@@ -488,6 +489,12 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 
 	/* Collect info about relation's foreign keys, if relevant */
 	get_relation_foreign_keys(root, rel, relation, inhparent);
+
+	/* Collect info about functions implemented by the rel's table AM. */
+	if (relation->rd_tableam &&
+		relation->rd_tableam->scan_set_tidrange != NULL &&
+		relation->rd_tableam->scan_getnextslot_tidrange != NULL)
+		rel->amflags |= AMFLAG_HAS_TID_RANGE;
 
 	/*
 	 * Collect info about relation's partitioning scheme, if any. Only

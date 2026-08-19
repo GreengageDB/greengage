@@ -82,6 +82,7 @@ clamp_row_est(double nrows)
 /* parameter variables and flags (see also optimizer.h) */
 extern PGDLLIMPORT Cost disable_cost;
 extern PGDLLIMPORT int max_parallel_workers_per_gather;
+extern PGDLLIMPORT bool enable_parallel_insert;
 extern PGDLLIMPORT bool enable_seqscan;
 extern PGDLLIMPORT bool enable_indexscan;
 extern PGDLLIMPORT bool enable_indexonlyscan;
@@ -122,6 +123,9 @@ extern void cost_bitmap_or_node(BitmapOrPath *path, PlannerInfo *root);
 extern void cost_bitmap_tree_node(Path *path, Cost *cost, Selectivity *selec);
 extern void cost_tidscan(Path *path, PlannerInfo *root,
 						 RelOptInfo *baserel, List *tidquals, ParamPathInfo *param_info);
+extern void cost_tidrangescan(Path *path, PlannerInfo *root,
+							  RelOptInfo *baserel, List *tidrangequals,
+							  ParamPathInfo *param_info);
 extern void cost_subqueryscan(SubqueryScanPath *path, PlannerInfo *root,
 							  RelOptInfo *baserel, ParamPathInfo *param_info);
 extern void cost_functionscan(Path *path, PlannerInfo *root,

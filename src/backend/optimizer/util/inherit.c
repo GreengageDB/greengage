@@ -770,7 +770,8 @@ apply_child_basequals(PlannerInfo *root, RelOptInfo *parentrel,
 			}
 			/* reconstitute RestrictInfo with appropriate properties */
 			childquals = lappend(childquals,
-								 make_restrictinfo((Expr *) onecq,
+								 make_restrictinfo(root,
+												   (Expr *) onecq,
 												   rinfo->is_pushed_down,
 												   rinfo->outerjoin_delayed,
 												   pseudoconstant,
@@ -807,7 +808,7 @@ apply_child_basequals(PlannerInfo *root, RelOptInfo *parentrel,
 
 				/* not likely that we'd see constants here, so no check */
 				childquals = lappend(childquals,
-									 make_restrictinfo(qual,
+									 make_restrictinfo(root, qual,
 													   true, false, false,
 													   security_level,
 													   NULL, NULL, NULL));

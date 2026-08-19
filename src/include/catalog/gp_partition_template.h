@@ -31,7 +31,7 @@
  */
 CATALOG(gp_partition_template,8022,PartitionTemplateRelationId)
 {
-	Oid			relid;		/* partitioned table oid */
+	Oid			relid BKI_LOOKUP(pg_class);		/* partitioned table oid */
 	int16       level;
 
 #ifdef CATALOG_VARLEN
@@ -39,7 +39,6 @@ CATALOG(gp_partition_template,8022,PartitionTemplateRelationId)
 #endif
 } FormData_gp_partition_template;
 
-FOREIGN_KEY(relid REFERENCES pg_class(oid));
 
 /* ----------------
  *		Form_gp_partition_template corresponds to a pointer to a tuple with
@@ -50,7 +49,7 @@ typedef FormData_gp_partition_template *Form_gp_partition_template;
 
 DECLARE_TOAST(gp_partition_template, 8024, 8025);
 
-DECLARE_UNIQUE_INDEX(gp_partition_template_relid_level_index, 8023, on gp_partition_template using btree(relid oid_ops, level int2_ops));
+DECLARE_UNIQUE_INDEX_PKEY(gp_partition_template_relid_level_index, 8023, on gp_partition_template using btree(relid oid_ops, level int2_ops));
 #define GpPartitionTemplateRelidLevelIndexId  8023
 
 extern void StoreGpPartitionTemplate(Oid relid, int32 level,

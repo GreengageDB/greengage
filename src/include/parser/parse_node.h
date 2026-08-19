@@ -79,6 +79,7 @@ typedef enum ParseExprKind
 	EXPR_KIND_CALL_ARGUMENT,	/* procedure argument in CALL */
 	EXPR_KIND_COPY_WHERE,		/* WHERE condition in COPY FROM */
 	EXPR_KIND_GENERATED_COLUMN, /* generation expression for a column */
+	EXPR_KIND_CYCLE_MARK,		/* cycle mark value */
 
 	/* GPDB additions */
 	EXPR_KIND_SCATTER_BY		/* SCATTER BY expression */
@@ -307,6 +308,7 @@ struct ParseNamespaceColumn
 	Oid			p_varcollid;	/* OID of collation, or InvalidOid */
 	Index		p_varnosyn;		/* rangetable index of syntactic referent */
 	AttrNumber	p_varattnosyn;	/* attribute number of syntactic referent */
+	bool		p_dontexpand;	/* not included in star expansion */
 };
 
 /* Support for parser_errposition_callback function */
@@ -321,7 +323,7 @@ typedef struct ParseCallbackState
 extern ParseState *make_parsestate(ParseState *parentParseState);
 extern void free_parsestate(ParseState *pstate);
 extern struct HTAB *parser_get_namecache(ParseState *pstate);
-extern void	parser_errposition(ParseState *pstate, int location);
+extern int	parser_errposition(ParseState *pstate, int location);
 
 extern void setup_parser_errposition_callback(ParseCallbackState *pcbstate,
 											  ParseState *pstate, int location);

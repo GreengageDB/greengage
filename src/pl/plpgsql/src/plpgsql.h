@@ -1010,9 +1010,6 @@ typedef struct PLpgSQL_function
 	int			extra_warnings;
 	int			extra_errors;
 
-	/* count of statements inside function */
-	unsigned int nstatements;
-
 	/* the datums representing the function's local variables */
 	int			ndatums;
 	PLpgSQL_datum **datums;
@@ -1020,6 +1017,10 @@ typedef struct PLpgSQL_function
 
 	/* function body parsetree */
 	PLpgSQL_stmt_block *action;
+
+	/* data derived while parsing body */
+	unsigned int nstatements;	/* counter for assigning stmtids */
+	bool		requires_procedure_resowner;	/* contains CALL or DO? */
 
 	/* these fields change when the function is used */
 	struct PLpgSQL_execstate *cur_estate;
@@ -1081,6 +1082,9 @@ typedef struct PLpgSQL_execstate
 	/* EState and resowner to use for "simple" expression evaluation */
 	EState	   *simple_eval_estate;
 	ResourceOwner simple_eval_resowner;
+
+	/* if running nonatomic procedure or DO block, resowner to use for CALL */
+	ResourceOwner procedure_resowner;
 
 	/* lookup table to use for executing type casts */
 	HTAB	   *cast_hash;
@@ -1266,6 +1270,7 @@ extern Datum plpgsql_exec_function(PLpgSQL_function *func,
 								   FunctionCallInfo fcinfo,
 								   EState *simple_eval_estate,
 								   ResourceOwner simple_eval_resowner,
+								   ResourceOwner procedure_resowner,
 								   bool atomic);
 extern HeapTuple plpgsql_exec_trigger(PLpgSQL_function *func,
 									  TriggerData *trigdata);
@@ -1317,7 +1322,7 @@ extern void plpgsql_append_source_text(StringInfo buf,
 extern int	plpgsql_peek(void);
 extern void plpgsql_peek2(int *tok1_p, int *tok2_p, int *tok1_loc,
 						  int *tok2_loc);
-extern void plpgsql_scanner_errposition(int location);
+extern int	plpgsql_scanner_errposition(int location);
 extern void plpgsql_yyerror(const char *message) pg_attribute_noreturn();
 extern int	plpgsql_location_to_lineno(int location);
 extern int	plpgsql_latest_lineno(void);

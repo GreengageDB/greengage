@@ -1969,7 +1969,7 @@ test_consume_xids(PG_FUNCTION_ARGS)
 	/* make sure we have a top-XID first */
 	topxid = GetCurrentTransactionId();
 
-	xid = ReadNewTransactionId();
+	xid = ReadNextTransactionId();
 
 	targetxid = xid + nxids;
 	while (targetxid < FirstNormalTransactionId)

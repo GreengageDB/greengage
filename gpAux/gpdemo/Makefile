@@ -14,7 +14,7 @@ top_builddir = ../..
 #
 
 export enable_gpfdist
-export with_openssl
+export with_ssl
 
 PORT_BASE ?= 7000
 NUM_PRIMARY_MIRROR_PAIRS ?= 3

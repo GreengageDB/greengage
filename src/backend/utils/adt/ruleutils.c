@@ -3139,13 +3139,14 @@ print_function_trftypes(StringInfo buf, HeapTuple proctup)
 	{
 		int			i;
 
-		appendStringInfoString(buf, "\n TRANSFORM ");
+		appendStringInfoString(buf, " TRANSFORM ");
 		for (i = 0; i < ntypes; i++)
 		{
 			if (i != 0)
 				appendStringInfoString(buf, ", ");
 			appendStringInfo(buf, "FOR TYPE %s", format_type_be(trftypes[i]));
 		}
+		appendStringInfoChar(buf, '\n');
 	}
 }
 
@@ -5216,6 +5217,64 @@ get_with_clause(Query *query, deparse_context *context)
 		if (PRETTY_INDENT(context))
 			appendContextKeyword(context, "", 0, 0, 0);
 		appendStringInfoChar(buf, ')');
+
+		if (cte->search_clause)
+		{
+			bool		first = true;
+			ListCell   *lc;
+
+			appendStringInfo(buf, " SEARCH %s FIRST BY ",
+							 cte->search_clause->search_breadth_first ? "BREADTH" : "DEPTH");
+
+			foreach(lc, cte->search_clause->search_col_list)
+			{
+				if (first)
+					first = false;
+				else
+					appendStringInfoString(buf, ", ");
+				appendStringInfoString(buf,
+									   quote_identifier(strVal(lfirst(lc))));
+			}
+
+			appendStringInfo(buf, " SET %s", quote_identifier(cte->search_clause->search_seq_column));
+		}
+
+		if (cte->cycle_clause)
+		{
+			bool		first = true;
+			ListCell   *lc;
+
+			appendStringInfoString(buf, " CYCLE ");
+
+			foreach(lc, cte->cycle_clause->cycle_col_list)
+			{
+				if (first)
+					first = false;
+				else
+					appendStringInfoString(buf, ", ");
+				appendStringInfoString(buf,
+									   quote_identifier(strVal(lfirst(lc))));
+			}
+
+			appendStringInfo(buf, " SET %s", quote_identifier(cte->cycle_clause->cycle_mark_column));
+
+			{
+				Const	   *cmv = castNode(Const, cte->cycle_clause->cycle_mark_value);
+				Const	   *cmd = castNode(Const, cte->cycle_clause->cycle_mark_default);
+
+				if (!(cmv->consttype == BOOLOID && !cmv->constisnull && DatumGetBool(cmv->constvalue) == true &&
+					  cmd->consttype == BOOLOID && !cmd->constisnull && DatumGetBool(cmd->constvalue) == false))
+				{
+					appendStringInfoString(buf, " TO ");
+					get_rule_expr(cte->cycle_clause->cycle_mark_value, context, false);
+					appendStringInfoString(buf, " DEFAULT ");
+					get_rule_expr(cte->cycle_clause->cycle_mark_default, context, false);
+				}
+			}
+
+			appendStringInfo(buf, " USING %s", quote_identifier(cte->cycle_clause->cycle_path_column));
+		}
+
 		sep = ", ";
 	}
 
@@ -5539,6 +5598,8 @@ get_basic_select_query(Query *query, deparse_context *context,
 
 		appendContextKeyword(context, " GROUP BY ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
+		if (query->groupDistinct)
+			appendStringInfoString(buf, "DISTINCT ");
 
 		save_exprkind = context->special_exprkind;
 		context->special_exprkind = EXPR_KIND_GROUP_BY;
@@ -10069,6 +10130,7 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 			appendStringInfoChar(buf, ')');
 			return true;
 
+		case F_LTRIM_BYTEA_BYTEA:
 		case F_LTRIM_TEXT:
 		case F_LTRIM_TEXT_TEXT:
 			/* TRIM() */
@@ -10083,6 +10145,7 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 			appendStringInfoChar(buf, ')');
 			return true;
 
+		case F_RTRIM_BYTEA_BYTEA:
 		case F_RTRIM_TEXT:
 		case F_RTRIM_TEXT_TEXT:
 			/* TRIM() */

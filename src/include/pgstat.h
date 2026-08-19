@@ -43,6 +43,16 @@ typedef enum TrackFunctionsLevel
 	TRACK_FUNC_ALL
 }			TrackFunctionsLevel;
 
+/* Values to track the cause of session termination */
+typedef enum SessionEndType
+{
+	DISCONNECT_NOT_YET,			/* still active */
+	DISCONNECT_NORMAL,
+	DISCONNECT_CLIENT_EOF,
+	DISCONNECT_FATAL,
+	DISCONNECT_KILLED
+} SessionEndType;
+
 /* ----------
  * The types of backend -> collector messages
  * ----------
@@ -74,6 +84,7 @@ typedef enum StatMsgType
 	PGSTAT_MTYPE_DEADLOCK,
 	PGSTAT_MTYPE_CHECKSUMFAILURE,
 	PGSTAT_MTYPE_REPLSLOT,
+	PGSTAT_MTYPE_CONNECTION,
 } StatMsgType;
 
 /* ----------
@@ -481,6 +492,12 @@ typedef struct PgStat_MsgWal
 	PgStat_Counter m_wal_fpi;
 	uint64		m_wal_bytes;
 	PgStat_Counter m_wal_buffers_full;
+	PgStat_Counter m_wal_write;
+	PgStat_Counter m_wal_sync;
+	PgStat_Counter m_wal_write_time;	/* time spent writing wal records in
+										 * microseconds */
+	PgStat_Counter m_wal_sync_time; /* time spent syncing wal records in
+									 * microseconds */
 } PgStat_MsgWal;
 
 /* ----------
@@ -640,6 +657,21 @@ typedef struct PgStat_MsgChecksumFailure
 	TimestampTz m_failure_time;
 } PgStat_MsgChecksumFailure;
 
+/* ----------
+ * PgStat_MsgConn			Sent by the backend to update connection statistics.
+ * ----------
+ */
+typedef struct PgStat_MsgConn
+{
+	PgStat_MsgHdr m_hdr;
+	Oid			m_databaseid;
+	PgStat_Counter m_count;
+	PgStat_Counter m_session_time;
+	PgStat_Counter m_active_time;
+	PgStat_Counter m_idle_in_xact_time;
+	SessionEndType m_disconnect;
+} PgStat_MsgConn;
+
 
 /* ----------
  * PgStat_Msg					Union over all possible messages.
@@ -673,6 +705,7 @@ typedef union PgStat_Msg
 	PgStat_MsgTempFile msg_tempfile;
 	PgStat_MsgChecksumFailure msg_checksumfailure;
 	PgStat_MsgReplSlot msg_replslot;
+	PgStat_MsgConn msg_conn;
 } PgStat_Msg;
 
 
@@ -684,7 +717,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BC9F
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA1
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -715,6 +748,13 @@ typedef struct PgStat_StatDBEntry
 	TimestampTz last_checksum_failure;
 	PgStat_Counter n_block_read_time;	/* times in microseconds */
 	PgStat_Counter n_block_write_time;
+	PgStat_Counter n_sessions;
+	PgStat_Counter total_session_time;
+	PgStat_Counter total_active_time;
+	PgStat_Counter total_idle_in_xact_time;
+	PgStat_Counter n_sessions_abandoned;
+	PgStat_Counter n_sessions_fatal;
+	PgStat_Counter n_sessions_killed;
 
 	TimestampTz stat_reset_timestamp;
 	TimestampTz stats_timestamp;	/* time of db stats file update */
@@ -866,6 +906,10 @@ typedef struct PgStat_WalStats
 	PgStat_Counter wal_fpi;
 	uint64		wal_bytes;
 	PgStat_Counter wal_buffers_full;
+	PgStat_Counter wal_write;
+	PgStat_Counter wal_sync;
+	PgStat_Counter wal_write_time;
+	PgStat_Counter wal_sync_time;
 	TimestampTz stat_reset_timestamp;
 } PgStat_WalStats;
 
@@ -1001,6 +1045,7 @@ typedef enum
 	WAIT_EVENT_BGWORKER_SHUTDOWN,
 	WAIT_EVENT_BGWORKER_STARTUP,
 	WAIT_EVENT_BTREE_PAGE,
+	WAIT_EVENT_BUFFER_IO,
 	WAIT_EVENT_CHECKPOINT_DONE,
 	WAIT_EVENT_CHECKPOINT_START,
 	WAIT_EVENT_EXECUTE_GATHER,
@@ -1038,6 +1083,7 @@ typedef enum
 	WAIT_EVENT_REPLICATION_SLOT_DROP,
 	WAIT_EVENT_SAFE_SNAPSHOT,
 	WAIT_EVENT_SYNC_REP,
+	WAIT_EVENT_WALRCV_EXIT,
 	WAIT_EVENT_XACT_GROUP_UPDATE
 
 	/* GPDB additions */
@@ -1183,7 +1229,6 @@ typedef struct PgBackendSSLStatus
 {
 	/* Information about SSL connection */
 	int			ssl_bits;
-	bool		ssl_compression;
 	char		ssl_version[NAMEDATALEN];
 	char		ssl_cipher[NAMEDATALEN];
 	char		ssl_client_dn[NAMEDATALEN];
@@ -1441,6 +1486,11 @@ extern PgStat_MsgWal WalStats;
  */
 extern PgStat_Counter pgStatBlockReadTime;
 extern PgStat_Counter pgStatBlockWriteTime;
+
+/*
+ * Updated by the traffic cop and in errfinish()
+ */
+extern SessionEndType pgStatSessionEndCause;
 
 /* ----------
  * Functions called from postmaster
@@ -1734,7 +1784,8 @@ extern void pgstat_twophase_postabort(TransactionId xid, uint16 info,
 
 extern void pgstat_send_archiver(const char *xlog, bool failed);
 extern void pgstat_send_bgwriter(void);
-extern void pgstat_send_wal(void);
+extern void pgstat_report_wal(void);
+extern bool pgstat_send_wal(bool force);
 
 struct CdbDispatchResults;
 struct pg_result;

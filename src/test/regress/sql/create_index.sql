@@ -626,7 +626,6 @@ DROP TABLE syscol_table;
 --
 -- Tests for IS NULL/IS NOT NULL with b-tree indexes
 --
-
 CREATE TABLE onek_with_null AS SELECT unique1, unique2 FROM onek DISTRIBUTED BY (unique1);
 INSERT INTO onek_with_null (unique1,unique2) VALUES (NULL, -1), (NULL, NULL);
 CREATE UNIQUE INDEX onek_nulltest ON onek_with_null (unique2,unique1);
@@ -1118,6 +1117,7 @@ CREATE UNIQUE INDEX concur_exprs_index_pred ON concur_exprs_tab (c1)
 CREATE UNIQUE INDEX concur_exprs_index_pred_2
   ON concur_exprs_tab (c1, (1 / c1))
   WHERE ('-H') >= (c2::TEXT) COLLATE "C";
+ALTER INDEX concur_exprs_index_expr ALTER COLUMN 2 SET STATISTICS 100;
 ANALYZE concur_exprs_tab;
 SELECT starelid::regclass, count(*) FROM pg_statistic WHERE starelid IN (
   'concur_exprs_index_expr'::regclass,
@@ -1142,6 +1142,13 @@ SELECT starelid::regclass, count(*) FROM pg_statistic WHERE starelid IN (
   'concur_exprs_index_pred'::regclass,
   'concur_exprs_index_pred_2'::regclass)
   GROUP BY starelid ORDER BY starelid::regclass::text;
+-- attstattarget should remain intact
+SELECT attrelid::regclass, attnum, attstattarget
+  FROM pg_attribute WHERE attrelid IN (
+    'concur_exprs_index_expr'::regclass,
+    'concur_exprs_index_pred'::regclass,
+    'concur_exprs_index_pred_2'::regclass)
+  ORDER BY attrelid::regclass::text, attnum;
 DROP TABLE concur_exprs_tab;
 
 -- Temporary tables and on-commit actions, where CONCURRENTLY is ignored.

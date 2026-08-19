@@ -90,11 +90,11 @@ extractPageMap(const char *datadir, XLogRecPtr startpoint, int tliIndex,
 
 			if (errormsg)
 				pg_fatal("could not read WAL record at %X/%X: %s",
-						 (uint32) (errptr >> 32), (uint32) (errptr),
+						 LSN_FORMAT_ARGS(errptr),
 						 errormsg);
 			else
 				pg_fatal("could not read WAL record at %X/%X",
-						 (uint32) (errptr >> 32), (uint32) (errptr));
+						 LSN_FORMAT_ARGS(errptr));
 		}
 
 		extractPageInfo(xlogreader);
@@ -143,10 +143,10 @@ readOneRecord(const char *datadir, XLogRecPtr ptr, int tliIndex,
 	{
 		if (errormsg)
 			pg_fatal("could not read WAL record at %X/%X: %s",
-					 (uint32) (ptr >> 32), (uint32) (ptr), errormsg);
+					 LSN_FORMAT_ARGS(ptr), errormsg);
 		else
 			pg_fatal("could not read WAL record at %X/%X",
-					 (uint32) (ptr >> 32), (uint32) (ptr));
+					 LSN_FORMAT_ARGS(ptr));
 	}
 	endptr = xlogreader->EndRecPtr;
 
@@ -209,11 +209,11 @@ findLastCheckpoint(const char *datadir, XLogRecPtr forkptr, int tliIndex,
 		{
 			if (errormsg)
 				pg_fatal("could not find previous WAL record at %X/%X: %s",
-						 (uint32) (searchptr >> 32), (uint32) (searchptr),
+						 LSN_FORMAT_ARGS(searchptr),
 						 errormsg);
 			else
 				pg_fatal("could not find previous WAL record at %X/%X",
-						 (uint32) (searchptr >> 32), (uint32) (searchptr));
+						 LSN_FORMAT_ARGS(searchptr));
 		}
 
 		/*
@@ -431,7 +431,7 @@ extractPageInfo(XLogReaderState *record)
 		 */
 		pg_fatal("WAL record modifies a relation, but record type is not recognized: "
 				 "lsn: %X/%X, rmgr: %s, info: %02X",
-				 (uint32) (record->ReadRecPtr >> 32), (uint32) (record->ReadRecPtr),
+				 LSN_FORMAT_ARGS(record->ReadRecPtr),
 				 RmgrNames[rmid], info);
 	}
 	else if (rmid == RM_APPEND_ONLY_ID)

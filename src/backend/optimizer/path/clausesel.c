@@ -265,7 +265,7 @@ clauselist_selectivity_ext(PlannerInfo *root,
 			}
 			else
 			{
-				ok = (NumRelids(clause) == 1) &&
+				ok = (NumRelids(root, clause) == 1) &&
 					(is_pseudo_constant_clause(lsecond(expr->args)) ||
 					 (varonleft = false,
 					  is_pseudo_constant_clause(linitial(expr->args))));
@@ -686,7 +686,7 @@ bms_is_subset_singleton(const Bitmapset *s, int x)
  *	  restriction or join estimator.  Subroutine for clause_selectivity().
  */
 static inline bool
-treat_as_join_clause(Node *clause, RestrictInfo *rinfo,
+treat_as_join_clause(PlannerInfo *root, Node *clause, RestrictInfo *rinfo,
 					 int varRelid, SpecialJoinInfo *sjinfo)
 {
 	if (varRelid != 0)
@@ -720,7 +720,7 @@ treat_as_join_clause(Node *clause, RestrictInfo *rinfo,
 		if (rinfo)
 			return (bms_membership(rinfo->clause_relids) == BMS_MULTIPLE);
 		else
-			return (NumRelids(clause) > 1);
+			return (NumRelids(root, clause) > 1);
 	}
 }
 
@@ -942,7 +942,7 @@ clause_selectivity_ext(PlannerInfo *root,
 		OpExpr	   *opclause = (OpExpr *) clause;
 		Oid			opno = opclause->opno;
 
-		if (treat_as_join_clause(clause, rinfo, varRelid, sjinfo))
+		if (treat_as_join_clause(root, clause, rinfo, varRelid, sjinfo))
 		{
 			/* Estimate selectivity for a join clause. */
 			s1 = join_selectivity(root, opno,
@@ -978,7 +978,7 @@ clause_selectivity_ext(PlannerInfo *root,
 								  funcclause->funcid,
 								  funcclause->args,
 								  funcclause->inputcollid,
-								  treat_as_join_clause(clause, rinfo,
+								  treat_as_join_clause(root, clause, rinfo,
 													   varRelid, sjinfo),
 								  varRelid,
 								  jointype,
@@ -989,7 +989,7 @@ clause_selectivity_ext(PlannerInfo *root,
 		/* Use node specific selectivity calculation function */
 		s1 = scalararraysel(root,
 							(ScalarArrayOpExpr *) clause,
-							treat_as_join_clause(clause, rinfo,
+							treat_as_join_clause(root, clause, rinfo,
 												 varRelid, sjinfo),
 							varRelid,
 							jointype,

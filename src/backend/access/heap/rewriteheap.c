@@ -1001,8 +1001,7 @@ logical_rewrite_log_mapping(RewriteState state, TransactionId xid,
 		snprintf(path, MAXPGPATH,
 				 "pg_logical/mappings/" LOGICAL_REWRITE_FORMAT,
 				 dboid, relid,
-				 (uint32) (state->rs_begin_lsn >> 32),
-				 (uint32) state->rs_begin_lsn,
+				 LSN_FORMAT_ARGS(state->rs_begin_lsn),
 				 xid, GetCurrentTransactionId());
 
 		dlist_init(&src->mappings);
@@ -1124,8 +1123,7 @@ heap_xlog_logical_rewrite(XLogReaderState *r)
 	snprintf(path, MAXPGPATH,
 			 "pg_logical/mappings/" LOGICAL_REWRITE_FORMAT,
 			 xlrec->mapped_db, xlrec->mapped_rel,
-			 (uint32) (xlrec->start_lsn >> 32),
-			 (uint32) xlrec->start_lsn,
+			 LSN_FORMAT_ARGS(xlrec->start_lsn),
 			 xlrec->mapped_xid, XLogRecGetXid(r));
 
 	fd = OpenTransientFile(path,
@@ -1260,8 +1258,8 @@ CheckPointLogicalRewriteHeap(void)
 
 			/*
 			 * The file cannot vanish due to concurrency since this function
-			 * is the only one removing logical mappings and it's run while
-			 * CheckpointLock is held exclusively.
+			 * is the only one removing logical mappings and only one
+			 * checkpoint can be in progress at a time.
 			 */
 			if (fd < 0)
 				ereport(ERROR,

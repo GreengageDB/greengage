@@ -176,9 +176,10 @@ bool
 bminsert(Relation rel, Datum *values, bool *isnull,
 		 ItemPointer ht_ctid, Relation heapRel,
 		 IndexUniqueCheck checkUnique,
+		 bool indexUnchanged,
 		 IndexInfo *indexInfo)
 {
-	_bitmap_doinsert(rel, *ht_ctid, values, isnull);
+	_bitmap_doinsert(rel, *ht_ctid, values, isnull, indexUnchanged);
 	return true;
 }
 
@@ -540,13 +541,15 @@ bmbulkdelete(IndexVacuumInfo *info,
 			 void *callback_state)
 {
 	Relation	rel = info->index;
+	ReindexParams reindex_params = {0};
 
 	/* allocate stats if first time through, else re-use existing struct */
 	if (stats == NULL)
 		stats = (IndexBulkDeleteResult *)
 			palloc0(sizeof(IndexBulkDeleteResult));	
 
-	reindex_index(RelationGetRelid(rel), true, rel->rd_rel->relpersistence, 0);
+	reindex_index(RelationGetRelid(rel), true, rel->rd_rel->relpersistence,
+				  &reindex_params);
 
 	CommandCounterIncrement();
 

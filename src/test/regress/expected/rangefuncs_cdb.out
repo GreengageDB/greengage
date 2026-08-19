@@ -14,13 +14,14 @@ SELECT name, setting FROM pg_settings WHERE name LIKE 'enable%';
  enable_nestloop                | off
  enable_parallel_append         | on
  enable_parallel_hash           | on
+ enable_parallel_insert         | on
  enable_partition_pruning       | on
  enable_partitionwise_aggregate | off
  enable_partitionwise_join      | off
  enable_seqscan                 | on
  enable_sort                    | on
  enable_tidscan                 | on
-(19 rows)
+(20 rows)
 
 -- start_ignore
 create schema rangefuncs_cdb;

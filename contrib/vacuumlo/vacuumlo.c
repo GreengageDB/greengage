@@ -124,8 +124,7 @@ vacuumlo(const char *database, const struct _param *param)
 	/* check to see that the backend connection was successfully made */
 	if (PQstatus(conn) == CONNECTION_BAD)
 	{
-		pg_log_error("connection to database \"%s\" failed: %s",
-					 database, PQerrorMessage(conn));
+		pg_log_error("%s", PQerrorMessage(conn));
 		PQfinish(conn);
 		return -1;
 	}
@@ -484,7 +483,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("vacuumlo (PostgreSQL) " PG_VERSION);
+			puts("vacuumlo (Greenplum Database) " PG_VERSION);
 			exit(0);
 		}
 	}

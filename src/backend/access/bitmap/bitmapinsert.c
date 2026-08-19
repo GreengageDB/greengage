@@ -63,7 +63,8 @@ static void create_lovitem(Relation rel, Buffer metabuf, uint64 tidnum,
 						   Datum *attdata, bool *nulls,
 						   Relation lovHeap, Relation lovIndex,
 						   BlockNumber *lovBlockP, 
-						   OffsetNumber *lovOffsetP, bool use_wal);
+						   OffsetNumber *lovOffsetP, bool use_wal,
+						   bool indexUnchanged);
 static void build_inserttuple(Relation rel, uint64 tidnum,
 							   ItemPointerData ht_ctid, TupleDesc tupDesc, 
 							   Datum *attdata, bool *nulls, BMBuildState *state);
@@ -72,7 +73,8 @@ static void inserttuple(Relation rel, Buffer metabuf,
 							    TupleDesc tupDesc, Datum* attdata,
 							    bool *nulls, Relation lovHeap, 
 								Relation lovIndex, ScanKey scanKey, 
-								IndexScanDesc scanDesc, bool use_wal);
+								IndexScanDesc scanDesc, bool use_wal,
+								bool indexUnchanged);
 static void updatesetbit(Relation rel, 
 						 Buffer lovBuffer, OffsetNumber lovOffset,
 						 uint64 tidnum, bool use_wal);
@@ -1618,8 +1620,8 @@ _bitmap_write_bitmapwords_on_page(Page bitmapPage, BMTIDBuffer *buf, int startWo
 static void
 create_lovitem(Relation rel, Buffer metabuf, uint64 tidnum,
 			   TupleDesc tupDesc, Datum *attdata, bool *nulls,
-			   Relation lovHeap, Relation lovIndex, BlockNumber *lovBlockP, 
-			   OffsetNumber *lovOffsetP, bool use_wal)
+			   Relation lovHeap, Relation lovIndex, BlockNumber *lovBlockP,
+			   OffsetNumber *lovOffsetP, bool use_wal, bool indexUnchanged)
 {
 	BMMetaPage		metapage;
 	Buffer			currLovBuffer;
@@ -1713,7 +1715,8 @@ create_lovitem(Relation rel, Buffer metabuf, uint64 tidnum,
 	lovDatum[numOfAttrs + 1] = Int16GetDatum(*lovOffsetP);
 	lovNulls[numOfAttrs + 1] = false;
 
-	_bitmap_insert_lov(lovHeap, lovIndex, lovDatum, lovNulls, use_wal);
+	_bitmap_insert_lov(lovHeap, lovIndex, lovDatum, lovNulls, use_wal,
+					   indexUnchanged);
 
 	_bitmap_relbuf(currLovBuffer);
 
@@ -2349,7 +2352,7 @@ build_inserttuple(Relation rel, uint64 tidnum,
 				 */
 				create_lovitem(rel, metabuf, tidnum, tupDesc, attdata, 
 							   nulls, state->bm_lov_heap, state->bm_lov_index,
-							   &lovBlock, &lovOffset, state->use_wal);
+							   &lovBlock, &lovOffset, state->use_wal, false);
 
 				lov = (BMBuildLovData *) (((char*)entry) + state->lovitem_hashKeySize );
 				lov->lov_block = lovBlock;
@@ -2399,7 +2402,7 @@ build_inserttuple(Relation rel, uint64 tidnum,
 				 */
 				create_lovitem(rel, metabuf, tidnum, tupDesc, attdata, 
 							   nulls, state->bm_lov_heap, state->bm_lov_index,
-							   &lovBlock, &lovOffset, state->use_wal);
+							   &lovBlock, &lovOffset, state->use_wal, false);
 			}
 		}
 	}
@@ -2434,7 +2437,7 @@ static void
 inserttuple(Relation rel, Buffer metabuf, uint64 tidnum, 
 			ItemPointerData ht_ctid pg_attribute_unused(), TupleDesc tupDesc, Datum *attdata,
 			bool *nulls, Relation lovHeap, Relation lovIndex, ScanKey scanKey,
-		   	IndexScanDesc scanDesc, bool use_wal)
+		   	IndexScanDesc scanDesc, bool use_wal, bool indexUnchanged)
 {
 	BlockNumber		lovBlock;
 	OffsetNumber	lovOffset;
@@ -2502,7 +2505,7 @@ inserttuple(Relation rel, Buffer metabuf, uint64 tidnum,
 		{
 			create_lovitem(rel, metabuf, tidnum, tupDesc,
 						   attdata, nulls, lovHeap, lovIndex,
-						   &lovBlock, &lovOffset, use_wal);
+						   &lovBlock, &lovOffset, use_wal, indexUnchanged);
 		}
 		LockBuffer(metabuf, BUFFER_LOCK_UNLOCK);
 	}
@@ -2542,7 +2545,7 @@ _bitmap_buildinsert(Relation rel, ItemPointerData ht_ctid, Datum *attdata,
  */
 void
 _bitmap_doinsert(Relation rel, ItemPointerData ht_ctid, Datum *attdata, 
-				 bool *nulls)
+				 bool *nulls, bool indexUnchanged)
 {
 	uint64			tidOffset;
 	TupleDesc		tupDesc;
@@ -2598,7 +2601,8 @@ _bitmap_doinsert(Relation rel, ItemPointerData ht_ctid, Datum *attdata,
 
 	/* insert this new tuple into the bitmap index. */
 	inserttuple(rel, metabuf, tidOffset, ht_ctid, tupDesc, attdata, nulls, 
-				lovHeap, lovIndex, scanKeys, scanDesc, RelationNeedsWAL(rel));
+				lovHeap, lovIndex, scanKeys, scanDesc, RelationNeedsWAL(rel),
+				indexUnchanged);
 
 	index_endscan(scanDesc);
 	_bitmap_close_lov_heapandindex(lovHeap, lovIndex, RowExclusiveLock);

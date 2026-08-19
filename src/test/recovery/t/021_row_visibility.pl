@@ -156,6 +156,13 @@ ok(send_query_and_wait(\%psql_standby,
    'finished prepared visible');
 } # end SKIP
 
+# explicitly shut down psql instances gracefully - to avoid hangs
+# or worse on windows
+$psql_primary{stdin}  .= "\\q\n";
+$psql_primary{run}->finish;
+$psql_standby{stdin} .= "\\q\n";
+$psql_standby{run}->finish;
+
 $node_primary->stop;
 $node_standby->stop;
 

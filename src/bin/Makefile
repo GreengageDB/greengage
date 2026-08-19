@@ -18,6 +18,7 @@ unittest-check:
 
 SUBDIRS = \
 	initdb \
+	pg_amcheck \
 	pg_archivecleanup \
 	pg_basebackup \
 	pg_checksums \
