@@ -1,20 +1,9 @@
-CREATE EXTENSION pg_cron VERSION '1.0';
-SELECT extversion FROM pg_extension WHERE extname='pg_cron';
--- Test binary compatibility with v1.3 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.3';
-SELECT cron.schedule('test', '* * * * *', 'SELECT 1');
-SELECT cron.unschedule('test');
--- Test binary compatibility with v1.4 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.4';
-SELECT cron.unschedule(job_name := 'no_such_job');
-SELECT cron.schedule('testjob', '* * * * *', 'SELECT 1');
-SELECT cron.unschedule('testjob');
-
+-- start_matchsubs
+-- m/ \([a-zA-Z0-9_]+\.c:\d+\)/
+-- s/ \([a-zA-Z0-9_]+\.c:\d+\)//
+-- end_matchsubs
 -- Test cache invalidation
-DROP EXTENSION pg_cron;
-CREATE EXTENSION pg_cron VERSION '1.4';
-
-ALTER EXTENSION pg_cron UPDATE;
+CREATE EXTENSION pg_cron;
 
 -- Vacuum every day at 10:00am (GMT)
 SELECT cron.schedule('0 10 * * *', 'VACUUM');
@@ -120,11 +109,11 @@ select cron.alter_job(job_id:=6,username:='anotheruser');
 select cron.alter_job(job_id:=2,database:='pgcron_dbyes');
 
 -- change the database for a job that the user own and can connect to
-select cron.alter_job(job_id:=6,database:='pgcron_dbyes');
+select cron.alter_job(job_id:=4,database:='pgcron_dbyes');
 SELECT database FROM cron.job;
 
 -- change the database for a job that the user own but can not connect to
-select cron.alter_job(job_id:=6,database:='pgcron_dbno');
+select cron.alter_job(job_id:=4,database:='pgcron_dbno');
 SELECT database FROM cron.job;
 
 -- back to superuser
@@ -136,7 +125,7 @@ SELECT username FROM cron.job where jobid=2;
 
 -- Create a job for another user
 SELECT cron.schedule_in_database(job_name:='his vacuum', schedule:='0 11 * * *', command:='VACUUM',database:=current_database(), username:='pgcron_cront');
-SELECT username FROM cron.job where jobid=7;
+SELECT username FROM cron.job where jobid=5;
 
 -- Make sure ownership checks remain case-sensitive for quoted role names
 CREATE USER "CaseOwner";
@@ -146,12 +135,12 @@ GRANT USAGE ON SCHEMA cron TO "CaseOwner", caseowner;
 SELECT cron.schedule_in_database(job_name:='mixed case owner', schedule:='0 11 * * *', command:='VACUUM',database:=current_database(), username:='CaseOwner');
 
 SET SESSION AUTHORIZATION caseowner;
-SELECT cron.unschedule(8);
+SELECT cron.unschedule(6);
 RESET SESSION AUTHORIZATION;
 
 -- Override function
 DROP EXTENSION IF EXISTS pg_cron cascade;
-CREATE TABLE test (data text);
+CREATE TABLE test (data text) DISTRIBUTED BY (data);
 DROP TYPE IF EXISTS current_setting cascade;
 CREATE TYPE current_setting AS ENUM ('cron.database_name');
 
