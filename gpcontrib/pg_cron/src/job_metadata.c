@@ -48,6 +48,7 @@
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
 #if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
 #endif
@@ -214,7 +215,11 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 
 	Oid userId = GetUserId();
 	userIdcheckacl = GetUserId();
+#if PG_VERSION_NUM >= 90500
 	username = GetUserNameFromId(userId, false);
+#else
+	username = GetUserNameFromId(userId);
+#endif
 
 	/* check schedule is valid */
 	schedule = text_to_cstring(scheduleText);
@@ -232,6 +237,7 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 
 	initStringInfo(&querybuf);
 
+#if PG_VERSION_NUM >= 90500
 	appendStringInfo(&querybuf,
 		"insert into %s (schedule, command, nodename, nodeport, database, username, active",
 		quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
@@ -258,6 +264,7 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 	}
 
 	appendStringInfo(&querybuf, " returning jobid");
+#endif
 
 	argTypes[0] = TEXTOID;
 	argValues[0] = CStringGetTextDatum(schedule);
@@ -314,7 +321,11 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 
 	if (aclresult != ACLCHECK_OK)
 		elog(ERROR, "User %s does not have CONNECT privilege on %s",
+#if PG_VERSION_NUM >= 90500
 				GetUserNameFromId(userIdcheckacl, false), database_name);
+#else
+				GetUserNameFromId(userIdcheckacl), database_name);
+#endif
 
 	argTypes[4] = TEXTOID;
 	argValues[4] = CStringGetTextDatum(database_name);
@@ -345,12 +356,70 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 		elog(ERROR, "SPI_connect failed");
 	}
 
+#if PG_VERSION_NUM >= 90500
 	if (SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL,
 							  false, 1) != SPI_OK_INSERT_RETURNING)
 	{
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 	}
+#else
+	bool jobUpdated = false;
 
+	/* precaution: lock to prevent concurrent UPSERT emulation race conditions */
+	appendStringInfo(&querybuf, "LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE",
+		quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
+
+	if (SPI_execute(querybuf.data, false, 0) != SPI_OK_UTILITY)
+	{
+		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+	}
+	resetStringInfo(&querybuf);
+
+	/* try to update existing row first */
+    if (jobnameText != NULL)
+    {
+        appendStringInfo(&querybuf,
+            "UPDATE %s SET "
+            "  schedule = $1, "
+            "  command = $2, "
+            "  database = $5 "
+            "WHERE jobname = $8 AND username = $6 "
+            "RETURNING jobid",
+            quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
+	
+		if (SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL,
+								  false, 1) != SPI_OK_UPDATE_RETURNING)
+		{
+			elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+		}
+
+		jobUpdated = (SPI_processed > 0);
+		resetStringInfo(&querybuf);
+	}
+
+	/* insert, if the job does not exist yet */
+	if (!jobUpdated)
+	{
+		appendStringInfo(&querybuf,
+			"INSERT INTO %s (schedule, command, nodename, nodeport, database, username, active",
+			quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
+
+		if (jobnameText != NULL)
+			appendStringInfo(&querybuf, ", jobname) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)");
+		else
+			appendStringInfo(&querybuf, ") VALUES ($1, $2, $3, $4, $5, $6, $7)");
+
+		appendStringInfo(&querybuf, " RETURNING jobid");
+
+		if (SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL,
+								false, 1) != SPI_OK_INSERT_RETURNING)
+		{
+			elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+		}
+	}
+	/* both paths leave the jobid RETURNING result in SPI_tuptable for the common tail below */
+#endif
+		
 	if (SPI_processed <= 0)
 	{
 		elog(ERROR, "query did not return any rows: %s", querybuf.data);
@@ -685,7 +754,11 @@ cron_unschedule_named(PG_FUNCTION_ARGS)
 	RegProcedure procedure;
 
 	Oid userId = GetUserId();
+#if PG_VERSION_NUM >= 90500
 	char *userName = GetUserNameFromId(userId, false);
+#else
+	char *userName = GetUserNameFromId(userId);
+#endif
 	Datum userNameDatum = CStringGetTextDatum(userName);
 
 	Relation cronJobsTable = NULL;
@@ -789,15 +862,18 @@ EnsureDeletePermission(Relation cronJobsTable, HeapTuple heapTuple)
 Datum
 cron_job_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	/* does not work with triggers in GG */
+#if 0
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
+#endif
 
 	InvalidateJobCache();
 
-	PG_RETURN_DATUM(PointerGetDatum(NULL));
+	PG_RETURN_VOID();
 }
 
 
@@ -1265,7 +1341,12 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 	userId = GetUserId();
 	userIdcheckacl = GetUserId();
 
+#if PG_VERSION_NUM >= 90500
 	currentuser = GetUserNameFromId(userId, false);
+#else
+	currentuser = GetUserNameFromId(userId);
+#endif
+
 	savedUserId = InvalidOid;
 	savedSecurityContext = 0;
 
@@ -1318,7 +1399,11 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 #endif
 
 		if (aclresult != ACLCHECK_OK)
+#if PG_VERSION_NUM >= 90500
 			elog(ERROR, "User %s does not have CONNECT privilege on %s", GetUserNameFromId(userIdcheckacl, false), database_name);
+#else
+			elog(ERROR, "User %s does not have CONNECT privilege on %s", GetUserNameFromId(userIdcheckacl), database_name);
+#endif
 
 		argTypes[i] = TEXTOID;
 		argValues[i] = CStringGetTextDatum(database_name);

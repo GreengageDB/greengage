@@ -14,6 +14,7 @@ pg_cron is a simple cron-based job scheduler for PostgreSQL (10 or higher) that 
 	- [Creating a cron job in a different database](#creating-a-cron-job-in-a-different-database)
 	- [Removing a cron job](#removing-a-cron-job)
 	- [Altering a cron job](#altering-a-cron-job)
+       - [Manual cron job management](#manual-cron-job-management)
 - [Installing pg_cron](#installing-pg_cron)
 - [Setting up pg_cron](#setting-up-pg_cron)
 - [Monitoring jobs](#monitoring-jobs)
@@ -85,8 +86,6 @@ Cron jobs can be managed by directly interacting with the `cron.job` table if yo
 - [`cron.schedule_in_database`](#creating-a-cron-job-in-a-different-database)
 - [`cron.unschedule`](#removing-a-cron-job)
 - [`cron.alter_job`](#altering-a-cron-job)
-
-> Note, an [RLS policy](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) ensures that jobs can only be seen and modified by the user that created them, unless the user is a superuser or has the `bypassrls` attribute.
 
 ### Creating a cron job
 
@@ -270,6 +269,29 @@ SELECT cron.alter_job(42, active := false);
 -- returns void
 ```
 
+### Manual cron job management
+Cron jobs can also be managed by using `INSERT`, `UPDATE`, `DELETE` and etc on `cron.job` table.
+
+> Directly modifying `cron.job` table, instead of using the functions, bypasses the security checks performed by the extension's job-management functions. Write access to `cron.job` must therefore be reserved for trusted roles, and is equivalent to the privileges of any role the scheduler can authenticate as (including superuser).
+
+Yet, after such operations `cron.job_cache_invalidate()` must be run to update the cache due to unsupported trigger:
+
+```sql
+INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, active, jobname)
+VALUES (
+       '0 2 * * *',         -- Run at 2 AM daily
+       'VACUUM ANALYZE',    -- Command to execute
+       'localhost',         -- Node name (or host)
+       6000,                -- Node port 
+       'postgres',          -- Database
+       'postgres',          -- Username
+       true,                -- Active
+       'daily_vacuum'       -- Job name
+);
+-- update the cache
+SELECT cron.job_cache_invalidate();
+```
+
 # Installing pg_cron
 
 Install on Red Hat, CentOS, Fedora, Amazon Linux with PostgreSQL 18 using [PGDG](https://yum.postgresql.org/repopackages/):
@@ -374,8 +396,6 @@ cron.host = ''
 Alternatively, pg_cron can be configured to use background workers. In that case, the number of concurrent jobs is limited by the `max_worker_processes` setting, so you may need to raise that.
 
 ```
-# Schedule jobs via background workers instead of localhost connections
-cron.use_background_workers = on
 # Increase the number of available background workers from the default of 8
 max_worker_processes = 20
 ```
@@ -402,7 +422,6 @@ The pg_cron extension supports the following configuration parameters:
 | `cron.log_statement`             | `on`        | Log all cron statements prior to execution.                                              |
 | `cron.max_running_jobs`          | `32`        | Maximum number of jobs that can be running at the same time.                             |
 | `cron.timezone`                  | `GMT`       | Timezone in which the pg_cron background worker should run.                              |
-| `cron.use_background_workers`    | `off`       | Use background workers instead of client connections.                                    |
 
 ### Changing settings
 
