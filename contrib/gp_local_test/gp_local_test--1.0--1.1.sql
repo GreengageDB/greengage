@@ -39,9 +39,3 @@ AS $$
            last_reset = now()
      WHERE code = p_code;
 $$;
-
-CREATE TABLE @extschema@.state_snapshot AS
-    SELECT id, code, value, updated_at FROM @extschema@.state;
-
-CREATE MATERIALIZED VIEW @extschema@.counter_summary AS
-    SELECT code, value, updated_at FROM @extschema@.state;

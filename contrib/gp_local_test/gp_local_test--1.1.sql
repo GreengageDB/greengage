@@ -75,9 +75,3 @@ $$;
 CREATE FUNCTION @extschema@.current_counter(p_code text) RETURNS integer
 AS 'MODULE_PATHNAME', 'gp_local_test_current_counter'
 LANGUAGE C STRICT;
-
-CREATE TABLE @extschema@.state_snapshot AS
-    SELECT id, code, value, updated_at FROM @extschema@.state;
-
-CREATE MATERIALIZED VIEW @extschema@.counter_summary AS
-    SELECT code, value, updated_at FROM @extschema@.state;
