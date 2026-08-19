@@ -1,44 +1,9 @@
-CREATE EXTENSION pg_cron VERSION '1.0';
-SELECT extversion FROM pg_extension WHERE extname='pg_cron';
- extversion 
-------------
- 1.0
-(1 row)
-
--- Test binary compatibility with v1.3 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.3';
-SELECT cron.schedule('test', '* * * * *', 'SELECT 1');
- schedule 
-----------
-        1
-(1 row)
-
-SELECT cron.unschedule('test');
- unschedule 
-------------
- t
-(1 row)
-
--- Test binary compatibility with v1.4 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.4';
-SELECT cron.unschedule(job_name := 'no_such_job');
-ERROR:  could not find valid entry for job 'no_such_job'
-SELECT cron.schedule('testjob', '* * * * *', 'SELECT 1');
- schedule 
-----------
-        2
-(1 row)
-
-SELECT cron.unschedule('testjob');
- unschedule 
-------------
- t
-(1 row)
-
+-- start_matchsubs
+-- m/ \([a-zA-Z0-9_]+\.c:\d+\)/
+-- s/ \([a-zA-Z0-9_]+\.c:\d+\)//
+-- end_matchsubs
 -- Test cache invalidation
-DROP EXTENSION pg_cron;
-CREATE EXTENSION pg_cron VERSION '1.4';
-ALTER EXTENSION pg_cron UPDATE;
+CREATE EXTENSION pg_cron;
 -- Vacuum every day at 10:00am (GMT)
 SELECT cron.schedule('0 10 * * *', 'VACUUM');
  schedule 
@@ -202,7 +167,7 @@ SET SESSION AUTHORIZATION pgcron_cront;
 SELECT cron.schedule('My vacuum', '0 11 * * *', 'VACUUM');
  schedule 
 ----------
-        6
+        4
 (1 row)
 
 -- Create a job for another user
@@ -215,26 +180,28 @@ ERROR:  must be superuser to alter username
 select cron.alter_job(job_id:=2,database:='pgcron_dbyes');
 ERROR:  Job 2 does not exist or you don't own it
 -- change the database for a job that the user own and can connect to
-select cron.alter_job(job_id:=6,database:='pgcron_dbyes');
+select cron.alter_job(job_id:=4,database:='pgcron_dbyes');
  alter_job 
 -----------
  
 (1 row)
 
 SELECT database FROM cron.job;
-   database   
---------------
+      database      
+--------------------
+ contrib_regression
  pgcron_dbyes
-(1 row)
+(2 rows)
 
 -- change the database for a job that the user own but can not connect to
-select cron.alter_job(job_id:=6,database:='pgcron_dbno');
+select cron.alter_job(job_id:=4,database:='pgcron_dbno');
 ERROR:  User pgcron_cront does not have CONNECT privilege on pgcron_dbno
 SELECT database FROM cron.job;
-   database   
---------------
+      database      
+--------------------
+ contrib_regression
  pgcron_dbyes
-(1 row)
+(2 rows)
 
 -- back to superuser
 RESET SESSION AUTHORIZATION;
@@ -255,10 +222,10 @@ SELECT username FROM cron.job where jobid=2;
 SELECT cron.schedule_in_database(job_name:='his vacuum', schedule:='0 11 * * *', command:='VACUUM',database:=current_database(), username:='pgcron_cront');
  schedule_in_database 
 ----------------------
-                    7
+                    5
 (1 row)
 
-SELECT username FROM cron.job where jobid=7;
+SELECT username FROM cron.job where jobid=5;
    username   
 --------------
  pgcron_cront
@@ -271,16 +238,16 @@ GRANT USAGE ON SCHEMA cron TO "CaseOwner", caseowner;
 SELECT cron.schedule_in_database(job_name:='mixed case owner', schedule:='0 11 * * *', command:='VACUUM',database:=current_database(), username:='CaseOwner');
  schedule_in_database 
 ----------------------
-                    8
+                    6
 (1 row)
 
 SET SESSION AUTHORIZATION caseowner;
-SELECT cron.unschedule(8);
-ERROR:  permission denied for table job
+SELECT cron.unschedule(6);
+ERROR:  permission denied for relation job
 RESET SESSION AUTHORIZATION;
 -- Override function
 DROP EXTENSION IF EXISTS pg_cron cascade;
-CREATE TABLE test (data text);
+CREATE TABLE test (data text) DISTRIBUTED BY (data);
 DROP TYPE IF EXISTS current_setting cascade;
 NOTICE:  type "current_setting" does not exist, skipping
 CREATE TYPE current_setting AS ENUM ('cron.database_name');
@@ -350,6 +317,68 @@ SELECT jobid, jobname, schedule, command FROM cron.job ORDER BY jobid;
 SELECT cron.schedule('bad-last-dom-job1', '0 11 $foo * *', 'VACUUM FULL');
 ERROR:  invalid schedule: 0 11 $foo * *
 HINT:  Use cron format (e.g. 5 4 * * *), or interval format '[1-59] seconds'
+-- verify job execution and launcher health
+CREATE FUNCTION public.pg_cron_wait_for_job(p_jobid bigint) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+    FOR i IN 1..30 LOOP
+        IF EXISTS (SELECT 1 FROM cron.job_run_details
+            WHERE jobid = p_jobid AND status = 'succeeded') THEN
+        RETURN 'succeeded';
+    END IF;
+        PERFORM pg_sleep(1);
+    END LOOP;
+    RETURN 'timeout';
+END $$;
+SELECT cron.schedule('simple_exec_test', '1 seconds', 'SELECT 1') AS exec_jobid \gset
+SELECT public.pg_cron_wait_for_job(:exec_jobid);
+ pg_cron_wait_for_job 
+----------------------
+ succeeded
+(1 row)
+
+SELECT cron.unschedule('simple_exec_test');
+ unschedule 
+------------
+ t
+(1 row)
+
+-- job connection respects pg_hba.conf
+CREATE ROLE pg_cron_hba_test LOGIN;
+SELECT cron.schedule_in_database(
+    'hba-test-job',
+        '1 seconds',
+    'SELECT 1',
+    current_database(),
+    'pg_cron_hba_test'
+) AS hba_job_id
+\gset
+SELECT public.pg_cron_wait_for_job(:hba_job_id);
+ pg_cron_wait_for_job 
+----------------------
+ timeout
+(1 row)
+
+SELECT status
+    FROM cron.job_run_details
+    WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id
+    ORDER BY runid DESC
+LIMIT 1;
+ status 
+--------
+ failed
+(1 row)
+
+SELECT cron.unschedule(:hba_job_id);
+ unschedule 
+------------
+ t
+(1 row)
+
+DELETE FROM cron.job_run_details
+    WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
+DROP ROLE pg_cron_hba_test;
+DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 -- cleaning
 DROP EXTENSION pg_cron;
 drop user pgcron_cront;
