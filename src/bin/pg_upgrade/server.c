@@ -197,6 +197,36 @@ executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...)
 	return executeQueryOrDieLog(conn, false, query);
 }
 
+/*
+ * This functions is very similar to the ones above,
+ * except that is intended to create support functions,
+ * as they can be absent in of the source cluster,
+ * and it is better to handle this case.
+ */
+
+#define ERRCODE_UNDEFINED_FUNCTION_STRING "42883"
+bool
+createSupportFunctionOrDie(PGconn *conn, char *query)
+{
+	PGresult *res;
+	ExecStatusType status;
+
+	pg_log(PG_VERBOSE, "executing: %s\n", query);
+	res = PQexec(conn, query);
+	status = PQresultStatus(res);
+	if (status != PGRES_COMMAND_OK)
+	{
+		char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+		if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
+		{
+			PQclear(res);
+			return false;
+		}
+		dieOnQueryFailure(conn, res, query);
+	}
+	PQclear(res);
+	return true;
+}
 
 /*
  * get_major_server_version()

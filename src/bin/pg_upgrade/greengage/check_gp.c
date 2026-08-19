@@ -20,7 +20,6 @@
 #include "access/nbtree.h"
 
 #define RELSTORAGE_EXTERNAL	'x'
-#define ERRCODE_UNDEFINED_FUNCTION_STRING "42883"
 
 static void check_external_partition(void);
 static void check_covering_aoindex(void);
@@ -851,6 +850,7 @@ check_views_with_removed_operators()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  support_function_is_present;
 	int   dbnum;
 	int   i_viewname;
 
@@ -870,6 +870,20 @@ check_views_with_removed_operators()
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
 
+		/* Install check support function */
+		support_function_is_present = createSupportFunctionOrDie(conn,
+																 "CREATE OR REPLACE FUNCTION "
+																 "view_has_removed_operators(OID) "
+																 "RETURNS BOOL "
+																 "AS '$libdir/pg_upgrade_support' "
+																 "LANGUAGE C STRICT;");
+
+		if (!support_function_is_present)
+		{
+			PQfinish(conn);
+			break;
+		}
+
 		/*
 		 * Disabling track_counts results in a large performance improvement of
 		 * several orders of magnitude when walking the views. This is because
@@ -879,13 +893,6 @@ check_views_with_removed_operators()
 		 */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "view_has_removed_operators(OID) "
-								  "RETURNS BOOL "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
 								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
@@ -915,7 +922,11 @@ check_views_with_removed_operators()
 		PQfinish(conn);
 	}
 
-	if (found)
+	if (!support_function_is_present)
+	{
+		check_skipped_due_to_missing_function();
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -938,6 +949,7 @@ check_views_with_removed_functions()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  support_function_is_present;
 	int   dbnum;
 	int   i_viewname;
 
@@ -957,6 +969,20 @@ check_views_with_removed_functions()
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
 
+		/* Install check support function */
+		support_function_is_present =  createSupportFunctionOrDie(conn,
+																  "CREATE OR REPLACE FUNCTION "
+																  "view_has_removed_functions(OID) "
+																  "RETURNS BOOL "
+																  "AS '$libdir/pg_upgrade_support' "
+																  "LANGUAGE C STRICT;");
+
+		if (!support_function_is_present)
+		{
+			PQfinish(conn);
+			break;
+		}
+
 		/*
 		 * Disabling track_counts results in a large performance improvement of
 		 * several orders of magnitude when walking the views. This is because
@@ -966,13 +992,6 @@ check_views_with_removed_functions()
 		 */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "view_has_removed_functions(OID) "
-								  "RETURNS BOOL "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
 								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
@@ -1003,7 +1022,11 @@ check_views_with_removed_functions()
 		PQfinish(conn);
 	}
 
-	if (found)
+	if (!support_function_is_present)
+	{
+		check_skipped_due_to_missing_function();
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1026,6 +1049,7 @@ check_views_with_removed_types()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  support_function_is_present;
 	int   dbnum;
 	int   i_viewname;
 
@@ -1045,6 +1069,19 @@ check_views_with_removed_types()
 		conn = connectToServer(&old_cluster, active_db->db_name);
 		PQclear(executeQueryOrDie(conn, "SET search_path TO 'public';"));
 
+		/* Install check support function */
+		support_function_is_present = createSupportFunctionOrDie(conn,
+																 "CREATE OR REPLACE FUNCTION "
+																 "view_has_removed_types(OID) "
+																 "RETURNS BOOL "
+																 "AS '$libdir/pg_upgrade_support' "
+																 "LANGUAGE C STRICT;");
+		if (!support_function_is_present)
+		{
+			PQfinish(conn);
+			break;
+		}
+
 		/*
 		 * Disabling track_counts results in a large performance improvement of
 		 * several orders of magnitude when walking the views. This is because
@@ -1054,13 +1091,6 @@ check_views_with_removed_types()
 		 */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "view_has_removed_types(OID) "
-								  "RETURNS BOOL "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS badviewname "
 								"FROM pg_class c JOIN pg_namespace n on c.relnamespace=n.oid "
@@ -1090,8 +1120,11 @@ check_views_with_removed_types()
 		PQclear(res);
 		PQfinish(conn);
 	}
-
-	if (found)
+	if (!support_function_is_present)
+	{
+		check_skipped_due_to_missing_function();
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1178,6 +1211,7 @@ check_views_with_changed_function_signatures()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
+	bool  support_function_is_present;
 	int   dbnum;
 	int   i_viewname;
 
@@ -1197,6 +1231,20 @@ check_views_with_changed_function_signatures()
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 
+		/* Install check support function */
+		support_function_is_present = createSupportFunctionOrDie(conn,
+																 "CREATE OR REPLACE FUNCTION "
+																 "public.view_has_changed_function_signatures(OID) "
+																 "RETURNS BOOL "
+																 "AS '$libdir/pg_upgrade_support' "
+																 "LANGUAGE C STRICT;");
+
+		if (!support_function_is_present)
+		{
+			PQfinish(conn);
+			break;
+		}
+
 		/*
 		 * Disabling track_counts results in a large performance improvement of
 		 * several orders of magnitude when walking the views. This is because
@@ -1206,13 +1254,6 @@ check_views_with_changed_function_signatures()
 		 */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
 
-		/* Install check support function */
-		PQclear(executeQueryOrDie(conn,
-								  "CREATE OR REPLACE FUNCTION "
-								  "public.view_has_changed_function_signatures(OID) "
-								  "RETURNS BOOL "
-								  "AS '$libdir/pg_upgrade_support' "
-								  "LANGUAGE C STRICT;"));
 		res = executeQueryOrDie(conn,
 								"SELECT pg_catalog.quote_ident(n.nspname) "
 								"|| '.' || pg_catalog.quote_ident(c.relname) AS badviewname "
@@ -1246,7 +1287,11 @@ check_views_with_changed_function_signatures()
 	if (script)
 		fclose(script);
 
-	if (found)
+	if (!support_function_is_present)
+	{
+		check_skipped_due_to_missing_function();
+	}
+	else if (found)
 	{
 		pg_log(PG_REPORT, "fatal\n");
 		gp_fatal_log(
@@ -1558,7 +1603,7 @@ check_views_with_removed_columns()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
-	bool  no_support_function = false;
+	bool  support_function_is_present;
 	prep_status("Checking for views with removed columns");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
@@ -1573,36 +1618,22 @@ check_views_with_removed_columns()
 		PGconn	 *conn;
 		int       i_viewname;
 		int       i_removed_columns;
-		ExecStatusType status;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 
 		/* Install check support function */
-		const char *create_support_function_query = "CREATE OR REPLACE FUNCTION "
-													"public.get_removed_columns(OID) "
-													"RETURNS TEXT "
-													"AS '$libdir/pg_upgrade_support' "
-													"LANGUAGE C STRICT;";
-		pg_log(PG_VERBOSE, "executing: %s\n", create_support_function_query);
-		res = PQexec(conn, create_support_function_query);
-		status = PQresultStatus(res);
-		if (status != PGRES_COMMAND_OK)
+		support_function_is_present = createSupportFunctionOrDie(conn,
+																 "CREATE OR REPLACE FUNCTION "
+																 "public.get_removed_columns(OID) "
+																 "RETURNS TEXT "
+																 "AS '$libdir/pg_upgrade_support' "
+																 "LANGUAGE C STRICT;");
+
+		if (!support_function_is_present)
 		{
-			/*
-			 * Required support function may be absent in the older
-			 * versions, so skip the check in this case.
-			 */
-			char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
-			if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
-			{
-				no_support_function = true;
-				PQclear(res);
-				PQfinish(conn);
-				break;
-			}
-			dieOnQueryFailure(conn, res, create_support_function_query);
+			PQfinish(conn);
+			break;
 		}
-		PQclear(res);
 
 		/* track_counts is disables for the same reason as above */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
@@ -1661,9 +1692,9 @@ check_views_with_removed_columns()
 	if (script)
 		fclose(script);
 
-	if (no_support_function)
+	if (!support_function_is_present)
 	{
-		pg_log(PG_REPORT, "skipped (required function was not found)\n");
+		check_skipped_due_to_missing_function();
 	}
 	else if (found)
 	{
@@ -1689,7 +1720,7 @@ check_views_with_removed_relations()
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	bool  found = false;
-	bool  no_support_function = false;
+	bool  support_function_is_present;
 	prep_status("Checking for views with removed relations");
 
 	snprintf(output_path, sizeof(output_path), "%s/%s",
@@ -1704,36 +1735,22 @@ check_views_with_removed_relations()
 		PGconn	 *conn;
 		int       i_viewname;
 		int       i_removed_tables;
-		ExecStatusType status;
 
 		conn = connectToServer(&old_cluster, active_db->db_name);
 
 		/* Install check support function */
-		const char *create_support_function_query = "CREATE OR REPLACE FUNCTION "
-													"public.get_removed_tables(OID) "
-													"RETURNS TEXT "
-													"AS '$libdir/pg_upgrade_support' "
-													"LANGUAGE C STRICT;";
-		pg_log(PG_VERBOSE, "executing: %s\n", create_support_function_query);
-		res = PQexec(conn, create_support_function_query);
-		status = PQresultStatus(res);
-		if (status != PGRES_COMMAND_OK)
+		support_function_is_present = createSupportFunctionOrDie(conn,
+																 "CREATE OR REPLACE FUNCTION "
+																 "public.get_removed_tables(OID) "
+																 "RETURNS TEXT "
+																 "AS '$libdir/pg_upgrade_support' "
+																 "LANGUAGE C STRICT;");
+
+		if (!support_function_is_present)
 		{
-			/*
-			 * Required support function may be absent in the older
-			 * versions, so skip the check in this case.
-			 */
-			char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
-			if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
-			{
-				no_support_function = true;
-				PQclear(res);
-				PQfinish(conn);
-				break;
-			}
-			dieOnQueryFailure(conn, res, create_support_function_query);
+			PQfinish(conn);
+			break;
 		}
-		PQclear(res);
 
 		/* track_counts is disables for the same reason as above */
 		PQclear(executeQueryOrDie(conn, "SET track_counts TO off;"));
@@ -1791,9 +1808,9 @@ check_views_with_removed_relations()
 	if (script)
 		fclose(script);
 
-	if (no_support_function)
+	if (!support_function_is_present)
 	{
-		pg_log(PG_REPORT, "skipped (required function was not found)\n");
+		check_skipped_due_to_missing_function();
 	}
 	else if (found)
 	{
