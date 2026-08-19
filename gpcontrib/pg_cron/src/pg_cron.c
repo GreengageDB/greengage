@@ -86,7 +86,9 @@
 #endif
 #include "lib/stringinfo.h"
 #include "libpq-fe.h"
+#if PG_VERSION_NUM >= 90500
 #include "libpq/pqmq.h"
+#endif
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "parser/analyze.h"
@@ -117,6 +119,9 @@
 #include "libpq/pqformat.h"
 #include "utils/builtins.h"
 
+#if PG_VERSION_NUM < 90500
+#define MyLatch (&MyProc->procLatch)
+#endif
 
 PG_MODULE_MAGIC;
 
@@ -162,16 +167,22 @@ static void PollForTasks(List *taskList);
 static bool CanStartTask(CronTask *task);
 static void ManageCronTasks(List *taskList, TimestampTz currentTime);
 static void ManageCronTask(CronTask *task, TimestampTz currentTime);
+#if PG_VERSION_NUM >= 90500
 static void ExecuteSqlString(const char *sql);
+#endif
 static void GetTaskFeedback(PGresult *result, CronTask *task);
+#if PG_VERSION_NUM >= 90500
 static void ProcessBgwTaskFeedback(CronTask *task, bool running);
+#endif
 static void CronNoticeReceiver(void *arg, const PGresult *result);
 
 static bool jobCanceled(CronTask *task);
 static bool jobStartupTimeout(CronTask *task, TimestampTz currentTime);
+#if PG_VERSION_NUM >= 90500
 static char* pg_cron_cmdTuples(char *msg);
 static void bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata);
 static void CleanupCronTask(CronTask *task);
+#endif
 
 /* global settings */
 char *CronTableDatabaseName = "postgres";
@@ -286,6 +297,7 @@ _PG_init(void)
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, NULL);
 
+#if PG_VERSION_NUM >= 90500
 	DefineCustomBoolVariable(
 		"cron.use_background_workers",
 		gettext_noop("Use background workers instead of client sessions."),
@@ -295,6 +307,7 @@ _PG_init(void)
 		PGC_POSTMASTER,
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, NULL);
+#endif
 
 	DefineCustomBoolVariable(
 		"cron.launch_active_jobs",
@@ -382,6 +395,7 @@ _PG_init(void)
 }
 
 
+#if PG_VERSION_NUM >= 90500
 /*
  * pg_cron_cmdTuples -
  *      mainly copy/pasted from PQcmdTuples
@@ -438,6 +452,7 @@ interpret_error:
 	ereport(LOG, (errmsg("could not interpret result from server: %s", msg)));
         return "";
 }
+#endif
 
 /*
  * cron_error_severity --- get string representing elevel
@@ -493,6 +508,7 @@ cron_error_severity(int elevel)
 	return elevel_char;
 }
 
+#if PG_VERSION_NUM >= 90500
 #if PG_VERSION_NUM < 150000
 /*
  * error_severity --- get string representing elevel
@@ -569,6 +585,7 @@ bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
 	if (edata.context != NULL)
 		appendStringInfo(display_msg, "\nCONTEXT: %s", edata.context);
 }
+#endif
 
 
 /*
@@ -1333,9 +1350,11 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			}
 
 			task->pendingRunCount -= 1;
+#if PG_VERSION_NUM >= 90500
 			if (UseBackgroundWorkers)
 				task->state = CRON_TASK_BGW_START;
 			else
+#endif
 				task->state = CRON_TASK_START;
 
 			task->lastStartTime = currentTime;
@@ -1423,6 +1442,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			}
 		}
 
+#if PG_VERSION_NUM >= 90500
 		case CRON_TASK_BGW_START:
 		{
 
@@ -1466,7 +1486,11 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			shm_toc_estimate_keys(&e, PG_CRON_NKEYS);
 			segsize = shm_toc_estimate(&e);
 
+			#if PG_VERSION_NUM >= 90500
 			task->seg = dsm_create(segsize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
+			#else
+			task->seg = dsm_create(segsize);
+			#endif
 			if (task->seg == NULL)
 			{
 				task->state = CRON_TASK_ERROR;
@@ -1577,6 +1601,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			task->state = CRON_TASK_BGW_RUNNING;
 			break;
 		}
+#endif
 
 		case CRON_TASK_CONNECTING:
 		{
@@ -1749,6 +1774,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			break;
 		}
 
+#if PG_VERSION_NUM >= 90500
 		case CRON_TASK_BGW_RUNNING:
 		{
 			pid_t pid;
@@ -1788,6 +1814,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 
 			break;
 		}
+#endif
 
 		case CRON_TASK_ERROR:
 		{
@@ -1859,6 +1886,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 	}
 }
 
+#if PG_VERSION_NUM >= 90500
 static void
 CleanupCronTask(CronTask *task)
 {
@@ -1877,6 +1905,7 @@ CleanupCronTask(CronTask *task)
 		task->seg = NULL;
 	}
 }
+#endif
 
 static void
 GetTaskFeedback(PGresult *result, CronTask *task)
@@ -1975,6 +2004,7 @@ GetTaskFeedback(PGresult *result, CronTask *task)
 }
 
 
+#if PG_VERSION_NUM >= 90500
 /*
  * ProcessBgwTaskFeedback reads messages from a shared memory queue associated
  * with the background worker that is executing a given task. If the task is
@@ -2351,6 +2381,7 @@ ExecuteSqlString(const char *sql)
 	/* Be sure to advance the command counter after the last script command */
 	CommandCounterIncrement();
 }
+#endif
 
 /*
  * If a task is not marked as active, set an appropriate error state on the task

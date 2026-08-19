@@ -1,3 +1,7 @@
+-- start_matchsubs
+-- m/ \([a-zA-Z0-9_]+\.c:\d+\)/
+-- s/ \([a-zA-Z0-9_]+\.c:\d+\)//
+-- end_matchsubs
 CREATE EXTENSION pg_cron VERSION '1.0';
 SELECT extversion FROM pg_extension WHERE extname='pg_cron';
 -- Test binary compatibility with v1.3 function signature.

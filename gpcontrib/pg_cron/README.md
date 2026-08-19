@@ -374,8 +374,6 @@ cron.host = ''
 Alternatively, pg_cron can be configured to use background workers. In that case, the number of concurrent jobs is limited by the `max_worker_processes` setting, so you may need to raise that.
 
 ```
-# Schedule jobs via background workers instead of localhost connections
-cron.use_background_workers = on
 # Increase the number of available background workers from the default of 8
 max_worker_processes = 20
 ```
@@ -402,7 +400,6 @@ The pg_cron extension supports the following configuration parameters:
 | `cron.log_statement`             | `on`        | Log all cron statements prior to execution.                                              |
 | `cron.max_running_jobs`          | `32`        | Maximum number of jobs that can be running at the same time.                             |
 | `cron.timezone`                  | `GMT`       | Timezone in which the pg_cron background worker should run.                              |
-| `cron.use_background_workers`    | `off`       | Use background workers instead of client connections.                                    |
 
 ### Changing settings
 
