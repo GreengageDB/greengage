@@ -25,8 +25,6 @@ CREATE TABLE @extschema@.settings (
     value text NOT NULL
 );
 
-INSERT INTO @extschema@.settings (key, value) VALUES ('bump_interval_seconds', '5');
-
 SELECT pg_catalog.pg_extension_config_dump('@extschema@.settings', '');
 
 -- Plain SQL-language function, no EXECUTE ON clause at all —
