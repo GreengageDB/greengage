@@ -310,9 +310,10 @@ mdunlink_ao_base_relfile(void *ctx, bool isRelFileNodeBackendTemp)
 					 SYNC_HANDLER_AO);
 		RegisterSyncRequest(&tag, SYNC_FORGET_REQUEST, true);
 
-		int ret = do_truncate(baserel);
+		if (do_truncate(baserel) < 0 && errno == ENOENT)
+			return;
 
-		if ((ret == 0 || errno != ENOENT) && unlink(baserel) != 0)
+		if (unlink(baserel) != 0)
 		{
 			/* ENOENT is expected after the end of the extensions */
 			if (errno != ENOENT)
