@@ -7,17 +7,9 @@ for Ubuntu:
 ```bash
 docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
 ```
-
-for Rocky Linux 8:
-
+for Rocky Linux:
 ```bash
-docker build -t gpdb7_rockylinux8:latest -f ci/Dockerfile.rockylinux .
-```
-
-for Rocky Linux 9:
-
-```bash
-docker build -t gpdb7_rockylinux9:latest --build-arg OS_VERSION=9 -f ci/Dockerfile.rockylinux .
+docker build -t gpdb7_regress:latest -f ci/Dockerfile .
 ```
 
 ## Full regression tests suite run
