@@ -4,7 +4,7 @@ name: Greengage CI (No Tests)
 on:
   push:
     branches: ['7.x'] # Trigger on push to main (after merged PR)
-    tags: ['7.*']     # Trigger on tags for versioned releases
+    tags:     ['7.*'] # Trigger on tags for versioned releases
   pull_request:
     branches: ['**']  # Trigger on pull requests for all branches
 
@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
-      actions: write  # Required for artifact upload
+      actions:  write # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v42
     with:
       version: 7
