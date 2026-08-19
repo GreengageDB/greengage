@@ -86,7 +86,6 @@
 #endif
 #include "lib/stringinfo.h"
 #include "libpq-fe.h"
-#include "libpq/pqmq.h"
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "parser/analyze.h"
@@ -162,15 +161,11 @@ static void PollForTasks(List *taskList);
 static bool CanStartTask(CronTask *task);
 static void ManageCronTasks(List *taskList, TimestampTz currentTime);
 static void ManageCronTask(CronTask *task, TimestampTz currentTime);
-static void ExecuteSqlString(const char *sql);
 static void GetTaskFeedback(PGresult *result, CronTask *task);
-static void ProcessBgwTaskFeedback(CronTask *task, bool running);
 static void CronNoticeReceiver(void *arg, const PGresult *result);
 
 static bool jobCanceled(CronTask *task);
 static bool jobStartupTimeout(CronTask *task, TimestampTz currentTime);
-static char* pg_cron_cmdTuples(char *msg);
-static void bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata);
 static void CleanupCronTask(CronTask *task);
 
 /* global settings */
@@ -381,64 +376,6 @@ _PG_init(void)
 	RegisterBackgroundWorker(&worker);
 }
 
-
-/*
- * pg_cron_cmdTuples -
- *      mainly copy/pasted from PQcmdTuples
- *      If the last command was INSERT/UPDATE/DELETE/MOVE/FETCH/COPY, return
- *      a string containing the number of inserted/affected tuples. If not,
- *      return "".
- *
- *      XXX: this should probably return an int
- */
-
-static char *
-pg_cron_cmdTuples(char *msg)
-{
-        char       *p,
-                           *c;
-
-        if (!msg)
-                return "";
-
-        if (strncmp(msg, "INSERT ", 7) == 0)
-        {
-                p = msg + 7;
-                /* INSERT: skip oid and space */
-                while (*p && *p != ' ')
-                        p++;
-                if (*p == 0)
-                        goto interpret_error;   /* no space? */
-                p++;
-        }
-        else if (strncmp(msg, "SELECT ", 7) == 0 ||
-                         strncmp(msg, "DELETE ", 7) == 0 ||
-                         strncmp(msg, "UPDATE ", 7) == 0)
-                p = msg + 7;
-        else if (strncmp(msg, "FETCH ", 6) == 0)
-                p = msg + 6;
-        else if (strncmp(msg, "MOVE ", 5) == 0 ||
-                         strncmp(msg, "COPY ", 5) == 0)
-                p = msg + 5;
-        else
-                return "";
-
-        /* check that we have an integer (at least one digit, nothing else) */
-        for (c = p; *c; c++)
-        {
-                if (!isdigit((unsigned char) *c))
-                        goto interpret_error;
-        }
-        if (c == p)
-                goto interpret_error;
-
-        return p;
-
-interpret_error:
-	ereport(LOG, (errmsg("could not interpret result from server: %s", msg)));
-        return "";
-}
-
 /*
  * cron_error_severity --- get string representing elevel
  */
@@ -492,84 +429,6 @@ cron_error_severity(int elevel)
 
 	return elevel_char;
 }
-
-#if PG_VERSION_NUM < 150000
-/*
- * error_severity --- get string representing elevel
- *
- * copied from elog.c
- */
-static const char *
-error_severity(int elevel)
-{
-	const char *prefix;
-
-	switch (elevel)
-	{
-		case DEBUG1:
-		case DEBUG2:
-		case DEBUG3:
-		case DEBUG4:
-		case DEBUG5:
-			prefix = gettext_noop("DEBUG");
-			break;
-		case LOG:
-#if PG_VERSION_NUM >= 100000
-		case LOG_SERVER_ONLY:
-#endif
-			prefix = gettext_noop("LOG");
-			break;
-		case INFO:
-			prefix = gettext_noop("INFO");
-			break;
-		case NOTICE:
-			prefix = gettext_noop("NOTICE");
-			break;
-		case WARNING:
-#if PG_VERSION_NUM >= 140000
-		case WARNING_CLIENT_ONLY:
-#endif
-			prefix = gettext_noop("WARNING");
-			break;
-		case ERROR:
-			prefix = gettext_noop("ERROR");
-			break;
-		case FATAL:
-			prefix = gettext_noop("FATAL");
-			break;
-		case PANIC:
-			prefix = gettext_noop("PANIC");
-			break;
-		default:
-			prefix = "???";
-			break;
-	}
-
-	return prefix;
-}
-#endif
-
-/*
- * bgw_generate_returned_message -
- *      generates the message to be inserted into the job_run_details table
- *      first part is comming from error_severity (elog.c)
- */
-static void
-bgw_generate_returned_message(StringInfoData *display_msg, ErrorData edata)
-{
-	const char *prefix = error_severity(edata.elevel);
-
-	appendStringInfo(display_msg, "%s: %s", prefix, edata.message);
-	if (edata.detail != NULL)
-		appendStringInfo(display_msg, "\nDETAIL: %s", edata.detail);
-
-	if (edata.hint != NULL)
-		appendStringInfo(display_msg, "\nHINT: %s", edata.hint);
-
-	if (edata.context != NULL)
-		appendStringInfo(display_msg, "\nCONTEXT: %s", edata.context);
-}
-
 
 /*
  * PgCronLauncherMain is the main entry-point for the background worker
@@ -1064,12 +923,12 @@ WaitForLatch(int timeoutMs)
 
 	/* nothing to do, wait for new jobs */
 #if (PG_VERSION_NUM >= 100000)
-	rc = WaitLatch(MyLatch, waitFlags, timeoutMs, PG_WAIT_EXTENSION);
+	rc = WaitLatch(&MyProc->procLatch, waitFlags, timeoutMs, PG_WAIT_EXTENSION);
 #else
-	rc = WaitLatch(MyLatch, waitFlags, timeoutMs);
+	rc = WaitLatch(&MyProc->procLatch, waitFlags, timeoutMs);
 #endif
 
-	ResetLatch(MyLatch);
+	ResetLatch(&MyProc->procLatch);
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -1466,7 +1325,7 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			shm_toc_estimate_keys(&e, PG_CRON_NKEYS);
 			segsize = shm_toc_estimate(&e);
 
-			task->seg = dsm_create(segsize, DSM_CREATE_NULL_IF_MAXSEGMENTS);
+			task->seg = dsm_create(segsize);
 			if (task->seg == NULL)
 			{
 				task->state = CRON_TASK_ERROR;
@@ -1758,32 +1617,14 @@ ManageCronTask(CronTask *task, TimestampTz currentTime)
 			/* check if job has been removed */
 			if (jobCanceled(task))
 			{
-				TerminateBackgroundWorker(&task->handle);
-				WaitForBackgroundWorkerShutdown(&task->handle);
-				CleanupCronTask(task);
-
-				break;
 			}
 
 			/* still waiting for job to complete */
 			if (GetBackgroundWorkerPid(&task->handle, &pid) != BGWH_STOPPED)
 			{
-				bool isRunning = true;
-
-				/* process notices and warnings */
-				ProcessBgwTaskFeedback(task, isRunning);
 			}
 			else
 			{
-				bool isRunning = false;
-
-				/* process remaining notices and final task result */
-				ProcessBgwTaskFeedback(task, isRunning);
-
-				task->state = CRON_TASK_DONE;
-
-				CleanupCronTask(task);
-				RunningTaskCount--;
 			}
 
 			break;
@@ -1972,384 +1813,6 @@ GetTaskFeedback(PGresult *result, CronTask *task)
 	}
 
 	PQclear(result);
-}
-
-
-/*
- * ProcessBgwTaskFeedback reads messages from a shared memory queue associated
- * with the background worker that is executing a given task. If the task is
- * still running, the function does not block if the queue is empty. Otherwise,
- * it reads until the end of the queue.
- */
-static void
-ProcessBgwTaskFeedback(CronTask *task, bool running)
-{
-	shm_mq_handle *responseq = task->sharedMemoryQueue;
-	TimestampTz end_time;
-
-	Size            nbytes;
-	void       *data;
-	char            msgtype;
-	StringInfoData  msg;
-	shm_mq_result res;
-
-	end_time = GetCurrentTimestamp();
-	/*
-	 * Message-parsing routines operate on a null-terminated StringInfo,
-	 * so we must construct one.
-	 */
-	for (;;)
-	{
-		/* do not wait if the task is running */
-		bool nowait = running;
-
-		/* Get next message. */
-		res = shm_mq_receive(responseq, &nbytes, &data, nowait);
-
-		if (res != SHM_MQ_SUCCESS)
-			break;
-
-		initStringInfo(&msg);
-		resetStringInfo(&msg);
-		enlargeStringInfo(&msg, nbytes);
-		msg.len = nbytes;
-		memcpy(msg.data, data, nbytes);
-		msg.data[nbytes] = '\0';
-		msgtype = pq_getmsgbyte(&msg);
-		switch (msgtype)
-		{
-			case 'N':
-			case 'E':
-				{
-					ErrorData	edata;
-					StringInfoData  display_msg;
-
-					pq_parse_errornotice(&msg, &edata);
-					initStringInfo(&display_msg);
-					bgw_generate_returned_message(&display_msg, edata);
-
-					if (CronLogRun)
-					{
-
-						if (edata.elevel >= ERROR)
-							UpdateJobRunDetail(task->runId, NULL, GetCronStatus(CRON_STATUS_FAILED), display_msg.data, NULL, &end_time);
-						else if (running)
-							UpdateJobRunDetail(task->runId, NULL, NULL, display_msg.data, NULL, NULL);
-						else
-							UpdateJobRunDetail(task->runId, NULL, GetCronStatus(CRON_STATUS_SUCCEEDED), display_msg.data, NULL, &end_time);
-					}
-
-					/*
-					 * We do not log the message, since the original process probably
-					 * already did that.
-					 */
-
-					pfree(display_msg.data);
-
-					break;
-				}
-			case 'T':
-					break;
-			case 'C':
-				{
-					const char  *tag = pq_getmsgstring(&msg);
-					char *nonconst_tag;
-					char *cmdTuples;
-
-					nonconst_tag = strdup(tag);
-
-					if (CronLogRun)
-						UpdateJobRunDetail(task->runId, NULL, GetCronStatus(CRON_STATUS_SUCCEEDED), nonconst_tag, NULL, &end_time);
-
-					if (CronLogStatement) {
-						cmdTuples = pg_cron_cmdTuples(nonconst_tag);
-						ereport(LOG, (errmsg("cron job " INT64_FORMAT " COMMAND completed: %s %s",
-											 task->jobId, nonconst_tag, cmdTuples)));
-					}
-
-					free(nonconst_tag);
-					break;
-				}
-			case 'A':
-			case 'D':
-			case 'G':
-			case 'H':
-			case 'W':
-			case 'Z':
-					break;
-			default:
-					elog(WARNING, "unknown message type: %c (%zu bytes)",
-						 msg.data[0], nbytes);
-					break;
-		}
-		pfree(msg.data);
-	}
-}
-
-/*
- * Background worker logic.
- */
-void
-CronBackgroundWorker(Datum main_arg)
-{
-	dsm_segment *seg;
-	shm_toc *toc;
-	char *database;
-	char *username;
-	char *command;
-	shm_mq *mq;
-	shm_mq_handle *responseq;
-
-	/* handle SIGTERM like regular backend */
-	pqsignal(SIGTERM, die);
-	BackgroundWorkerUnblockSignals();
-
-	/* Set up a memory context and resource owner. */
-	Assert(CurrentResourceOwner == NULL);
-	CurrentResourceOwner = ResourceOwnerCreate(NULL, "pg_cron");
-	CurrentMemoryContext = AllocSetContextCreate(TopMemoryContext,
-												 "pg_cron worker",
-												 ALLOCSET_DEFAULT_MINSIZE,
-												 ALLOCSET_DEFAULT_INITSIZE,
-												 ALLOCSET_DEFAULT_MAXSIZE);
-
-	/* Set up a dynamic shared memory segment. */
-	seg = dsm_attach(DatumGetUInt32(main_arg));
-	if (seg == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-				 errmsg("unable to map dynamic shared memory segment")));
-	toc = shm_toc_attach(PG_CRON_MAGIC, dsm_segment_address(seg));
-	if (toc == NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-			   errmsg("bad magic number in dynamic shared memory segment")));
-
-	#if PG_VERSION_NUM < 100000
-		database = shm_toc_lookup(toc, PG_CRON_KEY_DATABASE);
-		username = shm_toc_lookup(toc, PG_CRON_KEY_USERNAME);
-		command = shm_toc_lookup(toc, PG_CRON_KEY_COMMAND);
-		mq = shm_toc_lookup(toc, PG_CRON_KEY_QUEUE);
-	#else
-		database = shm_toc_lookup(toc, PG_CRON_KEY_DATABASE, false);
-		username = shm_toc_lookup(toc, PG_CRON_KEY_USERNAME, false);
-		command = shm_toc_lookup(toc, PG_CRON_KEY_COMMAND, false);
-		mq = shm_toc_lookup(toc, PG_CRON_KEY_QUEUE, false);
-	#endif
-
-	shm_mq_set_sender(mq, MyProc);
-	responseq = shm_mq_attach(mq, seg, NULL);
-	pq_redirect_to_shm_mq(seg, responseq);
-
-#if (PG_VERSION_NUM < 110000)
-	BackgroundWorkerInitializeConnection(database, username);
-#else
-	BackgroundWorkerInitializeConnection(database, username, 0);
-#endif
-
-	/* Prepare to execute the query. */
-	SetCurrentStatementStartTimestamp();
-	debug_query_string = command;
-	pgstat_report_activity(STATE_RUNNING, command);
-	StartTransactionCommand();
-	if (StatementTimeout > 0)
-		enable_timeout_after(STATEMENT_TIMEOUT, StatementTimeout);
-	else
-		disable_timeout(STATEMENT_TIMEOUT, false);
-
-	/* Execute the query. */
-	ExecuteSqlString(command);
-
-	/* Post-execution cleanup. */
-	disable_timeout(STATEMENT_TIMEOUT, false);
-	CommitTransactionCommand();
-	pgstat_report_activity(STATE_IDLE, command);
-	pgstat_report_stat(true);
-
-	/* Signal that we are done. */
-	ReadyForQuery(DestRemote);
-
-	dsm_detach(seg);
-	proc_exit(0);
-}
-
-/*
- * Execute given SQL string without SPI or a libpq session.
- */
-static void
-ExecuteSqlString(const char *sql)
-{
-	List *raw_parsetree_list;
-	ListCell *lc1;
-	bool isTopLevel;
-	int commands_remaining;
-	MemoryContext parsecontext;
-	MemoryContext oldcontext;
-
-	/*
-	 * Parse the SQL string into a list of raw parse trees.
-	 *
-	 * Because we allow statements that perform internal transaction control,
-	 * we can't do this in TopTransactionContext; the parse trees might get
-	 * blown away before we're done executing them.
-	 */
-	parsecontext = AllocSetContextCreate(TopMemoryContext,
-										 "pg_cron parse/plan",
-										 ALLOCSET_DEFAULT_MINSIZE,
-										 ALLOCSET_DEFAULT_INITSIZE,
-										 ALLOCSET_DEFAULT_MAXSIZE);
-	oldcontext = MemoryContextSwitchTo(parsecontext);
-	raw_parsetree_list = pg_parse_query(sql);
-	commands_remaining = list_length(raw_parsetree_list);
-	isTopLevel = commands_remaining == 1;
-	MemoryContextSwitchTo(oldcontext);
-
-	/*
-	 * Do parse analysis, rule rewrite, planning, and execution for each raw
-	 * parsetree.  We must fully execute each query before beginning parse
-	 * analysis on the next one, since there may be interdependencies.
-	 */
-	foreach(lc1, raw_parsetree_list)
-	{
-		#if PG_VERSION_NUM < 100000
-			Node *parsetree = (Node *) lfirst(lc1);
-		#else
-			RawStmt *parsetree = (RawStmt *)  lfirst(lc1);
-		#endif
-
-		#if PG_VERSION_NUM < 130000
-			const char *commandTag;
-			char completionTag[COMPLETION_TAG_BUFSIZE];
-		#else
-			CommandTag commandTag;
-			QueryCompletion qc;
-		#endif
-
-		List *querytree_list;
-		List *plantree_list;
-		bool snapshot_set = false;
-		Portal portal;
-		DestReceiver *receiver;
-		int16 format = 1;
-
-		/*
-		 * We don't allow transaction-control commands like COMMIT and ABORT
-		 * here.  The entire SQL statement is executed as a single transaction
-		 * which commits if no errors are encountered.
-		 */
-		if (IsA(parsetree, TransactionStmt))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("transaction control statements are not allowed in pg_cron")));
-
-		/*
-		 * Get the command name for use in status display (it also becomes the
-		 * default completion tag, down inside PortalRun).  Set ps_status and
-		 * do any special start-of-SQL-command processing needed by the
-		 * destination.
-		 */
-		#if PG_VERSION_NUM < 100000
-			commandTag = CreateCommandTag(parsetree);
-		#else
-			commandTag = CreateCommandTag(parsetree->stmt);
-		#endif
-
-
-		#if PG_VERSION_NUM < 130000
-			set_ps_display(commandTag, false);
-		#else
-			set_ps_display(GetCommandTagName(commandTag));
-		#endif
-
-		BeginCommand(commandTag, DestNone);
-
-		/* Set up a snapshot if parse analysis/planning will need one. */
-		if (analyze_requires_snapshot(parsetree))
-		{
-			PushActiveSnapshot(GetTransactionSnapshot());
-			snapshot_set = true;
-		}
-
-		/*
-		 * OK to analyze, rewrite, and plan this query.
-		 *
-		 * As with parsing, we need to make sure this data outlives the
-		 * transaction, because of the possibility that the statement might
-		 * perform internal transaction control.
-		 */
-		oldcontext = MemoryContextSwitchTo(parsecontext);
-		#if PG_VERSION_NUM >= 150000
-			querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, sql, NULL, 0, NULL);
-		#elif PG_VERSION_NUM >= 100000
-			querytree_list = pg_analyze_and_rewrite(parsetree, sql, NULL, 0, NULL);
-		#else
-			querytree_list = pg_analyze_and_rewrite(parsetree, sql, NULL, 0);
-		#endif
-
-		#if PG_VERSION_NUM < 130000
-			plantree_list = pg_plan_queries(querytree_list, 0, NULL);
-		#else
-			plantree_list = pg_plan_queries(querytree_list, sql, 0, NULL);
-		#endif
-
-		/* Done with the snapshot used for parsing/planning */
-		if (snapshot_set)
-			PopActiveSnapshot();
-
-		/* If we got a cancel signal in analysis or planning, quit */
-		CHECK_FOR_INTERRUPTS();
-
-		/*
-		 * Execute the query using the unnamed portal.
-		 */
-		portal = CreatePortal("", true, true);
-		/* Don't display the portal in pg_cursors */
-		portal->visible = false;
-		PortalDefineQuery(portal, NULL, sql, commandTag, plantree_list, NULL);
-		PortalStart(portal, NULL, 0, InvalidSnapshot);
-		PortalSetResultFormat(portal, 1, &format);		/* binary format */
-
-		--commands_remaining;
-		receiver = CreateDestReceiver(DestNone);
-
-		/*
-		 * Only once the portal and destreceiver have been established can
-		 * we return to the transaction context.  All that stuff needs to
-		 * survive an internal commit inside PortalRun!
-		 */
-		MemoryContextSwitchTo(oldcontext);
-
-		/* Here's where we actually execute the command. */
-		#if PG_VERSION_NUM < 100000
-			(void) PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, completionTag);
-		#elif PG_VERSION_NUM < 130000
-			(void) PortalRun(portal, FETCH_ALL, isTopLevel,true, receiver, receiver, completionTag);
-		#elif PG_VERSION_NUM < 180000
-			(void) PortalRun(portal, FETCH_ALL, isTopLevel, true, receiver, receiver, &qc);
-		#else
-			(void) PortalRun(portal, FETCH_ALL, isTopLevel, receiver, receiver, &qc);
-		#endif
-
-		/* Clean up the receiver. */
-		(*receiver->rDestroy) (receiver);
-
-		/*
-		 * Send a CommandComplete message even if we suppressed the query
-		 * results.  The user backend will report these in the absence of
-		 * any true query results.
-		 */
-		#if PG_VERSION_NUM < 130000
-			EndCommand(completionTag, DestRemote);
-		#else
-			EndCommand(&qc, DestRemote, false);
-		#endif
-
-		/* Clean up the portal. */
-		PortalDrop(portal, false);
-	}
-
-	/* Be sure to advance the command counter after the last script command */
-	CommandCounterIncrement();
 }
 
 /*

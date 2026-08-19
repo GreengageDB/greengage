@@ -48,6 +48,7 @@
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
 #if (PG_VERSION_NUM >= 100000)
 #include "utils/varlena.h"
 #endif
@@ -214,7 +215,7 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 
 	Oid userId = GetUserId();
 	userIdcheckacl = GetUserId();
-	username = GetUserNameFromId(userId, false);
+	username = GetUserNameFromId(userId);
 
 	/* check schedule is valid */
 	schedule = text_to_cstring(scheduleText);
@@ -229,35 +230,6 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 	}
 
 	free_entry(parsedSchedule);
-
-	initStringInfo(&querybuf);
-
-	appendStringInfo(&querybuf,
-		"insert into %s (schedule, command, nodename, nodeport, database, username, active",
-		quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
-
-	if (jobnameText != NULL)
-	{
-		appendStringInfo(&querybuf, ", jobname");
-	}
-
-	appendStringInfo(&querybuf, ") values ($1, $2, $3, $4, $5, $6, $7");
-
-	if (jobnameText != NULL)
-	{
-		appendStringInfo(&querybuf, ", $8) ");
-		appendStringInfo(&querybuf, "on conflict on constraint jobname_username_uniq ");
-		appendStringInfo(&querybuf, "do update set ");
-		appendStringInfo(&querybuf, "schedule = EXCLUDED.schedule, ");
-		appendStringInfo(&querybuf, "command = EXCLUDED.command, ");
-		appendStringInfo(&querybuf, "database = EXCLUDED.database");
-	}
-	else
-	{
-		appendStringInfo(&querybuf, ")");
-	}
-
-	appendStringInfo(&querybuf, " returning jobid");
 
 	argTypes[0] = TEXTOID;
 	argValues[0] = CStringGetTextDatum(schedule);
@@ -314,7 +286,7 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 
 	if (aclresult != ACLCHECK_OK)
 		elog(ERROR, "User %s does not have CONNECT privilege on %s",
-				GetUserNameFromId(userIdcheckacl, false), database_name);
+				GetUserNameFromId(userIdcheckacl), database_name);
 
 	argTypes[4] = TEXTOID;
 	argValues[4] = CStringGetTextDatum(database_name);
@@ -339,21 +311,71 @@ ScheduleCronJob(text *scheduleText, text *commandText, text *databaseText,
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CronExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	/* Open SPI context. */
 	if (SPI_connect() != SPI_OK_CONNECT)
 	{
 		elog(ERROR, "SPI_connect failed");
 	}
 
-	if (SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL,
-							  false, 1) != SPI_OK_INSERT_RETURNING)
-	{
-		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+	initStringInfo(&querybuf);
+
+    if (jobnameText != NULL)
+    {
+        appendStringInfo(&querybuf,
+            "UPDATE %s SET "
+            "  schedule = $1, "
+            "  command = $2, "
+            "  database = $5, "
+            "  active = $7 "
+            "WHERE jobname = $8 AND username = $6 "
+            "RETURNING jobid",
+            quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
+
+        int rc = SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL, false, 1);
+
+		/* if an existing row was updated, return its jobid immediately */
+		if (rc > 0 && SPI_processed > 0)
+        {
+            returnedRowDescriptor = SPI_tuptable->tupdesc;
+            returnedRow = SPI_tuptable->vals[0];
+
+            jobIdDatum = SPI_getbinval(returnedRow, returnedRowDescriptor, 1, &returnedJobIdIsNull);
+            jobId = DatumGetInt64(jobIdDatum);
+
+            /* advance the jobid sequence manually on UPDATE to match ON CONFLICT behavior */
+            StringInfoData seqbuf;
+            initStringInfo(&seqbuf);
+            appendStringInfo(&seqbuf, "SELECT nextval('%s')",
+                             quote_qualified_identifier(CRON_SCHEMA_NAME, "jobid_seq"));
+            SPI_execute(seqbuf.data, false, 0);
+            pfree(seqbuf.data);
+
+            pfree(querybuf.data);
+            SPI_finish();
+            SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+            InvalidateJobCache();
+
+            return jobId;
+        }
+
+		resetStringInfo(&querybuf);
 	}
 
-	if (SPI_processed <= 0)
+    /* insert, if job does not exist */
+	appendStringInfo(&querybuf,
+		"INSERT INTO %s (schedule, command, nodename, nodeport, database, username, active",
+		quote_qualified_identifier(CRON_SCHEMA_NAME, JOBS_TABLE_NAME));
+
+	if (jobnameText != NULL)
+		appendStringInfo(&querybuf, ", jobname) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)");
+	else
+		appendStringInfo(&querybuf, ") VALUES ($1, $2, $3, $4, $5, $6, $7)");
+
+	appendStringInfo(&querybuf, " RETURNING jobid");
+
+	int rc = SPI_execute_with_args(querybuf.data, argCount, argTypes, argValues, NULL, false, 1);
+	if (rc <= 0 || SPI_processed <= 0)
 	{
-		elog(ERROR, "query did not return any rows: %s", querybuf.data);
+		elog(ERROR, "SPI_exec failed (%d): %s", rc, querybuf.data);
 	}
 
 	returnedRowDescriptor = SPI_tuptable->tupdesc;
@@ -685,7 +707,7 @@ cron_unschedule_named(PG_FUNCTION_ARGS)
 	RegProcedure procedure;
 
 	Oid userId = GetUserId();
-	char *userName = GetUserNameFromId(userId, false);
+	char *userName = GetUserNameFromId(userId);
 	Datum userNameDatum = CStringGetTextDatum(userName);
 
 	Relation cronJobsTable = NULL;
@@ -1265,7 +1287,7 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 	userId = GetUserId();
 	userIdcheckacl = GetUserId();
 
-	currentuser = GetUserNameFromId(userId, false);
+	currentuser = GetUserNameFromId(userId);
 	savedUserId = InvalidOid;
 	savedSecurityContext = 0;
 
@@ -1318,7 +1340,7 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 #endif
 
 		if (aclresult != ACLCHECK_OK)
-			elog(ERROR, "User %s does not have CONNECT privilege on %s", GetUserNameFromId(userIdcheckacl, false), database_name);
+			elog(ERROR, "User %s does not have CONNECT privilege on %s", GetUserNameFromId(userIdcheckacl), database_name);
 
 		argTypes[i] = TEXTOID;
 		argValues[i] = CStringGetTextDatum(database_name);

@@ -25,8 +25,6 @@ CREATE TABLE cron.job (
 	username text not null default current_user
 );
 GRANT SELECT ON cron.job TO public;
-ALTER TABLE cron.job ENABLE ROW LEVEL SECURITY;
-CREATE POLICY cron_job_policy ON cron.job USING (username OPERATOR(pg_catalog.=) current_user);
 
 CREATE FUNCTION cron.schedule(schedule text, command text)
     RETURNS bigint
@@ -49,7 +47,3 @@ CREATE FUNCTION cron.job_cache_invalidate()
 COMMENT ON FUNCTION cron.job_cache_invalidate()
     IS 'invalidate job cache';
 
-CREATE TRIGGER cron_job_cache_invalidate
-    AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
-    ON cron.job
-    FOR STATEMENT EXECUTE PROCEDURE cron.job_cache_invalidate();
