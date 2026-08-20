@@ -7,17 +7,9 @@ for Ubuntu:
 ```bash
 docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
 ```
-
-for Rocky Linux 8:
-
+for Rocky Linux:
 ```bash
-docker build -t gpdb7_rockylinux8:latest -f ci/Dockerfile.rockylinux .
-```
-
-for Rocky Linux 9:
-
-```bash
-docker build -t gpdb7_rockylinux9:latest --build-arg OS_VERSION=9 -f ci/Dockerfile.rockylinux .
+docker build -t gpdb7_regress:latest -f ci/Dockerfile .
 ```
 
 ## Full regression tests suite run
@@ -79,6 +71,41 @@ for Rocky Linux:
 * we need to increase semaphore amount to be able to run demo cluster
 
 To use gdb inside the container, add the `--privileged` flag to the run command.
+
+## Resource group v2 isolation tests
+
+Resource group v2 tests require a Linux host with cgroup v2 enabled.
+`gpdemo-datadirs` and `testtablespace` must be directories on a regular host
+filesystem, not Docker overlay or tmpfs. Note that the script can create host
+`/sys/fs/cgroup/gpdb` and enable cgroup controllers.
+
+For Ubuntu:
+```bash
+mkdir -p gpdemo-datadirs testtablespace
+chmod -R 777 gpdemo-datadirs testtablespace
+
+docker run --name gpdb7_resgroup_v2 --rm -e TEST_OS=ubuntu \
+  --sysctl "kernel.sem=500 1024000 200 4096" \
+  --privileged \
+  --cgroupns=host \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -v "$PWD/gpdemo-datadirs":/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs:rw \
+  -v "$PWD/testtablespace":/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace:rw \
+  gpdb7_u22:latest \
+  /home/gpadmin/gpdb_src/concourse/scripts/ic_gpdb_resgroup_v2.bash
+```
+
+Required Docker options:
+
+* `--privileged` allows cgroup controller and process-management operations that
+  are otherwise blocked by Docker isolation.
+* `--cgroupns=host` makes `/sys/fs/cgroup` paths refer to the host cgroup
+  namespace instead of a private container namespace.
+* `-v /sys/fs/cgroup:/sys/fs/cgroup:rw` gives the container writable access to
+  the host cgroup v2 filesystem.
+* `gpdemo-datadirs` and `testtablespace` mounts keep database files used by
+  IO_LIMIT tests on the host filesystem, where cgroup v2 can resolve real block
+  devices.
 
 ## ORCA linter
 

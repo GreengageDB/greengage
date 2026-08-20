@@ -37,6 +37,7 @@ dnf -y install \
     bison \
     bzip2-devel \
     cmake \
+    clang \
     expat-devel \
     flex \
     gcc-c++ \
@@ -53,6 +54,7 @@ dnf -y install \
     libcurl-devel \
     libevent-devel \
     libicu \
+    libicu-devel \
     libkadm5 \
     libtool \
     libuuid-devel \
@@ -61,6 +63,7 @@ dnf -y install \
     libxslt-devel \
     libyaml-devel \
     libzstd-devel \
+    llvm-devel \
     lsof \
     net-tools \
     openldap-devel \
@@ -73,6 +76,8 @@ dnf -y install \
     rsync \
     snappy-devel \
     sudo \
+    systemd-devel \
+    tcl-devel \
     time \
     unzip \
     vim \
@@ -114,7 +119,7 @@ rm -rf zstd-1.4.4
 #---------------------------------------------------------------------
 # Bare-metal only configuration
 #---------------------------------------------------------------------
-if [[ ! -f /.dockerenv && -z "$IS_DOCKER_BUILD" ]]; then
+if [[ ! -f /.dockerenv && -z "${IS_DOCKER_BUILD:-}" ]]; then
 
     # Disable SELinux
     setenforce 0 || true

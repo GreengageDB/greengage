@@ -6,10 +6,6 @@
   sudo ./README.Rhel-Rocky.bash
   ```
 
-- LLVM 21 provided by current Rocky/RHEL releases is not compatible with
-  Greengage 7. When building in the provided Docker environment, LLVM/Clang
-  14 is installed automatically.
-
 ## For Ubuntu:
 
 - Install Dependencies
