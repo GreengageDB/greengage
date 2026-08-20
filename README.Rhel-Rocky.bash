@@ -54,6 +54,7 @@ dnf -y install \
     libcurl-devel \
     libevent-devel \
     libicu \
+    libicu-devel \
     libkadm5 \
     libtool \
     libuuid-devel \
@@ -75,6 +76,8 @@ dnf -y install \
     rsync \
     snappy-devel \
     sudo \
+    systemd-devel \
+    tcl-devel \
     time \
     unzip \
     vim \
