@@ -15,8 +15,14 @@ CREATE FUNCTION
 CREATE OR REPLACE FUNCTION ao_temp_count_files_on_segs() RETURNS TABLE (n bigint) AS $$ SELECT count(st.size) from ao_temp_relfile_paths fp, pg_stat_file(fp.relpath, true) st WHERE fp.segno = gp_execution_segment() $$ LANGUAGE sql EXECUTE ON ALL SEGMENTS;
 CREATE FUNCTION
 
-CREATE OR REPLACE FUNCTION ao_temp_count_files_on_master() RETURNS TABLE (n bigint) AS $$ SELECT count(st.size) from ao_temp_relfile_paths fp, pg_stat_file(fp.relpath, true) st WHERE fp.segno = -1 
-$$ LANGUAGE sql EXECUTE ON MASTER;
+-- This is required to confidently run pg_stat_file on master
+-- As there may be a situation when optimizer decides to run it on segments,
+-- because pg_stat_file is PROEXECLOCATION_ANY. Therefore it could check master
+-- relfiles on segments, resulting in false positive
+CREATE OR REPLACE FUNCTION ao_temp_count_files_on_master_impl(paths text[]) RETURNS TABLE (n bigint) AS $$ SELECT count(st.size) FROM unnest(paths) p, pg_stat_file(p, true) st $$ LANGUAGE sql EXECUTE ON MASTER;
+CREATE FUNCTION
+
+CREATE OR REPLACE FUNCTION ao_temp_count_files_on_master() RETURNS TABLE (n bigint) AS $$ SELECT c.n FROM ao_temp_count_files_on_master_impl( (SELECT array_agg(relpath) FROM ao_temp_relfile_paths WHERE segno = -1)) c $$ LANGUAGE sql;
 CREATE FUNCTION
 
 -- Create function to wait until relfiles are gone
@@ -29,6 +35,7 @@ CREATE TABLE
 1: CREATE TEMP TABLE temp_relfile_aoco (a int) WITH (APPENDONLY = TRUE, ORIENTATION = COLUMN);
 CREATE TABLE
 
+-- start_ignore
 1: INSERT INTO ao_temp_relfile_paths SELECT * FROM ao_temp_get_relfile_path_on_segs('temp_relfile_aoro');
 INSERT 0 3
 1: INSERT INTO ao_temp_relfile_paths SELECT * FROM ao_temp_get_relfile_path_on_master('temp_relfile_aoro');
@@ -38,6 +45,7 @@ INSERT 0 1
 INSERT 0 3
 1: INSERT INTO ao_temp_relfile_paths SELECT * FROM ao_temp_get_relfile_path_on_master('temp_relfile_aoco');
 INSERT 0 1
+-- end_ignore
 
 -- Check for relfiles existence
 1: SELECT sum(n) = 2 * (SELECT count(*) FROM gp_segment_configuration WHERE role = 'p' AND content >= 0) AS val FROM ao_temp_count_files_on_segs();
@@ -82,6 +90,8 @@ DROP FUNCTION
 DROP FUNCTION IF EXISTS ao_temp_get_relfile_path_on_master(tbl regclass);
 DROP FUNCTION
 DROP FUNCTION IF EXISTS ao_temp_count_files_on_segs();
+DROP FUNCTION
+DROP FUNCTION IF EXISTS ao_temp_count_files_on_master_impl();
 DROP FUNCTION
 DROP FUNCTION IF EXISTS ao_temp_count_files_on_master();
 DROP FUNCTION
