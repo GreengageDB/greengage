@@ -44,6 +44,7 @@ def get_ip(hostname=None):
     for family, _, _, _, sockaddr in hostinfo:
         if family == socket.AF_INET and ipv4 is None:
             ipv4 = sockaddr[0]
+            break
         elif family == socket.AF_INET6 and ipv6 is None:
             ipv6 = sockaddr[0]
     return ipv4 or ipv6
