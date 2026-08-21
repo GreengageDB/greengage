@@ -157,6 +157,10 @@
    don't. */
 #undef HAVE_DECL_F_FULLFSYNC
 
+/* Define to 1 if you have the declaration of `gss_store_cred_into', and to 0
+   if you don't. */
+#undef HAVE_DECL_GSS_STORE_CRED_INTO
+
 /* Define to 1 if you have the declaration of `posix_fadvise', and to 0 if you
    don't. */
 #undef HAVE_DECL_POSIX_FADVISE
@@ -298,7 +302,7 @@
 /* Define to 1 if you have the <gssapi.h> header file. */
 #undef HAVE_GSSAPI_H
 
-/* Define to 1 if you have the <gssapi_ext.h> header file */
+/* Define to 0 if you do not have GSSAPI extension support. */
 #undef HAVE_GSSAPI_PROXY
 
 /* Define to 1 if you have the <history.h> header file. */
@@ -783,12 +787,6 @@
 /* Define to 1 if you have the `X509_get_signature_nid' function. */
 #undef HAVE_X509_GET_SIGNATURE_NID
 
-/* Define to 1 if your compiler understands __builtin_bswap16. */
-#undef HAVE__BUILTIN_BSWAP16
-
-/* Define to 1 if your compiler understands __builtin_bswap32. */
-#undef HAVE__BUILTIN_BSWAP32
-
 /* Define to 1 if you have the <yaml.h> header file. */
 #undef HAVE_YAML_H
 
@@ -935,21 +933,18 @@
 /* Define to 1 to build with Bonjour support. (--with-bonjour) */
 #undef USE_BONJOUR
 
-/* Define to use /dev/urandom for random number generation */
-#undef USE_DEV_URANDOM
-
 /* Define to 1 to build with libcurl support. (--with-libcurl) */
 #undef USE_CURL
 
 /* Define to 1 to build with debug_ntuplestore. (--enable-ntuplestore) */
 #undef USE_DEBUG_NTUPLESTORE
 
+/* Define to use /dev/urandom for random number generation */
+#undef USE_DEV_URANDOM
+
 /* Define to 1 if you want float4 values to be passed by value. (Always
    defined in GPDB) */
 #undef USE_FLOAT4_BYVAL
-
-/* Define to use /dev/urandom for random number generation */
-#undef USE_DEV_URANDOM
 
 /* Define to 1 if you want float8, int8, etc values to be passed by value.
    (Always defined in GPDB) */
@@ -978,14 +973,14 @@
 /* Define to select named POSIX semaphores. */
 #undef USE_NAMED_POSIX_SEMAPHORES
 
-/* Define to 1 to build with Greengage ORCA optimizer. (--enable-orca) */
-#undef USE_ORCA
-
 /* Define to build with OpenSSL support. (--with-openssl) */
 #undef USE_OPENSSL
 
 /* Define to use OpenSSL for random number generation */
 #undef USE_OPENSSL_RANDOM
+
+/* Define to 1 to build with Greengage ORCA optimizer. (--enable-orca) */
+#undef USE_ORCA
 
 /* Define to 1 to build with PAM support. (--with-pam) */
 #undef USE_PAM
