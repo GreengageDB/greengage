@@ -258,6 +258,12 @@ check_ok(void)
 	fflush(stdout);
 }
 
+void
+check_skipped_due_to_missing_function(void)
+{
+	report_status(PG_REPORT, "skipped (unsupported by source cluster; install a later version to enable)");
+	/* report_status/pg_log seems to do fflush for us */
+}
 
 /*
  *  Wrapper around pg_fatal to continue check when running in check mode

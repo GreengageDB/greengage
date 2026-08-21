@@ -119,6 +119,21 @@ cluster_conn_opts(ClusterInfo *cluster)
 }
 
 /*
+ * A common way to exit() if a query has failed.
+ * The caller is responsible for checking ExecStatusType.
+ */
+void
+dieOnQueryFailure(PGconn *conn, PGresult *result, const char *query)
+{
+	pg_log(PG_REPORT, "SQL command failed\n%s\n%s", query,
+		   PQerrorMessage(conn));
+	PQclear(result);
+	PQfinish(conn);
+	printf(_("Failure, exiting\n"));
+	exit(1);
+}
+
+/*
  * executeQueryOrDieLog()
  *
  *	Formats a query string from the given arguments and executes the
@@ -137,16 +152,9 @@ executeQueryOrDieLog(PGconn *conn, bool add_log, const char *query)
 	status = PQresultStatus(result);
 
 	if ((status != PGRES_TUPLES_OK) && (status != PGRES_COMMAND_OK))
-	{
-		pg_log(PG_REPORT, "SQL command failed\n%s\n%s", query,
-			   PQerrorMessage(conn));
-		PQclear(result);
-		PQfinish(conn);
-		printf(_("Failure, exiting\n"));
-		exit(1);
-	}
-	else
-		return result;
+		dieOnQueryFailure(conn, result, query);
+
+	return result;
 }
 
 /*
@@ -171,7 +179,7 @@ executeQueryOrDie(PGconn *conn, const char *fmt,...)
 
 /*
  * executeQueryOrDieWithoutLog()
- *Ы
+ *
  *     Formats a query string from the given arguments and executes the
  *     resulting query.  If the query fails, this function logs an error
  *     message and calls exit() to kill the program.
@@ -189,6 +197,36 @@ executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...)
 	return executeQueryOrDieLog(conn, false, query);
 }
 
+/*
+ * This functions is very similar to the ones above,
+ * except that is intended to create support functions,
+ * as they can be absent in of the source cluster,
+ * and it is better to handle this case.
+ */
+
+#define ERRCODE_UNDEFINED_FUNCTION_STRING "42883"
+bool
+createSupportFunctionOrDie(PGconn *conn, char *query)
+{
+	PGresult *res;
+	ExecStatusType status;
+
+	pg_log(PG_VERBOSE, "executing: %s\n", query);
+	res = PQexec(conn, query);
+	status = PQresultStatus(res);
+	if (status != PGRES_COMMAND_OK)
+	{
+		char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+		if (sqlstate && strcmp(sqlstate, ERRCODE_UNDEFINED_FUNCTION_STRING) == 0)
+		{
+			PQclear(res);
+			return false;
+		}
+		dieOnQueryFailure(conn, res, query);
+	}
+	PQclear(res);
+	return true;
+}
 
 /*
  * get_major_server_version()
