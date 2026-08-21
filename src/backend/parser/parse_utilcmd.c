@@ -43,6 +43,7 @@
 #include "catalog/pg_type_encoding.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
 #include "miscadmin.h"
@@ -1852,6 +1853,10 @@ transformDistributedBy(CreateStmtContext *cxt,
 	 * utility mode creates can't have a policy.  Only the QD can have policies
 	 */
 	if (Gp_role != GP_ROLE_DISPATCH && !IsBinaryUpgrade)
+		return NULL;
+
+	/* POLICYTYPE_ENTRY for local extensions */
+	if (creating_extension && creating_extension_local)
 		return NULL;
 
 	if (distributedBy && distributedBy->numsegments > 0)

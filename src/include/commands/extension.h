@@ -24,6 +24,7 @@
  * installation script.
  */
 extern PGDLLIMPORT bool creating_extension;
+extern PGDLLIMPORT bool creating_extension_local;
 extern PGDLLIMPORT Oid CurrentExtensionObject;
 
 
@@ -48,6 +49,8 @@ extern Oid	AlterExtensionNamespace(List *names, const char *newschema);
 extern void AlterExtensionOwner_oid(Oid extensionOid, Oid newOwnerId);
 
 extern void ResetExtensionCreatingGlobalVarsOnQE(void);
+
+extern void SetExtensionLocal(Oid extensionOid);
 
 #endif							/* EXTENSION_H */
 

@@ -1619,6 +1619,8 @@ selectDumpableType(TypeInfo *tyinfo)
 static void
 selectDumpableFunction(FuncInfo *finfo)
 {
+	if (checkExtensionMembership(&finfo->dobj))
+		return;					/* extension membership overrides all else */
 	/*
 	 * If specific functions are being dumped, dump just those functions; else, dump
 	 * according to the parent namespace's dump flag if parent namespace is not null;
@@ -2097,7 +2099,7 @@ dumpTableData(Archive *fout, TableDataInfo *tdinfo)
 	DataDumperPtr dumpFn;
 	char	   *copyStmt;
 
-	if (!dump_inserts)
+	if (!dump_inserts && !tdinfo->isCoordOnly)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
@@ -2250,6 +2252,7 @@ makeTableDataInfo(TableInfo *tbinfo, bool oids)
 	tdinfo->tdtable = tbinfo;
 	tdinfo->oids = oids;
 	tdinfo->filtercond = NULL;	/* might get set later */
+	tdinfo->isCoordOnly = false;/* might get set later */
 	addObjectDependency(&tdinfo->dobj, tbinfo->dobj.dumpId);
 
 	tbinfo->dataObj = tdinfo;
@@ -3707,6 +3710,34 @@ getExtensions(Archive *fout, int *numExtensions)
 		extinfo[i].extversion = pg_strdup(PQgetvalue(res, i, i_extversion));
 		extinfo[i].extconfig = pg_strdup(PQgetvalue(res, i, i_extconfig));
 		extinfo[i].extcondition = pg_strdup(PQgetvalue(res, i, i_extcondition));
+		extinfo[i].local = false;
+		{
+			PQExpBuffer query_local_ext;
+			PGresult   *res_local_ext;
+			int			ntups_local_ext = 0;
+			query_local_ext = createPQExpBuffer();
+
+			appendPQExpBuffer(query_local_ext,
+				"SELECT label FROM pg_seclabel where "
+					"classoid='pg_extension'::regclass AND "
+					"objoid = %u AND "
+					"provider = 'gp_local_ext'",
+				extinfo[i].dobj.catId.oid);
+
+			res_local_ext = ExecuteSqlQuery(fout, query_local_ext->data, PGRES_TUPLES_OK);
+
+			ntups_local_ext = PQntuples(res_local_ext);
+			Assert(ntups_local_ext <= 1);
+
+			if (ntups_local_ext == 1)
+			{
+				extinfo[i].local =
+					strcmp(PQgetvalue(res_local_ext, 0, 0), "true") == 0;
+			}
+
+			PQclear(res_local_ext);
+			destroyPQExpBuffer(query_local_ext);
+		}
 
 		/* Decide whether we want to dump it */
 		selectDumpableExtension(&(extinfo[i]));
@@ -8349,8 +8380,9 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 		 * built-in extensions based on their OIDs; see
 		 * selectDumpableExtension.
 		 */
-		appendPQExpBuffer(q, "CREATE EXTENSION IF NOT EXISTS %s WITH SCHEMA %s;\n",
-						  qextname, fmtId(extinfo->namespace));
+		appendPQExpBuffer(q, "CREATE EXTENSION IF NOT EXISTS %s WITH SCHEMA %s%s;\n",
+						  qextname, fmtId(extinfo->namespace),
+						  extinfo->local ? " LOCAL" : "");
 	}
 	else
 	{
@@ -8408,6 +8440,8 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 			}
 		}
 		appendPQExpBufferStr(q, "]::pg_catalog.text[]");
+		appendPQExpBufferStr(q, ", ");
+		appendPQExpBuffer(q, "%s", extinfo->local ? "true" : "false");
 		appendPQExpBufferStr(q, ");\n");
 	}
 
@@ -12970,6 +13004,7 @@ collectSecLabels(Archive *fout, SecLabelItem **items)
 	appendPQExpBufferStr(query,
 						 "SELECT label, provider, classoid, objoid, objsubid "
 						 "FROM pg_catalog.pg_seclabel "
+						 "WHERE provider != 'gp_local_ext' "
 						 "ORDER BY classoid, objoid, objsubid");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -15884,6 +15919,8 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 					{
 						if (strlen(extconditionarray[j]) > 0)
 							configtbl->dataObj->filtercond = pg_strdup(extconditionarray[j]);
+
+						configtbl->dataObj->isCoordOnly = curext->local;
 					}
 				}
 			}
