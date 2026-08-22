@@ -107,27 +107,34 @@ write_log(const char *fmt,...)
 {
 	char		logprefix[1024];
 	char		tempbuf[25];
+	char		msgbuf[2048];	/* Arbitrary size? */
 	va_list		ap;
+	int			len;
 
 	fmt = _(fmt);
 
+	/*
+	 * Render the caller's fmt/args into their own buffer while ap still
+	 * matches fmt exactly.  logprefix below embeds text derived from
+	 * log_timezone's timezone abbreviation, which is not validated for
+	 * stray '%' characters, so it must never be used as a printf format
+	 * string together with ap.
+	 */
 	va_start(ap, fmt);
+	len = vsnprintf(msgbuf, sizeof(msgbuf), fmt, ap);
+	va_end(ap);
+
+	if (len >= sizeof(msgbuf))
+	{
+		msgbuf[pg_mbcliplen(msgbuf, len, sizeof(msgbuf) - 1)] = '\0';
+	}
 
 	if (Logging_collector && gp_log_format == 1)
 	{
-		char		errbuf[2048];	/* Arbitrary size? */
-
-		int len = vsnprintf(errbuf, sizeof(errbuf), fmt, ap);
-
-		if (len >= sizeof(errbuf))
-		{
-			errbuf[pg_mbcliplen(errbuf, len, sizeof(errbuf) - 1)] = '\0';
-		}
-
 		/* Write the message in the CSV format */
 		write_message_to_server_log(LOG,
 									0,
-									errbuf,
+									msgbuf,
 									NULL,
 									NULL,
 									NULL,
@@ -144,7 +151,6 @@ write_log(const char *fmt,...)
 									NULL,
 									false);
 
-		va_end(ap);
 		return;
 	}
 
@@ -187,11 +193,6 @@ write_log(const char *fmt,...)
 	}
 	strcat(logprefix, ":  ");
 
-	strcat(logprefix, fmt);
-
-	if (fmt[strlen(fmt) - 1] != '\n')
-		strcat(logprefix, "\n");
-
 	/*
 	 * We don't trust that vfprintf won't get confused if it is being run by
 	 * two threads at the same time, which could cause interleaved messages.
@@ -201,7 +202,8 @@ write_log(const char *fmt,...)
 	pthread_mutex_lock(&send_mutex);
 #ifndef WIN32
 	/* On Unix, we just fprintf to stderr */
-	vfprintf(stderr, logprefix, ap);
+	fprintf(stderr, "%s%s%s", logprefix, msgbuf,
+			(msgbuf[0] == '\0' || msgbuf[strlen(msgbuf) - 1] != '\n') ? "\n" : "");
 	fflush(stderr);
 #else
 
@@ -213,17 +215,18 @@ write_log(const char *fmt,...)
 	{
 		char		errbuf[2048];	/* Arbitrary size? */
 
-		vsnprintf(errbuf, sizeof(errbuf), logprefix, ap);
+		snprintf(errbuf, sizeof(errbuf), "%s%s%s", logprefix, msgbuf,
+				 (msgbuf[0] == '\0' || msgbuf[strlen(msgbuf) - 1] != '\n') ? "\n" : "");
 
 		write_eventlog(EVENTLOG_ERROR_TYPE, errbuf);
 	}
 	else
 	{
 		/* Not running as service, write to stderr */
-		vfprintf(stderr, logprefix, ap);
+		fprintf(stderr, "%s%s%s", logprefix, msgbuf,
+				(msgbuf[0] == '\0' || msgbuf[strlen(msgbuf) - 1] != '\n') ? "\n" : "");
 		fflush(stderr);
 	}
 #endif
 	pthread_mutex_unlock(&send_mutex);
-	va_end(ap);
 }
