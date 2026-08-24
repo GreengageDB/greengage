@@ -12,12 +12,24 @@ none of them is identical to a build of the unmodified sources.
 
 ### `--with-product-name=NAME`
 
-Sets the product name used in version strings. Defaults to
-`Greengage Database`. It determines:
+The product, as one word and without the ` Database` that is appended to it.
+`--with-product-name=Greenplum` names the product `Greenplum Database`; the
+default names it `Greengage Database`.
+
+` Database` is appended rather than taken from the caller because
+`gpMgmt/bin/gppylib/gpversion.py` parses `select version()` with the regexp
+`Green\w+ Database`, and half of that pattern is then guaranteed. What remains
+to check is `NAME` itself, which must match `Green\w+` — letters, digits and
+underscores after `Green`, so no spaces, hyphens or dots. `configure` refuses
+anything else, including a `NAME` that already carries ` Database`.
+
+The name sets two things.
+
+**The product name**, which determines:
 
 * `PACKAGE_NAME` and `PACKAGE_STRING` in `pg_config.h`, and through them the
-  `Greengage Database / ...` GUC categories in `pg_settings.category` and a
-  handful of error message texts;
+  `... Database / ...` GUC categories in `pg_settings.category` and a handful of
+  error message texts;
 * `PG_VERSION_STR`, and through it the output of `select version()`;
 * `GP_PRODUCT_NAME`, used by the `--version` and `--gp-version` output of
   `postgres`, `initdb`, `pg_ctl`, `pg_controldata`, `pg_resetxlog`,
@@ -28,19 +40,11 @@ The same value must be used for the whole installation: `pg_ctl`,
 `pg_basebackup` and `pg_rewind` locate their helper binaries with
 `find_other_exec()`, which compares the `--version` output verbatim.
 
-**Constraint.** The name must match `Green\w+ Database` — `\w` being
-`[a-zA-Z0-9_]`, so no spaces, hyphens or dots between `Green` and ` Database`.
-That is the pattern `gpMgmt/bin/gppylib/gpversion.py` uses to parse
-`select version()`. A name outside it makes `GpVersion()` raise on every server
-started by the build, which takes down `gpstart`, `gpstop`, `gppkg`, `analyzedb`
-and `gpload`. `configure` enforces the pattern and refuses such a name.
-
-### `--with-env-script-alias=NAME`
-
-An extra symlink created next to `$GPHOME/greengage_path.sh`, for installations
-whose users source the environment script under a historical name. The real file
-is always `greengage_path.sh`; the alias points at it. Empty by default, in which
-case no symlink is created.
+**The environment script alias**, a symlink `<name>_path.sh` created next to
+`$GPHOME/greengage_path.sh` for installations whose users source the script
+under that name. `NAME` is lower cased for it. The real file is always
+`greengage_path.sh`; the alias points at it. No symlink is created for a default
+build, or for a `NAME` that would name the file after itself.
 
 ### `--with-hashable-eq-symbol=SYMBOL`
 
@@ -59,16 +63,16 @@ the upstream build** and must be validated against the distribution's own
 
 ```
 ./configure \
-    --with-product-name="Historic Database" \
-    --with-env-script-alias=historic_path.sh \
-    --with-hashable-eq-symbol=is_builtin_historic_hashable_equality_between_same_type
+    --with-product-name=Greengrocer \
+    --with-hashable-eq-symbol=is_builtin_greengrocer_hashable_equality_between_same_type
 ```
 
-The same flags can be passed through `gpAux`:
+which names the product `Greengrocer Database` and symlinks
+`$GPHOME/greengrocer_path.sh` to `greengage_path.sh`. The same flags can be
+passed through `gpAux`:
 
 ```
-make -C gpAux CONFIGURE_FLAGS='--with-product-name="Historic Database" \
-    --with-env-script-alias=historic_path.sh' dist
+make -C gpAux CONFIGURE_FLAGS='--with-product-name=Greengrocer' dist
 ```
 
 ## Scope

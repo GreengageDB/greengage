@@ -45,38 +45,47 @@ AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greengag
 AC_CANONICAL_HOST
 
 dnl ---------------------------------------------------------------------
-dnl Product naming.  Lets distributions set the product name at build time
-dnl instead of patching the sources.  Defaults reproduce the stock build.
+dnl Product naming.  Lets distributions name the product at build time instead
+dnl of patching the sources.  The default reproduces the stock build.
+dnl
+dnl One option carries the product, and both the full name and the environment
+dnl script alias are composed from it.  gpMgmt parses version() with the Python
+dnl regexp "Green\w+ Database" (gpMgmt/bin/gppylib/gpversion.py), so " Database"
+dnl is supplied here rather than taken from the caller, and what is left to
+dnl check is a single word.
 dnl ---------------------------------------------------------------------
 PGAC_ARG_REQ(with, product-name, [NAME],
-             [product name used in version strings (default: Greengage Database)],
+             [name the product "NAME Database" and symlink name_path.sh to
+              greengage_path.sh in GPHOME (default: Greengage)],
              [], [])
-: ${with_product_name:="Greengage Database"}
 
-dnl gpMgmt parses version() with the Python regexp "Green\w+ Database"
-dnl (gpMgmt/bin/gppylib/gpversion.py).  Mirror it: a shell glob cannot,
-dnl because `*' also matches spaces and hyphens, which \w+ does not, and POSIX
-dnl globs have no quantifier over a character class.
-if expr "X$with_product_name" : 'XGreen[[a-zA-Z0-9_]][[a-zA-Z0-9_]]* Database$' >/dev/null; then
-  :
+if test -n "$with_product_name"; then
+  if expr "X$with_product_name" : 'XGreen[[a-zA-Z0-9_]][[a-zA-Z0-9_]]*$' >/dev/null; then
+    :
+  else
+    AC_MSG_ERROR([--with-product-name takes one word, without the " Database" that
+is appended to it, and that word has to match "Green\w+": gpversion.py in
+gpMgmt/bin/gppylib parses select version() with the regexp "Green\w+ Database",
+and a name it cannot parse makes GpVersion() raise on every server started by
+this build, failing gpstart, gpstop, gpstate, gppkg and gpload at run time.])
+  fi
+  gp_product_name="$with_product_name Database"
+  GP_ENV_SCRIPT_ALIAS="`echo "$with_product_name" | tr 'A-Z' 'a-z'`_path.sh"
+  dnl Naming the stock product would symlink the script onto itself.
+  if test "$GP_ENV_SCRIPT_ALIAS" = greengage_path.sh; then
+    GP_ENV_SCRIPT_ALIAS=
+  fi
 else
-  AC_MSG_ERROR([product name "$with_product_name" does not match the "Green\w+
-Database" pattern that gpMgmt/bin/gppylib/gpversion.py uses to parse version().
-GpVersion() would raise on every server started by this build, so gpstart,
-gpstop, gpstate, gppkg and gpload would all fail at run time.])
+  gp_product_name="Greengage Database"
+  GP_ENV_SCRIPT_ALIAS=
 fi
 
-AC_DEFINE_UNQUOTED(GP_PRODUCT_NAME, ["$with_product_name"],
+AC_DEFINE_UNQUOTED(GP_PRODUCT_NAME, ["$gp_product_name"],
                    [Product name used in version strings])
-AC_DEFINE_UNQUOTED(PACKAGE_NAME, ["$with_product_name"],
+AC_DEFINE_UNQUOTED(PACKAGE_NAME, ["$gp_product_name"],
                    [Define to the full name of this package.])
-AC_DEFINE_UNQUOTED(PACKAGE_STRING, ["$with_product_name $PACKAGE_VERSION"],
+AC_DEFINE_UNQUOTED(PACKAGE_STRING, ["$gp_product_name $PACKAGE_VERSION"],
                    [Define to the full name and version of this package.])
-
-PGAC_ARG_REQ(with, env-script-alias, [NAME],
-             [extra symlink to greengage_path.sh in GPHOME],
-             [], [])
-GP_ENV_SCRIPT_ALIAS=$with_env_script_alias
 AC_SUBST(GP_ENV_SCRIPT_ALIAS)
 
 PGAC_ARG_REQ(with, hashable-eq-symbol, [SYMBOL],
@@ -2793,7 +2802,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["PostgreSQL $PG_VERSION ($with_product_name $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["PostgreSQL $PG_VERSION ($gp_product_name $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons

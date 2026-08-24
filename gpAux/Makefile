@@ -703,8 +703,8 @@ copylibs :
 	mkdir -p $(INSTLOC)/etc
 	mkdir -p $(INSTLOC)/include
 
-# This makefile does not include src/Makefile.global, so the value configured
-# by --with-env-script-alias is read back from the generated file.
+# This makefile does not include src/Makefile.global, so the alias derived from
+# --with-product-name is read back from the generated file.
 GP_ENV_SCRIPT_ALIAS = $(shell sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
                           $(BUILDDIR)/src/Makefile.global 2>/dev/null)
 

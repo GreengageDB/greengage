@@ -47,7 +47,7 @@ GP_VERSION = @GP_VERSION_SHORT@
 GP_MAJORVERSION = @GP_MAJORVERSION@
 
 # Extra symlink to greengage_path.sh created in $GPHOME
-# (--with-env-script-alias)
+# (derived from --with-product-name)
 GP_ENV_SCRIPT_ALIAS = @GP_ENV_SCRIPT_ALIAS@
 
 # Set top_srcdir, srcdir, and VPATH.
