@@ -880,7 +880,7 @@
    compilations where static inline functions are defined but not called. */
 #undef PG_USE_INLINE
 
-/* PostgreSQL version this product is based on */
+/* Postgres version Greengage Database is based on */
 #undef PG_VERSION
 
 /* PostgreSQL version as a number */

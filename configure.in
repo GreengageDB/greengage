@@ -40,7 +40,7 @@ AC_DEFINE_UNQUOTED(PG_MAJORVERSION, "$PG_MAJORVERSION", [PostgreSQL major versio
 
 [PG_VERSION="$PG_PACKAGE_VERSION"]
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version], [], [])
-AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [PostgreSQL version this product is based on])
+AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_PACKAGE_VERSION", [Postgres version Greengage Database is based on])
 
 AC_CANONICAL_HOST
 
