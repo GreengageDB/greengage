@@ -704,16 +704,15 @@ copylibs :
 	mkdir -p $(INSTLOC)/include
 
 # This makefile does not include src/Makefile.global, so the value configured
-# by --with-env-script-aliases is read back from the generated file.
-GP_ENV_SCRIPT_ALIASES = $(shell sed -n 's/^GP_ENV_SCRIPT_ALIASES = //p' \
-                            $(BUILDDIR)/src/Makefile.global 2>/dev/null)
+# by --with-env-script-alias is read back from the generated file.
+GP_ENV_SCRIPT_ALIAS = $(shell sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
+                          $(BUILDDIR)/src/Makefile.global 2>/dev/null)
 
 greengage_path:
 	mkdir -p $(INSTLOC)
 	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(INSTLOC)/greengage_path.sh
-	@for alias in $(GP_ENV_SCRIPT_ALIASES); do \
-	    cd $(INSTLOC) && ln -sf greengage_path.sh $$alias; \
-	done
+	@test -z "$(GP_ENV_SCRIPT_ALIAS)" || \
+	    ln -sf greengage_path.sh $(INSTLOC)/$(GP_ENV_SCRIPT_ALIAS)
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \

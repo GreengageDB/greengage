@@ -785,7 +785,7 @@ enable_gpfdist
 enable_rpath
 default_port
 PORTNAME
-GP_ENV_SCRIPT_ALIASES
+GP_ENV_SCRIPT_ALIAS
 host_os
 host_vendor
 host_cpu
@@ -840,7 +840,7 @@ ac_user_opts='
 enable_option_checking
 with_extra_version
 with_product_name
-with_env_script_aliases
+with_env_script_alias
 with_hashable_eq_symbol
 with_template
 with_includes
@@ -1568,9 +1568,8 @@ Optional Packages:
   --with-product-name=NAME
                           product name used in version strings (default:
                           Greengage Database)
-  --with-env-script-aliases=NAMES
-                          space separated extra symlinks to greengage_path.sh
-                          in GPHOME
+  --with-env-script-alias=NAME
+                          extra symlink to greengage_path.sh in GPHOME
   --with-hashable-eq-symbol=SYMBOL
                           export the builtin hashable equality helper under
                           SYMBOL
@@ -3000,15 +2999,15 @@ _ACEOF
 
 
 
-# Check whether --with-env-script-aliases was given.
-if test "${with_env_script_aliases+set}" = set; then :
-  withval=$with_env_script_aliases;
+# Check whether --with-env-script-alias was given.
+if test "${with_env_script_alias+set}" = set; then :
+  withval=$with_env_script_alias;
   case $withval in
     yes)
-      as_fn_error $? "argument required for --with-env-script-aliases option" "$LINENO" 5
+      as_fn_error $? "argument required for --with-env-script-alias option" "$LINENO" 5
       ;;
     no)
-      as_fn_error $? "argument required for --with-env-script-aliases option" "$LINENO" 5
+      as_fn_error $? "argument required for --with-env-script-alias option" "$LINENO" 5
       ;;
     *)
 
@@ -3018,7 +3017,7 @@ if test "${with_env_script_aliases+set}" = set; then :
 fi
 
 
-GP_ENV_SCRIPT_ALIASES=$with_env_script_aliases
+GP_ENV_SCRIPT_ALIAS=$with_env_script_alias
 
 
 

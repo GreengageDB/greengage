@@ -35,12 +35,12 @@ That is the pattern `gpMgmt/bin/gppylib/gpversion.py` uses to parse
 started by the build, which takes down `gpstart`, `gpstop`, `gppkg`, `analyzedb`
 and `gpload`. `configure` enforces the pattern and refuses such a name.
 
-### `--with-env-script-aliases=NAMES`
+### `--with-env-script-alias=NAME`
 
-Space separated list of extra symlinks created next to
-`$GPHOME/greengage_path.sh`, for installations whose users source the
-environment script under a historical name. The real file is always
-`greengage_path.sh`; the aliases point at it. Empty by default.
+An extra symlink created next to `$GPHOME/greengage_path.sh`, for installations
+whose users source the environment script under a historical name. The real file
+is always `greengage_path.sh`; the alias points at it. Empty by default, in which
+case no symlink is created.
 
 ### `--with-hashable-eq-symbol=SYMBOL`
 
@@ -60,7 +60,7 @@ the upstream build** and must be validated against the distribution's own
 ```
 ./configure \
     --with-product-name="Historic Database" \
-    --with-env-script-aliases=historic_path.sh \
+    --with-env-script-alias=historic_path.sh \
     --with-hashable-eq-symbol=is_builtin_historic_hashable_equality_between_same_type
 ```
 
@@ -68,7 +68,7 @@ The same flags can be passed through `gpAux`:
 
 ```
 make -C gpAux CONFIGURE_FLAGS='--with-product-name="Historic Database" \
-    --with-env-script-aliases=historic_path.sh' dist
+    --with-env-script-alias=historic_path.sh' dist
 ```
 
 ## Scope

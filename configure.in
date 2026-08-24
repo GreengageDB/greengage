@@ -73,11 +73,11 @@ AC_DEFINE_UNQUOTED(PACKAGE_NAME, ["$with_product_name"],
 AC_DEFINE_UNQUOTED(PACKAGE_STRING, ["$with_product_name $PACKAGE_VERSION"],
                    [Define to the full name and version of this package.])
 
-PGAC_ARG_REQ(with, env-script-aliases, [NAMES],
-             [space separated extra symlinks to greengage_path.sh in GPHOME],
+PGAC_ARG_REQ(with, env-script-alias, [NAME],
+             [extra symlink to greengage_path.sh in GPHOME],
              [], [])
-GP_ENV_SCRIPT_ALIASES=$with_env_script_aliases
-AC_SUBST(GP_ENV_SCRIPT_ALIASES)
+GP_ENV_SCRIPT_ALIAS=$with_env_script_alias
+AC_SUBST(GP_ENV_SCRIPT_ALIAS)
 
 PGAC_ARG_REQ(with, hashable-eq-symbol, [SYMBOL],
              [export the builtin hashable equality helper under SYMBOL],
