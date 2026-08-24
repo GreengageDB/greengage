@@ -7,7 +7,7 @@
 \! gpstop -raq -M fast
 \c
 --end_ignore
-CREATE EXTENSION pg_cron VERSION '1.0';
+CREATE EXTENSION pg_cron VERSION '1.0' LOCAL;
 SELECT extversion FROM pg_extension WHERE extname='pg_cron';
 -- Test binary compatibility with v1.3 function signature.
 ALTER EXTENSION pg_cron UPDATE TO '1.3';
@@ -21,7 +21,7 @@ SELECT cron.unschedule('testjob');
 
 -- Test cache invalidation
 DROP EXTENSION pg_cron;
-CREATE EXTENSION pg_cron VERSION '1.4';
+CREATE EXTENSION pg_cron VERSION '1.4' LOCAL;
 
 ALTER EXTENSION pg_cron UPDATE;
 
@@ -172,7 +172,7 @@ CREATE OR REPLACE FUNCTION public.func1(current_setting) RETURNS text
 
 CREATE CAST (current_setting AS text) WITH FUNCTION public.func1(current_setting) AS IMPLICIT;
 
-CREATE EXTENSION pg_cron;
+CREATE EXTENSION pg_cron LOCAL;
 select * from public.test;
 
 -- valid interval jobs

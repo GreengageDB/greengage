@@ -110,4 +110,4 @@ installcheck:
 	$(MAKE) -C gp_check_functions installcheck
 	$(MAKE) -C temp_tables_stat installcheck
 	$(MAKE) -C credcheck installcheck
-	$(MAKE) -C pg_cron PGOPTIONS="-c gp_session_role=utility" installcheck
+	$(MAKE) -C pg_cron installcheck
