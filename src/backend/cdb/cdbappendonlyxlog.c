@@ -141,17 +141,7 @@ void xlog_ao_truncate(RelFileNode relFileNode, int32 segmentFileNum, int64 offse
 
 	XLogInsert(RM_APPEND_ONLY_ID, XLOG_APPENDONLY_TRUNCATE);
 
-	/*
-	 * See xlog_ao_insert: no block references, mark the write explicitly.
-	 *
-	 * Unlike xlog_ao_insert, do not assert an assigned xid here: the vacuum
-	 * drop phase truncates awaiting-drop segfiles before it touches
-	 * pg_aoseg (AppendOnlyCompaction_DropSegmentFile runs ahead of
-	 * ClearFileSegInfo), so this record can be the transaction's first
-	 * xid-assigning-free WAL.  The mark is correct regardless: the truncate
-	 * is durable work, and the same transaction assigns an xid moments later
-	 * when it updates the segfile catalog entry.
-	 */
+	/* See xlog_ao_insert: no block references, mark the write explicitly. */
 	MarkWalWriteForPermanentRel();
 }
 
