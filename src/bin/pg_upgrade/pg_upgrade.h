@@ -533,6 +533,7 @@ void		init_tablespaces(void);
 /* server.c */
 
 PGconn	   *connectToServer(ClusterInfo *cluster, const char *db_name);
+void        dieOnQueryFailure(PGconn *conn, PGresult *result, const char *query) pg_attribute_noreturn();
 PGresult   *executeQueryOrDie(PGconn *conn, const char *fmt,...) pg_attribute_printf(2, 3);
 PGresult   *executeQueryOrDieWithoutLog(PGconn *conn, const char *fmt,...) pg_attribute_printf(2, 3);
 
