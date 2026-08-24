@@ -93,6 +93,29 @@ Feature: gpactivatestandby
           And verify the standby coordinator is now acting as coordinator
           And clean up and revert back to original coordinator
 
+    Scenario: activation still happens when non-critical exception is thrown
+        Given the database is running
+          And the standby is not initialized
+
+         When the user runs gpinitstandby with options " "
+         Then gpinitstandby should return a return code of 0
+          And verify the standby coordinator entries in catalog
+        
+         When all files in pg_wal directory are deleted from data directory of preferred primary of content 1
+          And the standby coordinator goes down
+         Then the coordinator goes down
+         
+         When the user runs gpactivatestandby with options "-f"
+         Then gpactivatestandby should return a return code of 3
+          And verify the standby coordinator is now acting as coordinator
+          And gpactivatestandby should print a "Encountered exception" warning
+
+         When the user runs command "gprecoverseg -a --differential" from standby coordinator
+         Then gprecoverseg should return a return code of 0
+          And the user runs command "gprecoverseg -a -s -r" from standby coordinator
+          And gprecoverseg should return a return code of 0
+          And clean up and revert back to original coordinator
+
 ########################### @concourse_cluster tests ###########################
 # The @concourse_cluster tag denotes the scenario that requires a remote cluster
 
