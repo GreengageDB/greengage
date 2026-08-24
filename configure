@@ -2972,15 +2972,14 @@ fi
 
 : ${with_product_name:="Greengage Database"}
 
-case $with_product_name in
-  Green*\ Database) ;;
-  *) { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: gpMgmt parses version() with a \"Green... Database\" pattern
-                  (gpMgmt/bin/gppylib/gpversion.py); other product names will
-                  break version detection in the management utilities" >&5
-$as_echo "$as_me: WARNING: gpMgmt parses version() with a \"Green... Database\" pattern
-                  (gpMgmt/bin/gppylib/gpversion.py); other product names will
-                  break version detection in the management utilities" >&2;} ;;
-esac
+if expr "X$with_product_name" : 'XGreen[a-zA-Z0-9_][a-zA-Z0-9_]* Database$' >/dev/null; then
+  :
+else
+  as_fn_error $? "product name \"$with_product_name\" does not match the \"Green\w+
+Database\" pattern that gpMgmt/bin/gppylib/gpversion.py uses to parse version().
+GpVersion() would raise on every server started by this build, so gpstart,
+gpstop, gpstate, gppkg and gpload would all fail at run time." "$LINENO" 5
+fi
 
 
 cat >>confdefs.h <<_ACEOF

@@ -28,10 +28,12 @@ The same value must be used for the whole installation: `pg_ctl`,
 `pg_basebackup` and `pg_rewind` locate their helper binaries with
 `find_other_exec()`, which compares the `--version` output verbatim.
 
-**Constraint.** The management utilities parse `select version()` with a
-`Green... Database` pattern (`gpMgmt/bin/gppylib/gpversion.py`). A product name
-outside that pattern will break version detection in `gpstart`, `gpstate`,
-`gppkg` and friends; `configure` warns when it sees one.
+**Constraint.** The name must match `Green\w+ Database` — `\w` being
+`[a-zA-Z0-9_]`, so no spaces, hyphens or dots between `Green` and ` Database`.
+That is the pattern `gpMgmt/bin/gppylib/gpversion.py` uses to parse
+`select version()`. A name outside it makes `GpVersion()` raise on every server
+started by the build, which takes down `gpstart`, `gpstop`, `gppkg`, `analyzedb`
+and `gpload`. `configure` enforces the pattern and refuses such a name.
 
 ### `--with-env-script-aliases=NAMES`
 
