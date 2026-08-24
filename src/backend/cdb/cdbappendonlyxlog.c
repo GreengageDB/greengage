@@ -141,7 +141,11 @@ void xlog_ao_truncate(RelFileNode relFileNode, int32 segmentFileNum, int64 offse
 
 	XLogInsert(RM_APPEND_ONLY_ID, XLOG_APPENDONLY_TRUNCATE);
 
-	/* See xlog_ao_insert: no block references, mark the write explicitly. */
+	/*
+	 * See xlog_ao_insert: no block references, mark the write explicitly.
+	 * No xid assertion here: the vacuum drop phase truncates awaiting-drop
+	 * segfiles before ClearFileSegInfo() assigns the transaction's xid.
+	 */
 	MarkWalWriteForPermanentRel();
 }
 

@@ -247,6 +247,31 @@ select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid)
 select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid)
   from gp_segment_configuration where role = 'p' and content = 0;
 
+-- Case 14: a read after LOCK TABLE (which assigned an xid) still stays
+-- one-phase.  With gp_disable_tuple_hints=on (the default) the QE defers
+-- hint-bit dirtying for user tables with recent xmins, so reading the
+-- just-populated table emits no XLOG_FPI_FOR_HINT that could pick up the
+-- lock's xid; the table's catalog rows were already hinted by the earlier
+-- statements.  autovacuum is disabled on it so nothing hints it in between.
+create table dtx_phase_hint_target(a int) with (autovacuum_enabled = false) distributed by (a);
+insert into dtx_phase_hint_target select i from generate_series(1, 100) i;
+checkpoint;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+1: set gp_disable_tuple_hints = on;
+1: begin;
+1: lock table dtx_phase_lock_only in access exclusive mode;
+1: select count(*) from dtx_phase_hint_target;
+1: commit;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = 0;
+
 1q:
 drop table dtx_phase_heap;
 drop table dtx_phase_ao;
@@ -254,3 +279,4 @@ drop table dtx_phase_aocs;
 drop table dtx_phase_prune;
 drop table dtx_phase_unlogged;
 drop table dtx_phase_lock_only;
+drop table dtx_phase_hint_target;
