@@ -157,7 +157,6 @@ typedef struct _extensionInfo
 	char	   *extversion;
 	char	   *extconfig;		/* info about configuration tables */
 	char	   *extcondition;
-	bool		local;
 } ExtensionInfo;
 
 typedef struct _typeInfo

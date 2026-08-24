@@ -490,8 +490,6 @@ create_empty_extension(PG_FUNCTION_ARGS)
 	Datum		extConfig;
 	Datum		extCondition;
 	List	   *requiredExtensions;
-	bool		isLocalExtension = false;
-	Oid			extensionOid;
 
 	if (PG_ARGISNULL(4))
 		extConfig = PointerGetDatum(NULL);
@@ -524,12 +522,7 @@ create_empty_extension(PG_FUNCTION_ARGS)
 		}
 	}
 
-	if (!PG_ARGISNULL(7))
-	{
-		isLocalExtension = PG_GETARG_BOOL(7);
-	}
-
-	extensionOid = InsertExtensionTuple(text_to_cstring(extName),
+	InsertExtensionTuple(text_to_cstring(extName),
 						 GetUserId(),
 					   get_namespace_oid(text_to_cstring(schemaName), false),
 						 relocatable,
@@ -537,11 +530,6 @@ create_empty_extension(PG_FUNCTION_ARGS)
 						 extConfig,
 						 extCondition,
 						 requiredExtensions);
-
-	if (isLocalExtension)
-	{
-		SetExtensionLocal(extensionOid);
-	}
 
 	PG_RETURN_VOID();
 }

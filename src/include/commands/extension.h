@@ -50,7 +50,5 @@ extern void AlterExtensionOwner_oid(Oid extensionOid, Oid newOwnerId);
 
 extern void ResetExtensionCreatingGlobalVarsOnQE(void);
 
-extern void SetExtensionLocal(Oid extensionOid);
-
 #endif							/* EXTENSION_H */
 

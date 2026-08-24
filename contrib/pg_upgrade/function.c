@@ -87,7 +87,7 @@ install_support_functions_in_new_db(const char *db_name)
 							  "LANGUAGE C STRICT;"));
 	PQclear(executeQueryOrDie(conn,
 							  "CREATE OR REPLACE FUNCTION "
-							  "binary_upgrade.create_empty_extension(text, text, bool, text, oid[], text[], text[], bool) "
+							  "binary_upgrade.create_empty_extension(text, text, bool, text, oid[], text[], text[]) "
 							  "RETURNS VOID "
 							  "AS '$libdir/pg_upgrade_support' "
 							  "LANGUAGE C;"));

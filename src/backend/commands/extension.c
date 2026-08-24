@@ -87,6 +87,7 @@ typedef struct ExtensionControlFile
 	char	   *schema;			/* target schema (allowed if !relocatable) */
 	bool		relocatable;	/* is ALTER EXTENSION SET SCHEMA supported? */
 	bool		superuser;		/* must be superuser to install? */
+	bool		local;			/* must the extension run coordinator-only? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
 } ExtensionControlFile;
@@ -118,8 +119,6 @@ static void ApplyExtensionUpdates(Oid extensionOid,
 					  const char *initialVersion,
 					  List *updateVersions);
 static char *read_whole_file(const char *filename, int *length);
-
-static bool IsExtensionLocal(Oid extensionOid);
 
 
 /*
@@ -552,6 +551,14 @@ parse_extension_control_file(ExtensionControlFile *control,
 						 errmsg("parameter \"%s\" requires a Boolean value",
 								item->name)));
 		}
+		else if (strcmp(item->name, "local") == 0)
+		{
+			if (!parse_bool(item->value, &control->local))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("parameter \"%s\" requires a Boolean value",
+								item->name)));
+		}
 		else if (strcmp(item->name, "encoding") == 0)
 		{
 			control->encoding = pg_valid_server_encoding(item->value);
@@ -608,6 +615,7 @@ read_extension_control_file(const char *extname)
 	control->name = pstrdup(extname);
 	control->relocatable = false;
 	control->superuser = true;
+	control->local = false;
 	control->encoding = -1;
 
 	/*
@@ -900,7 +908,7 @@ execute_extension_script(Node *stmt,
 	 * things. On failure, ensure we reset these variables.
 	 */
 	creating_extension = true;
-	creating_extension_local = IsExtensionLocal(extensionOid);
+	creating_extension_local = control->local;
 	CurrentExtensionObject = extensionOid;
 
 	/*
@@ -1267,30 +1275,6 @@ find_update_path(List *evi_list,
 	return result;
 }
 
-void SetExtensionLocal(Oid extensionOid)
-{
-    ObjectAddress extAddr;
-    extAddr.classId = ExtensionRelationId;
-    extAddr.objectId = extensionOid;
-    extAddr.objectSubId = 0;
-
-    SetSecurityLabel(&extAddr, "gp_local_ext", "true");
-}
-
-static bool IsExtensionLocal(Oid extensionOid)
-{
-    ObjectAddress extAddr;
-    extAddr.classId = ExtensionRelationId;
-    extAddr.objectId = extensionOid;
-    extAddr.objectSubId = 0;
-
-	char *lbl = GetSecurityLabel(&extAddr, "gp_local_ext");
-	if (lbl)
-		return strcmp(lbl, "true") == 0;
-
-	return false;
-}
-
 /*
  * CREATE EXTENSION
  */
@@ -1312,7 +1296,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
-	bool		localExtension = false;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -1410,8 +1393,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 						 errmsg("conflicting or redundant options")));
 			d_old_version = defel;
 		}
-		else if (strcmp(defel->defname, "local") == 0)
-			localExtension = true;
 		else
 			elog(ERROR, "unrecognized option: %s", defel->defname);
 	}
@@ -1599,12 +1580,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 										PointerGetDatum(NULL),
 										PointerGetDatum(NULL),
 										requiredExtensions);
-
-	if (localExtension)
-	{
-	    SetExtensionLocal(extensionOid);
-		CommandCounterIncrement();
-	}
 
 	/*
 	 * Apply any control-file comment on extension
