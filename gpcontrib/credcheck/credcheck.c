@@ -1932,6 +1932,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				ListCell      *option;
 				char          *password;
 				bool           save_password = false;
+				bool           has_other_option = false;
 				DefElem    *dvalidUntil = NULL;
 				DefElem    *dpassword = NULL;
 
@@ -1966,6 +1967,11 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					else if (strcmp(defel->defname, "validUntil") == 0)
 					{
 						dvalidUntil = defel;
+					}
+					else
+					{
+						/* any other role option (SUPERUSER, CREATEROLE, ...) */
+						has_other_option = true;
 					}
 				}
 
@@ -2020,8 +2026,12 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					 * 	Only roles with the CREATEROLE attribute and the ADMIN option
 					 * 	on role "..." may alter this role.
 					 * force use of the superuser privilege to modify the password user.
+					 * Restrict this elevation to a pure password change on the caller's
+					 * own role, otherwise privileged options (SUPERUSER, CREATEROLE, ...)
+					 * would run as the bootstrap superuser.
 					 */
-					if (!superuser() && get_rolespec_oid(stmt->role, false) == GetUserId())
+					if (!superuser() && dpassword != NULL && !has_other_option
+						&& get_rolespec_oid(stmt->role, false) == GetUserId())
 						use_superuser_priv = true;
 				}
 
