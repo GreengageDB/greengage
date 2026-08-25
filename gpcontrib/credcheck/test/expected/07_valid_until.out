@@ -68,3 +68,49 @@ SELECT count(*), '1' AS "expected" FROM pg_password_history ;
 (1 row)
 
 DROP USER aaa;
+--
+-- Privilege escalation regression: a non-superuser altering their own role must
+-- never be elevated to superuser just because credcheck auto-injects a VALID
+-- UNTIL clause. Only a pure password change on the caller's own role may be run
+-- with elevated privileges.
+--
+CREATE USER low_priv;
+SET ROLE low_priv;
+-- Attempt to smuggle privileged options into a self ALTER ROLE; must not elevate
+DO $$
+DECLARE
+	escalated boolean;
+BEGIN
+	BEGIN
+		ALTER ROLE low_priv CREATEDB;
+	EXCEPTION WHEN OTHERS THEN NULL;
+	END;
+    BEGIN
+		ALTER ROLE low_priv CREATEROLE;
+	EXCEPTION WHEN OTHERS THEN NULL;
+	END;
+	BEGIN
+		ALTER ROLE low_priv BYPASSRLS;
+	EXCEPTION WHEN OTHERS THEN NULL;
+	END;
+	BEGIN
+		ALTER ROLE low_priv SUPERUSER;
+	EXCEPTION WHEN OTHERS THEN NULL;
+	END;
+	BEGIN
+		ALTER ROLE low_priv PASSWORD 'SomePass2' SUPERUSER;
+	EXCEPTION WHEN OTHERS THEN NULL;
+	END;
+	SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls
+		INTO escalated FROM pg_roles WHERE rolname = current_role;
+	IF escalated THEN
+		RAISE NOTICE 'FAIL: low_priv gained privileges';
+	ELSE
+		RAISE NOTICE 'PASS: no privilege escalation';
+	END IF;
+END $$;
+NOTICE:  PASS: no privilege escalation
+-- A plain self password change must still be accepted (elevation still works)
+ALTER ROLE low_priv PASSWORD 'SomePass3';
+RESET ROLE;
+DROP ROLE low_priv;
