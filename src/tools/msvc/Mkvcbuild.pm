@@ -104,7 +104,7 @@ sub mkvcbuild
 	  pread.c pwrite.c pg_bitutils.c
 	  pg_strong_random.c pgcheckdir.c pgmkdirp.c pgsleep.c pgstrcasecmp.c
 	  pqsignal.c mkdtemp.c qsort.c qsort_arg.c quotes.c setenv.c system.c
-	  sprompt.c strerror.c tar.c thread.c
+	  sprompt.c strerror.c tar.c thread.c timingsafe_bcmp.c
 	  win32env.c win32error.c win32security.c win32setlocale.c);
 
 	push(@pgportfiles, 'rint.c') if ($vsVersion < '12.00');
