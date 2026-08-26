@@ -13,7 +13,7 @@ is identical to a build of the unmodified sources.
 ### `--with-product-name=NAME`
 
 The product, as one word and without the ` Database` that is appended to it.
-`--with-product-name=Greenplum` names the product `Greenplum Database`; the
+`--with-product-name=Greengrocer` names the product `Greengrocer Database`; the
 default names it `Greengage Database`.
 
 ` Database` is appended rather than taken from the caller because
