@@ -2907,6 +2907,7 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 			selected_partition_mdids->Release();
 			selected_partition_cnstrs->Release();
 			foreign_server_mdids->Release();
+			selected_partitions->Release();
 			CColRefArray *colref_array =
 				expr->DeriveOutputColumns()->Pdrgpcr(mp);
 
