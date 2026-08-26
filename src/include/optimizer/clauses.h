@@ -121,17 +121,6 @@ extern bool is_grouping_extension(CanonicalGroupingSets *grpsets);
 extern bool contain_extended_grouping(List *grp);
 
 extern bool is_builtin_true_equality_between_same_type(int opno);
-
-#ifdef GP_HASHABLE_EQ_SYMBOL
-/*
- * Distributions may need the backend to export this function under a
- * historical name so that extensions built against their older releases keep
- * loading.  The name is supplied at configure time by
- * --with-hashable-eq-symbol; the default build exports the name below.
- */
-#define is_builtin_greengage_hashable_equality_between_same_type \
-		GP_HASHABLE_EQ_SYMBOL
-#endif
 extern bool is_builtin_greengage_hashable_equality_between_same_type(int opno);
 
 extern bool subexpression_match(Expr *expr1, Expr *expr2);

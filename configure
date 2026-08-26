@@ -840,7 +840,6 @@ ac_user_opts='
 enable_option_checking
 with_extra_version
 with_product_name
-with_hashable_eq_symbol
 with_template
 with_includes
 with_libraries
@@ -1568,9 +1567,6 @@ Optional Packages:
                           name the product "NAME Database" and symlink
                           name_path.sh to greengage_path.sh in GPHOME
                           (default: Greengage)
-  --with-hashable-eq-symbol=SYMBOL
-                          export the builtin hashable equality helper under
-                          SYMBOL
   --with-template=NAME    override operating system template
   --with-includes=DIRS    look for additional header files in DIRS
   --with-libraries=DIRS   look for additional libraries in DIRS
@@ -3004,35 +3000,6 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
-
-
-
-
-# Check whether --with-hashable-eq-symbol was given.
-if test "${with_hashable_eq_symbol+set}" = set; then :
-  withval=$with_hashable_eq_symbol;
-  case $withval in
-    yes)
-      as_fn_error $? "argument required for --with-hashable-eq-symbol option" "$LINENO" 5
-      ;;
-    no)
-      as_fn_error $? "argument required for --with-hashable-eq-symbol option" "$LINENO" 5
-      ;;
-    *)
-
-      ;;
-  esac
-
-fi
-
-
-if test -n "$with_hashable_eq_symbol"; then
-
-cat >>confdefs.h <<_ACEOF
-#define GP_HASHABLE_EQ_SYMBOL $with_hashable_eq_symbol
-_ACEOF
-
-fi
 
 template=
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking which template to use" >&5

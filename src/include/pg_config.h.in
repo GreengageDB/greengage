@@ -97,10 +97,6 @@
 /* Define to 1 to build ORCA for MacOS (GPOS_Darwin=1) */
 #undef GPOS_Darwin
 
-/* Override the exported name of the builtin hashable equality helper for
-   extension ABI compatibility */
-#undef GP_HASHABLE_EQ_SYMBOL
-
 /* Greengage major version as a string */
 #undef GP_MAJORVERSION
 

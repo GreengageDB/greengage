@@ -5,10 +5,10 @@ historically carried a patch set against the sources for that purpose alone.
 The naming is a build parameter, not a behaviour change, so `configure` exposes
 it directly.
 
-All options below default to the stock upstream values: a build that passes
-none of them is identical to a build of the unmodified sources.
+The option defaults to the stock upstream value: a build that does not pass it
+is identical to a build of the unmodified sources.
 
-## Options
+## The option
 
 ### `--with-product-name=NAME`
 
@@ -46,29 +46,14 @@ under that name. `NAME` is lower cased for it. The real file is always
 `greengage_path.sh`; the alias points at it. No symlink is created for a default
 build, or for a `NAME` that would name the file after itself.
 
-### `--with-hashable-eq-symbol=SYMBOL`
-
-Exports `is_builtin_greengage_hashable_equality_between_same_type()` under
-`SYMBOL` instead of its upstream name. This is an ABI escape hatch for
-distributions whose already released extensions resolve the function under a
-historical name at `dlopen()` time. Empty by default, in which case the
-upstream name is exported.
-
-The value is a C identifier, not a string, and it *renames* the symbol rather
-than adding an alias. A build that sets it is therefore **ABI incompatible with
-the upstream build** and must be validated against the distribution's own
-`.abi-check` baselines rather than the ones in this repository.
-
 ## Example
 
 ```
-./configure \
-    --with-product-name=Greengrocer \
-    --with-hashable-eq-symbol=is_builtin_greengrocer_hashable_equality_between_same_type
+./configure --with-product-name=Greengrocer
 ```
 
-which names the product `Greengrocer Database` and symlinks
-`$GPHOME/greengrocer_path.sh` to `greengage_path.sh`. The same flags can be
+names the product `Greengrocer Database` and symlinks
+`$GPHOME/greengrocer_path.sh` to `greengage_path.sh`. The same flag can be
 passed through `gpAux`:
 
 ```
@@ -77,10 +62,10 @@ make -C gpAux CONFIGURE_FLAGS='--with-product-name=Greengrocer' dist
 
 ## Scope
 
-The options cover the version strings and the exported symbol only. Product
-names embedded in `errmsg()`/`errdetail()` texts, in comments, in documentation
-and in package names are unaffected — their values are pinned by hundreds of
-regression test expected files.
+The option covers the version strings only. Product names embedded in
+`errmsg()`/`errdetail()` texts, in comments, in documentation and in package
+names are unaffected — their values are pinned by hundreds of regression test
+expected files.
 
 The MSVC client build does not parameterize the product name: it reads
 `src/include/pg_config.h.win32`, which is a static file and does not go through
