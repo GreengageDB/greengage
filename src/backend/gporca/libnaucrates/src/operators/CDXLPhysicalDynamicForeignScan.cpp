@@ -12,11 +12,11 @@
 
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicForeignScan.h"
 
+#include "naucrates/base/CDXLBitMapSet.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"
 #include "naucrates/md/IMDCacheObject.h"
-#include "naucrates/base/CDXLBitMapSet.h"
 
 using namespace gpos;
 using namespace gpdxl;
@@ -31,8 +31,9 @@ using namespace gpdxl;
 //
 //---------------------------------------------------------------------------
 CDXLPhysicalDynamicForeignScan::CDXLPhysicalDynamicForeignScan(
-	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids, CBitSet *selected_parts,
-	ULongPtrArray *selector_ids, OID foreign_server_oid)
+	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids,
+	CBitSet *selected_parts, ULongPtrArray *selector_ids,
+	OID foreign_server_oid)
 	: CDXLPhysical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_part_mdids(part_mdids),

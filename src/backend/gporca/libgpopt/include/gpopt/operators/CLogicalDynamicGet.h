@@ -106,7 +106,7 @@ public:
 	{
 		return m_has_security_quals;
 	}
-	
+
 	CBitSet *
 	GetSelectedParts() const
 	{

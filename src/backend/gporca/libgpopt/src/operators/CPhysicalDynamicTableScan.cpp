@@ -36,8 +36,8 @@ using namespace gpopt;
 CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG ulOriginOpId, ULONG scan_id, CColRefArray *pdrgpcrOutput,
-	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids, CBitSet *selected_parts,
-	ColRefToUlongMapArray *root_col_mapping_per_part)
+	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
+	CBitSet *selected_parts, ColRefToUlongMapArray *root_col_mapping_per_part)
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
 						   root_col_mapping_per_part),

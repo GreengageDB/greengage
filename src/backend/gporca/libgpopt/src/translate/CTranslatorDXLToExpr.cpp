@@ -639,7 +639,7 @@ CTranslatorDXLToExpr::PexprLogicalGet(const CDXLNode *dxlnode)
 		CBitSet *selected_partitions = GPOS_NEW(m_mp) CBitSet(m_mp);
 		selected_partitions->SetFirstN(partition_mdids->Size());
 		popGet = GPOS_NEW(m_mp) CLogicalDynamicGet(
-			m_mp, pname, ptabdesc, part_idx_id, partition_mdids, 
+			m_mp, pname, ptabdesc, part_idx_id, partition_mdids,
 			foreign_server_mdids, selected_partitions, hasSecurityQuals);
 		CLogicalDynamicGet *popDynamicGet =
 			CLogicalDynamicGet::PopConvert(popGet);

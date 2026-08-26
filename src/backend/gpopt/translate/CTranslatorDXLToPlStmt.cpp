@@ -563,9 +563,9 @@ CTranslatorDXLToPlStmt::TranslatePartOids(IMdIdArray *parts, INT lockmode)
 }
 
 Bitmapset *
-CTranslatorDXLToPlStmt::TranslateCBitSet(CBitSet* set)
+CTranslatorDXLToPlStmt::TranslateCBitSet(CBitSet *set)
 {
-	Bitmapset* result = NULL;
+	Bitmapset *result = NULL;
 
 	CBitSetIter bsiter(*set);
 	while (bsiter.Advance())
@@ -573,7 +573,7 @@ CTranslatorDXLToPlStmt::TranslateCBitSet(CBitSet* set)
 		auto value = bsiter.Bit();
 		result = gpdb::BmsAddMember(result, value);
 	}
-	
+
 	return result;
 }
 
@@ -4296,8 +4296,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 
 	dyn_seq_scan->partOids = TranslatePartOids(dyn_tbl_scan_dxlop->GetParts(),
 											   dxl_table_descr->LockMode());
-	dyn_seq_scan->selected_parts = TranslateCBitSet(
-			dyn_tbl_scan_dxlop->GetSelectedParts());
+	dyn_seq_scan->selected_parts =
+		TranslateCBitSet(dyn_tbl_scan_dxlop->GetSelectedParts());
 
 	OID oid_type =
 		CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -4614,8 +4614,9 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	// which assumes we're working with a foreign table. The root partition is
 	// not foreign!
 	int firstForeignPartIdx =
-			gpdb::BmsNextMember(dyn_foreign_scan->selected_parts, -1);
-	Oid oid_first_child = CMDIdGPDB::CastMdid((*parts)[firstForeignPartIdx])->Oid();
+		gpdb::BmsNextMember(dyn_foreign_scan->selected_parts, -1);
+	Oid oid_first_child =
+		CMDIdGPDB::CastMdid((*parts)[firstForeignPartIdx])->Oid();
 	rte->relid = oid_first_child;
 	// need to lock foreign rel when calling out to CreateForeignScan
 	gpdb::GPDBLockRelationOid(
@@ -4653,7 +4654,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	dyn_foreign_scan->fdw_private_list = NIL;
 	for (ULONG ul = 0; ul < parts->Size(); ul++)
 	{
-		if(!selected_parts->Get(ul))
+		if (!selected_parts->Get(ul))
 		{
 			continue;
 		}

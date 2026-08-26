@@ -58,7 +58,8 @@ CLogicalDynamicGet::CLogicalDynamicGet(
 	ULONG ulPartIndex, CColRefArray *pdrgpcrOutput,
 	CColRef2dArray *pdrgpdrgpcrPart, IMdIdArray *partition_mdids,
 	CConstraint *partition_cnstrs_disj, BOOL static_pruned,
-	IMdIdArray *foreign_server_mdids, CBitSet *selected_parts, BOOL hasSecurityQuals)
+	IMdIdArray *foreign_server_mdids, CBitSet *selected_parts,
+	BOOL hasSecurityQuals)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
 							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
 	  m_partition_cnstrs_disj(partition_cnstrs_disj),

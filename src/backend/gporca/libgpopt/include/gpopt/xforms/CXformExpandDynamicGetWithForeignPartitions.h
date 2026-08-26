@@ -56,10 +56,10 @@ using SForeignServerToIMdIdArrayMap =
 			 FEqualSForeignServer, CleanupDelete<SForeignServer>,
 			 CleanupRelease<IMdIdArray>>;
 
-using SForeignServerToBitSetMap = 
+using SForeignServerToBitSetMap =
 	CHashMap<SForeignServer, CBitSet, UlHashSForeignServer,
 			 FEqualSForeignServer, CleanupDelete<SForeignServer>,
-			     CleanupRelease<CBitSet>>;
+			 CleanupRelease<CBitSet>>;
 
 // iterator
 using SForeignServerToIMdIdArrayMapIter =

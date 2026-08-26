@@ -313,8 +313,8 @@ CBitSet::SetFirstN(ULONG count)
 		bsl = pbsl_new;
 	}
 	ULONG offset = 0;
-	while (true) {
-		
+	while (true)
+	{
 		CBitVector *vec = bsl->GetVec();
 		if (count >= m_vector_size)
 		{
@@ -327,7 +327,7 @@ CBitSet::SetFirstN(ULONG count)
 			break;
 		}
 		offset += m_vector_size;
-		
+
 		if (nullptr == m_bsllist.Next(bsl))
 		{
 			CBitSetLink *pbsl_new =

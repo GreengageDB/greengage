@@ -12,11 +12,11 @@
 
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicTableScan.h"
 
+#include "naucrates/base/CDXLBitMapSet.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"
 #include "naucrates/md/IMDCacheObject.h"
-#include "naucrates/base/CDXLBitMapSet.h"
 
 using namespace gpos;
 using namespace gpdxl;
@@ -31,8 +31,8 @@ using namespace gpdxl;
 //
 //---------------------------------------------------------------------------
 CDXLPhysicalDynamicTableScan::CDXLPhysicalDynamicTableScan(
-	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids, CBitSet *selected_parts,
-	ULongPtrArray *selector_ids)
+	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids,
+	CBitSet *selected_parts, ULongPtrArray *selector_ids)
 	: CDXLPhysical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_part_mdids(part_mdids),
@@ -143,10 +143,11 @@ CDXLPhysicalDynamicTableScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
-	
-	CDXLBitMapSet::SerializeToDXL(m_mp, xml_serializer,
-								  CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
-								  m_selected_parts);
+
+	CDXLBitMapSet::SerializeToDXL(
+		m_mp, xml_serializer,
+		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+		m_selected_parts);
 
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(

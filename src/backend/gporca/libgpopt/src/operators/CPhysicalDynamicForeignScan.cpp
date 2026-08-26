@@ -35,9 +35,9 @@ using namespace gpopt;
 CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG ulOriginOpId, ULONG scan_id, CColRefArray *pdrgpcrOutput,
-	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids, CBitSet *selected_parts,
-	ColRefToUlongMapArray *root_col_mapping_per_part, OID foreign_server_oid,
-	IMDRelation::Ereldistrpolicy exec_location)
+	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
+	CBitSet *selected_parts, ColRefToUlongMapArray *root_col_mapping_per_part,
+	OID foreign_server_oid, IMDRelation::Ereldistrpolicy exec_location)
 
 
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,

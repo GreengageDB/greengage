@@ -43,12 +43,11 @@ public:
 							  CColRefArray *pdrgpcrOutput,
 							  CColRef2dArray *pdrgpdrgpcrPart,
 							  IMdIdArray *partition_mdids,
-							  CBitSet *selected_parts,
-							  OID foreign_server_oid,
+							  CBitSet *selected_parts, OID foreign_server_oid,
 							  IMDRelation::Ereldistrpolicy exec_location);
 
 	~CLogicalDynamicForeignGet() override;
-	
+
 	// ident accessors
 
 	EOperatorId
@@ -83,13 +82,13 @@ public:
 	{
 		return m_exec_location;
 	}
-	
+
 	CBitSet *
 	GetSelectedParts() const
 	{
 		return m_selected_parts;
 	}
-	
+
 	//-------------------------------------------------------------------------------------
 	// Required Relational Properties
 	//-------------------------------------------------------------------------------------

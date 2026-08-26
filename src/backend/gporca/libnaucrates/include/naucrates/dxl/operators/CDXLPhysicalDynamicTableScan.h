@@ -15,10 +15,10 @@
 #define GPDXL_CDXLPhysicalDynamicTableScan_H
 
 #include "gpos/base.h"
+#include "gpos/common/CBitSet.h"
 
 #include "naucrates/dxl/operators/CDXLPhysical.h"
 #include "naucrates/dxl/operators/CDXLTableDescr.h"
-#include "gpos/common/CBitSet.h"
 
 namespace gpdxl
 {

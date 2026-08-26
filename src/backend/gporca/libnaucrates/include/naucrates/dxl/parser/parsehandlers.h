@@ -169,6 +169,7 @@
 #include "naucrates/dxl/parser/CParseHandlerScalarWindowRef.h"
 #include "naucrates/dxl/parser/CParseHandlerSearchStage.h"
 #include "naucrates/dxl/parser/CParseHandlerSearchStrategy.h"
+#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 #include "naucrates/dxl/parser/CParseHandlerSequence.h"
 #include "naucrates/dxl/parser/CParseHandlerSort.h"
 #include "naucrates/dxl/parser/CParseHandlerSortCol.h"
@@ -190,7 +191,6 @@
 #include "naucrates/dxl/parser/CParseHandlerWindowSpec.h"
 #include "naucrates/dxl/parser/CParseHandlerWindowSpecList.h"
 #include "naucrates/dxl/parser/CParseHandlerXform.h"
-#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 #endif	// !GPDXL_parsehandlers_H
 
 // EOF

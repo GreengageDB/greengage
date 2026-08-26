@@ -1400,9 +1400,8 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 
 
 	CDXLPhysicalDynamicTableScan *pdxlopDTS =
-		GPOS_NEW(m_mp) CDXLPhysicalDynamicTableScan(m_mp, table_descr,
-													part_mdids, selected_parts,
-													selector_ids);
+		GPOS_NEW(m_mp) CDXLPhysicalDynamicTableScan(
+			m_mp, table_descr, part_mdids, selected_parts, selector_ids);
 
 	CDXLNode *pdxlnDTS = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopDTS);
 	pdxlnDTS->SetProperties(pdxlpropDTS);
@@ -1621,7 +1620,7 @@ CTranslatorExprToDXL::PdxlnDynamicIndexScan(
 	{
 		pdxlnDIS = GPOS_NEW(m_mp)
 			CDXLNode(m_mp, GPOS_NEW(m_mp) CDXLPhysicalDynamicIndexOnlyScan(
-							   m_mp, table_descr, dxl_index_descr, 
+							   m_mp, table_descr, dxl_index_descr,
 							   EdxlisdForward, part_mdids, selector_ids));
 	}
 	else

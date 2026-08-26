@@ -19,9 +19,9 @@
 #include "naucrates/dxl/parser/CParseHandlerMetadataIdList.h"
 #include "naucrates/dxl/parser/CParseHandlerProjList.h"
 #include "naucrates/dxl/parser/CParseHandlerProperties.h"
+#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 #include "naucrates/dxl/parser/CParseHandlerTableDescr.h"
 #include "naucrates/dxl/parser/CParseHandlerUtils.h"
-#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 
 using namespace gpdxl;
 
@@ -165,7 +165,7 @@ CParseHandlerDynamicForeignScan::EndElement(
 	CParseHandlerMetadataIdList *partition_mdids_parse_handler =
 		dynamic_cast<CParseHandlerMetadataIdList *>((*this)[3]);
 	CParseHandlerSelectedPartitionsSet *selected_partition_set_handler =
-		dynamic_cast<CParseHandlerSelectedPartitionsSet*>((*this)[4]);
+		dynamic_cast<CParseHandlerSelectedPartitionsSet *>((*this)[4]);
 	CParseHandlerTableDescr *table_descr_parse_handler =
 		dynamic_cast<CParseHandlerTableDescr *>((*this)[5]);
 

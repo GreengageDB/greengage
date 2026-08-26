@@ -286,8 +286,8 @@ CParseHandlerFactory::Init(CMemoryPool *mp)
 		{EdxltokenPhysicalValuesScan, &CreateValuesScanParseHandler},
 		{EdxltokenNLJIndexParamList, &CreateNLJIndexParamListParseHandler},
 		{EdxltokenNLJIndexParam, &CreateNLJIndexParamParseHandler},
-		{EdxltokenSelectedPartitionSet, &CreateSelectedPartitionsSetParseHandler}
-	};
+		{EdxltokenSelectedPartitionSet,
+		 &CreateSelectedPartitionsSetParseHandler}};
 
 	const ULONG num_of_parse_handlers =
 		GPOS_ARRAY_SIZE(token_parse_handler_map);
@@ -2109,9 +2109,8 @@ CParseHandlerFactory::CreateSelectedPartitionsSetParseHandler(
 	CMemoryPool *mp, CParseHandlerManager *parse_handler_manager,
 	CParseHandlerBase *parse_handler_root)
 {
-	return GPOS_NEW(mp)
-		CParseHandlerSelectedPartitionsSet(mp, parse_handler_manager,
-										   parse_handler_root);
+	return GPOS_NEW(mp) CParseHandlerSelectedPartitionsSet(
+		mp, parse_handler_manager, parse_handler_root);
 }
 
 // EOF

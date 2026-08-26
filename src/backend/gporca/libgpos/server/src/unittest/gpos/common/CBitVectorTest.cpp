@@ -259,59 +259,59 @@ CBitVectorTest::EresUnittest_SetFirstN()
 	// create memory pool
 	CAutoMemoryPool amp;
 	CMemoryPool *mp = amp.Pmp();
-	
+
 	// Set zero length range
 	{
 		CBitVector bv(mp, 256);
 		bv.SetFirstN(0);
-		for(ULONG i = 0; i < 256; i++)
+		for (ULONG i = 0; i < 256; i++)
 		{
 			GPOS_ASSERT(bv.Get(i) == 0);
 		}
 	}
-	
-	// Set a range less than unit size 
+
+	// Set a range less than unit size
 	{
 		CBitVector bv(mp, 256);
 		bv.SetFirstN(10);
-		for(ULONG i = 0; i < 10; i++)
+		for (ULONG i = 0; i < 10; i++)
 		{
 			GPOS_ASSERT(bv.Get(i));
 		}
-		for(ULONG i = 10; i < 256; i++)
+		for (ULONG i = 10; i < 256; i++)
 		{
 			GPOS_ASSERT(bv.Get(i) == 0);
 		}
 	}
-	
-	// Set exactly one unit size range 
+
+	// Set exactly one unit size range
 	{
 		CBitVector bv(mp, 256);
 		bv.SetFirstN(64);
-		for(ULONG i = 0; i < 64; i++)
+		for (ULONG i = 0; i < 64; i++)
 		{
 			GPOS_ASSERT(bv.Get(i));
 		}
-		for(ULONG i = 64; i < 256; i++)
+		for (ULONG i = 64; i < 256; i++)
 		{
 			GPOS_ASSERT(bv.Get(i) == 0);
 		}
 	}
-	
+
 	// Set a range that is not a multiple of the unit size
 	{
 		CBitVector bv(mp, 256);
 		bv.SetFirstN(74);
-		for(ULONG i = 0; i < 74; i++)
+		for (ULONG i = 0; i < 74; i++)
 		{
 			GPOS_ASSERT(bv.Get(i));
 		}
-		for(ULONG i = 74; i < 256; i++)
+		for (ULONG i = 74; i < 256; i++)
 		{
 			GPOS_ASSERT(bv.Get(i) == 0);
 		}
 	}
-	
+
 	return GPOS_OK;
 }
 
