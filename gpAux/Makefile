@@ -703,16 +703,17 @@ copylibs :
 	mkdir -p $(INSTLOC)/etc
 	mkdir -p $(INSTLOC)/include
 
-# This makefile does not include src/Makefile.global, so the alias derived from
-# --with-product-name is read back from the generated file.
-GP_ENV_SCRIPT_ALIAS = $(shell sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
-                          $(BUILDDIR)/src/Makefile.global 2>/dev/null)
-
 greengage_path:
 	mkdir -p $(INSTLOC)
 	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(INSTLOC)/greengage_path.sh
-	@test -z "$(GP_ENV_SCRIPT_ALIAS)" || \
-	    ln -sf greengage_path.sh $(INSTLOC)/$(GP_ENV_SCRIPT_ALIAS)
+	@# This makefile does not include src/Makefile.global, so the alias
+	@# derived from --with-product-name is read back from the generated
+	@# file.  Reading it here rather than in a $(shell) assignment keeps
+	@# sed to one run and lets its exit status fail the recipe.
+	@alias_name=`sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
+	                 $(BUILDDIR)/src/Makefile.global` && \
+	    { test -z "$$alias_name" || \
+	          ln -sf greengage_path.sh $(INSTLOC)/$$alias_name; }
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \
