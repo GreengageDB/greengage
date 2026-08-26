@@ -1002,6 +1002,10 @@ private:
 	static CParseHandlerBase *CreateNLJIndexParamParseHandler(
 		CMemoryPool *pmp, CParseHandlerManager *parse_handler_manager,
 		CParseHandlerBase *parse_handler_root);
+	
+	static CParseHandlerBase *CreateSelectedPartitionsSetParseHandler(
+	CMemoryPool *mp, CParseHandlerManager *parse_handler_manager,
+	CParseHandlerBase *parse_handler_root);
 
 public:
 	// initialize mappings of tokens to parse handlers

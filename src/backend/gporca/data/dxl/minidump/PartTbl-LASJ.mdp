@@ -925,6 +925,7 @@
                   <dxl:Partition Mdid="6.259515005.1.1"/>
                   <dxl:Partition Mdid="6.259515006.1.1"/>
                 </dxl:Partitions>
+                <dxl:SelectedPartitionSet Value="0:5"/>
                 <dxl:TableDescriptor Mdid="6.259515.1.1" TableName="foo3_p">
                   <dxl:Columns>
                     <dxl:Column ColId="0" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>

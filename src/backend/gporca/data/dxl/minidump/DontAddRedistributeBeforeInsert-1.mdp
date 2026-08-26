@@ -617,6 +617,7 @@ Physical plan:
                               <dxl:Partition Mdid="6.16467001.1.0"/>
                               <dxl:Partition Mdid="6.16467002.1.0"/>
                             </dxl:Partitions>
+                            <dxl:SelectedPartitionSet Value="0:1"/>
                             <dxl:TableDescriptor Mdid="6.16467.1.0" TableName="part_random_t1">
                               <dxl:Columns>
                                 <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -683,6 +684,7 @@ Physical plan:
                               <dxl:Partition Mdid="6.16467001.1.0"/>
                               <dxl:Partition Mdid="6.16467002.1.0"/>
                             </dxl:Partitions>
+                            <dxl:SelectedPartitionSet Value="0:1"/>
                             <dxl:TableDescriptor Mdid="6.16467.1.0" TableName="part_random_t1">
                               <dxl:Columns>
                                 <dxl:Column ColId="11" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

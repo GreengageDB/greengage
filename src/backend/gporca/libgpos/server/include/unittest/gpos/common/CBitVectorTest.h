@@ -32,6 +32,7 @@ public:
 	static GPOS_RESULT EresUnittest_SetOps();
 	static GPOS_RESULT EresUnittest_Cursor();
 	static GPOS_RESULT EresUnittest_Random();
+	static GPOS_RESULT EresUnittest_SetFirstN();
 
 #ifdef GPOS_DEBUG
 	static GPOS_RESULT EresUnittest_OutOfBounds();

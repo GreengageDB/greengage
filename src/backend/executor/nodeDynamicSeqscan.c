@@ -67,10 +67,24 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 	ExecInitResultTypeTL(&state->ss.ps);
 	ExecAssignScanProjectionInfo(&state->ss);
 
-	state->nOids = list_length(node->partOids);
-	state->partOids = palloc(sizeof(Oid) * state->nOids);
-	foreach_with_count(lc, node->partOids, i)
-		state->partOids[i] = lfirst_oid(lc);
+	if (node->join_prune_paramids)
+	{
+		state->nOids = list_length(node->partOids);
+		state->partOids = palloc(sizeof(Oid) * state->nOids);
+		foreach_with_count(lc, node->partOids, i)
+			state->partOids[i] = lfirst_oid(lc);
+	}
+	else
+	{
+		state->nOids = bms_num_members(node->selected_parts);
+		state->partOids = palloc(sizeof(Oid) * state->nOids);
+		int partIdx = 0;
+		foreach_with_count(lc, node->partOids, i)
+		{
+			if (bms_is_member(i, node->selected_parts))
+				state->partOids[partIdx++] = lfirst_oid(lc);
+		}
+	}
 	state->whichPart = -1;
 
 	reloid = exec_rt_fetch(node->seqscan.scanrelid, estate)->relid;
@@ -178,11 +192,11 @@ ExecDynamicSeqScan(PlanState *pstate)
 	if (NULL != plan->join_prune_paramids && !node->did_pruning)
 	{
 		node->did_pruning = true;
-		node->as_valid_subplans =
+		node->as_valid_subplans = bms_intersect(plan->selected_parts,
 			ExecFindMatchingSubPlans(node->as_prune_state,
 									 node->ss.ps.state,
 									 list_length(plan->partOids),
-									 plan->join_prune_paramids);
+									 plan->join_prune_paramids));
 
 		int i = 0;
 		int partOidIdx = -1;

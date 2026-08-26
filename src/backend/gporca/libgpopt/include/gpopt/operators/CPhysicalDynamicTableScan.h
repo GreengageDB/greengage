@@ -28,6 +28,7 @@ namespace gpopt
 class CPhysicalDynamicTableScan : public CPhysicalDynamicScan
 {
 private:
+	CBitSet* m_selected_parts;
 public:
 	CPhysicalDynamicTableScan(const CPhysicalDynamicTableScan &) = delete;
 
@@ -37,8 +38,11 @@ public:
 							  ULONG scan_id, CColRefArray *pdrgpcrOutput,
 							  CColRef2dArray *pdrgpdrgpcrParts,
 							  IMdIdArray *partition_mdids,
+							  CBitSet *selected_parts,
 							  ColRefToUlongMapArray *root_col_mapping_per_part);
 
+	~CPhysicalDynamicTableScan() override;
+	
 	// ident accessors
 	EOperatorId
 	Eopid() const override
@@ -53,6 +57,12 @@ public:
 		return "CPhysicalDynamicTableScan";
 	}
 
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
+	}
+	
 	// match function
 	BOOL Matches(COperator *) const override;
 

@@ -56,6 +56,9 @@ public:
 	// set given bit; return previous value
 	BOOL ExchangeSet(ULONG ulBit);
 
+	// set first N bits to 1
+	void SetFirstN(ULONG count);
+	
 	// clear given bit; return previous value
 	BOOL ExchangeClear(ULONG ulBit);
 

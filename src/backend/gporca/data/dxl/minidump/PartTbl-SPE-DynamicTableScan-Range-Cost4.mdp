@@ -1121,6 +1121,7 @@
           <dxl:Partitions>
             <dxl:Partition Mdid="6.74801.1.0"/>
           </dxl:Partitions>
+          <dxl:SelectedPartitionSet Value="0"/>
           <dxl:TableDescriptor Mdid="6.74798.1.0" TableName="default_part_only" LockMode="1">
             <dxl:Columns>
               <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

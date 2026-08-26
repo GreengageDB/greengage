@@ -18,7 +18,7 @@
 
 #include "naucrates/dxl/operators/CDXLPhysical.h"
 #include "naucrates/dxl/operators/CDXLTableDescr.h"
-
+#include "gpos/common/CBitSet.h"
 
 namespace gpdxl
 {
@@ -45,6 +45,7 @@ private:
 	CDXLTableDescr *m_dxl_table_descr;
 
 	IMdIdArray *m_part_mdids;
+	CBitSet *m_selected_parts;
 
 	ULongPtrArray *m_selector_ids = nullptr;
 
@@ -55,7 +56,7 @@ public:
 
 	// ctor
 	CDXLPhysicalDynamicForeignScan(CMemoryPool *mp, CDXLTableDescr *table_descr,
-								   IMdIdArray *part_mdids,
+								   IMdIdArray *part_mdids, CBitSet *selected_parts,
 								   ULongPtrArray *selector_ids,
 								   OID foreign_server_oid);
 
@@ -73,6 +74,8 @@ public:
 
 	IMdIdArray *GetParts() const;
 
+	CBitSet *GetSelectedParts() const;
+	
 	const ULongPtrArray *
 	GetSelectorIds() const
 	{

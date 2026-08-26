@@ -522,6 +522,7 @@
                 <dxl:Partition Mdid="6.250652004.1.1"/>
                 <dxl:Partition Mdid="6.250652005.1.1"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0:4"/>
               <dxl:TableDescriptor Mdid="6.250652.1.1" TableName="r6756">
                 <dxl:Columns>
                   <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>

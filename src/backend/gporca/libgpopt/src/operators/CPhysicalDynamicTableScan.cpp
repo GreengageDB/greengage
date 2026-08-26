@@ -36,12 +36,14 @@ using namespace gpopt;
 CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG ulOriginOpId, ULONG scan_id, CColRefArray *pdrgpcrOutput,
-	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
+	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids, CBitSet *selected_parts,
 	ColRefToUlongMapArray *root_col_mapping_per_part)
 	: CPhysicalDynamicScan(mp, ptabdesc, ulOriginOpId, pnameAlias, scan_id,
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
-						   root_col_mapping_per_part)
+						   root_col_mapping_per_part),
+	  m_selected_parts(selected_parts)
 {
+	GPOS_ASSERT(nullptr != selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -89,6 +91,10 @@ CPhysicalDynamicTableScan::PppsDerive(CMemoryPool *mp,
 				Ptabdesc()->MDId(), nullptr, nullptr);
 
 	return pps;
+}
+CPhysicalDynamicTableScan::~CPhysicalDynamicTableScan()
+{
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 // EOF

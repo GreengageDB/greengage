@@ -58,16 +58,18 @@ CLogicalDynamicGet::CLogicalDynamicGet(
 	ULONG ulPartIndex, CColRefArray *pdrgpcrOutput,
 	CColRef2dArray *pdrgpdrgpcrPart, IMdIdArray *partition_mdids,
 	CConstraint *partition_cnstrs_disj, BOOL static_pruned,
-	IMdIdArray *foreign_server_mdids, BOOL hasSecurityQuals)
+	IMdIdArray *foreign_server_mdids, CBitSet *selected_parts, BOOL hasSecurityQuals)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
 							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
 	  m_partition_cnstrs_disj(partition_cnstrs_disj),
 	  m_static_pruned(static_pruned),
 	  m_foreign_server_mdids(foreign_server_mdids),
-	  m_has_security_quals(hasSecurityQuals)
+	  m_has_security_quals(hasSecurityQuals),
+	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(static_pruned || (nullptr == partition_cnstrs_disj));
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
+	GPOS_ASSERT(nullptr != selected_parts);
 }
 
 
@@ -84,13 +86,16 @@ CLogicalDynamicGet::CLogicalDynamicGet(CMemoryPool *mp, const CName *pnameAlias,
 									   ULONG ulPartIndex,
 									   IMdIdArray *partition_mdids,
 									   IMdIdArray *foreign_server_mdids,
+									   CBitSet *selected_parts,
 									   BOOL hasSecurityQuals)
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
 							 partition_mdids),
 	  m_foreign_server_mdids(foreign_server_mdids),
-	  m_has_security_quals(hasSecurityQuals)
+	  m_has_security_quals(hasSecurityQuals),
+	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
+	GPOS_ASSERT(nullptr != selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -105,6 +110,7 @@ CLogicalDynamicGet::~CLogicalDynamicGet()
 {
 	CRefCount::SafeRelease(m_partition_cnstrs_disj);
 	CRefCount::SafeRelease(m_foreign_server_mdids);
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -181,6 +187,7 @@ CLogicalDynamicGet::PopCopyWithRemappedColumns(CMemoryPool *mp,
 	CName *pnameAlias = GPOS_NEW(mp) CName(mp, *m_pnameAlias);
 	Ptabdesc()->AddRef();
 	m_partition_mdids->AddRef();
+	m_selected_parts->AddRef();
 
 	CConstraint *partition_cnstrs_disj = nullptr;
 
@@ -199,7 +206,7 @@ CLogicalDynamicGet::PopCopyWithRemappedColumns(CMemoryPool *mp,
 	return GPOS_NEW(mp) CLogicalDynamicGet(
 		mp, pnameAlias, Ptabdesc(), m_scan_id, pdrgpcrOutput, pdrgpdrgpcrPart,
 		m_partition_mdids, partition_cnstrs_disj, m_static_pruned,
-		m_foreign_server_mdids, m_has_security_quals);
+		m_foreign_server_mdids, m_selected_parts, m_has_security_quals);
 }
 
 //---------------------------------------------------------------------------
@@ -385,6 +392,7 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 	{
 		// Get unpruned partitions
 		IMdIdArray *partition_mdids = GetPartitionMdids();
+		CBitSet *selected_partitions = GetSelectedParts();
 		CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 
 		// Iterate through the unpruned partitions, and add up the rows.
@@ -394,8 +402,11 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 		DOUBLE unpruned_partitions_rows = 0;
 		for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
 		{
+			if (!selected_partitions->Get(ul))
+			{
+				continue;
+			}
 			IMDId *partition_mdid = (*partition_mdids)[ul];
-
 			// Retrieve row count from Relation objects
 			CDouble part_rows =
 				md_accessor->RetrieveRel(partition_mdid)->Rows();

@@ -1739,6 +1739,7 @@ select * from (select * from p1 union all select * from p2) as p, tt where p.b=t
                 <dxl:Partition Mdid="6.174229004.1.1"/>
                 <dxl:Partition Mdid="6.174229005.1.1"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0:4"/>
               <dxl:TableDescriptor Mdid="6.174229.1.1" TableName="p1">
                 <dxl:Columns>
                   <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>
@@ -1773,6 +1774,7 @@ select * from (select * from p1 union all select * from p2) as p, tt where p.b=t
                 <dxl:Partition Mdid="6.174451004.1.1"/>
                 <dxl:Partition Mdid="6.174451005.1.1"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0:4"/>
               <dxl:TableDescriptor Mdid="6.174451.1.1" TableName="p2">
                 <dxl:Columns>
                   <dxl:Column ColId="9" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>

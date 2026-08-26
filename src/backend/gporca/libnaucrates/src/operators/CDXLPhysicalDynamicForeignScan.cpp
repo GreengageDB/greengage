@@ -16,6 +16,7 @@
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"
 #include "naucrates/md/IMDCacheObject.h"
+#include "naucrates/base/CDXLBitMapSet.h"
 
 using namespace gpos;
 using namespace gpdxl;
@@ -30,11 +31,12 @@ using namespace gpdxl;
 //
 //---------------------------------------------------------------------------
 CDXLPhysicalDynamicForeignScan::CDXLPhysicalDynamicForeignScan(
-	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids,
+	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids, CBitSet *selected_parts,
 	ULongPtrArray *selector_ids, OID foreign_server_oid)
 	: CDXLPhysical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_part_mdids(part_mdids),
+	  m_selected_parts(selected_parts),
 	  m_selector_ids(selector_ids),
 	  m_foreign_server_oid(foreign_server_oid)
 
@@ -55,6 +57,7 @@ CDXLPhysicalDynamicForeignScan::~CDXLPhysicalDynamicForeignScan()
 {
 	m_dxl_table_descr->Release();
 	m_part_mdids->Release();
+	m_selected_parts->Release();
 	CRefCount::SafeRelease(m_selector_ids);
 }
 
@@ -107,6 +110,12 @@ CDXLPhysicalDynamicForeignScan::GetParts() const
 	return m_part_mdids;
 }
 
+CBitSet *
+CDXLPhysicalDynamicForeignScan::GetSelectedParts() const
+{
+	return m_selected_parts;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLPhysicalDynamicForeignScan::SerializeToDXL
@@ -138,6 +147,12 @@ CDXLPhysicalDynamicForeignScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
+
+	CDXLBitMapSet::SerializeToDXL(
+		m_mp, xml_serializer,
+		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+		m_selected_parts);
+
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);

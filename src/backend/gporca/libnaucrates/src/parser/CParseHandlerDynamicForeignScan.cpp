@@ -21,6 +21,7 @@
 #include "naucrates/dxl/parser/CParseHandlerProperties.h"
 #include "naucrates/dxl/parser/CParseHandlerTableDescr.h"
 #include "naucrates/dxl/parser/CParseHandlerUtils.h"
+#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 
 using namespace gpdxl;
 
@@ -85,6 +86,13 @@ CParseHandlerDynamicForeignScan::StartElement(
 			m_parse_handler_mgr, this);
 	m_parse_handler_mgr->ActivateParseHandler(table_descr_parse_handler);
 
+	CParseHandlerBase *selected_partition_set_parse_handler =
+		CParseHandlerFactory::GetParseHandler(
+			m_mp, CDXLTokens::XmlstrToken(EdxltokenSelectedPartitionSet),
+			m_parse_handler_mgr, this);
+	m_parse_handler_mgr->ActivateParseHandler(
+		selected_partition_set_parse_handler);
+
 	CParseHandlerBase *partition_mdids_parse_handler =
 		CParseHandlerFactory::GetParseHandler(
 			m_mp, CDXLTokens::XmlstrToken(EdxltokenMetadataIdList),
@@ -118,6 +126,7 @@ CParseHandlerDynamicForeignScan::StartElement(
 	this->Append(proj_list_parse_handler);
 	this->Append(filter_parse_handler);
 	this->Append(partition_mdids_parse_handler);
+	this->Append(selected_partition_set_parse_handler);
 	this->Append(table_descr_parse_handler);
 }
 
@@ -155,8 +164,10 @@ CParseHandlerDynamicForeignScan::EndElement(
 		dynamic_cast<CParseHandlerFilter *>((*this)[2]);
 	CParseHandlerMetadataIdList *partition_mdids_parse_handler =
 		dynamic_cast<CParseHandlerMetadataIdList *>((*this)[3]);
+	CParseHandlerSelectedPartitionsSet *selected_partition_set_handler =
+		dynamic_cast<CParseHandlerSelectedPartitionsSet*>((*this)[4]);
 	CParseHandlerTableDescr *table_descr_parse_handler =
-		dynamic_cast<CParseHandlerTableDescr *>((*this)[4]);
+		dynamic_cast<CParseHandlerTableDescr *>((*this)[5]);
 
 
 	// set table descriptor
@@ -166,9 +177,13 @@ CParseHandlerDynamicForeignScan::EndElement(
 	IMdIdArray *mdid_partitions_array =
 		partition_mdids_parse_handler->GetMdIdArray();
 	mdid_partitions_array->AddRef();
+	CBitSet *selected_partition_set =
+		selected_partition_set_handler->GetSelectedParts();
+	selected_partition_set->AddRef();
 	CDXLPhysicalDynamicForeignScan *dxl_op = GPOS_NEW(m_mp)
 		CDXLPhysicalDynamicForeignScan(m_mp, table_descr, mdid_partitions_array,
-									   m_selector_ids, m_foreign_server_oid);
+									   selected_partition_set, m_selector_ids,
+									   m_foreign_server_oid);
 
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, dxl_op);
 	// set statistics and physical properties

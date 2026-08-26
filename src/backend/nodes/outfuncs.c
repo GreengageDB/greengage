@@ -720,6 +720,7 @@ _outDynamicSeqScan(StringInfo str, const DynamicSeqScan *node)
 	WRITE_NODE_FIELD(partOids);
 	WRITE_NODE_FIELD(part_prune_info);
 	WRITE_NODE_FIELD(join_prune_paramids);
+	WRITE_BITMAPSET_FIELD(selected_parts);
 }
 
 static void
@@ -984,6 +985,7 @@ _outDynamicForeignScan(StringInfo str, const DynamicForeignScan *node)
 	WRITE_NODE_FIELD(part_prune_info);
 	WRITE_NODE_FIELD(join_prune_paramids);
 	WRITE_NODE_FIELD(fdw_private_list);
+	WRITE_BITMAPSET_FIELD(selected_parts);
 }
 
 #ifndef COMPILING_BINARY_FUNCS

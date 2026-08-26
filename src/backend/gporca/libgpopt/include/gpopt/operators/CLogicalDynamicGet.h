@@ -45,6 +45,8 @@ protected:
 	// relation has row level security enabled and has security quals
 	BOOL m_has_security_quals{false};
 
+	CBitSet *m_selected_parts{nullptr};
+
 public:
 	CLogicalDynamicGet(const CLogicalDynamicGet &) = delete;
 
@@ -58,12 +60,14 @@ public:
 					   IMdIdArray *partition_mdids,
 					   CConstraint *partition_cnstrs_disj, BOOL static_pruned,
 					   IMdIdArray *foreign_server_mdids,
+					   CBitSet *required_partition_map,
 					   BOOL hasSecurityQuals = false);
 
 	CLogicalDynamicGet(CMemoryPool *mp, const CName *pnameAlias,
 					   CTableDescriptor *ptabdesc, ULONG ulPartIndex,
 					   IMdIdArray *partition_mdids,
 					   IMdIdArray *foreign_server_mdids,
+					   CBitSet *required_partition_map,
 					   BOOL hasSecurityQuals = false);
 
 	// dtor
@@ -101,6 +105,12 @@ public:
 	HasSecurityQuals() const
 	{
 		return m_has_security_quals;
+	}
+	
+	CBitSet *
+	GetSelectedParts() const
+	{
+		return m_selected_parts;
 	}
 
 	// operator specific hash function

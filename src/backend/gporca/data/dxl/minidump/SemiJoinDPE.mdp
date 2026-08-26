@@ -1125,6 +1125,7 @@
               <dxl:Partition Mdid="6.41019.1.0"/>
               <dxl:Partition Mdid="6.40989.1.0"/>
             </dxl:Partitions>
+            <dxl:SelectedPartitionSet Value="0:5"/>
             <dxl:TableDescriptor Mdid="6.40986.1.0" TableName="pt" LockMode="1">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="dist" TypeMdid="0.23.1.0" ColWidth="4"/>

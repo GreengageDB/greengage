@@ -584,6 +584,7 @@ this query isn't eligible for DPE.
                 <dxl:Partition Mdid="6.16388.1.0"/>
                 <dxl:Partition Mdid="6.16391.1.0"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0:1"/>
               <dxl:TableDescriptor Mdid="6.16385.1.0" TableName="t3" LockMode="1">
                 <dxl:Columns>
                   <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -635,6 +636,7 @@ this query isn't eligible for DPE.
                 <dxl:Partition Mdid="6.16397.1.0"/>
                 <dxl:Partition Mdid="6.16400.1.0"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0:1"/>
               <dxl:TableDescriptor Mdid="6.16394.1.0" TableName="t4" LockMode="1">
                 <dxl:Columns>
                   <dxl:Column ColId="9" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

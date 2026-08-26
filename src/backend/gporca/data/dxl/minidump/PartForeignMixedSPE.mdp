@@ -494,7 +494,9 @@ alter table part attach partition p4 for values from (30) to (40);
               <dxl:Filter/>
               <dxl:Partitions>
                 <dxl:Partition Mdid="6.32934.1.0"/>
+                <dxl:Partition Mdid="6.32931.1.0"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="0"/>
               <dxl:TableDescriptor Mdid="6.32925.1.0" TableName="part" LockMode="1">
                 <dxl:Columns>
                   <dxl:Column ColId="9" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -523,8 +525,10 @@ alter table part attach partition p4 for values from (30) to (40);
               </dxl:ProjList>
               <dxl:Filter/>
               <dxl:Partitions>
+                <dxl:Partition Mdid="6.32934.1.0"/>
                 <dxl:Partition Mdid="6.32931.1.0"/>
               </dxl:Partitions>
+              <dxl:SelectedPartitionSet Value="1"/>
               <dxl:TableDescriptor Mdid="6.32925.1.0" TableName="part" LockMode="1">
                 <dxl:Columns>
                   <dxl:Column ColId="18" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

@@ -35,7 +35,7 @@ using namespace gpopt;
 CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG ulOriginOpId, ULONG scan_id, CColRefArray *pdrgpcrOutput,
-	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids,
+	CColRef2dArray *pdrgpdrgpcrParts, IMdIdArray *partition_mdids, CBitSet *selected_parts,
 	ColRefToUlongMapArray *root_col_mapping_per_part, OID foreign_server_oid,
 	IMDRelation::Ereldistrpolicy exec_location)
 
@@ -44,8 +44,11 @@ CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 						   pdrgpcrOutput, pdrgpdrgpcrParts, partition_mdids,
 						   root_col_mapping_per_part),
 	  m_foreign_server_oid(foreign_server_oid),
-	  m_exec_location(exec_location)
+	  m_exec_location(exec_location),
+	  m_selected_parts(selected_parts)
 {
+	GPOS_ASSERT(nullptr != selected_parts);
+
 	// we need to overwrite the distribution spec for DynamicForeignGets, as
 	// the partition table can have one distribution, but the distribution for the
 	// ForeignGet can be different. Note this distribution spec mismatch is only
@@ -68,6 +71,11 @@ CPhysicalDynamicForeignScan::CPhysicalDynamicForeignScan(
 		GPOS_ASSERT(m_exec_location == IMDRelation::EreldistrRandom);
 		m_pds = GPOS_NEW(mp) CDistributionSpecRandom();
 	}
+}
+
+CPhysicalDynamicForeignScan::~CPhysicalDynamicForeignScan()
+{
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------

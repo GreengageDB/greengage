@@ -661,6 +661,7 @@
                               <dxl:Partition Mdid="6.100193004.1.1"/>
                               <dxl:Partition Mdid="6.100193005.1.1"/>
                             </dxl:Partitions>
+                            <dxl:SelectedPartitionSet Value="0:4"/>
                             <dxl:TableDescriptor Mdid="6.100193.1.1" TableName="decodenum">
                               <dxl:Columns>
                                 <dxl:Column ColId="11" Attno="1" ColName="numcol" TypeMdid="0.1700.1.0"/>
@@ -717,6 +718,7 @@
               <dxl:Partition Mdid="6.100193004.1.1"/>
               <dxl:Partition Mdid="6.100193005.1.1"/>
             </dxl:Partitions>
+            <dxl:SelectedPartitionSet Value="0:4"/>
             <dxl:TableDescriptor Mdid="6.100193.1.1" TableName="decodenum">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="numcol" TypeMdid="0.1700.1.0"/>

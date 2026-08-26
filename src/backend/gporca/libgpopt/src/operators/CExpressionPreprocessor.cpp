@@ -2854,6 +2854,7 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 
 		IMdIdArray *foreign_server_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 		IMdIdArray *all_partition_mdids = dyn_get->GetPartitionMdids();
+		CBitSet *selected_partitions = GPOS_NEW(mp) CBitSet(mp);
 		for (ULONG ul = 0; ul < all_partition_mdids->Size(); ++ul)
 		{
 			IMDId *part_mdid = (*all_partition_mdids)[ul];
@@ -2923,11 +2924,12 @@ CExpressionPreprocessor::PrunePartitions(CMemoryPool *mp, CExpression *expr)
 		CConstraint *selected_part_cnstr_disj =
 			CConstraint::PcnstrDisjunction(mp, selected_partition_cnstrs);
 
+		selected_partitions->SetFirstN(selected_partition_mdids->Size());
 		CLogicalDynamicGet *new_dyn_get = GPOS_NEW(mp) CLogicalDynamicGet(
 			mp, new_alias, dyn_get->Ptabdesc(), dyn_get->ScanId(),
 			dyn_get->PdrgpcrOutput(), dyn_get->PdrgpdrgpcrPart(),
 			selected_partition_mdids, selected_part_cnstr_disj, true,
-			foreign_server_mdids, dyn_get->HasSecurityQuals());
+			foreign_server_mdids, selected_partitions, dyn_get->HasSecurityQuals());
 
 		CExpressionArray *select_children = GPOS_NEW(mp) CExpressionArray(mp);
 		select_children->Append(GPOS_NEW(mp) CExpression(mp, new_dyn_get));

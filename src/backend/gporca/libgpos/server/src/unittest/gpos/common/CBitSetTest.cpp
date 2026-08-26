@@ -35,6 +35,7 @@ CBitSetTest::EresUnittest()
 		GPOS_UNITTEST_FUNC(CBitSetTest::EresUnittest_Basics),
 		GPOS_UNITTEST_FUNC(CBitSetTest::EresUnittest_Removal),
 		GPOS_UNITTEST_FUNC(CBitSetTest::EresUnittest_SetOps),
+		GPOS_UNITTEST_FUNC(CBitSetTest::EresUnittest_SetFirstN),
 		GPOS_UNITTEST_FUNC(CBitSetTest::EresUnittest_Performance)};
 
 	return CUnittest::EresExecute(rgut, GPOS_ARRAY_SIZE(rgut));
@@ -220,6 +221,78 @@ CBitSetTest::EresUnittest_SetOps()
 	return GPOS_OK;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CBitSetTest::EresUnittest_SetFirstN
+//
+//	@doc:
+//		Test for set first N bits
+//
+//---------------------------------------------------------------------------
+GPOS_RESULT
+CBitSetTest::EresUnittest_SetFirstN()
+{
+	// This is default value but make it explicit
+	const ULONG vector_size = 256;
+	
+	// Create memory pool
+	CAutoMemoryPool amp;
+	CMemoryPool *mp = amp.Pmp();
+	
+	// Zero length range
+	{
+		CBitSet *set = GPOS_NEW(mp) CBitSet(mp, vector_size);
+		
+		set->SetFirstN(0);
+		
+		GPOS_UNITTEST_ASSERT(set->Size() == 0);
+		
+		set->Release();
+	}
+	
+	// Set range less than vector size
+	{
+		CBitSet *set = GPOS_NEW(mp) CBitSet(mp, vector_size);
+		
+		set->SetFirstN(128);
+		GPOS_ASSERT(set->Size() == 128);
+		for (ULONG i = 0; i < 128; i++)
+		{
+			GPOS_ASSERT(set->Get(i));
+		}
+		set->Release();
+	}
+	
+	// Set range exactly vector size
+	{
+		CBitSet *set = GPOS_NEW(mp) CBitSet(mp, vector_size);
+		
+		set->SetFirstN(vector_size);
+		GPOS_ASSERT(set->Size() == vector_size);
+		for (ULONG i = 0; i < set->Size(); i++)
+		{
+			GPOS_ASSERT(set->Get(i));
+		}
+		
+		set->Release();
+	}
+	
+	// Set range greater than vector size
+	{
+		CBitSet *set = GPOS_NEW(mp) CBitSet(mp, vector_size);
+		
+		set->SetFirstN(vector_size + 10);
+		GPOS_ASSERT(set->Size() == vector_size + 10);
+		for (ULONG i = 0; i < set->Size(); i++)
+		{
+			GPOS_ASSERT(set->Get(i));
+		}
+		
+		set->Release();
+	}
+	
+	return GPOS_OK;
+}
 
 //---------------------------------------------------------------------------
 //	@function:

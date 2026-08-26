@@ -160,6 +160,25 @@ CBitVector::ExchangeSet(ULONG pos)
 	return fSet;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CBitVector::SetFirstN
+//
+//	@doc:
+//		Set first N bits to 1
+//
+//---------------------------------------------------------------------------
+void
+CBitVector::SetFirstN(ULONG count)
+{
+	GPOS_ASSERT(count <= m_nbits);
+	clib::Memset(m_vec, 0xFF, (count / BITS_PER_UNIT) * BYTES_PER_UNIT);
+	if (count % BITS_PER_UNIT)
+	{
+		ULONG idx = count / BITS_PER_UNIT;
+		m_vec[idx] = (ULLONG(1) << (count % BITS_PER_UNIT)) - 1;
+	}
+}
 
 //---------------------------------------------------------------------------
 //	@function:

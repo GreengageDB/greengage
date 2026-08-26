@@ -804,6 +804,7 @@ typedef struct DynamicSeqScan
 	 */
 	List	   *join_prune_paramids;
 
+	Bitmapset *selected_parts;
 } DynamicSeqScan;
 
 /* ----------------
@@ -1019,6 +1020,8 @@ typedef struct DynamicForeignScan
 
 	/* list of fdw_privates for each partition's foreign scan */
 	List	*fdw_private_list;
+	
+	Bitmapset *selected_parts;
 } DynamicForeignScan;
 /* ----------------
  *	   CustomScan node

@@ -190,6 +190,7 @@
 #include "naucrates/dxl/parser/CParseHandlerWindowSpec.h"
 #include "naucrates/dxl/parser/CParseHandlerWindowSpecList.h"
 #include "naucrates/dxl/parser/CParseHandlerXform.h"
+#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 #endif	// !GPDXL_parsehandlers_H
 
 // EOF

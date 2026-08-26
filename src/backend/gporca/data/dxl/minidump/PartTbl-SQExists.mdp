@@ -683,6 +683,7 @@
               <dxl:Partition Mdid="6.24588003.1.1"/>
               <dxl:Partition Mdid="6.24588004.1.1"/>
             </dxl:Partitions>
+            <dxl:SelectedPartitionSet Value="0:3"/>
             <dxl:TableDescriptor Mdid="6.24588.1.1" TableName="smallt_part">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>
@@ -713,6 +714,7 @@
               <dxl:Partition Mdid="6.24756003.1.1"/>
               <dxl:Partition Mdid="6.24756004.1.1"/>
             </dxl:Partitions>
+            <dxl:SelectedPartitionSet Value="0:3"/>
             <dxl:TableDescriptor Mdid="6.24756.1.1" TableName="smallt2_part">
               <dxl:Columns>
                 <dxl:Column ColId="9" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>
