@@ -1850,9 +1850,18 @@ transformDistributedBy(CreateStmtContext *cxt,
 	int			numsegments;
 
 	/*
-	 * utility mode creates can't have a policy.  Only the QD can have policies
+	 * utility mode creates can't have a policy.  Only the QD can have policies.
+	 *
+	 * IsBinaryUpgrade normally bypasses this, since --binary-upgrade restore
+	 * runs entirely in utility mode but still needs real policies computed
+	 * for tables that were actually distributed (pg_dump always emits an
+	 * explicit DISTRIBUTED BY/RANDOMLY/REPLICATED clause for those). But if
+	 * there is no such clause, the source table had no gp_distribution_policy
+	 * row at all, i.e. it was entry-distributed -- fall through to the
+	 * ordinary utility-mode behavior instead of guessing a default policy.
 	 */
-	if (Gp_role != GP_ROLE_DISPATCH && !IsBinaryUpgrade)
+	if (Gp_role != GP_ROLE_DISPATCH &&
+		(!IsBinaryUpgrade || distributedBy == NULL))
 		return NULL;
 
 	/* POLICYTYPE_ENTRY for local extensions */
