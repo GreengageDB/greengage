@@ -25,7 +25,7 @@ CParseHandlerSelectedPartitionsSet::CParseHandlerSelectedPartitionsSet(
 
 CParseHandlerSelectedPartitionsSet::~CParseHandlerSelectedPartitionsSet()
 {
-	m_selected_parts->Release();
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 void
