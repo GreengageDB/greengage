@@ -1455,6 +1455,47 @@ class gpexpand(object):
         statements = ["delete from pg_catalog.%s" % tab for tab in MASTER_ONLY_TABLES]
 
         """
+        Purge every extension-member table unconditionally, regardless of
+        whether the owning extension is local or not. A brand-new segment's
+        pg_basebackup clone of the coordinator has no business holding
+        pre-existing rows for any table: for a local (coordinator-only)
+        extension the data is never supposed to live on a segment at all,
+        and for a normally-distributed extension table the coordinator's
+        own local storage never holds any row data to begin with, so the
+        clone can't have leaked anything real - the delete is a no-op
+        there. Any legitimate rows a normally-distributed table needs on
+        the new segments come from the standard gpexpand redistribution
+        phase.
+
+        The table list is looked up once per database, via the coordinator
+        (self.dburl), and reused for every new segment below, rather than
+        being re-queried per (segment, database) pair: a new segment's
+        catalog at this point is an untouched clone of the coordinator's -
+        the same assumption the MASTER_ONLY_TABLES cleanup above already
+        relies on - so the coordinator's answer is exactly what each
+        segment's own catalog would give too.
+        """
+        extTablesSql = '''select quote_ident(n.nspname) || '.' || quote_ident(c.relname) as fq_name from
+            pg_class c
+            join pg_namespace n on c.relnamespace = n.oid
+            join pg_depend d on c.oid = d.objid
+            where
+            c.relkind = 'r' and
+            d.deptype = 'e' and
+            d.classid = 'pg_class'::regclass and
+            d.refclassid = 'pg_extension'::regclass'''
+
+        db_statements_by_dbname = {}
+        url = copy.deepcopy(self.dburl)
+        for database in databases:
+            if database[0] == 'template0':
+                continue
+            url.pgdb = database[0]
+            with closing (dbconn.connect(url, encoding='UTF8')) as conn:
+                cursor = dbconn.execSQL(conn, extTablesSql)
+                db_statements_by_dbname[database[0]] = statements + ["delete from %s" % row[0] for row in cursor]
+
+        """
           Connect to each database in the new segments, and clean up the catalog tables.
         """
         for seg in newSegments:
@@ -1468,37 +1509,7 @@ class gpexpand(object):
                                      , dbname=database[0]
                                      )
 
-
-                url = copy.deepcopy(self.dburl)
-                url.pgdb = database[0]
-                db_statements = statements
-                with closing (dbconn.connect(url, encoding='UTF8')) as conn:
-                    """
-                    Purge every extension-member table unconditionally,
-                    regardless of whether the owning extension is local or
-                    not. A brand-new segment's pg_basebackup clone of the
-                    coordinator has no business holding pre-existing rows
-                    for any table: for a local (coordinator-only) extension
-                    the data is never supposed to live on a segment at all,
-                    and for a normally-distributed extension table the
-                    coordinator's own local storage never holds any row
-                    data to begin with, so the clone can't have leaked
-                    anything real - the delete is a no-op there. Any
-                    legitimate rows a normally-distributed table needs on
-                    the new segments come from the standard gpexpand
-                    redistribution phase.
-                    """
-                    extTablesSql = '''select quote_ident(n.nspname) || '.' || quote_ident(c.relname) as fq_name from
-                        pg_class c
-                        join pg_namespace n on c.relnamespace = n.oid
-                        join pg_depend d on c.oid = d.objid
-                        where
-                        c.relkind = 'r' and
-                        d.deptype = 'e' and
-                        d.classid = 'pg_class'::regclass and
-                        d.refclassid = 'pg_extension'::regclass'''
-                    cursor = dbconn.execSQL(conn, extTablesSql)
-                    db_statements = db_statements + ["delete from %s" % row[0] for row in cursor]
+                db_statements = db_statements_by_dbname[database[0]]
 
                 name = "gpexpand execute segment cleanup commands. seg dbid = %s, command = %s" % (
                     seg.getSegmentDbId(), str(db_statements))
