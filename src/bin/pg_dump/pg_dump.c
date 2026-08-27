@@ -15897,9 +15897,9 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 						 * A config table is coordinator-only (entry policy)
 						 * if it has no distribution policy row.
 						 */
+						Assert(configtbl->distclause);
 						configtbl->dataObj->isCoordOnly =
-							(configtbl->distclause == NULL ||
-							 configtbl->distclause[0] == '\0');
+							 configtbl->distclause[0] == '\0';
 					}
 				}
 			}
