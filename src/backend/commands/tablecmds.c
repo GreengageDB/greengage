@@ -70,6 +70,7 @@
 #include "commands/copy.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
@@ -772,7 +773,12 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char relstorage, boo
 		policy = intoPolicy;
 	}
 	else
-		policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
+	{
+		if (creating_extension_local)
+			policy = NULL; /* POLICYTYPE_ENTRY for local extensions */
+		else
+			policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
+	}
 
 	/* Greengage specific code */
 	if (list_length(schema) == 0)
