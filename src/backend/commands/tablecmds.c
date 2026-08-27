@@ -70,7 +70,6 @@
 #include "commands/copy.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
-#include "commands/extension.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
