@@ -773,12 +773,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, char relstorage, boo
 		policy = intoPolicy;
 	}
 	else
-	{
-		if (creating_extension_local)
-			policy = NULL; /* POLICYTYPE_ENTRY for local extensions */
-		else
-			policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
-	}
+		policy = getPolicyForDistributedBy(stmt->distributedBy, descriptor);
 
 	/* Greengage specific code */
 	if (list_length(schema) == 0)
