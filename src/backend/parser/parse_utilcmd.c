@@ -456,8 +456,8 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 		if (creating_extension_local &&
 			(stmt->partitionBy != NULL || stmt->is_part_child))
 			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-					 errmsg("cannot create partition table in inside a local extension script")));
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot create partition table inside a local extension script")));
 
 		AssertImply(stmt->is_part_parent,
 					stmt->distributedBy == NULL);
