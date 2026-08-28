@@ -109,7 +109,7 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 		}
 
 		/* populate fdw_private array from list so we can access by index later */
-		fdw_private_array = (void **) palloc(state->nOids * sizeof(void *));
+		fdw_private_array = (void **) palloc0(state->nOids * sizeof(void *));
 		i = 0;
 		foreach_with_count(lc, node->fdw_private_list, i)
 			fdw_private_array[i] = (void *) lfirst(lc);;
