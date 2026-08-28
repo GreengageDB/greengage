@@ -33,7 +33,8 @@ operating systems:
   - Behave tests
   - Regression tests
   - Orca tests
-  - Resource group tests
+  - Resource group tests (cgroup v1)
+  - Resource group v2 tests (cgroup v2, version 7.x only)
   - JIT tests (version 7.x only)
   - pg_upgrade test (Ubuntu 22.04 only, no matrix)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
