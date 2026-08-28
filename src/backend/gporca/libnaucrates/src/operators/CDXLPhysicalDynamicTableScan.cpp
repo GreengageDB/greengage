@@ -12,7 +12,6 @@
 
 #include "naucrates/dxl/operators/CDXLPhysicalDynamicTableScan.h"
 
-#include "naucrates/base/CDXLBitMapSet.h"
 #include "naucrates/dxl/CDXLUtils.h"
 #include "naucrates/dxl/operators/CDXLNode.h"
 #include "naucrates/dxl/xml/CXMLSerializer.h"
