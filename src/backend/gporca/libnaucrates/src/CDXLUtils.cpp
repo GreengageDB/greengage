@@ -1735,25 +1735,24 @@ CDXLUtils::SerializeToCommaSeparatedString(CMemoryPool *mp,
 
 // Serialize CBitSet into a string, optimized for long ranges of set bits.
 // Ranges are separated by commas. The start and end of the range are separated
-// by a colon. 
+// by a colon.
 CWStringDynamic *
 CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(CMemoryPool *mp,
 														const CBitSet *set)
 {
 	if (0 == set->Size())
 	{
-		GPOS_RAISE(
-			CException::ExmaInvalid, CException::ExmiInvalid,
-			GPOS_WSZ_LIT("Invalid empty selected parts set"));
+		GPOS_RAISE(CException::ExmaInvalid, CException::ExmiInvalid,
+				   GPOS_WSZ_LIT("Invalid empty selected parts set"));
 	}
-	
+
 	CWStringDynamic *str = GPOS_NEW(mp) CWStringDynamic(mp);
 	CBitSetIter bsiter(*set);
 	bsiter.Advance();
-	
+
 	ULONG rangeStart = bsiter.Bit();
 	ULONG rangeEnd = bsiter.Bit();
-	
+
 	while (bsiter.Advance())
 	{
 		auto value = bsiter.Bit();
@@ -1769,8 +1768,7 @@ CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(CMemoryPool *mp,
 			}
 			else
 			{
-				str->AppendFormat(GPOS_WSZ_LIT("%d:%d,"), rangeStart,
-								  rangeEnd);
+				str->AppendFormat(GPOS_WSZ_LIT("%d:%d,"), rangeStart, rangeEnd);
 			}
 
 			rangeStart = value;
@@ -1786,7 +1784,7 @@ CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(CMemoryPool *mp,
 	{
 		str->AppendFormat(GPOS_WSZ_LIT("%d:%d"), rangeStart, rangeEnd);
 	}
-	
+
 	return str;
 }
 

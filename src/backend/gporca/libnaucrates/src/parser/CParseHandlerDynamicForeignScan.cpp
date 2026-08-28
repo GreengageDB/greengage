@@ -83,9 +83,9 @@ CParseHandlerDynamicForeignScan::StartElement(
 		EdxltokenForeignServerOid, EdxltokenPhysicalDynamicForeignScan);
 
 	m_selected_parts = CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
-		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSelectedPartitionSet,
-		EdxltokenPhysicalDynamicForeignScan);
-	
+		m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+		EdxltokenSelectedPartitionSet, EdxltokenPhysicalDynamicForeignScan);
+
 	// create child node parsers in reverse order of their expected occurrence
 
 	// parse handler for table descriptor

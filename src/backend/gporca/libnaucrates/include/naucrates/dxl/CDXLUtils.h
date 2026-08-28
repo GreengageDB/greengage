@@ -272,7 +272,7 @@ public:
 
 	static CWStringDynamic *SerializeCBitSetToCommaSeparatedRangesString(
 		CMemoryPool *mp, const CBitSet *set);
-	
+
 	// decode a byte array from a string
 	static BYTE *DecodeByteArrayFromString(CMemoryPool *mp,
 										   const CWStringDynamic *dxl_string,

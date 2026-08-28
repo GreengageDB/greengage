@@ -77,11 +77,12 @@ CParseHandlerDynamicTableScan::StartElement(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSelectorIds,
 		EdxltokenPhysicalDynamicTableScan);
 
-	if (-1 != attrs.getIndex(CDXLTokens::XmlstrToken(EdxltokenSelectedPartitionSet)))
+	if (-1 !=
+		attrs.getIndex(CDXLTokens::XmlstrToken(EdxltokenSelectedPartitionSet)))
 	{
 		m_selected_parts = CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
-			m_parse_handler_mgr->GetDXLMemoryManager(), attrs, EdxltokenSelectedPartitionSet,
-			EdxltokenPhysicalDynamicTableScan);
+			m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+			EdxltokenSelectedPartitionSet, EdxltokenPhysicalDynamicTableScan);
 	}
 
 	// create child node parsers in reverse order of their expected occurrence

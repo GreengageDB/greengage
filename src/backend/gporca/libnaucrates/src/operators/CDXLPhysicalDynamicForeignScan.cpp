@@ -145,7 +145,8 @@ CDXLPhysicalDynamicForeignScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 	GPOS_DELETE(serialized_selector_ids);
 
 	CWStringDynamic *serialized_selected_parts =
-		CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(m_mp, m_selected_parts);
+		CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(
+			m_mp, m_selected_parts);
 	xml_serializer->AddAttribute(
 		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
 		serialized_selected_parts);

@@ -141,7 +141,8 @@ CDXLPhysicalDynamicTableScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 	if (m_selected_parts)
 	{
 		CWStringDynamic *serialized_selected_parts =
-			CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(m_mp, m_selected_parts);
+			CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(
+				m_mp, m_selected_parts);
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
 			serialized_selected_parts);

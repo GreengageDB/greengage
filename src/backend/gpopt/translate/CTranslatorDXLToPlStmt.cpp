@@ -4300,9 +4300,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 		dyn_seq_scan->selected_parts =
 			TranslateCBitSet(dyn_tbl_scan_dxlop->GetSelectedParts());
 	else
-		dyn_seq_scan->selected_parts =
-				gpdb::BmsAddRange(nullptr, 0,
-								  dyn_tbl_scan_dxlop->GetParts()->Size() - 1);
+		dyn_seq_scan->selected_parts = gpdb::BmsAddRange(
+			nullptr, 0, dyn_tbl_scan_dxlop->GetParts()->Size() - 1);
 
 	OID oid_type =
 		CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -4592,9 +4591,8 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 
 	if (0 == selected_parts->Size())
 	{
-		GPOS_RAISE(
-				gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
-				GPOS_WSZ_LIT("Unexpected empty set of selected parts"));
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT("Unexpected empty set of selected parts"));
 	}
 	dyn_foreign_scan->selected_parts = TranslateCBitSet(selected_parts);
 	dyn_foreign_scan->partOids = oids_list;

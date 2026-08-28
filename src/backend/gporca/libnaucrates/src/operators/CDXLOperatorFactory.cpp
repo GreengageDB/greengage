@@ -2986,9 +2986,9 @@ CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
 {
 	const XMLCh *xml_val =
 		CDXLOperatorFactory::ExtractAttrValue(attrs, target_attr, target_elem);
-	
+
 	return ExtractIntRangesToIntBitSet(dxl_memory_manager, xml_val, target_attr,
-								  target_elem);
+									   target_elem);
 }
 
 //---------------------------------------------------------------------------
@@ -3039,9 +3039,9 @@ CDXLOperatorFactory::ExtractConvertPartitionTypeToArray(
 }
 
 CBitSet *
-CDXLOperatorFactory::ExtractIntRangesToIntBitSet(CDXLMemoryManager *dxl_memory_manager,
-							const XMLCh *attribute_value, Edxltoken target_attr,
-												 Edxltoken target_elem)
+CDXLOperatorFactory::ExtractIntRangesToIntBitSet(
+	CDXLMemoryManager *dxl_memory_manager, const XMLCh *attribute_value,
+	Edxltoken target_attr, Edxltoken target_elem)
 {
 	// get the memory pool from the memory manager
 	CMemoryPool *mp = dxl_memory_manager->Pmp();
@@ -3049,8 +3049,8 @@ CDXLOperatorFactory::ExtractIntRangesToIntBitSet(CDXLMemoryManager *dxl_memory_m
 	CBitSet *result = GPOS_NEW(mp) CBitSet(mp);
 
 	// Get range values
-	XMLStringTokenizer bits_components(
-		attribute_value, CDXLTokens::XmlstrToken(EdxltokenComma));
+	XMLStringTokenizer bits_components(attribute_value,
+									   CDXLTokens::XmlstrToken(EdxltokenComma));
 	const ULONG num_tokens = bits_components.countTokens();
 
 	for (ULONG ul = 0; ul < num_tokens; ul++)
@@ -3059,10 +3059,8 @@ CDXLOperatorFactory::ExtractIntRangesToIntBitSet(CDXLMemoryManager *dxl_memory_m
 		// Single value range
 		if (XMLString::indexOf(bitRange, ':') == -1)
 		{
-			result->ExchangeSet(
-				CDXLOperatorFactory::ConvertAttrValueToInt(
-					dxl_memory_manager, bitRange, target_attr,
-					target_attr));
+			result->ExchangeSet(CDXLOperatorFactory::ConvertAttrValueToInt(
+				dxl_memory_manager, bitRange, target_attr, target_attr));
 		}
 		else
 		{
@@ -3070,30 +3068,23 @@ CDXLOperatorFactory::ExtractIntRangesToIntBitSet(CDXLMemoryManager *dxl_memory_m
 				bitRange, CDXLTokens::XmlstrToken(EdxltokenColon));
 			if (range_components.countTokens() != 2)
 			{
-				GPOS_RAISE(gpdxl::ExmaDXL,
-						   gpdxl::ExmiDXLInvalidAttributeValue,
-						   CDXLTokens::GetDXLTokenStr(
-							   target_elem)
-							   ->GetBuffer(),
-						   CDXLTokens::GetDXLTokenStr(target_attr)
-							   ->GetBuffer());
+				GPOS_RAISE(
+					gpdxl::ExmaDXL, gpdxl::ExmiDXLInvalidAttributeValue,
+					CDXLTokens::GetDXLTokenStr(target_elem)->GetBuffer(),
+					CDXLTokens::GetDXLTokenStr(target_attr)->GetBuffer());
 			}
 			INT rangeStart = CDXLOperatorFactory::ConvertAttrValueToInt(
-				dxl_memory_manager, range_components.nextToken(),
-				target_elem, target_attr);
+				dxl_memory_manager, range_components.nextToken(), target_elem,
+				target_attr);
 			INT rangeEnd = CDXLOperatorFactory::ConvertAttrValueToInt(
-				dxl_memory_manager,
-				range_components.nextToken(), target_elem,
+				dxl_memory_manager, range_components.nextToken(), target_elem,
 				target_attr);
 			if (rangeStart < 0 || rangeEnd < 0)
 			{
-				GPOS_RAISE(gpdxl::ExmaDXL,
-						   gpdxl::ExmiDXLInvalidAttributeValue,
-						   CDXLTokens::GetDXLTokenStr(
-							   target_elem)
-							   ->GetBuffer(),
-						   CDXLTokens::GetDXLTokenStr(target_attr)
-							   ->GetBuffer());
+				GPOS_RAISE(
+					gpdxl::ExmaDXL, gpdxl::ExmiDXLInvalidAttributeValue,
+					CDXLTokens::GetDXLTokenStr(target_elem)->GetBuffer(),
+					CDXLTokens::GetDXLTokenStr(target_attr)->GetBuffer());
 			}
 			for (INT i = rangeStart; i <= rangeEnd; i++)
 			{

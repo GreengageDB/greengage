@@ -39,7 +39,7 @@ private:
 	ULongPtrArray *m_selector_ids;
 
 	OID m_foreign_server_oid;
-	
+
 	CBitSet *m_selected_parts;
 
 	// process the start of an element
