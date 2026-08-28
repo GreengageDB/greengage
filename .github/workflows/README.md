@@ -33,7 +33,8 @@ operating systems:
   - Behave tests
   - Regression tests
   - Orca tests
-  - Resource group tests
+  - Resource group tests (cgroup v1)
+  - Resource group v2 tests (cgroup v2, version 7.x only)
   - JIT tests (version 7.x only)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
