@@ -935,7 +935,6 @@ WHERE tt.event_ts >= tq.ets AND
                     <dxl:Partition Mdid="6.-1369891366.1.1"/>
                     <dxl:Partition Mdid="6.-1369891365.1.1"/>
                   </dxl:Partitions>
-                  <dxl:SelectedPartitionSet Value="0:2"/>
                   <dxl:TableDescriptor Mdid="6.32989847.1.1" TableName="my_tq_agg_small_part">
                     <dxl:Columns>
                       <dxl:Column ColId="11" Attno="1" ColName="ets" TypeMdid="0.23.1.0"/>

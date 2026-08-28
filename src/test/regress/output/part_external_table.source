@@ -582,4 +582,13 @@ select * from part_mixed;
  17 | 18
 (10 rows)
 
+drop table if exists filter_table;
 drop table if exists part_mixed cascade;
+drop external table if exists p_e1;
+NOTICE:  foreign table "p_e1" does not exist, skipping
+drop external table if exists p_e2;
+NOTICE:  foreign table "p_e2" does not exist, skipping
+drop table if exists p_0;
+drop table if exists p_1;
+drop table if exists p_2;
+drop table if exists p_3;

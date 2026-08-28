@@ -194,8 +194,7 @@ OBJS        = CParseHandlerAgg.o \
               CParseHandlerWindowOids.o \
               CParseHandlerWindowSpec.o \
               CParseHandlerWindowSpecList.o \
-              CParseHandlerXform.o \
-              CParseHandlerSelectedPartitionsSet.o
+              CParseHandlerXform.o
 
 include $(top_srcdir)/src/backend/common.mk
 

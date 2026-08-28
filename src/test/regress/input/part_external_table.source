@@ -256,4 +256,11 @@ analyse part_mixed;
 explain (costs off) select * from part_mixed;
 select * from part_mixed;
 
+drop table if exists filter_table;
 drop table if exists part_mixed cascade;
+drop external table if exists p_e1;
+drop external table if exists p_e2;
+drop table if exists p_0;
+drop table if exists p_1;
+drop table if exists p_2;
+drop table if exists p_3;

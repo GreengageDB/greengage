@@ -525,7 +525,6 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
                     <dxl:Partitions>
                       <dxl:Partition Mdid="6.25679001.1.0"/>
                     </dxl:Partitions>
-                    <dxl:SelectedPartitionSet Value="0"/>
                     <dxl:TableDescriptor Mdid="6.25679.1.0" TableName="foo">
                       <dxl:Columns>
                         <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -573,7 +572,6 @@ explain select 1+row_number() over(partition by foo.c) from foo, bar where foo.a
                       <dxl:Partitions>
                         <dxl:Partition Mdid="6.25698001.1.0"/>
                       </dxl:Partitions>
-                      <dxl:SelectedPartitionSet Value="0"/>
                       <dxl:TableDescriptor Mdid="6.25698.1.0" TableName="bar">
                         <dxl:Columns>
                           <dxl:Column ColId="10" Attno="1" ColName="d" TypeMdid="0.23.1.0" ColWidth="4"/>

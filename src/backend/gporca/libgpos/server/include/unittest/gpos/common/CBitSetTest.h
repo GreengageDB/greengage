@@ -31,7 +31,6 @@ public:
 	static GPOS_RESULT EresUnittest_Basics();
 	static GPOS_RESULT EresUnittest_Removal();
 	static GPOS_RESULT EresUnittest_SetOps();
-	static GPOS_RESULT EresUnittest_SetFirstN();
 	static GPOS_RESULT EresUnittest_Performance();
 
 };	// class CBitSetTest

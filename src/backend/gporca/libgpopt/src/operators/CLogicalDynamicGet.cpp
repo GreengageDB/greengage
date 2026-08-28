@@ -70,7 +70,7 @@ CLogicalDynamicGet::CLogicalDynamicGet(
 {
 	GPOS_ASSERT(static_pruned || (nullptr == partition_cnstrs_disj));
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
-	GPOS_ASSERT(nullptr != selected_parts);
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 
@@ -96,7 +96,7 @@ CLogicalDynamicGet::CLogicalDynamicGet(CMemoryPool *mp, const CName *pnameAlias,
 	  m_selected_parts(selected_parts)
 {
 	GPOS_ASSERT(nullptr != foreign_server_mdids);
-	GPOS_ASSERT(nullptr != selected_parts);
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------
@@ -133,6 +133,9 @@ CLogicalDynamicGet::HashValue() const
 	ulHash = gpos::CombineHashes(ulHash,
 								 gpos::HashValue<BOOL>(&m_has_security_quals));
 
+	if (m_selected_parts)
+		ulHash = gpos::CombineHashes(ulHash, m_selected_parts->HashValue());
+
 	return ulHash;
 }
 
@@ -154,6 +157,12 @@ CLogicalDynamicGet::Matches(COperator *pop) const
 	}
 
 	CLogicalDynamicGet *popGet = CLogicalDynamicGet::PopConvert(pop);
+
+	if (GetSelectedParts() != nullptr && popGet->GetSelectedParts() != nullptr &&
+		!GetSelectedParts()->Equals(popGet->GetSelectedParts()))
+	{
+		return false;
+	}
 
 	return CUtils::FMatchDynamicScan(this, pop) &&
 		   this->HasSecurityQuals() == popGet->HasSecurityQuals();
@@ -188,7 +197,10 @@ CLogicalDynamicGet::PopCopyWithRemappedColumns(CMemoryPool *mp,
 	CName *pnameAlias = GPOS_NEW(mp) CName(mp, *m_pnameAlias);
 	Ptabdesc()->AddRef();
 	m_partition_mdids->AddRef();
-	m_selected_parts->AddRef();
+	if (m_selected_parts)
+	{
+		m_selected_parts->AddRef();
+	}
 
 	CConstraint *partition_cnstrs_disj = nullptr;
 
@@ -403,7 +415,7 @@ CLogicalDynamicGet::PstatsDeriveFilter(CMemoryPool *mp,
 		DOUBLE unpruned_partitions_rows = 0;
 		for (ULONG ul = 0; ul < partition_mdids->Size(); ++ul)
 		{
-			if (!selected_partitions->Get(ul))
+			if (selected_partitions && !selected_partitions->Get(ul))
 			{
 				continue;
 			}

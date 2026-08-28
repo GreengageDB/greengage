@@ -43,6 +43,7 @@ CDXLPhysicalDynamicForeignScan::CDXLPhysicalDynamicForeignScan(
 
 {
 	GPOS_ASSERT(nullptr != table_descr);
+	GPOS_ASSERT(nullptr != selected_parts && 0 != selected_parts->Size());
 }
 
 
@@ -142,17 +143,20 @@ CDXLPhysicalDynamicForeignScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenForeignServerOid),
 		m_foreign_server_oid);
 	GPOS_DELETE(serialized_selector_ids);
+
+	CWStringDynamic *serialized_selected_parts =
+		CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(m_mp, m_selected_parts);
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+		serialized_selected_parts);
+	GPOS_DELETE(serialized_selected_parts);
+
 	node->SerializePropertiesToDXL(xml_serializer);
 	node->SerializeChildrenToDXL(xml_serializer);
 	IMDCacheObject::SerializeMDIdList(
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
-
-	CDXLBitMapSet::SerializeToDXL(
-		m_mp, xml_serializer,
-		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
-		m_selected_parts);
 
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(

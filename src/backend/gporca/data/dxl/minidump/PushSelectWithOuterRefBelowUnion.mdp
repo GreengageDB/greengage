@@ -5341,7 +5341,6 @@
               <dxl:Partition Mdid="6.740207004.1.1"/>
               <dxl:Partition Mdid="6.740207005.1.1"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0:4"/>
             <dxl:TableDescriptor Mdid="6.740207.1.1" TableName="i_plineitem">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="l_id" TypeMdid="0.23.1.0"/>

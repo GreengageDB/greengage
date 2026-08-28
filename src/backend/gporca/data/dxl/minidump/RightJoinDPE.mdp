@@ -1591,7 +1591,6 @@
               <dxl:Partition Mdid="6.16460.1.0"/>
               <dxl:Partition Mdid="6.16463.1.0"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0:24"/>
             <dxl:TableDescriptor Mdid="6.16388.1.0" TableName="bar_pt1" LockMode="1">
               <dxl:Columns>
                 <dxl:Column ColId="9" Attno="1" ColName="a_pc" TypeMdid="0.23.1.0" ColWidth="4"/>

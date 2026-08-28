@@ -1383,8 +1383,10 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 	IMdIdArray *part_mdids = popDTS->GetPartitionMdids();
 	part_mdids->AddRef();
 	CBitSet *selected_parts = popDTS->GetSelectedParts();
-	selected_parts->AddRef();
-
+	if (selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 	CPartitionPropagationSpec *pps_reqd =
 		pexprDTS->Prpp()->Pepp()->PppsRequired();

@@ -95,7 +95,10 @@ CXformDynamicGet2DynamicTableScan::Transform(CXformContext *pxfctxt,
 
 	popGet->GetPartitionMdids()->AddRef();
 	popGet->GetRootColMappingPerPart()->AddRef();
-	popGet->GetSelectedParts()->AddRef();
+	if (popGet->GetSelectedParts())
+	{
+		popGet->GetSelectedParts()->AddRef();
+	}
 
 	// create alternative expression
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(

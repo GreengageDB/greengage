@@ -2577,7 +2577,6 @@
               <dxl:Partition Mdid="6.904881004.1.1"/>
               <dxl:Partition Mdid="6.904881005.1.1"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0:4"/>
             <dxl:TableDescriptor Mdid="6.904881.1.1" TableName="store_sales">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="ss_sold_date_sk" TypeMdid="0.23.1.0"/>
@@ -2997,7 +2996,6 @@
                     <dxl:Partition Mdid="6.897052004.1.1"/>
                     <dxl:Partition Mdid="6.897052005.1.1"/>
                   </dxl:Partitions>
-                  <dxl:SelectedPartitionSet Value="0:4"/>
                   <dxl:TableDescriptor Mdid="6.897052.1.1" TableName="date_dim">
                     <dxl:Columns>
                       <dxl:Column ColId="30" Attno="1" ColName="d_date_sk" TypeMdid="0.23.1.0"/>

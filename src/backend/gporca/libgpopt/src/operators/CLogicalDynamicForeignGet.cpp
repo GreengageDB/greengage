@@ -85,7 +85,8 @@ CLogicalDynamicForeignGet::Matches(COperator *pop) const
 
 	return Ptabdesc() == popGet->Ptabdesc() &&
 		   PdrgpcrOutput()->Equals(popGet->PdrgpcrOutput()) &&
-		   GetForeignServerOid() == popGet->GetForeignServerOid();
+		   GetForeignServerOid() == popGet->GetForeignServerOid() &&
+		   GetSelectedParts()->Equals(popGet->GetSelectedParts());
 }
 
 //---------------------------------------------------------------------------

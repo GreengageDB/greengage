@@ -340,7 +340,7 @@ explain select * from part;
             </dxl:ProjElem>
           </dxl:ProjList>
           <dxl:Filter/>
-          <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945">
+          <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945" SelectedPartitionSet="0">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="431.000008" Rows="1.000000" Width="12"/>
             </dxl:Properties>
@@ -357,7 +357,6 @@ explain select * from part;
               <dxl:Partition Mdid="6.32949.1.0"/>
               <dxl:Partition Mdid="6.32952.1.0"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0"/>
             <dxl:TableDescriptor Mdid="6.32946.1.0" TableName="part" LockMode="1">
               <dxl:Columns>
                 <dxl:Column ColId="9" Attno="1" ColName="word1" TypeMdid="0.25.1.0" ColWidth="8"/>
@@ -386,7 +385,7 @@ explain select * from part;
             </dxl:ProjList>
             <dxl:Filter/>
             <dxl:SortingColumnList/>
-            <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945">
+            <dxl:DynamicForeignScan SelectorIds="" ForeignServerOid="32945" SelectedPartitionSet="1">
               <dxl:Properties>
                 <dxl:Cost StartupCost="0" TotalCost="431.000023" Rows="1.000000" Width="12"/>
               </dxl:Properties>
@@ -403,7 +402,6 @@ explain select * from part;
                 <dxl:Partition Mdid="6.32949.1.0"/>
                 <dxl:Partition Mdid="6.32952.1.0"/>
               </dxl:Partitions>
-              <dxl:SelectedPartitionSet Value="1"/>
               <dxl:TableDescriptor Mdid="6.32946.1.0" TableName="part" LockMode="1">
                 <dxl:Columns>
                   <dxl:Column ColId="18" Attno="1" ColName="word1" TypeMdid="0.25.1.0" ColWidth="8"/>

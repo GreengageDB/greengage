@@ -579,7 +579,6 @@ explain select i, count(j) from pt2 group by i;
                     <dxl:Partition Mdid="6.1695223004.1.1"/>
                     <dxl:Partition Mdid="6.1695223005.1.1"/>
                   </dxl:Partitions>
-                  <dxl:SelectedPartitionSet Value="0:4"/>
                   <dxl:TableDescriptor Mdid="6.1695223.1.1" TableName="pt2">
                     <dxl:Columns>
                       <dxl:Column ColId="0" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>

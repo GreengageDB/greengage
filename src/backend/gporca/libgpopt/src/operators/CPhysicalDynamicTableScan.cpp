@@ -43,7 +43,7 @@ CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 						   root_col_mapping_per_part),
 	  m_selected_parts(selected_parts)
 {
-	GPOS_ASSERT(nullptr != selected_parts);
+	GPOS_ASSERT(nullptr == selected_parts || 0 != selected_parts->Size());
 }
 
 //---------------------------------------------------------------------------

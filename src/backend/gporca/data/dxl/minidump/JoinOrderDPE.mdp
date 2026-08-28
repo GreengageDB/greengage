@@ -2685,7 +2685,6 @@
               <dxl:Partitions>
                 <dxl:Partition Mdid="6.17816.1.0"/>
               </dxl:Partitions>
-              <dxl:SelectedPartitionSet Value="0"/>
               <dxl:TableDescriptor Mdid="6.17804.1.0" TableName="jazz" LockMode="1" AclMode="2">
                 <dxl:Columns>
                   <dxl:Column ColId="18" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -2753,7 +2752,6 @@
                   <dxl:Partitions>
                     <dxl:Partition Mdid="6.17846.1.0"/>
                   </dxl:Partitions>
-                  <dxl:SelectedPartitionSet Value="0"/>
                   <dxl:TableDescriptor Mdid="6.17834.1.0" TableName="foo" LockMode="1" AclMode="2">
                     <dxl:Columns>
                       <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
@@ -2807,7 +2805,6 @@
             <dxl:Partitions>
               <dxl:Partition Mdid="6.17876.1.0"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0"/>
             <dxl:TableDescriptor Mdid="6.17864.1.0" TableName="bar" LockMode="1" AclMode="2">
               <dxl:Columns>
                 <dxl:Column ColId="9" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

@@ -169,7 +169,6 @@
 #include "naucrates/dxl/parser/CParseHandlerScalarWindowRef.h"
 #include "naucrates/dxl/parser/CParseHandlerSearchStage.h"
 #include "naucrates/dxl/parser/CParseHandlerSearchStrategy.h"
-#include "naucrates/dxl/parser/CParseHandlerSelectedPartitionsSet.h"
 #include "naucrates/dxl/parser/CParseHandlerSequence.h"
 #include "naucrates/dxl/parser/CParseHandlerSort.h"
 #include "naucrates/dxl/parser/CParseHandlerSortCol.h"

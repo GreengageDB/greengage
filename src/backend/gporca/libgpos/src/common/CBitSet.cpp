@@ -292,55 +292,6 @@ CBitSet::ExchangeSet(ULONG pos)
 	return bit;
 }
 
-//---------------------------------------------------------------------------
-//	@function:
-//		CBitSet::SetFirstN
-//
-//	@doc:
-//		Set first N bits to 1
-//
-//---------------------------------------------------------------------------
-void
-CBitSet::SetFirstN(ULONG count)
-{
-	m_size = count;
-	CBitSetLink *bsl = m_bsllist.First();
-	if (nullptr == bsl)
-	{
-		CBitSetLink *pbsl_new =
-			GPOS_NEW(m_mp) CBitSetLink(m_mp, 0, m_vector_size);
-		m_bsllist.Prepend(pbsl_new);
-		bsl = pbsl_new;
-	}
-	ULONG offset = 0;
-	while (true)
-	{
-		CBitVector *vec = bsl->GetVec();
-		if (count >= m_vector_size)
-		{
-			vec->SetFirstN(m_vector_size);
-			count -= m_vector_size;
-		}
-		else
-		{
-			vec->SetFirstN(count);
-			break;
-		}
-		offset += m_vector_size;
-
-		if (nullptr == m_bsllist.Next(bsl))
-		{
-			CBitSetLink *pbsl_new =
-				GPOS_NEW(m_mp) CBitSetLink(m_mp, offset, m_vector_size);
-			m_bsllist.Append(pbsl_new, bsl);
-			bsl = pbsl_new;
-		}
-		else
-		{
-			bsl = m_bsllist.Next(bsl);
-		}
-	}
-}
 
 //---------------------------------------------------------------------------
 //	@function:

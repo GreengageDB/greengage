@@ -711,7 +711,6 @@
                   <dxl:Partition Mdid="6.16526.1.0"/>
                   <dxl:Partition Mdid="6.16529.1.0"/>
                 </dxl:Partitions>
-                <dxl:SelectedPartitionSet Value="0:4"/>
                 <dxl:TableDescriptor Mdid="6.16514.1.0" TableName="pt2" LockMode="7">
                   <dxl:Columns>
                     <dxl:Column ColId="0" Attno="1" ColName="i" TypeMdid="0.23.1.0" ColWidth="4"/>

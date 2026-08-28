@@ -536,6 +536,10 @@ public:
 		CDXLMemoryManager *dxl_memory_manager, const Attributes &attr,
 		Edxltoken target_attr, Edxltoken target_elem);
 
+	static CBitSet *ExtractConvertRangesToIntBitSet(
+		CDXLMemoryManager *dxl_memory_manager, const Attributes &attrs,
+		Edxltoken target_attr, Edxltoken target_elem);
+	
 	// parse a comma-separated list of integers numbers into a dynamic array
 	// will raise an exception if list is not well-formed
 	template <typename T, void (*CleanupFn)(T *),
@@ -590,6 +594,10 @@ public:
 
 		return pbs;
 	}
+	
+	static CBitSet *
+	ExtractIntRangesToIntBitSet(CDXLMemoryManager *dxl_memory_manager,
+						   const XMLCh *attribute_value, Edxltoken target_attr, Edxltoken target_elem);
 
 	// parse a comma-separated list of CHAR partition types into a dynamic array.
 	// will raise an exception if list is not well-formed

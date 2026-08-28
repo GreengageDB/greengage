@@ -17,8 +17,7 @@ OBJS        = CDatumBoolGPDB.o \
               CDatumInt8GPDB.o \
               CDatumOidGPDB.o \
               CQueryToDXLResult.o \
-              IDatum.o \
-              CDXLBitMapSet.o
+              IDatum.o
 
 include $(top_srcdir)/src/backend/common.mk
 

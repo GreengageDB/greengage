@@ -636,11 +636,9 @@ CTranslatorDXLToExpr::PexprLogicalGet(const CDXLNode *dxlnode)
 		// generate a part index id
 		ULONG part_idx_id = COptCtxt::PoctxtFromTLS()->UlPartIndexNextVal();
 		partition_mdids->AddRef();
-		CBitSet *selected_partitions = GPOS_NEW(m_mp) CBitSet(m_mp);
-		selected_partitions->SetFirstN(partition_mdids->Size());
 		popGet = GPOS_NEW(m_mp) CLogicalDynamicGet(
 			m_mp, pname, ptabdesc, part_idx_id, partition_mdids,
-			foreign_server_mdids, selected_partitions, hasSecurityQuals);
+			foreign_server_mdids, nullptr, hasSecurityQuals);
 		CLogicalDynamicGet *popDynamicGet =
 			CLogicalDynamicGet::PopConvert(popGet);
 

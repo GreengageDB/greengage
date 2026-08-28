@@ -885,7 +885,6 @@ select * from x, y where (x.i > y.j);
                 <dxl:Partition Mdid="6.-1186144847.1.1"/>
                 <dxl:Partition Mdid="6.-1186144846.1.1"/>
               </dxl:Partitions>
-              <dxl:SelectedPartitionSet Value="0:1"/>
               <dxl:TableDescriptor Mdid="6.54648430.1.1" TableName="x">
                 <dxl:Columns>
                   <dxl:Column ColId="0" Attno="1" ColName="i" TypeMdid="0.23.1.0"/>

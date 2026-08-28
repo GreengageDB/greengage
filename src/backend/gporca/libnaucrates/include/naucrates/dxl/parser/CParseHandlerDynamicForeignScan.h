@@ -39,6 +39,8 @@ private:
 	ULongPtrArray *m_selector_ids;
 
 	OID m_foreign_server_oid;
+	
+	CBitSet *m_selected_parts;
 
 	// process the start of an element
 	void StartElement(
@@ -63,6 +65,8 @@ public:
 	CParseHandlerDynamicForeignScan(CMemoryPool *mp,
 									CParseHandlerManager *parse_handler_mgr,
 									CParseHandlerBase *pph);
+
+	~CParseHandlerDynamicForeignScan() override;
 };
 }  // namespace gpdxl
 

@@ -1349,7 +1349,6 @@ Select * from X where X.a < ANY (select a from P);
                       <dxl:Partition Mdid="6.1478028634.1.1"/>
                       <dxl:Partition Mdid="6.1478028635.1.1"/>
                     </dxl:Partitions>
-                    <dxl:SelectedPartitionSet Value="0:2"/>
                     <dxl:TableDescriptor Mdid="6.35837767.1.1" TableName="p">
                       <dxl:Columns>
                         <dxl:Column ColId="8" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>

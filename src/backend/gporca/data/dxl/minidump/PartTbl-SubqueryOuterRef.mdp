@@ -827,7 +827,6 @@ explain select * from t1 where a = 1 and b in (select b from t2);
               <dxl:Partition Mdid="6.284979009.1.1"/>
               <dxl:Partition Mdid="6.284979010.1.1"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0:9"/>
             <dxl:TableDescriptor Mdid="6.284979.1.1" TableName="t1">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0"/>

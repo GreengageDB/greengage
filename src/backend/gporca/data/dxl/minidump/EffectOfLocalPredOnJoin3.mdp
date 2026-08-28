@@ -13957,7 +13957,6 @@
               <dxl:Partition Mdid="6.1976539004.1.1"/>
               <dxl:Partition Mdid="6.1976539005.1.1"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0:4"/>
             <dxl:TableDescriptor Mdid="6.1976539.1.1" TableName="web_sales">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="ws_sold_date_sk" TypeMdid="0.23.1.0"/>

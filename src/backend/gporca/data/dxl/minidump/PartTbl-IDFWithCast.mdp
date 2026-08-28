@@ -363,7 +363,6 @@ explain select * from L where 2::numeric is distinct from b::numeric;
             <dxl:Partition Mdid="6.311296002.1.0"/>
             <dxl:Partition Mdid="6.311296003.1.0"/>
           </dxl:Partitions>
-          <dxl:SelectedPartitionSet Value="0:2"/>
           <dxl:TableDescriptor Mdid="6.311296.1.0" TableName="l">
             <dxl:Columns>
               <dxl:Column ColId="0" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>

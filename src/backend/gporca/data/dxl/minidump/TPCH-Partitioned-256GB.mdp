@@ -4534,7 +4534,6 @@
                       <dxl:Partition Mdid="6.93299003.1.1"/>
                       <dxl:Partition Mdid="6.93299004.1.1"/>
                     </dxl:Partitions>
-                    <dxl:SelectedPartitionSet Value="0:3"/>
                     <dxl:TableDescriptor Mdid="6.93299.1.1" TableName="lineitem">
                       <dxl:Columns>
                         <dxl:Column ColId="30" Attno="1" ColName="l_orderkey" TypeMdid="0.23.1.0"/>

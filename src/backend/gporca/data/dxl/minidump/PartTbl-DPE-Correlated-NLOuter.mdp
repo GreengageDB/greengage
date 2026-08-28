@@ -457,7 +457,6 @@ select (select h.i from t2) from h where h.j = 1;
             <dxl:Partitions>
               <dxl:Partition Mdid="6.242747001.1.0"/>
             </dxl:Partitions>
-            <dxl:SelectedPartitionSet Value="0"/>
             <dxl:TableDescriptor Mdid="6.242747.1.0" TableName="h">
               <dxl:Columns>
                 <dxl:Column ColId="0" Attno="1" ColName="j" TypeMdid="0.23.1.0" ColWidth="4"/>

@@ -4210,7 +4210,6 @@
                           <dxl:Partition Mdid="6.328475003.1.1"/>
                           <dxl:Partition Mdid="6.328475004.1.1"/>
                         </dxl:Partitions>
-                        <dxl:SelectedPartitionSet Value="0:3"/>
                         <dxl:TableDescriptor Mdid="6.328475.1.1" TableName="fact_sales">
                           <dxl:Columns>
                             <dxl:Column ColId="0" Attno="1" ColName="sales_date" TypeMdid="0.1082.1.0"/>

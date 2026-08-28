@@ -41,6 +41,7 @@ CDXLPhysicalDynamicTableScan::CDXLPhysicalDynamicTableScan(
 
 {
 	GPOS_ASSERT(nullptr != table_descr);
+	GPOS_ASSERT(nullptr == m_selected_parts || 0 != m_selected_parts->Size());
 }
 
 
@@ -56,7 +57,7 @@ CDXLPhysicalDynamicTableScan::~CDXLPhysicalDynamicTableScan()
 {
 	m_dxl_table_descr->Release();
 	m_part_mdids->Release();
-	m_selected_parts->Release();
+	CRefCount::SafeRelease(m_selected_parts);
 	CRefCount::SafeRelease(m_selector_ids);
 }
 
@@ -137,17 +138,21 @@ CDXLPhysicalDynamicTableScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenSelectorIds),
 		serialized_selector_ids);
 	GPOS_DELETE(serialized_selector_ids);
+	if (m_selected_parts)
+	{
+		CWStringDynamic *serialized_selected_parts =
+			CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(m_mp, m_selected_parts);
+		xml_serializer->AddAttribute(
+			CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+			serialized_selected_parts);
+		GPOS_DELETE(serialized_selected_parts);
+	}
 	node->SerializePropertiesToDXL(xml_serializer);
 	node->SerializeChildrenToDXL(xml_serializer);
 	IMDCacheObject::SerializeMDIdList(
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
-
-	CDXLBitMapSet::SerializeToDXL(
-		m_mp, xml_serializer,
-		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
-		m_selected_parts);
 
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(
