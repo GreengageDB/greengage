@@ -402,6 +402,8 @@ typedef struct _tableInfo
 	char	*distclause; /* distributed by clause */
 	char	*partclause;	/* partition definition, if table is partition parent */
 	char	*parttemplate;	/* subpartition template */
+	bool	 ignoreRootPartDroppedAttr /* true if need to ignore root partition's dropped columns */
+;
 } TableInfo;
 
 /* AO auxilliary table metadata */

@@ -9217,6 +9217,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	{
 		Oid			attrelid = atooid(PQgetvalue(res, r, i_attrelid));
 		TableInfo  *tbinfo = NULL;
+		bool        tableHasDroppedAttrs = false;
 		int			numatts;
 		bool		hasdefaults;
 
@@ -9301,6 +9302,9 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, PQfnumber(res, "attencoding")));
 			else
 				tbinfo->attencoding[j] = NULL;
+
+			if (tbinfo->attisdropped[j])
+				tableHasDroppedAttrs = true;
 		}
 
 		if (hasdefaults)
@@ -9309,6 +9313,75 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			if (tbloids->len > 1)	/* do we have more than the '{'? */
 				appendPQExpBufferChar(tbloids, ',');
 			appendPQExpBuffer(tbloids, "%u", tbinfo->dobj.catId.oid);
+		}
+
+		/*
+		 * GPDB: If root partition has a dropped attribute, check if its child
+		 * partitions do too. If all the child partitions have the same
+		 * dropped attribute then continue as normal. If none of the child
+		 * partitions have a dropped attribute, we will suppress the dropped
+		 * attribute from being dumped later in the CREATE TABLE PARTITION BY
+		 * DDL along with the respective ALTER TABLE DROP COLUMN. Child and
+		 * subroot partitions do not have their own DDL; they are completely
+		 * delegated by the root partition DDL.
+		 *
+		 * Note: This assumes that the dropped column reference is the same
+		 * between the root partition and its child partitions.
+		 */
+		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION &&
+			dopt->binary_upgrade &&
+			tbinfo->parparent &&
+			tableHasDroppedAttrs)
+		{
+			int numDistinctNatts;
+			int childPartNumNatts;
+			PGresult   *attsRes;
+
+			pg_log_info("checking if root partition table \"%s\" with dropped column(s) is synchronized with its child partitions.\n",
+						tbinfo->dobj.name);
+
+			resetPQExpBuffer(q);
+			appendPQExpBuffer(q, "SELECT DISTINCT relnatts "
+							  "FROM pg_catalog.pg_class "
+							  "WHERE NOT relhassubclass AND "
+							  "oid IN (SELECT parchildrelid "
+							  "    FROM pg_catalog.pg_partition par "
+							  "    JOIN pg_catalog.pg_partition_rule rule ON par.oid=rule.paroid "
+							  "        AND NOT par.paristemplate "
+							  "        AND par.parrelid = '%u'::pg_catalog.oid)",
+							  tbinfo->dobj.catId.oid);
+
+			attsRes = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
+			numDistinctNatts = PQntuples(attsRes);
+			Assert(numDistinctNatts > 0);
+
+			/*
+			 * We encountered a heterogeneous partition table where all the
+			 * child partitions are not synchronized with the number of
+			 * attributes (e.g. one has a dropped column while the others do
+			 * not).
+			 */
+			if (numDistinctNatts != 1)
+			{
+				pg_log_error("invalid heterogeneous partition table detected with root partition table \"%s\".\n",
+							 tbinfo->dobj.name);
+				exit_nicely(1);
+			}
+
+			/*
+			 * If the number of attributes from the child partitions match the
+			 * root partition then keep the dropped column reference. If they
+			 * do not match, then ignore the dropped column reference when
+			 * dumping the partition table DDL.
+			 */
+			childPartNumNatts = atoi(PQgetvalue(attsRes, 0, 0));
+			if (childPartNumNatts != numatts)
+			{
+				pg_log_info("suppressing dropped column(s) for root partition table \"%s\".\n",
+							tbinfo->dobj.name);
+				tbinfo->ignoreRootPartDroppedAttr = true;
+			}
+			PQclear(attsRes);
 		}
 	}
 
@@ -9628,7 +9701,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 bool
 shouldPrintColumn(const DumpOptions *dopt, const TableInfo *tbinfo, int colno)
 {
-	if (dopt->binary_upgrade)
+	if (dopt->binary_upgrade && !tbinfo->ignoreRootPartDroppedAttr)
 		return true;
 	if (tbinfo->attisdropped[colno])
 		return false;
@@ -17636,7 +17709,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 			for (j = 0; j < tbinfo->numatts; j++)
 			{
-				if (tbinfo->attisdropped[j])
+				if (tbinfo->attisdropped[j] && !tbinfo->ignoreRootPartDroppedAttr)
 				{
 					appendPQExpBufferStr(q, "\n-- For binary upgrade, recreate dropped column.\n");
 					appendPQExpBuffer(q, "UPDATE pg_catalog.pg_attribute\n"
