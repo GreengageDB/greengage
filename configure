@@ -785,6 +785,7 @@ enable_gpfdist
 enable_rpath
 default_port
 PORTNAME
+GP_ENV_SCRIPT_ALIAS
 host_os
 host_vendor
 host_cpu
@@ -838,6 +839,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 with_extra_version
+with_product_name
 with_template
 with_includes
 with_libraries
@@ -1561,6 +1563,10 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
+  --with-product-name=NAME
+                          name the product "NAME Database" and symlink
+                          name_path.sh to greengage_path.sh in GPHOME
+                          (default: Greengage)
   --with-template=NAME    override operating system template
   --with-includes=DIRS    look for additional header files in DIRS
   --with-libraries=DIRS   look for additional libraries in DIRS
@@ -2933,6 +2939,65 @@ shift; shift
 host_os=$*
 IFS=$ac_save_IFS
 case $host_os in *\ *) host_os=`echo "$host_os" | sed 's/ /-/g'`;; esac
+
+
+
+
+
+
+# Check whether --with-product-name was given.
+if test "${with_product_name+set}" = set; then :
+  withval=$with_product_name;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-product-name option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-product-name option" "$LINENO" 5
+      ;;
+    *)
+
+      ;;
+  esac
+
+fi
+
+
+
+if test -n "$with_product_name"; then
+  if expr "X$with_product_name" : 'XGreen[a-zA-Z0-9_][a-zA-Z0-9_]*$' >/dev/null; then
+    :
+  else
+    as_fn_error $? "--with-product-name takes one word, without the \" Database\" that
+is appended to it, and that word has to match \"Green\w+\": gpversion.py in
+gpMgmt/bin/gppylib parses select version() with the regexp \"Green\w+ Database\",
+and a name it cannot parse makes GpVersion() raise on every server started by
+this build, failing gpstart, gpstop, gpstate, gppkg and gpload at run time." "$LINENO" 5
+  fi
+  gp_product_name="$with_product_name Database"
+  GP_ENV_SCRIPT_ALIAS="`echo "$with_product_name" | tr 'A-Z' 'a-z'`_path.sh"
+    if test "$GP_ENV_SCRIPT_ALIAS" = greengage_path.sh; then
+    GP_ENV_SCRIPT_ALIAS=
+  fi
+else
+  gp_product_name="Greengage Database"
+  GP_ENV_SCRIPT_ALIAS=
+fi
+
+
+cat >>confdefs.h <<_ACEOF
+#define GP_PRODUCT_NAME "$gp_product_name"
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PACKAGE_NAME "$gp_product_name"
+_ACEOF
+
+
+cat >>confdefs.h <<_ACEOF
+#define PACKAGE_STRING "$gp_product_name $PACKAGE_VERSION"
+_ACEOF
 
 
 
@@ -19608,7 +19673,7 @@ fi
 
 
 cat >>confdefs.h <<_ACEOF
-#define PG_VERSION_STR "PostgreSQL $PG_VERSION (Greengage Database $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
+#define PG_VERSION_STR "PostgreSQL $PG_VERSION ($gp_product_name $GP_VERSION) on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
 _ACEOF
 
 
