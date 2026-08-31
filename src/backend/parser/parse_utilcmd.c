@@ -45,6 +45,7 @@
 #include "catalog/pg_type.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
@@ -2392,10 +2393,57 @@ transformDistributedBy(ParseState *pstate,
 	int			numsegments;
 
 	/*
-	 * utility mode creates can't have a policy.  Only the QD can have policies
+	 * utility mode creates can't have a policy.  Only the QD can have policies.
+	 *
+	 * IsBinaryUpgrade normally bypasses this, since --binary-upgrade restore
+	 * runs entirely in utility mode but still needs real policies computed
+	 * for tables that were actually distributed (pg_dump always emits an
+	 * explicit DISTRIBUTED BY/RANDOMLY/REPLICATED clause for those). But if
+	 * there is no such clause, the source table had no gp_distribution_policy
+	 * row at all, i.e. it was entry-distributed -- fall through to the
+	 * ordinary utility-mode behavior instead of guessing a default policy.
 	 */
-	if (Gp_role != GP_ROLE_DISPATCH && !IsBinaryUpgrade)
+	if (Gp_role != GP_ROLE_DISPATCH &&
+		(!IsBinaryUpgrade || distributedBy == NULL))
 		return NULL;
+
+	if (creating_extension_local)
+	{
+		/*
+		 * Partitioned tables are not supported inside a local extension
+		 * script, matching the 6x local-extension patch. A partition child
+		 * of an externally-created parent that already has a real policy
+		 * can otherwise silently end up with an inconsistent (entry) policy
+		 * of its own: a plain "PARTITION OF parent FOR VALUES (...)" clause
+		 * sets neither distributedBy nor likeDistributedBy, so the explicit
+		 * distribution check below has nothing to catch. Separately,
+		 * gpexpand's redistribution-prep step cannot process an
+		 * entry-distributed partitioned table at all, and fails past the
+		 * point of rollback if it encounters one. Reject both the
+		 * partitioned parent (PARTITION BY) and any partition child
+		 * (PARTITION OF) outright until both of those are addressed.
+		 */
+		if (cxt->ispartitioned || cxt->partbound != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("partitioned tables are not supported inside a local extension script")));
+
+		/*
+		 * POLICYTYPE_ENTRY for local extensions. An explicit distribution
+		 * (given directly, or inherited via LIKE ... INCLUDING DISTRIBUTION)
+		 * can't be honored, but silently discarding it and returning NULL
+		 * here isn't safe either: some callers (writable external tables)
+		 * assume a non-NULL result whenever they passed in a non-NULL
+		 * distributedBy or likeDistributedBy, and dereference it right
+		 * after the call. Error out instead of handing them a NULL they
+		 * don't check for.
+		 */
+		if (distributedBy != NULL || likeDistributedBy != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("explicit distribution is not supported inside a local extension script")));
+		return NULL;
+	}
 
 	if (distributedBy && distributedBy->numsegments > 0)
 		/* If numsegments is set in DISTRIBUTED BY use the specified value */
