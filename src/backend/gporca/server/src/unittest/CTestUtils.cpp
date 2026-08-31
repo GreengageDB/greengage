@@ -455,14 +455,13 @@ CTestUtils::PexprLogicalDynamicGetWithIndexes(CMemoryPool *mp)
 	CWStringConst strAlias(GPOS_WSZ_LIT("P1Alias"));
 
 	IMdIdArray *partition_mdids = GPOS_NEW(mp) IMdIdArray(mp);
-	CBitSet *required_partition_map = GPOS_NEW(mp) CBitSet(mp);
 	IMdIdArray *foreign_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 
 	return GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CLogicalDynamicGet(
 				mp, GPOS_NEW(mp) CName(mp, CName(&strAlias)), ptabdesc,
 				0,	// ulPartIndex
-				partition_mdids, foreign_mdids, required_partition_map));
+				partition_mdids, foreign_mdids, nullptr));
 }
 
 
@@ -1865,14 +1864,13 @@ CTestUtils::PexprLogicalDynamicGet(CMemoryPool *mp, CTableDescriptor *ptabdesc,
 	GPOS_UNITTEST_ASSERT(nullptr != ptabdesc);
 
 	IMdIdArray *partition_mdids = GPOS_NEW(mp) IMdIdArray(mp);
-	CBitSet *required_partition_map = GPOS_NEW(mp) CBitSet(mp);
 	IMdIdArray *foreign_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 
 	return GPOS_NEW(mp)
 		CExpression(mp, GPOS_NEW(mp) CLogicalDynamicGet(
 							mp, GPOS_NEW(mp) CName(mp, CName(pstrTableAlias)),
 							ptabdesc, ulPartIndex, partition_mdids,
-							foreign_mdids, required_partition_map));
+							foreign_mdids, nullptr));
 }
 
 //---------------------------------------------------------------------------
