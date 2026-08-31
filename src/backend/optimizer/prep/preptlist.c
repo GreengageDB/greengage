@@ -44,6 +44,7 @@
 
 #include "access/sysattr.h"
 #include "access/table.h"
+#include "access/relation.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
@@ -53,6 +54,8 @@
 #include "parser/parse_coerce.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
+#include "partitioning/partdesc.h"
+#include "catalog/partition.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -465,6 +468,29 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 * time to actually create the ModifyTable, and SplitUpdate, node.
 			 */
 			root->is_split_update = true;
+		}
+
+		if (!key_col_updated && rel->rd_rel->relispartition)
+		{
+			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+			Relation root_rel = relation_open(rootoid, RowShareLock);
+			PartitionDesc rdesc = RelationRetrievePartitionDesc(root_rel);
+
+			for (int i = 0; i < rdesc->nparts; i++)
+			{
+				if (rdesc->is_leaf[i]) 
+				{
+					Oid leafid = rdesc->oids[i];
+					GpPolicy   *leafPolicy = GpPolicyFetch(leafid);
+					bool is_policies_equal = GpPolicyEqual(targetPolicy, leafPolicy);
+
+					if (!is_policies_equal) {
+						root->is_split_update = true;
+						break;
+					}
+				}
+			}
+			relation_close(root_rel, RowShareLock);
 		}
 	}
 

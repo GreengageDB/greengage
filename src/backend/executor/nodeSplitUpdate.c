@@ -21,6 +21,7 @@
 #include "commands/tablecmds.h"
 #include "executor/instrument.h"
 #include "executor/nodeSplitUpdate.h"
+#include "parser/parsetree.h"
 
 #include "utils/memutils.h"
 
@@ -88,6 +89,7 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 	{
 		TargetEntry *tle = lfirst(element);
 		AttrNumber attno = tle->resno;
+		elog(INFO, "for tle we have resname=%s, attno=%i", tle->resname, attno - 1);
 
 		if (IsA(tle->expr, DMLActionExpr))
 		{
@@ -128,15 +130,24 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			delete_values[attno - 1] = values[node->input_segid_attno - 1];
 			delete_nulls[attno - 1] = false;
 
+			if (node->output_segid_attno <= 0 || node->cdbhash == NULL) 
+			{
+				insert_values[attno - 1] = values[node->input_segid_attno - 1];
+    			insert_nulls[attno - 1] = false;
+			}
+
 			/* compute the new value later, after we have processed all the other columns */
 		}
 		else
 		{
+			elog(INFO, "We're in last else block");
 			if (IsA(tle->expr, Var))
 			{
 				Var		   *var = (Var *) tle->expr;
 
 				Assert(var->varno == OUTER_VAR);
+
+				elog(INFO, "inside last else we're doing this at this attno = %i and this varattno = %i: deleve values = %lu, delete_nulls = %d, insert_values = %lu, insert_nulls = %d", attno - 1, var->varattno - 1, values[var->varattno - 1], nulls[var->varattno - 1], values[var->varattno - 1], nulls[var->varattno - 1]);
 
 				delete_values[attno - 1] = values[var->varattno - 1];
 				delete_nulls[attno - 1] = nulls[var->varattno - 1];
@@ -151,7 +162,7 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 	}
 
 	/* Compute segment ID for the new row */
-	if (node->output_segid_attno > 0)
+	if (node->output_segid_attno > 0 && node->cdbhash != NULL)
 	{
 		int32		target_seg;
 
@@ -249,10 +260,8 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 * Look up the positions of the gp_segment_id in the subplan's target
 	 * list, and in the result.
 	 */
-	splitupdatestate->input_segid_attno =
-		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
-	splitupdatestate->output_segid_attno =
-		ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
+	splitupdatestate->input_segid_attno = get_tle_by_resname(outerPlan->targetlist, "gp_segment_id");
+	splitupdatestate->output_segid_attno = get_tle_by_resname(node->plan.targetlist, "gp_segment_id");
 
 	/*
 	 * DML nodes do not project.
