@@ -799,7 +799,8 @@ CDXLTokens::Init(CMemoryPool *mp)
 		{EdxltokenAdd, GPOS_WSZ_LIT("Add")},
 		{EdxltokenSubtract, GPOS_WSZ_LIT("Sub")},
 		{EdxltokenMultiply, GPOS_WSZ_LIT("Multi")},
-		{EdxltokenSelectedPartitionSet, GPOS_WSZ_LIT("SelectedPartitionSet")}};
+		{EdxltokenSelectedPartitionSet, GPOS_WSZ_LIT("SelectedPartitionSet")}
+	};
 
 	m_pstrmap = GPOS_NEW_ARRAY(m_mp, SStrMapElem, EdxltokenSentinel);
 	m_pxmlszmap = GPOS_NEW_ARRAY(m_mp, SXMLStrMapElem, EdxltokenSentinel);

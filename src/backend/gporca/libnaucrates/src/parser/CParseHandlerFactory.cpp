@@ -285,7 +285,9 @@ CParseHandlerFactory::Init(CMemoryPool *mp)
 		{EdxltokenScalarSortGroupClause, &CreateScSortGroupClauseParseHandler},
 		{EdxltokenPhysicalValuesScan, &CreateValuesScanParseHandler},
 		{EdxltokenNLJIndexParamList, &CreateNLJIndexParamListParseHandler},
-		{EdxltokenNLJIndexParam, &CreateNLJIndexParamParseHandler}};
+		{EdxltokenNLJIndexParam, &CreateNLJIndexParamParseHandler}
+
+	};
 
 	const ULONG num_of_parse_handlers =
 		GPOS_ARRAY_SIZE(token_parse_handler_map);

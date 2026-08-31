@@ -63,8 +63,6 @@ CLogicalDynamicForeignGet::CLogicalDynamicForeignGet(
 	GPOS_ASSERT(nullptr != selected_parts);
 }
 
-
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CLogicalDynamicForeignGet::Matches

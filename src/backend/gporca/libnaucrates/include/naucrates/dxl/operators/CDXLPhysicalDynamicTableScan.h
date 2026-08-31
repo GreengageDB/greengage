@@ -20,6 +20,7 @@
 #include "naucrates/dxl/operators/CDXLPhysical.h"
 #include "naucrates/dxl/operators/CDXLTableDescr.h"
 
+
 namespace gpdxl
 {
 // indices of dynamic table scan elements in the children array

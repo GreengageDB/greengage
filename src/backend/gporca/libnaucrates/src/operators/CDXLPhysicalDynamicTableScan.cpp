@@ -153,7 +153,6 @@ CDXLPhysicalDynamicTableScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
-
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);

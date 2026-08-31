@@ -2402,7 +2402,7 @@ ExecFindMatchingSubPlans(PartitionPruneState *prunestate,
 			{
 				Assert(IsA(psstate, PartitionSelectorState));
 
-					join_selected = bms_intersect(join_selected,
+				join_selected = bms_intersect(join_selected,
 											  psstate->part_prune_result);
 			}
 		}
