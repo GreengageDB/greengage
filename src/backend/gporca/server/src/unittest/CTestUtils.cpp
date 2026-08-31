@@ -1866,11 +1866,10 @@ CTestUtils::PexprLogicalDynamicGet(CMemoryPool *mp, CTableDescriptor *ptabdesc,
 	IMdIdArray *partition_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 	IMdIdArray *foreign_mdids = GPOS_NEW(mp) IMdIdArray(mp);
 
-	return GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CLogicalDynamicGet(
-							mp, GPOS_NEW(mp) CName(mp, CName(pstrTableAlias)),
-							ptabdesc, ulPartIndex, partition_mdids,
-							foreign_mdids, nullptr));
+	return GPOS_NEW(mp) CExpression(
+		mp, GPOS_NEW(mp) CLogicalDynamicGet(
+				mp, GPOS_NEW(mp) CName(mp, CName(pstrTableAlias)), ptabdesc,
+				ulPartIndex, partition_mdids, foreign_mdids, nullptr));
 }
 
 //---------------------------------------------------------------------------
