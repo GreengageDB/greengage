@@ -23,6 +23,7 @@
 #include "access/heapam.h"
 #include "access/relscan.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
@@ -386,6 +387,8 @@ systable_beginscan(Relation heapRelation,
 		sysscan->snapshot = NULL;
 	}
 
+	sysscan->tempscan = tempcat_beginscan(heapRelation, nkeys, key);
+
 	if (irel)
 	{
 		int			i;
@@ -447,6 +450,13 @@ systable_getnext(SysScanDesc sysscan)
 {
 	HeapTuple	htup = NULL;
 
+	if (sysscan->tempscan)
+	{
+		htup = tempcat_getnext(sysscan->tempscan, (BufferHeapTupleTableSlot *) sysscan->slot);
+		if (htup)
+			return htup;
+	}
+
 	if (sysscan->irel)
 	{
 		if (index_getnext_slot(sysscan->iscan, ForwardScanDirection, sysscan->slot))
@@ -501,6 +511,9 @@ systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 	Snapshot	freshsnap;
 	bool		result;
 
+	if (sysscan->tempscan && tempcat_is_fetched(sysscan->tempscan))
+		return true;
+
 	Assert(tup == ExecFetchSlotHeapTuple(sysscan->slot, false, NULL));
 
 	/*
@@ -526,6 +539,9 @@ systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 void
 systable_endscan(SysScanDesc sysscan)
 {
+	if (sysscan->tempscan)
+		tempcat_endscan(sysscan->tempscan);
+
 	if (sysscan->slot)
 	{
 		ExecDropSingleTupleTableSlot(sysscan->slot);
@@ -588,6 +604,16 @@ systable_beginscan_ordered(Relation heapRelation,
 	sysscan->heap_rel = heapRelation;
 	sysscan->irel = indexRelation;
 	sysscan->slot = table_slot_create(heapRelation, NULL);
+
+	/*
+	 * Ordered catalog scans do not consult the in-memory temp catalog; they
+	 * read only on-disk tuples.  Make the (unused) tempscan pointer NULL so it
+	 * is never mistaken for a live tempcat scan, and assert the relation has no
+	 * virtual rows. On the codepath where ordered scan is needed there should be
+	 * no virtual tuples. 
+	 */
+	sysscan->tempscan = NULL;
+	Assert(!tempcat_relation_has_entries(heapRelation));
 
 	if (snapshot == NULL)
 	{
@@ -751,6 +777,19 @@ systable_inplace_update_begin(Relation relation,
 			return;
 		}
 
+		/*
+		 * If the tuple came from the in-memory virtual catalog (tempcat),
+		 * there is no buffer to lock.  Return the tuple for modification;
+		 * systable_inplace_update_finish will route the write through
+		 * tempcat_update_inplace.
+		 */
+		if (IsTempcatItemPointer(&oldtup->t_self))
+		{
+			*oldtupcopy = heap_copytuple(oldtup);
+			*state = scan;
+			return;
+		}
+
 		slot = scan->slot;
 		Assert(TTS_IS_BUFFERTUPLE(slot));
 		bslot = (BufferHeapTupleTableSlot *) slot;
@@ -773,13 +812,24 @@ systable_inplace_update_finish(void *state, HeapTuple tuple)
 {
 	SysScanDesc scan = (SysScanDesc) state;
 	Relation	relation = scan->heap_rel;
-	TupleTableSlot *slot = scan->slot;
-	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
-	HeapTuple	oldtup = bslot->base.tuple;
-	Buffer		buffer = bslot->buffer;
 
-	heap_inplace_update_and_unlock(relation, oldtup, tuple, buffer);
-	systable_endscan(scan);
+	/* Virtual tempcat tuple: route through tempcat_update_inplace. */
+	if (IsTempcatItemPointer(&tuple->t_self))
+	{
+		tempcat_update_inplace(relation, tuple);
+		systable_endscan(scan);
+		return;
+	}
+
+	{
+		TupleTableSlot *slot = scan->slot;
+		BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
+		HeapTuple	oldtup = bslot->base.tuple;
+		Buffer		buffer = bslot->buffer;
+
+		heap_inplace_update_and_unlock(relation, oldtup, tuple, buffer);
+		systable_endscan(scan);
+	}
 }
 
 /*
@@ -791,12 +841,22 @@ void
 systable_inplace_update_cancel(void *state)
 {
 	SysScanDesc scan = (SysScanDesc) state;
-	Relation	relation = scan->heap_rel;
-	TupleTableSlot *slot = scan->slot;
-	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
-	HeapTuple	oldtup = bslot->base.tuple;
-	Buffer		buffer = bslot->buffer;
 
-	heap_inplace_unlock(relation, oldtup, buffer);
-	systable_endscan(scan);
+	/* Virtual tempcat tuple: no buffer lock to release. */
+	if (scan->tempscan && tempcat_is_fetched(scan->tempscan))
+	{
+		systable_endscan(scan);
+		return;
+	}
+
+	{
+		Relation	relation = scan->heap_rel;
+		TupleTableSlot *slot = scan->slot;
+		BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
+		HeapTuple	oldtup = bslot->base.tuple;
+		Buffer		buffer = bslot->buffer;
+
+		heap_inplace_unlock(relation, oldtup, buffer);
+		systable_endscan(scan);
+	}
 }

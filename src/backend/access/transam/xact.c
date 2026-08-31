@@ -24,6 +24,7 @@
 #include "access/multixact.h"
 #include "access/parallel.h"
 #include "access/subtrans.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/xact.h"
@@ -248,6 +249,7 @@ typedef struct TransactionStateData
 	Oid			prevUser;		/* previous CurrentUserId setting */
 	int			prevSecContext; /* previous SecurityRestrictionContext */
 	bool		prevXactReadOnly;	/* entry-time xact r/o state */
+	bool		prevTempTableScope; /* entry-time tempcat temp-table scope */
 	bool		startedInRecovery;	/* did we start in recovery? */
 	bool		didLogXid;		/* has xid been included in WAL record? */
 	int			parallelModeLevel;	/* Enter/ExitParallelMode counter */
@@ -2746,6 +2748,9 @@ StartTransaction(void)
 	initialize_wal_bytes_written();
 	ShowTransactionState("StartTransaction");
 
+	/* Prepare virtual catalog for this transaction */
+	tempcat_begin_transaction();
+
 	ereportif(Debug_print_full_dtm, LOG,
 			  (errmsg("StartTransaction in DTX Context = '%s', "
 					  "isolation level %s, read-only = %d, %s",
@@ -3074,6 +3079,10 @@ CommitTransaction(void)
 	 * default
 	 */
 	s->state = TRANS_DEFAULT;
+
+	/* Commit virtual catalog changes */
+	tempcat_end_transaction();
+	temp_table_scope = false;
 
 	/* we're now in a consistent state to handle an interrupt. */
 	RESUME_INTERRUPTS();
@@ -3653,6 +3662,10 @@ AbortTransaction(void)
 		AtEOXact_WorkFile();
 		pgstat_report_xact_timestamp(0);
 	}
+
+	/* Abort virtual catalog changes */
+	tempcat_abort_transaction();
+	temp_table_scope = false;
 
 	/*
 	 * Exported snapshots must be cleared before transaction ID is reset.  In
@@ -6039,6 +6052,8 @@ StartSubTransaction(void)
 	CallSubXactCallbacks(SUBXACT_EVENT_START_SUB, s->subTransactionId,
 						 s->parent->subTransactionId);
 
+	tempcat_begin_subtransaction();
+
 	ShowTransactionState("StartSubTransaction");
 }
 
@@ -6058,6 +6073,9 @@ CommitSubTransaction(void)
 	if (s->state != TRANS_INPROGRESS)
 		elog(WARNING, "CommitSubTransaction while in %s state",
 			 TransStateAsString(s->state));
+
+	/* Merge this subtransaction's tempcat changes into the parent snapshot */
+	tempcat_commit_subtransaction();
 
 	/* Pre-commit processing goes here */
 
@@ -6252,6 +6270,14 @@ AbortSubTransaction(void)
 	 */
 	if (s->curTransactionOwner)
 	{
+		/*
+		 * Discard this subtransaction's tempcat changes.  Done inside the
+		 * curTransactionOwner guard so it fires only when StartSubTransaction
+		 * actually ran (and thus pushed a snapshot); a subtransaction aborted
+		 * from TBLOCK_SUBBEGIN never started, so there is nothing to pop.
+		 */
+		tempcat_abort_subtransaction();
+
 		AfterTriggerEndSubXact(false);
 		AtSubAbort_Portals(s->subTransactionId,
 						   s->parent->subTransactionId,
@@ -6309,6 +6335,20 @@ AbortSubTransaction(void)
 	 * with the commit case.
 	 */
 	XactReadOnly = s->prevXactReadOnly;
+
+	/*
+	 * Restore the tempcat temp-table scope flag.  BEGIN_TEMP_TABLE_SCOPE does
+	 * not install a catch block of its own, so an error that unwinds out of an
+	 * open scope relies on this (or on AbortTransaction at the top level) to
+	 * put the flag back.
+	 *
+	 * Note this is a save/restore, not a plain reset to false: a subtransaction
+	 * can be started *inside* an open scope -- e.g. an index expression that
+	 * calls a PL/pgSQL function with an EXCEPTION block, evaluated by
+	 * index_build() within index_create()'s scope -- and when such a subxact
+	 * aborts, the enclosing scope is still open and must stay on.
+	 */
+	temp_table_scope = s->prevTempTableScope;
 
 	RESUME_INTERRUPTS();
 }
@@ -6403,6 +6443,7 @@ PushTransaction(void)
 	s->blockState = TBLOCK_SUBBEGIN;
 	GetUserIdAndSecContext(&s->prevUser, &s->prevSecContext);
 	s->prevXactReadOnly = XactReadOnly;
+	s->prevTempTableScope = temp_table_scope;
 	s->startedInRecovery = p->startedInRecovery;
 	s->parallelModeLevel = 0;
 	s->executorSaysXactDoesWrites = false;

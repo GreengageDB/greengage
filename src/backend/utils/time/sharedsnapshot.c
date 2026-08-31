@@ -560,12 +560,22 @@ SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription
 		sharedSnapshotArray->nextSlot = slot->slotindex;
 	}
 
+	/* Release tempcat DSM if present. */
+	if (slot->tempcat_dsm != DSM_HANDLE_INVALID)
+	{
+		dsm_segment *seg = dsm_find_mapping(slot->tempcat_dsm);
+		if (seg)
+			dsm_detach(seg);
+		slot->tempcat_dsm = DSM_HANDLE_INVALID;
+	}
+
 	/* reset the slotid which marks it as being unused. */
 	slot->slotid = -1;
 	slot->fullXid = InvalidFullTransactionId;
 	slot->startTimestamp = 0;
 	slot->distributedXid = InvalidDistributedTransactionId;
 	slot->segmateSync = 0;
+	slot->tempcat_version = 0;
 
 	sharedSnapshotArray->numSlots -= 1;
 

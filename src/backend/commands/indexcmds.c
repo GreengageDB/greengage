@@ -19,6 +19,7 @@
 
 #include "access/amapi.h"
 #include "access/heapam.h"
+#include "access/tempcat.h"
 #include "access/htup_details.h"
 #include "access/reloptions.h"
 #include "access/sysattr.h"
@@ -1757,8 +1758,15 @@ DefineIndex(Oid relationId,
 	{
 		dispatch_create_index(stmt, root_save_userid, root_save_sec_context);
 
-		/* Set indcheckxmin in the coordinator, if it was set on any segment */
-		if (!indexInfo->ii_BrokenHotChain)
+		/*
+		 * Set indcheckxmin in the coordinator, if it was set on any segment.
+		 * Skip this for temp tables under tempcat: the pg_index entry lives
+		 * in memory, not on-disk pg_catalog, so segments cannot answer the
+		 * indcheckxmin query.
+		 */
+		if (!indexInfo->ii_BrokenHotChain &&
+			!(enable_temp_memory_catalog &&
+			  rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP))
 			cdb_sync_indcheckxmin_with_segments(indexRelationId);
 	}
 
