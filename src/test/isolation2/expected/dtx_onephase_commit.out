@@ -1,0 +1,621 @@
+-- Tests for the WAL-based one-phase / two-phase commit decision: the QD
+-- broadcasts PREPARE at COMMIT only if some QE reported a durable change to
+-- a permanent relation (see MarkWalWriteForPermanentRel()); otherwise it
+-- uses the cheaper one-phase commit.
+--
+-- Each case arms a 'skip' fault on the expected path ('before_xlog_xact_prepare'
+-- fires on PREPARE, 'start_performDtxProtocolCommitOnePhase' on one-phase
+-- commit) and an 'error' fault on the wrong path.  The 'status' check after
+-- COMMIT must show the expected fault hit once; a broken decision fails the
+-- COMMIT itself with the injected error instead of hanging the test.
+
+create table dtx_phase_heap(a int) distributed by (a);
+CREATE TABLE
+create table dtx_phase_ao(a int) with (appendonly=true) distributed by (a);
+CREATE TABLE
+create table dtx_phase_aocs(a int) with (appendonly=true, orientation=column) distributed by (a);
+CREATE TABLE
+create table dtx_phase_prune(a int) distributed by (a);
+CREATE TABLE
+create unlogged table dtx_phase_unlogged(a int) distributed by (a);
+CREATE TABLE
+create table dtx_phase_lock_only(a int) distributed by (a);
+CREATE TABLE
+-- Fill heap pages completely so a later seqscan prunes them (pruning
+-- requires page free space below BLCKSZ/10).
+insert into dtx_phase_prune select i from generate_series(1, 30000) i;
+INSERT 0 30000
+delete from dtx_phase_prune;
+DELETE 30000
+
+-- Case 1: a multi-segment heap write takes the two-phase path.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_heap select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 2: an append-optimized row write takes the two-phase path.  AO WAL
+-- records carry no block references, so this guards the explicit mark in
+-- xlog_ao_insert().
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_ao select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 3: same for a column-oriented append-optimized write.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_aocs select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 4: a lock-only transaction takes the one-phase path.  LOCK TABLE
+-- logs XLOG_STANDBY_LOCK under an assigned xid but registers no blocks.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: lock table dtx_phase_heap in access exclusive mode;
+LOCK TABLE
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 5: a read-only transaction stays one-phase even when its scans emit
+-- block-carrying maintenance WAL (page pruning, hint-bit FPIs) -- those are
+-- logged without an xid.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: select count(*) from dtx_phase_prune;
+ count 
+-------
+ 0     
+(1 row)
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 6: work rolled back to a savepoint still forces the two-phase path.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: savepoint sp1;
+SAVEPOINT
+1: insert into dtx_phase_heap select i from generate_series(101, 200) i;
+INSERT 0 100
+1: rollback to savepoint sp1;
+ROLLBACK
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 7: unlogged-table writes take the one-phase path (data pages of
+-- unlogged relations are not WAL-logged).
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_unlogged select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 8: same for a temp table.  It is created in session 1 so the tested
+-- transaction on that connection sees it.
+1: create temp table dtx_phase_temp(a int) distributed by (a);
+CREATE TABLE
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_temp select i from generate_series(1, 100) i;
+INSERT 0 100
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 9: PREPARE is broadcast to every participant, including segments
+-- that only saw the lock (the single row lands on one segment).
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content >= 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content >= 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+1: begin;
+BEGIN
+1: lock table dtx_phase_lock_only in access exclusive mode;
+LOCK TABLE
+1: insert into dtx_phase_heap values (1);
+INSERT 0 1
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content >= 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(3 rows)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content >= 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content >= 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+
+-- Case 10: COPY takes the two-phase path; it receives the QE reports
+-- through its own dispatch path (cdbcopy.c).
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: copy dtx_phase_heap from program 'seq 201 300';
+COPY 100
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 11: the flag resets between transactions on reused QE backends: a
+-- write takes two-phase, the next read-only transaction stays one-phase.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: insert into dtx_phase_heap select i from generate_series(301, 310) i;
+INSERT 0 10
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: select count(*) from dtx_phase_heap;
+ count 
+-------
+ 211   
+(1 row)
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 12: the report is sticky across statements: lock first, write in a
+-- later statement -- still two-phase.
+select gp_inject_fault('before_xlog_xact_prepare', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: lock table dtx_phase_lock_only in access exclusive mode;
+LOCK TABLE
+1: insert into dtx_phase_heap select i from generate_series(311, 320) i;
+INSERT 0 10
+1: commit;
+COMMIT
+select gp_inject_fault('before_xlog_xact_prepare', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                               
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'before_xlog_xact_prepare' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 13: read, lock, read -- no durable write, stays one-phase.  The
+-- reads run before the lock so hint-bit FPIs are logged without an xid.
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: begin;
+BEGIN
+1: select count(*) from dtx_phase_heap;
+ count 
+-------
+ 221   
+(1 row)
+1: lock table dtx_phase_lock_only in access exclusive mode;
+LOCK TABLE
+1: select count(*) from dtx_phase_lock_only;
+ count 
+-------
+ 0     
+(1 row)
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Case 14: a read after LOCK TABLE (which assigned an xid) still stays
+-- one-phase.  With gp_disable_tuple_hints=on (the default) the QE defers
+-- hint-bit dirtying for user tables with recent xmins, so reading the
+-- just-populated table emits no XLOG_FPI_FOR_HINT that could pick up the
+-- lock's xid; the table's catalog rows were already hinted by the earlier
+-- statements.  autovacuum is disabled on it so nothing hints it in between.
+create table dtx_phase_hint_target(a int) with (autovacuum_enabled = false) distributed by (a);
+CREATE TABLE
+insert into dtx_phase_hint_target select i from generate_series(1, 100) i;
+INSERT 0 100
+checkpoint;
+CHECKPOINT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'skip', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'error', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: set gp_disable_tuple_hints = on;
+SET
+1: begin;
+BEGIN
+1: lock table dtx_phase_lock_only in access exclusive mode;
+LOCK TABLE
+1: select count(*) from dtx_phase_hint_target;
+ count 
+-------
+ 100   
+(1 row)
+1: commit;
+COMMIT
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'status', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Success: fault name:'start_performDtxProtocolCommitOnePhase' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'1' extra arg:'0' fault injection state:'completed'  num times hit:'1' 
+ 
+(1 row)
+select gp_inject_fault('start_performDtxProtocolCommitOnePhase', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+select gp_inject_fault('before_xlog_xact_prepare', 'reset', dbid) from gp_segment_configuration where role = 'p' and content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+1q: ... <quitting>
+drop table dtx_phase_heap;
+DROP TABLE
+drop table dtx_phase_ao;
+DROP TABLE
+drop table dtx_phase_aocs;
+DROP TABLE
+drop table dtx_phase_prune;
+DROP TABLE
+drop table dtx_phase_unlogged;
+DROP TABLE
+drop table dtx_phase_lock_only;
+DROP TABLE
+drop table dtx_phase_hint_target;
+DROP TABLE
