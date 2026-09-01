@@ -9337,18 +9337,23 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			int childPartNumNatts;
 			PGresult   *attsRes;
 
-			pg_log_info("checking if root partition table \"%s\" with dropped column(s) is synchronized with its child partitions.\n",
+			pg_log_info("checking if root partition table \"%s\" with dropped column(s) is synchronized with its child partitions",
 						tbinfo->dobj.name);
 
 			resetPQExpBuffer(q);
-			appendPQExpBuffer(q, "SELECT DISTINCT relnatts "
-							  "FROM pg_catalog.pg_class "
-							  "WHERE NOT relhassubclass AND "
-							  "oid IN (SELECT parchildrelid "
-							  "    FROM pg_catalog.pg_partition par "
-							  "    JOIN pg_catalog.pg_partition_rule rule ON par.oid=rule.paroid "
-							  "        AND NOT par.paristemplate "
-							  "        AND par.parrelid = '%u'::pg_catalog.oid)",
+			appendPQExpBuffer(q,
+							  "SELECT DISTINCT c.relnatts "
+							  "FROM pg_catalog.pg_class c "
+							  "JOIN pg_catalog.pg_partition_rule rule "
+							  "		ON c.oid = rule.parchildrelid "
+							  "JOIN pg_catalog.pg_partition par "
+							  "		ON rule.paroid = par.oid "
+							  "WHERE par.parrelid = '%u'::pg_catalog.oid "
+							  "		AND NOT par.paristemplate "
+							  "		AND NOT EXISTS ( "
+							  "			SELECT 1 FROM pg_catalog.pg_partition_rule child "
+							  "			WHERE child.parparentrule = rule.oid "
+							  "		); ",
 							  tbinfo->dobj.catId.oid);
 
 			attsRes = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
@@ -9363,7 +9368,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			 */
 			if (numDistinctNatts != 1)
 			{
-				pg_log_error("invalid heterogeneous partition table detected with root partition table \"%s\".\n",
+				pg_log_error("invalid heterogeneous partition table detected with root partition table \"%s\"",
 							 tbinfo->dobj.name);
 				exit_nicely(1);
 			}
@@ -9377,7 +9382,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			childPartNumNatts = atoi(PQgetvalue(attsRes, 0, 0));
 			if (childPartNumNatts != numatts)
 			{
-				pg_log_info("suppressing dropped column(s) for root partition table \"%s\".\n",
+				pg_log_info("suppressing dropped column(s) for root partition table \"%s\"",
 							tbinfo->dobj.name);
 				tbinfo->ignoreRootPartDroppedAttr = true;
 			}
