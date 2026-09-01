@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package greengage.flight.sql.mpp.v1;
+
+enum TransactionMode {
+  TRANSACTION_MODE_AUTO_COMMIT = 0;
+  TRANSACTION_MODE_REQUIRED = 1;
+}
+
+enum TransactionScope {
+  TRANSACTION_SCOPE_UNSPECIFIED = 0;
+  TRANSACTION_SCOPE_NONE = 1;
+  TRANSACTION_SCOPE_CLUSTER = 2;
+}
+
+message Target {
+  string catalog = 1;
+  string schema = 2;
+  string table = 3;
+  bool temporary = 4;
+}
+
+message CreateMppIngestPlanRequest {
+  uint32 protocol_version = 1;
+  string client_operation_id = 2;
+  Target target = 3;
+  bytes arrow_schema_ipc = 4;
+  bytes schema_fingerprint = 5;
+  uint32 segment_count = 6;
+  TransactionMode transaction_mode = 7;
+  bytes transaction_id = 8;
+  int64 requested_lease_ms = 9;
+}
+
+message IngestRoute {
+  uint32 segment_index = 1;
+  string location = 2;
+  bytes route_token = 3;
+  string worker_id = 4;
+}
+
+message CreateMppIngestPlanResponse {
+  uint32 protocol_version = 1;
+  bytes plan_id = 2;
+  int64 expires_at_unix_ms = 3;
+  TransactionScope transaction_scope = 4;
+  repeated IngestRoute routes = 5;
+}
+
+message DispatchedMppIngestPlan {
+  CreateMppIngestPlanResponse response = 1;
+  string client_operation_id = 2;
+  bytes schema_fingerprint = 3;
+  uint32 segment_count = 4;
+}
+
+message MppIngestPlanRequest {
+  uint32 protocol_version = 1;
+  string client_operation_id = 2;
+  bytes plan_id = 3;
+}
+
+message IngestRouteResult {
+  uint32 segment_index = 1;
+  int64 rows = 2;
+  int64 batches = 3;
+  int64 bytes = 4;
+  string worker_id = 5;
+  bool opened = 6;
+}
+
+message CompleteMppIngestPlanResponse {
+  uint32 protocol_version = 1;
+  bytes plan_id = 2;
+  int64 rows = 3;
+  int64 batches = 4;
+  int64 bytes = 5;
+  repeated IngestRouteResult routes = 6;
+}
+
+message AbortMppIngestPlanResponse {
+  uint32 protocol_version = 1;
+  bytes plan_id = 2;
+  bool already_terminal = 3;
+}

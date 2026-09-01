@@ -1,0 +1,259 @@
+x-flightsql-synthetic: &flightsql-synthetic
+  image: ${FLIGHTSQL_GG_IMAGE:-greengage-u22-arm64-flight-sql-test:latest}
+  platform: ${FLIGHTSQL_GG_PLATFORM:-linux/arm64}
+  working_dir: /workspace
+  volumes:
+    - ../..:/workspace:ro
+  environment:
+    ARROWFLIGHT_BENCH_SEGMENTS: "3"
+    ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+    ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+    ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+    ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+    ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+  entrypoint:
+    - bash
+    - -lc
+  healthcheck:
+    test:
+      - CMD
+      - bash
+      - -lc
+      - exec 3<>/dev/tcp/127.0.0.1/$${FLIGHTSQL_SYNTHETIC_PORT}
+    interval: 1s
+    timeout: 3s
+    retries: 120
+    start_period: 10s
+
+x-flightsql-synthetic-command: &flightsql-synthetic-command |
+  set -euo pipefail
+  rm -rf /tmp/flightsql-mpp-generated
+  mkdir -p /tmp/flightsql-mpp-generated
+  protoc \
+    --proto_path=gpcontrib/arrowflight/src/proto \
+    --cpp_out=/tmp/flightsql-mpp-generated \
+    gpcontrib/arrowflight/src/proto/flightsql_mpp.proto
+  g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+    -I/tmp/flightsql-mpp-generated \
+    gpcontrib/arrowflight/tools/flightsql_benchmark_server.cpp \
+    /tmp/flightsql-mpp-generated/flightsql_mpp.pb.cc \
+    -o /tmp/flightsql-benchmark-server \
+    $$(pkg-config --cflags --libs \
+      arrow arrow-flight arrow-flight-sql protobuf)
+  mkdir -p /tmp/flightsql-ipc
+  /tmp/flightsql-benchmark-server --write-bench-ipc /tmp/flightsql-ipc
+  export ARROWFLIGHT_BENCH_IPC_DIR=/tmp/flightsql-ipc
+  exec /tmp/flightsql-benchmark-server "$${FLIGHTSQL_SYNTHETIC_PORT}"
+
+services:
+  flightsql-synthetic:
+    <<: *flightsql-synthetic
+    hostname: flightsql-synthetic
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      FLIGHTSQL_SYNTHETIC_PORT: "9015"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-synthetic-auto-fail:
+    <<: *flightsql-synthetic
+    hostname: flightsql-synthetic-auto-fail
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_BENCH_FAIL_INGEST_STREAM: "1"
+      FLIGHTSQL_SYNTHETIC_PORT: "9016"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-synthetic-required-fail:
+    <<: *flightsql-synthetic
+    hostname: flightsql-synthetic-required-fail
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_BENCH_FAIL_INGEST_STREAM: "1"
+      FLIGHTSQL_SYNTHETIC_PORT: "9017"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-synthetic-delay:
+    <<: *flightsql-synthetic
+    hostname: flightsql-synthetic-delay
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_BENCH_READ_DELAY_MS: "100"
+      ARROWFLIGHT_BENCH_INGEST_DELAY_MS: "100"
+      FLIGHTSQL_SYNTHETIC_PORT: "9018"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-synthetic-secure:
+    <<: *flightsql-synthetic
+    hostname: flightsql-synthetic-secure
+    volumes:
+      - ../..:/workspace:ro
+      - ${FLIGHTSQL_SECURITY_DIR:?set FLIGHTSQL_SECURITY_DIR}:/run/flightsql-security:ro
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_BENCH_TLS_CERT_FILE: /run/flightsql-security/server.pem
+      ARROWFLIGHT_BENCH_TLS_KEY_FILE: /run/flightsql-security/server.key
+      ARROWFLIGHT_BENCH_CLIENT_CA_FILE: /run/flightsql-security/ca.pem
+      ARROWFLIGHT_BENCH_AUTH_TOKEN_FILE: /run/flightsql-security/token
+      ARROWFLIGHT_BENCH_ADVERTISED_LOCATION: grpc+tls://flightsql-synthetic-secure-alias:9019
+      FLIGHTSQL_SYNTHETIC_PORT: "9019"
+    networks:
+      default:
+        aliases:
+          - flightsql-synthetic-secure-alias
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-control:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-control
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKERS: "grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023"
+      FLIGHTSQL_SYNTHETIC_PORT: "9020"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-fail-control:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-fail-control
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKERS: "grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-fail:9024"
+      FLIGHTSQL_SYNTHETIC_PORT: "9025"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-no-cluster-control:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-no-cluster-control
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKERS: "grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023"
+      ARROWFLIGHT_MPP_CLUSTER_TRANSACTIONS: "false"
+      FLIGHTSQL_SYNTHETIC_PORT: "9026"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-worker-0:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-0
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-0
+      FLIGHTSQL_SYNTHETIC_PORT: "9021"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-worker-1:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-1
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-1
+      FLIGHTSQL_SYNTHETIC_PORT: "9022"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-worker-2:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-2
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-2
+      FLIGHTSQL_SYNTHETIC_PORT: "9023"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-mpp-worker-fail:
+    <<: *flightsql-synthetic
+    hostname: flightsql-mpp-worker-fail
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      ARROWFLIGHT_MPP_WORKER_ID: worker-2
+      ARROWFLIGHT_MPP_FAIL_SEGMENT: "2"
+      FLIGHTSQL_SYNTHETIC_PORT: "9024"
+    command:
+      - *flightsql-synthetic-command
+
+  greengage:
+    volumes:
+      - ${FLIGHTSQL_SECURITY_DIR:?set FLIGHTSQL_SECURITY_DIR}:/run/flightsql-security-source:ro
+
+volumes:
+  flightsql-mpp-state:

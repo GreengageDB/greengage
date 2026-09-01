@@ -1,0 +1,6 @@
+# arrowflight extension
+comment = 'Experimental Arrow Flight SQL foreign data wrapper for Greengage'
+default_version = '1.0'
+module_pathname = '$libdir/arrowflight'
+schema = pg_catalog
+relocatable = false
