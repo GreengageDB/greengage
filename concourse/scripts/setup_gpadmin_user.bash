@@ -2,7 +2,7 @@
 
 # Based on install_hawq_toolchain.bash in Pivotal-DataFabric/ci-infrastructure repo
 
-set -euxo pipefail
+set -uxo pipefail
 setup_ssh_for_user() {
   local user="${1}"
   local home_dir
@@ -34,14 +34,35 @@ ssh_keyscan_for_user() {
   } >> "${home_dir}/.ssh/known_hosts"
 }
 
+chown_if_needed() {
+    local dir="$1"
+    [ -d "$dir" ] || return 0
+
+    local last_fixed=""
+    while IFS= read -r bad_dir; do
+        # skip directories already covered by a previously-fixed ancestor
+        if [ -n "$last_fixed" ] && [[ "$bad_dir" == "$last_fixed"/* ]]; then
+            continue
+        fi
+        echo "WARNING: wrong ownership on '$bad_dir', running chown -R gpadmin:gpadmin" >&2
+        chown -R gpadmin:gpadmin "$bad_dir"
+        last_fixed="$bad_dir"
+    done < <(find "$dir" -xdev -type d \( ! -user gpadmin -o ! -group gpadmin \))
+}
+
+
 transfer_ownership() {
+    # There are dependent projects which are rely on changing ownership of files
+    # lets make this optional.
+
     chmod a+w gpdb_src
     find gpdb_src -type d -exec chmod a+w {} \;
     # Needed for the gpload test
     [ -f gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv ] && chown gpadmin:gpadmin gpdb_src/gpMgmt/bin/gpload_test/gpload2/data_file.csv
-    [ -d /usr/local/gpdb ] && chown -R gpadmin:gpadmin /usr/local/gpdb
-    [ -d /usr/local/greengage-db-devel ] && chown -R gpadmin:gpadmin /usr/local/greengage-db-devel
-    chown -R gpadmin:gpadmin /home/gpadmin
+
+    chown_if_needed /usr/local/gpdb
+    chown_if_needed /usr/local/greenplum-db-devel
+    chown_if_needed /home/gpadmin
 }
 
 set_limits() {
@@ -57,8 +78,13 @@ set_limits() {
   su gpadmin -c 'ulimit -a'
 }
 
-setup_gpadmin_user() {
-  groupadd supergroup
+add_gpadmin_user() {
+  if ! getent group supergroup > /dev/null; then
+    groupadd supergroup
+  fi
+
+  TEST_OS=$(determine_os)
+
   case "$TEST_OS" in
     centos*)
       /usr/sbin/useradd -G supergroup,tty gpadmin
@@ -73,14 +99,19 @@ setup_gpadmin_user() {
     photon*)
       /usr/sbin/useradd -U -G supergroup,tty,root gpadmin
       ;;
-    *) echo "Unknown OS: $TEST_OS"; exit 1 ;;
+    *) echo "Unknown OS: $TEST_OS"; return 1 ;;
   esac
+
   echo -e "password\npassword" | passwd gpadmin
   # Add user to sudoers list required for gpinitsystem test
   echo "gpadmin ALL = NOPASSWD : ALL" >> /etc/sudoers
+  set_limits
+}
+
+setup_gpadmin_user() {
+  # Perform actions when the container starts
   setup_ssh_for_user gpadmin
   transfer_ownership
-  set_limits
 }
 
 setup_sshd() {
@@ -153,10 +184,12 @@ workaround_before_concourse_stops_stripping_suid_bits() {
 }
 
 _main() {
+  set -e
   TEST_OS=$(determine_os)
   setup_gpadmin_user
   setup_sshd
   workaround_before_concourse_stops_stripping_suid_bits
 }
 
+echo "Starting"
 [ "${BASH_SOURCE[0]}" = "$0" ] && _main "$@"
