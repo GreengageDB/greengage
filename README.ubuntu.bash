@@ -71,6 +71,8 @@ if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; 
     python2 \
     python2-dev
   python2 -m pip install future==0.16
+  # Install pip3 from outside because from packages it conflicts with python-pip
+  curl https://bootstrap.pypa.io/pip/get-pip.py | python3
 else
   apt-get install -y \
     python3-pip \
