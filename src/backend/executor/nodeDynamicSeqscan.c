@@ -66,10 +66,10 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 	/* Initialize result tuple type. */
 	ExecInitResultTypeTL(&state->ss.ps);
 	ExecAssignScanProjectionInfo(&state->ss);
-
-	if(bms_num_members(node->selected_parts) == 0)
+	int selected_parts_count = bms_num_members(node->selected_parts);
+	if (selected_parts_count == 0)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-				errmsg("No partitions is selected for Dynamic Scan")));
+				errmsg("No partition is selected for Dynamic Scan")));
 
 	if (node->join_prune_paramids)
 	{
@@ -80,7 +80,7 @@ ExecInitDynamicSeqScan(DynamicSeqScan *node, EState *estate, int eflags)
 	}
 	else
 	{
-		state->nOids = bms_num_members(node->selected_parts);
+		state->nOids = selected_parts_count;
 		state->partOids = palloc0(sizeof(Oid) * state->nOids);
 		int partIdx = 0;
 		foreach_with_count(lc, node->partOids, i)

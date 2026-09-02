@@ -74,9 +74,10 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 	ExecInitResultTypeTL(&state->ss.ps);
 	ExecAssignScanProjectionInfo(&state->ss);
 
-	if(bms_num_members(node->selected_parts) == 0)
+	int selected_parts_count = bms_num_members(node->selected_parts);
+	if (selected_parts_count == 0)
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-				errmsg("No partitions is selected for Dynamic Scan")));
+				errmsg("No partition is selected for Dynamic Scan")));
 
 	if (node->join_prune_paramids)
 	{
@@ -95,11 +96,10 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 				fdw_private_array[i] = list_nth(node->fdw_private_list, fdw_private_Idx++);
 			}
 		}
-		state->fdw_private_array = fdw_private_array;
 	}
 	else
 	{
-		state->nOids = bms_num_members(node->selected_parts);
+		state->nOids = selected_parts_count;
 		state->partOids = palloc0(sizeof(Oid) * state->nOids);
 		int partIdx = 0;
 		foreach_with_count(lc, node->partOids, i)
@@ -113,8 +113,8 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 		i = 0;
 		foreach_with_count(lc, node->fdw_private_list, i)
 			fdw_private_array[i] = (void *) lfirst(lc);;
-		state->fdw_private_array = fdw_private_array;
 	}
+	state->fdw_private_array = fdw_private_array;
 	state->whichPart = -1;
 
 	reloid = exec_rt_fetch(node->foreignscan.scan.scanrelid, estate)->relid;
