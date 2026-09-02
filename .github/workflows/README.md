@@ -1,9 +1,9 @@
-# Greengage CI Workflow
+# CI Workflows
 
-This directory contains the CI pipelines for the Greengage project,
+This directory contains the CI workflows for the Greengage project,
 orchestrating the build, test, and upload stages for containerized
-environments. The pipeline is designed to be flexible, with parameterized
-inputs for version and target operating systems, allowing it to adapt to
+environments. The workflows are designed to be flexible, with parameterized
+inputs for version and target operating systems, allowing them to adapt to
 different branches and configurations.
 
 ## ⚠️ Important Notice
@@ -11,35 +11,75 @@ different branches and configurations.
 Whenever the list of **NAMES of required jobs** in the workflow (including any
 **reusable workflows**) is **added, removed, or renamed**, you must contact a
 repository administrator to update the **Branch Protection Rules** accordingly.
+
 Without this, new, deleted, or renamed jobs will not be recognized as required
 when checking Pull Requests.
 
-## Overview
+## Greengage CI
 
-The `Greengage CI` workflow triggers on:
+The `Greengage CI` workflow is the main CI pipeline for the Greengage project.
+It builds Docker images, runs tests, uploads images, and builds packages for
+supported target operating systems.
 
-- **Push events** to versioned release branches (`6.x`, `7.x`) after
-  merged PR, or versioned release tags (`6.*`, `7.*`).
-- **Pull requests** to any branch.
+### Key Features
 
-It executes the following jobs in a matrix strategy for multiple target
-operating systems:
+- **Triggers:** Runs on push events to versioned release branches (`6.x`,
+  `7.x`) after merged PRs, versioned release tags (`6.*`, `7.*`), and pull
+  requests to any branch.
 
-- **Build**: Constructs and pushes Docker images to the GitHub Container
-  Registry (GHCR) with development commit SHA tag and branchname tag. Runs for
-  pull requests and all push events (default branch and tags).
-- **Tests**: Runs multiple test suites only for pull requests. The available
+- **Multi-OS Matrix:** Builds images for multiple target operating systems
+  using a matrix strategy.
+
+- **Build:** Constructs and pushes Docker images to the GitHub Container
+  Registry (GHCR) with development commit SHA and branch name tags. Runs for
+  pull requests and all push events.
+
+- **Tests:** Runs multiple test suites for pull requests. The available
   suites depend on the branch version:
+
   - Behave tests
   - Regression tests
   - Orca tests
   - Resource group tests
   - JIT tests (version 7.x only)
-- **Upload**: Retags and pushes final Docker images to GHCR and optionally
-  DockerHub. Runs for push to the default branch (retags to `latest`) and tags
-  after build.
-- **Package**: Builds Debian packages and optionally tests deployment.
-  Currently supported for version 6.x only.
+
+- **Upload:** Retags and pushes final Docker images to GHCR and optionally
+  DockerHub. Runs for push to the default branch (retags to `latest`) and
+  tags after build.
+
+- **Package:** Builds Debian and RPM packages for supported target
+  operating systems and optionally tests deployment. Debian packages are
+  supported for versions 6.x and 7.x.
+  RPM packages are currently supported for version 6.x only.
+
+## Greengage CI (No Tests)
+
+The `Greengage CI (No Tests)` workflow follows the same build process as
+`Greengage CI`, but does not run test jobs.
+
+It is used for target operating systems where build and package validation is
+required, but the test pipeline is not required.
+
+### Key Features
+
+- **Same Build Process:** Uses the same build workflow and matrix-based
+  configuration as `Greengage CI`.
+
+- **No Tests:** Does not run any test suites.
+
+- **Non-Required Workflow:** Is not configured as a required check for pull
+  requests. Failures do not block pull request merges, but remain visible in
+  GitHub Actions for investigation.
+
+- **Additional OS Targets:** Can be used for operating systems that are not
+  included in the main CI test matrix.
+
+### Behavior
+
+1. **Build:** Builds Docker images for the configured target operating
+   systems.
+
+2. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 
