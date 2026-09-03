@@ -250,8 +250,6 @@ CREATE TABLE p_3 (a int, b int) DISTRIBUTED BY (a);
 insert into p_3 values (35, 35);
 ALTER TABLE part_mixed ATTACH PARTITION p_3 FOR VALUES FROM (30) TO (40);
 
-analyse part_mixed;
-
 -- Test that explain contain expected count of scanning partitions in Dynamic Scans
 explain (costs off) select * from part_mixed;
 select * from part_mixed;
