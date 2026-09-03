@@ -24,6 +24,7 @@
 
 #include "access/relation.h"
 #include "access/sysattr.h"
+#include "catalog/partition.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "foreign/fdwapi.h"
@@ -3260,7 +3261,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
 		classForm->relispartition)
 	{
-		rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
 		rootRel = relation_open(rootoid, NoLock);
 		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
 	}
