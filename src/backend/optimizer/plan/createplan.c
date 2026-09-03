@@ -3240,17 +3240,35 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Plan	   *subplan;
 	SplitUpdate *splitupdate;
 	Relation	resultRel;
+	Relation	rootRel;
 	TupleDesc	resultDesc;
 	GpPolicy   *cdbpolicy;
+	GpPolicy   *rootRelCdbpolicy = NULL;
 	int			attrIdx;
 	ListCell   *lc;
 	int			lastresno;
 	Oid		   *hashFuncs;
 	int			i;
+	Oid 		rootoid;
 
 	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
 	cdbpolicy = resultRel->rd_cdbpolicy;
+
+	Form_pg_class classForm = resultRel->rd_rel;
+	if ((classForm->relkind == RELKIND_RELATION ||
+		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+		classForm->relispartition)
+	{
+		rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+		rootRel = relation_open(rootoid, NoLock);
+		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
+	}
+
+	if (!GpPolicyEqual(rootRelCdbpolicy, cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
+	{
+		cdbpolicy = rootRelCdbpolicy;
+	}
 
 	subplan = create_plan_recurse(root, subpath, CP_EXACT_TLIST);
 
@@ -3348,6 +3366,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 
 	relation_close(resultRel, NoLock);
+	relation_close(rootRel, NoLock);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,

@@ -470,27 +470,25 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			root->is_split_update = true;
 		}
 
-		if (!key_col_updated && rel->rd_rel->relispartition)
+		Form_pg_class classForm = rel->rd_rel;
+		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
+			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+			classForm->relispartition)
 		{
 			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
-			Relation root_rel = relation_open(rootoid, RowShareLock);
-			PartitionDesc rdesc = RelationRetrievePartitionDesc(root_rel);
+			Relation rootRel = relation_open(rootoid, RowShareLock);
 
-			for (int i = 0; i < rdesc->nparts; i++)
+			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
+
+			if (GpPolicyIsHashPartitioned(rootRelPolicy) &&
+				has_partition_attrs(rootRel, changed_cols, NULL)) 
 			{
-				if (rdesc->is_leaf[i]) 
+				if (!GpPolicyEqual(targetPolicy, rootRelPolicy)) 
 				{
-					Oid leafid = rdesc->oids[i];
-					GpPolicy   *leafPolicy = GpPolicyFetch(leafid);
-					bool is_policies_equal = GpPolicyEqual(targetPolicy, leafPolicy);
-
-					if (!is_policies_equal) {
-						root->is_split_update = true;
-						break;
-					}
+					root->is_split_update = true;
 				}
 			}
-			relation_close(root_rel, RowShareLock);
+			relation_close(rootRel, RowShareLock);
 		}
 	}
 
