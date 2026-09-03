@@ -3241,7 +3241,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Plan	   *subplan;
 	SplitUpdate *splitupdate;
 	Relation	resultRel;
-	Relation	rootRel;
+	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
 	GpPolicy   *cdbpolicy;
 	GpPolicy   *rootRelCdbpolicy = NULL;
@@ -3367,7 +3367,8 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 
 	relation_close(resultRel, NoLock);
-	relation_close(rootRel, NoLock);
+	if (rootRel)
+		relation_close(rootRel, NoLock);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,
