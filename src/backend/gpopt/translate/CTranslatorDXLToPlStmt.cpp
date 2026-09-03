@@ -5036,7 +5036,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	Plan *plan = &(split->plan);
 
 	// If we're updating hash-distributed table we need to fill hash-related
-	// fields.  
+	// fields.
 	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
 	{
 		Index result_rel_index = linitial_int(m_result_rel_list);
