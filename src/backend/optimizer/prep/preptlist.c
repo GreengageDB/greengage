@@ -508,7 +508,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			}
 
 			// Check if we're updating partitioning key columns of hash-distributed table
-			if (GpPolicyIsHashPartitioned(rootRelPolicy) &&
+			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy) &&
 				has_partition_attrs(rootRel, changed_cols_for_partition_check, NULL)) 
 			{
 				/*
@@ -517,10 +517,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 				 * transferred only to randomly distributed tables, where 
 				 * final segment doesn't matter.
 				 */
-				if (!GpPolicyEqual(targetPolicy, rootRelPolicy)) 
-				{
-					root->is_split_update = true;
-				}
+				root->is_split_update = true;
 			}
 			relation_close(rootRel, RowShareLock);
 		}

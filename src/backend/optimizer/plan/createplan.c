@@ -3351,7 +3351,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
 	}
 
-	if (!GpPolicyEqual(rootRelCdbpolicy, cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
+	if (!GpPolicyIsHashPartitioned(cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
 	{
 		cdbpolicy = rootRelCdbpolicy;
 		resultDesc = RelationGetDescr(rootRel);

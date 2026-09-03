@@ -630,7 +630,8 @@ set search_path=test_partial_table,public;
 copy partial_rpt_to to stdout;
 
 --
--- Test
+-- Test that segment is choosen correctly in case of tupre routing
+-- with differently distributed partitions (2nd phase of gpexpand)
 --
 create extension if not exists gp_debug_numsegments;
 select gp_debug_set_create_table_default_numsegments(2);
@@ -648,15 +649,19 @@ end (date '2011-03-01') exclusive
 every (interval '1 month'),
 default partition outlying_dates);
 
+-- insert data for future movement
+insert into sales values (543,'2011-01-01',1000,'usa');
+insert into sales values (543,'2011-02-01',1234,'usa');
+
 -- prepare for expansion (1st stage of gpexpand)
 alter table sales expand partition prepare;
 
 -- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
-alter table sales_1_prt_2_2_prt_usa set with (reorganize=true) distributed by (id);
+alter table sales_1_prt_2_2_prt_usa set with (reorganize=true) distributed by (trans_id);
 
---insert data for future movement
-insert into sales values (543,'2011-01-01',1000,'usa');
-insert into sales values (543,'2011-02-01',1234,'usa');
+-- check values distribution before update
+select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
+select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
 
 -- see if update is done with splitting and explicit redistribution
 explain update sales set date='2011-01-01' where amount=1234; 
@@ -664,6 +669,8 @@ explain update sales set date='2011-01-01' where amount=1234;
 -- update key columns so partition change will be triggered
 update sales set date='2011-01-01' where amount=1234; 
 
+-- check that update endeds up where it should
+select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
 
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial

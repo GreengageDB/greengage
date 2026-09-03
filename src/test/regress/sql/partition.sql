@@ -4315,32 +4315,64 @@ PARTITION BY RANGE (year)
 ( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
 
--- PREPARE FOR EXPANSION (1ST STAGE OF GPEXPAND)
-ALTER TABLE rank EXPAND PARTITION PREPARE;
-ALTER TABLE rank2 EXPAND PARTITION PREPARE;
-
--- COMPLETE EXPANSION FOR SOME LEAFS, THUS SIMULATING MIDDLE OF 2ND STAGE OF GPEXPAND
-ALTER TABLE rank_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
-ALTER TABLE rank2_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
-
---INSERT DATA FOR FUTURE MOVEMENT
+-- insert data for future movement
 INSERT INTO rank VALUES (543,1,2006,'m',1);
 INSERT INTO rank VALUES (543,1,2007,'f',1);
 INSERT INTO rank2 VALUES (543,1,2006,'m',1);
 INSERT INTO rank2 VALUES (543,1,2007,'f',1);
 
--- SEE IF UPDATE IS DONE WITH SPLITTING AND EXPLICIT REDISTRIBUTION
+-- prepare for expansion (1st stage of gpexpand)
+ALTER TABLE rank EXPAND PARTITION PREPARE;
+ALTER TABLE rank2 EXPAND PARTITION PREPARE;
+
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+ALTER TABLE rank_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+ALTER TABLE rank2_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+
+-- check values distribution before update
+SELECT gp_segment_id, * FROM rank_1_prt_2;
+SELECT gp_segment_id, * FROM rank2_1_prt_2;
+
+-- see if update is done with splitting and explicit redistribution
 EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
 EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
 
--- UPDATE KEY COLUMNS SO PARTITION CHANGE WILL BE TRIGGERED
+-- update key columns so partition change will be triggered
 UPDATE rank SET year=2006 WHERE gender='f';
 UPDATE rank2 SET year=2006 WHERE gender='f';
+
+-- check that update endeds up where it should
+SELECT gp_segment_id, * FROM rank_1_prt_2;
+SELECT gp_segment_id, * FROM rank2_1_prt_2;
+
+--
+-- Test that segment is choosen correctly in case of insertion also
+--
+CREATE extension IF NOT EXISTS gp_debug_numsegments;
+SELECT gp_debug_set_create_table_default_numsegments(2);
+
+CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+
+-- get to 2nd stage of gpexpand
+ALTER TABLE rank3 EXPAND PARTITION PREPARE;
+ALTER TABLE rank3_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+
+-- insert data
+INSERT INTO rank3 VALUES (543,1,2006,'m',1);
+INSERT INTO rank3 VALUES (543,1,2007,'f',1);
+
+-- check, that it's inserted right
+SELECT gp_segment_id, * FROM rank3_1_prt_2;
 
 SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
 DROP TABLE rank2;
+DROP TABLE rank3;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;
