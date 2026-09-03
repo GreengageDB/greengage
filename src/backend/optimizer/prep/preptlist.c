@@ -470,6 +470,18 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			root->is_split_update = true;
 		}
 
+		/*
+		 * If we're updating values in partitioned table, we need to be aware
+		 * of updating values at partitioning key columns. Because such updates
+		 * could lead to tuples being moved from one leaf-table to another.
+		 * And these leaf-tables could have different distribution policies
+		 * (at second stage of gpexpand some leaf-tables could be partitioned
+		 * randomly and some could be partitioned by hash). So we could
+		 * possible end up in situation where we need to remove tuple from one
+		 * segment and make it appear on other. For that we would need to use
+		 * split update as simple update is capable of deletion and insertion
+		 * of tuples only on one segment.
+		 */
 		Form_pg_class classForm = rel->rd_rel;
 		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
 			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
@@ -495,9 +507,16 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 								attno - FirstLowInvalidHeapAttributeNumber);
 			}
 
+			// Check if we're updating partitioning key columns of hash-distributed table
 			if (GpPolicyIsHashPartitioned(rootRelPolicy) &&
 				has_partition_attrs(rootRel, changed_cols_for_partition_check, NULL)) 
 			{
+				/*
+				 * We don't need split update on tuples from already hash
+				 * distributed leaf-partition, as they could possible be
+				 * transferred only to randomly distributed tables, where 
+				 * final segment doesn't matter.
+				 */
 				if (!GpPolicyEqual(targetPolicy, rootRelPolicy)) 
 				{
 					root->is_split_update = true;

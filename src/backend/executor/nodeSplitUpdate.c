@@ -89,7 +89,6 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 	{
 		TargetEntry *tle = lfirst(element);
 		AttrNumber attno = tle->resno;
-		elog(INFO, "for tle we have resname=%s, attno=%i", tle->resname, attno - 1);
 
 		if (IsA(tle->expr, DMLActionExpr))
 		{
@@ -140,14 +139,11 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 		}
 		else
 		{
-			elog(INFO, "We're in last else block");
 			if (IsA(tle->expr, Var))
 			{
 				Var		   *var = (Var *) tle->expr;
 
 				Assert(var->varno == OUTER_VAR);
-
-				elog(INFO, "inside last else we're doing this at this attno = %i and this varattno = %i: deleve values = %lu, delete_nulls = %d, insert_values = %lu, insert_nulls = %d", attno - 1, var->varattno - 1, values[var->varattno - 1], nulls[var->varattno - 1], values[var->varattno - 1], nulls[var->varattno - 1]);
 
 				delete_values[attno - 1] = values[var->varattno - 1];
 				delete_nulls[attno - 1] = nulls[var->varattno - 1];
@@ -161,7 +157,7 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 		}
 	}
 
-	/* Compute segment ID for the new row */
+	/* Compute segment ID for the new row in case we need it for redistribution by hash */
 	if (node->output_segid_attno > 0 && node->cdbhash != NULL)
 	{
 		int32		target_seg;

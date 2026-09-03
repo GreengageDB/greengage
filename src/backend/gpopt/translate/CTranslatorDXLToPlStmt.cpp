@@ -5035,20 +5035,14 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	SplitUpdate *split = MakeNode(SplitUpdate);
 	Plan *plan = &(split->plan);
 
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.  
 	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
 	{
 		Index result_rel_index = linitial_int(m_result_rel_list);
-		RangeTblEntry *rte = rt_fetch(result_rel_index,
-									  m_dxl_to_plstmt_context->GetRTableEntriesList());
+		RangeTblEntry *rte = rt_fetch(
+			result_rel_index, m_dxl_to_plstmt_context->GetRTableEntriesList());
 		Oid target_relid = rte->relid;
-
-		// // Open relation to check if it's a partition
-		// gpdb::RelationWrapper rel = gpdb::GetRelation(target_relid);
-		// if (rel && rel->rd_rel->relispartition)
-		// {
-		// 	// Traverse up to the root table to get the expanded numsegments
-		// 	target_relid = get_top_level_partition_root(target_relid);
-		// }
 
 		if (OidIsValid(target_relid))
 		{
@@ -5056,28 +5050,32 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 			if (target_rel)
 			{
 				GpPolicy *policy = target_rel->rd_cdbpolicy;
-				
+
 				// Check if it's hash distributed
 				if (policy != nullptr && GpPolicyIsHashPartitioned(policy))
 				{
 					int policy_nattrs = policy->nattrs;
 					Oid *opclasses = policy->opclasses;
-					TupleDesc	resultDesc = RelationGetDescr(target_rel);
+					TupleDesc resultDesc = RelationGetDescr(target_rel);
 
 					split->numHashAttrs = policy_nattrs;
 					split->numHashSegments = policy->numsegments;
-					split->hashAttnos = (AttrNumber *) palloc(policy_nattrs * sizeof(AttrNumber));
-					split->hashFuncs = (Oid *) palloc(policy_nattrs * sizeof(Oid));
+					split->hashAttnos = (AttrNumber *) palloc(
+						policy_nattrs * sizeof(AttrNumber));
+					split->hashFuncs =
+						(Oid *) palloc(policy_nattrs * sizeof(Oid));
+
 
 					for (int i = 0; i < policy_nattrs; i++)
 					{
 						split->hashAttnos[i] = policy->attrs[i];
-						
+
 						AttrNumber attnum = policy->attrs[i];
 						Oid typeoid = resultDesc->attrs[attnum - 1].atttypid;
-						
+
 						Oid opfamily = gpdb::GetOpclassFamily(opclasses[i]);
-						split->hashFuncs[i] = gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+						split->hashFuncs[i] =
+							gpdb::GetHashProcInOpfamily(opfamily, typeoid);
 					}
 				}
 			}

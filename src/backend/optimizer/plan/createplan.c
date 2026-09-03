@@ -3256,6 +3256,14 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	resultDesc = RelationGetDescr(resultRel);
 	cdbpolicy = resultRel->rd_cdbpolicy;
 
+	/* 
+	 * If we're split-updating partitioned relation, it could mean, that
+	 * partitioning column is being updated. In that case we can not rely on
+	 * leaf-tables partitioning policy alone, as it may be 2 stage of gpexpand
+	 * where some tables are still distributed randomly and some are already
+	 * hash redistributed. So we better off to use root's partition policy
+	 * that way we would statisfy all possible distributions.  
+	 */
 	Form_pg_class classForm = resultRel->rd_rel;
 	if ((classForm->relkind == RELKIND_RELATION ||
 		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
