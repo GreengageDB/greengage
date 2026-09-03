@@ -5038,7 +5038,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
 	{
 		Index result_rel_index = linitial_int(m_result_rel_list);
-		RangeTblEntry *rte = rt_fetch(result_rel_index, 
+		RangeTblEntry *rte = rt_fetch(result_rel_index,
 									  m_dxl_to_plstmt_context->GetRTableEntriesList());
 		Oid target_relid = rte->relid;
 
