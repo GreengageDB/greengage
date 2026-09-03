@@ -121,9 +121,9 @@ automatically upon the completion of the `Greengage CI` workflow.
   PR), SQL dumps are generated exclusively for verified, approved patches after
   they are merged into the main branches.
 - **Artifact Retention:** The generated SQL dump artifact is retained 90 days
-  after the last download. Each new run of the `behave tests gpexpand` workflow
-  (which consumes this artifact) resets this retention period when it downloads
-  the artifact.
+  after the last download. Each new run of the `behave tests gpexpand`
+  workflow or the `pg_upgrade` test (both consume this artifact) resets this
+  retention period when it downloads the artifact.
 
 ### Behavior
 
