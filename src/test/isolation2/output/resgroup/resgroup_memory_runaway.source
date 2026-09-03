@@ -7,7 +7,7 @@ DROP RESOURCE GROUP rg2_memory_test;
 ERROR:  resource group "rg2_memory_test" does not exist
 -- end_ignore
 
-CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS '@abs_builddir@/../../regress/regress@DLSUFFIX@', 'resGroupPalloc' LANGUAGE C READS SQL DATA;
+CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS '/home/gpadmin/gpdb_src/src/test/isolation2/resgroup/../../regress/regress.so', 'resGroupPalloc' LANGUAGE C READS SQL DATA;
 CREATE
 
 CREATE OR REPLACE FUNCTION hold_memory_by_percent(float) RETURNS int AS $$ SELECT * FROM resGroupPalloc($1) $$ LANGUAGE sql;
@@ -21,39 +21,39 @@ CREATE
 
 -- start_ignore
 ! gpconfig -c runaway_detector_activation_percent -v 50;
-20191213:05:03:47:014263 gpconfig:hubert-gp-centos:huanzhang-[INFO]:-completed successfully with parameters '-c runaway_detector_activation_percent -v 50'
+20260905:00:19:56:014220 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c runaway_detector_activation_percent -v 50'
 
 ! gpstop -ari;
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Starting gpstop with args: -ari
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Gathering information and validating the environment...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greengage Master catalog information
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Segment details from master...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5211.gf5c0dd1 build dev'
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing Master instance shutdown with mode='immediate'
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Master segment instance directory=/home/huanzhang/workspace/gpdb7/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Attempting forceful termination of any leftover master process
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Terminating processes for segment /home/huanzhang/workspace/gpdb7/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Stopping master standby host hubert-gp-centos mode=immediate
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Successfully shutdown standby process on hubert-gp-centos
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-0.00% of jobs completed
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-100.00% of jobs completed
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-0.00% of jobs completed
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-100.00% of jobs completed
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-----------------------------------------------------
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-   Segments stopped successfully      = 6
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-   Segments with errors during stop   = 0
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-----------------------------------------------------
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Successfully shutdown 6 of 6 segment instances 
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Database successfully shutdown with no errors reported
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover gpmmon process
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-No leftover gpmmon process found
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover gpsmon processes
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover shared memory
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Restarting System...
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -ari
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from master...
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.31.0+dev.30.gc4ca7c7d34 build commit:c4ca7c7d340216f4eb748aeeb086d6658dff5017'
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
+20260905:00:19:56:014271 gpstop:cdw:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:19:57:014271 gpstop:cdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
+20260905:00:19:57:014271 gpstop:cdw:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:20:00:014271 gpstop:cdw:gpadmin-[INFO]:-Stopping master standby host cdw mode=immediate
+20260905:00:20:00:014271 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown standby process on cdw
+20260905:00:20:00:014271 gpstop:cdw:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20260905:00:20:00:014271 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20260905:00:20:00:014271 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:03:014271 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:03:014271 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20260905:00:20:03:014271 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpmmon process
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-No leftover gpmmon process found
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpsmon processes
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover shared memory
+20260905:00:20:06:014271 gpstop:cdw:gpadmin-[INFO]:-Restarting System...
 
 -- end_ignore
 
@@ -89,7 +89,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.3);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806868, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57748, group memory usage 655 MB, group shared memory quota is 1 MB, slot memory quota is 204 MB, global freechunks memory is 370 MB, global safe memory threshold is 410 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -112,7 +112,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.3)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806868, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10883) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57748, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB  (seg0 slice1 172.18.0.3:6002 pid=9321)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -153,7 +153,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.3);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806877, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57757, group memory usage 778 MB, group shared memory quota is 205 MB, slot memory quota is 102 MB, global freechunks memory is 349 MB, global safe memory threshold is 410 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -181,7 +181,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.3)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806877, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10918) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57757, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB  (seg0 slice1 172.18.0.3:6002 pid=9342)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -221,7 +221,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.15);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806886, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57766, group memory usage 533 MB, group shared memory quota is 205 MB, slot memory quota is 102 MB, global freechunks memory is 185 MB, global safe memory threshold is 205 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -244,7 +244,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.15)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806886, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10952) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57766, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB  (seg0 slice1 172.18.0.3:6002 pid=9363)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -265,7 +265,40 @@ DROP
 
 -- start_ignore
 ! gpconfig -c runaway_detector_activation_percent -v 99;
+20260905:00:20:16:014704 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c runaway_detector_activation_percent -v 99'
+
 ! gpstop -ari;
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -ari
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from master...
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.31.0+dev.30.gc4ca7c7d34 build commit:c4ca7c7d340216f4eb748aeeb086d6658dff5017'
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
+20260905:00:20:16:014755 gpstop:cdw:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:20:17:014755 gpstop:cdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
+20260905:00:20:17:014755 gpstop:cdw:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:20:20:014755 gpstop:cdw:gpadmin-[INFO]:-Stopping master standby host cdw mode=immediate
+20260905:00:20:20:014755 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown standby process on cdw
+20260905:00:20:20:014755 gpstop:cdw:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20260905:00:20:20:014755 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20260905:00:20:20:014755 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:23:014755 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:23:014755 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20260905:00:20:23:014755 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpmmon process
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-No leftover gpmmon process found
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpsmon processes
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20260905:00:20:25:014755 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover shared memory
+20260905:00:20:26:014755 gpstop:cdw:gpadmin-[INFO]:-Restarting System...
+
 -- end_ignore
 
 1: CREATE RESOURCE GROUP rg1_memory_test WITH (concurrency=2, cpu_rate_limit=10, memory_limit=60, memory_shared_quota=50);
@@ -305,3 +338,40 @@ DROP
 DROP
 0q: ... <quitting>
 
+-- start_ignore
+! gpconfig -c runaway_detector_activation_percent -v 100;
+20260905:00:20:32:015160 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c runaway_detector_activation_percent -v 100'
+
+! gpstop -ari;
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Starting gpstop with args: -ari
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Gathering information and validating the environment...
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Obtaining Greengage Master catalog information
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Obtaining Segment details from master...
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Greengage Version: 'postgres (Greengage Database) 6.31.0+dev.30.gc4ca7c7d34 build commit:c4ca7c7d340216f4eb748aeeb086d6658dff5017'
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Commencing Master instance shutdown with mode='immediate'
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Master segment instance directory=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Attempting forceful termination of any leftover master process
+20260905:00:20:33:015211 gpstop:cdw:gpadmin-[INFO]:-Terminating processes for segment /home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
+20260905:00:20:36:015211 gpstop:cdw:gpadmin-[INFO]:-Stopping master standby host cdw mode=immediate
+20260905:00:20:37:015211 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown standby process on cdw
+20260905:00:20:37:015211 gpstop:cdw:gpadmin-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
+20260905:00:20:37:015211 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
+20260905:00:20:37:015211 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:39:015211 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:39:015211 gpstop:cdw:gpadmin-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
+20260905:00:20:39:015211 gpstop:cdw:gpadmin-[INFO]:-0.00% of jobs completed
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-100.00% of jobs completed
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-   Segments stopped successfully      = 6
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-   Segments with errors during stop   = 0
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-----------------------------------------------------
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-Successfully shutdown 6 of 6 segment instances 
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-Database successfully shutdown with no errors reported
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpmmon process
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-No leftover gpmmon process found
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover gpsmon processes
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
+20260905:00:20:42:015211 gpstop:cdw:gpadmin-[INFO]:-Cleaning up leftover shared memory
+20260905:00:20:43:015211 gpstop:cdw:gpadmin-[INFO]:-Restarting System...
+
+-- end_ignore

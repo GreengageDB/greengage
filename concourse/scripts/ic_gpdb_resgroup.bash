@@ -5,16 +5,7 @@ set -eox pipefail
 ./ccp_src/scripts/setup_ssh_to_cluster.sh
 
 CLUSTER_NAME=$(cat ./cluster_env_files/terraform/name)
-
-if [ "$TEST_OS" = centos6 ]; then
-    CGROUP_BASEDIR=/cgroup
-else
-    CGROUP_BASEDIR=/sys/fs/cgroup
-fi
-
-if [ "$TEST_OS" = centos7 ]; then
-    CGROUP_AUTO_MOUNTED=1
-fi
+CGROUP_BASEDIR=/sys/fs/cgroup
 
 mount_cgroups() {
     local gpdb_host_alias=$1
@@ -26,17 +17,6 @@ mount_cgroups() {
     if [ "$CGROUP_AUTO_MOUNTED" ]; then
         # nothing to do as cgroup is already automatically mounted
         return
-    fi
-
-    if [ "$TEST_OS" = centos6 ]; then
-        ssh -t $gpdb_host_alias sudo bash -ex <<EOF
-        mkdir -p $basedir
-        mount -t tmpfs tmpfs $basedir
-        for group in $groups; do
-                mkdir -p $basedir/\$group
-                mount -t cgroup -o $options,\$group cgroup $basedir/\$group
-        done
-EOF
     fi
 
      if [ "$TEST_OS" = rhel8 ]; then
