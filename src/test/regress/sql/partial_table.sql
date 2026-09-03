@@ -629,6 +629,42 @@ copy partial_rpt_to to stdout;
 set search_path=test_partial_table,public;
 copy partial_rpt_to to stdout;
 
+--
+-- Test
+--
+create extension if not exists gp_debug_numsegments;
+select gp_debug_set_create_table_default_numsegments(2);
+-- create different kinds of partitioned tables
+create table sales (trans_id int, date date, amount decimal(9,2), region text)
+distributed by (trans_id)
+partition by range (date)
+subpartition by list (region)
+subpartition template
+(subpartition usa values ('usa'),
+subpartition asia values ('asia'),
+default subpartition other_regions)
+(start (date '2011-01-01') inclusive
+end (date '2011-03-01') exclusive
+every (interval '1 month'),
+default partition outlying_dates);
+
+-- prepare for expansion (1st stage of gpexpand)
+alter table sales expand partition prepare;
+
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+alter table sales_1_prt_2_2_prt_usa set with (reorganize=true) distributed by (id);
+
+--insert data for future movement
+insert into sales values (543,'2011-01-01',1000,'usa');
+insert into sales values (543,'2011-02-01',1234,'usa');
+
+-- see if update is done with splitting and explicit redistribution
+explain update sales set date='2011-01-01' where amount=1234; 
+
+-- update key columns so partition change will be triggered
+update sales set date='2011-01-01' where amount=1234; 
+
+
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial
 -- tables, we need to drop the partial tables to keep the cluster expansion

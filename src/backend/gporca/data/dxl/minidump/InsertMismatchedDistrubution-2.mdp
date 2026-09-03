@@ -455,7 +455,7 @@ explain insert into pt2 select * from r;
         </dxl:LogicalGet>
       </dxl:LogicalInsert>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="2">
+    <dxl:Plan Id="0" SpaceSize="1">
       <dxl:DMLInsert Columns="0,1,2" ActionCol="10" CtidCol="0" SegmentIdCol="0">
         <dxl:Properties>
           <dxl:Cost StartupCost="0" TotalCost="431.031309" Rows="1.000000" Width="16"/>
@@ -506,7 +506,7 @@ explain insert into pt2 select * from r;
           </dxl:ProjList>
           <dxl:Filter/>
           <dxl:OneTimeFilter/>
-          <dxl:RedistributeMotion InputSegments="0,1" OutputSegments="0,1">
+          <dxl:RandomMotion InputSegments="0,1" OutputSegments="0,1">
             <dxl:Properties>
               <dxl:Cost StartupCost="0" TotalCost="431.000051" Rows="1.000000" Width="16"/>
             </dxl:Properties>
@@ -523,11 +523,6 @@ explain insert into pt2 select * from r;
             </dxl:ProjList>
             <dxl:Filter/>
             <dxl:SortingColumnList/>
-            <dxl:HashExprList>
-              <dxl:HashExpr>
-                <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
-              </dxl:HashExpr>
-            </dxl:HashExprList>
             <dxl:TableScan>
               <dxl:Properties>
                 <dxl:Cost StartupCost="0" TotalCost="431.000012" Rows="1.000000" Width="16"/>
@@ -559,7 +554,7 @@ explain insert into pt2 select * from r;
                 </dxl:Columns>
               </dxl:TableDescriptor>
             </dxl:TableScan>
-          </dxl:RedistributeMotion>
+          </dxl:RandomMotion>
         </dxl:Result>
       </dxl:DMLInsert>
     </dxl:Plan>
