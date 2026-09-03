@@ -130,7 +130,7 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			delete_values[attno - 1] = values[node->input_segid_attno - 1];
 			delete_nulls[attno - 1] = false;
 
-			if (node->output_segid_attno <= 0 || node->cdbhash == NULL) 
+			if (node->output_segid_attno <= 0)
 			{
 				insert_values[attno - 1] = values[node->input_segid_attno - 1];
     			insert_nulls[attno - 1] = false;

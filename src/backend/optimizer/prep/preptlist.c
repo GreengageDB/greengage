@@ -480,8 +480,23 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 
 			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
 
+			Bitmapset *changed_cols_for_partition_check = NULL;
+			int attno = -1;
+
+			/*
+			* changed_cols currently contains plain attnums.
+			* has_partition_attrs() expects attnums offset by
+			* FirstLowInvalidHeapAttributeNumber.
+			*/
+			while ((attno = bms_next_member(changed_cols, attno)) >= 0)
+			{
+				changed_cols_for_partition_check =
+					bms_add_member(changed_cols_for_partition_check,
+								attno - FirstLowInvalidHeapAttributeNumber);
+			}
+
 			if (GpPolicyIsHashPartitioned(rootRelPolicy) &&
-				has_partition_attrs(rootRel, changed_cols, NULL)) 
+				has_partition_attrs(rootRel, changed_cols_for_partition_check, NULL)) 
 			{
 				if (!GpPolicyEqual(targetPolicy, rootRelPolicy)) 
 				{
