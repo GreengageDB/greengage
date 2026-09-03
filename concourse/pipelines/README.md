@@ -111,16 +111,10 @@ The generated pipeline file `gpdb_6X_STABLE-generated.yml` will be set,
 validated and ultimately committed (including the updated pipeline
 template) to the source repository.
 
-Create and update 6X_STABLE_centos7, 6X_STABLE_centos6, 6X_STABLE_rhel8, 6X_STABLE_ubuntu18.04 pipelines:
+Create and update 6X_STABLE_rhel8 pipelines:
 
 ```
-$ ./gen_pipeline.py -t prod -O centos7
-
-$ ./gen_pipeline.py -t prod -O centos6
-
 $ ./gen_pipeline.py -t prod -O rhel8
-
-$ ./gen_pipeline.py -t prod -O ubuntu18.04
 ```
 
 ### Creating Developer pipelines
@@ -156,31 +150,4 @@ fly -t dev \
     -v gpdb-git-remote=https://github.com/<github-user>/gpdb \
     -v gpdb-git-branch=<branch-name> \
     -v pipeline-name=gpdb-dpm-curry
-```
-
-Use the following to generate a pipeline with `ICW` and `CLI` test jobs
-for `centos6` platform.
-
-```
-$ ./gen_pipeline.py -t cli -u durant -O centos6 -a {ICW,CLI}
-
-======================================================================
-  Generate Pipeline type: .. : cli
-  Pipeline file ............ : ~/workspace/gpdb/concourse/pipelines/gpdb-cli-durant.yml
-  Template file ............ : gpdb-tpl.yml
-  OS Type. ................. : centos6]
-  Test sections ............ : ['ICW', 'CLI']
-  test_trigger ............. : True
-======================================================================
-
-NOTE: You can set the developer pipeline with the following:
-
-fly -t dev \
-    set-pipeline \
-    -p gpdb-cs-durant \
-    -c gpdb-cs-durant.yml \
-    -l ~/workspace/gpdb/concourse/vars/common_prod.yml \
-    -l ~/workspace/gpdb/concourse/vars/common_dev.yml \
-    -v gpdb-git-remote=<https://github.com/<github-user>/gpdb> \
-    -v gpdb-git-branch=<branch-name>
 ```

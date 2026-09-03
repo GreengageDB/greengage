@@ -19,7 +19,7 @@ if sys.version_info[0] == 3:
 else:
     string_types = basestring
 
-# Python version 2.7.5 (CentOS 7) or 3.12.3 (Ubuntu 24.04) is expected,
+# Python version 2.7.5 (For older distributions) or 3.12.3 (Ubuntu 24.04) is expected,
 # must be between 2.7-3.0 or 3.5+
 if sys.version_info < (2, 7, 0) or ((3, 0, 0) <= sys.version_info < (3, 5, 0)) :
     sys.stderr.write("Error: %s is supported on Python versions 2.7 or 3.5+\n"

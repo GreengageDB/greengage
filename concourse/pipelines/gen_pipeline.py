@@ -99,10 +99,7 @@ def create_pipeline(args, git_remote, git_branch):
 
     variables_type = args.pipeline_target
     os_username = {
-        "centos6" : "centos",
-        "centos7" : "centos",
         "rhel8" : "rhel",
-        "ubuntu20.04" : "ubuntu",
         "rocky8" : "rocky",
         "rocky9" : "rocky",
         "oel8" : "oel",
@@ -111,10 +108,7 @@ def create_pipeline(args, git_remote, git_branch):
         "oel9" : "oel"
     }
     test_os = {
-        "centos6" : "centos",
-        "centos7" : "centos",
         "rhel8" : "centos",
-        "ubuntu20.04" : "ubuntu",
         "rocky8" : "centos",
         "rocky9" : "centos",
         "oel8" : "centos",
@@ -123,10 +117,7 @@ def create_pipeline(args, git_remote, git_branch):
         "oel9": "centos"
     }
     dist = {
-        "centos6" : "rhel6",
-        "centos7" : "rhel7",
         "rhel8" : "rhel8",
-        "ubuntu20.04" : "ubuntu20.04",
         "rocky8" : "rhel8",
         "rocky9" : "rhel9",
         "oel8" : "rhel8",
@@ -135,10 +126,7 @@ def create_pipeline(args, git_remote, git_branch):
         "oel9": "rhel9"
     }
     rpm_platform = {
-        "centos6" : "rhel6",
-        "centos7" : "rhel7",
         "rhel8" : "rhel8",
-        "ubuntu20.04" : "ubuntu20.04",
         "rocky8" : "rocky8",
         "rocky9" : "rocky9",
         "oel8" : "oel8",
@@ -147,10 +135,7 @@ def create_pipeline(args, git_remote, git_branch):
         "oel9": "oel9"
     }
     compile_platform = {
-        "centos6": "centos6",
-        "centos7": "centos7",
         "rhel8": "rocky8",
-        "ubuntu20.04": "ubuntu20.04",
         "rocky8": "rocky8",
         "rocky9": "rocky9",
         "oel8": "rocky8",
@@ -295,7 +280,7 @@ def main():
         action='store',
         dest='os_type',
         default=default_os_type,
-        choices=['centos6', 'centos7', 'rhel8','ubuntu20.04', 'rocky8', 'oel8', 'oel7', 'rhel9', "oel9", 'rocky9'],
+        choices=['rhel8', 'rocky8', 'oel8', 'oel7', 'rhel9', "oel9", 'rocky9'],
         help='OS value to support'
     )
 

@@ -192,7 +192,6 @@ groups:
   - icw_planner_ictcp_rocky8
   - icw_mirrorless_rocky8
   - icw_gporca_memory_rocky8
-  # Not support enable fips on ubuntu20.04
   - fips_rocky8
   - unit_tests_gporca_rocky8
   - gpdb_pitr_rocky8
@@ -277,7 +276,6 @@ groups:
   - icw_planner_ictcp_rocky8
   - icw_mirrorless_rocky8
   - icw_gporca_memory_rocky8
-  # Not support enable fips on ubuntu20.04
   - fips_rocky8
   - unit_tests_gporca_rocky8
   - gpdb_pitr_rocky8
@@ -493,13 +491,6 @@ resources:
     bucket: ((gcs-bucket))
     json_key: ((concourse-gcs-resources-service-account-key))
     regexp: server/published/gpdb6/server-rc-(.*)-rhel8_x86_64((rc-build-type-gcs)).tar.gz
-
-- name: bin_gpdb_centos7_rc
-  type: gcs
-  source:
-    bucket: ((gcs-bucket))
-    json_key: ((concourse-gcs-resources-service-account-key))
-    regexp: server/published/gpdb6/server-rc-(.*)-rhel7_x86_64((rc-build-type-gcs)).tar.gz
 
 - name: gpdb_rpm_installer_rocky8
   type: gcs
@@ -821,8 +812,7 @@ jobs:
         passed: [compile_gpdb_clients_windows]
       - get: bin_gpdb_clients_windows
         passed: [compile_gpdb_clients_windows]
-      - get: bin_gpdb
-        resource: bin_gpdb_centos7_rc
+      - get: bin_gpdb_rocky8_rc
       - get: terraform.d
         params:
           unpack: true
@@ -1430,7 +1420,6 @@ jobs:
         - icw_planner_ictcp_rocky8
         - icw_mirrorless_rocky8
         - icw_gporca_memory_rocky8
-        # Not support enable fips on ubuntu20.04
         - fips_rocky8
         - unit_tests_gporca_rocky8
         - gpdb_pitr_rocky8
@@ -1447,7 +1436,6 @@ jobs:
         - icw_planner_ictcp_rocky8
         - icw_mirrorless_rocky8
         - icw_gporca_memory_rocky8
-        # Not support enable fips on ubuntu20.04
         - fips_rocky8
         - unit_tests_gporca_rocky8
         - gpdb_pitr_rocky8
