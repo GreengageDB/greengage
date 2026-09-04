@@ -30,7 +30,7 @@ private:
 
 	IMDRelation::Ereldistrpolicy m_exec_location;
 
-	CBitSet *m_selected_parts;
+	CBitSet *m_selected_parts{nullptr};
 
 public:
 	CLogicalDynamicForeignGet(const CLogicalDynamicForeignGet &) = delete;
