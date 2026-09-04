@@ -3347,7 +3347,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		classForm->relispartition)
 	{
 		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
-		rootRel = relation_open(rootoid, NoLock);
+		rootRel = relation_open(rootoid, AccessShareLock);
 		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
 	}
 
@@ -3377,7 +3377,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 
 	relation_close(resultRel, NoLock);
 	if (rootRel)
-		relation_close(rootRel, NoLock);
+		relation_close(rootRel, AccessShareLock);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,
