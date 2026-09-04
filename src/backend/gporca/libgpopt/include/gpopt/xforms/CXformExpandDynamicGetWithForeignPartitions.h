@@ -50,17 +50,17 @@ FEqualSForeignServer(const SForeignServer *fs1, const SForeignServer *fs2)
 		   fs1->m_exec_location == fs2->m_exec_location;
 }
 
-// hash maps ULONG -> array of ULONGs
-using SForeignServerToIMdIdArrayMap =
-	CHashMap<SForeignServer, IMdIdArray, UlHashSForeignServer,
+// hash maps ULONG -> CBitSet
+using SForeignServerToBitSetMap =
+	CHashMap<SForeignServer, CBitSet, UlHashSForeignServer,
 			 FEqualSForeignServer, CleanupDelete<SForeignServer>,
-			 CleanupRelease<IMdIdArray>>;
+			 CleanupRelease<CBitSet>>;
 
 // iterator
-using SForeignServerToIMdIdArrayMapIter =
-	CHashMapIter<SForeignServer, IMdIdArray, UlHashSForeignServer,
+using SForeignServerToCBitSetIter =
+	CHashMapIter<SForeignServer, CBitSet, UlHashSForeignServer,
 				 FEqualSForeignServer, CleanupDelete<SForeignServer>,
-				 CleanupRelease<IMdIdArray>>;
+				 CleanupRelease<CBitSet>>;
 
 //---------------------------------------------------------------------------
 //	@class:

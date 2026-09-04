@@ -369,6 +369,28 @@ gpdb::BmsAddMember(Bitmapset *a, int x)
 	return nullptr;
 }
 
+int
+gpdb::BmsNextMember(const Bitmapset *a, int prevbit)
+{
+	GP_WRAP_START;
+	{
+		return bms_next_member(a, prevbit);
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
+Bitmapset *
+gpdb::BmsAddRange(Bitmapset *a, int lower, int upper)
+{
+	GP_WRAP_START;
+	{
+		return bms_add_range(a, lower, upper);
+	}
+	GP_WRAP_END;
+	return nullptr;
+}
+
 void *
 gpdb::CopyObject(void *from)
 {

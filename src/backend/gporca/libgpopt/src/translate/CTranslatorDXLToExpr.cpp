@@ -638,7 +638,7 @@ CTranslatorDXLToExpr::PexprLogicalGet(const CDXLNode *dxlnode)
 		partition_mdids->AddRef();
 		popGet = GPOS_NEW(m_mp) CLogicalDynamicGet(
 			m_mp, pname, ptabdesc, part_idx_id, partition_mdids,
-			foreign_server_mdids, hasSecurityQuals);
+			foreign_server_mdids, nullptr, hasSecurityQuals);
 		CLogicalDynamicGet *popDynamicGet =
 			CLogicalDynamicGet::PopConvert(popGet);
 

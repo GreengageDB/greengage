@@ -50,14 +50,17 @@ CLogicalDynamicForeignGet::CLogicalDynamicForeignGet(
 	CMemoryPool *mp, const CName *pnameAlias, CTableDescriptor *ptabdesc,
 	ULONG ulPartIndex, CColRefArray *pdrgpcrOutput,
 	CColRef2dArray *pdrgpdrgpcrPart, IMdIdArray *partition_mdids,
-	OID foreign_server_oid, IMDRelation::Ereldistrpolicy exec_location)
+	CBitSet *selected_parts, OID foreign_server_oid,
+	IMDRelation::Ereldistrpolicy exec_location)
 
 
 	: CLogicalDynamicGetBase(mp, pnameAlias, ptabdesc, ulPartIndex,
 							 pdrgpcrOutput, pdrgpdrgpcrPart, partition_mdids),
 	  m_foreign_server_oid(foreign_server_oid),
-	  m_exec_location(exec_location)
+	  m_exec_location(exec_location),
+	  m_selected_parts(selected_parts)
 {
+	GPOS_ASSERT(nullptr != selected_parts);
 }
 
 //---------------------------------------------------------------------------
@@ -80,7 +83,8 @@ CLogicalDynamicForeignGet::Matches(COperator *pop) const
 
 	return Ptabdesc() == popGet->Ptabdesc() &&
 		   PdrgpcrOutput()->Equals(popGet->PdrgpcrOutput()) &&
-		   GetForeignServerOid() == popGet->GetForeignServerOid();
+		   GetForeignServerOid() == popGet->GetForeignServerOid() &&
+		   GetSelectedParts()->Equals(popGet->GetSelectedParts());
 }
 
 //---------------------------------------------------------------------------
@@ -111,10 +115,17 @@ CLogicalDynamicForeignGet::PopCopyWithRemappedColumns(
 	CName *pnameAlias = GPOS_NEW(mp) CName(mp, *m_pnameAlias);
 	Ptabdesc()->AddRef();
 	m_partition_mdids->AddRef();
+	m_selected_parts->AddRef();
 
 	return GPOS_NEW(mp) CLogicalDynamicForeignGet(
 		mp, pnameAlias, Ptabdesc(), m_scan_id, pdrgpcrOutput, pdrgpdrgpcrPart,
-		m_partition_mdids, m_foreign_server_oid, m_exec_location);
+		m_partition_mdids, m_selected_parts, m_foreign_server_oid,
+		m_exec_location);
+}
+
+CLogicalDynamicForeignGet::~CLogicalDynamicForeignGet()
+{
+	CRefCount::SafeRelease(m_selected_parts);
 }
 
 //---------------------------------------------------------------------------
