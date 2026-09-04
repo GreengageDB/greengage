@@ -89,7 +89,7 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 		/* populate fdw_private array from list so we can access by index later */
 		fdw_private_array = (void **) palloc0(state->nOids * sizeof(void *));
 		int fdw_private_Idx = 0;
-		for(i = 0; i < state->nOids; i++)
+		for (i = 0; i < state->nOids; i++)
 		{
 			if (bms_is_member(i, node->selected_parts))
 			{

@@ -158,7 +158,8 @@ CLogicalDynamicGet::Matches(COperator *pop) const
 
 	CLogicalDynamicGet *popGet = CLogicalDynamicGet::PopConvert(pop);
 
-	if (!CUtils::FMatchSelectedParts(m_selected_parts, popGet->m_selected_parts))
+	if (!CUtils::FMatchSelectedParts(m_selected_parts,
+									 popGet->m_selected_parts))
 	{
 		return false;
 	}

@@ -62,9 +62,11 @@ CPhysicalDynamicTableScan::Matches(COperator *pop) const
 		return false;
 	}
 
-	CPhysicalDynamicTableScan *popScan = CPhysicalDynamicTableScan::PopConvert(pop);
+	CPhysicalDynamicTableScan *popScan =
+		CPhysicalDynamicTableScan::PopConvert(pop);
 
-	if (!CUtils::FMatchSelectedParts(m_selected_parts, popScan->m_selected_parts))
+	if (!CUtils::FMatchSelectedParts(m_selected_parts,
+									 popScan->m_selected_parts))
 	{
 		return false;
 	}

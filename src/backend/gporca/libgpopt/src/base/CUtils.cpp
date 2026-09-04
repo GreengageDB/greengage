@@ -5163,7 +5163,7 @@ CUtils::RemoveDuplicateMdids(CMemoryPool *mp, CTableDescriptorHashSet *tabdescs)
 }
 
 BOOL
-CUtils::FMatchSelectedParts(const CBitSet* set1, const CBitSet* set2)
+CUtils::FMatchSelectedParts(const CBitSet *set1, const CBitSet *set2)
 {
 	if (nullptr == set1 && nullptr == set2)
 	{
