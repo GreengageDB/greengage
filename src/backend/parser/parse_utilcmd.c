@@ -2393,20 +2393,11 @@ transformDistributedBy(ParseState *pstate,
 	int			numsegments;
 
 	/*
-	 * utility mode creates can't have a policy.  Only the QD can have policies.
-	 *
-	 * IsBinaryUpgrade normally bypasses this, since --binary-upgrade restore
-	 * runs entirely in utility mode but still needs real policies computed
-	 * for tables that were actually distributed (pg_dump always emits an
-	 * explicit DISTRIBUTED BY/RANDOMLY/REPLICATED clause for those). But if
-	 * there is no such clause, the source table had no gp_distribution_policy
-	 * row at all, i.e. it was entry-distributed -- fall through to the
-	 * ordinary utility-mode behavior instead of guessing a default policy.
+	 * Checked ahead of the Gp_role/IsBinaryUpgrade fallback below: a local
+	 * extension's own install-script tables must always follow these rules
+	 * regardless of what mode the script happens to be running in -
+	 * normal or utility.
 	 */
-	if (Gp_role != GP_ROLE_DISPATCH &&
-		(!IsBinaryUpgrade || distributedBy == NULL))
-		return NULL;
-
 	if (creating_extension_local)
 	{
 		/*
@@ -2444,6 +2435,21 @@ transformDistributedBy(ParseState *pstate,
 					 errmsg("explicit distribution is not supported inside a local extension script")));
 		return NULL;
 	}
+
+	/*
+	 * utility mode creates can't have a policy.  Only the QD can have policies.
+	 *
+	 * IsBinaryUpgrade normally bypasses this, since --binary-upgrade restore
+	 * runs entirely in utility mode but still needs real policies computed
+	 * for tables that were actually distributed (pg_dump always emits an
+	 * explicit DISTRIBUTED BY/RANDOMLY/REPLICATED clause for those). But if
+	 * there is no such clause, the source table had no gp_distribution_policy
+	 * row at all, i.e. it was entry-distributed -- fall through to the
+	 * ordinary utility-mode behavior instead of guessing a default policy.
+	 */
+	if (Gp_role != GP_ROLE_DISPATCH &&
+		(!IsBinaryUpgrade || distributedBy == NULL))
+		return NULL;
 
 	if (distributedBy && distributedBy->numsegments > 0)
 		/* If numsegments is set in DISTRIBUTED BY use the specified value */
