@@ -81,7 +81,8 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 		//         with the split deleting the existing rows and this DML node inserting the new rows,
 		//         so this is handled here like an insert, using hash distribution for all partitions.
 
-		if (CLogicalDML::EdmlDelete == edmlop || !fSplit || (CLogicalDML::EdmlUpdate == edmlop && fSplit))
+		if (CLogicalDML::EdmlDelete == edmlop || !fSplit ||
+			(CLogicalDML::EdmlUpdate == edmlop && fSplit))
 		{
 			m_pds->Release();
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();
