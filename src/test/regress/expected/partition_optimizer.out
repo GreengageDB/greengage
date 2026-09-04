@@ -6668,6 +6668,137 @@ SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_ao_acl_1_prt_3
  e       | {user_prt_acl=w/gpadmin}
 (1 row)
 
+--
+-- Test that segment is choosen correctly in case of tupre routing
+-- with differently distributed partitions (2nd phase of gpexpand)
+--
+CREATE extension IF NOT EXISTS gp_debug_numsegments;
+NOTICE:  extension "gp_debug_numsegments" already exists, skipping
+SELECT gp_debug_set_create_table_default_numsegments(2);
+ gp_debug_set_create_table_default_numsegments 
+-----------------------------------------------
+ 2
+(1 row)
+
+-- create different kinds of partitioned tables
+CREATE TABLE rank (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+CREATE TABLE rank2 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+WITH (appendonly='true', orientation='column', compresstype=zstd, compresslevel='1')
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+-- insert data for future movement
+INSERT INTO rank VALUES (543,1,2006,'m',1);
+INSERT INTO rank VALUES (543,1,2007,'f',1);
+INSERT INTO rank2 VALUES (543,1,2006,'m',1);
+INSERT INTO rank2 VALUES (543,1,2007,'f',1);
+-- prepare for expansion (1st stage of gpexpand)
+ALTER TABLE rank EXPAND PARTITION PREPARE;
+ALTER TABLE rank2 EXPAND PARTITION PREPARE;
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+ALTER TABLE rank_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+ALTER TABLE rank2_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+-- check values distribution before update
+SELECT gp_segment_id, * FROM rank_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+(1 row)
+
+SELECT gp_segment_id, * FROM rank2_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+(1 row)
+
+-- see if update is done with splitting and explicit redistribution
+EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Update on rank  (cost=0.00..431.10 rows=1 width=1)
+   ->  Result  (cost=0.00..0.00 rows=0 width=0)
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
+               ->  Split  (cost=0.00..431.00 rows=1 width=38)
+                     ->  Dynamic Seq Scan on rank  (cost=0.00..431.00 rows=1 width=34)
+                           Number of partitions to scan: 3 (out of 3)
+                           Filter: (gender = 'f'::bpchar)
+ Optimizer: GPORCA
+(8 rows)
+
+EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Update on rank2  (cost=0.00..431.10 rows=1 width=1)
+   ->  Result  (cost=0.00..0.00 rows=0 width=0)
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
+               ->  Split  (cost=0.00..431.00 rows=1 width=38)
+                     ->  Dynamic Seq Scan on rank2  (cost=0.00..431.00 rows=1 width=34)
+                           Number of partitions to scan: 3 (out of 3)
+                           Filter: (gender = 'f'::bpchar)
+ Optimizer: GPORCA
+(8 rows)
+
+-- update key columns so partition change will be triggered
+UPDATE rank SET year=2006 WHERE gender='f';
+UPDATE rank2 SET year=2006 WHERE gender='f';
+-- check that update endeds up where it should
+SELECT gp_segment_id, * FROM rank_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+             2 | 543 |    1 | 2006 | f      |     1
+(2 rows)
+
+SELECT gp_segment_id, * FROM rank2_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+             2 | 543 |    1 | 2006 | f      |     1
+(2 rows)
+
+--
+-- Test that segment is choosen correctly in case of insertion also
+--
+CREATE extension IF NOT EXISTS gp_debug_numsegments;
+NOTICE:  extension "gp_debug_numsegments" already exists, skipping
+SELECT gp_debug_set_create_table_default_numsegments(2);
+ gp_debug_set_create_table_default_numsegments 
+-----------------------------------------------
+ 2
+(1 row)
+
+CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+-- get to 2nd stage of gpexpand
+ALTER TABLE rank3 EXPAND PARTITION PREPARE;
+ALTER TABLE rank3_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+-- insert data
+INSERT INTO rank3 VALUES (543,1,2006,'m',1);
+INSERT INTO rank3 VALUES (543,1,2007,'f',1);
+-- check, that it's inserted right
+SELECT gp_segment_id, * FROM rank3_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+(1 row)
+
+SELECT gp_debug_reset_create_table_default_numsegments();
+ gp_debug_reset_create_table_default_numsegments 
+-------------------------------------------------
+ 
+(1 row)
+
+DROP TABLE rank;
+DROP TABLE rank2;
+DROP TABLE rank3;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;

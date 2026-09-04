@@ -4538,6 +4538,112 @@ copy partial_rpt_to to stdout;
 set search_path=test_partial_table,public;
 copy partial_rpt_to to stdout;
 1	1
+--
+-- Test that segment is choosen correctly in case of tupre routing
+-- with differently distributed partitions (2nd phase of gpexpand)
+--
+create extension if not exists gp_debug_numsegments;
+NOTICE:  extension "gp_debug_numsegments" already exists, skipping
+select gp_debug_set_create_table_default_numsegments(2);
+ gp_debug_set_create_table_default_numsegments 
+-----------------------------------------------
+ 2
+(1 row)
+
+-- create different kinds of partitioned tables
+create table sales (trans_id int, date date, amount decimal(9,2), region text)
+distributed by (trans_id)
+partition by range (date)
+subpartition by list (region)
+subpartition template
+(subpartition usa values ('usa'),
+subpartition asia values ('asia'),
+default subpartition other_regions)
+(start (date '2011-01-01') inclusive
+end (date '2011-03-01') exclusive
+every (interval '1 month'),
+default partition outlying_dates);
+-- insert data for future movement
+insert into sales values (543,'2011-01-01',1000,'usa');
+insert into sales values (543,'2011-02-01',1234,'usa');
+-- prepare for expansion (1st stage of gpexpand)
+alter table sales expand partition prepare;
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+alter table sales_1_prt_2_2_prt_usa set with (reorganize=true) distributed by (trans_id);
+-- check values distribution before update
+select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             2 |      543 | 01-01-2011 | 1000.00 | usa
+(1 row)
+
+select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             0 |      543 | 02-01-2011 | 1234.00 | usa
+(1 row)
+
+-- see if update is done with splitting and explicit redistribution
+explain update sales set date='2011-01-01' where amount=1234; 
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Update on sales  (cost=0.00..1768.90 rows=220 width=64)
+   Update on sales_1_prt_2_2_prt_asia
+   Update on sales_1_prt_2_2_prt_usa
+   Update on sales_1_prt_2_2_prt_other_regions
+   Update on sales_1_prt_3_2_prt_asia
+   Update on sales_1_prt_3_2_prt_usa
+   Update on sales_1_prt_3_2_prt_other_regions
+   Update on sales_1_prt_outlying_dates_2_prt_asia
+   Update on sales_1_prt_outlying_dates_2_prt_usa
+   Update on sales_1_prt_outlying_dates_2_prt_other_regions
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_2_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Seq Scan on sales_1_prt_2_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+         Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_2_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_3_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_3_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_3_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice7; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+   ->  Explicit Redistribute Motion 3:3  (slice8; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
+         ->  Split  (cost=0.00..196.08 rows=26 width=64)
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+                     Filter: (amount = '1234'::numeric)
+ Optimizer: Postgres-based planner
+(45 rows)
+
+-- update key columns so partition change will be triggered
+update sales set date='2011-01-01' where amount=1234; 
+-- check that update endeds up where it should
+select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             2 |      543 | 01-01-2011 | 1000.00 | usa
+             2 |      543 | 01-01-2011 | 1234.00 | usa
+(2 rows)
+
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial
 -- tables, we need to drop the partial tables to keep the cluster expansion

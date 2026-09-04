@@ -21,6 +21,7 @@
 #include "commands/tablecmds.h"
 #include "executor/instrument.h"
 #include "executor/nodeSplitUpdate.h"
+#include "parser/parsetree.h"
 
 #include "utils/memutils.h"
 
@@ -128,6 +129,12 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			delete_values[attno - 1] = values[node->input_segid_attno - 1];
 			delete_nulls[attno - 1] = false;
 
+			if (node->output_segid_attno <= 0)
+			{
+				insert_values[attno - 1] = values[node->input_segid_attno - 1];
+    			insert_nulls[attno - 1] = false;
+			}
+
 			/* compute the new value later, after we have processed all the other columns */
 		}
 		else
@@ -150,8 +157,8 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 		}
 	}
 
-	/* Compute segment ID for the new row */
-	if (node->output_segid_attno > 0)
+	/* Compute segment ID for the new row in case we need it for redistribution by hash */
+	if (node->output_segid_attno > 0 && node->cdbhash != NULL)
 	{
 		int32		target_seg;
 
@@ -249,10 +256,8 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 * Look up the positions of the gp_segment_id in the subplan's target
 	 * list, and in the result.
 	 */
-	splitupdatestate->input_segid_attno =
-		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
-	splitupdatestate->output_segid_attno =
-		ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
+	splitupdatestate->input_segid_attno = get_tle_by_resname(outerPlan->targetlist, "gp_segment_id");
+	splitupdatestate->output_segid_attno = get_tle_by_resname(node->plan.targetlist, "gp_segment_id");
 
 	/*
 	 * DML nodes do not project.

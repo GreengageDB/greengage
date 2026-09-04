@@ -24,6 +24,7 @@
 
 #include "access/relation.h"
 #include "access/sysattr.h"
+#include "catalog/partition.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "foreign/fdwapi.h"
@@ -3240,13 +3241,16 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Plan	   *subplan;
 	SplitUpdate *splitupdate;
 	Relation	resultRel;
+	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
 	GpPolicy   *cdbpolicy;
+	GpPolicy   *rootRelCdbpolicy = NULL;
 	int			attrIdx;
 	ListCell   *lc;
 	int			lastresno;
 	Oid		   *hashFuncs;
 	int			i;
+	Oid 		rootoid;
 
 	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
@@ -3329,6 +3333,30 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 														   "DMLAction",
 														   true));
 
+	/*
+	 * If we're split-updating partitioned relation, it could mean, that
+	 * partitioning column is being updated. In that case we can not rely on
+	 * leaf-tables partitioning policy alone, as it may be 2 stage of gpexpand
+	 * where some tables are still distributed randomly and some are already
+	 * hash redistributed. So we better off to use root's partition policy
+	 * that way we would statisfy all possible distributions.
+	 */
+	Form_pg_class classForm = resultRel->rd_rel;
+	if ((classForm->relkind == RELKIND_RELATION ||
+		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+		classForm->relispartition)
+	{
+		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
+		rootRel = relation_open(rootoid, AccessShareLock);
+		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
+	}
+
+	if (!GpPolicyIsHashPartitioned(cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
+	{
+		cdbpolicy = rootRelCdbpolicy;
+		resultDesc = RelationGetDescr(rootRel);
+	}
+
 	/* Look up the right hash functions for the hash expressions */
 	hashFuncs = palloc(cdbpolicy->nattrs * sizeof(Oid));
 	for (i = 0; i < cdbpolicy->nattrs; i++)
@@ -3348,6 +3376,8 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 
 	relation_close(resultRel, NoLock);
+	if (rootRel)
+		relation_close(rootRel, AccessShareLock);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,
