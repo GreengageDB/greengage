@@ -1459,6 +1459,7 @@ class gpexpand:
             where
             c.relkind = 'r' and
             d.deptype = 'e' and
+            d.objsubid = 0 and
             d.classid = 'pg_class'::regclass and
             d.refclassid = 'pg_extension'::regclass'''
 
@@ -1468,9 +1469,22 @@ class gpexpand:
             if database[0] == 'template0':
                 continue
             url.pgdb = database[0]
-            with closing (dbconn.connect(url, encoding='UTF8')) as conn:
-                cursor = dbconn.query(conn, extTablesSql)
-                db_statements_by_dbname[database[0]] = statements + ["delete from %s" % row[0] for row in cursor]
+            try:
+                with closing(dbconn.connect(url, encoding='UTF8')) as conn:
+                    ext_tables = [row[0] for row in dbconn.query(conn, extTablesSql)]
+            except Exception as e:
+                self.logger.warning(
+                    "Could not connect to database %s to look up extension-owned "
+                    "tables for new-segment cleanup, skipping: %s" % (database[0], str(e)))
+                ext_tables = []
+
+            db_statements = list(statements)
+            if ext_tables:
+                # A single TRUNCATE naming every extension table together, rather
+                # than one DELETE per table (order-dependent) or CASCADE (which
+                # could reach into unrelated, non-extension tables).
+                db_statements.append("truncate %s" % ", ".join(ext_tables))
+            db_statements_by_dbname[database[0]] = db_statements
 
         """
           Connect to each database in the new segments, and clean up the catalog tables.
