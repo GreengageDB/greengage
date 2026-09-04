@@ -906,6 +906,18 @@ main(int argc, char **argv)
 	}
 
 	/*
+	 * Without dumpGpPolicy, no CREATE TABLE carries a DISTRIBUTED BY/
+	 * RANDOMLY/REPLICATED clause, so --binary-upgrade has no way to tell
+	 * what policy each table's transplanted segment files actually match --
+	 * whatever policy restore ends up assigning will be wrong.
+	 */
+	if (dopt.binary_upgrade && !dopt.dumpGpPolicy)
+	{
+		pg_log_error("options \"--binary-upgrade\" and \"--no-gp-syntax\" cannot be used together");
+		exit_nicely(1);
+	}
+
+	/*
 	 * Disable security label support if server version < v9.1.x (prevents
 	 * access to nonexistent pg_seclabel catalog)
 	 */
