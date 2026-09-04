@@ -57,7 +57,22 @@ CPhysicalDynamicTableScan::CPhysicalDynamicTableScan(
 BOOL
 CPhysicalDynamicTableScan::Matches(COperator *pop) const
 {
-	return CUtils::FMatchDynamicScan(this, pop);
+	if (Eopid() != pop->Eopid())
+	{
+		return false;
+	}
+
+	CPhysicalDynamicTableScan *popScan = CPhysicalDynamicTableScan::PopConvert(pop);
+
+	if (!CUtils::FMatchSelectedParts(m_selected_parts, popScan->m_selected_parts))
+	{
+		return false;
+	}
+
+	// match if the table descriptors are identical
+	return ScanId() == popScan->ScanId() &&
+		   Ptabdesc()->MDId()->Equals(popScan->Ptabdesc()->MDId()) &&
+		   PdrgpcrOutput()->Equals(popScan->PdrgpcrOutput());
 }
 
 //---------------------------------------------------------------------------
