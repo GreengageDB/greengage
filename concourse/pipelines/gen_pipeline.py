@@ -103,7 +103,6 @@ def create_pipeline(args, git_remote, git_branch):
         "rocky8" : "rocky",
         "rocky9" : "rocky",
         "oel8" : "oel",
-        "oel7" : "oel",
         "rhel9" : "rhel",
         "oel9" : "oel"
     }
@@ -112,7 +111,6 @@ def create_pipeline(args, git_remote, git_branch):
         "rocky8" : "centos",
         "rocky9" : "centos",
         "oel8" : "centos",
-        "oel7" : "centos",
         "rhel9" : "centos",
         "oel9": "centos"
     }
@@ -121,7 +119,6 @@ def create_pipeline(args, git_remote, git_branch):
         "rocky8" : "rhel8",
         "rocky9" : "rhel9",
         "oel8" : "rhel8",
-        "oel7" : "oel7",
         "rhel9" : "rhel9",
         "oel9": "rhel9"
     }
@@ -130,7 +127,6 @@ def create_pipeline(args, git_remote, git_branch):
         "rocky8" : "rocky8",
         "rocky9" : "rocky9",
         "oel8" : "oel8",
-        "oel7" : "oel7",
         "rhel9" : "rhel9",
         "oel9": "oel9"
     }
@@ -139,7 +135,6 @@ def create_pipeline(args, git_remote, git_branch):
         "rocky8": "rocky8",
         "rocky9": "rocky9",
         "oel8": "rocky8",
-        "oel7": "oel7",
         "rhel9" : "rocky9",
         "oel9": "rocky9"
     }
@@ -280,7 +275,7 @@ def main():
         action='store',
         dest='os_type',
         default=default_os_type,
-        choices=['rhel8', 'rocky8', 'oel8', 'oel7', 'rhel9', "oel9", 'rocky9'],
+        choices=['rhel8', 'rocky8', 'oel8', 'rhel9', "oel9", 'rocky9'],
         help='OS value to support'
     )
 

@@ -1,11 +1,11 @@
 # Add plpython3u support
 ## How to build: 
 ```
-# Install Python3 (take centos7 as example)
-yum install -y python36-devel
+# Install Python3 (take Rocky 8 as example)
+dnf install -y python3.11-devel
 
 # Configure build environment to install at /usr/local/gpdb
-PYTHON=/usr/bin/python3.6 ./configure --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
+PYTHON=/usr/bin/python3.11 ./configure --with-perl --with-python --with-libxml --prefix=/usr/local/gpdb
 
 # Compile and install
 make -j8
@@ -17,7 +17,7 @@ make -j8 install
 ```
 # Ensure your environment include the SAME python version as the build environment, in our example is Python3.6.
 # If you install Python in a non-system folder, you also need to add $PYTHONHOME/lib into your shared library path.
-yum install -y python36-devel
+dnf install -y python3.11-devel
 
 # Install Python3 packages:
 wget https://bootstrap.pypa.io/get-pip.py

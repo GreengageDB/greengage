@@ -926,8 +926,6 @@ jobs:
           globs: [greengage-db-6*-rhel8-x86_64.rpm]
           {% elif os_type == "rhel8" %}
           globs: [greengage-db-6*-rhel8-x86_64.rpm]
-          {% elif os_type == "oel7" %}
-          globs: [greengage-db-6*-rhel7-x86_64.rpm]
           {% else %}
           globs: [greengage-db-6*-[[ dist ]]-x86_64.rpm]
           {% endif %}

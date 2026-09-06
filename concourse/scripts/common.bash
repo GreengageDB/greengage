@@ -38,7 +38,7 @@ function build_arch() {
 	local id=$(os_id)
 	local version=$(os_version)
 	# BLD_ARCH expects rhel8_x86_64 || rocky8_x86_64 || rocky9_x86_64 || sles12_x86_64
-	# for oel7 and oel8 platform, the id will return centos
+	# for oel8 platform, the id will return centos
 	case ${id} in
 	sles | rocky) version=$(os_version | cut -d. -f1) ;;
 	centos) id="rhel" ;;
