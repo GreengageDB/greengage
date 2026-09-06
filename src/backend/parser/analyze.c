@@ -58,6 +58,7 @@
 #include "cdb/cdbendpoint.h"
 #include "catalog/gp_distribution_policy.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "access/htup_details.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
@@ -3050,6 +3051,22 @@ transformCreateTableAsStmt(ParseState *pstate, CreateTableAsStmt *stmt)
 {
 	Query	   *result;
 	Query	   *query;
+
+	/*
+	 * CREATE TABLE AS / CREATE MATERIALIZED VIEW are not supported inside a
+	 * local extension's install/upgrade script.
+	 * Unlike plain CREATE TABLE, their distribution-policy assignment is
+	 * not aware of creating_extension_local, and even suppressing that
+	 * policy assignment is not sufficient on its own: the populate phase
+	 * still dispatches as a normal writer-gang operation across segments.
+	 * Until that is fixed, reject this outright.
+	 */
+	if (creating_extension_local)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("CREATE TABLE AS and CREATE MATERIALIZED VIEW are not "
+						"supported inside a local extension script"),
+				 errhint("Use CREATE TABLE followed by INSERT INTO ... SELECT instead.")));
 
 	/* transform contained query, not allowing SELECT INTO */
 	query = transformStmt(pstate, stmt->query);

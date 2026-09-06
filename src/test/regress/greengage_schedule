@@ -373,4 +373,6 @@ test: gp_orphaned_files
 test: libpq
 
 test: alter_rebalance
+
+test: gp_local_extension
 # end of tests

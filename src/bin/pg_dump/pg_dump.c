@@ -906,6 +906,18 @@ main(int argc, char **argv)
 	}
 
 	/*
+	 * Without dumpGpPolicy, no CREATE TABLE carries a DISTRIBUTED BY/
+	 * RANDOMLY/REPLICATED clause, so --binary-upgrade has no way to tell
+	 * what policy each table's transplanted segment files actually match --
+	 * whatever policy restore ends up assigning will be wrong.
+	 */
+	if (dopt.binary_upgrade && !dopt.dumpGpPolicy)
+	{
+		pg_log_error("options \"--binary-upgrade\" and \"--no-gp-syntax\" cannot be used together");
+		exit_nicely(1);
+	}
+
+	/*
 	 * Disable security label support if server version < v9.1.x (prevents
 	 * access to nonexistent pg_seclabel catalog)
 	 */
@@ -2341,7 +2353,8 @@ dumpTableData_insert(Archive *fout, const void *dcontext)
 	PGresult   *res;
 	int			nfields,
 				i;
-	int			rows_per_statement = dopt->dump_inserts;
+	int			rows_per_statement = dopt->dump_inserts > 0 ?
+		dopt->dump_inserts : DUMP_DEFAULT_ROWS_PER_INSERT;
 	int			rows_this_statement = 0;
 
 	/* Temporary allows to access to foreign tables to dump data */
@@ -2690,7 +2703,7 @@ dumpTableData(Archive *fout, const TableDataInfo *tdinfo)
 	else
 		copyFrom = fmtQualifiedDumpable(tbinfo);
 
-	if (dopt->dump_inserts == 0)
+	if (dopt->dump_inserts == 0 && !tdinfo->isCoordOnly)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
@@ -2863,6 +2876,7 @@ makeTableDataInfo(DumpOptions *dopt, TableInfo *tbinfo)
 	tdinfo->dobj.namespace = tbinfo->dobj.namespace;
 	tdinfo->tdtable = tbinfo;
 	tdinfo->filtercond = NULL;	/* might get set later */
+	tdinfo->isCoordOnly = false;/* might get set later */
 	addObjectDependency(&tdinfo->dobj, tbinfo->dobj.dumpId);
 
 	/* A TableDataInfo contains data, of course */
@@ -19765,6 +19779,14 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 					{
 						if (strlen(extconditionarray[j]) > 0)
 							configtbl->dataObj->filtercond = pg_strdup(extconditionarray[j]);
+
+						/*
+						 * A config table is coordinator-only (entry policy)
+						 * if it has no distribution policy row.
+						 */
+						Assert(configtbl->distclause);
+						configtbl->dataObj->isCoordOnly =
+							 configtbl->distclause[0] == '\0';
 					}
 				}
 			}
