@@ -72,7 +72,6 @@ const CHAR *rgszFileNames[] = {
 	// disabling it for now. Revisit this test when we upgrade scan cost model.
 	// "../data/dxl/minidump/Tpcds-10TB-Q37-NoIndexJoin.mdp",
 
-	// TODO:  - 06/29/2015: the row estimate for 32-bit rhel is off in the 6th decimel place
 	"../data/dxl/minidump/retail_28.mdp",
 	"../data/dxl/minidump/JoinNDVRemain.mdp",
 	"../data/dxl/minidump/Least-Greatest.mdp",

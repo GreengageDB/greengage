@@ -17,7 +17,7 @@ function build_gpdb_binaries_tarball(){
         # The tar.gz and .zip files are the github release attachements.
         # here, I just want to test the uploading attachments function for github release concourse resource.
         # later, we can upload the binaries of gpdb instead of them.
-        # eg. bin_gpdb_centos6.tar.gz, bin_gpdb_unbuntu18.04.tar.gz ...
+        # eg. bin_gpdb_ubuntu22.04.tar.gz ...
 
         git archive -o "${BASE_DIR}/release_artifacts/${GPDB_RELEASE_TAG}.tar.gz" --prefix="gpdb-${GPDB_RELEASE_TAG}/"  --format=tar.gz  refs/tags/"${GPDB_RELEASE_TAG}"
         git archive -o "${BASE_DIR}/release_artifacts/${GPDB_RELEASE_TAG}.zip" --prefix="gpdb-${GPDB_RELEASE_TAG}/" --format=zip  -9 refs/tags/"${GPDB_RELEASE_TAG}"
