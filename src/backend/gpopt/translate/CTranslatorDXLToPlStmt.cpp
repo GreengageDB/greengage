@@ -5061,9 +5061,9 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 static AttrNumber
 findTargetListPositionByResname(List *targetlist, const char *colname)
 {
-	ListCell   *lc;
+	ListCell *lc;
 
-	foreach(lc, targetlist)
+	foreach (lc, targetlist)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
 
@@ -5180,12 +5180,12 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 						const char *colname = NameStr(att->attname);
 
 						AttrNumber tlist_attno =
-							findTargetListPositionByResname(
-								plan->targetlist,
-								colname);
+							findTargetListPositionByResname(plan->targetlist,
+															colname);
 
 						Oid typeoid = att->atttypid;
-						Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+						Oid opfamily =
+							gpdb::GetOpclassFamily(policy->opclasses[i])
 
 						split->hashAttnos[i] = tlist_attno;
 						split->hashFuncs[i] =
