@@ -5017,6 +5017,30 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::findTargetListPositionByResname
+//
+//	@doc:
+//		Find position in targetlist by attribute name
+//
+//---------------------------------------------------------------------------
+static AttrNumber
+findTargetListPositionByResname(List *targetlist, const char *colname)
+{
+	ListCell   *lc;
+
+	foreach(lc, targetlist)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(lc);
+
+		if (tle->resname && strcmp(tle->resname, colname) == 0)
+			return tle->resno;
+	}
+
+	return InvalidAttrNumber;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSplit
 //
 //	@doc:
@@ -5034,53 +5058,6 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// create SplitUpdate node
 	SplitUpdate *split = MakeNode(SplitUpdate);
 	Plan *plan = &(split->plan);
-
-	// If we're updating hash-distributed table we need to fill hash-related
-	// fields.
-	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
-	{
-		Index result_rel_index = linitial_int(m_result_rel_list);
-		RangeTblEntry *rte = rt_fetch(
-			result_rel_index, m_dxl_to_plstmt_context->GetRTableEntriesList());
-		Oid target_relid = rte->relid;
-
-		if (OidIsValid(target_relid))
-		{
-			gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
-			if (target_rel)
-			{
-				GpPolicy *policy = target_rel->rd_cdbpolicy;
-
-				// Check if it's hash distributed
-				if (policy != nullptr && GpPolicyIsHashPartitioned(policy))
-				{
-					int policy_nattrs = policy->nattrs;
-					Oid *opclasses = policy->opclasses;
-					TupleDesc resultDesc = RelationGetDescr(target_rel);
-
-					split->numHashAttrs = policy_nattrs;
-					split->numHashSegments = policy->numsegments;
-					split->hashAttnos = (AttrNumber *) palloc(
-						policy_nattrs * sizeof(AttrNumber));
-					split->hashFuncs =
-						(Oid *) palloc(policy_nattrs * sizeof(Oid));
-
-
-					for (int i = 0; i < policy_nattrs; i++)
-					{
-						split->hashAttnos[i] = policy->attrs[i];
-
-						AttrNumber attnum = policy->attrs[i];
-						Oid typeoid = resultDesc->attrs[attnum - 1].atttypid;
-
-						Oid opfamily = gpdb::GetOpclassFamily(opclasses[i]);
-						split->hashFuncs[i] =
-							gpdb::GetHashProcInOpfamily(opfamily, typeoid);
-					}
-				}
-			}
-		}
-	}
 
 	CDXLNode *project_list_dxlnode = (*split_dxlnode)[0];
 	CDXLNode *child_dxlnode = (*split_dxlnode)[1];
@@ -5127,6 +5104,62 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 
 	plan->lefttree = child_plan;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
+	{
+		Index result_rel_index = linitial_int(m_result_rel_list);
+		RangeTblEntry *rte = rt_fetch(
+			result_rel_index, m_dxl_to_plstmt_context->GetRTableEntriesList());
+		Oid target_relid = rte->relid;
+
+		if (OidIsValid(target_relid))
+		{
+			gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
+			if (target_rel)
+			{
+				GpPolicy *policy = target_rel->rd_cdbpolicy;
+
+				// Check if it's hash distributed
+				if (policy != nullptr && GpPolicyIsHashPartitioned(policy))
+				{
+					int policy_nattrs = policy->nattrs;
+					TupleDesc resultDesc = RelationGetDescr(target_rel);
+
+					split->numHashAttrs = policy_nattrs;
+					split->numHashSegments = policy->numsegments;
+					split->hashAttnos = (AttrNumber *) palloc(
+						policy_nattrs * sizeof(AttrNumber));
+					split->hashFuncs =
+						(Oid *) palloc(policy_nattrs * sizeof(Oid));
+
+
+					for (int i = 0; i < policy_nattrs; i++)
+					{
+						AttrNumber catalog_attno = policy->attrs[i];
+
+						Form_pg_attribute att =
+							TupleDescAttr(resultDesc, catalog_attno - 1);
+
+						const char *colname = NameStr(att->attname);
+
+						AttrNumber tlist_attno =
+							findTargetListPositionByResname(
+								plan->targetlist,
+								colname);
+
+						Oid typeoid = att->atttypid;
+						Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+
+						split->hashAttnos[i] = tlist_attno;
+						split->hashFuncs[i] =
+							gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+					}
+				}
+			}
+		}
+	}
 
 	SetParamIds(plan);
 

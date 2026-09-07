@@ -3249,6 +3249,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	ListCell   *lc;
 	int			lastresno;
 	Oid		   *hashFuncs;
+	AttrNumber *hashAttnos;
 	int			i;
 	Oid 		rootoid;
 
@@ -3359,19 +3360,39 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 
 	/* Look up the right hash functions for the hash expressions */
 	hashFuncs = palloc(cdbpolicy->nattrs * sizeof(Oid));
+	hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
 	for (i = 0; i < cdbpolicy->nattrs; i++)
 	{
-		AttrNumber	attnum = cdbpolicy->attrs[i];
-		Oid			typeoid = resultDesc->attrs[attnum - 1].atttypid;
+		AttrNumber	policy_attnum = cdbpolicy->attrs[i];
+		AttrNumber	leaf_attnum;
+		Oid			typeoid = resultDesc->attrs[policy_attnum - 1].atttypid;
 		Oid			opfamily;
+
+		/*
+		 * If we are using the root partition's distribution policy,
+		 * policy_attnum is the catalog attnum of the root table. However, the
+		 * subplan's targetlist is built for the LEAF table, where 
+		 * resno == leaf_catalog_attnum. We must map the root's attnum to the
+		 * leaf's attnum via column name.
+		 */
+		if (cdbpolicy == rootRelCdbpolicy)
+		{
+			char *colname = get_attname(rootoid, policy_attnum, false);
+			leaf_attnum = get_attnum(RelationGetRelid(resultRel), colname);
+			pfree(colname);
+		}
+		else
+		{
+			leaf_attnum = policy_attnum;
+		}
+		hashAttnos[i] = leaf_attnum;
 
 		opfamily = get_opclass_family(cdbpolicy->opclasses[i]);
 
 		hashFuncs[i] = cdb_hashproc_in_opfamily(opfamily, typeoid);
 	}
 	splitupdate->numHashAttrs = cdbpolicy->nattrs;
-	splitupdate->hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
-	memcpy(splitupdate->hashAttnos, cdbpolicy->attrs, cdbpolicy->nattrs * sizeof(AttrNumber));
+	splitupdate->hashAttnos = hashAttnos;
 	splitupdate->hashFuncs = hashFuncs;
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 

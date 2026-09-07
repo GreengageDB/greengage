@@ -257,6 +257,43 @@ preprocess_targetlist(PlannerInfo *root)
 	return tlist;
 }
 
+/*
+ * fixup_columns_attnos
+ *
+ * Returns a bitmapset which contains attribute number of the parent
+ * table based on the given bitmapset of the child.
+ */
+static Bitmapset *
+fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
+{
+	Bitmapset  *result = NULL;
+	int			index = -1;
+
+	/*
+	 * obviously, no need to do anything here
+	 */
+	if (parentId == childId)
+		return columns;
+
+	while ((index = bms_next_member(columns, index)) >= 0)
+	{
+		char	   *attname;
+
+		attname = get_attname(childId, index, false);
+		AttrNumber attno = get_attnum(parentId, attname);
+		if (attno == InvalidAttrNumber)
+			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+				 attname, parentId);
+
+		result = bms_add_member(result,
+								attno - FirstLowInvalidHeapAttributeNumber);
+
+		pfree(attname);
+	}
+
+	return result;
+}
+
 
 /*****************************************************************************
  *
@@ -488,11 +525,8 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			classForm->relispartition)
 		{
 			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
-			Relation rootRel = relation_open(rootoid, RowShareLock);
 
-			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
-
-			Bitmapset *changed_cols_for_partition_check = NULL;
+			Bitmapset *changed_cols_for_partition_check = fixup_columns_attnos(rootoid, RelationGetRelid(rel), changed_cols);
 			int attno = -1;
 
 			/*
@@ -506,6 +540,9 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					bms_add_member(changed_cols_for_partition_check,
 								attno - FirstLowInvalidHeapAttributeNumber);
 			}
+
+			Relation rootRel = relation_open(rootoid, RowShareLock);
+			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
 
 			// Check if we're updating partitioning key columns of hash-distributed table
 			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy) &&
