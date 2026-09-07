@@ -38,10 +38,16 @@ XERCES_CPP_NAMESPACE_USE
 CParseHandlerDynamicForeignScan::CParseHandlerDynamicForeignScan(
 	CMemoryPool *mp, CParseHandlerManager *parse_handler_mgr,
 	CParseHandlerBase *parse_handler_root)
-	: CParseHandlerPhysicalOp(mp, parse_handler_mgr, parse_handler_root)
+	: CParseHandlerPhysicalOp(mp, parse_handler_mgr, parse_handler_root),
+	  m_selected_parts(nullptr)
 {
 }
 
+
+CParseHandlerDynamicForeignScan::~CParseHandlerDynamicForeignScan()
+{
+	CRefCount::SafeRelease(m_selected_parts);
+}
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -75,6 +81,10 @@ CParseHandlerDynamicForeignScan::StartElement(
 	m_foreign_server_oid = CDXLOperatorFactory::ExtractConvertAttrValueToOid(
 		m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
 		EdxltokenForeignServerOid, EdxltokenPhysicalDynamicForeignScan);
+
+	m_selected_parts = CDXLOperatorFactory::ExtractConvertRangesToIntBitSet(
+		m_parse_handler_mgr->GetDXLMemoryManager(), attrs,
+		EdxltokenSelectedPartitionSet, EdxltokenPhysicalDynamicForeignScan);
 
 	// create child node parsers in reverse order of their expected occurrence
 
@@ -166,9 +176,12 @@ CParseHandlerDynamicForeignScan::EndElement(
 	IMdIdArray *mdid_partitions_array =
 		partition_mdids_parse_handler->GetMdIdArray();
 	mdid_partitions_array->AddRef();
+	m_selected_parts->AddRef();
+
 	CDXLPhysicalDynamicForeignScan *dxl_op = GPOS_NEW(m_mp)
 		CDXLPhysicalDynamicForeignScan(m_mp, table_descr, mdid_partitions_array,
-									   m_selector_ids, m_foreign_server_oid);
+									   m_selected_parts, m_selector_ids,
+									   m_foreign_server_oid);
 
 	m_dxl_node = GPOS_NEW(m_mp) CDXLNode(m_mp, dxl_op);
 	// set statistics and physical properties

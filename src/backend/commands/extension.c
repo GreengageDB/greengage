@@ -74,6 +74,7 @@
 
 /* Globally visible state variables */
 bool		creating_extension = false;
+bool		creating_extension_local = false;
 Oid			CurrentExtensionObject = InvalidOid;
 
 /* File visible "segment" variable for GUCs state */
@@ -95,6 +96,7 @@ typedef struct ExtensionControlFile
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
+	bool		local;			/* must the extension run coordinator-only? */
 } ExtensionControlFile;
 
 /*
@@ -591,6 +593,14 @@ parse_extension_control_file(ExtensionControlFile *control,
 								item->name)));
 			}
 		}
+		else if (strcmp(item->name, "gg_local") == 0)
+		{
+			if (!parse_bool(item->value, &control->local))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("parameter \"%s\" requires a Boolean value",
+								item->name)));
+		}
 		else
 			ereport(ERROR,
 					(errcode(ERRCODE_SYNTAX_ERROR),
@@ -624,6 +634,7 @@ read_extension_control_file(const char *extname)
 	control->relocatable = false;
 	control->superuser = true;
 	control->encoding = -1;
+	control->local = false;
 
 	/*
 	 * Parse the primary control file.
@@ -924,6 +935,8 @@ execute_extension_script(Node *stmt,
 	 * things. On failure, ensure we reset these variables.
 	 */
 	creating_extension = true;
+	if (Gp_role != GP_ROLE_EXECUTE)
+		creating_extension_local = control->local;
 	CurrentExtensionObject = extensionOid;
 
 	/*
@@ -1014,6 +1027,7 @@ execute_extension_script(Node *stmt,
 		 * during abort transaction. (refer: AtAbort_Extension_QE()).
 		 */
 		creating_extension = false;
+		creating_extension_local = false;
 		CurrentExtensionObject = InvalidOid;
 
 		/*
@@ -1025,6 +1039,7 @@ execute_extension_script(Node *stmt,
 	PG_END_TRY();
 
 	creating_extension = false;
+	creating_extension_local = false;
 	CurrentExtensionObject = InvalidOid;
 
 	/*

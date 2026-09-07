@@ -196,6 +196,7 @@ private:
 	static void SetParamIds(Plan *);
 
 	static List *TranslatePartOids(IMdIdArray *parts, INT lockmode);
+	static Bitmapset *TranslateCBitSet(CBitSet *selected_parts);
 
 	static List *TranslateJoinPruneParamids(
 		const ULongPtrArray *selector_ids, OID oid_type,
