@@ -13,6 +13,8 @@ import base64
 
 class IsVersionCompatibleTestCase(GpTestCase):
     def setUp(self):
+        # This package is an ancient history at this point, but there is
+        # no way for us to get a newer one.
         self.gppkg_mock_values = \
             {
                 'main_rpm': 'plperl-1.1-2.x86_64.rpm',

@@ -45,22 +45,24 @@ PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-poli
 UBUNTU_CODENAME=jammy
         """
 
-        valid_data_centos7 = """
-NAME="CentOS Linux"
-VERSION="7 (Core)"
-ID="centos"
-ID_LIKE="rhel fedora"
-VERSION_ID="7"
-PRETTY_NAME="CentOS Linux 7 (Core)"
-ANSI_COLOR="0;31"
-CPE_NAME="cpe:/o:centos:centos:7"
-HOME_URL="https://www.centos.org/"
-BUG_REPORT_URL="https://bugs.centos.org/"
-
-CENTOS_MANTISBT_PROJECT="CentOS-7"
-CENTOS_MANTISBT_PROJECT_VERSION="7"
-REDHAT_SUPPORT_PRODUCT="centos"
-REDHAT_SUPPORT_PRODUCT_VERSION="7"
+        valid_data_rocky8 = """
+NAME="Rocky Linux"
+VERSION="8.9 (Green Obsidian)"
+ID="rocky"
+ID_LIKE="rhel centos fedora"
+VERSION_ID="8.9"
+PLATFORM_ID="platform:el8"
+PRETTY_NAME="Rocky Linux 8.9 (Green Obsidian)"
+ANSI_COLOR="0;32"
+LOGO="fedora-logo-icon"
+CPE_NAME="cpe:/o:rocky:rocky:8:GA"
+HOME_URL="https://rockylinux.org/"
+BUG_REPORT_URL="https://bugs.rockylinux.org/"
+SUPPORT_END="2029-05-31"
+ROCKY_SUPPORT_PRODUCT="Rocky-Linux-8"
+ROCKY_SUPPORT_PRODUCT_VERSION="8.9"
+REDHAT_SUPPORT_PRODUCT="Rocky Linux"
+REDHAT_SUPPORT_PRODUCT_VERSION="8.9"
 """
 
         with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_ubuntu24):
@@ -69,8 +71,8 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
         with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_ubuntu22):
             self.assertEqual(('debian', 22), get_dist_info())
 
-        with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_centos7):
-            self.assertEqual(('rhel fedora', 7), get_dist_info())
+        with patch(self.open_patch, new_callable=mock_open, read_data=valid_data_rocky8):
+            self.assertEqual(('rhel centos fedora', 8), get_dist_info())
 
     def test_get_dist_valid_edge_cases(self):
         no_id_like = """

@@ -100,9 +100,9 @@ class GpVersionTestCase(GpTestCase):
         self.assertEqual(v_2.getVersionRelease(), "4.2")
        
     def test_case_7(self):
-        vLong = GpVersion("PostgreSQL 9.4.20 (Greengage Database 6.0.0 build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0, 64-bit compiled on Jul  8 2019 16:27:59")
+        vLong = GpVersion("PostgreSQL 9.4.26 (Greengage Database 6.31.0+dev.28.gf037f646fad build dev) on x86_64-unknown-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, 64-bit compiled on Sep  6 2026 14:45:22 (with assert checking)")
         self.assertTrue(vLong.isVersionCurrentRelease() == True )
-        self.assertTrue(vLong.getVersionBuild() == 'dev')
+        self.assertTrue(vLong.getVersionBuild() == 'dev.28.gf037f646fad')
         self.assertTrue(vLong.getVersionRelease() == "6")
         self.assertTrue(vLong.isVersionRelease("6.0"))
         self.assertTrue(vLong.isVersionRelease("3.2") == False)

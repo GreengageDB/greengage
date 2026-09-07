@@ -24,7 +24,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg2 172.17.0.2:6004 pid=46669)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -58,10 +58,10 @@ insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 explain update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
                                                         QUERY PLAN                                                         
 ---------------------------------------------------------------------------------------------------------------------------
- Update  (cost=0.00..868.53 rows=34 width=1)
-   ->  Split  (cost=0.00..862.80 rows=67 width=22)
-         ->  Result  (cost=0.00..862.80 rows=34 width=22)
-               ->  Hash Semi Join  (cost=0.00..862.80 rows=34 width=18)
+ Update  (cost=0.00..868.86 rows=34 width=1)
+   ->  Split  (cost=0.00..863.13 rows=67 width=22)
+         ->  Result  (cost=0.00..863.13 rows=34 width=22)
+               ->  Hash Semi Join  (cost=0.00..863.13 rows=34 width=18)
                      Hash Cond: (s.a = r.b)
                      ->  Seq Scan on s  (cost=0.00..431.00 rows=34 width=18)
                            Filter: (NOT (a IS NULL))
@@ -77,18 +77,19 @@ update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 explain delete from s where exists (select 1 from r where s.a = r.b);
                                                      QUERY PLAN                                                      
 ---------------------------------------------------------------------------------------------------------------------
- Delete  (cost=0.00..865.66 rows=34 width=1)
-   ->  Result  (cost=0.00..862.80 rows=34 width=22)
-         ->  Hash Semi Join  (cost=0.00..862.80 rows=34 width=18)
-               Hash Cond: s.a = r.b
-               ->  Seq Scan on s  (cost=0.00..431.00 rows=34 width=18)
+ Delete  (cost=0.00..864.95 rows=34 width=1)
+   ->  Result  (cost=0.00..863.13 rows=34 width=14)
+         ->  Hash Semi Join  (cost=0.00..863.13 rows=34 width=10)
+               Hash Cond: (s.a = r.b)
+               ->  Seq Scan on s  (cost=0.00..431.00 rows=34 width=14)
+                     Filter: (NOT (a IS NULL))
                ->  Hash  (cost=431.15..431.15 rows=3334 width=4)
                      ->  Result  (cost=0.00..431.15 rows=3334 width=4)
                            ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.14 rows=3334 width=4)
                                  Hash Key: r.b
                                  ->  Seq Scan on r  (cost=0.00..431.07 rows=3334 width=4)
- Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
-(11 rows)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(12 rows)
 
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
@@ -110,7 +111,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg2 rhel62-vm1:25434 pid=32307)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg0 172.17.0.2:6002 pid=46673)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -162,7 +163,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg2 172.17.0.2:6004 pid=46669)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -214,7 +215,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg2 rhel62-vm1:25434 pid=32307)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg1 172.17.0.2:6003 pid=46668)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -266,7 +267,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg1 172.17.0.2:6003 pid=46668)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -318,7 +319,7 @@ insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
 insert into s select generate_series(1, 100), generate_series(1, 100) * 4;
 update r set b = r.b + 1 from s where r.a = s.a;
 update r set b = r.b + 1 from s where r.a in (select a from s);
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg1 172.17.0.2:6003 pid=46668)
 delete from r using s where r.a = s.a;
 delete from r;
 insert into r select generate_series(1, 10000), generate_series(1, 10000) * 3;
@@ -1052,6 +1053,7 @@ create table r (a int, b int) distributed by (a);
 create table s (a int, b int) distributed by (a);
 create table m ();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+WARNING:  creating a table with no columns.
 	alter table m add column a int;
 	alter table m add column b int;
 create table t (region text, id int) distributed by (region);
@@ -1346,7 +1348,7 @@ select r.* from r,s,sales where s.a = sales.day and sales.month = r.b;
 (6 rows)
 
 update r set b = r.b + 1 from s,sales where s.a = sales.day and sales.month = r.b;
-ERROR:  multiple updates to a row by the same query is not allowed  (seg1 rhel62-vm1:25433 pid=32305)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg0 172.17.0.2:6002 pid=46673)
 select r.* from r,s,sales where s.a = sales.day and sales.month = r.b-1;
  a | b  
 ---+----
@@ -1662,7 +1664,7 @@ select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) 
 (4 rows)
 
 update sales_par set month = month+1 from s where sales_par.id in (s.b, s.b+1) and region = 'europe';
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg2 172.17.0.2:6004 pid=46669)
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
  id | year | month | day | region 
 ----+------+-------+-----+--------
@@ -1762,7 +1764,7 @@ select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) 
 
 PREPARE plan3 AS update sales_par set month = month+1 from s where sales_par.id in (s.b, s.b+1) and region = 'europe';
 EXECUTE plan3;
-ERROR:  multiple updates to a row by the same query is not allowed  (seg0 rhel62-vm1:25432 pid=32303)
+ERROR:  multiple updates to a row by the same query is not allowed  (seg2 172.17.0.2:6004 pid=46669)
 select distinct sales_par.* from sales_par,s where sales_par.id in (s.b, s.b+1) and region='europe';
  id | year | month | day | region 
 ----+------+-------+-----+--------
