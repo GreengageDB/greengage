@@ -7,10 +7,9 @@ Find more information about the architecture on [the wiki page](https://github.c
 ## Libraries Required
 
 ### libsigar:
-	For Rocky 8 (and others):
-	    Use this updated fork: https://github.com/boundary/sigar
-		to build:
-	    `mkdir build && cd build && cmake .. && make && make install`
+    Use this updated fork: https://github.com/boundary/sigar
+    to build:
+    `mkdir build && cd build && cmake .. && make && make install`
 
 ## Troubleshooting
 	For macOS:
