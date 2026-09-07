@@ -671,6 +671,7 @@ update sales set date='2011-01-01' where amount=1234;
 
 -- check that update endeds up where it should
 select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
+select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
 
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial

@@ -18,6 +18,7 @@
 
 #include "cdb/cdbhash.h"
 #include "cdb/cdbutil.h"
+#include "cdb/cdbvars.h"
 #include "commands/tablecmds.h"
 #include "executor/instrument.h"
 #include "executor/nodeSplitUpdate.h"
@@ -158,14 +159,30 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 	}
 
 	/* Compute segment ID for the new row in case we need it for redistribution by hash */
-	if (node->output_segid_attno > 0 && node->cdbhash != NULL)
+	if (node->output_segid_attno > 0)
 	{
-		int32		target_seg;
+		if (node->cdbhash != NULL)
+		{
+			int32		target_seg;
 
-		target_seg = evalHashKey(node, insert_values, insert_nulls);
+			target_seg = evalHashKey(node, insert_values, insert_nulls);
 
-		insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
-		insert_nulls[node->output_segid_attno - 1] = false;
+			insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
+			insert_nulls[node->output_segid_attno - 1] = false;
+		}
+		else
+		{
+			if (node->input_segid_attno > 0)
+			{
+				insert_values[node->output_segid_attno - 1] = values[node->input_segid_attno - 1];
+				insert_nulls[node->output_segid_attno - 1] = nulls[node->input_segid_attno - 1];
+			}
+			else
+			{
+				insert_values[node->output_segid_attno - 1] = Int32GetDatum(GpIdentity.segindex);
+				insert_nulls[node->output_segid_attno - 1] = false;
+			}
+		}
 	}
 }
 

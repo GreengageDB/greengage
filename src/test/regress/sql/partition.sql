@@ -4332,6 +4332,8 @@ ALTER TABLE rank2_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
 -- check values distribution before update
 SELECT gp_segment_id, * FROM rank_1_prt_2;
 SELECT gp_segment_id, * FROM rank2_1_prt_2;
+SELECT gp_segment_id, * FROM rank_1_prt_3;
+SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 -- see if update is done with splitting and explicit redistribution
 EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
@@ -4344,6 +4346,8 @@ UPDATE rank2 SET year=2006 WHERE gender='f';
 -- check that update endeds up where it should
 SELECT gp_segment_id, * FROM rank_1_prt_2;
 SELECT gp_segment_id, * FROM rank2_1_prt_2;
+SELECT gp_segment_id, * FROM rank_1_prt_3;
+SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 --
 -- Test that segment is choosen correctly in case of insertion also
@@ -4368,11 +4372,47 @@ INSERT INTO rank3 VALUES (543,1,2007,'f',1);
 -- check, that it's inserted right
 SELECT gp_segment_id, * FROM rank3_1_prt_2;
 
-SELECT gp_debug_reset_create_table_default_numsegments();
+--
+-- Test that segment is choosen correctly even in case of different attribute number
+--
+CREATE extension IF NOT EXISTS gp_debug_numsegments;
+SELECT gp_debug_set_create_table_default_numsegments(2);
+
+CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) END (2010) EVERY (1),
+DEFAULT PARTITION extra);
+
+-- create partition with changed attribute number
+CREATE TABLE rank4_1_prt_6 (like rank4);
+ALTER TABLE rank4_1_prt_6 DROP year, ADD year INT;
+ALTER TABLE rank4 EXCHANGE PARTITION FOR (INT '2009') WITH TABLE rank4_1_prt_6;
+
+INSERT INTO rank4 VALUES (543,1,2006,'m',1);
+INSERT INTO rank4 VALUES (543,1,2009,'f',1);
+
+ALTER TABLE rank4 EXPAND PARTITION PREPARE;
+
+ALTER TABLE rank4_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+
+SELECT gp_segment_id, * FROM rank4_1_prt_2;
+SELECT gp_segment_id, * FROM rank4_1_prt_5;
+
+-- see if update is done with splitting and explicit redistribution
+EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
+
+UPDATE rank4 SET year=2006 WHERE gender='f';
+
+SELECT gp_segment_id, * FROM rank4_1_prt_2;
+SELECT gp_segment_id, * FROM rank4_1_prt_5;
+
+SELECT gp_debug_set_create_table_default_numsegments(3);
 
 DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
+DROP TABLE rank4;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;

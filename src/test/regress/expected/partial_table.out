@@ -4644,6 +4644,11 @@ select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
              2 |      543 | 01-01-2011 | 1234.00 | usa
 (2 rows)
 
+select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
+ gp_segment_id | trans_id | date | amount | region 
+---------------+----------+------+--------+--------
+(0 rows)
+
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial
 -- tables, we need to drop the partial tables to keep the cluster expansion
