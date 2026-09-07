@@ -97,7 +97,8 @@ CPhysicalDynamicForeignScan::Matches(COperator *pop) const
 	CPhysicalDynamicForeignScan *popForeignScan =
 		CPhysicalDynamicForeignScan::PopConvert(pop);
 	return CUtils::FMatchDynamicScan(this, pop) &&
-		   m_foreign_server_oid == popForeignScan->GetForeignServerOid();
+		   m_foreign_server_oid == popForeignScan->GetForeignServerOid() &&
+		CUtils::FMatchSelectedParts(GetSelectedParts(), popForeignScan->GetSelectedParts());
 }
 
 //---------------------------------------------------------------------------
