@@ -31,15 +31,18 @@ using namespace gpdxl;
 //---------------------------------------------------------------------------
 CDXLPhysicalDynamicForeignScan::CDXLPhysicalDynamicForeignScan(
 	CMemoryPool *mp, CDXLTableDescr *table_descr, IMdIdArray *part_mdids,
-	ULongPtrArray *selector_ids, OID foreign_server_oid)
+	CBitSet *selected_parts, ULongPtrArray *selector_ids,
+	OID foreign_server_oid)
 	: CDXLPhysical(mp),
 	  m_dxl_table_descr(table_descr),
 	  m_part_mdids(part_mdids),
+	  m_selected_parts(selected_parts),
 	  m_selector_ids(selector_ids),
 	  m_foreign_server_oid(foreign_server_oid)
 
 {
 	GPOS_ASSERT(nullptr != table_descr);
+	GPOS_ASSERT(nullptr != selected_parts && 0 != selected_parts->Size());
 }
 
 
@@ -55,6 +58,7 @@ CDXLPhysicalDynamicForeignScan::~CDXLPhysicalDynamicForeignScan()
 {
 	m_dxl_table_descr->Release();
 	m_part_mdids->Release();
+	m_selected_parts->Release();
 	CRefCount::SafeRelease(m_selector_ids);
 }
 
@@ -107,6 +111,12 @@ CDXLPhysicalDynamicForeignScan::GetParts() const
 	return m_part_mdids;
 }
 
+CBitSet *
+CDXLPhysicalDynamicForeignScan::GetSelectedParts() const
+{
+	return m_selected_parts;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLPhysicalDynamicForeignScan::SerializeToDXL
@@ -132,12 +142,22 @@ CDXLPhysicalDynamicForeignScan::SerializeToDXL(CXMLSerializer *xml_serializer,
 		CDXLTokens::GetDXLTokenStr(EdxltokenForeignServerOid),
 		m_foreign_server_oid);
 	GPOS_DELETE(serialized_selector_ids);
+
+	CWStringDynamic *serialized_selected_parts =
+		CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(
+			m_mp, m_selected_parts);
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenSelectedPartitionSet),
+		serialized_selected_parts);
+	GPOS_DELETE(serialized_selected_parts);
+
 	node->SerializePropertiesToDXL(xml_serializer);
 	node->SerializeChildrenToDXL(xml_serializer);
 	IMDCacheObject::SerializeMDIdList(
 		xml_serializer, m_part_mdids,
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartitions),
 		CDXLTokens::GetDXLTokenStr(EdxltokenPartition));
+
 	m_dxl_table_descr->SerializeToDXL(xml_serializer);
 	xml_serializer->CloseElement(
 		CDXLTokens::GetDXLTokenStr(EdxltokenNamespacePrefix), element_name);

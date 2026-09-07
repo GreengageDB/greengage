@@ -40,6 +40,8 @@ private:
 
 	OID m_foreign_server_oid;
 
+	CBitSet *m_selected_parts;
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace
@@ -63,6 +65,8 @@ public:
 	CParseHandlerDynamicForeignScan(CMemoryPool *mp,
 									CParseHandlerManager *parse_handler_mgr,
 									CParseHandlerBase *pph);
+
+	~CParseHandlerDynamicForeignScan() override;
 };
 }  // namespace gpdxl
 
