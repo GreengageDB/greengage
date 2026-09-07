@@ -3251,7 +3251,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Oid		   *hashFuncs;
 	AttrNumber *hashAttnos;
 	int			i;
-	Oid 		rootoid = NULL;
+	Oid 		rootoid = InvalidOid;
 
 	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
