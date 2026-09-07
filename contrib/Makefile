@@ -66,6 +66,7 @@ SUBDIRS += \
 		formatter_fixedwidth \
 		extprotocol \
 		indexscan \
+		gp_local_test
 
 ifeq ($(with_openssl),yes)
 SUBDIRS += sslinfo
