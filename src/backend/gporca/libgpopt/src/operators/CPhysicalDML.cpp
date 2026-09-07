@@ -81,8 +81,44 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 		//         with the split deleting the existing rows and this DML node inserting the new rows,
 		//         so this is handled here like an insert, using hash distribution for all partitions.
 
+		BOOL is_update_without_changing_distribution_key = false;
+
+		if (CLogicalDML::EdmlUpdate == edmlop)
+		{
+			// Safety check: only compute intersection if m_pds is actually Hashed.
+			if (CDistributionSpec::EdtHashed == m_pds->Edt())
+			{
+				CDistributionSpecHashed *hashDistSpec =
+					CDistributionSpecHashed::PdsConvert(m_pds);
+				CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
+				CColRefSet *distributionCols = hashDistSpec->PcrsUsed(mp);
+
+				// compute a ColRefSet of the updated columns
+				for (ULONG c = 0; c < pdrgpcrSource->Size(); c++)
+				{
+					if (pbsModified->Get(c))
+					{
+						updatedCols->Include((*pdrgpcrSource)[c]);
+					}
+				}
+
+				is_update_without_changing_distribution_key =
+					!updatedCols->FIntersects(distributionCols);
+
+				updatedCols->Release();
+				distributionCols->Release();
+			}
+			else
+			{
+				// If the table is already treated as Random (e.g. gpexpand phase 2),
+				// there is no hash distribution to preserve. We treat this as "not changing"
+				// the distribution key so that we force a Routed requirement later.
+				is_update_without_changing_distribution_key = true;
+			}
+		}
+
 		if (CLogicalDML::EdmlDelete == edmlop || !fSplit ||
-			(CLogicalDML::EdmlUpdate == edmlop && fSplit))
+			(is_update_without_changing_distribution_key && fSplit))
 		{
 			m_pds->Release();
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();
