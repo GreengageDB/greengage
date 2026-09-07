@@ -5,6 +5,7 @@ import json
 import os
 import re
 import pipes
+import shlex
 import shutil
 import socket
 import tempfile
@@ -98,6 +99,42 @@ def _cluster_contains_standard_demo_segments():
         actual_segments.add( (seg.content, seg.role, seg.preferred_role) )
 
     return expected_segments == actual_segments
+
+def _options_as_list(options):
+    """
+    Normalize options into a list of tokens.
+    """
+    if options is None:
+        return []
+
+    if isinstance(options, str):
+        return shlex.split(options)
+
+    return list(options)
+
+def _get_option_value(options, flag):
+    """
+    Return the value following a flag.
+
+    Example:
+      _get_option_value(["-S", "/data/standby"], "-S")
+    """
+
+    if flag not in options:
+        return None
+
+    reverse_idx = options[::-1].index(flag)
+    idx = len(options) - 1 - reverse_idx
+
+    try:
+        value = options[idx + 1]
+    except IndexError:
+        raise ValueError("Option %s requires a value" % flag)
+
+    if not value or value.startswith("-"):
+        raise ValueError("Option %s requires a value" % flag)
+
+    return value
 
 @given('a standard local demo cluster is running')
 def impl(context):
@@ -1187,12 +1224,21 @@ def impl(context):
 
 def init_standby(context, coordinator_hostname, options, segment_hostname):
     remote = (coordinator_hostname != segment_hostname)
+    opts = _options_as_list(options)
     # -n option assumes gpinitstandby already ran and put standby in catalog
-    if "-n" not in options:
-        if remote:
+    if "-n" not in opts:
+        if "-S" in opts:
+            standby_data_dir = _get_option_value(opts, '-S')
+            context.standby_data_dir = os.path.normpath(standby_data_dir)
+        elif remote:
             context.standby_data_dir = coordinator_data_dir
         else:
             context.standby_data_dir = tempfile.mkdtemp() + "/standby_datadir"
+
+        if "-P" in opts:
+            standby_port = _get_option_value(opts, '-P')
+            context.standby_port = standby_port
+
     run_gpinitstandby(context, context.standby_hostname, context.standby_port, context.standby_data_dir, options,
                       remote)
     context.coordinator_hostname = coordinator_hostname
@@ -1388,6 +1434,7 @@ def impl(context):
 
     cmd = "gpactivatestandby -a -d %s" % coordinator_data_dir
     run_gpcommand(context, cmd)
+    check_return_code(context, 0)
 
 # from https://stackoverflow.com/questions/2838244/get-open-tcp-port-in-python/2838309#2838309
 def get_open_port():

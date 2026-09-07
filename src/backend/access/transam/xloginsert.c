@@ -478,6 +478,28 @@ XLogInsert_Internal(RmgrId rmid, uint8 info, TransactionId headerXid)
 		EndPos = XLogInsertRecord(rdt, fpw_lsn, curinsert_flags, num_fpw);
 	} while (EndPos == InvalidXLogRecPtr);
 
+	/*
+	 * A record carrying block references modifies one or more relation pages.
+	 * Temporary relations never emit such records (their data is not
+	 * WAL-logged at all) and unlogged relations emit them only for their init
+	 * forks, so this implies a durable change to a permanent relation.
+	 * Remember it so the dispatcher can tell a transaction that did real work
+	 * (which needs a two-phase commit) apart from one that only touched
+	 * temporary objects (which can use a one-phase commit).
+	 *
+	 * Require an assigned top-level xid, so that only records attributable to
+	 * the current transaction count.  Read-only transactions can emit
+	 * block-carrying records as a side effect of scanning - opportunistic
+	 * page pruning (XLOG_HEAP2_CLEAN) and hint-bit full-page images
+	 * (XLOG_FPI_FOR_HINT) are logged without an xid - and must not be forced
+	 * into a needless two-phase commit by them.  Every genuine modification
+	 * of a permanent relation runs with an assigned xid before its first
+	 * block-carrying record, so this loses no true positive.
+	 */
+	if (max_registered_block_id > 0 &&
+		TransactionIdIsValid(GetTopTransactionIdIfAny()))
+		MarkWalWriteForPermanentRel();
+
 	XLogResetInsertion();
 
 	return EndPos;

@@ -2077,7 +2077,7 @@ AC_CHECK_DECLS(posix_fadvise, [], [], [#include <fcntl.h>])
 ]) # fi
 
 AC_CHECK_DECLS(fdatasync, [], [], [#include <unistd.h>])
-AC_CHECK_DECLS([strlcat, strlcpy, strnlen])
+AC_CHECK_DECLS([strlcat, strlcpy, strnlen, timingsafe_bcmp])
 # This is probably only present on macOS, but may as well check always
 AC_CHECK_DECLS(F_FULLFSYNC, [], [], [#include <fcntl.h>])
 
@@ -2138,6 +2138,7 @@ AC_REPLACE_FUNCS(m4_normalize([
 	strlcpy
 	strnlen
 	strtof
+	timingsafe_bcmp
 ]))
 
 case $host_os in

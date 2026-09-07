@@ -148,6 +148,26 @@ int32 gp_subtrans_warn_limit = 16777216; /* 16 million */
 bool		seqXlogWrite;
 
 /*
+ * Set when the current transaction emits a WAL record that modifies a
+ * permanent relation: a record carrying registered block references logged
+ * under an assigned xid, or an append-optimized write record (AO segfiles are
+ * not buffer pages, so those records carry no block references and mark this
+ * explicitly - see xlog_ao_insert).  Temporary relations never WAL-log their
+ * data pages (RelationNeedsWAL is false for them) and unlogged relations
+ * WAL-log only their init forks, so such records always pertain to a
+ * permanent relation and mean the transaction did durable work that requires a
+ * distributed two-phase commit.  Block-carrying records logged without an xid
+ * (opportunistic pruning, hint-bit FPIs during read-only scans) do not count.
+ * A transaction that only emits lock/invalidation/commit records - e.g. one
+ * that merely takes an AccessExclusiveLock (XLOG_STANDBY_LOCK), or whose only
+ * relation writes went to temporary tables - leaves this false and may
+ * commit with a cheaper one-phase commit.  It is reset at
+ * top-level transaction start and is otherwise sticky (only ever set), which
+ * is the safe direction.
+ */
+static bool xactWroteWalForPermanentRel = false;
+
+/*
  * Miscellaneous flag bits to record events which occur on the top level
  * transaction. These flags are only persisted in MyXactFlags and are intended
  * so we remember to do certain things later on in the transaction. This is
@@ -464,6 +484,28 @@ TransactionDidWriteXLog(void)
 {
 	TransactionState s = CurrentTransactionState;
 	return s->didLogXid;
+}
+
+/*
+ * Record that the current transaction emitted a WAL record modifying a
+ * permanent relation.  Called from the WAL insertion path when a record
+ * carries block references.  See xactWroteWalForPermanentRel.
+ */
+void
+MarkWalWriteForPermanentRel(void)
+{
+	xactWroteWalForPermanentRel = true;
+}
+
+/*
+ * Whether the current transaction has made a durable change to a permanent
+ * relation.  Used to decide whether a distributed two-phase commit is needed:
+ * a transaction that only touched temporary objects never sets this.
+ */
+bool
+TransactionWroteWalForPermanentRel(void)
+{
+	return xactWroteWalForPermanentRel;
 }
 
 bool
@@ -2419,6 +2461,7 @@ StartTransaction(void)
 	nUnreportedXids = 0;
 	s->didLogXid = false;
 	TopXactexecutorDidWriteXLog = false;
+	xactWroteWalForPermanentRel = false;
 
 	/*
 	 * must initialize resource-management stuff first
