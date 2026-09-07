@@ -1,0 +1,242 @@
+-- Exercises the local (QD-only/coordinator-only) extension mechanism
+-- (the gg_local control-file flag) end to end, using the gp_local_test
+-- sample extension in contrib/.
+-- This test deliberately leaves the extension installed at the end (see
+-- the closing comment below), so guard against a prior run's leftover
+-- state to stay safely re-runnable against the same database.
+-- start_ignore
+DROP EXTENSION IF EXISTS gp_local_test;
+-- end_ignore
+CREATE EXTENSION gp_local_test;
+-- Every table the extension's install script created must have no
+-- distribution policy at all - that's the defining property of a
+-- QD-only table.
+SELECT count(*) FROM gp_distribution_policy
+ WHERE localoid IN ('ext_local_test.state'::regclass,
+                     'ext_local_test.settings'::regclass);
+ count 
+-------
+     0
+(1 row)
+
+-- QD-only tables live only on the coordinator (segment id -1), never
+-- dispatched to segments. EXPLAIN confirms the plan itself has no Motion
+-- node moving data from segments - it's a plain local scan.
+EXPLAIN (COSTS OFF) SELECT gp_segment_id, code, value FROM ext_local_test.state;
+            QUERY PLAN             
+-----------------------------------
+ Seq Scan on state
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT gp_segment_id, code, value FROM ext_local_test.state;
+ gp_segment_id |  code   | value 
+---------------+---------+-------
+            -1 | counter |     0
+(1 row)
+
+-- settings is registered via pg_extension_config_dump() with an empty
+-- (unfiltered) condition - the standard "config table" convention.
+SELECT extconfig IS NOT NULL AS has_config_tables, extcondition
+  FROM pg_extension WHERE extname = 'gp_local_test';
+ has_config_tables | extcondition 
+-------------------+--------------
+ t                 | {""}
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT key, value FROM ext_local_test.settings ORDER BY key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Index Scan using settings_pkey on settings
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT key, value FROM ext_local_test.settings ORDER BY key;
+ key | value 
+-----+-------
+(0 rows)
+
+-- Exercise the extension's functions against the QD-only table, neither
+-- carrying any EXECUTE ON clause. Again, no Motion in the plan.
+EXPLAIN (COSTS OFF) SELECT ext_local_test.bump_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.bump_counter('counter');
+ bump_counter 
+--------------
+            1
+(1 row)
+
+SELECT ext_local_test.bump_counter('counter');
+ bump_counter 
+--------------
+            2
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT ext_local_test.current_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.current_counter('counter');
+ current_counter 
+-----------------
+               2
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT code, value FROM ext_local_test.state;
+            QUERY PLAN             
+-----------------------------------
+ Seq Scan on state
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT code, value FROM ext_local_test.state;
+  code   | value 
+---------+-------
+ counter |     2
+(1 row)
+
+-- Schema evolution: ALTER EXTENSION UPDATE must be able to add a column,
+-- a new table, and replace a function's language (SQL -> plpgsql) on a
+-- QD-only table, and the table must remain QD-only afterward.
+ALTER EXTENSION gp_local_test UPDATE TO '1.1';
+SELECT count(*) FROM gp_distribution_policy
+ WHERE localoid IN ('ext_local_test.state'::regclass,
+                     'ext_local_test.history'::regclass);
+ count 
+-------
+     0
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT ext_local_test.bump_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.bump_counter('counter');
+ bump_counter 
+--------------
+            3
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT code, old_value, new_value FROM ext_local_test.history ORDER BY id;
+                QUERY PLAN                
+------------------------------------------
+ Index Scan using history_pkey on history
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT code, old_value, new_value FROM ext_local_test.history ORDER BY id;
+  code   | old_value | new_value 
+---------+-----------+-----------
+ counter |         2 |         3
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT ext_local_test.reset_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.reset_counter('counter');
+ reset_counter 
+---------------
+ 
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT code, value FROM ext_local_test.state;
+            QUERY PLAN             
+-----------------------------------
+ Seq Scan on state
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT code, value FROM ext_local_test.state;
+  code   | value 
+---------+-------
+ counter |     0
+(1 row)
+
+-- And back down again.
+ALTER EXTENSION gp_local_test UPDATE TO '1.0';
+EXPLAIN (COSTS OFF) SELECT code, value FROM ext_local_test.state;
+            QUERY PLAN             
+-----------------------------------
+ Seq Scan on state
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT code, value FROM ext_local_test.state;
+  code   | value 
+---------+-------
+ counter |     0
+(1 row)
+
+-- Drop and re-create from scratch: the schema/tables/functions must not
+-- linger past DROP EXTENSION, and a fresh CREATE EXTENSION afterward must
+-- produce a fully working, QD-only extension again, not inherit any state
+-- from the dropped one.
+DROP EXTENSION gp_local_test;
+CREATE EXTENSION gp_local_test;
+SELECT count(*) FROM gp_distribution_policy
+ WHERE localoid IN ('ext_local_test.state'::regclass,
+                     'ext_local_test.settings'::regclass);
+ count 
+-------
+     0
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT gp_segment_id, code, value FROM ext_local_test.state;
+            QUERY PLAN             
+-----------------------------------
+ Seq Scan on state
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT gp_segment_id, code, value FROM ext_local_test.state;
+ gp_segment_id |  code   | value 
+---------------+---------+-------
+            -1 | counter |     0
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT ext_local_test.bump_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.bump_counter('counter');
+ bump_counter 
+--------------
+            1
+(1 row)
+
+EXPLAIN (COSTS OFF) SELECT ext_local_test.current_counter('counter');
+            QUERY PLAN             
+-----------------------------------
+ Result
+ Optimizer: Postgres-based planner
+(2 rows)
+
+SELECT ext_local_test.current_counter('counter');
+ current_counter 
+-----------------
+               1
+(1 row)
+
+-- Deliberately left installed (not dropped) here: gpcheckcat's normal
+-- installcheck-world pass and the pg_upgrade test (test_gpdb.sh), which
+-- both examine the "regression" database as it stands at the end of this
+-- suite, then get to exercise a real QD-only extension's catalog state
+-- and pg_upgrade path too, not just this test's own assertions.
