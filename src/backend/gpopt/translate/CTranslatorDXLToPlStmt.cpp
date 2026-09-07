@@ -5185,7 +5185,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 
 						Oid typeoid = att->atttypid;
 						Oid opfamily =
-							gpdb::GetOpclassFamily(policy->opclasses[i])
+							gpdb::GetOpclassFamily(policy->opclasses[i]);
 
 						split->hashAttnos[i] = tlist_attno;
 						split->hashFuncs[i] =
