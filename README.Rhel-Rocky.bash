@@ -3,7 +3,7 @@
 # CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build,
 #          or run directly on a bare-metal host
 # PURPOSE: Install build dependencies, compile zstd static library,
-#          configure system for Greengage (bare-metal only)
+#          configure system for Greengage
 
 set -euxo pipefail
 
@@ -99,11 +99,6 @@ alternatives --set pip3 /usr/bin/pip3.12
 alternatives --set pip  /usr/bin/pip3.12
 ln -sf ./pip3.12 /usr/bin/pip-3
 
-# Debug
-python3 --version
-pip3    --version
-pip     --version
-
 # Upgrade pip to support current package versions
 python3 -m pip install --no-cache-dir --upgrade pip
 
@@ -116,28 +111,21 @@ make -j"$(nproc)" -C zstd-1.4.4
 make install PREFIX=/usr/local -C zstd-1.4.4
 rm -rf zstd-1.4.4
 
-#---------------------------------------------------------------------
-# Bare-metal only configuration
-#---------------------------------------------------------------------
-if [[ ! -f /.dockerenv && -z "${IS_DOCKER_BUILD:-}" ]]; then
+#For all Greengage Database host systems running RHEL, CentOs or Rocky8, SELinux must either be Disabled or configured to allow unconfined access to Greengage processes, directories, and the gpadmin user.
+setenforce 0
+sudo tee -a /etc/selinux/config << EOF
+SELINUX=disabled
+EOF
 
-    # Disable SELinux
-    setenforce 0 || true
-    if [ -f /etc/selinux/config ]; then
-        sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
-    fi
+#To prevent SELinux-related SSH authentication denials that could occur even with SELinux deactivated
+sudo tee -a /etc/sssd/sssd.conf << EOF
+selinux_provider=none
+EOF
 
-    # Disable sssd SELinux provider
-    if [ -f /etc/sssd/sssd.conf ]; then
-        echo 'selinux_provider=none' >> /etc/sssd/sssd.conf
-    fi
+sudo systemctl stop firewalld.service
 
-    # Stop firewall
-    systemctl stop firewalld.service || true
-    systemctl disable --now firewalld.service || true
-
-    # Configure kernel parameters
-    cat >> /etc/sysctl.d/10-gpdb.conf << EOF
+#Configure kernel settings so the system is optimized for Greengage Database.
+sudo tee -a /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536
 kernel.msgmni = 2048
@@ -177,27 +165,24 @@ vm.dirty_writeback_centisecs = 100
 vm.zone_reclaim_mode = 0
 EOF
 
-    RAM_IN_KB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
-    RAM_IN_BYTES=$((RAM_IN_KB * 1024))
-    {
-        echo "vm.min_free_kbytes = $((RAM_IN_BYTES * 3 / 100 / 1024))"
-        echo "kernel.shmall = $((RAM_IN_BYTES / 2 / 4096))"
-        echo "kernel.shmmax = $((RAM_IN_BYTES / 2))"
-        if [ "$RAM_IN_BYTES" -le $((64 * 1024 * 1024 * 1024)) ]; then
-            echo "vm.dirty_background_ratio = 3"
-            echo "vm.dirty_ratio = 10"
-        else
-            echo "vm.dirty_background_ratio = 0"
-            echo "vm.dirty_ratio = 0"
-            echo "vm.dirty_background_bytes = 1610612736 # 1.5GB"
-            echo "vm.dirty_bytes = 4294967296 # 4GB"
-        fi
-    } >> /etc/sysctl.d/10-gpdb.conf
+RAM_IN_KB=`cat /proc/meminfo | grep MemTotal | awk '{print $2}'`
+RAM_IN_BYTES=$(($RAM_IN_KB*1024))
+echo "vm.min_free_kbytes = $(($RAM_IN_BYTES*3/100/1024))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+echo "kernel.shmall = $(($RAM_IN_BYTES/2/4096))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+echo "kernel.shmmax = $(($RAM_IN_BYTES/2))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+if [ $RAM_IN_BYTES -le $((64*1024*1024*1024)) ]; then
+    echo "vm.dirty_background_ratio = 3" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+    echo "vm.dirty_ratio = 10" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+else
+    echo "vm.dirty_background_ratio = 0" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+    echo "vm.dirty_ratio = 0" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+    echo "vm.dirty_background_bytes = 1610612736 # 1.5GB" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+    echo "vm.dirty_bytes = 4294967296 # 4GB" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
+fi
 
-    sysctl -p /etc/sysctl.d/10-gpdb.conf
+sudo sysctl -p
 
-    # Configure system limits
-    cat >> /etc/security/limits.d/10-nproc.conf << EOF
+sudo tee -a /etc/security/limits.d/10-nproc.conf << EOF
 * soft nofile 524288
 * hard nofile 524288
 * soft nproc 131072
@@ -205,4 +190,6 @@ EOF
 * soft core unlimited
 EOF
 
-fi
+
+ulimit -n 65536 65536
+
