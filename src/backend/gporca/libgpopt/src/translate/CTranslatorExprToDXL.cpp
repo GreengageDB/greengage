@@ -1382,7 +1382,11 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 	// construct dynamic table scan operator
 	IMdIdArray *part_mdids = popDTS->GetPartitionMdids();
 	part_mdids->AddRef();
-
+	CBitSet *selected_parts = popDTS->GetSelectedParts();
+	if (selected_parts)
+	{
+		selected_parts->AddRef();
+	}
 	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
 	CPartitionPropagationSpec *pps_reqd =
 		pexprDTS->Prpp()->Pepp()->PppsRequired();
@@ -1398,8 +1402,8 @@ CTranslatorExprToDXL::PdxlnDynamicTableScan(
 
 
 	CDXLPhysicalDynamicTableScan *pdxlopDTS =
-		GPOS_NEW(m_mp) CDXLPhysicalDynamicTableScan(m_mp, table_descr,
-													part_mdids, selector_ids);
+		GPOS_NEW(m_mp) CDXLPhysicalDynamicTableScan(
+			m_mp, table_descr, part_mdids, selected_parts, selector_ids);
 
 	CDXLNode *pdxlnDTS = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopDTS);
 	pdxlnDTS->SetProperties(pdxlpropDTS);
@@ -1793,6 +1797,8 @@ CTranslatorExprToDXL::PdxlnDynamicForeignScan(
 
 	IMdIdArray *part_mdids = popDFS->GetPartitionMdids();
 	part_mdids->AddRef();
+	CBitSet *selected_parts = popDFS->GetSelectedParts();
+	selected_parts->AddRef();
 
 	// populate selector ids for dynamic partition elimination
 	ULongPtrArray *selector_ids = GPOS_NEW(m_mp) ULongPtrArray(m_mp);
@@ -1811,7 +1817,7 @@ CTranslatorExprToDXL::PdxlnDynamicForeignScan(
 
 	CDXLPhysicalDynamicForeignScan *pdxlopDFS = GPOS_NEW(m_mp)
 		CDXLPhysicalDynamicForeignScan(m_mp, table_descr, part_mdids,
-									   selector_ids,
+									   selected_parts, selector_ids,
 									   popDFS->GetForeignServerOid());
 
 	CDXLNode *pdxlnDFS = GPOS_NEW(m_mp) CDXLNode(m_mp, pdxlopDFS);

@@ -599,6 +599,7 @@ _copyDynamicSeqScan(const DynamicSeqScan *from)
 	COPY_NODE_FIELD(partOids);
 	COPY_NODE_FIELD(part_prune_info);
 	COPY_NODE_FIELD(join_prune_paramids);
+	COPY_BITMAPSET_FIELD(selected_parts);
 
 	return newnode;
 }
@@ -1057,6 +1058,7 @@ _copyDynamicForeignScan(const DynamicForeignScan *from)
 	COPY_NODE_FIELD(part_prune_info);
 	COPY_NODE_FIELD(join_prune_paramids);
 	COPY_NODE_FIELD(fdw_private_list);
+	COPY_BITMAPSET_FIELD(selected_parts);
 
 	return newnode;
 }

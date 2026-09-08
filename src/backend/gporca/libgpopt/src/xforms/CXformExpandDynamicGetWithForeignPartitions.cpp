@@ -16,6 +16,7 @@
 #include "gpopt/exception.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CLogicalDynamicForeignGet.h"
+#include "gpopt/operators/CLogicalSelect.h"
 #include "gpopt/operators/CLogicalUnionAll.h"
 #include "gpopt/xforms/CXformUtils.h"
 #include "naucrates/md/CMDRelationGPDB.h"
@@ -87,10 +88,10 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 	IMdIdArray *all_part_mdids = popGet->GetPartitionMdids();
 	BOOL hasSecurityQuals = popGet->HasSecurityQuals();
 
-	IMdIdArray *non_foreign_parts = GPOS_NEW(mp) IMdIdArray(mp);
-	// create map from server-> (array of part mdids)
-	SForeignServerToIMdIdArrayMap *foreign_server_to_part_oid_array_map =
-		GPOS_NEW(mp) SForeignServerToIMdIdArrayMap(mp);
+	// create map from server-> (bitset of selected parts)
+	SForeignServerToBitSetMap *foreign_server_to_bitset_map =
+		GPOS_NEW(mp) SForeignServerToBitSetMap(mp);
+	CBitSet *non_foreign_parts_set = GPOS_NEW(mp) CBitSet(mp);
 
 	// iterate over all partitions. If it is not foreign, place in non_foreign_parts array,
 	// otherwise place in foreign server map
@@ -104,42 +105,44 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 		// if partition is not foreign, add to non foreign array
 		if (!foreign_server_mdid->IsValid())
 		{
-			non_foreign_parts->Append(partMdid);
+			non_foreign_parts_set->ExchangeSet(ul);
 		}
 		else
 		{
 			// this is a foreign partition. However, we need to separate it by the foreign server mdid,
 			// as each server can have a different distribution derivation
 			// (some foreign tables can only be executed on segments, others only the coordinator)
-			// place these in a map from server->array of foreign partitions
+			// place these in a map from server->bitset of foreign partitions
 			const IMDRelation *pmdrel = md_accessor->RetrieveRel(partMdid);
 
 			OID foreign_server_oid =
 				CMDIdGPDB::CastMdid(foreign_server_mdid)->Oid();
 			SForeignServer foreign_server_lookup = {
 				foreign_server_oid, pmdrel->GetRelDistribution()};
-			const IMdIdArray *foreign_server =
-				foreign_server_to_part_oid_array_map->Find(
-					&foreign_server_lookup);
+			const CBitSet *foreign_server =
+				foreign_server_to_bitset_map->Find(&foreign_server_lookup);
 			if (nullptr == foreign_server)
 			{
 				// create array for foreign server and insert
-				IMdIdArray *part_oid_array = GPOS_NEW(mp) IMdIdArray(mp);
-				part_oid_array->Append(partMdid);
+				CBitSet *part_set = GPOS_NEW(mp) CBitSet(mp);
+				part_set->ExchangeSet(ul);
 				BOOL fres GPOS_ASSERTS_ONLY =
-					foreign_server_to_part_oid_array_map->Insert(
+					foreign_server_to_bitset_map->Insert(
 						GPOS_NEW(mp) SForeignServer{
 							foreign_server_oid, pmdrel->GetRelDistribution()},
-						part_oid_array);
+						part_set);
 				GPOS_ASSERT(fres);
 			}
 			else
 			{
 				// array for foreign server already exists in map, just append
-				(const_cast<IMdIdArray *>(foreign_server))->Append(partMdid);
+				(const_cast<CBitSet *>(foreign_server))->ExchangeSet(ul);
 			}
 		}
 	}
+
+	BOOL no_union_all = foreign_server_to_bitset_map->GetKeys()->Size() == 1 &&
+						non_foreign_parts_set->Size() == 0;
 
 	// By this point we have an array of non-foreign parts and a map from foreign_server->(arry of parts)
 	// Now we can create the DynamicGet operators and union them if necessary.
@@ -148,9 +151,9 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 	CColRef2dArray *inputColArrayForUnion = GPOS_NEW(mp) CColRef2dArray(mp);
 
 	// Create a regular dynamic from the non-foreign partitions and add to union all expression array
-	ULONG non_foreign_parts_size = non_foreign_parts->Size();
-	if (non_foreign_parts_size > 0)
+	if (non_foreign_parts_set->Size() > 0)
 	{
+		all_part_mdids->AddRef();
 		popGet->Ptabdesc()->AddRef();
 		popGet->PdrgpdrgpcrPart()->AddRef();
 		CName *new_alias = GPOS_NEW(mp) CName(mp, popGet->Name());
@@ -164,10 +167,10 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 		CLogicalDynamicGet *nonForeignDynamicGet =
 			GPOS_NEW(mp) CLogicalDynamicGet(
 				mp, new_alias, popGet->Ptabdesc(), popGet->ScanId(), pdrgpcrNew,
-				popGet->PdrgpdrgpcrPart(), non_foreign_parts,
+				popGet->PdrgpdrgpcrPart(), all_part_mdids,
 				popGet->GetPartitionConstraintsDisj(), popGet->FStaticPruned(),
 				GPOS_NEW(mp) IMdIdArray(mp) /* foreign_server_mdids */,
-				hasSecurityQuals);
+				non_foreign_parts_set, hasSecurityQuals);
 		CExpression *pexprNonForeignDynamicGet =
 			GPOS_NEW(mp) CExpression(mp, nonForeignDynamicGet);
 
@@ -179,21 +182,18 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 	}
 	else
 	{
-		non_foreign_parts->Release();
+		non_foreign_parts_set->Release();
 	}
 
 	// loop over each key in the map, create a DynamicForeignGet for each
-	// foreign server using the mdid array
-	SForeignServerToIMdIdArrayMapIter map_iter(
-		foreign_server_to_part_oid_array_map);
-	BOOL no_union_all =
-		foreign_server_to_part_oid_array_map->GetKeys()->Size() == 1 &&
-		non_foreign_parts_size == 0;
+	// foreign server using the selected parts bitset
+	SForeignServerToCBitSetIter map_iter(foreign_server_to_bitset_map);
+
 	while (map_iter.Advance())
 	{
 		SForeignServer foreign_server = *(map_iter.Key());
-		IMdIdArray *part_oid_array = const_cast<IMdIdArray *>(map_iter.Value());
-		part_oid_array->AddRef();
+		CBitSet *selected_parts_set = const_cast<CBitSet *>(map_iter.Value());
+		selected_parts_set->AddRef();
 		popGet->Ptabdesc()->AddRef();
 		popGet->PdrgpdrgpcrPart()->AddRef();
 		CName *new_alias = GPOS_NEW(mp) CName(mp, popGet->Name());
@@ -209,12 +209,13 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 		{
 			pdrgpcrNew = CUtils::PdrgpcrCopy(mp, popGet->PdrgpcrOutput());
 		}
-		CLogicalDynamicForeignGet *dynamicForeignGet = GPOS_NEW(mp)
-			CLogicalDynamicForeignGet(mp, new_alias, popGet->Ptabdesc(),
-									  popGet->ScanId(), pdrgpcrNew,
-									  popGet->PdrgpdrgpcrPart(), part_oid_array,
-									  foreign_server.m_foreign_server_oid,
-									  foreign_server.m_exec_location);
+		all_part_mdids->AddRef();
+		CLogicalDynamicForeignGet *dynamicForeignGet =
+			GPOS_NEW(mp) CLogicalDynamicForeignGet(
+				mp, new_alias, popGet->Ptabdesc(), popGet->ScanId(), pdrgpcrNew,
+				popGet->PdrgpdrgpcrPart(), all_part_mdids, selected_parts_set,
+				foreign_server.m_foreign_server_oid,
+				foreign_server.m_exec_location);
 		CExpression *pexprDynamicForeignGet =
 			GPOS_NEW(mp) CExpression(mp, dynamicForeignGet);
 
@@ -224,7 +225,7 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 			expressionsForUnion->Release();
 			inputColArrayForUnion->Release();
 			pxfres->Add(pexprDynamicForeignGet);
-			foreign_server_to_part_oid_array_map->Release();
+			foreign_server_to_bitset_map->Release();
 			return;
 		}
 		else
@@ -235,7 +236,7 @@ CXformExpandDynamicGetWithForeignPartitions::Transform(CXformContext *pxfctxt,
 		}
 	}
 
-	foreign_server_to_part_oid_array_map->Release();
+	foreign_server_to_bitset_map->Release();
 
 	// Create a UNION ALL node above the gets
 	popGet->PdrgpcrOutput()->AddRef();
