@@ -5159,7 +5159,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 							get_tle_by_resname(plan->targetlist, colname);
 						if (!AttributeNumberIsValid(tlist_attno))
 						{
-							char *err_msg[256];
+							char err_msg[256];
 							snprintf(
 								err_msg, 256,
 								"Couldn't find attribute number of \"%s\" column in plan's targetlist.",
