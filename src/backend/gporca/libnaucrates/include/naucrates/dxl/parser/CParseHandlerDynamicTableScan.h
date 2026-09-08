@@ -38,6 +38,8 @@ class CParseHandlerDynamicTableScan : public CParseHandlerPhysicalOp
 private:
 	ULongPtrArray *m_selector_ids;
 
+	CBitSet *m_selected_parts;
+
 	// process the start of an element
 	void StartElement(
 		const XMLCh *const element_uri,			// URI of element's namespace
@@ -61,6 +63,8 @@ public:
 	CParseHandlerDynamicTableScan(CMemoryPool *mp,
 								  CParseHandlerManager *parse_handler_mgr,
 								  CParseHandlerBase *pph);
+
+	~CParseHandlerDynamicTableScan() override;
 };
 }  // namespace gpdxl
 

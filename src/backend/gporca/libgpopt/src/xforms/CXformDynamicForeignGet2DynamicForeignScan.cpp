@@ -89,13 +89,14 @@ CXformDynamicForeignGet2DynamicForeignScan::Transform(CXformContext *pxfctxt,
 
 	popGet->GetPartitionMdids()->AddRef();
 	popGet->GetRootColMappingPerPart()->AddRef();
+	popGet->GetSelectedParts()->AddRef();
 
 	// create alternative expression
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CPhysicalDynamicForeignScan(
 				mp, pname, ptabdesc, popGet->UlOpId(), popGet->ScanId(),
 				pdrgpcrOutput, pdrgpdrgpcrPart, popGet->GetPartitionMdids(),
-				popGet->GetRootColMappingPerPart(),
+				popGet->GetSelectedParts(), popGet->GetRootColMappingPerPart(),
 				popGet->GetForeignServerOid(), popGet->DistributionType()));
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
