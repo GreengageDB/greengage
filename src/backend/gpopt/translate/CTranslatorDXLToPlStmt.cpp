@@ -5052,30 +5052,6 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CTranslatorDXLToPlStmt::findTargetListPositionByResname
-//
-//	@doc:
-//		Find position in targetlist by attribute name
-//
-//---------------------------------------------------------------------------
-static AttrNumber
-findTargetListPositionByResname(List *targetlist, const char *colname)
-{
-	ListCell *lc;
-
-	foreach (lc, targetlist)
-	{
-		TargetEntry *tle = (TargetEntry *) lfirst(lc);
-
-		if (tle->resname && strcmp(tle->resname, colname) == 0)
-			return tle->resno;
-	}
-
-	return InvalidAttrNumber;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSplit
 //
 //	@doc:
@@ -5144,7 +5120,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (m_result_rel_list != nullptr && list_length(m_result_rel_list) > 0)
 	{
-		Index result_rel_index = linitial_int(m_result_rel_list);
+		Index result_rel_index = list_length(m_result_rel_list) - 1;
 		RangeTblEntry *rte = rt_fetch(
 			result_rel_index, m_dxl_to_plstmt_context->GetRTableEntriesList());
 		Oid target_relid = rte->relid;
@@ -5180,8 +5156,17 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 						const char *colname = NameStr(att->attname);
 
 						AttrNumber tlist_attno =
-							findTargetListPositionByResname(plan->targetlist,
-															colname);
+							get_tle_by_resname(plan->targetlist, colname);
+						if (!AttributeNumberIsValid(tlist_attno))
+						{
+							char *err_msg[256];
+							snprintf(
+								err_msg, 256,
+								"Couldn't find attribute number of \"%s\" column in plan's targetlist.",
+								colname);
+							GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg,
+										nullptr);
+						}
 
 						Oid typeoid = att->atttypid;
 						Oid opfamily =

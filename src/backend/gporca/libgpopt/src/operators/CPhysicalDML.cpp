@@ -85,36 +85,25 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 
 		if (CLogicalDML::EdmlUpdate == edmlop)
 		{
-			// Safety check: only compute intersection if m_pds is actually Hashed.
-			if (CDistributionSpec::EdtHashed == m_pds->Edt())
-			{
-				CDistributionSpecHashed *hashDistSpec =
-					CDistributionSpecHashed::PdsConvert(m_pds);
-				CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
-				CColRefSet *distributionCols = hashDistSpec->PcrsUsed(mp);
+			CDistributionSpecHashed *hashDistSpec =
+				CDistributionSpecHashed::PdsConvert(m_pds);
+			CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
+			CColRefSet *distributionCols = hashDistSpec->PcrsUsed(mp);
 
-				// compute a ColRefSet of the updated columns
-				for (ULONG c = 0; c < pdrgpcrSource->Size(); c++)
+			// compute a ColRefSet of the updated columns
+			for (ULONG i = 0; i < pdrgpcrSource->Size(); i++)
+			{
+				if (pbsModified->Get(i))
 				{
-					if (pbsModified->Get(c))
-					{
-						updatedCols->Include((*pdrgpcrSource)[c]);
-					}
+					updatedCols->Include((*pdrgpcrSource)[i]);
 				}
-
-				is_update_without_changing_distribution_key =
-					!updatedCols->FIntersects(distributionCols);
-
-				updatedCols->Release();
-				distributionCols->Release();
 			}
-			else
-			{
-				// If the table is already treated as Random (e.g. gpexpand phase 2),
-				// there is no hash distribution to preserve. We treat this as "not changing"
-				// the distribution key so that we force a Routed requirement later.
-				is_update_without_changing_distribution_key = true;
-			}
+
+			is_update_without_changing_distribution_key =
+				!updatedCols->FIntersects(distributionCols);
+
+			updatedCols->Release();
+			distributionCols->Release();
 		}
 
 		if (CLogicalDML::EdmlDelete == edmlop || !fSplit ||

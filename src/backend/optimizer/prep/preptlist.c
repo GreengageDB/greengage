@@ -281,7 +281,7 @@ fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
 
 		attname = get_attname(childId, index, false);
 		AttrNumber attno = get_attnum(parentId, attname);
-		if (attno == InvalidAttrNumber)
+		if (!AttributeNumberIsValid(attno))
 			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
 				 attname, parentId);
 
@@ -527,19 +527,6 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
 
 			Bitmapset *changed_cols_for_partition_check = fixup_columns_attnos(rootoid, RelationGetRelid(rel), changed_cols);
-			int attno = -1;
-
-			/*
-			* changed_cols currently contains plain attnums.
-			* has_partition_attrs() expects attnums offset by
-			* FirstLowInvalidHeapAttributeNumber.
-			*/
-			while ((attno = bms_next_member(changed_cols, attno)) >= 0)
-			{
-				changed_cols_for_partition_check =
-					bms_add_member(changed_cols_for_partition_check,
-								attno - FirstLowInvalidHeapAttributeNumber);
-			}
 
 			Relation rootRel = relation_open(rootoid, RowShareLock);
 			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
