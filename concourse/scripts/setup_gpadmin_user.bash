@@ -139,13 +139,6 @@ determine_os() {
   echo "${name}${version}"
 }
 
-# Set the "Set-User-ID" bit of ping, or else gpinitsystem will error by following message:
-# [FATAL]:-Unknown host d6f9f630-65a3-4c98-4c03-401fbe5dd60b: ping: socket: Operation not permitted
-# This is needed at least for sles12sp5
-workaround_before_concourse_stops_stripping_suid_bits() {
-  chmod u+s $(which ping)
-}
-
 _main() {
   TEST_OS=$(determine_os)
   setup_gpadmin_user

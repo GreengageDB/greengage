@@ -1,26 +1,19 @@
 -- start_ignore
 ! chmod 755 /sys/fs/cgroup/cpu/gpdb/*/;
-chmod: cannot access '/sys/fs/cgroup/cpu/gpdb/*/': No such file or directory
 
 ! chmod 755 /sys/fs/cgroup/cpuacct/gpdb/*/;
-chmod: cannot access '/sys/fs/cgroup/cpuacct/gpdb/*/': No such file or directory
 
 ! chmod 755 /sys/fs/cgroup/cpuset/gpdb/*/;
-chmod: cannot access '/sys/fs/cgroup/cpuset/gpdb/*/': No such file or directory
 
 ! rmdir /sys/fs/cgroup/cpu/gpdb/*/;
-rmdir: failed to remove '/sys/fs/cgroup/cpu/gpdb/*/': No such file or directory
 
 ! rmdir /sys/fs/cgroup/cpuacct/gpdb/*/;
-rmdir: failed to remove '/sys/fs/cgroup/cpuacct/gpdb/*/': No such file or directory
 
 ! rmdir /sys/fs/cgroup/cpuset/gpdb/*/;
-rmdir: failed to remove '/sys/fs/cgroup/cpuset/gpdb/*/': No such file or directory
 
 ! rmdir /sys/fs/cgroup/cpu/gpdb;
 
 ! rmdir /sys/fs/cgroup/cpuacct/gpdb;
-rmdir: failed to remove '/sys/fs/cgroup/cpuacct/gpdb': No such file or directory
 
 ! rmdir /sys/fs/cgroup/cpuset/gpdb;
 
@@ -36,7 +29,6 @@ new GUC value failed validation: [cdw:cgroup is not properly configured: directo
 ! mkdir /sys/fs/cgroup/cpu/gpdb;
 
 ! mkdir /sys/fs/cgroup/cpuacct/gpdb;
-mkdir: cannot create directory ‘/sys/fs/cgroup/cpuacct/gpdb’: File exists
 
 ! mkdir /sys/fs/cgroup/cpuset/gpdb;
 
