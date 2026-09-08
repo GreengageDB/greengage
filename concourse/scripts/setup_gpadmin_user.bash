@@ -143,7 +143,6 @@ _main() {
   TEST_OS=$(determine_os)
   setup_gpadmin_user
   setup_sshd
-  workaround_before_concourse_stops_stripping_suid_bits
 }
 
 [ "${BASH_SOURCE[0]}" = "$0" ] && _main "$@"
