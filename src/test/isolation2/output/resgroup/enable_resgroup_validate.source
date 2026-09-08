@@ -1,61 +1,61 @@
 -- start_ignore
-! chmod 755 /sys/fs/cgroup/cpu/gpdb/*/;
+! chmod 755 @cgroup_mnt_point@/cpu/gpdb/*/;
 
-! chmod 755 /sys/fs/cgroup/cpuacct/gpdb/*/;
+! chmod 755 @cgroup_mnt_point@/cpuacct/gpdb/*/;
 
-! chmod 755 /sys/fs/cgroup/cpuset/gpdb/*/;
+! chmod 755 @cgroup_mnt_point@/cpuset/gpdb/*/;
 
-! rmdir /sys/fs/cgroup/cpu/gpdb/*/;
+! rmdir @cgroup_mnt_point@/cpu/gpdb/*/;
 
-! rmdir /sys/fs/cgroup/cpuacct/gpdb/*/;
+! rmdir @cgroup_mnt_point@/cpuacct/gpdb/*/;
 
-! rmdir /sys/fs/cgroup/cpuset/gpdb/*/;
+! rmdir @cgroup_mnt_point@/cpuset/gpdb/*/;
 
-! rmdir /sys/fs/cgroup/cpu/gpdb;
+! rmdir @cgroup_mnt_point@/cpu/gpdb;
 
-! rmdir /sys/fs/cgroup/cpuacct/gpdb;
+! rmdir @cgroup_mnt_point@/cpuacct/gpdb;
 
-! rmdir /sys/fs/cgroup/cpuset/gpdb;
+! rmdir @cgroup_mnt_point@/cpuset/gpdb;
 
 -- end_ignore
 
 -- gpdb top group is not created
 ! gpconfig -c gp_resource_manager -v group;
-20260905:00:12:48:010604 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '/sys/fs/cgroup/cpu/gpdb/' does not exist]
-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '/sys/fs/cgroup/cpu/gpdb/' does not exist]
+20260905:00:12:48:010604 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '@cgroup_mnt_point@/cpu/gpdb/' does not exist]
+new GUC value failed validation: [cdw:cgroup is not properly configured: directory '@cgroup_mnt_point@/cpu/gpdb/' does not exist]
 
 
 -- start_ignore
-! mkdir /sys/fs/cgroup/cpu/gpdb;
+! mkdir @cgroup_mnt_point@/cpu/gpdb;
 
-! mkdir /sys/fs/cgroup/cpuacct/gpdb;
+! mkdir @cgroup_mnt_point@/cpuacct/gpdb;
 
-! mkdir /sys/fs/cgroup/cpuset/gpdb;
+! mkdir @cgroup_mnt_point@/cpuset/gpdb;
 
-! chmod 644 /sys/fs/cgroup/cpu/gpdb;
+! chmod 644 @cgroup_mnt_point@/cpu/gpdb;
 
-! chmod 644 /sys/fs/cgroup/cpuset/gpdb;
+! chmod 644 @cgroup_mnt_point@/cpuset/gpdb;
 
 -- end_ignore
 
 -- gpdb directory should have rwx permission
 ! gpconfig -c gp_resource_manager -v group;
-20260905:00:12:49:010648 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '/sys/fs/cgroup/cpu/gpdb/' permission denied: require permission 'rwx']
-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '/sys/fs/cgroup/cpu/gpdb/' permission denied: require permission 'rwx']
+20260905:00:12:49:010648 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: directory '@cgroup_mnt_point@/cpu/gpdb/' permission denied: require permission 'rwx']
+new GUC value failed validation: [cdw:cgroup is not properly configured: directory '@cgroup_mnt_point@/cpu/gpdb/' permission denied: require permission 'rwx']
 
 
 -- start_ignore
-! chmod 755 /sys/fs/cgroup/cpu/gpdb;
+! chmod 755 @cgroup_mnt_point@/cpu/gpdb;
 
-! chmod 755 /sys/fs/cgroup/cpuset/gpdb;
+! chmod 755 @cgroup_mnt_point@/cpuset/gpdb;
 
-! chmod 444 /sys/fs/cgroup/cpu/gpdb/cgroup.procs;
+! chmod 444 @cgroup_mnt_point@/cpu/gpdb/cgroup.procs;
 
-! chmod 444 /sys/fs/cgroup/cpu/gpdb/cpu.cfs_quota_us;
+! chmod 444 @cgroup_mnt_point@/cpu/gpdb/cpu.cfs_quota_us;
 
-! chmod 244 /sys/fs/cgroup/cpu/gpdb/cpu.cfs_period_us;
+! chmod 244 @cgroup_mnt_point@/cpu/gpdb/cpu.cfs_period_us;
 
-! chmod 244 /sys/fs/cgroup/cpuacct/gpdb/cpuacct.usage;
+! chmod 244 @cgroup_mnt_point@/cpuacct/gpdb/cpuacct.usage;
 
 -- end_ignore
 
@@ -64,6 +64,6 @@ new GUC value failed validation: [cdw:cgroup is not properly configured: directo
 -- cpu.cfs_period_us should have read permission
 -- cpuacct.usage should have read permission
 ! gpconfig -c gp_resource_manager -v group;
-20260905:00:12:49:010694 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: file '/sys/fs/cgroup/cpu/gpdb/cgroup.procs' permission denied: require permission 'rw']
-new GUC value failed validation: [cdw:cgroup is not properly configured: file '/sys/fs/cgroup/cpu/gpdb/cgroup.procs' permission denied: require permission 'rw']
+20260905:00:12:49:010694 gpconfig:cdw:gpadmin-[CRITICAL]:-new GUC value failed validation: [cdw:cgroup is not properly configured: file '@cgroup_mnt_point@/cpu/gpdb/cgroup.procs' permission denied: require permission 'rw']
+new GUC value failed validation: [cdw:cgroup is not properly configured: file '@cgroup_mnt_point@/cpu/gpdb/cgroup.procs' permission denied: require permission 'rw']
 
