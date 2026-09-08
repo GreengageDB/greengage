@@ -1046,7 +1046,8 @@ class GpSystemStateProgram(object):
                 conn = dbconn.connect(url, utility=True)
                 with closing(conn) as conn:
                     cursor = dbconn.execSQL(conn,
-                                          "SELECT pg_xlog_location_diff(pg_current_xlog_location(), sent_location)"
+                                          "SELECT pg_xlog_location_diff(pg_current_xlog_location(), sent_location), " \
+                                          "pg_xlog_location_diff(flush_location, replay_location),"
                                           ",sync_state FROM pg_stat_replication")
                     rows = cursor.fetchall()
                     cursor.close()
