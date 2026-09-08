@@ -293,7 +293,7 @@ SELECT check_cgroup_io_max('rg_alter_tran', 'rg_io_limit_ts_2', 'rbps=2097152000
 
 -- Should be one in `num times hit`
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'status', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
- gp_inject_fault                                                                                                                                                                                                           
+ gp_inject_fault                                                                                                                                                                                                                 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Success: fault name:'resgroup_alter_on_commit' fault type:'skip' ddl statement:'' database name:'' table name:'' start occurrence:'1' end occurrence:'100' extra arg:'0' fault injection state:'triggered'  num times hit:'1' 
  
