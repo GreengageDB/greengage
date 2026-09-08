@@ -4,7 +4,7 @@ DROP RESOURCE GROUP rg1_memory_test;
 DROP RESOURCE GROUP rg2_memory_test;
 -- end_ignore
 
-CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS '/home/gpadmin/gpdb_src/src/test/isolation2/resgroup/../../regress/regress.so', 'resGroupPalloc' LANGUAGE C READS SQL DATA;
+CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS '@abs_builddir@/../../regress/regress@DLSUFFIX@', 'resGroupPalloc' LANGUAGE C READS SQL DATA;
 CREATE
 
 CREATE OR REPLACE FUNCTION hold_memory_by_percent(float) RETURNS int AS $$ SELECT * FROM resGroupPalloc($1) $$ LANGUAGE sql;
