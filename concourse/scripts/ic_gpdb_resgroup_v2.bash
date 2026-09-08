@@ -75,8 +75,8 @@ setup_loop_devices() {
     mkfs.ext4 "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img"
     sudo mount -o loop "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
 
-    sudo chmod -R 777 $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
-    sudo chown gpadmin:gpadmin $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+    sudo chmod -R 777 "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+    sudo chown gpadmin:gpadmin "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
 }
 
 gen_env() {
