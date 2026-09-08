@@ -3381,7 +3381,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 			leaf_attnum = get_attnum(RelationGetRelid(resultRel), colname);
 			if (!AttributeNumberIsValid(leaf_attnum))
 			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
-				 attname, parentId);
+				 colname, rootoid);
 			pfree(colname);
 		}
 		else
