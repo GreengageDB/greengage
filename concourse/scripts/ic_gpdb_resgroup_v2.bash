@@ -64,6 +64,21 @@ setup_cgroup_v2() {
     chmod a+w /sys/fs/cgroup/cgroup.procs
 }
 
+setup_loop_devices() {
+    mkdir "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+
+    dd if=/dev/zero of="$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img" bs=1M count=64
+    mkfs.ext4 "$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img"
+    sudo mount -o loop "$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1"
+
+    dd if=/dev/zero of="$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img" bs=1M count=64
+    mkfs.ext4 "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img"
+    sudo mount -o loop "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+
+    sudo chmod -R 777 $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+    sudo chown gpadmin:gpadmin $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" $ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+}
+
 gen_env() {
     cat > /opt/run_test.sh <<-EOF
 		trap look4diffs ERR
@@ -121,6 +136,7 @@ _main() {
     time install_and_configure_gpdb
     time setup_gpadmin_user
     time setup_cgroup_v2
+    time setup_loop_devices
     time make_cluster
     time gen_env
     time run_test
