@@ -94,4 +94,3 @@ DROP RESOURCE GROUP rg_test_group5;
 DROP RESOURCE GROUP rg_test_group7;
 
 DROP TABLESPACE rg_io_limit_ts_1;
-
