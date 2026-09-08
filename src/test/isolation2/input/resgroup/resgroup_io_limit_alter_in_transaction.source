@@ -188,9 +188,6 @@ SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default',
 -- 7 Two ALTERs set the same io_limit across two tablespaces in a different
 -- element order. The order-independent compare treats the two values as equal,
 -- so the duplicate is dropped and only one apply happens.
-select mkdir('@testtablespace@/rg_io_limit_ts_1') from gp_dist_random('gp_id') intersect select mkdir('@testtablespace@/rg_io_limit_ts_1') from gp_id;
-select mkdir('@testtablespace@/rg_io_limit_ts_2') from gp_dist_random('gp_id') intersect select mkdir('@testtablespace@/rg_io_limit_ts_2') from gp_id;
-
 CREATE TABLESPACE rg_io_limit_ts_1 LOCATION '@testtablespace@/rg_io_limit_ts_1';
 CREATE TABLESPACE rg_io_limit_ts_2 LOCATION '@testtablespace@/rg_io_limit_ts_2';
 
@@ -230,9 +227,6 @@ ALTER RESOURCE GROUP rg_alter_tran SET io_limit '-1';
 
 DROP TABLESPACE rg_io_limit_ts_1;
 DROP TABLESPACE rg_io_limit_ts_2;
-
-select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_dist_random('gp_id') intersect select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_id;
-select rmdir('@testtablespace@/rg_io_limit_ts_2') from gp_dist_random('gp_id') intersect select rmdir('@testtablespace@/rg_io_limit_ts_2') from gp_id;
 
 -- clean
 DROP RESOURCE GROUP rg_alter_tran;

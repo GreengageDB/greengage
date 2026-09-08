@@ -95,4 +95,3 @@ DROP RESOURCE GROUP rg_test_group7;
 
 DROP TABLESPACE rg_io_limit_ts_1;
 
-select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_dist_random('gp_id') intersect select rmdir('@testtablespace@/rg_io_limit_ts_1') from gp_id;
