@@ -114,3 +114,69 @@ NOTICE:  PASS: no privilege escalation
 ALTER ROLE low_priv PASSWORD 'SomePass3';
 RESET ROLE;
 DROP ROLE low_priv;
+--
+-- issue #77: credcheck.password_valid_min gives newly created roles a short
+-- VALID UNTIL window (so users are forced to change their password quickly)
+-- while existing roles that change their password keep the longer
+-- password_valid_until window.
+--
+SET credcheck.password_reuse_history TO 0;
+SET credcheck.password_reuse_interval TO 0;
+SET credcheck.password_valid_until TO 60;
+SET credcheck.password_valid_min TO 5;
+SET credcheck.password_valid_max TO 90;
+-- new role without VALID UNTIL: auto-set to now()+5 days (password_valid_min), not 60
+CREATE USER remi PASSWORD 'DummY1';
+SELECT rolname, rolvaliduntil between now() + '4 days'::interval and now() + '6 days'::interval AS min_window FROM pg_roles WHERE rolname='remi';
+ rolname | min_window 
+---------+------------
+ remi    | t
+(1 row)
+
+-- existing role changing its password without VALID UNTIL: auto-set to now()+60 days (password_valid_until)
+ALTER USER remi PASSWORD 'DummY2';
+SELECT rolname, rolvaliduntil between now() + '59 days'::interval and now() + '61 days'::interval AS until_window FROM pg_roles WHERE rolname='remi';
+ rolname | until_window 
+---------+--------------
+ remi    | t
+(1 row)
+
+DROP USER remi;
+-- fail: a new role requesting a VALID UNTIL beyond password_valid_max (90 days)
+CREATE USER remi PASSWORD 'DummY1' VALID UNTIL '2999-01-01';
+ERROR:  require a VALID UNTIL option with a date NOT beyond 90 days
+-- fail: a new role requesting a VALID UNTIL below password_valid_min (5 days)
+CREATE USER remi PASSWORD 'DummY1' VALID UNTIL '2020-01-01';
+ERROR:  require a VALID UNTIL option with a date older than 5 days
+-- password_valid_min works even when password_valid_until is disabled (0)
+SET credcheck.password_valid_until TO 0;
+SET credcheck.password_valid_max TO 0;
+SET credcheck.password_valid_min TO 7;
+CREATE USER remi PASSWORD 'DummY1';
+SELECT rolname, rolvaliduntil between now() + '6 days'::interval and now() + '8 days'::interval AS min_only_window FROM pg_roles WHERE rolname='remi';
+ rolname | min_only_window 
+---------+-----------------
+ remi    | t
+(1 row)
+
+DROP USER remi;
+-- non-regression: with password_valid_min explicitly disabled (0), CREATE ROLE
+-- must behave exactly as before issue #77 and fall back to password_valid_until.
+SET credcheck.password_valid_min TO 0;
+SET credcheck.password_valid_until TO 30;
+SET credcheck.password_valid_max TO 0;
+-- new role without VALID UNTIL: auto-set to now()+30 days (password_valid_until), the pre-#77 behaviour
+CREATE USER remi PASSWORD 'DummY1';
+SELECT rolname, rolvaliduntil between now() + '29 days'::interval and now() + '31 days'::interval AS fallback_window FROM pg_roles WHERE rolname='remi';
+ rolname | fallback_window 
+---------+-----------------
+ remi    | t
+(1 row)
+
+DROP USER remi;
+-- and the password_valid_until floor still applies at CREATE when min is 0
+CREATE USER remi PASSWORD 'DummY1' VALID UNTIL '2020-01-01';
+ERROR:  require a VALID UNTIL option with a date older than 30 days
+SET credcheck.password_valid_min TO DEFAULT;
+SET credcheck.password_valid_until TO DEFAULT;
+SET credcheck.password_valid_max TO DEFAULT;

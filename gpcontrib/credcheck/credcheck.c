@@ -500,6 +500,7 @@ static char *password_contain = NULL;
 static bool password_contain_username = true;
 static bool password_ignore_case = false;
 static int password_valid_until = 0;
+static int password_valid_min = 0;
 static int password_valid_warning = 0;
 static int password_valid_max = 0;
 static int auth_delay_milliseconds = 0;
@@ -1106,6 +1107,16 @@ password_guc(void)
 					" now() + password_valid_until days in the ALTER ROLE statement"
 					" when the password is changed"),
 				NULL, &password_valid_until, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_valid_min",
+				gettext_noop("number of days used for the VALID UNTIL clause of newly"
+					" created roles (CREATE ROLE). When greater than zero it overrides"
+					" credcheck.password_valid_until at role creation only, so new roles"
+					" can be forced to change their password quickly while existing roles"
+					" that change their password keep the password_valid_until window."
+					" When set to 0 (default) CREATE ROLE keeps using password_valid_until."),
+				NULL, &password_valid_min, 0, 0, INT_MAX,
 				PGC_SUSET, 0, NULL, NULL, NULL);
 
 	DefineCustomIntVariable("credcheck.password_valid_max",
@@ -2896,6 +2907,16 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				int             valid_until = 0;
 				int             valid_max = 0;
 				bool            has_valid_until = false; 
+				/*
+				 * At role creation credcheck.password_valid_min, when set,
+				 * takes precedence over credcheck.password_valid_until. This
+				 * lets a DBA force a short VALID UNTIL window on brand new
+				 * roles (so users must change their password quickly) while
+				 * keeping a longer password_valid_until window for existing
+				 * roles that change their password (see issue #77).
+				 */
+				int             create_valid = (password_valid_min > 0) ?
+										password_valid_min : password_valid_until;
 				bool            save_password = false;
 				char           *password;
 				DefElem    *dpassword = NULL;
@@ -2929,10 +2950,12 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				}
 #endif
 				/*
-				 * At user creation automatically set the valid until date to now() + password_valid_until
-				 * days if password_valid_until is set.
+				 * At user creation automatically set the valid until date to
+				 * now() + create_valid days if a create-time window is set
+				 * (credcheck.password_valid_min, falling back to
+				 * credcheck.password_valid_until).
 				 */
-				if (!dvalidUntil && password_valid_until > 0)
+				if (!dvalidUntil && create_valid > 0)
 				{
 					Timestamp dt_now = GetCurrentTimestamp();
 					struct pg_tm tt, *tm = &tt;
@@ -2950,7 +2973,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					 * Add credcheck.password_valid_until days by converting to and from Julian.
 					 */
 					julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
-					if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+					if (pg_add_s32_overflow(julian, create_valid+1, &julian) ||
 						julian < 0)
 						ereport(ERROR,
 								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
@@ -2962,7 +2985,7 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 					((CreateRoleStmt *)parsetree)->options = lappend(((CreateRoleStmt *)parsetree)->options, dvalidUntil);
 				}
 
-				if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+				if (dvalidUntil && dvalidUntil->arg && create_valid > 0)
 				{
 					valid_until = check_valid_until(strVal(dvalidUntil->arg));
 					has_valid_until = true;
@@ -2974,16 +2997,16 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				}
 
 				/* check that a VALID UNTIL option is present */
-				if ( !has_valid_until && (password_valid_until > 0 || password_valid_max > 0) )
+				if ( !has_valid_until && (create_valid > 0 || password_valid_max > 0) )
 					ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("require a VALID UNTIL option"))));
 
 				/* check that a minimum number of days for password validity is defined */
-				if (password_valid_until > 0 && valid_until < password_valid_until)
+				if (create_valid > 0 && valid_until < create_valid)
 					ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
-							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), password_valid_until)));
+							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), create_valid)));
 
 				/* check that we do not exceed the number of days for password validity */
 				if (password_valid_max > 0 && valid_max > password_valid_max)

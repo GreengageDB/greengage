@@ -95,6 +95,7 @@ Please find the below list of general checks, which we can enforce on credential
 | password_ignore_case      | password | ignore case while performing above checks           | on            | &check; Abc                 | &#10008; aXf                 |
 | password_valid_until      | password | force use of VALID UNTIL clause in CREATE ROLE statement with a minimum number of days or set it automatically to now() + password_valid_until days in the CREATE/ALTER ROLE statements when the password is changed and no VALID UNTIL clause is present | 60             | &check; CREATE ROLE abcd VALID UNTIL (now()+'3 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
 | password_valid_until_su   | password | same as above but applies to superuser only | 30             | &check; CREATE ROLE abcd VALID UNTIL (now()+'2 months'::interval)::date | &#10008; CREATE ROLE abcd LOGIN; |
+| password_valid_min        | password | number of days used for the VALID UNTIL clause of newly created roles (CREATE ROLE). When greater than zero it overrides password_valid_until at role creation only, so new roles can be forced to change their password quickly while existing roles that change their password keep the password_valid_until window. When set to 0 (default) CREATE ROLE keeps using password_valid_until | 0 (disabled)   | &check; CREATE ROLE abcd VALID UNTIL (now()+'5 days'::interval)::date | &#10008; CREATE ROLE abcd VALID UNTIL (now()+'2 days'::interval)::date; |
 | password_valid_max        | password | force use of VALID UNTIL clause in CREATE ROLE statement with a maximum number of days   | 365             | &check; CREATE ROLE abcd VALID UNTIL (now()+'6 months'::interval)::date | &#10008;  CREATE ROLE abcd VALID UNTIL (now()+'2 years'::interval)::date; |
 | password_valid_warn       | password | emit a warning N days before the password is about to expire | 0 (disabled) |  |  |
 | password_valid_warning | password | throw a warning N days before the password expires | 0 (disabled) |  |  |
@@ -259,6 +260,28 @@ ERROR:  require a VALID UNTIL option with a date not beyond 180 days
 ```
 When a user change its password and a VALID UNTIL clause is not set, credcheck
 will set the valid until date to `now() + credcheck.password_valid_until`
+
+The `credcheck.password_valid_min` setting can be used to give newly created
+roles a shorter VALID UNTIL window than the one applied when an existing role
+changes its password. When it is greater than zero, it overrides
+`credcheck.password_valid_until` for `CREATE ROLE` statements only. This is
+handy to force new users to change their password within a few days, for
+example when the client tool (DBeaver, pgAdmin, ...) does not support
+`credcheck.password_change_first_login`:
+```
+postgres=# SET credcheck.password_valid_min = 5;    -- new roles: 5 days
+postgres=# SET credcheck.password_valid_until = 365; -- password changes: 1 year
+postgres=# SET credcheck.password_valid_max = 370;   -- never beyond ~1 year
+
+-- new role, no VALID UNTIL given: automatically set to now() + 5 days
+postgres=# CREATE USER remi PASSWORD 'FirstPass1';
+
+-- when remi later changes its password without a VALID UNTIL clause,
+-- credcheck sets it to now() + 365 days instead of 5.
+postgres=# ALTER USER remi PASSWORD 'ChosenPass1';
+```
+When `credcheck.password_valid_min` is left to 0 (the default), `CREATE ROLE`
+keeps using `credcheck.password_valid_until` exactly as before.
 
 If you have enabled the use of cracklib to check the easiness of a password
 you could have this kind of messages:
