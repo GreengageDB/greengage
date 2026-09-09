@@ -376,23 +376,6 @@ typedef struct ResultRelInfo
 	struct AOCSInsertDescData *ri_aocsInsertDesc;
 	struct ExternalInsertDescData *ri_extInsertDesc;
 
-	/*
-	 * Links in EState.es_partInsertLru* while this (leaf-partition) ResultRelInfo
-	 * has an open ri_aoInsertDesc / ri_aocsInsertDesc that is subject to
-	 * LRU eviction. NULL/NULL when not tracked.
-	 */
-	struct ResultRelInfo *ri_partInsertLruPrev;
-	struct ResultRelInfo *ri_partInsertLruNext;
-
-	/*
-	 * Private context holding this leaf partition's LRU-bounded AO/AOCS insert
-	 * descriptor (see gp_max_partition_open_insert_descs). Deleted (and set back
-	 * to NULL) on eviction so that repeatedly opening and closing the descriptor
-	 * cannot leak es_query_cxt. NULL when the descriptor lives directly in
-	 * es_query_cxt (the historical, unbounded behaviour).
-	 */
-	MemoryContext ri_partInsertDescCxt;
-
 	RelationDeleteDesc ri_deleteDesc;
 	RelationUpdateDesc ri_updateDesc;
 
@@ -423,6 +406,22 @@ typedef struct ResultRelInfo
 	int			nBufferedTuples;
 	HeapTuple	*bufferedTuples;
 	Size		bufferedTuplesSize;
+
+	/*
+	 * gp_max_partition_open_insert_descs bookkeeping. Kept at the end of the
+	 * struct so adding it does not shift the offset of any existing field.
+	 *
+	 * ri_partInsertLruPrev/Next link this (leaf-partition) ResultRelInfo into
+	 * EState.es_partInsertLru* while it has an open ri_aoInsertDesc /
+	 * ri_aocsInsertDesc subject to LRU eviction (NULL/NULL when not tracked).
+	 * ri_partInsertDescCxt is the private context that descriptor is allocated
+	 * in, deleted (and set back to NULL) on eviction so that repeatedly opening
+	 * and closing the descriptor cannot leak es_query_cxt; NULL when the
+	 * descriptor lives directly in es_query_cxt (the unbounded behaviour).
+	 */
+	struct ResultRelInfo *ri_partInsertLruPrev;
+	struct ResultRelInfo *ri_partInsertLruNext;
+	MemoryContext ri_partInsertDescCxt;
 } ResultRelInfo;
 
 typedef struct ShareNodeEntry
@@ -564,16 +563,6 @@ typedef struct EState
 	/* partitioning info for target relation */
 	PartitionNode *es_result_partitions;
 
-	/*
-	 * LRU list of leaf-partition ResultRelInfos that currently hold an open
-	 * AO/AOCS insert descriptor, most-recently-used at the head. Used to bound
-	 * the number of simultaneously-open per-partition write stacks when
-	 * inserting through a partition root (see gp_max_partition_open_insert_descs).
-	 */
-	struct ResultRelInfo *es_partInsertLruHead;
-	struct ResultRelInfo *es_partInsertLruTail;
-	int			es_partInsertLruCount;
-
 	/* AO fileseg info for target relation */
 	List	   *es_result_aosegnos;
 
@@ -692,6 +681,18 @@ typedef struct EState
 
 	/* List of cross-slice SharedScan consumers in the current slice */
 	List	   *sharedScanConsumers;
+
+	/*
+	 * LRU list of leaf-partition ResultRelInfos that currently hold an open
+	 * AO/AOCS insert descriptor, most-recently-used at the head, used to bound
+	 * the number of simultaneously-open per-partition write stacks when
+	 * inserting through a partition root (see gp_max_partition_open_insert_descs).
+	 * Kept at the end of the struct so adding it does not shift the offset of
+	 * any existing field.
+	 */
+	struct ResultRelInfo *es_partInsertLruHead;
+	struct ResultRelInfo *es_partInsertLruTail;
+	int			es_partInsertLruCount;
 } EState;
 
 struct PlanState;
