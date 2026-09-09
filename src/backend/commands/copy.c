@@ -4119,41 +4119,9 @@ CopyFrom(CopyState cstate)
 
 			relstorage = RelinfoGetStorage(resultRelInfo);
 			if (relstorage == RELSTORAGE_AOROWS)
-			{
-				if (resultRelInfo->ri_aoInsertDesc == NULL)
-				{
-					MemoryContext oldcxt;
-
-					ResultRelInfoSetSegno(resultRelInfo, cstate->ao_segnos);
-					oldcxt = MemoryContextSwitchTo(
-						PartInsertDescMemoryContext(estate, resultRelInfo));
-					resultRelInfo->ri_aoInsertDesc =
-						appendonly_insert_init(resultRelInfo->ri_RelationDesc,
-											   resultRelInfo->ri_aosegno, false);
-					MemoryContextSwitchTo(oldcxt);
-					PartInsertDescTrackAndBound(estate, resultRelInfo);
-				}
-				else
-					PartInsertDescTouch(estate, resultRelInfo);
-			}
+				PartInsertDescEnsureAO(estate, resultRelInfo, cstate->ao_segnos);
 			else if (relstorage == RELSTORAGE_AOCOLS)
-			{
-				if (resultRelInfo->ri_aocsInsertDesc == NULL)
-				{
-					MemoryContext oldcxt;
-
-					ResultRelInfoSetSegno(resultRelInfo, cstate->ao_segnos);
-					oldcxt = MemoryContextSwitchTo(
-						PartInsertDescMemoryContext(estate, resultRelInfo));
-					resultRelInfo->ri_aocsInsertDesc =
-						aocs_insert_init(resultRelInfo->ri_RelationDesc,
-										 resultRelInfo->ri_aosegno, false);
-					MemoryContextSwitchTo(oldcxt);
-					PartInsertDescTrackAndBound(estate, resultRelInfo);
-				}
-				else
-					PartInsertDescTouch(estate, resultRelInfo);
-			}
+				PartInsertDescEnsureAOCS(estate, resultRelInfo, cstate->ao_segnos);
 			else if (relstorage == RELSTORAGE_EXTERNAL &&
 					 resultRelInfo->ri_extInsertDesc == NULL)
 			{

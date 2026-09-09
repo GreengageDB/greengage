@@ -4736,11 +4736,11 @@ PartInsertLruPushHead(EState *estate, ResultRelInfo *rri)
 }
 
 /*
- * Called right after a new per-partition insert descriptor is opened at the
- * COPY/INSERT lazy-init site. Registers it as most-recently-used and, if that
- * pushed us over gp_max_partition_open_insert_descs, evicts from the tail.
+ * Called right after a new per-partition insert descriptor is opened. Registers
+ * it as most-recently-used and, if that pushed us over
+ * gp_max_partition_open_insert_descs, evicts from the tail.
  */
-void
+static void
 PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
 {
 	if (gp_max_partition_open_insert_descs <= 0)
@@ -4780,7 +4780,7 @@ PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
  * Called when an already-open per-partition insert descriptor is re-used, to
  * refresh its LRU position.
  */
-void
+static void
 PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
 {
 	if (gp_max_partition_open_insert_descs <= 0 || Gp_role == GP_ROLE_DISPATCH)
@@ -4796,16 +4796,13 @@ PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
 }
 
 /*
- * Memory context that a per-partition AO/AOCS insert descriptor for rri must be
- * allocated in. Callers switch into this right before appendonly_insert_init()
- * / aocs_insert_init() and switch back after.
- *
- * When the open descriptors are LRU-bounded, each leaf partition gets its own
- * child context of es_query_cxt so that evicting it (PartInsertDescClose) can
- * delete the whole thing; it is recreated here on the next open. Otherwise this
- * is just es_query_cxt and behaviour is exactly as before.
+ * Memory context a per-partition AO/AOCS insert descriptor for rri is allocated
+ * in. When the open descriptors are LRU-bounded, each leaf partition gets its
+ * own child context of es_query_cxt so that evicting it (PartInsertDescClose)
+ * can delete the whole thing; it is recreated here on the next open. Otherwise
+ * this is just es_query_cxt and behaviour is exactly as before.
  */
-MemoryContext
+static MemoryContext
 PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
 {
 	if (gp_max_partition_open_insert_descs <= 0 ||
@@ -4821,6 +4818,49 @@ PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
 								  ALLOCSET_DEFAULT_INITSIZE,
 								  ALLOCSET_DEFAULT_MAXSIZE);
 	return rri->ri_partInsertDescCxt;
+}
+
+/*
+ * Open (or, if already open, LRU-touch) the AO-row / AOCS insert descriptor for
+ * a leaf partition. A freshly opened descriptor is allocated in the LRU-bounded
+ * per-partition context and registered for eviction. Called from the COPY /
+ * INSERT lazy-init sites so those sites carry none of the segno / context / LRU
+ * bookkeeping.
+ */
+void
+PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *ao_segnos)
+{
+	MemoryContext oldcxt;
+
+	if (rri->ri_aoInsertDesc != NULL)
+	{
+		PartInsertDescTouch(estate, rri);
+		return;
+	}
+	ResultRelInfoSetSegno(rri, ao_segnos);
+	oldcxt = MemoryContextSwitchTo(PartInsertDescMemoryContext(estate, rri));
+	rri->ri_aoInsertDesc = appendonly_insert_init(rri->ri_RelationDesc,
+												  rri->ri_aosegno, false);
+	MemoryContextSwitchTo(oldcxt);
+	PartInsertDescTrackAndBound(estate, rri);
+}
+
+void
+PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *ao_segnos)
+{
+	MemoryContext oldcxt;
+
+	if (rri->ri_aocsInsertDesc != NULL)
+	{
+		PartInsertDescTouch(estate, rri);
+		return;
+	}
+	ResultRelInfoSetSegno(rri, ao_segnos);
+	oldcxt = MemoryContextSwitchTo(PartInsertDescMemoryContext(estate, rri));
+	rri->ri_aocsInsertDesc = aocs_insert_init(rri->ri_RelationDesc,
+											 rri->ri_aosegno, false);
+	MemoryContextSwitchTo(oldcxt);
+	PartInsertDescTrackAndBound(estate, rri);
 }
 
 ResultRelInfo *
