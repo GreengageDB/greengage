@@ -89,10 +89,6 @@
 #include "gpos/common/CTimerUser.h"
 
 #ifdef GPOS_DEBUG
-// for historical reasons, this was disabled on Linux, as it caused the CentOS 6 and 7 builds to fail
-// (for some not well-known cause, possibly due to an inconsistency in a test script).
-// they are no longer supported, can we enabled this again?
-#ifndef __linux__
 // enable this feature
 #define GPOS_DEBUG_COUNTERS
 #endif
