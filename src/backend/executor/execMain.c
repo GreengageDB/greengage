@@ -84,6 +84,7 @@
 #include "utils/snapmgr.h"
 #include "utils/tqual.h"
 #include "utils/metrics_utils.h"
+#include "utils/vmem_tracker.h"
 
 #include "utils/ps_status.h"
 #include "utils/snapmgr.h"
@@ -4735,15 +4736,56 @@ PartInsertLruPushHead(EState *estate, ResultRelInfo *rri)
 		estate->es_partInsertLruTail = rri;
 }
 
+/* Adaptive mode keeps at least this fraction of the vmem limit free. */
+#define PART_INSERT_EVICT_HEADROOM_PCT 20
+
+/*
+ * Adaptive-mode (gp_max_partition_open_insert_descs = -1) pressure test: are we
+ * close enough to the memory ceiling that another open per-partition write stack
+ * is likely to matter?
+ *
+ * RedZoneHandler_IsVmemRedZone() already unifies the two ceilings -- the plain
+ * segment vmem tracker and, when gp_resource_manager = group, the resource
+ * group's memory quota (IsGroupInRedZone(), which also accounts for the global
+ * shared pool). It is the point at which the runaway detector would cancel the
+ * query, so treat it as a hard "shed now". VmemTracker_Get*() are likewise
+ * resource-group aware (the limit is ResGroupGetVmemLimitChunks() under a
+ * group), so the softer "free memory is getting low" test covers both too.
+ */
+static bool
+PartInsertMemoryPressureHigh(void)
+{
+	int64		limitMB;
+	int64		availMB;
+
+	if (RedZoneHandler_IsVmemRedZone())
+		return true;
+
+	if (!VmemTrackerIsActivated())
+		return false;			/* no ceiling to measure against */
+
+	limitMB = VmemTracker_ConvertVmemChunksToMB(VmemTracker_GetVmemLimitChunks());
+	availMB = VmemTracker_GetAvailableVmemMB();
+
+	/*
+	 * Start shedding once free vmem drops below a fixed headroom, so the flush
+	 * that eviction performs still has room to work and we react before the
+	 * runaway threshold (default 90%) rather than at it.
+	 */
+	return limitMB > 0 &&
+		availMB * 100 <= limitMB * PART_INSERT_EVICT_HEADROOM_PCT;
+}
+
 /*
  * Called right after a new per-partition insert descriptor is opened. Registers
- * it as most-recently-used and, if that pushed us over
- * gp_max_partition_open_insert_descs, evicts from the tail.
+ * it as most-recently-used and evicts from the tail: down to
+ * gp_max_partition_open_insert_descs open descriptors when that is > 0, or while
+ * the backend is under memory pressure when it is < 0 (adaptive).
  */
 static void
 PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
 {
-	if (gp_max_partition_open_insert_descs <= 0)
+	if (gp_max_partition_open_insert_descs == 0)
 		return;
 	if (rri->ri_aocsInsertDesc == NULL && rri->ri_aoInsertDesc == NULL)
 		return;
@@ -4764,15 +4806,35 @@ PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
 	PartInsertLruPushHead(estate, rri);
 	estate->es_partInsertLruCount++;
 
-	while (estate->es_partInsertLruCount > gp_max_partition_open_insert_descs &&
-		   estate->es_partInsertLruTail != NULL &&
-		   estate->es_partInsertLruTail != rri)
+	/*
+	 * Never evict rri itself (it is about to be written to), so the loops stop
+	 * once the tail is rri -- i.e. this is the only descriptor left.
+	 */
+	if (gp_max_partition_open_insert_descs > 0)
 	{
-		ResultRelInfo *victim = estate->es_partInsertLruTail;
+		while (estate->es_partInsertLruCount > gp_max_partition_open_insert_descs &&
+			   estate->es_partInsertLruTail != NULL &&
+			   estate->es_partInsertLruTail != rri)
+		{
+			ResultRelInfo *victim = estate->es_partInsertLruTail;
 
-		PartInsertLruUnlink(estate, victim);
-		estate->es_partInsertLruCount--;
-		PartInsertDescClose(victim);
+			PartInsertLruUnlink(estate, victim);
+			estate->es_partInsertLruCount--;
+			PartInsertDescClose(victim);
+		}
+	}
+	else						/* adaptive: gp_max_partition_open_insert_descs < 0 */
+	{
+		while (estate->es_partInsertLruTail != NULL &&
+			   estate->es_partInsertLruTail != rri &&
+			   PartInsertMemoryPressureHigh())
+		{
+			ResultRelInfo *victim = estate->es_partInsertLruTail;
+
+			PartInsertLruUnlink(estate, victim);
+			estate->es_partInsertLruCount--;
+			PartInsertDescClose(victim);
+		}
 	}
 }
 
@@ -4783,7 +4845,7 @@ PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
 static void
 PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
 {
-	if (gp_max_partition_open_insert_descs <= 0 || Gp_role == GP_ROLE_DISPATCH)
+	if (gp_max_partition_open_insert_descs == 0 || Gp_role == GP_ROLE_DISPATCH)
 		return;
 	if (rri->ri_partInsertLruPrev == NULL && estate->es_partInsertLruHead == rri)
 		return;					/* already MRU */
@@ -4805,7 +4867,7 @@ PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
 static MemoryContext
 PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
 {
-	if (gp_max_partition_open_insert_descs <= 0 ||
+	if (gp_max_partition_open_insert_descs == 0 ||
 		Gp_role == GP_ROLE_DISPATCH ||
 		rri == estate->es_result_relations)
 		return estate->es_query_cxt;

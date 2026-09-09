@@ -3673,7 +3673,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"gp_max_partition_open_insert_descs", PGC_USERSET, APPENDONLY_TABLES,
-			gettext_noop("Maximum number of leaf partitions that may have an open AO/AOCS "
+			gettext_noop("Bounds the number of leaf partitions that may have an open AO/AOCS "
 						 "insert descriptor at once while inserting through a partition root."),
 			gettext_noop("A single COPY/INSERT into a partition root opens one write stack "
 						 "per column for every leaf partition it touches, all of it retained "
@@ -3681,10 +3681,14 @@ struct config_int ConfigureNamesInt_gp[] =
 						 "table that exhausts memory. When this is greater than 0, the least "
 						 "recently used insert descriptor is flushed and closed once the "
 						 "limit is reached; it is re-opened transparently if that partition "
-						 "is written to again. 0 keeps the historical unbounded behavior.")
+						 "is written to again. -1 keeps descriptors open until the backend "
+						 "nears its memory ceiling (the segment vmem limit, or the resource "
+						 "group quota when gp_resource_manager = group) and only then evicts "
+						 "the least recently used ones. 0 keeps the historical unbounded "
+						 "behavior.")
 		},
 		&gp_max_partition_open_insert_descs,
-		0, 0, INT_MAX,
+		0, -1, INT_MAX,
 		NULL, NULL, NULL
 	},
 

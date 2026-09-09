@@ -13,8 +13,10 @@ set client_min_messages to warning;
 create schema pdlru;
 set search_path = pdlru, public;
 
--- GUC surface: USERSET, default 0 (unbounded / historical), range [0, INT_MAX]
+-- GUC surface: USERSET, default 0 (unbounded / historical), -1 = adaptive,
+-- range [-1, INT_MAX]
 show gp_max_partition_open_insert_descs;
+set gp_max_partition_open_insert_descs = -2;
 set gp_max_partition_open_insert_descs = -1;
 set gp_max_partition_open_insert_descs = 4;
 show gp_max_partition_open_insert_descs;
@@ -234,6 +236,24 @@ end $$ set gp_max_partition_open_insert_descs = 4;
 truncate pdlru.ao_rr;
 select pdlru.load(4000);
 select count(*) from pdlru.ao_rr;
+
+----------------------------------------------------------------------
+-- 8. Adaptive mode (-1): no fixed limit, evicts only under memory
+--    pressure. Well under the vmem ceiling here, so nothing is evicted
+--    and the result still matches the unbounded load exactly.
+----------------------------------------------------------------------
+
+set gp_max_partition_open_insert_descs = -1;
+truncate pdlru.aocs;
+insert into pdlru.aocs select * from pdlru.src;
+select (select row(count(*), sum(id), sum(a), sum(c), sum(hashtext(b)::bigint))
+        from pdlru.aocs_ref)
+     = (select row(count(*), sum(id), sum(a), sum(c), sum(hashtext(b)::bigint))
+        from pdlru.aocs)
+       as adaptive_equals_unbounded;
+select count(*) as dup_tids from (
+  select gp_segment_id, part, ctid from pdlru.aocs group by 1, 2, 3 having count(*) > 1
+) d;
 
 reset search_path;
 set client_min_messages to warning;
