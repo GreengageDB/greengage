@@ -142,6 +142,7 @@ bool		gp_appendonly_verify_block_checksums = true;
 bool		gp_appendonly_verify_write_block = false;
 bool		gp_appendonly_compaction = true;
 int			gp_appendonly_compaction_threshold = 0;
+int			gp_max_partition_open_insert_descs = 0;
 bool		gp_heap_require_relhasoids_match = true;
 bool		gp_local_distributed_cache_stats = false;
 bool		debug_xlog_record_read = false;
@@ -3667,6 +3668,23 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_appendonly_compaction_threshold,
 		10, 0, 100,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_max_partition_open_insert_descs", PGC_USERSET, APPENDONLY_TABLES,
+			gettext_noop("Maximum number of leaf partitions that may have an open AO/AOCS "
+						 "insert descriptor at once while inserting through a partition root."),
+			gettext_noop("A single COPY/INSERT into a partition root opens one write stack "
+						 "per column for every leaf partition it touches, all of it retained "
+						 "for the life of the statement. On a wide, many-partition AO/AOCS "
+						 "table that exhausts memory. When this is greater than 0, the least "
+						 "recently used insert descriptor is flushed and closed once the "
+						 "limit is reached; it is re-opened transparently if that partition "
+						 "is written to again. 0 keeps the historical unbounded behavior.")
+		},
+		&gp_max_partition_open_insert_descs,
+		0, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 

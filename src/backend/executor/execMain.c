@@ -78,6 +78,7 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h" /* dumpDynamicTableScanPidIndex() */
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
@@ -4630,6 +4631,190 @@ get_part(EState *estate, Datum *values, bool *isnull, TupleDesc tupdesc,
 				 errmsg("no partition for partitioning key")));
 
 	return targetid_get_partition(targetid, estate, openIndices);
+}
+
+/*
+ * Bounded set of open per-partition AO/AOCS insert descriptors.
+ *
+ * A COPY/INSERT that routes rows through a partition root opens, on first touch
+ * of each leaf partition, one DatumStream write stack per column
+ * (aocs_insert_init -> OpenAOCSDatumStreams), and keeps it for the whole
+ * statement in estate->es_query_cxt. For a wide table with many partitions this
+ * is tens of MB times thousands of partitions and runs the backend out of vmem.
+ *
+ * When gp_max_partition_open_insert_descs > 0 we keep the open descriptors in an
+ * LRU list on the EState and, once the limit is reached, flush and close the
+ * least-recently-used one before opening a new one. A closed partition is
+ * re-opened transparently at its current on-disk EOF if it is written to again
+ * (aocs_insert_init / appendonly_insert_init read the segfile state through
+ * SnapshotSelf, so they see this transaction's own just-flushed data). The
+ * transaction-scoped segment-file lock taken in OpenAOCSDatumStreams is NOT
+ * released by the flush, so exclusivity is preserved across the close/re-open.
+ *
+ * Caveat: each flush bumps pg_ao(cs)seg.modcount, so a partition that is
+ * evicted and re-opened N times gets modcount += N+1 instead of +1. This only
+ * affects incremental-backup change detection (a false "changed", never a
+ * missed change), the same class of imprecision that VACUUM already introduces.
+ * Pick a limit large enough that eviction is rare for the expected input order.
+ */
+static void
+PartInsertDescClose(ResultRelInfo *rri)
+{
+	if (rri->ri_aocsInsertDesc)
+	{
+		aocs_insert_finish(rri->ri_aocsInsertDesc);
+		rri->ri_aocsInsertDesc = NULL;
+	}
+	else if (rri->ri_aoInsertDesc)
+	{
+		appendonly_insert_finish(rri->ri_aoInsertDesc);
+		rri->ri_aoInsertDesc = NULL;
+	}
+	else
+		return;
+
+	/*
+	 * aocs_insert_finish() / appendonly_insert_finish() just transactionally
+	 * updated this segment file's pg_aocsseg / pg_aoseg row (eof, tupcount,
+	 * modcount) via simple_heap_update(). If this partition is written to again
+	 * later in the same command, it is closed a second time and that same row
+	 * is updated again -- without advancing the command counter the second
+	 * simple_heap_update() trips HeapTupleSelfUpdated ("tuple already updated by
+	 * self"). Bump the counter here so the row we just wrote is seen by the
+	 * next update as a prior-command change. InsertInitialAOCSFileSegInfo()
+	 * already does the same thing during first-touch init on this code path, so
+	 * an extra CommandCounterIncrement() mid-COPY/INSERT is nothing new here.
+	 */
+	CommandCounterIncrement();
+
+	/*
+	 * aocs_insert_finish() / appendonly_insert_finish() only free part of what
+	 * the matching _init() allocated -- the rest is normally reclaimed when
+	 * es_query_cxt is reset at end of statement. Since we re-run the open/close
+	 * cycle many times within one statement, reclaim it now by resetting the
+	 * descriptor's private context (see PartInsertDescMemoryContext); otherwise
+	 * a wide, many-partition load leaks es_query_cxt without bound and defeats
+	 * the whole point of the limit.
+	 */
+	if (rri->ri_partInsertDescCxt != NULL)
+		MemoryContextReset(rri->ri_partInsertDescCxt);
+}
+
+static void
+PartInsertLruUnlink(EState *estate, ResultRelInfo *rri)
+{
+	if (rri->ri_partInsertLruPrev)
+		rri->ri_partInsertLruPrev->ri_partInsertLruNext = rri->ri_partInsertLruNext;
+	else if (estate->es_partInsertLruHead == rri)
+		estate->es_partInsertLruHead = rri->ri_partInsertLruNext;
+
+	if (rri->ri_partInsertLruNext)
+		rri->ri_partInsertLruNext->ri_partInsertLruPrev = rri->ri_partInsertLruPrev;
+	else if (estate->es_partInsertLruTail == rri)
+		estate->es_partInsertLruTail = rri->ri_partInsertLruPrev;
+
+	rri->ri_partInsertLruPrev = NULL;
+	rri->ri_partInsertLruNext = NULL;
+}
+
+static void
+PartInsertLruPushHead(EState *estate, ResultRelInfo *rri)
+{
+	rri->ri_partInsertLruPrev = NULL;
+	rri->ri_partInsertLruNext = estate->es_partInsertLruHead;
+	if (estate->es_partInsertLruHead)
+		estate->es_partInsertLruHead->ri_partInsertLruPrev = rri;
+	estate->es_partInsertLruHead = rri;
+	if (estate->es_partInsertLruTail == NULL)
+		estate->es_partInsertLruTail = rri;
+}
+
+/*
+ * Called right after a new per-partition insert descriptor is opened at the
+ * COPY/INSERT lazy-init site. Registers it as most-recently-used and, if that
+ * pushed us over gp_max_partition_open_insert_descs, evicts from the tail.
+ */
+void
+PartInsertDescTrackAndBound(EState *estate, ResultRelInfo *rri)
+{
+	if (gp_max_partition_open_insert_descs <= 0)
+		return;
+	if (rri->ri_aocsInsertDesc == NULL && rri->ri_aoInsertDesc == NULL)
+		return;
+
+	/*
+	 * On the QD the per-partition insert descriptors carry pg_ao(cs)seg
+	 * row-count bookkeeping that is only finalised from the QE-reported counts
+	 * at end of COPY; evicting them mid-stream would drop that. The memory
+	 * pressure is on the QEs (and utility-mode single node) anyway.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH)
+		return;
+
+	/* Not the partition root itself (root has ri_partition_hash). */
+	if (rri == estate->es_result_relations)
+		return;
+
+	PartInsertLruPushHead(estate, rri);
+	estate->es_partInsertLruCount++;
+
+	while (estate->es_partInsertLruCount > gp_max_partition_open_insert_descs &&
+		   estate->es_partInsertLruTail != NULL &&
+		   estate->es_partInsertLruTail != rri)
+	{
+		ResultRelInfo *victim = estate->es_partInsertLruTail;
+
+		PartInsertLruUnlink(estate, victim);
+		estate->es_partInsertLruCount--;
+		PartInsertDescClose(victim);
+	}
+}
+
+/*
+ * Called when an already-open per-partition insert descriptor is re-used, to
+ * refresh its LRU position.
+ */
+void
+PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
+{
+	if (gp_max_partition_open_insert_descs <= 0 || Gp_role == GP_ROLE_DISPATCH)
+		return;
+	if (rri->ri_partInsertLruPrev == NULL && estate->es_partInsertLruHead == rri)
+		return;					/* already MRU */
+	if (rri->ri_partInsertLruPrev == NULL && rri->ri_partInsertLruNext == NULL &&
+		estate->es_partInsertLruHead != rri)
+		return;					/* not tracked (e.g. limit changed mid-stream) */
+
+	PartInsertLruUnlink(estate, rri);
+	PartInsertLruPushHead(estate, rri);
+}
+
+/*
+ * Memory context that a per-partition AO/AOCS insert descriptor for rri must be
+ * allocated in. Callers switch into this right before appendonly_insert_init()
+ * / aocs_insert_init() and switch back after.
+ *
+ * When the open descriptors are LRU-bounded, each leaf partition gets its own
+ * child context of es_query_cxt so that evicting it (PartInsertDescClose) can
+ * reset the whole thing. Otherwise this is just es_query_cxt and behaviour is
+ * exactly as before.
+ */
+MemoryContext
+PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
+{
+	if (gp_max_partition_open_insert_descs <= 0 ||
+		Gp_role == GP_ROLE_DISPATCH ||
+		rri == estate->es_result_relations)
+		return estate->es_query_cxt;
+
+	if (rri->ri_partInsertDescCxt == NULL)
+		rri->ri_partInsertDescCxt =
+			AllocSetContextCreate(estate->es_query_cxt,
+								  "PartitionInsertDesc",
+								  ALLOCSET_DEFAULT_MINSIZE,
+								  ALLOCSET_DEFAULT_INITSIZE,
+								  ALLOCSET_DEFAULT_MAXSIZE);
+	return rri->ri_partInsertDescCxt;
 }
 
 ResultRelInfo *

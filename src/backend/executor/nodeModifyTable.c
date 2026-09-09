@@ -370,23 +370,39 @@ ExecInsert(TupleTableSlot *parentslot,
 	{
 		if (resultRelInfo->ri_aoInsertDesc == NULL)
 		{
+			MemoryContext oldcxt;
+
 			/* Set the pre-assigned fileseg number to insert into */
 			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
 
+			oldcxt = MemoryContextSwitchTo(
+				PartInsertDescMemoryContext(estate, resultRelInfo));
 			resultRelInfo->ri_aoInsertDesc =
 				appendonly_insert_init(resultRelationDesc,
 									   resultRelInfo->ri_aosegno,
 									   false);
+			MemoryContextSwitchTo(oldcxt);
+			PartInsertDescTrackAndBound(estate, resultRelInfo);
 		}
+		else
+			PartInsertDescTouch(estate, resultRelInfo);
 	}
 	else if (rel_is_aocols)
 	{
 		if (resultRelInfo->ri_aocsInsertDesc == NULL)
 		{
+			MemoryContext oldcxt;
+
 			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
+			oldcxt = MemoryContextSwitchTo(
+				PartInsertDescMemoryContext(estate, resultRelInfo));
 			resultRelInfo->ri_aocsInsertDesc = aocs_insert_init(resultRelationDesc,
 																resultRelInfo->ri_aosegno, false);
+			MemoryContextSwitchTo(oldcxt);
+			PartInsertDescTrackAndBound(estate, resultRelInfo);
 		}
+		else
+			PartInsertDescTouch(estate, resultRelInfo);
 	}
 	else if (rel_is_external)
 	{
@@ -556,14 +572,22 @@ ExecInsert(TupleTableSlot *parentslot,
 
 			if (resultRelInfo->ri_aoInsertDesc == NULL)
 			{
+				MemoryContext oldcxt;
+
 				/* Set the pre-assigned fileseg number to insert into */
 				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
 
+				oldcxt = MemoryContextSwitchTo(
+					PartInsertDescMemoryContext(estate, resultRelInfo));
 				resultRelInfo->ri_aoInsertDesc =
 					appendonly_insert_init(resultRelationDesc,
 										   resultRelInfo->ri_aosegno,
 										   false);
+				MemoryContextSwitchTo(oldcxt);
+				PartInsertDescTrackAndBound(estate, resultRelInfo);
 			}
+			else
+				PartInsertDescTouch(estate, resultRelInfo);
 
 			mtuple = ExecFetchSlotMemTuple(slot);
 			newId = appendonly_insert(resultRelInfo->ri_aoInsertDesc, mtuple, tuple_oid, (AOTupleId *) &lastTid);
@@ -574,10 +598,18 @@ ExecInsert(TupleTableSlot *parentslot,
 		{
 			if (resultRelInfo->ri_aocsInsertDesc == NULL)
 			{
+				MemoryContext oldcxt;
+
 				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-				resultRelInfo->ri_aocsInsertDesc = aocs_insert_init(resultRelationDesc, 
+				oldcxt = MemoryContextSwitchTo(
+					PartInsertDescMemoryContext(estate, resultRelInfo));
+				resultRelInfo->ri_aocsInsertDesc = aocs_insert_init(resultRelationDesc,
 																	resultRelInfo->ri_aosegno, false);
+				MemoryContextSwitchTo(oldcxt);
+				PartInsertDescTrackAndBound(estate, resultRelInfo);
 			}
+			else
+				PartInsertDescTouch(estate, resultRelInfo);
 
 			newId = aocs_insert(resultRelInfo->ri_aocsInsertDesc, slot);
 			lastTid = *slot_get_ctid(slot);

@@ -376,6 +376,23 @@ typedef struct ResultRelInfo
 	struct AOCSInsertDescData *ri_aocsInsertDesc;
 	struct ExternalInsertDescData *ri_extInsertDesc;
 
+	/*
+	 * Links in EState.es_partInsertLru* while this (leaf-partition) ResultRelInfo
+	 * has an open ri_aoInsertDesc / ri_aocsInsertDesc that is subject to
+	 * LRU eviction. NULL/NULL when not tracked.
+	 */
+	struct ResultRelInfo *ri_partInsertLruPrev;
+	struct ResultRelInfo *ri_partInsertLruNext;
+
+	/*
+	 * Private context holding this leaf partition's LRU-bounded AO/AOCS insert
+	 * descriptor (see gp_max_partition_open_insert_descs). Reset on eviction so
+	 * that repeatedly opening and closing the descriptor cannot leak
+	 * es_query_cxt. NULL when the descriptor lives directly in es_query_cxt
+	 * (the historical, unbounded behaviour).
+	 */
+	MemoryContext ri_partInsertDescCxt;
+
 	RelationDeleteDesc ri_deleteDesc;
 	RelationUpdateDesc ri_updateDesc;
 
@@ -546,6 +563,16 @@ typedef struct EState
 
 	/* partitioning info for target relation */
 	PartitionNode *es_result_partitions;
+
+	/*
+	 * LRU list of leaf-partition ResultRelInfos that currently hold an open
+	 * AO/AOCS insert descriptor, most-recently-used at the head. Used to bound
+	 * the number of simultaneously-open per-partition write stacks when
+	 * inserting through a partition root (see gp_max_partition_open_insert_descs).
+	 */
+	struct ResultRelInfo *es_partInsertLruHead;
+	struct ResultRelInfo *es_partInsertLruTail;
+	int			es_partInsertLruCount;
 
 	/* AO fileseg info for target relation */
 	List	   *es_result_aosegnos;
