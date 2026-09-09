@@ -23,7 +23,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v33
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
@@ -48,7 +48,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v35
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
@@ -66,7 +66,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v49
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
@@ -84,7 +84,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v28
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
@@ -120,7 +120,7 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-jit.yml@v49
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-jit.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
