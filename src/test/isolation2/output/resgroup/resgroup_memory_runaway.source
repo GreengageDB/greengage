@@ -272,6 +272,5 @@ DROP
 
 -- start_ignore
 ! gpconfig -c runaway_detector_activation_percent -v 100;
-
 ! gpstop -ari;
 -- end_ignore
