@@ -65,18 +65,39 @@ setup_cgroup_v2() {
 }
 
 setup_loop_devices() {
-    mkdir "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+    local i dir img src prev=""
+    for i in 1 2; do
+        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
+        img="$ISOLATION2_TESTTABLESPACE/io_limit_fs_$i.img"
 
-    dd if=/dev/zero of="$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img" bs=1M count=64
-    mkfs.ext4 "$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img"
-    sudo mount -o loop "$ISOLATION2_TESTTABLESPACE/io_limit_fs_1.img" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1"
+        mkdir -p "$dir"
+        if ! mountpoint -q "$dir"; then
+            dd if=/dev/zero of="$img" bs=1M count=64
+            mkfs.ext4 -q -F "$img"
+            mount -o loop "$img" "$dir"
+        fi
+        chown gpadmin:gpadmin "$dir"
 
-    dd if=/dev/zero of="$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img" bs=1M count=64
-    mkfs.ext4 "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img"
-    sudo mount -o loop "$ISOLATION2_TESTTABLESPACE/io_limit_fs_2.img" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+        src=$(findmnt -no SOURCE "$dir" || true)
+        if [ ! -b "$src" ]; then
+            fatal "$dir: mount source '$src' is not a block device node"
+        fi
+        if [ "$src" = "$prev" ]; then
+            fatal "both io_limit tablespaces resolved to $src"
+        fi
+        prev=$src
+    done
 
-    sudo chmod -R 777 "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
-    sudo chown gpadmin:gpadmin "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_1" "$ISOLATION2_TESTTABLESPACE/rg_io_limit_ts_2"
+    trap 'cleanup_cgroup_v2 || true; teardown_loop_devices' EXIT 
+}
+
+teardown_loop_devices() {
+    local i dir
+    for i in 1 2; do
+        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
+        mountpoint -q "$dir" && umount "$dir"
+    done
+    return 0
 }
 
 gen_env() {

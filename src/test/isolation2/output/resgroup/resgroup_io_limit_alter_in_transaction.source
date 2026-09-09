@@ -252,9 +252,9 @@ SELECT check_cgroup_io_max('rg_alter_tran', 'pg_default', 'rbps=5242880000 wbps=
 -- 7 Two ALTERs set the same io_limit across two tablespaces in a different
 -- element order. The order-independent compare treats the two values as equal,
 -- so the duplicate is dropped and only one apply happens.
-CREATE TABLESPACE rg_io_limit_ts_1 LOCATION '@testtablespace@/rg_io_limit_ts_1';
+CREATE TABLESPACE rg_io_limit_ts_1 LOCATION '@testtablespace@/rg_io_limit_loop_1';
 CREATE TABLESPACE
-CREATE TABLESPACE rg_io_limit_ts_2 LOCATION '@testtablespace@/rg_io_limit_ts_2';
+CREATE TABLESPACE rg_io_limit_ts_2 LOCATION '@testtablespace@/rg_io_limit_loop_2';
 CREATE TABLESPACE
 
 SELECT gp_inject_fault('resgroup_alter_on_commit', 'reset', dbid) FROM gp_segment_configuration WHERE content = -1 AND role = 'p';
