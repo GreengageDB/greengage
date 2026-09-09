@@ -2083,7 +2083,7 @@ lastlog_record_login(Port *port)
 	if (!lastlog_enabled || lastlog == NULL || MyProc == NULL)
 		return;
 
-#if PG_VERSION_NUM < 160000
+#if PG_VERSION_NUM < 170000
 	ll_my_slot = MyProc->pgprocno;
 #else
 	ll_my_slot = MyProc->vxid.procNumber;
