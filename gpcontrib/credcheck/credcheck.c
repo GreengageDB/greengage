@@ -53,14 +53,24 @@
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "postmaster/postmaster.h"
+#include "postmaster/bgworker.h"
+#include "storage/latch.h"
+#include "storage/proc.h"
+#include "storage/procarray.h"
 #include "tcop/utility.h"
 #include "tcop/tcopprot.h"	/* debug_query_string */
+
+#ifndef WIN32
+#include <sys/mman.h>
+#endif
 #if PG_VERSION_NUM >= 190000
 #include "storage/fd.h"
 #endif
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#include "utils/wait_event.h"
+#include "libpq/pqsignal.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
@@ -93,6 +103,97 @@ static const uint32 PGPH_FILE_HEADER = 0x48504750;
 static const uint32 PGPH_VERSION = 100;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
 #define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
+
+/*
+ * ---------------------------------------------------------------------------
+ * lastlog: utmp/wtmp-like login history persisted in a memory-mapped file.
+ *
+ * The runtime data lives in two areas:
+ *   - an anonymous shared memory control struct (LastlogShared) holding the
+ *     LWLock and the live (still connected) sessions array.  This is volatile
+ *     and never persisted.
+ *   - a memory-mapped, fixed-size ring of LastlogEntry records (the history
+ *     plus boot/shutdown/crash markers).  This *is* the file, the kernel
+ *     handles write-back; we only msync() periodically and at shutdown.
+ *
+ * Because the mapping base address differs between processes (EXEC_BACKEND,
+ * ASLR), NOTHING in the mapped region may store a pointer: records are
+ * addressed by integer index only.
+ * ---------------------------------------------------------------------------
+ */
+#define LASTLOG_DUMP_FILE       "credcheck.lastlog"
+#define LASTLOG_TRANCHE_NAME    "credcheck_lastlog"
+static const uint32 LASTLOG_FILE_HEADER = 0x4C4C4743;   /* "LLGC" */
+static const uint32 LASTLOG_VERSION = 100;
+#define LASTLOG_HOST_LEN        64
+
+typedef enum LastlogType
+{
+	LL_USER = 0,        /* a user session */
+	LL_BOOT,            /* PostgreSQL (re)start */
+	LL_SHUTDOWN,        /* clean shutdown */
+	LL_CRASH            /* unclean previous shutdown detected at next boot */
+} LastlogType;
+
+/*
+ * A single fixed-size record.  The query text is stored inline right after
+ * the struct, capped at lastlog_query_size bytes; the real on-disk/in-mmap
+ * stride is ll_record_stride (computed at startup and stored in the header),
+ * so last_query must remain the final member.
+ */
+typedef struct LastlogEntry
+{
+	uint64       seqno;                      /* monotonic; 0 == empty slot */
+	bool         complete;                   /* written last, torn-write guard */
+	LastlogType  type;
+	char         username[NAMEDATALEN];
+	int          pid;
+	char         remote_host[LASTLOG_HOST_LEN];   /* IP or "[local]" */
+	int          remote_port;
+	TimestampTz  login_time;
+	TimestampTz  logout_time;                /* 0 while still connected */
+	bool         active;                     /* still connected */
+	char         last_query[FLEXIBLE_ARRAY_MEMBER]; /* size lastlog_query_size */
+} LastlogEntry;
+
+#define LASTLOG_BASE_SIZE   (offsetof(LastlogEntry, last_query))
+
+/* On-disk/in-mmap header, kept at offset 0 of the mapping. */
+typedef struct LastlogFileHeader
+{
+	uint32       magic;
+	uint32       version;
+	uint32       record_stride;   /* bytes per record incl. inline query */
+	uint32       capacity;        /* number of record slots (= lastlog_max) */
+	uint32       head;            /* index of next slot to (over)write */
+	uint32       nused;           /* number of valid records (<= capacity) */
+	uint64       seqno;           /* last allocated sequence number */
+	bool         clean_shutdown;  /* set true only on clean shutdown */
+} LastlogFileHeader;
+
+/*
+ * Live session slot, one per backend, addressed by MyProc->pgprocno.
+ * Lives in anonymous shared memory, never persisted.
+ */
+typedef struct LastlogActive
+{
+	bool         in_use;
+	int          pid;
+	char         username[NAMEDATALEN];
+	char         remote_host[LASTLOG_HOST_LEN];
+	int          remote_port;
+	TimestampTz  login_time;
+	char        *last_query;      /* points inside LastlogShared->query_area */
+} LastlogActive;
+
+/* Anonymous shared control structure for lastlog. */
+typedef struct LastlogShared
+{
+	LWLock      *lock;            /* protects the mmap ring and active[] */
+	int          nactive_slots;   /* == MaxBackends */
+	LastlogActive active[FLEXIBLE_ARRAY_MEMBER];
+	/* query_area (nactive_slots * lastlog_query_size bytes) follows */
+} LastlogShared;
 
 #if PG_VERSION_NUM >= 150000
 /*
@@ -239,6 +340,21 @@ static pgphSharedState *pgph = NULL;
 static HTAB *pgph_hash = NULL;
 static int pgph_max = 65535;
 static int pgaf_max = 1024;
+
+/* lastlog runtime state (process-local where noted) */
+static LastlogShared *lastlog = NULL;            /* anon shmem control */
+static char          *ll_mmap_base = NULL;       /* process-local mmap base */
+static LastlogFileHeader *ll_hdr = NULL;         /* == (header *) ll_mmap_base */
+static Size           ll_mmap_size = 0;          /* process-local mapped size */
+static uint32         ll_record_stride = 0;      /* bytes per record */
+static int            ll_my_slot = -1;           /* this backend's active idx */
+
+/* lastlog GUCs */
+static bool lastlog_enabled = false;
+static int  lastlog_max = 1024;
+static bool lastlog_track_query = false;
+static int  lastlog_query_size = 1024;
+static int  lastlog_flush_interval = 0;          /* seconds; 0 = shutdown only */
 static int fail_max = 0;
 static bool reset_superuser = false;
 static bool encrypted_password_allowed = false;
@@ -282,6 +398,20 @@ static void pghist_shmem_request(void);
 static void pghist_shmem_startup(void);
 static void pgph_shmem_startup(void);
 static void pgaf_shmem_startup(void);
+
+/* lastlog forward declarations */
+static Size lastlog_memsize(void);
+static void lastlog_shmem_startup(void);
+static void lastlog_mmap_attach(void);
+static void lastlog_init_header(void);
+static void lastlog_append_marker(LastlogType type);
+static void lastlog_record_login(Port *port);
+static void lastlog_finalize_session(int code, Datum arg);
+static void lastlog_track_last_query(const char *query_string);
+static void lastlog_msync(int flags);
+PGDLLEXPORT void lastlog_bgworker_main(Datum main_arg);
+static void lastlog_bgworker_shutdown(int code, Datum arg);
+extern PGDLLEXPORT Datum credcheck_lastlog(PG_FUNCTION_ARGS);
 #if PG_VERSION_NUM >= 120000
 static int  entry_cmp(const void *lhs, const void *rhs);
 #endif
@@ -1725,6 +1855,569 @@ check_password(const char *username, const char *password,
 	}
 }
 
+/*
+ * ===========================================================================
+ * lastlog implementation
+ * ===========================================================================
+ */
+
+/* Accessor: pointer to record slot i inside the mmap region (index-based). */
+static inline LastlogEntry *
+ll_slot(uint32 i)
+{
+	return (LastlogEntry *) (ll_mmap_base
+							 + MAXALIGN(sizeof(LastlogFileHeader))
+							 + (Size) i * ll_record_stride);
+}
+
+/*
+ * Estimate anonymous shared memory needed by lastlog (control struct + live
+ * sessions array + per-session query buffers).  The history ring itself does
+ * NOT live here: it is the memory-mapped file.
+ */
+static Size
+lastlog_memsize(void)
+{
+	Size	size;
+
+	if (!lastlog_enabled)
+		return 0;
+
+	size = offsetof(LastlogShared, active);
+	size = add_size(size, mul_size(MaxBackends, sizeof(LastlogActive)));
+	/* one query buffer per backend */
+	size = add_size(size, mul_size(MaxBackends, (Size) lastlog_query_size));
+	return MAXALIGN(size);
+}
+
+/*
+ * Map (creating/sizing if necessary) the lastlog history file.  Runs in every
+ * process that executes the shmem startup hook; the mapping is process-local.
+ */
+static void
+lastlog_mmap_attach(void)
+{
+	Size	filesize;
+
+	ll_record_stride = MAXALIGN(LASTLOG_BASE_SIZE + (Size) lastlog_query_size);
+
+	filesize = MAXALIGN(sizeof(LastlogFileHeader))
+		+ (Size) lastlog_max * ll_record_stride;
+	/* round up to a multiple of BLCKSZ to please pgBackRest backups */
+	filesize = TYPEALIGN(BLCKSZ, filesize);
+	ll_mmap_size = filesize;
+
+#ifndef WIN32
+	{
+		int		fd;
+
+		fd = BasicOpenFile(LASTLOG_DUMP_FILE, O_RDWR | O_CREAT | PG_BINARY);
+		if (fd < 0)
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not open lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+
+		if (ftruncate(fd, (off_t) filesize) != 0)
+		{
+			int		save_errno = errno;
+
+			close(fd);
+			errno = save_errno;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not size lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+		}
+
+		ll_mmap_base = mmap(NULL, filesize, PROT_READ | PROT_WRITE,
+							MAP_SHARED, fd, 0);
+		close(fd);				/* the mapping outlives the fd */
+		if (ll_mmap_base == MAP_FAILED)
+		{
+			ll_mmap_base = NULL;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not mmap lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+		}
+	}
+#else
+	/*
+	 * Windows path: must be implemented with CreateFileMapping /
+	 * MapViewOfFile on a real file handle (not the paging file).  Left as a
+	 * follow-up; mmap-based persistence is currently POSIX-only.
+	 */
+	ereport(FATAL,
+			(errmsg("credcheck.lastlog is not yet supported on Windows")));
+#endif
+
+	ll_hdr = (LastlogFileHeader *) ll_mmap_base;
+}
+
+/* Initialise (or reset) the mmap header.  Caller holds the lastlog lock. */
+static void
+lastlog_init_header(void)
+{
+	memset(ll_mmap_base, 0, ll_mmap_size);
+	ll_hdr->magic = LASTLOG_FILE_HEADER;
+	ll_hdr->version = LASTLOG_VERSION;
+	ll_hdr->record_stride = ll_record_stride;
+	ll_hdr->capacity = lastlog_max;
+	ll_hdr->head = 0;
+	ll_hdr->nused = 0;
+	ll_hdr->seqno = 0;
+	ll_hdr->clean_shutdown = false;
+}
+
+/*
+ * Append a marker record (boot/shutdown/crash).  Caller holds the lock
+ * exclusively.  Markers are tiny and rare, so we msync them immediately.
+ */
+static void
+lastlog_append_marker(LastlogType type)
+{
+	LastlogEntry   *e;
+
+	if (!ll_hdr)
+		return;
+
+	e = ll_slot(ll_hdr->head);
+	memset(e, 0, ll_record_stride);
+	e->type = type;
+	e->login_time = GetCurrentTimestamp();
+	e->pid = (type == LL_BOOT) ? PostmasterPid : 0;
+	e->active = false;
+	e->seqno = ++ll_hdr->seqno;
+	pg_write_barrier();
+	e->complete = true;
+
+	ll_hdr->head = (ll_hdr->head + 1) % ll_hdr->capacity;
+	if (ll_hdr->nused < ll_hdr->capacity)
+		ll_hdr->nused++;
+
+	lastlog_msync(MS_ASYNC);
+}
+
+/*
+ * Record a successful login in the caller's live-session slot.  Called from
+ * the ClientAuthentication hook (status == STATUS_OK).  Also arms the
+ * proc_exit callback that will move the session into the history ring.
+ */
+static void
+lastlog_record_login(Port *port)
+{
+	LastlogActive  *a;
+
+	if (!lastlog_enabled || lastlog == NULL || MyProc == NULL)
+		return;
+
+#if PG_VERSION_NUM < 160000
+	ll_my_slot = MyProc->pgprocno;
+#else
+	ll_my_slot = MyProc->vxid.procNumber;
+#endif
+	if (ll_my_slot < 0 || ll_my_slot >= lastlog->nactive_slots)
+	{
+		ll_my_slot = -1;
+		return;
+	}
+
+	a = &lastlog->active[ll_my_slot];
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	a->in_use = true;
+	a->pid = MyProcPid;
+	strlcpy(a->username, port->user_name ? port->user_name : "",
+			NAMEDATALEN);
+	if (port->remote_host && port->remote_host[0] != '\0')
+		strlcpy(a->remote_host, port->remote_host, LASTLOG_HOST_LEN);
+	else
+		strlcpy(a->remote_host, "[local]", LASTLOG_HOST_LEN);
+	a->remote_port = (port->remote_port && port->remote_port[0] != '\0')
+		? atoi(port->remote_port) : 0;
+	a->login_time = GetCurrentTimestamp();
+	if (a->last_query)
+		a->last_query[0] = '\0';
+	LWLockRelease(lastlog->lock);
+
+	/* Ensure the session is flushed to history on backend exit. */
+	before_shmem_exit(lastlog_finalize_session, (Datum) 0);
+}
+
+/*
+ * proc_exit callback: turn this backend's live session into a finalized
+ * history record (with logout time / duration), then free the live slot.
+ */
+static void
+lastlog_finalize_session(int code, Datum arg)
+{
+	LastlogActive  *a;
+	LastlogEntry   *e;
+
+	if (!lastlog_enabled || lastlog == NULL || ll_hdr == NULL
+		|| ll_my_slot < 0)
+		return;
+
+	a = &lastlog->active[ll_my_slot];
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	if (!a->in_use)
+	{
+		LWLockRelease(lastlog->lock);
+		ll_my_slot = -1;
+		return;
+	}
+
+	e = ll_slot(ll_hdr->head);
+	memset(e, 0, ll_record_stride);
+	e->type = LL_USER;
+	strlcpy(e->username, a->username, NAMEDATALEN);
+	e->pid = a->pid;
+	strlcpy(e->remote_host, a->remote_host, LASTLOG_HOST_LEN);
+	e->remote_port = a->remote_port;
+	e->login_time = a->login_time;
+	e->logout_time = GetCurrentTimestamp();
+	e->active = false;
+	if (lastlog_track_query && a->last_query)
+		strlcpy(e->last_query, a->last_query, lastlog_query_size);
+	e->seqno = ++ll_hdr->seqno;
+	pg_write_barrier();
+	e->complete = true;
+
+	ll_hdr->head = (ll_hdr->head + 1) % ll_hdr->capacity;
+	if (ll_hdr->nused < ll_hdr->capacity)
+		ll_hdr->nused++;
+
+	a->in_use = false;
+	LWLockRelease(lastlog->lock);
+
+	ll_my_slot = -1;
+}
+
+/* Copy the current query text into this backend's live slot (ExecutorStart). */
+static void
+lastlog_track_last_query(const char *query_string)
+{
+	LastlogActive  *a;
+
+	if (!lastlog_enabled || !lastlog_track_query || lastlog == NULL
+		|| ll_my_slot < 0 || query_string == NULL)
+		return;
+
+	a = &lastlog->active[ll_my_slot];
+	if (a->last_query == NULL)
+		return;
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	if (a->in_use)
+		strlcpy(a->last_query, query_string, lastlog_query_size);
+	LWLockRelease(lastlog->lock);
+}
+
+/* Flush the mmap region to disk. */
+static void
+lastlog_msync(int flags)
+{
+#ifndef WIN32
+	if (ll_mmap_base != NULL && ll_mmap_size > 0)
+		(void) msync(ll_mmap_base, ll_mmap_size, flags);
+#endif
+}
+
+/*
+ * shmem startup hook for lastlog: allocate the anonymous control area, attach
+ * the mmap file, and (only in the first process) initialise the header,
+ * detect a previous crash and write the boot marker.
+ */
+static void
+lastlog_shmem_startup(void)
+{
+	bool	found;
+	Size	qoff;
+	char   *query_area;
+	int		i;
+
+	if (!lastlog_enabled)
+		return;
+
+	lastlog = NULL;
+	ll_mmap_base = NULL;
+	ll_hdr = NULL;
+
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	lastlog = ShmemInitStruct("credcheck lastlog",
+							  lastlog_memsize(), &found);
+
+	if (!found)
+	{
+		lastlog->lock = &(GetNamedLWLockTranche(LASTLOG_TRANCHE_NAME))->lock;
+		lastlog->nactive_slots = MaxBackends;
+		MemSet(lastlog->active, 0,
+			   mul_size(MaxBackends, sizeof(LastlogActive)));
+	}
+
+	/* wire each backend's query buffer into the area following active[] */
+	qoff = offsetof(LastlogShared, active)
+		+ mul_size(MaxBackends, sizeof(LastlogActive));
+	query_area = ((char *) lastlog) + qoff;
+	for (i = 0; i < MaxBackends; i++)
+		lastlog->active[i].last_query =
+			query_area + (Size) i * lastlog_query_size;
+
+	/* attach the memory-mapped history file (process-local) */
+	lastlog_mmap_attach();
+
+	if (!found)
+	{
+		bool	prev_unclean;
+
+		LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+
+		/* fresh / incompatible file -> (re)initialise */
+		if (ll_hdr->magic != LASTLOG_FILE_HEADER
+			|| ll_hdr->version != LASTLOG_VERSION
+			|| ll_hdr->record_stride != ll_record_stride
+			|| ll_hdr->capacity != (uint32) lastlog_max)
+		{
+			lastlog_init_header();
+			prev_unclean = false;
+		}
+		else
+		{
+			/* previous run crashed if it never set clean_shutdown */
+			prev_unclean = !ll_hdr->clean_shutdown;
+		}
+
+		if (prev_unclean)
+			lastlog_append_marker(LL_CRASH);
+
+		lastlog_append_marker(LL_BOOT);
+		ll_hdr->clean_shutdown = false;     /* cleared until clean exit */
+		lastlog_msync(MS_ASYNC);
+
+		LWLockRelease(lastlog->lock);
+	}
+
+	LWLockRelease(AddinShmemInitLock);
+}
+
+/*
+ * Background worker: periodic msync and, on SIGTERM, the clean-shutdown
+ * marker + a final synchronous flush.  This is the reliable place to catch
+ * server shutdown (a plain backend's before_shmem_exit is not).
+ */
+void
+lastlog_bgworker_main(Datum main_arg)
+{
+	pqsignal(SIGTERM, die);
+	pqsignal(SIGHUP, SIG_IGN);
+	BackgroundWorkerUnblockSignals();
+
+	/* write the clean-shutdown marker when we are asked to stop */
+	before_shmem_exit(lastlog_bgworker_shutdown, (Datum) 0);
+
+	/* attach to the already-created shared structures */
+	for (;;)
+	{
+		int		rc;
+		long	timeout_ms;
+
+		CHECK_FOR_INTERRUPTS();
+
+		if (lastlog_flush_interval > 0)
+		{
+			lastlog_msync(MS_ASYNC);
+			timeout_ms = (long) lastlog_flush_interval * 1000L;
+		}
+		else
+			timeout_ms = 60000L;	/* idle wakeup; shutdown flush only */
+
+		rc = WaitLatch(MyLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+					   timeout_ms, PG_WAIT_EXTENSION);
+		ResetLatch(MyLatch);
+
+		if (rc & WL_LATCH_SET)
+			CHECK_FOR_INTERRUPTS();		/* die() will longjmp out on SIGTERM */
+	}
+}
+
+/*
+ * proc_exit-time handler for the bgworker: write the clean shutdown marker.
+ * Registered via before_shmem_exit so it runs when die() unwinds.
+ */
+static void
+lastlog_bgworker_shutdown(int code, Datum arg)
+{
+	if (!lastlog_enabled || ll_hdr == NULL)
+		return;
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	lastlog_append_marker(LL_SHUTDOWN);
+	ll_hdr->clean_shutdown = true;
+	LWLockRelease(lastlog->lock);
+	lastlog_msync(MS_SYNC);
+}
+
+#define PG_LASTLOG_COLS		10
+
+/*
+ * SQL-callable SRF returning the merged view of live sessions (from active[])
+ * and the history ring (from the mmap file), newest first.
+ */
+PG_FUNCTION_INFO_V1(credcheck_lastlog);
+Datum
+credcheck_lastlog(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo  *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc		tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext	per_query_ctx;
+	MemoryContext	oldcontext;
+	int				i;
+
+	if (!lastlog_enabled || lastlog == NULL || ll_hdr == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("credcheck.lastlog is disabled")));
+
+	if (rsinfo == NULL || !(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+	MemoryContextSwitchTo(oldcontext);
+
+	LWLockAcquire(lastlog->lock, LW_SHARED);
+
+	/* live sessions first (still logged in) */
+	for (i = 0; i < lastlog->nactive_slots; i++)
+	{
+		Datum		values[PG_LASTLOG_COLS];
+		bool		nulls[PG_LASTLOG_COLS];
+		LastlogActive *a = &lastlog->active[i];
+
+		if (!a->in_use)
+			continue;
+
+		MemSet(values, 0, sizeof(values));
+		MemSet(nulls, 0, sizeof(nulls));
+
+		values[0] = CStringGetTextDatum("user");
+		values[1] = CStringGetTextDatum(a->username);
+		values[2] = Int32GetDatum(a->pid);
+		values[3] = CStringGetTextDatum(a->remote_host);
+		values[4] = Int32GetDatum(a->remote_port);
+		values[5] = TimestampTzGetDatum(a->login_time);
+		nulls[6] = true;		/* logout_time */
+		values[7] = DirectFunctionCall2(timestamptz_age,
+						TimestampTzGetDatum(GetCurrentTimestamp()),
+						TimestampTzGetDatum(a->login_time));
+		values[8] = CStringGetTextDatum("still connected");
+		if (lastlog_track_query && a->last_query && a->last_query[0] != '\0')
+			values[9] = CStringGetTextDatum(a->last_query);
+		else
+			nulls[9] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* then the history ring, newest first */
+	if (ll_hdr->nused > 0)
+	{
+		uint32		n = ll_hdr->nused;
+		uint32		idx = (ll_hdr->head + ll_hdr->capacity - 1) % ll_hdr->capacity;
+		uint32		k;
+
+		for (k = 0; k < n; k++)
+		{
+			LastlogEntry *e = ll_slot(idx);
+			Datum		values[PG_LASTLOG_COLS];
+			bool		nulls[PG_LASTLOG_COLS];
+			const char *tname;
+
+			if (e->complete && e->seqno != 0)
+			{
+				MemSet(values, 0, sizeof(values));
+				MemSet(nulls, 0, sizeof(nulls));
+
+				switch (e->type)
+				{
+					case LL_BOOT:		tname = "boot";		break;
+					case LL_SHUTDOWN:	tname = "shutdown";	break;
+					case LL_CRASH:		tname = "crash";	break;
+					default:			tname = "user";		break;
+				}
+				values[0] = CStringGetTextDatum(tname);
+
+				if (e->type == LL_USER)
+					values[1] = CStringGetTextDatum(e->username);
+				else
+					nulls[1] = true;
+
+				if (e->pid != 0)
+					values[2] = Int32GetDatum(e->pid);
+				else
+					nulls[2] = true;
+
+				if (e->type == LL_USER)
+				{
+					values[3] = CStringGetTextDatum(e->remote_host);
+					values[4] = Int32GetDatum(e->remote_port);
+				}
+				else
+				{
+					nulls[3] = true;
+					nulls[4] = true;
+				}
+
+				values[5] = TimestampTzGetDatum(e->login_time);
+
+				if (e->logout_time != 0)
+				{
+					values[6] = TimestampTzGetDatum(e->logout_time);
+					values[7] = DirectFunctionCall2(timestamptz_age,
+								TimestampTzGetDatum(e->logout_time),
+								TimestampTzGetDatum(e->login_time));
+				}
+				else
+				{
+					nulls[6] = true;
+					nulls[7] = true;
+				}
+
+				values[8] = CStringGetTextDatum(
+					e->type == LL_USER ? "disconnected" : tname);
+
+				if (e->type == LL_USER && lastlog_track_query
+					&& e->last_query[0] != '\0')
+					values[9] = CStringGetTextDatum(e->last_query);
+				else
+					nulls[9] = true;
+
+				tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+			}
+
+			idx = (idx + ll_hdr->capacity - 1) % ll_hdr->capacity;
+		}
+	}
+
+	LWLockRelease(lastlog->lock);
+
+	return (Datum) 0;
+}
+
 void
 _PG_init(void)
 {
@@ -1743,6 +2436,50 @@ _PG_init(void)
 					gettext_noop("maximum of entries in the auth failure cache"), NULL,
 					&pgaf_max, 1024, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
 					NULL, NULL, NULL);
+
+		DefineCustomBoolVariable("credcheck.lastlog",
+					gettext_noop("enable the last-login history (utmp-like)"), NULL,
+					&lastlog_enabled, false, PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_max",
+					gettext_noop("number of records kept in the lastlog history ring"),
+					gettext_noop("Sizes the memory-mapped history file. Should be >= max_connections."),
+					&lastlog_max, 1024, 16, (INT_MAX / 4096), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_query_size",
+					gettext_noop("maximum length stored for the last SQL query in lastlog"),
+					NULL, &lastlog_query_size, 1024, 0, (1024 * 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomBoolVariable("credcheck.lastlog_track_query",
+					gettext_noop("store the last executed SQL query in lastlog"), NULL,
+					&lastlog_track_query, false, PGC_SIGHUP, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_flush_interval",
+					gettext_noop("seconds between lastlog msync flushes (0 = at shutdown only)"),
+					NULL, &lastlog_flush_interval, 0, 0, 86400, PGC_SIGHUP,
+					GUC_UNIT_S, NULL, NULL, NULL);
+
+		/* Register the lastlog flush/shutdown background worker. */
+		if (lastlog_enabled)
+		{
+			BackgroundWorker	worker;
+
+			MemSet(&worker, 0, sizeof(BackgroundWorker));
+			worker.bgw_flags = BGWORKER_SHMEM_ACCESS;
+			worker.bgw_start_time = BgWorkerStart_PostmasterStart;
+			worker.bgw_restart_time = 5;
+			snprintf(worker.bgw_library_name, BGW_MAXLEN, "credcheck");
+			snprintf(worker.bgw_function_name, BGW_MAXLEN, "lastlog_bgworker_main");
+			snprintf(worker.bgw_name, BGW_MAXLEN, "credcheck lastlog flusher");
+			snprintf(worker.bgw_type, BGW_MAXLEN, "credcheck lastlog");
+			worker.bgw_main_arg = (Datum) 0;
+			worker.bgw_notify_pid = 0;
+			RegisterBackgroundWorker(&worker);
+		}
 
 #if PG_VERSION_NUM >= 150000
 		/* Register custom WAL rmgr that replicates the password history. */
@@ -1807,6 +2544,11 @@ _PG_init(void)
         RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
         RequestAddinShmemSpace(pgaf_memsize());
         RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
+        if (lastlog_enabled)
+        {
+                RequestAddinShmemSpace(lastlog_memsize());
+                RequestNamedLWLockTranche(LASTLOG_TRANCHE_NAME, 1);
+        }
 #else
 	MarkGUCPrefixReserved("credcheck");
 	MarkGUCPrefixReserved("credcheck_internal");
@@ -2341,6 +3083,11 @@ pghist_shmem_request(void)
 	RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
 	RequestAddinShmemSpace(pgaf_memsize());
 	RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
+	if (lastlog_enabled)
+	{
+		RequestAddinShmemSpace(lastlog_memsize());
+		RequestNamedLWLockTranche(LASTLOG_TRANCHE_NAME, 1);
+	}
 }
 #endif
 
@@ -2354,6 +3101,8 @@ pghist_shmem_startup(void)
 	pgph_shmem_startup();
 
 	pgaf_shmem_startup();
+
+	lastlog_shmem_startup();
 }
 
 /*
@@ -3240,6 +3989,10 @@ credcheck_max_auth_failure(Port *port, int status)
 		}
 	}
 
+	/* Record the successful login in the lastlog history. */
+	if (status == STATUS_OK)
+		lastlog_record_login(port);
+
 	if (prev_ClientAuthentication)
 		prev_ClientAuthentication(port, status);
 
@@ -3522,6 +4275,10 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			}
 		}
 	}
+
+	/* Remember the last executed query for the lastlog view. */
+	if (queryDesc->sourceText != NULL)
+		lastlog_track_last_query(queryDesc->sourceText);
 
         /* Continue the normal behavior */
         if (prev_ExecutorStart)
