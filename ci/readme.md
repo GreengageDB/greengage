@@ -12,6 +12,42 @@ for Rocky Linux:
 docker build -t gpdb7_regress:latest -f ci/Dockerfile .
 ```
 
+To build images that can compile the optional Arrow Flight extension, enable
+Apache Arrow C++ dependencies explicitly:
+
+for Ubuntu:
+```bash
+docker build -t gpdb7_u22_arrowflight:latest \
+  --build-arg WITH_ARROW_FLIGHT_DEPS=true \
+  -f ci/Dockerfile.ubuntu .
+```
+
+for Rocky Linux:
+```bash
+docker build -t gpdb7_regress_arrowflight:latest \
+  --build-arg WITH_ARROW_FLIGHT_DEPS=true \
+  -f ci/Dockerfile .
+```
+
+The standard CI images use the x86_64 packaging path. For a native Linux
+ARM64 development image, build Greengage directly with:
+
+```bash
+docker buildx build --load \
+  --platform linux/arm64 \
+  --build-arg WITH_ARROW_FLIGHT_DEPS=true \
+  --target dev \
+  -f ci/Dockerfile.ubuntu.arm64-dev \
+  -t greengage7-u22-arm64-dev:latest \
+  .
+```
+
+Then build the extension with:
+```bash
+make -C gpcontrib/arrowflight USE_ARROW_FLIGHT=1
+make -C gpcontrib/arrowflight installcheck USE_ARROW_FLIGHT=1
+```
+
 ## Full regression tests suite run
 
 We need to execute [../concourse/scripts/ic_gpdb.bash](../concourse/scripts/ic_gpdb.bash) in container to create demo cluster and run different test suites against it:

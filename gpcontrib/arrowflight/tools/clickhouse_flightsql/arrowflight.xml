@@ -1,0 +1,8 @@
+<clickhouse>
+    <arrowflight_port>9005</arrowflight_port>
+    <arrowflight>
+        <cancel_ticket_after_do_get>true</cancel_ticket_after_do_get>
+    </arrowflight>
+    <postgresql_port>9012</postgresql_port>
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>

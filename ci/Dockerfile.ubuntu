@@ -2,6 +2,9 @@ FROM ubuntu:22.04 AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+ARG WITH_ARROW_FLIGHT_DEPS=false
+ARG ARROW_FLIGHT_PACKAGE_VERSION=
+
 ARG UBUNTU_MAIN_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_UPDATES_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG UBUNTU_BACKPORTS_MIRROR=http://archive.ubuntu.com/ubuntu
@@ -36,6 +39,12 @@ RUN set -eux; \
       'mock<=5.0.0' \
       protobuf==3.20.0 \
       pytest
+
+COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+RUN if [[ "${WITH_ARROW_FLIGHT_DEPS}" == "true" || "${WITH_ARROW_FLIGHT_DEPS}" == "yes" || "${WITH_ARROW_FLIGHT_DEPS}" == "1" ]]; then \
+      bash /tmp/install_arrow_flight_deps.bash; \
+    fi; \
+    rm -f /tmp/install_arrow_flight_deps.bash
 
 FROM base AS build
 

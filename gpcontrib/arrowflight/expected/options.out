@@ -1,0 +1,439 @@
+CREATE SERVER flightsql_options_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    timeout_ms '1000',
+    max_endpoints '100',
+    max_plan_bytes '1048576',
+    batch_rows '8',
+    max_batch_bytes '4096',
+    endpoint_location_allowlist 'grpc+tcp://worker1.example:9005,grpc+tcp://worker2.example:9005'
+);
+CREATE SERVER flightsql_bad_auth_no_tls_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    auth_token_file '/tmp/token'
+);
+ERROR:  flightsql_fdw TLS/auth file options require tls=true
+CREATE SERVER flightsql_bad_cert_only_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    tls 'true',
+    tls_client_cert_file '/tmp/client.pem'
+);
+ERROR:  flightsql_fdw options "tls_client_cert_file" and "tls_client_key_file" must be set together
+CREATE SERVER flightsql_bad_max_endpoints_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    max_endpoints '0'
+);
+ERROR:  invalid max_endpoints value "0"
+HINT:  Use an integer value between 1 and 2147483647.
+CREATE SERVER flightsql_bad_endpoint_scheme_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    tls 'true',
+    endpoint_location_allowlist 'grpc+tcp://worker.example:9005'
+);
+ERROR:  invalid endpoint location in flightsql_fdw endpoint_location_allowlist
+DETAIL:  Every entry must use the "grpc+tls://" scheme.
+CREATE SERVER flightsql_bad_endpoint_path_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    endpoint_location_allowlist 'grpc+tcp://worker.example:9005/path'
+);
+ERROR:  invalid endpoint location in flightsql_fdw endpoint_location_allowlist
+DETAIL:  Endpoint locations must contain only a host and an explicit port.
+CREATE SERVER flightsql_bad_max_plan_bytes_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    max_plan_bytes '1000'
+);
+ERROR:  invalid max_plan_bytes value "1000"
+HINT:  Use an integer value between 1024 and 2147483647.
+CREATE SERVER flightsql_bad_row_count_check_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    ingest_row_count_check 'relaxed'
+);
+ERROR:  invalid ingest_row_count_check value "relaxed"
+HINT:  Use "exact" or "off".
+CREATE SERVER flightsql_bad_transaction_mode_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    write_transaction_mode 'best_effort'
+);
+ERROR:  invalid write_transaction_mode value "best_effort"
+HINT:  Use "auto_commit" or "required".
+CREATE SERVER flightsql_bad_routing_mode_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    write_routing_mode 'automatic'
+);
+ERROR:  invalid write_routing_mode value "automatic"
+HINT:  Use "origin" or "planned".
+CREATE SERVER flightsql_bad_predicate_pushdown_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    predicate_pushdown 'sometimes'
+);
+ERROR:  invalid boolean value "sometimes" for flightsql_fdw option "predicate_pushdown"
+CREATE SERVER flightsql_bad_segment_count_srv
+FOREIGN DATA WRAPPER flightsql_fdw
+OPTIONS (
+    host 'localhost',
+    port '8815',
+    num_segments '2147483647'
+);
+CREATE FOREIGN TABLE flightsql_bad_segment_count (
+    id int4
+)
+SERVER flightsql_bad_segment_count_srv
+OPTIONS (
+    table_name 'bad_segment_count'
+);
+DO $$
+BEGIN
+    EXECUTE 'EXPLAIN SELECT * FROM flightsql_bad_segment_count';
+    RAISE EXCEPTION 'expected num_segments validation failure';
+EXCEPTION
+    WHEN invalid_parameter_value THEN
+        RAISE NOTICE 'mismatched Flight SQL num_segments rejected';
+END
+$$;
+NOTICE:  mismatched Flight SQL num_segments rejected
+DROP FOREIGN TABLE flightsql_bad_segment_count;
+DROP SERVER flightsql_bad_segment_count_srv;
+CREATE FOREIGN TABLE flightsql_missing_table (
+    id int4
+)
+SERVER flightsql_options_srv;
+ERROR:  flightsql_fdw foreign table requires option "table_name"  (seg2 192.168.215.3:7004 pid=19674)
+CREATE FOREIGN TABLE flightsql_options_check (
+    id int4 OPTIONS (column_name 'remote_id'),
+    label text
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'events',
+    schema_name 'default',
+    rows '10'
+);
+CREATE FOREIGN TABLE flightsql_pushdown_off_check (
+    id int4 OPTIONS (column_name 'remote_id'),
+    label text
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'events',
+    schema_name 'default',
+    rows '10',
+    predicate_pushdown 'false'
+);
+CREATE FOREIGN TABLE flightsql_predicate_types_check (
+    id int4,
+    active bool,
+    amount float8,
+    exact_amount numeric(12, 2),
+    event_date date,
+    event_time time,
+    event_timestamp timestamp,
+    zoned_timestamp timestamptz,
+    fixed_label char(8)
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'predicate_types',
+    schema_name 'default',
+    rows '10'
+);
+CREATE FOREIGN TABLE flightsql_required_check (
+    id int4
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'required_check',
+    write_transaction_mode 'required'
+);
+CREATE FOREIGN TABLE flightsql_bad_security_table_option (
+    id int4
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'bad_security',
+    auth_token_file '/tmp/token'
+);
+ERROR:  invalid option "auth_token_file" for flightsql_fdw  (seg1 192.168.215.3:7003 pid=19673)
+CREATE FOREIGN TABLE flightsql_bad_endpoint_table_option (
+    id int4
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'bad_endpoint',
+    endpoint_location_allowlist 'grpc+tcp://worker.example:9005'
+);
+ERROR:  invalid option "endpoint_location_allowlist" for flightsql_fdw  (seg1 192.168.215.3:7003 pid=19673)
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE label = 'one';
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Flight SQL query: SELECT remote_id AS id FROM "default".events WHERE (label = 'one')
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id >= 1
+  AND id < 10
+  AND label = 'one'
+  AND label IS NOT NULL;
+                                                                                      QUERY PLAN                                                                                       
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Flight SQL query: SELECT remote_id AS id FROM "default".events WHERE (remote_id >= 1) AND (remote_id < 10) AND (label = 'one') AND (NOT (label IS NULL))
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id IN (1, 3, 5);
+                                                            QUERY PLAN                                                             
+-----------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Flight SQL query: SELECT remote_id AS id FROM "default".events WHERE (remote_id IN (1, 3, 5))
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id NOT IN (1, NULL);
+                               QUERY PLAN                               
+------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Filter: (id <> ALL ('{1,NULL}'::integer[]))
+         Flight SQL query: SELECT remote_id AS id FROM "default".events
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE label = 'O''Reilly';
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Flight SQL query: SELECT remote_id AS id FROM "default".events WHERE (label = 'O''Reilly')
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE label = E'path\\value';
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Filter: (label = 'path\value'::text)
+         Flight SQL query: SELECT remote_id AS id, label AS label FROM "default".events
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id = 1 OR id = 2;
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Flight SQL query: SELECT remote_id AS id FROM "default".events WHERE ((remote_id = 1) OR (remote_id = 2))
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id = 1 OR lower(label) = 'one';
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Filter: ((id = 1) OR (lower(label) = 'one'::text))
+         Flight SQL query: SELECT remote_id AS id, label AS label FROM "default".events
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE id > 0
+  AND lower(label) = 'one';
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Filter: (lower(label) = 'one'::text)
+         Flight SQL query: SELECT remote_id AS id, label AS label FROM "default".events WHERE (remote_id > 0)
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_options_check
+WHERE label > 'one';
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_options_check
+         Filter: (label > 'one'::text)
+         Flight SQL query: SELECT remote_id AS id, label AS label FROM "default".events
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_pushdown_off_check
+WHERE id > 0
+  AND label = 'one';
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_pushdown_off_check
+         Filter: ((id > 0) AND (label = 'one'::text))
+         Flight SQL query: SELECT remote_id AS id, label AS label FROM "default".events
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_predicate_types_check
+WHERE active
+  AND amount = 1.5
+  AND exact_amount >= 10.25
+  AND event_date >= DATE '2025-01-02'
+  AND event_timestamp < TIMESTAMP '2025-01-02 12:34:56';
+                                                                                                             QUERY PLAN                                                                                                             
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_predicate_types_check
+         Flight SQL query: SELECT id AS id FROM "default".predicate_types WHERE active AND (amount = 1.5) AND (exact_amount >= 10.25) AND (event_date >= DATE '2025-01-02') AND (event_timestamp < TIMESTAMP '2025-01-02 12:34:56')
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_predicate_types_check
+WHERE active IS UNKNOWN;
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_predicate_types_check
+         Flight SQL query: SELECT id AS id FROM "default".predicate_types WHERE (active IS NULL)
+ Optimizer: GPORCA
+(4 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT id
+FROM flightsql_predicate_types_check
+WHERE amount > 1.5
+  AND active IS TRUE
+  AND event_time < TIME '12:34:56.123456'
+  AND event_timestamp < TIMESTAMP '2025-01-02 12:34:56.123456'
+  AND zoned_timestamp IS NOT NULL
+  AND fixed_label = 'fixed';
+                                                                                                                            QUERY PLAN                                                                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   ->  Foreign Scan on flightsql_predicate_types_check
+         Filter: ((amount > '1.5'::double precision) AND (active IS TRUE) AND (event_time < '12:34:56.123456'::time without time zone) AND (event_timestamp < 'Thu Jan 02 12:34:56.123456 2025'::timestamp without time zone) AND (fixed_label = 'fixed'::bpchar))
+         Flight SQL query: SELECT id AS id, active AS active, amount AS amount, event_time AS event_time, event_timestamp AS event_timestamp, fixed_label AS fixed_label FROM "default".predicate_types WHERE (NOT (zoned_timestamp IS NULL))
+ Optimizer: GPORCA
+(5 rows)
+
+EXPLAIN (VERBOSE, COSTS OFF)
+INSERT INTO flightsql_options_check
+VALUES (1, 'one');
+                      QUERY PLAN                      
+------------------------------------------------------
+ Insert on public.flightsql_options_check
+   Flight SQL Ingest Table: events
+   Flight SQL Ingest Mode: append
+   Flight SQL Transaction Mode: auto_commit
+   Flight SQL Write Routing: origin
+   ->  Redistribute Motion 1:3  (slice1; segments: 1)
+         Output: 1, 'one'::text
+         ->  Result
+               Output: 1, 'one'::text
+ Optimizer: Postgres-based planner
+(9 rows)
+
+CREATE FOREIGN TABLE flightsql_bad_type (
+    payload bit(8)
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'bad_type'
+);
+EXPLAIN (COSTS OFF)
+SELECT * FROM flightsql_bad_type;
+ERROR:  column "payload" has unsupported Greengage type bit for flightsql_fdw
+CREATE FOREIGN TABLE flightsql_bad_array (
+    payload int4[]
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'bad_array'
+);
+EXPLAIN (COSTS OFF)
+SELECT * FROM flightsql_bad_array;
+ERROR:  column "payload" has unsupported Greengage type integer[] for flightsql_fdw
+CREATE FOREIGN TABLE flightsql_bad_batch_rows (
+    id int4
+)
+SERVER flightsql_options_srv
+OPTIONS (
+    table_name 'bad_batch_rows',
+    batch_rows '0'
+);
+ERROR:  invalid batch_rows value "0"  (seg1 192.168.215.3:7003 pid=19673)
+HINT:  Use an integer value between 1 and 2147483647.
+DROP FOREIGN TABLE flightsql_bad_array;
+DROP FOREIGN TABLE flightsql_bad_type;
+DROP FOREIGN TABLE flightsql_required_check;
+DROP FOREIGN TABLE flightsql_predicate_types_check;
+DROP FOREIGN TABLE flightsql_pushdown_off_check;
+DROP FOREIGN TABLE flightsql_options_check;
+DROP SERVER flightsql_options_srv;
