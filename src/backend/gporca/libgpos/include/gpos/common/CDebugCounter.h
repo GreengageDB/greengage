@@ -92,7 +92,6 @@
 // enable this feature
 #define GPOS_DEBUG_COUNTERS
 #endif
-#endif
 
 // define macros
 #ifdef GPOS_DEBUG_COUNTERS
