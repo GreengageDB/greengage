@@ -26,6 +26,22 @@ INSERT 6000
 CREATE TABLE pdlru_vmem (tag text, vmem_mb int);
 CREATE
 
+-- clear any of these faults a previously aborted test may have left set
+2: SELECT gp_inject_fault('ao_column_insert_init_1','reset',dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+2: SELECT gp_inject_fault('ao_column_insert_init_2','reset',dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+(3 rows)
+
 -- ===================== unbounded =====================
 2: SELECT gp_inject_fault('ao_column_insert_init_1','skip','','','',1,-1,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
  gp_inject_fault 

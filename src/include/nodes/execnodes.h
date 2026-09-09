@@ -386,10 +386,10 @@ typedef struct ResultRelInfo
 
 	/*
 	 * Private context holding this leaf partition's LRU-bounded AO/AOCS insert
-	 * descriptor (see gp_max_partition_open_insert_descs). Reset on eviction so
-	 * that repeatedly opening and closing the descriptor cannot leak
-	 * es_query_cxt. NULL when the descriptor lives directly in es_query_cxt
-	 * (the historical, unbounded behaviour).
+	 * descriptor (see gp_max_partition_open_insert_descs). Deleted (and set back
+	 * to NULL) on eviction so that repeatedly opening and closing the descriptor
+	 * cannot leak es_query_cxt. NULL when the descriptor lives directly in
+	 * es_query_cxt (the historical, unbounded behaviour).
 	 */
 	MemoryContext ri_partInsertDescCxt;
 

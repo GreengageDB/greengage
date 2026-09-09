@@ -28,6 +28,10 @@ INSERT INTO pdlru_stg SELECT g, g % 30,
 
 CREATE TABLE pdlru_vmem (tag text, vmem_mb int);
 
+-- clear any of these faults a previously aborted test may have left set
+2: SELECT gp_inject_fault('ao_column_insert_init_1','reset',dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+2: SELECT gp_inject_fault('ao_column_insert_init_2','reset',dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
+
 -- ===================== unbounded =====================
 2: SELECT gp_inject_fault('ao_column_insert_init_1','skip','','','',1,-1,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
 2: SELECT gp_inject_fault('ao_column_insert_init_2','suspend','','','',28,28,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;

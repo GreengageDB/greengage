@@ -4691,13 +4691,19 @@ PartInsertDescClose(ResultRelInfo *rri)
 	 * aocs_insert_finish() / appendonly_insert_finish() only free part of what
 	 * the matching _init() allocated -- the rest is normally reclaimed when
 	 * es_query_cxt is reset at end of statement. Since we re-run the open/close
-	 * cycle many times within one statement, reclaim it now by resetting the
+	 * cycle many times within one statement, reclaim it now by deleting the
 	 * descriptor's private context (see PartInsertDescMemoryContext); otherwise
 	 * a wide, many-partition load leaks es_query_cxt without bound and defeats
-	 * the whole point of the limit.
+	 * the whole point of the limit. Delete rather than reset so nothing (not
+	 * even an empty keeper block per partition) lingers for partitions that are
+	 * never written again; PartInsertDescMemoryContext() recreates it lazily on
+	 * re-open.
 	 */
 	if (rri->ri_partInsertDescCxt != NULL)
-		MemoryContextReset(rri->ri_partInsertDescCxt);
+	{
+		MemoryContextDelete(rri->ri_partInsertDescCxt);
+		rri->ri_partInsertDescCxt = NULL;
+	}
 }
 
 static void
@@ -4796,8 +4802,8 @@ PartInsertDescTouch(EState *estate, ResultRelInfo *rri)
  *
  * When the open descriptors are LRU-bounded, each leaf partition gets its own
  * child context of es_query_cxt so that evicting it (PartInsertDescClose) can
- * reset the whole thing. Otherwise this is just es_query_cxt and behaviour is
- * exactly as before.
+ * delete the whole thing; it is recreated here on the next open. Otherwise this
+ * is just es_query_cxt and behaviour is exactly as before.
  */
 MemoryContext
 PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
