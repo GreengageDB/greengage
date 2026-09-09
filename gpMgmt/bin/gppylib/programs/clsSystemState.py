@@ -1053,11 +1053,17 @@ class GpSystemStateProgram(object):
                     cursor.close()
                     if rows:
                         # wal connection is active.
-                        if rows[0][1] != 'sync':
+                        if rows[0][2] != 'sync':
                             # walsender is in 'catchup' state
                             wal_sync_bytes_out = rows[0][0]
                             unsync_segs.append(s)
                             data.addValue(VALUE__REPL_SYNC_REMAINING_BYTES, wal_sync_bytes_out)
+                        elif rows[0][2] == 'Sync':
+                            if rows[0][1] != 0:
+                                # wals are being replayed
+                                wal_sync_bytes_out = rows[0][1]
+                                unsync_segs.append(s)
+                                data.addValue(VALUE__REPL_SYNC_REMAINING_BYTES, wal_sync_bytes_out)
                     else:
                         # no return value from pg_stat_replication, there isn't a replication connection
                         wal_sync_bytes_out = 'Unknown'
