@@ -4649,13 +4649,19 @@ select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
 ---------------+----------+------+--------+--------
 (0 rows)
 
+select gp_debug_reset_create_table_default_numsegments();
+ gp_debug_reset_create_table_default_numsegments 
+-------------------------------------------------
+ 
+(1 row)
+
 -- start_ignore
 -- We need to do a cluster expansion which will check if there are partial
 -- tables, we need to drop the partial tables to keep the cluster expansion
 -- run correctly.
 reset search_path;
 drop schema test_partial_table cascade;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to table test_partial_table.t1
 drop cascades to table test_partial_table.d1
 drop cascades to table test_partial_table.r1
@@ -4665,4 +4671,5 @@ drop cascades to table test_partial_table.r2
 drop cascades to table test_partial_table.size_sanity_check
 drop cascades to table test_partial_table.partial_rpt_from
 drop cascades to table test_partial_table.partial_rpt_to
+drop cascades to table test_partial_table.sales
 -- end_ignore

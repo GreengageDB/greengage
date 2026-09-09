@@ -6829,14 +6829,6 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 --
 -- Test that segment is choosen correctly in case of insertion also
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
-NOTICE:  extension "gp_debug_numsegments" already exists, skipping
-SELECT gp_debug_set_create_table_default_numsegments(2);
- gp_debug_set_create_table_default_numsegments 
------------------------------------------------
- 2
-(1 row)
-
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
@@ -6858,14 +6850,6 @@ SELECT gp_segment_id, * FROM rank3_1_prt_2;
 --
 -- Test that segment is choosen correctly even in case of different attribute number
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
-NOTICE:  extension "gp_debug_numsegments" already exists, skipping
-SELECT gp_debug_set_create_table_default_numsegments(2);
- gp_debug_set_create_table_default_numsegments 
------------------------------------------------
- 2
-(1 row)
-
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
@@ -6936,16 +6920,17 @@ SELECT gp_segment_id, * FROM rank4_1_prt_5;
 ---------------+----+------+--------+-------+------
 (0 rows)
 
-SELECT gp_debug_set_create_table_default_numsegments(3);
- gp_debug_set_create_table_default_numsegments 
------------------------------------------------
- 3
+SELECT gp_debug_reset_create_table_default_numsegments();
+ gp_debug_reset_create_table_default_numsegments 
+-------------------------------------------------
+ 
 (1 row)
 
 DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
+DROP TABLE rank4_1_prt_6;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;

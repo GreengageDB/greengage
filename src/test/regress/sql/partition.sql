@@ -4352,9 +4352,6 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 --
 -- Test that segment is choosen correctly in case of insertion also
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
-SELECT gp_debug_set_create_table_default_numsegments(2);
-
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
@@ -4375,9 +4372,6 @@ SELECT gp_segment_id, * FROM rank3_1_prt_2;
 --
 -- Test that segment is choosen correctly even in case of different attribute number
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
-SELECT gp_debug_set_create_table_default_numsegments(2);
-
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
@@ -4407,7 +4401,7 @@ UPDATE rank4 SET year=2006 WHERE gender='f';
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
 
-SELECT gp_debug_set_create_table_default_numsegments(3);
+SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
 DROP TABLE rank2;
