@@ -24,6 +24,7 @@
 
 #include "access/relation.h"
 #include "access/sysattr.h"
+#include "catalog/partition.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "foreign/fdwapi.h"
@@ -3240,13 +3241,17 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Plan	   *subplan;
 	SplitUpdate *splitupdate;
 	Relation	resultRel;
+	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
 	GpPolicy   *cdbpolicy;
+	GpPolicy   *rootRelCdbpolicy = NULL;
 	int			attrIdx;
 	ListCell   *lc;
 	int			lastresno;
 	Oid		   *hashFuncs;
+	AttrNumber *hashAttnos;
 	int			i;
+	Oid 		rootoid = InvalidOid;
 
 	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
@@ -3329,25 +3334,74 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 														   "DMLAction",
 														   true));
 
+	/*
+	 * If we're split-updating partitioned relation, it could mean, that
+	 * partitioning column is being updated. In that case we can not rely on
+	 * leaf-tables partitioning policy alone, as it may be 2 stage of gpexpand
+	 * where some tables are still distributed randomly and some are already
+	 * hash redistributed. So we better off to use root's partition policy
+	 * that way we would statisfy all possible distributions.
+	 */
+	Form_pg_class classForm = resultRel->rd_rel;
+	if ((classForm->relkind == RELKIND_RELATION ||
+		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+		classForm->relispartition)
+	{
+		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
+		rootRel = relation_open(rootoid, AccessShareLock);
+		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
+	}
+
+	if (!GpPolicyIsHashPartitioned(cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
+	{
+		cdbpolicy = rootRelCdbpolicy;
+		resultDesc = RelationGetDescr(rootRel);
+	}
+
 	/* Look up the right hash functions for the hash expressions */
 	hashFuncs = palloc(cdbpolicy->nattrs * sizeof(Oid));
+	hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
 	for (i = 0; i < cdbpolicy->nattrs; i++)
 	{
-		AttrNumber	attnum = cdbpolicy->attrs[i];
-		Oid			typeoid = resultDesc->attrs[attnum - 1].atttypid;
+		AttrNumber	policy_attnum = cdbpolicy->attrs[i];
+		AttrNumber	leaf_attnum;
+		Oid			typeoid = resultDesc->attrs[policy_attnum - 1].atttypid;
 		Oid			opfamily;
+
+		/*
+		 * If we are using the root partition's distribution policy,
+		 * policy_attnum is the catalog attnum of the root table. However, the
+		 * subplan's targetlist is built for the LEAF table, where 
+		 * resno == leaf_catalog_attnum. We must map the root's attnum to the
+		 * leaf's attnum via column name.
+		 */
+		if (cdbpolicy == rootRelCdbpolicy)
+		{
+			char *colname = get_attname(rootoid, policy_attnum, false);
+			leaf_attnum = get_attnum(RelationGetRelid(resultRel), colname);
+			if (!AttributeNumberIsValid(leaf_attnum))
+			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+				 colname, rootoid);
+			pfree(colname);
+		}
+		else
+		{
+			leaf_attnum = policy_attnum;
+		}
+		hashAttnos[i] = leaf_attnum;
 
 		opfamily = get_opclass_family(cdbpolicy->opclasses[i]);
 
 		hashFuncs[i] = cdb_hashproc_in_opfamily(opfamily, typeoid);
 	}
 	splitupdate->numHashAttrs = cdbpolicy->nattrs;
-	splitupdate->hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
-	memcpy(splitupdate->hashAttnos, cdbpolicy->attrs, cdbpolicy->nattrs * sizeof(AttrNumber));
+	splitupdate->hashAttnos = hashAttnos;
 	splitupdate->hashFuncs = hashFuncs;
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 
 	relation_close(resultRel, NoLock);
+	if (rootRel)
+		relation_close(rootRel, AccessShareLock);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,

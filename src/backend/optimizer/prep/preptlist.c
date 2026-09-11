@@ -44,6 +44,7 @@
 
 #include "access/sysattr.h"
 #include "access/table.h"
+#include "access/relation.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
@@ -53,6 +54,8 @@
 #include "parser/parse_coerce.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
+#include "partitioning/partdesc.h"
+#include "catalog/partition.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -252,6 +255,43 @@ preprocess_targetlist(PlannerInfo *root)
 		table_close(target_relation, NoLock);
 
 	return tlist;
+}
+
+/*
+ * fixup_columns_attnos
+ *
+ * Returns a bitmapset which contains attribute number of the parent
+ * table based on the given bitmapset of the child.
+ */
+static Bitmapset *
+fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
+{
+	Bitmapset  *result = NULL;
+	int			index = -1;
+
+	/*
+	 * obviously, no need to do anything here
+	 */
+	if (parentId == childId)
+		return columns;
+
+	while ((index = bms_next_member(columns, index)) >= 0)
+	{
+		char	   *attname;
+
+		attname = get_attname(childId, index, false);
+		AttrNumber attno = get_attnum(parentId, attname);
+		if (!AttributeNumberIsValid(attno))
+			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+				 attname, parentId);
+
+		result = bms_add_member(result,
+								attno - FirstLowInvalidHeapAttributeNumber);
+
+		pfree(attname);
+	}
+
+	return result;
 }
 
 
@@ -465,6 +505,45 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			 * time to actually create the ModifyTable, and SplitUpdate, node.
 			 */
 			root->is_split_update = true;
+		}
+
+		/*
+		 * If we're updating values in partitioned table, we need to be aware
+		 * of updating values at partitioning key columns. Because such updates
+		 * could lead to tuples being moved from one leaf-table to another.
+		 * And these leaf-tables could have different distribution policies
+		 * (at second stage of gpexpand some leaf-tables could be partitioned
+		 * randomly and some could be partitioned by hash). So we could
+		 * possible end up in situation where we need to remove tuple from one
+		 * segment and make it appear on other. For that we would need to use
+		 * split update as simple update is capable of deletion and insertion
+		 * of tuples only on one segment.
+		 */
+		Form_pg_class classForm = rel->rd_rel;
+		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
+			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+			classForm->relispartition)
+		{
+			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+
+			Bitmapset *changed_cols_for_partition_check = fixup_columns_attnos(rootoid, RelationGetRelid(rel), changed_cols);
+
+			Relation rootRel = relation_open(rootoid, RowShareLock);
+			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
+
+			// Check if we're updating partitioning key columns of hash-distributed table
+			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy) &&
+				has_partition_attrs(rootRel, changed_cols_for_partition_check, NULL)) 
+			{
+				/*
+				 * We don't need split update on tuples from already hash
+				 * distributed leaf-partition, as they could possible be
+				 * transferred only to randomly distributed tables, where 
+				 * final segment doesn't matter.
+				 */
+				root->is_split_update = true;
+			}
+			relation_close(rootRel, RowShareLock);
 		}
 	}
 
