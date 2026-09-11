@@ -12,6 +12,18 @@ TEST_OS=${TEST_OS:-ubuntu}
 GPDB_DEMO_DATADIRS=/home/gpadmin/gpdb_src/gpAux/gpdemo/datadirs
 ISOLATION2_TESTTABLESPACE=/home/gpadmin/gpdb_src/src/test/isolation2/testtablespace
 
+exit_handlers=()
+
+run_exit_handlers() {
+    local rc=$?
+    local h
+    for h in "${exit_handlers[@]}"; do
+        "$h" || true
+    done
+    return "$rc"
+}
+trap run_exit_handlers EXIT
+
 fatal() {
     echo "FATAL: $*" >&2
     exit 1
@@ -37,9 +49,7 @@ assert_real_filesystem() {
 
 # Restore cgroup.procs mode on exit.
 cleanup_cgroup_v2() {
-    local rc=$?
-    chmod "$ORIG_CGROUP_PROCS_MODE" /sys/fs/cgroup/cgroup.procs 2>/dev/null || true
-    return "$rc"
+    chmod "$ORIG_CGROUP_PROCS_MODE" /sys/fs/cgroup/cgroup.procs 2>/dev/null
 }
 
 # Create GPDB cgroup, enable parent controllers, and grant gpadmin access.
@@ -60,8 +70,17 @@ setup_cgroup_v2() {
 
     chown -R gpadmin:gpadmin /sys/fs/cgroup/gpdb
     ORIG_CGROUP_PROCS_MODE=$(stat -c %a /sys/fs/cgroup/cgroup.procs)
-    trap cleanup_cgroup_v2 EXIT
     chmod a+w /sys/fs/cgroup/cgroup.procs
+    
+    exit_handlers+=(cleanup_cgroup_v2)
+}
+
+cleanup_loop_devices() {
+    local i dir
+    for i in 1 2; do
+        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
+        mountpoint -q "$dir" && umount "$dir"
+    done
 }
 
 setup_loop_devices() {
@@ -72,7 +91,7 @@ setup_loop_devices() {
 
         mkdir -p "$dir"
         if ! mountpoint -q "$dir"; then
-            dd if=/dev/zero of="$img" bs=1M count=64
+            truncate -s 64M "$img"
             mkfs.ext4 -q -F "$img"
             mount -o loop "$img" "$dir"
         fi
@@ -88,16 +107,7 @@ setup_loop_devices() {
         prev=$src
     done
 
-    trap 'cleanup_cgroup_v2 || true; teardown_loop_devices' EXIT 
-}
-
-teardown_loop_devices() {
-    local i dir
-    for i in 1 2; do
-        dir="$ISOLATION2_TESTTABLESPACE/rg_io_limit_loop_$i"
-        mountpoint -q "$dir" && umount "$dir"
-    done
-    return 0
+    exit_handlers+=(cleanup_loop_devices) 
 }
 
 gen_env() {
