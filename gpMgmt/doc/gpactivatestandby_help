@@ -128,6 +128,22 @@ OPTIONS
 
  Displays the online help. 
 
+*****************************************************
+EXIT STATUS
+*****************************************************
+
+Normally, the exit status is 0, which means that the standby was promoted and
+successfully activated as the master without encountering any errors.
+
+An exit status of 1 means that the utility encountered an unexpected internal
+failure that is not handled by the normal error-handling path.
+
+An exit status of 2 means that the utility encountered somewhat an expected
+error that is handled appropriately.
+
+An exit status of 3 means that the standby was successfully promoted, but some
+non-critical errors were encountered that could not be ignored and should be
+examined. These errors do not mean that the utility failed in its purpose.
 
 *****************************************************
 EXAMPLES

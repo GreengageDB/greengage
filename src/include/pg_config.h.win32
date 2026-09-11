@@ -112,6 +112,10 @@
 # define gettimeofday(a,b) gettimeofday(a)
 #endif
 
+/* Product name used in version strings.  The MSVC build does not parameterize
+   the product name; keep this in sync with PACKAGE_NAME below. */
+#define GP_PRODUCT_NAME "Greengage Database"
+
 /* Define to 1 if you have the `ASN1_STRING_get0_data' function. */
 /* #undef HAVE_ASN1_STRING_GET0_DATA */
 
