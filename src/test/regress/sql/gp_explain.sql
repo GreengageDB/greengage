@@ -34,12 +34,27 @@ begin
 end;
 $$ language plpgsql;
 
+-- Return EXPLAIN ANALYZE result as xml to manipulate it further.
+create or replace function get_explain_analyze_xml_output(explain_query text)
+returns xml as
+$$
+declare
+  x xml;
+begin
+  execute 'EXPLAIN (ANALYZE, VERBOSE, FORMAT XML) ' || explain_query
+  into x;
+  return x;
+end;
+$$ language plpgsql;
+
 
 --
 -- Test explain_memory_verbosity option
 -- 
+set gp_use_legacy_hashops=off;
 CREATE TABLE explaintest (id int4);
 INSERT INTO explaintest SELECT generate_series(1, 10);
+reset gp_use_legacy_hashops;
 
 EXPLAIN ANALYZE SELECT * FROM explaintest;
 
@@ -162,22 +177,49 @@ set gp_enable_explain_allstat=on;
 explain analyze SELECT * FROM explaintest;
 set gp_enable_explain_allstat=DEFAULT;
 
+-- Test explain rows out.
+set gp_enable_explain_rows_out=on;
+
+\pset format unaligned
+\pset tuples_only on
+WITH query_plan (et) AS
+(
+  select get_explain_analyze_output($$
+    SELECT * FROM explaintest;
+  $$)
+)
+SELECT trim(et) FROM query_plan WHERE et like '%Rows out:%' AND et not like '%(seg-1)%';
+
+-- Rows out on a skewed distribution, so max and min land on different segments.
+set gp_use_legacy_hashops=off;
+CREATE TABLE explain_rows_skew (id int) DISTRIBUTED BY (id);
+INSERT INTO explain_rows_skew SELECT 2 FROM generate_series(1, 100);
+INSERT INTO explain_rows_skew SELECT 1 FROM generate_series(1, 10);
+INSERT INTO explain_rows_skew VALUES (5);
+reset gp_use_legacy_hashops;
+ANALYZE explain_rows_skew;
+
+SELECT xpath(
+  '//*[local-name()="Relation-Name" and text()="explain_rows_skew"]/..
+    /*[local-name()="Workers"
+       or local-name()="Average-Rows"
+       or local-name()="Max-Rows"
+       or local-name()="Max-Rows-Segment"
+       or local-name()="Min-Rows"
+       or local-name()="Min-Rows-Segment"]/text()',
+  x)
+FROM get_explain_analyze_xml_output($$
+    SELECT * FROM explain_rows_skew;
+  $$) AS query_plan(x);
+
+\pset tuples_only off
+\pset format aligned
+reset gp_enable_explain_rows_out;
+DROP TABLE explain_rows_skew;
+
 --
 -- Test output of EXPLAIN ANALYZE for Bitmap index scan's actual rows.
 --
-
--- Return EXPLAIN ANALYZE result as xml to manipulate it further.
-create or replace function get_explain_analyze_xml_output(explain_query text)
-returns xml as
-$$
-declare
-  x xml;
-begin
-  execute 'EXPLAIN (ANALYZE, VERBOSE, FORMAT XML) ' || explain_query
-  into x;
-  return x;
-end;
-$$ language plpgsql;
 
 -- force (Dynamic) Bitmap Index Scan
 set optimizer_enable_dynamictablescan=off;
@@ -337,25 +379,21 @@ FROM gp_dist_random('gp_id');
 DROP TABLE t1;
 
 
--- Check optional table alias support.
+-- Check table alias support.
 
 -- start_ignore
 drop table if exists foo_alias;
 -- end_ignore
 
--- Check that with optimizer_enable_table_alias=off plan doesn't have aliases.
--- When optimizer_enable_table_alias is off, table aliases are not supported.
-set optimizer_enable_table_alias=off;
-
+-- Test that optimizer_enable_table_alias GUC is defunct and by default aliases are being shown
 create table foo_alias (a int, b int);
 insert into foo_alias select generate_series(1,10);
 
 explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
 
--- When optimizer_enable_table_alias is on, table alias is supported and it 
--- can be easily seen with self joins
-set optimizer_enable_table_alias=on;
-explain delete from foo_alias bbb using foo_alias aaa where aaa.a=bbb.a;
+-- The GUC should be enabled by default and cannot be disabled
+show optimizer_enable_table_alias;
+set optimizer_enable_table_alias=off;
+show optimizer_enable_table_alias;
 
 drop table foo_alias;
-reset optimizer_enable_table_alias;

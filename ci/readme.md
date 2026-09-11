@@ -14,6 +14,18 @@ To build an image based on Ubuntu 24.04, specify the version in build args:
 docker build -t gpdb6_regress:latest --build-arg OS_VERSION=24.04 -f ci/Dockerfile.ubuntu .
 ```
 
+To build a Rocky Linux 8 image:
+
+```bash
+docker build -t gpdb6_rockylinux8:latest -f ci/Dockerfile.rockylinux .
+```
+
+To build a Rocky Linux 9 image:
+
+```bash
+docker build -t gpdb6_rockylinux9:latest --build-arg OS_VERSION=9 -f ci/Dockerfile.rockylinux .
+```
+
 
 ## Full regression tests suite run
 

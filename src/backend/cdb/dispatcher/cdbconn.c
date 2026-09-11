@@ -36,6 +36,7 @@ static uint32 cdbconn_get_motion_listener_port(PGconn *conn);
 static void cdbconn_disconnect(SegmentDatabaseDescriptor *segdbDesc);
 
 static void MPPnoticeReceiver(void *arg, const PGresult *res);
+static void MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueId queue_id);
 
 static const char *
 transStatusToString(PGTransactionStatusType status)
@@ -283,10 +284,28 @@ cdbconn_doConnectStart(SegmentDatabaseDescriptor *segdbDesc,
 	return;
 }
 
+static PQmetadataReceiver
+PQsetMetadataReceiver(PGconn *conn, PQmetadataReceiver proc, void *arg)
+{
+	PQmetadataReceiver old;
+
+	if (conn == NULL)
+		return NULL;
+
+	old = conn->metadataHooks.metadataRec;
+	if (proc)
+	{
+		conn->metadataHooks.metadataRec = proc;
+		conn->metadataHooks.metadataRecArg = arg;
+	}
+	return old;
+}
+
 void
 cdbconn_doConnectComplete(SegmentDatabaseDescriptor *segdbDesc)
 {
 	PQsetNoticeReceiver(segdbDesc->conn, &MPPnoticeReceiver, segdbDesc);
+	PQsetMetadataReceiver(segdbDesc->conn, &MPPmetadataReceiver, segdbDesc);
 
 	/*
 	 * Command the QE to initialize its motion layer. Wait for it to respond
@@ -869,4 +888,185 @@ forwardQENotices(void)
 	}
 	if (hasNotices)
 		pq_flush();
+}
+
+typedef struct ggMetadataQueue
+{
+	ggMetadataQueueId id;
+	int			count;
+	ggMetadataChunk *chunks;
+}	ggMetadataQueue;
+
+/* List of ggMetadataQueue */
+static List *ggMetadataQueues = NIL;
+
+static ggMetadataQueue *
+PQMetadataFindQueue(ggMetadataQueueId queue_id)
+{
+	ListCell   *lc;
+
+	foreach(lc, ggMetadataQueues)
+	{
+		ggMetadataQueue *queue = lfirst(lc);
+
+		if (queue->id == queue_id)
+			return queue;
+	}
+	return NULL;
+}
+
+static void
+MPPmetadataReceiver(void *arg, ggMetadataChunk *metadata_chunk, ggMetadataQueueId queue_id)
+{
+	SegmentDatabaseDescriptor *segdbDesc = arg;
+
+	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
+
+	/* 
+	 * queue is expected to be created by the extension
+	 */
+	if (queue == NULL)
+	{
+		elog(WARNING, "Could not recieve chunk. No metadata queue with id %u", queue_id);
+		pqPfree(metadata_chunk);
+		return;
+	}
+
+	metadata_chunk->next = queue->chunks;
+	metadata_chunk->segindex = segdbDesc->segindex;
+	queue->chunks = metadata_chunk;
+	queue->count++;
+}
+
+ggMetadataChunkIterator
+PQMetadataWalk(ggMetadataQueueId queue_id)
+{
+	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
+
+	if (!queue)
+		elog(ERROR, "No metadata queue with id %u", queue_id);
+	return queue->chunks;
+}
+
+ggMetadataChunkIterator
+PQgetNextMetadata(ggMetadataChunkIterator it)
+{
+	if (!it)
+		return NULL;
+
+	ggMetadataChunk *chunk = (ggMetadataChunk *) it;
+
+	return chunk->next;
+}
+
+void
+PQgetMetadata(ggMetadataChunkIterator it, ggMetadataDescriptor *out_desc)
+{
+	Assert(it != NULL);
+	Assert(out_desc != NULL);
+
+	ggMetadataChunk *chunk = (ggMetadataChunk *) it;
+
+	out_desc->metadataLen = chunk->metadataLen;
+	out_desc->segindex = chunk->segindex;
+	out_desc->data = chunk->payload;
+}
+
+int
+PQgetMetadataCount(ggMetadataQueueId queue_id)
+{
+	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
+
+	if (!queue)
+		elog(ERROR, "No metadata queue with id %u", queue_id);
+	return queue->count;
+}
+
+static void
+PQCleanMetadataInternal(ggMetadataQueue *queue)
+{
+	ggMetadataChunk *chunk = queue->chunks;
+
+	while (chunk)
+	{
+		ggMetadataChunkIterator next = chunk->next;
+
+		pqPfree(chunk);
+		chunk = next;
+	}
+	queue->chunks = NULL;
+	queue->count = 0;
+}
+
+void
+PQCleanMetadata(ggMetadataQueueId queue_id)
+{
+	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
+
+	if (!queue)
+		elog(ERROR, "No metadata queue with id %u", queue_id);
+
+	PQCleanMetadataInternal(queue);
+}
+
+
+ggMetadataQueueId
+PQMetadataNextQueueId(void)
+{
+	static ggMetadataQueueId queueId = 0;
+	return queueId++;
+}
+
+/* Callback executed at transaction end */
+static void
+PQDeleteMetadataQueues(void)
+{
+	while (ggMetadataQueues)
+	{
+		ListCell   *lc = list_head(ggMetadataQueues);
+		ggMetadataQueue *queue = lfirst(lc);
+
+		elog(WARNING, "Metadata queue %u was not deleted in transaction after use", queue->id);
+		PQDeleteMetadataQueue(queue->id);
+	}
+}
+
+void
+AtCommit_MetadataQueues(void)
+{
+	PQDeleteMetadataQueues();
+}
+
+void
+AtAbort_MetadataQueues(void)
+{
+	PQDeleteMetadataQueues();
+}
+
+void
+PQCreateMetadataQueue(ggMetadataQueueId queue_id)
+{
+	MemoryContext oldcontext = MemoryContextSwitchTo(TopTransactionContext);
+
+	ggMetadataQueue *queue = palloc0(sizeof(ggMetadataQueue));
+
+	queue->id = queue_id;
+
+	ggMetadataQueues = lappend(ggMetadataQueues, queue);
+
+	MemoryContextSwitchTo(oldcontext);
+}
+
+void
+PQDeleteMetadataQueue(ggMetadataQueueId queue_id)
+{
+	ggMetadataQueue *queue = PQMetadataFindQueue(queue_id);
+
+	if (!queue)
+		elog(ERROR, "No metadata queue with id %u", queue_id);
+
+	PQCleanMetadataInternal(queue);
+
+	ggMetadataQueues = list_delete(ggMetadataQueues, queue);
+	pfree(queue);
 }

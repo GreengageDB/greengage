@@ -10,6 +10,8 @@ generate_greengage_path_file:
 	mkdir -p $(DESTDIR)$(prefix)
 	unset LIBPATH; \
 	bin/generate-greengage-path.sh > $(DESTDIR)$(prefix)/greengage_path.sh
+	@test -z "$(GP_ENV_SCRIPT_ALIAS)" || \
+	    ln -sf greengage_path.sh $(DESTDIR)$(prefix)/$(GP_ENV_SCRIPT_ALIAS)
 
 install: generate_greengage_path_file
 	mkdir -p $(DESTDIR)$(prefix)/lib/python
@@ -23,11 +25,7 @@ install: generate_greengage_path_file
 	fi
 	# Move _pg extension to sys.path root for Python 3 import (from _pg import *)
 	if [ -e bin/ext/pygresql ]; then \
-	    cp -rp bin/ext/pygresql $(DESTDIR)$(prefix)/lib/python ; \
-	    sofile=`find "$(DESTDIR)$(prefix)/lib/python/pygresql" -maxdepth 1 -type f -name "_pg*.so" | head -n 1`; \
-	    if [ -n "$$sofile" ]; then \
-	        mv -f "$$sofile" "$(DESTDIR)$(prefix)/lib/python/"; \
-	    fi; \
+	    cp -rp bin/ext/pygresql/* $(DESTDIR)$(prefix)/lib/python; \
 	fi
 	if [ -e bin/ext/yaml ]; then \
 	    cp -rp bin/ext/yaml $(DESTDIR)$(prefix)/lib/python ; \

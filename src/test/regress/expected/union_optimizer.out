@@ -718,7 +718,7 @@ explain (costs off)
          ->  Result
                Filter: (t = 2)
                ->  Result
-                     ->  Seq Scan on tenk1
+                     ->  Seq Scan on tenk1 b
  Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (10 rows)
 
@@ -843,10 +843,10 @@ select * from
 ---------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    ->  Hash Join
-         Hash Cond: (expensivefunc(t3.x) = int4_tbl.f1)
+         Hash Cond: (expensivefunc(a.x) = int4_tbl.f1)
          ->  Append
-               ->  Seq Scan on t3
-               ->  Seq Scan on t3 t3_1
+               ->  Seq Scan on t3 a
+               ->  Seq Scan on t3 b
          ->  Hash
                ->  Broadcast Motion 3:3  (slice1; segments: 3)
                      ->  Seq Scan on int4_tbl

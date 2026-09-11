@@ -30,6 +30,13 @@ extern		"C"
 #include "postgres_ext.h"
 
 /*
+ * These symbols may be used in compile-time #ifdef tests for the availability
+ * of Greengage libpq features.
+ */
+/* Indicates presence of external metadata commit v1 */
+#define LIBPQ_HAS_EXT_METADATA_COMMIT_V1 1
+
+/*
  * Option flags for PQcopyResult
  */
 #define PG_COPYRES_ATTRS		  0x01

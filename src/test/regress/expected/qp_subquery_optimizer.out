@@ -1481,14 +1481,14 @@ where unnested_array_column is not null;
 ---------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)
    ->  Result
-         Filter: (NOT ((unnest(table_with_array_column_1.an_array_column)) IS NULL))
+         Filter: (NOT ((unnest(t1.an_array_column)) IS NULL))
          ->  Result
                ->  Nested Loop
                      Join Filter: true
-                     ->  Seq Scan on table_with_array_column table_with_array_column_1
+                     ->  Seq Scan on table_with_array_column t1
                      ->  Materialize
                            ->  Broadcast Motion 3:3  (slice1; segments: 3)
-                                 ->  Seq Scan on table_with_array_column
+                                 ->  Seq Scan on table_with_array_column t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (11 rows)
 

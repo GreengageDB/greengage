@@ -1,4 +1,4 @@
-@gpperfmon @skip
+@gpperfmon
 Feature: gpperfmon
     """
     Quantum controls how frequently text files get their data put in external tables.

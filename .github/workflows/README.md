@@ -39,9 +39,9 @@ operating systems:
 
 ## Release Workflow
 
-A separate workflow `Greengage release` handles the uploading of Debian package
-to GitHub releases. It is triggered when a release is published and uses a
-composite action to manage package deployment.
+A separate workflow `Greengage release` handles the uploading of Debian
+packages to GitHub releases. It is triggered when a release is published and
+uses a composite action to manage package deployment.
 
 ### Key Features
 
@@ -50,8 +50,13 @@ including re-publishing.
 - **Concurrency:** Uses the same concurrency group as the CI workflow
   (`Greengage CI-${{ github.ref }}`) to ensure proper sequencing and prevent
   race conditions.
-- **Cache-based Artifacts:** Restores built packages from cache using the
+- **Multi-OS Matrix:** Builds and uploads packages for ubuntu 22.04 and
+  ubuntu 24.04 in parallel.
+- **Cache-based Artifacts:** Restores built packages from cache using OS and
   commit SHA as the key, rather than downloading artifacts from previous jobs.
+- **OS-specific Filenames:** Inserts `~{target_os}{target_os_version}` into
+  each package filename before the architecture suffix prior to upload
+  (e.g. `greengage6_6.30.1_amd64.deb` → `greengage6_6.30.1~ubuntu24.04_amd64.deb`).
 - **Manual Recovery:** If the cache is missing, the workflow checks the status
   of the last build for the tag and provides clear instructions for manual
   intervention. It does not automatically trigger builds to avoid infinite
@@ -130,6 +135,10 @@ To use this pipeline:
 > - target_os: ubuntu
 >   target_os_version: "22.04"
 > ```
+>
+> **Note**: The release workflow (`greengage-release.yml`) is exempt from this
+> rule — it explicitly sets `target_os_version` for all matrix entries to
+> ensure unambiguous cache key matching with the build workflow.
 
 ## Additional Documentation
 

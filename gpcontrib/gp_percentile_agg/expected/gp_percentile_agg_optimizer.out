@@ -1803,10 +1803,10 @@ explain select (select a from perct where median(t.a) = 5) from perct t;
                ->  Shared Scan (share slice:id 6:0)  (cost=0.00..431.01 rows=34 width=1)
                      ->  Materialize  (cost=0.00..431.01 rows=34 width=1)
                            ->  GroupAggregate  (cost=0.00..431.01 rows=34 width=12)
-                                 Group Key: perct.a
+                                 Group Key: t.a
                                  ->  Sort  (cost=0.00..431.00 rows=34 width=4)
-                                       Sort Key: perct.a
-                                       ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
+                                       Sort Key: t.a
+                                       ->  Seq Scan on perct t  (cost=0.00..431.00 rows=34 width=4)
                ->  Redistribute Motion 1:3  (slice4)  (cost=0.00..1324037.57 rows=1 width=8)
                      ->  Aggregate  (cost=0.00..1324037.57 rows=1 width=8)
                            ->  Limit  (cost=0.00..1324037.57 rows=34 width=20)
@@ -1827,7 +1827,7 @@ explain select (select a from perct where median(t.a) = 5) from perct t;
                  One-Time Filter: ((gp_percentile_cont((share0_ref3.a)::double precision, 0.5::double precision, (int8((pg_catalog.sum((sum(share0_ref2."ColRef_0020")))))), share0_ref3."ColRef_0020")) = 5::double precision)
                  ->  Materialize  (cost=0.00..431.01 rows=100 width=4)
                        ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
-                             ->  Seq Scan on perct perct_1  (cost=0.00..431.00 rows=34 width=4)
+                             ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (32 rows)
 
@@ -1846,10 +1846,10 @@ explain select (select array_agg(a ORDER BY a) from perct where median(t.a) = 50
                ->  Shared Scan (share slice:id 6:0)  (cost=0.00..431.01 rows=34 width=1)
                      ->  Materialize  (cost=0.00..431.01 rows=34 width=1)
                            ->  GroupAggregate  (cost=0.00..431.01 rows=34 width=12)
-                                 Group Key: perct.a
+                                 Group Key: t.a
                                  ->  Sort  (cost=0.00..431.00 rows=34 width=4)
-                                       Sort Key: perct.a
-                                       ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
+                                       Sort Key: t.a
+                                       ->  Seq Scan on perct t  (cost=0.00..431.00 rows=34 width=4)
                ->  Redistribute Motion 1:3  (slice4)  (cost=0.00..1324037.57 rows=1 width=8)
                      ->  Aggregate  (cost=0.00..1324037.57 rows=1 width=8)
                            ->  Limit  (cost=0.00..1324037.57 rows=34 width=20)
@@ -1871,7 +1871,7 @@ explain select (select array_agg(a ORDER BY a) from perct where median(t.a) = 50
                        One-Time Filter: ((gp_percentile_cont((share0_ref3.a)::double precision, 0.5::double precision, (int8((pg_catalog.sum((sum(share0_ref2."ColRef_0021")))))), share0_ref3."ColRef_0021")) = 50.5::double precision)
                        ->  Materialize  (cost=0.00..431.01 rows=100 width=4)
                              ->  Broadcast Motion 3:3  (slice5; segments: 3)  (cost=0.00..431.01 rows=100 width=4)
-                                   ->  Seq Scan on perct perct_1  (cost=0.00..431.00 rows=34 width=4)
+                                   ->  Seq Scan on perct  (cost=0.00..431.00 rows=34 width=4)
  Optimizer: Pivotal Optimizer (GPORCA)
 (33 rows)
 

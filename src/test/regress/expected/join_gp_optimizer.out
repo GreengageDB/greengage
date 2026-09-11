@@ -19,10 +19,10 @@ explain select * from nhtest a join nhtest b using (i);
 -----------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..862.00 rows=1 width=9)
    ->  Hash Join  (cost=0.00..862.00 rows=1 width=9)
-         Hash Cond: nhtest.i = nhtest_1.i
-         ->  Seq Scan on nhtest  (cost=0.00..431.00 rows=1 width=9)
+         Hash Cond: a.i = b.i
+         ->  Seq Scan on nhtest a  (cost=0.00..431.00 rows=1 width=9)
          ->  Hash  (cost=431.00..431.00 rows=1 width=9)
-               ->  Seq Scan on nhtest nhtest_1  (cost=0.00..431.00 rows=1 width=9)
+               ->  Seq Scan on nhtest b  (cost=0.00..431.00 rows=1 width=9)
  Optimizer: Pivotal Optimizer (GPORCA) version 2.74.0
 (7 rows)
 
@@ -532,14 +532,14 @@ explain select * from t5370 a , t5370_2 b where a.name=b.name;
 --------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice3; segments: 3)  (cost=0.00..862.25 rows=1000 width=14)
    ->  Hash Join  (cost=0.00..862.20 rows=334 width=14)
-         Hash Cond: t5370.name = t5370_2.name
+         Hash Cond: a.name = b.name
          ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.02 rows=334 width=7)
-               Hash Key: t5370.name
-               ->  Seq Scan on t5370  (cost=0.00..431.01 rows=334 width=7)
+               Hash Key: a.name
+               ->  Seq Scan on t5370 a  (cost=0.00..431.01 rows=334 width=7)
          ->  Hash  (cost=431.02..431.02 rows=334 width=7)
                ->  Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..431.02 rows=334 width=7)
-                     Hash Key: t5370_2.name
-                     ->  Seq Scan on t5370_2  (cost=0.00..431.01 rows=334 width=7)
+                     Hash Key: b.name
+                     ->  Seq Scan on t5370_2 b  (cost=0.00..431.01 rows=334 width=7)
  Optimizer: Pivotal Optimizer (GPORCA) version 2.70.2
 (11 rows)
 
@@ -1661,22 +1661,22 @@ explain (costs off) select * from (select t1.a as aVal1, t2.a as aVal2 from repl
                                    QUERY PLAN                                   
 --------------------------------------------------------------------------------
  Hash Join
-   Hash Cond: (repli_t1.a = repli_t1_1.a)
+   Hash Cond: (t1.a = t2.a)
    ->  Result
          Filter: (SubPlan 1)
          ->  Gather Motion 1:1  (slice1; segments: 1)
-               ->  Seq Scan on repli_t1
+               ->  Seq Scan on repli_t1 t1
          SubPlan 1  (slice0)
            ->  Result
                  ->  Result
                        ->  Result
-                             Filter: (repli_t1.a >= dist_t1.b)
+                             Filter: (t1.a >= t4.b)
                              ->  Materialize
                                    ->  Gather Motion 3:1  (slice2; segments: 3)
-                                         ->  Seq Scan on dist_t1
+                                         ->  Seq Scan on dist_t1 t4
    ->  Hash
          ->  Gather Motion 1:1  (slice3; segments: 1)
-               ->  Seq Scan on repli_t1 repli_t1_1
+               ->  Seq Scan on repli_t1 t2
  Optimizer: Pivotal Optimizer (GPORCA)
 (18 rows)
 
@@ -1744,13 +1744,13 @@ explain (costs off) select * from repli_t1 as t1  where exists ( select 1 from r
                         QUERY PLAN                         
 -----------------------------------------------------------
  Gather Motion 1:1  (slice1; segments: 1)
-   ->  Seq Scan on repli_t1
+   ->  Seq Scan on repli_t1 t1
          Filter: (SubPlan 1)
          SubPlan 1  (slice1; segments: 1)
            ->  Result
                  ->  Result
-                       ->  Seq Scan on repli_t1 repli_t1_1
-                             Filter: (repli_t1.a >= a)
+                       ->  Seq Scan on repli_t1 t2
+                             Filter: (t1.a >= a)
  Optimizer: Pivotal Optimizer (GPORCA)
 (9 rows)
 

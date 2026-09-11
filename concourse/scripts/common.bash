@@ -10,14 +10,12 @@ function set_env() {
 }
 
 function os_id() {
-	if [[ ! -f "/etc/altlinux-release" ]] && [[ -f "/etc/redhat-release" ]]; then
-		echo "centos"
-	else
-		echo "$(
-			. /etc/os-release
-			echo "${ID}"
-		)"
+	if [[ -f "/etc/os-release" ]]; then
+		. /etc/os-release
+	elif [[ -f "/etc/redhat-release" ]]; then
+		ID="centos"
 	fi
+	echo "${ID}"
 }
 
 function os_version() {
@@ -39,7 +37,7 @@ function os_version() {
 function build_arch() {
 	local id=$(os_id)
 	local version=$(os_version)
-	# BLD_ARCH expects rhel{6,7,8}_x86_64 || rocky8_x86_64 || sles12_x86_64 || ubuntu20.04_x86_64
+	# BLD_ARCH expects rhel{6,7,8}_x86_64 || rocky8_x86_64 || rocky9_x86_64 || sles12_x86_64 || ubuntu20.04_x86_64
 	# for oel7 and oel8 platform, the id will return centos
 	case ${id} in
 	sles | rocky) version=$(os_version | cut -d. -f1) ;;

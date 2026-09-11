@@ -1,3 +1,5 @@
+import pickle
+
 from gppylib.operations import Operation
 
 """
@@ -40,7 +42,9 @@ class ExceptionWithArgsUnsafe(Exception):
     def __init__(self, x, y):
         self.x, self.y = x, y
 
+class Unpicklable(Exception):
+        def __reduce__(self):
+            raise pickle.PicklingError("intentionally unpicklable")
 class RaiseOperation_Unpicklable(Operation):
     def execute(self):
-        from pygresql import pg
-        raise pg.DatabaseError()
+        raise Unpicklable()

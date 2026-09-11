@@ -81,17 +81,13 @@ class UtilsTestCase(GpTestCase):
     # It is crucial that the RMI is debuggable!
     def test_Remote_harden(self):
         """ Ensure that some logging occurs in event of error. """
-        # One case encountered thus far is the raising of a pygresql DatabaseError,
-        # which due to the import from a shared object (I think), does not behave
-        # nicely in terms of imports and namespacing. """
         try:
             RemoteOperation(RaiseOperation_Unpicklable(), "localhost").run()
         except ExecutionError as e:
-            self.assertTrue(e.cmd.get_results().stderr.strip().endswith("raise pg.DatabaseError()"))
+            self.assertTrue(e.cmd.get_results().stderr.strip().endswith("raise Unpicklable()"))
         else:
-            self.fail("""A pg.DatabaseError should have been raised remotely, and because it cannot
-                         be pickled cleanly (due to a strange import in pickle.py),
-                         an ExecutionError should have ultimately been caused.""")
+            self.fail("""A Unpicklable should have been raised remotely, and because it cannot
+                         be pickled cleanly, an ExecutionError should have ultimately been caused.""")
             # TODO: Check logs on disk. With gplogfilter?
 
     def test_ParallelOperation_succeeds(self):

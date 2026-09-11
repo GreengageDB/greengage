@@ -3643,3 +3643,12 @@ FROM ext_subplan_t1;
 
 DROP EXTERNAL TABLE ext_subplan_t1;
 DROP EXTERNAL TABLE ext_subplan_t2;
+
+-- Test non-negative plan costs on non-distributed external web tables
+
+CREATE EXTERNAL WEB TABLE ext_t1(c1 int) EXECUTE 'seq 1 10' ON MASTER FORMAT 'text';
+
+EXPLAIN
+SELECT * FROM ext_t1;
+
+DROP EXTERNAL TABLE ext_t1;

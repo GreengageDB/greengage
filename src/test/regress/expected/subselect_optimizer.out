@@ -886,22 +886,22 @@ select * from int4_tbl where
                Output: int4_tbl.f1
    SubPlan 1  (slice0)
      ->  Result
-           Output: tenk1.unique1
+           Output: a.unique1
            ->  Result
-                 Output: true, tenk1.unique1
+                 Output: true, a.unique1
                  ->  Materialize
-                       Output: tenk1.unique1
+                       Output: a.unique1
                        ->  Gather Motion 3:1  (slice2; segments: 3)
-                             Output: tenk1.unique1
-                             ->  Seq Scan on public.tenk1
-                                   Output: tenk1.unique1
+                             Output: a.unique1
+                             ->  Seq Scan on public.tenk1 a
+                                   Output: a.unique1
    SubPlan 2  (slice0)
      ->  Materialize
-           Output: tenk1_1.ten
+           Output: b.ten
            ->  Gather Motion 3:1  (slice3; segments: 3)
-                 Output: tenk1_1.ten
-                 ->  Seq Scan on public.tenk1 tenk1_1
-                       Output: tenk1_1.ten
+                 Output: b.ten
+                 ->  Seq Scan on public.tenk1 b
+                       Output: b.ten
  Optimizer: Pivotal Optimizer (GPORCA) version 3.1.0
  Settings: optimizer=on
 (27 rows)

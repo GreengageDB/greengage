@@ -867,6 +867,87 @@ def checkPartitionIntegrity():
         myprint('[ERROR] executing test: checkPartitionIntegrity')
         myprint('  Execution error: ' + str(e))
 
+    # Check there are no relations inherited from a relation that is already
+    # included into a partition hierarchy, and where the relation itself is
+    # not a child in a partitioning hierarchy.
+    qry = '''
+    select distinct
+        n.nspname as schema_name, c.relname as rel_name,
+        n_parent.nspname as parent_schema_name, c_parent.relname as parent_rel_name
+    from pg_inherits as inh
+    join pg_class c on inh.inhrelid = c.oid
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_class c_parent on inh.inhparent = c_parent.oid
+    join pg_namespace n_parent on n_parent.oid = c_parent.relnamespace
+    left join pg_partition_rule parent_pr on parent_pr.parchildrelid = inh.inhparent
+    left join pg_partition parent_p on parent_p.parrelid = inh.inhparent
+    left join pg_partition_rule child_pr on child_pr.parchildrelid = inh.inhrelid
+    where
+        (parent_pr.parchildrelid is not null or parent_p.parrelid is not null)
+        and child_pr.parchildrelid is null
+    '''
+    try:
+        curs = db.query(qry)
+        err = []
+        for row in curs.dictresult():
+            err.append([GV.cfg[GV.master_dbid], ('schema_name', 'rel_name', 'parent_schema_name', 'parent_rel_name'), row])
+
+        if not err:
+            logger.info('[OK] inheritance from partitions check')
+        else:
+            GV.checkStatus = False
+            setError(ERROR_NOREPAIR)
+            logger.info('[FAIL] inheritance from partitions check')
+            logger.error('inheritance from partitions check found %d issue(s)' % len(err))
+            logger.error('Check query:' + qry)
+            for e in err[0:100]:
+                row = e[2]
+                logger.error(" Not partitioned table %s.%s is inherited from %s.%s, which is included in a partition hierarchy" %
+                             (row['schema_name'], row['rel_name'], row['parent_schema_name'], row['parent_rel_name']))
+            if len(err) > 100:
+                logger.error("...")
+    except Exception as e:
+        setError(ERROR_NOREPAIR)
+        myprint('[ERROR] executing test: checkPartitionIntegrity')
+        myprint('  Execution error: ' + str(e))
+
+    # Check there are no leaf partitions, from which any tables were inherited.
+    qry = '''
+    select n.nspname as schema_name, c.relname as rel_name
+    from pg_partition_rule pr
+    join pg_class c on c.oid = pr.parchildrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    left join pg_partition_rule child_pr on child_pr.parchildrelid in (
+        select inhrelid from pg_inherits where inhparent = pr.parchildrelid
+    )
+    where
+        child_pr.parchildrelid is null and c.relhassubclass = true
+    '''
+    try:
+        curs = db.query(qry)
+        err = []
+        for row in curs.dictresult():
+            err.append([GV.cfg[GV.master_dbid], ('schema_name', 'rel_name'), row])
+
+        if not err:
+            logger.info('[OK] relhassubclass for leaf partitions check')
+        else:
+            GV.checkStatus = False
+            setError(ERROR_NOREPAIR)
+            logger.info('[FAIL] relhassubclass for leaf partitions check')
+            logger.error('relhassubclass for leaf partitions check found %d issue(s)' % len(err))
+            logger.error('Check query:' + qry)
+            for e in err[0:100]:
+                row = e[2]
+                logger.error(" leaf partition %s.%s has 'relhassubclass' = true" %
+                             (row['schema_name'], row['rel_name']))
+            if len(err) > 100:
+                logger.error("...")
+    except Exception as e:
+        setError(ERROR_NOREPAIR)
+        myprint('[ERROR] executing test: checkPartitionIntegrity')
+        myprint('  Execution error: ' + str(e))
+
     db.close()
 
     checkPoliciesRepair()

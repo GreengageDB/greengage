@@ -735,9 +735,14 @@ estimate_rel_size(Relation rel, int32 *attr_widths,
 		case RELKIND_AOBLOCKDIR:
 		case RELKIND_AOVISIMAP:
 
-			/* skip external tables */
+			/* Just use whatever's in pg_class */
 			if(RelationIsExternal(rel))
+			{
+				*pages = rel->rd_rel->relpages;
+				*tuples = rel->rd_rel->reltuples;
+				*allvisfrac = 0;
 				break;
+			}
 			
 			if (RelationIsAoRows(rel))
 			{

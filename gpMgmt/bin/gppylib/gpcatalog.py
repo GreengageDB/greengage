@@ -40,6 +40,7 @@ MASTER_ONLY_TABLES = [
     'pg_stat_last_shoperation',
     'pg_statistic',
     'pg_partition_encoding',
+    'pg_event_trigger'
     ]
 
 # Hard coded tables that have different values on every segment

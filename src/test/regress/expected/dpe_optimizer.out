@@ -1796,10 +1796,10 @@ explain select * from apart as a, b, c where a.t = b.t and a.id = c.id;
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.11 rows=1 width=19)
    ->  Hash Join  (cost=0.00..1293.11 rows=1 width=19)
-         Hash Cond: apart.id = c.id
+         Hash Cond: a.id = c.id
          ->  Hash Join  (cost=0.00..862.11 rows=2 width=13)
-               Hash Cond: apart.t = b.t
-               ->  Dynamic Seq Scan on apart (dynamic scan id: 1)  (cost=0.00..431.01 rows=333 width=7)
+               Hash Cond: a.t = b.t
+               ->  Dynamic Seq Scan on apart a (dynamic scan id: 1)  (cost=0.00..431.01 rows=333 width=7)
                ->  Hash  (cost=431.00..431.00 rows=4 width=6)
                      ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=4 width=6)
                            ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=6)
@@ -1827,10 +1827,10 @@ explain select * from apart as a, b, c where a.t = b.t and a.id = c.id;
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Gather Motion 3:1  (slice2; segments: 3)  (cost=0.00..1293.11 rows=1 width=19)
    ->  Hash Join  (cost=0.00..1293.11 rows=1 width=19)
-         Hash Cond: apart.id = c.id
+         Hash Cond: a.id = c.id
          ->  Hash Join  (cost=0.00..862.11 rows=2 width=13)
-               Hash Cond: apart.t = b.t
-               ->  Dynamic Seq Scan on apart (dynamic scan id: 1)  (cost=0.00..431.01 rows=333 width=7)
+               Hash Cond: a.t = b.t
+               ->  Dynamic Seq Scan on apart a (dynamic scan id: 1)  (cost=0.00..431.01 rows=333 width=7)
                ->  Hash  (cost=431.00..431.00 rows=4 width=6)
                      ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=4 width=6)
                            ->  Seq Scan on b  (cost=0.00..431.00 rows=2 width=6)

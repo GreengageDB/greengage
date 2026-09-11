@@ -1,6 +1,7 @@
 #!/bin/bash
 # Some packages, for example KRB5, not installing properly without this option
 export DEBIAN_FRONTEND=noninteractive
+
 apt-get update
 apt-get install -y \
   bison \
@@ -15,6 +16,7 @@ apt-get install -y \
   g++ \
   gcc \
   git \
+  gnupg \
   iproute2 \
   iputils-ping \
   krb5-admin-server \
@@ -39,15 +41,29 @@ apt-get install -y \
   libyaml-dev \
   libzstd-dev \
   locales \
+  lsof \
   net-tools \
   openssh-client \
   openssh-server \
   pkg-config \
   protobuf-compiler \
   python3-dev \
+  python3-installer \
+  python3-psutil \
   rsync \
   sudo \
   zlib1g-dev
+
+curl -fsSL greengagedb.org/repositories/gpg | gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
+echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
+      https://greengagedb.org/repositories/ubuntu/22.04/x86_64 \
+      greengagedb main" \
+      | tee /etc/apt/sources.list.d/greengagedb.list
+
+apt-get update
+apt-get install -y \
+  sigar \
+  sigar-headers
 
 if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; then
   apt-get install -y \

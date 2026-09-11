@@ -8,5 +8,6 @@ SUBDIRS = test_planner
 SUBDIRS += connection 
 SUBDIRS += test_extensions 
 SUBDIRS += test_dsa
+SUBDIRS += test_metadata
 
 $(recurse)

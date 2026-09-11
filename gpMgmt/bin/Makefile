@@ -86,6 +86,7 @@ pygresql:
 	else \
 	    cd $(PYLIB_SRC)/$(PYGRESQL_DIR) && DESTDIR="$(DESTDIR)" CC="$(CC)" LDFLAGS='$(LDFLAGS) $(PYGRESQL_LDFLAGS)' python setup.py build; \
 	fi
+	cd $(PYLIB_SRC)/PyGreSQL-compat && python setup.py build;
 	mkdir -p $(PYLIB_DIR)/pygresql
 	if [ `uname -s` = 'Darwin' ]; then \
 	  cp -r $(PYLIB_SRC)/$(PYGRESQL_DIR)/build/lib.macosx*/* $(PYLIB_DIR)/pygresql; \
@@ -94,6 +95,7 @@ pygresql:
 	else \
 	  cp -r $(PYLIB_SRC)/$(PYGRESQL_DIR)/build/lib.linux*/* $(PYLIB_DIR)/pygresql; \
 	fi
+	cp -r $(PYLIB_SRC)/PyGreSQL-compat/build/lib*/* $(PYLIB_DIR)/pygresql;
 	touch $(PYLIB_DIR)/__init__.py
 
 #
@@ -180,23 +182,35 @@ checkcode: pylint
 	@echo -n "pylint_score=" > $(SRC)/../pylint_score.properties
 	@grep "Your code has been rated at" $(SRC)/../pylint.txt | sed -e "s|Your .* \(.*\)/.*|\1|" >> $(SRC)/../pylint_score.properties
 
-check-regress:
+check-regress: coverage-setup
 	@echo "Running regression tests..."
 	@PYTHONPATH=$(SRC):$(SRC)/ext:$(PYTHONPATH) \
-	gppylib/gpunit discover --verbose -s gppylib -p "test_regress*.py" 2> $(SRC)/../gpMgmt_testregress_results.log 1> $(SRC)/../gpMgmt_testregress_output.log
+	gppylib/gpunit discover --verbose -s gppylib -p "test_regress*.py" 2>&1
 
-check:
+check: coverage-setup
 	@echo "Running pure unit and also "unit" tests that require cluster to be up..."
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2> $(SRC)/../gpMgmt_testunit_results.log 1> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_unit*.py" 2>&1
 	@TMPDIR=/tmp PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
-	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>> $(SRC)/../gpMgmt_testunit_results.log 1>> $(SRC)/../gpMgmt_testunit_output.log || (cat $(SRC)/../gpMgmt_testunit_results.log && cat $(SRC)/../gpMgmt_testunit_output.log && exit 1)
+	gppylib/gpunit discover --verbose -s $(SRC)/gppylib -p "test_cluster*.py" 2>&1
 
-unitdevel:
+unitdevel: coverage-setup
 	@echo "Running pure unit tests..."
 	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR) \
 	    python -m unittest discover --verbose -s $(SRC)/gppylib -p "test_unit*.py"
 
+coverage-setup:
+	@echo "Setting up coverage instrumentation..."
+	echo "import coverage; coverage.process_startup()" > \
+	    $(DESTDIR)$(prefix)/lib/python/sitecustomize.py
+	@if [ -z "$$COVERAGE_PROCESS_START" ]; then \
+		echo "WARNING: COVERAGE_PROCESS_START is not set."; \
+		echo "Coverage will NOT be collected from subprocesses."; \
+		echo "Set it manually, e.g.:"; \
+		echo "export COVERAGE_PROCESS_START=/home/gpadmin/gpdb_src/gpMgmt/test/coveragerc_unit"; \
+	else \
+		echo "COVERAGE_PROCESS_START=$$COVERAGE_PROCESS_START"; \
+	fi
 
 .PHONY: installcheck-bash
 installcheck-bash:
@@ -213,6 +227,7 @@ clean distclean:
 	rm -rf $(PYLIB_SRC_EXT)/$(LOGILAB_ASTNG_DIR)
 	rm -rf $(PYLIB_SRC_EXT)/$(PYGRESQL_DIR)/build
 	rm -rf $(PYLIB_SRC)/$(PYGRESQL_DIR)/build
+	rm -rf $(PYLIB_SRC)/PyGreSQL-compat/build
 	rm -rf $(PYLIB_SRC)/subprocess32/build
 	rm -rf *.pyc
 	rm -f analyzedbc gpactivatestandbyc gpaddmirrorsc gpcheckcatc \
@@ -221,3 +236,4 @@ clean distclean:
 		  gppkgc gprecoversegc gpreloadc gpscpc gpsdc gpssh-exkeysc gpsshc \
 		  gpstartc gpstatec gpstopc gpsys1c minireproc
 	rm -f gpconfig_modules/gucs_disallowed_in_file.txt
+	rm -f $(DESTDIR)$(prefix)/lib/python/sitecustomize.py

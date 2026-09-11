@@ -5241,7 +5241,6 @@ AtEOXact_GUC(bool isCommit, int nestLevel)
 			 * record it and restore QE before next query start
 			 */
 			if (Gp_role == GP_ROLE_DISPATCH
-					&& !IsTransactionBlock()
 					&& changed
 					&& ((isCommit) || (!isCommit && gp_guc_need_restore))
 					&& (gconf->flags & GUC_GPDB_NEED_SYNC))
@@ -5921,6 +5920,14 @@ set_config_option(const char *name, const char *value,
 			   errmsg("unrecognized configuration parameter \"%s\"", name)));
 		return 0;
 	}
+	/*
+	 * Make SET LOCAL just SET when executing on segments. It is needed for
+	 * correct passage of local GUCs as they might be discarded. Anyway,
+	 * master executes SET as LOCAL, so on next transaction GUC will
+	 * resynchronize and everything will be back in place.
+	 */
+	if (Gp_role == GP_ROLE_EXECUTE && action == GUC_ACTION_LOCAL)
+		action = GUC_ACTION_SET;
 
 	/*
 	 * Check if option can be set by the user.

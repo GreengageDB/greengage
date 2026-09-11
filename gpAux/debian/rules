@@ -13,7 +13,7 @@ ifeq ($(LSB_SI),Ubuntu)
     DEPS = python2,python2.7
     CONFLICTS = python-is-python3
   else
-    DEPS = python3
+    DEPS = python3,python-is-python3
   endif
 else
   DEPS = python2,python2.7

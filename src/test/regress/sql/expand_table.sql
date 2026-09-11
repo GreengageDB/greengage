@@ -455,3 +455,81 @@ select numsegments from gp_distribution_policy where localoid='expand_domain_tab
 reset search_path;
 drop schema test_reshuffle cascade;
 -- end_ignore
+
+-- Check that table expand doesn't lead to invalid data distribution
+-- if WAL wasn't replicated to a mirror in time, the respective Primary failed,
+-- and the mirror with obsolete data is promoted. That could happen if the user
+-- disabled 'synchronous_commit'.
+
+create extension if not exists gp_inject_fault;
+
+select gp_debug_set_create_table_default_numsegments(2);
+drop table if exists test;
+create table test(a int) distributed by (a);
+insert into test select generate_series(1, 100);
+
+set synchronous_commit = off;
+
+select gp_inject_fault('wal_sender_loop', 'suspend', dbid) from gp_segment_configuration where content=0 and role='p';
+
+alter table test expand table;
+
+select '\! pg_ctl -D ' || datadir || ' stop -m immediate' as cmd_stop_primary_0 from gp_segment_configuration where content = 0 and role = 'p'
+\gset
+:cmd_stop_primary_0
+
+select gp_request_fts_probe_scan();
+select role, preferred_role, status from gp_segment_configuration where content = 0 order by dbid;
+
+select count(*) from test;
+
+select count(*), gp_segment_id from test group by gp_segment_id order by gp_segment_id;
+
+reset synchronous_commit;
+
+-- start_ignore
+\! gprecoverseg -aF --no-progress;
+\! gprecoverseg -ar;
+-- end_ignore
+
+drop table test;
+
+-- Check the same for SET WITH (REORGANIZE=TRUE), which is used for partitioned table.
+select gp_debug_set_create_table_default_numsegments(2);
+create table test (a int) distributed by (a)
+partition by range (a)
+(
+    start (0) end (1000) every (1000)
+);
+insert into test select generate_series(1, 100);
+
+alter table test expand partition prepare;
+
+set synchronous_commit = off;
+
+select gp_inject_fault('wal_sender_loop', 'suspend', dbid) from gp_segment_configuration where content=0 and role='p';
+
+alter table test_1_prt_1 set with (reorganize=true) distributed by (a);
+
+select '\! pg_ctl -D ' || datadir || ' stop -m immediate' as cmd_stop_primary_0 from gp_segment_configuration where content = 0 and role = 'p'
+\gset
+:cmd_stop_primary_0
+
+select gp_request_fts_probe_scan();
+select role, preferred_role, status from gp_segment_configuration where content = 0 order by dbid;
+
+
+select count(*) from test;
+
+select count(*), gp_segment_id from test group by gp_segment_id order by gp_segment_id;
+
+reset synchronous_commit;
+
+-- start_ignore
+\! gprecoverseg -aF --no-progress;
+\! gprecoverseg -ar;
+-- end_ignore
+
+drop table test;
+
+select gp_debug_reset_create_table_default_numsegments();

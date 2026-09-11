@@ -172,3 +172,20 @@ Feature: gpstart behave tests
 
           When the user runs psql with "-c 'drop user foouser;'" against database "postgres"
           Then psql should return a return code of 0
+
+    Scenario: gpstart on dir with trailing slash
+        Given the database is running
+          And the catalog has a standby master entry
+          And the standby is not initialized
+
+         When the user runs gpinitstandby with options "-S /tmp/standby_data/"
+         Then gpinitstandby should return a return code of 0
+          And verify the standby master entries in catalog
+        
+         When the master goes down
+          And the user runs "gpstart -a"
+         Then gpstart should return a return code of 0
+          And verify the standby master entries in catalog
+        
+         When execute sql "select datadir from gp_segment_configuration where content = -1 and role = 'm'" in db "postgres" and store result in the context
+         Then validate that "/tmp/standby_data/" is in the stored rows

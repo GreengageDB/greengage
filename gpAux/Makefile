@@ -93,7 +93,7 @@ ISCONFIG=$(GPPGDIR)/GNUmakefile
 ## On these platforms, we do the full build including the server. On other
 ## platforms, we do a client-only build.
 ##
-SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 linux_x86_64
+SERVER_PLATFORMS=rhel7_x86_64 rhel6_x86_64 rhel8_x86_64 rocky8_x86_64 rocky9_x86_64 linux_x86_64
 
 #---------------------------------------------------------------------
 # Compiler options
@@ -124,23 +124,25 @@ DEFPORT=5432
 
 ORCA_CONFIG=--enable-orca
 
-rhel6_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-altlinux8.4_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-altlinux10.2_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-astra1.7_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-astra1.8_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rhel7_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-rhel7_ppc64le_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel6_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+altlinux8.4_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+altlinux10.2_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+astra1.7_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+astra1.8_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel7_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel7_ppc64le_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 rhel8_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+rhel9_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 rocky8_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --enable-gpcloud --with-libxml --with-openssl --with-pam --with-ldap --with-pythonsrc-ext --with-uuid=e2fs
 rocky9_x86_64_CONFIGFLAGS=--disable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 linux_x86_64_CONFIGFLAGS=${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu18.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu20.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu22.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-ubuntu24.04_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-sles12_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
-redos7.3_x86_64_CONFIGFLAGS=--with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu18.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu20.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu22.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+ubuntu24.04_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+sles12_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+redos7.3_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
+redos8.0_x86_64_CONFIGFLAGS=--enable-gpperfmon --with-gssapi --enable-mapreduce --enable-orafce --enable-ic-proxy ${ORCA_CONFIG} --with-libxml --with-pythonsrc-ext --with-uuid=e2fs
 BLD_CONFIGFLAGS=$($(BLD_ARCH)_CONFIGFLAGS)
 
 CONFIGFLAGS=$(strip $(BLD_CONFIGFLAGS) --with-pgport=$(DEFPORT) $(BLD_DEPLOYMENT_SETTING))
@@ -235,7 +237,7 @@ define BUILD_STEPS
 	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
-	@$(MAKE) greengage_path INSTLOC=$(INSTLOC)
+	@$(MAKE) greengage_path INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) set_scripts_version INSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) copylicense INSTLOC=$(INSTLOC) \
@@ -354,6 +356,7 @@ PACKAGE_NAME := $(shell grep '^Package:' debian/control | head -1 | awk '{print 
 MAINTAINER := $(shell grep '^Maintainer:' debian/control | sed 's/Maintainer: //')
 DATE_RFC := $(shell date -R)
 ARTIFACTS_DIR := $(CURDIR)/../Package
+RPM_TOPDIR := $(CURDIR)/../RPM
 
 ../VERSION :
 	@echo "Update $@"
@@ -363,21 +366,21 @@ ARTIFACTS_DIR := $(CURDIR)/../Package
 version-vars : ../VERSION
 	$(eval FULL_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, ,-,g' ../VERSION))
 	$(eval PACKAGE_VERSION := $(shell [ -f ../VERSION ] && perl -pe 's, .*,,g' ../VERSION))
-	$(eval DISTRO_CODENAME := $(shell lsb_release -sc))
+	$(eval VERSION_CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME))
 	$(eval IS_RELEASE := $(if $(findstring +dev,$(PACKAGE_VERSION)),no,yes))
 	$(eval BUILD_TYPE := $(if $(filter yes,$(IS_RELEASE)),Release build,Development build))
 
 version-info : version-vars
 	@echo "PACKAGE_VERSION: $(PACKAGE_VERSION)"
 	@echo "FULL_VERSION: $(FULL_VERSION)"
-	@echo "DISTRO_CODENAME: $(DISTRO_CODENAME)"
+	@echo "VERSION_CODENAME: $(VERSION_CODENAME)"
 	@echo "IS_RELEASE: $(IS_RELEASE)"
 	@echo "BUILD_TYPE: $(BUILD_TYPE)"
 
 # Generate package control files
 changelog : debian/changelog
 debian/changelog : version-vars
-	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(DISTRO_CODENAME); urgency=low" > $@
+	@echo "$(PACKAGE_NAME) ($(PACKAGE_VERSION)) $(VERSION_CODENAME); urgency=low" > $@
 	@echo "" >> $@
 	@echo "  * $(BUILD_TYPE)" >> $@
 	@echo "" >> $@
@@ -404,7 +407,25 @@ pkg-deb : debian/changelog debian/install
 											-o -name "*.changes" \) \
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
-.PHONY: pkg pkg-deb changelog version-vars version-info
+# Build RPM package
+pkg-rpm : GPROOT = /opt/greengagedb
+pkg-rpm : GPDIR  = $(PACKAGE_NAME)
+pkg-rpm : version-vars
+	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+	rpmbuild -bb \
+		--define "_topdir $(RPM_TOPDIR)" \
+		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
+		--define "gpdb_release 1" \
+		--define "gproot $(GPROOT)" \
+		--define "gpdir $(GPDIR)" \
+		--define "sourcedir $(CURDIR)/.." \
+		rpm/greengage6.spec
+	@mkdir -p $(ARTIFACTS_DIR)
+	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
+		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+
+.PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
 #---------------------------------------------------------------------
 # clientTools
@@ -468,6 +489,7 @@ rhel6_x86_64_MPP_ARCH=RHEL6-x86_64
 rhel7_x86_64_MPP_ARCH=RHEL7-x86_64
 rhel8_x86_64_MPP_ARCH=RHEL8-x86_64
 rocky8_x86_64_MPP_ARCH=ROCKY8-x86_64
+rocky9_x86_64_MPP_ARCH=ROCKY9-x86_64
 ifneq "$($(BLD_ARCH)_MPP_ARCH)" ""
 export MPP_ARCH=$($(BLD_ARCH)_MPP_ARCH)
 else
@@ -684,6 +706,14 @@ copylibs :
 greengage_path:
 	mkdir -p $(INSTLOC)
 	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(INSTLOC)/greengage_path.sh
+	@# This makefile does not include src/Makefile.global, so the alias
+	@# derived from --with-product-name is read back from the generated
+	@# file.  Reading it here rather than in a $(shell) assignment keeps
+	@# sed to one run and lets its exit status fail the recipe.
+	@alias_name=`sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
+	                 $(BUILDDIR)/src/Makefile.global` && \
+	    { test -z "$$alias_name" || \
+	          ln -sf greengage_path.sh $(INSTLOC)/$$alias_name; }
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \

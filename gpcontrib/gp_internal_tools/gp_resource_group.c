@@ -15,10 +15,12 @@
 #include "postgres.h"
 #include "access/tupdesc.h"
 #include "access/htup.h"
+#include "catalog/pg_resgroup.h"
 #include "cdb/cdbvars.h"
 #include "commands/resgroupcmds.h"
 #include "fmgr.h"
 #include "funcapi.h"
+#include "storage/lmgr.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
 #include "utils/resgroup.h"
@@ -87,7 +89,20 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 		if (pid == MyProcPid)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 (errmsg("cannot move myself"))));
+					(errmsg("cannot move myself"))));
+
+		/*
+		 * Fail if any resource group is being edited.
+		 * ALTER holds ExclusiveLock until end of transaction.
+		 * RowShareLock allows concurrent moves but conflicts with it.
+		 */
+		if (!ConditionalLockRelationOid(ResGroupCapabilityRelationId,
+										RowShareLock))
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_IN_USE),
+					 errmsg("cannot move query while a resource group is being edited")));
+		}
 
 		groupId = GetResGroupIdForName(groupName);
 		if (groupId == InvalidOid)
@@ -106,10 +121,11 @@ pg_resgroup_move_query(PG_FUNCTION_ARGS)
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
 					 (errmsg("process %d is in IDLE state", pid))));
-		if (currentGroupId == groupId)
-			PG_RETURN_BOOL(true);
 
-		ResGroupMoveQuery(sessionId, groupId, groupName);
+		if (currentGroupId != groupId)
+			ResGroupMoveQuery(sessionId, groupId, groupName);
+
+		UnlockRelationOid(ResGroupCapabilityRelationId, RowShareLock);
 	}
 	else if (Gp_role == GP_ROLE_EXECUTE)
 	{

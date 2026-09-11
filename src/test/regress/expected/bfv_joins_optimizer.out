@@ -3404,10 +3404,10 @@ EXPLAIN (costs off) SELECT * FROM coercejoin a, coercejoin b WHERE a.a=b.a;
 -------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
    ->  Hash Join
-         Hash Cond: ((coercejoin.a)::text = (coercejoin_1.a)::text)
-         ->  Seq Scan on coercejoin
+         Hash Cond: ((a.a)::text = (b.a)::text)
+         ->  Seq Scan on coercejoin a
          ->  Hash
-               ->  Seq Scan on coercejoin coercejoin_1
+               ->  Seq Scan on coercejoin b
 (7 rows)
 
 -- Negative test, the join should not be colocated since the cast is a coercion
@@ -3418,14 +3418,14 @@ EXPLAIN (costs off) SELECT * FROM coercejoin a, coercejoin b WHERE a.a::numeric=
 -------------------------------------------------------------------------------
  Gather Motion 3:1  (slice3; segments: 3)
    ->  Hash Join
-         Hash Cond: ((coercejoin.a)::numeric = (coercejoin_1.a)::numeric)
+         Hash Cond: ((a.a)::numeric = (b.a)::numeric)
          ->  Redistribute Motion 3:3  (slice1; segments: 3)
-               Hash Key: (coercejoin.a)::numeric
-               ->  Seq Scan on coercejoin
+               Hash Key: (a.a)::numeric
+               ->  Seq Scan on coercejoin a
          ->  Hash
                ->  Redistribute Motion 3:3  (slice2; segments: 3)
-                     Hash Key: (coercejoin_1.a)::numeric
-                     ->  Seq Scan on coercejoin coercejoin_1
+                     Hash Key: (b.a)::numeric
+                     ->  Seq Scan on coercejoin b
 (11 rows)
 
 --

@@ -234,6 +234,7 @@ double		gp_resource_group_memory_limit;
 bool		gp_resource_group_bypass;
 bool		gp_resource_group_enable_recalculate_query_mem;
 bool		gp_resource_group_retrieve;
+bool		gp_resource_group_enable_alter_in_transaction;
 
 /* Perfmon segment GUCs */
 int			gp_perfmon_segment_interval;
@@ -885,6 +886,17 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
 		&gp_enable_explain_allstat,
+		false,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_enable_explain_rows_out", PGC_USERSET, CLIENT_CONN_OTHER,
+			gettext_noop("Experimental feature: print avg, min and max rows out in segments in EXPLAIN ANALYZE."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_enable_explain_rows_out,
 		false,
 		NULL, NULL, NULL
 	},
@@ -3047,7 +3059,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"optimizer_enable_table_alias", PGC_USERSET, DEVELOPER_OPTIONS,
+		{"optimizer_enable_table_alias", PGC_USERSET, DEFUNCT_OPTIONS,
 			gettext_noop("Enable using table aliases to make plan explain more descriptive"),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -3166,6 +3178,15 @@ struct config_bool ConfigureNamesBool_gp[] =
 			NULL
 		},
 		&gp_resource_group_cpu_ceiling_enforcement,
+		false, NULL, NULL
+	},
+
+	{
+		{"gp_resource_group_enable_alter_in_transaction", PGC_POSTMASTER, RESOURCES,
+			gettext_noop("Allow ALTER RESOURCE GROUP inside a transaction block."),
+			NULL
+		},
+		&gp_resource_group_enable_alter_in_transaction,
 		false, NULL, NULL
 	},
 

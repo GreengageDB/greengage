@@ -4232,3 +4232,28 @@ select outer_outer_func(20);
 drop function outer_outer_func(int);
 drop function outer_func(int);
 drop function inner_func(int);
+
+-- Test consistency and passage of SET LOCAL GUC to writing commands
+--start_ignore
+drop schema if exists s cascade;
+--end_ignore
+
+create schema s;
+
+do $$
+begin
+  set local search_path to s;
+  create table test_table(a int) distributed by (a);
+  drop table test_table;
+end $$;
+
+-- check existence on master and segments
+with c as (
+    select gp_segment_id, relname, relkind, relnamespace from pg_class
+    union all
+    select gp_segment_id, relname, relkind, relnamespace from gp_dist_random('pg_class')
+) select gp_segment_id from c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relname = 'test_table' and c.relkind = 'r' and n.nspname = 's';
+
+drop schema s cascade;

@@ -118,6 +118,7 @@
 #include "utils/memutils.h"
 #include "utils/metrics_utils.h"
 #include "utils/relcache.h"
+#include "utils/guc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
@@ -2252,6 +2253,21 @@ MergeAttributes(List *schema, List *supers, char relpersistence, bool isPartitio
 		 * recently dropped.
 		 */
 		relation = heap_openrv(parent, ShareUpdateExclusiveLock);
+
+		/*
+		 * We do not allow partitioned tables and partitions to participate in
+		 * regular inheritance.
+		 */
+		if (!isPartitioned && rel_is_partitioned(RelationGetRelid(relation)))
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("cannot inherit from partitioned table \"%s\"",
+							RelationGetRelationName(relation))));
+		if (!isPartitioned && rel_is_child_partition(RelationGetRelid(relation)))
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("cannot inherit from partition \"%s\"",
+							RelationGetRelationName(relation))));
 
 		if (relation->rd_rel->relkind != RELKIND_RELATION)
 			ereport(ERROR,
@@ -13683,6 +13699,19 @@ ATExecAddInherit(Relation child_rel, Node *node, LOCKMODE lockmode)
 				 errmsg("cannot inherit from temporary relation \"%s\"",
 						RelationGetRelationName(parent_rel))));
 
+	/* Prevent partitioned tables from becoming inheritance parents */
+	if (!is_partition && rel_is_partitioned(RelationGetRelid(parent_rel)))
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot inherit from partitioned table \"%s\"",
+						parent->relname)));
+
+	/* Likewise for partitions */
+	if (!is_partition && rel_is_child_partition(RelationGetRelid(parent_rel)))
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cannot inherit from a partition")));
+
 	if (is_partition)
 	{
 		/* lookup all attrs */
@@ -15023,6 +15052,20 @@ ATExecExpandTable(List **wqueue, Relation rel, AlterTableCmd *cmd)
 			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("permission denied: \"%s\" is a system catalog", RelationGetRelationName(rel))));
 
+	/*
+	 * synchronous_commit can be "off" at the session or cluster level for
+	 * reasons unrelated to this command. With it off, a segment's commit never
+	 * waits for its mirror to acknowledge the redistributed data, so a primary
+	 * crash immediately followed by an automatic mirror promotion can silently
+	 * lose/duplicate the rows this command just moved, if not all WAL was sent
+	 * to the mirror.
+	 * Therefore, forbid operation if synchronous_commit is not fully enabled.
+	 */
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during EXPAND")));
+
 	oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(rel));
 	newPolicy = GpPolicyCopy(policy);
 	MemoryContextSwitchTo(oldContext);
@@ -15365,6 +15408,17 @@ ATExecSetDistributedBy(Relation rel, Node *node, AlterTableCmd *cmd)
 		ereport(ERROR,
 			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 			errmsg("permission denied: \"%s\" is a system catalog", RelationGetRelationName(rel))));
+
+	/*
+	 * Like ATExecExpandTable, this command can rewrite and redistribute the
+	 * table's data via an internal CTAS. See the comment there.
+	 * And, forbid operation if synchronous_commit is not fully enabled here
+	 * as well.
+	 */
+	if (synchronous_commit != SYNCHRONOUS_COMMIT_ON)
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("synchronous_commit should be enabled during SET DISTRIBUTED BY")));
 
 	Assert(PointerIsValid(node));
 	Assert(IsA(node, List));

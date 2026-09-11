@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright (c) Greenplum Inc 2008. All Rights Reserved. 
 #
@@ -27,6 +28,23 @@ class GplogTestCase(GpTestCase):
         gplog._LOGGER = None
         gplog.get_unittest_logger()
         gplog.log_to_file_only("should not crash")
+
+    def test_log_exception_with_unicode(self):
+        logger = gplog.get_default_logger()
+        logger.exception(Exception(u"тест".encode('utf-8')))
+        logger.exception(Exception(u"тест"))
+
+    def test_log_unicode(self):
+        logger = gplog.get_default_logger()
+        logger.log(logging.INFO, u"тест")
+
+    def test_log_binary_string(self):
+        logger = gplog.get_default_logger()
+        logger.log(logging.INFO, b"test")
+
+    def test_log_binary_string_with_unicode(self):
+        logger = gplog.get_default_logger()
+        logger.log(logging.INFO, u"тест".encode('utf-8'))
 
 if __name__ == '__main__':
     run_tests()

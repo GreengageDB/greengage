@@ -84,6 +84,7 @@
 #include "utils/workfile_mgr.h"
 #include "utils/vmem_tracker.h"
 #include "cdb/cdbdisp.h"
+#include "cdb/cdbconn.h"
 
 /*
  *	User-tweakable parameters
@@ -2847,6 +2848,8 @@ CommitTransaction(void)
 	if(Gp_role == GP_ROLE_DISPATCH)
 		MoveDbSessionLockRelease();
 
+	AtCommit_MetadataQueues();
+
 	AtCommit_TablespaceStorage();
 
 	AtEOXact_AppendOnly();
@@ -3368,6 +3371,8 @@ AbortTransaction(void)
 
 		DoPendingDbDeletes(false);
 		DatabaseStorageResetSessionLock();
+
+		AtAbort_MetadataQueues();
 
 		AtAbort_TablespaceStorage();
 		AtEOXact_AppendOnly();

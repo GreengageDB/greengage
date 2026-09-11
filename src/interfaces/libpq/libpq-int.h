@@ -197,6 +197,26 @@ typedef struct
 	void	   *noticeProcArg;
 } PGNoticeHooks;
 
+#ifndef FRONTEND
+/* Fields needed for metadata handling */
+typedef struct ggMetadataChunk
+{
+	struct ggMetadataChunk *next;
+	int    segindex;      /* source segment */
+	int    metadataLen;    /* Length of metadata buffer */
+	char   payload[];
+} ggMetadataChunk;
+
+typedef unsigned int ggMetadataQueueId;
+typedef void (*PQmetadataReceiver) (void *arg, ggMetadataChunk *, ggMetadataQueueId);
+
+typedef struct
+{
+	PQmetadataReceiver metadataRec; /* metadata message receiver */
+	void	   *metadataRecArg;
+} PGMetadataHooks;
+#endif
+
 typedef struct PGEvent
 {
 	PGEventProc proc;			/* the function to call on events */
@@ -538,6 +558,11 @@ struct pg_conn
 	/* Buffer for receiving various parts of messages */
 	PQExpBufferData workBuffer; /* expansible string */
 	char       *diffoptions;  /* MPP: transfer changed GUCs(require sync) from QD to QEs */
+
+#ifndef FRONTEND
+	/* Callback procedures for metadata message processing */
+	PGMetadataHooks metadataHooks;
+#endif
 };
 
 /* PGcancel stores all data necessary to cancel a connection. A copy of this

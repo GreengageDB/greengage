@@ -22,6 +22,7 @@ sudo yum install -y \
     libyaml-devel \
     libzstd-devel \
     libzstd-static \
+    lsof \
     net-tools \
     openldap-devel \
     openssl \
