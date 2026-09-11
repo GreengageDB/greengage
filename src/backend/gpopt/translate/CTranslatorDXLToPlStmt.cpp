@@ -4535,10 +4535,9 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 						split->hashAttnos[i] = tlist_attno;
 						split->hashFuncs[i] =
 							gpdb::GetHashProcInOpfamily(opfamily, typeoid);
-
-						gpdb::CloseRelation(target_rel);
 					}
 				}
+				gpdb::CloseRelation(target_rel);
 			}
 		}
 	}
