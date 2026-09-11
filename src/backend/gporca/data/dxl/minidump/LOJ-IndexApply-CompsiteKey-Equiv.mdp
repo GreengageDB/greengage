@@ -530,7 +530,7 @@ explain select * from foo left join bar on foo.a = bar.a and foo.b = bar.b left 
     <dxl:Plan Id="0" SpaceSize="6">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="922.609110" Rows="10.000000" Width="30"/>
+          <dxl:Cost StartupCost="0" TotalCost="923.212319" Rows="30.000000" Width="30"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -565,7 +565,7 @@ explain select * from foo left join bar on foo.a = bar.a and foo.b = bar.b left 
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="true">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="922.607992" Rows="10.000000" Width="30"/>
+            <dxl:Cost StartupCost="0" TotalCost="923.208965" Rows="30.000000" Width="30"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -602,7 +602,7 @@ explain select * from foo left join bar on foo.a = bar.a and foo.b = bar.b left 
           </dxl:JoinFilter>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="true">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="491.002039" Rows="10.000000" Width="20"/>
+              <dxl:Cost StartupCost="0" TotalCost="491.002272" Rows="20.000000" Width="20"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -713,7 +713,7 @@ explain select * from foo left join bar on foo.a = bar.a and foo.b = bar.b left 
           </dxl:NestedLoopJoin>
           <dxl:BitmapTableScan>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="431.605500" Rows="1.000000" Width="10"/>
+              <dxl:Cost StartupCost="0" TotalCost="432.205500" Rows="0.500000" Width="10"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="20" Alias="a">
