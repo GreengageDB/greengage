@@ -222,13 +222,94 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 					mp, dynamic_cast<CStatistics *>(stats),
 					unsupported_pred_stats, false /* do_cap_NDVs */);
 
-			// If it is outer join and the cardinality after applying the unsupported join
-			// filters is less than the cardinality of outer child, we don't use this stats.
-			// Because we need to make sure that Card(LOJ) >= Card(Outer child of LOJ).
+			// For an outer join, Card(LOJ) must stay >= Card(Outer child of
+			// LOJ). A plain filter can only ever remove rows, but what this
+			// predicate actually means is that some previously-matched
+			// pairs are disqualified -- for a LEFT JOIN, that turns the
+			// corresponding outer rows into NULL-extended rows, it doesn't
+			// make them disappear. So instead of discarding the filter's
+			// effect outright when it would violate the invariant, convert
+			// the shortfall into additional NULL-extended rows on the
+			// inner side (mirroring how a real LASJ contributes NULLs in
+			// CLeftOuterJoinStatsProcessor::AddHistogramsLOJInner).
 			if (is_a_left_join &&
 				stats_after_join_filter->Rows() < num_rows_outer)
 			{
+				CStatistics *filtered_stats =
+					CStatistics::CastStats(stats_after_join_filter);
+				CDouble matched_rows = filtered_stats->Rows();
+				CDouble shortfall = num_rows_outer - matched_rows;
+
+				CBitSet *inner_colids = GPOS_NEW(mp) CBitSet(mp);
+				ULongPtrArray *inner_colids_with_stats =
+					CStatistics::CastStats(current_stats)
+						->GetColIdsWithStats(mp);
+				for (ULONG uli = 0; uli < inner_colids_with_stats->Size();
+					 uli++)
+				{
+					(void) inner_colids->ExchangeSet(
+						*(*inner_colids_with_stats)[uli]);
+				}
+				inner_colids_with_stats->Release();
+
+				// the number of NULLs added to the inner side is the
+				// shortfall: outer rows whose only would-be match was
+				// excluded by the predicate we couldn't fold into the join
+				// condition itself
+				CHistogram *null_histogram = GPOS_NEW(mp) CHistogram(
+					mp, GPOS_NEW(mp) CBucketArray(mp),
+					true /*is_well_defined*/, 1.0 /*null_freq*/,
+					CHistogram::DefaultNDVRemain,
+					CHistogram::DefaultNDVFreqRemain,
+					true /*is_col_stats_missing*/);
+
+				UlongToHistogramMap *corrected_histograms =
+					GPOS_NEW(mp) UlongToHistogramMap(mp);
+				ULongPtrArray *all_colids_with_stats =
+					filtered_stats->GetColIdsWithStats(mp);
+				for (ULONG uli = 0; uli < all_colids_with_stats->Size();
+					 uli++)
+				{
+					ULONG colid = *(*all_colids_with_stats)[uli];
+					const CHistogram *filtered_histogram =
+						filtered_stats->GetHistogram(colid);
+					if (inner_colids->Get(colid))
+					{
+						CHistogram *corrected_histogram =
+							filtered_histogram
+								->MakeUnionAllHistogramNormalize(
+									matched_rows, null_histogram, shortfall);
+						CStatisticsUtils::AddHistogram(mp, colid,
+													   corrected_histogram,
+													   corrected_histograms);
+						GPOS_DELETE(corrected_histogram);
+					}
+					else
+					{
+						// outer-side column: its value distribution across
+						// all outer rows is unaffected by which specific
+						// rows failed to find a match
+						CStatisticsUtils::AddHistogram(mp, colid,
+													   filtered_histogram,
+													   corrected_histograms);
+					}
+				}
+				all_colids_with_stats->Release();
+				inner_colids->Release();
+				GPOS_DELETE(null_histogram);
+
+				UlongToDoubleMap *corrected_widths =
+					filtered_stats->CopyWidths(mp);
+				BOOL filtered_is_empty = filtered_stats->IsEmpty();
+				ULONG filtered_num_predicates =
+					filtered_stats->GetNumberOfPredicates();
+
 				stats_after_join_filter->Release();
+				stats->Release();
+				stats = GPOS_NEW(mp)
+					CStatistics(mp, corrected_histograms, corrected_widths,
+								num_rows_outer, filtered_is_empty,
+								filtered_num_predicates);
 			}
 			else
 			{
@@ -314,6 +395,15 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	const ULONG num_join_conds = join_pred_stats_info->Size();
 
 	BOOL output_is_empty = false;
+	// For a LASJ, the anti-join produces no rows only if EVERY AND-ed
+	// predicate independently shows complete coverage (no outer value
+	// survives unmatched on that column) - a single predicate with
+	// surviving buckets is enough on its own to keep the anti-join
+	// non-empty, so predicates must be combined with AND here. This is the
+	// opposite of the OR used below for other join types, where a single
+	// AND-ed predicate with no possible matches is enough to make the whole
+	// (intersection-based) join empty.
+	BOOL lasj_all_preds_fully_covered = (num_join_conds > 0);
 	CDouble num_join_rows = 0;
 	// iterate over join's predicate(s)
 	for (ULONG i = 0; i < num_join_conds; i++)
@@ -366,9 +456,17 @@ CJoinStatsProcessor::SetResultingJoinStats(
 					   DoIgnoreLASJHistComputation);
 
 
-		output_is_empty = JoinStatsAreEmpty(
-			outer_stats->IsEmpty(), output_is_empty, outer_histogram,
-			inner_histogram, outer_histogram_after, join_type);
+		BOOL pred_is_empty = JoinStatsAreEmpty(outer_histogram, inner_histogram,
+											   outer_histogram_after);
+		if (IsLASJ)
+		{
+			lasj_all_preds_fully_covered =
+				lasj_all_preds_fully_covered && pred_is_empty;
+		}
+		else
+		{
+			output_is_empty = output_is_empty || pred_is_empty;
+		}
 
 		CStatisticsUtils::AddHistogram(mp, colid1, outer_histogram_after,
 									   result_col_hist_mapping);
@@ -420,6 +518,13 @@ CJoinStatsProcessor::SetResultingJoinStats(
 				local_scale_factor, mdid_pair, both_dist_keys));
 	}
 
+
+	// finalize output_is_empty: for LASJ, empty only if every AND-ed
+	// predicate independently showed complete coverage (AND across
+	// predicates); for other join types, keep the OR-accumulated
+	// per-predicate result plus the (unchanged) outer-empty rule.
+	output_is_empty = IsLASJ ? lasj_all_preds_fully_covered
+							 : (output_is_empty || (outer_stats->IsEmpty()));
 
 	num_join_rows = CStatistics::MinRows;
 	if (!output_is_empty)
@@ -477,17 +582,48 @@ CJoinStatsProcessor::CalcJoinCardinality(
 	CDouble limit_for_result_scale_factor(
 		std::max(left_num_rows.Get(), right_num_rows.Get()));
 
-	CDouble scale_factor = CScaleFactorUtils::CumulativeJoinScaleFactor(
-		mp, stats_config, join_conds_scale_factors,
-		limit_for_result_scale_factor);
+	const ULONG num_join_conds = join_conds_scale_factors->Size();
+
+	BOOL IsLASJ = (IStatistics::EsjtLeftAntiSemiJoin == join_type);
+
+	CDouble scale_factor(1.0);
+	if (IsLASJ && 0 < num_join_conds)
+	{
+		// For a LASJ, a row survives the AND-ed anti-join condition if it
+		// fails to match on ANY single predicate (survives(x) iff there is
+		// no y satisfying every predicate at once). A row that survives
+		// even one predicate alone therefore also survives the combined
+		// condition, so:
+		//     survivors(combined) >= max(survivors(P1), survivors(P2), ...)
+		// Since scale_factor = left_num_rows / survivors, that means the
+		// combined scale factor is bounded by the LEAST restrictive
+		// predicate's own scale factor - i.e. the minimum, not the
+		// damped product CumulativeJoinScaleFactor computes for
+		// match-fraction-style combination (inner/semi join). Additional
+		// AND-ed predicates can only grow the LASJ survivor set relative
+		// to the most permissive one, never shrink it below what that
+		// predicate alone already guarantees.
+		scale_factor = (*join_conds_scale_factors)[0]->m_scale_factor;
+		for (ULONG ul = 1; ul < num_join_conds; ul++)
+		{
+			scale_factor =
+				std::min(scale_factor.Get(),
+						 (*join_conds_scale_factors)[ul]->m_scale_factor.Get());
+		}
+	}
+	else
+	{
+		scale_factor = CScaleFactorUtils::CumulativeJoinScaleFactor(
+			mp, stats_config, join_conds_scale_factors,
+			limit_for_result_scale_factor);
+	}
 	CDouble cartesian_product_num_rows = left_num_rows * right_num_rows;
 
-	if (IStatistics::EsjtLeftAntiSemiJoin == join_type ||
-		IStatistics::EsjtLeftSemiJoin == join_type)
+	if (IsLASJ || IStatistics::EsjtLeftSemiJoin == join_type)
 	{
 		CDouble rows = left_num_rows;
 
-		if (IStatistics::EsjtLeftAntiSemiJoin == join_type)
+		if (IsLASJ)
 		{
 			rows = left_num_rows / scale_factor;
 		}
@@ -509,23 +645,25 @@ CJoinStatsProcessor::CalcJoinCardinality(
 
 
 
-// check if the join statistics object is empty output based on the input
-// histograms and the join histograms
+// check whether a single join predicate's histograms show that this
+// predicate alone cannot produce any matches. Note this says nothing on its
+// own about whether the overall (possibly multi-predicate) join is empty -
+// see SetResultingJoinStats for how this is combined across predicates.
 BOOL
-CJoinStatsProcessor::JoinStatsAreEmpty(BOOL outer_is_empty,
-									   BOOL output_is_empty,
-									   const CHistogram *outer_histogram,
+CJoinStatsProcessor::JoinStatsAreEmpty(const CHistogram *outer_histogram,
 									   const CHistogram *inner_histogram,
-									   CHistogram *join_histogram,
-									   IStatistics::EStatsJoinType join_type)
+									   CHistogram *join_histogram)
 {
 	GPOS_ASSERT(nullptr != outer_histogram);
 	GPOS_ASSERT(nullptr != inner_histogram);
 	GPOS_ASSERT(nullptr != join_histogram);
-	BOOL IsLASJ = IStatistics::EsjtLeftAntiSemiJoin == join_type;
-	return output_is_empty || (!IsLASJ && outer_is_empty) ||
-		   (!outer_histogram->IsEmpty() && !inner_histogram->IsEmpty() &&
-			join_histogram->IsEmpty());
+
+	BOOL pred_is_empty = !outer_histogram->IsEmpty() &&
+						 !inner_histogram->IsEmpty() &&
+						 join_histogram->IsEmpty();
+
+
+	return pred_is_empty;
 }
 
 // Derive statistics for join operation given array of statistics object
