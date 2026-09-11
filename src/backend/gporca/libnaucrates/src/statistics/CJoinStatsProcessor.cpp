@@ -222,13 +222,94 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 					mp, dynamic_cast<CStatistics *>(stats),
 					unsupported_pred_stats, false /* do_cap_NDVs */);
 
-			// If it is outer join and the cardinality after applying the unsupported join
-			// filters is less than the cardinality of outer child, we don't use this stats.
-			// Because we need to make sure that Card(LOJ) >= Card(Outer child of LOJ).
+			// For an outer join, Card(LOJ) must stay >= Card(Outer child of
+			// LOJ). A plain filter can only ever remove rows, but what this
+			// predicate actually means is that some previously-matched
+			// pairs are disqualified -- for a LEFT JOIN, that turns the
+			// corresponding outer rows into NULL-extended rows, it doesn't
+			// make them disappear. So instead of discarding the filter's
+			// effect outright when it would violate the invariant, convert
+			// the shortfall into additional NULL-extended rows on the
+			// inner side (mirroring how a real LASJ contributes NULLs in
+			// CLeftOuterJoinStatsProcessor::AddHistogramsLOJInner).
 			if (is_a_left_join &&
 				stats_after_join_filter->Rows() < num_rows_outer)
 			{
+				CStatistics *filtered_stats =
+					CStatistics::CastStats(stats_after_join_filter);
+				CDouble matched_rows = filtered_stats->Rows();
+				CDouble shortfall = num_rows_outer - matched_rows;
+
+				CBitSet *inner_colids = GPOS_NEW(mp) CBitSet(mp);
+				ULongPtrArray *inner_colids_with_stats =
+					CStatistics::CastStats(current_stats)
+						->GetColIdsWithStats(mp);
+				for (ULONG uli = 0; uli < inner_colids_with_stats->Size();
+					 uli++)
+				{
+					(void) inner_colids->ExchangeSet(
+						*(*inner_colids_with_stats)[uli]);
+				}
+				inner_colids_with_stats->Release();
+
+				// the number of NULLs added to the inner side is the
+				// shortfall: outer rows whose only would-be match was
+				// excluded by the predicate we couldn't fold into the join
+				// condition itself
+				CHistogram *null_histogram = GPOS_NEW(mp) CHistogram(
+					mp, GPOS_NEW(mp) CBucketArray(mp),
+					true /*is_well_defined*/, 1.0 /*null_freq*/,
+					CHistogram::DefaultNDVRemain,
+					CHistogram::DefaultNDVFreqRemain,
+					true /*is_col_stats_missing*/);
+
+				UlongToHistogramMap *corrected_histograms =
+					GPOS_NEW(mp) UlongToHistogramMap(mp);
+				ULongPtrArray *all_colids_with_stats =
+					filtered_stats->GetColIdsWithStats(mp);
+				for (ULONG uli = 0; uli < all_colids_with_stats->Size();
+					 uli++)
+				{
+					ULONG colid = *(*all_colids_with_stats)[uli];
+					const CHistogram *filtered_histogram =
+						filtered_stats->GetHistogram(colid);
+					if (inner_colids->Get(colid))
+					{
+						CHistogram *corrected_histogram =
+							filtered_histogram
+								->MakeUnionAllHistogramNormalize(
+									matched_rows, null_histogram, shortfall);
+						CStatisticsUtils::AddHistogram(mp, colid,
+													   corrected_histogram,
+													   corrected_histograms);
+						GPOS_DELETE(corrected_histogram);
+					}
+					else
+					{
+						// outer-side column: its value distribution across
+						// all outer rows is unaffected by which specific
+						// rows failed to find a match
+						CStatisticsUtils::AddHistogram(mp, colid,
+													   filtered_histogram,
+													   corrected_histograms);
+					}
+				}
+				all_colids_with_stats->Release();
+				inner_colids->Release();
+				GPOS_DELETE(null_histogram);
+
+				UlongToDoubleMap *corrected_widths =
+					filtered_stats->CopyWidths(mp);
+				BOOL filtered_is_empty = filtered_stats->IsEmpty();
+				ULONG filtered_num_predicates =
+					filtered_stats->GetNumberOfPredicates();
+
 				stats_after_join_filter->Release();
+				stats->Release();
+				stats = GPOS_NEW(mp)
+					CStatistics(mp, corrected_histograms, corrected_widths,
+								num_rows_outer, filtered_is_empty,
+								filtered_num_predicates);
 			}
 			else
 			{
