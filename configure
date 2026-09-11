@@ -2989,6 +2989,10 @@ cat >>confdefs.h <<_ACEOF
 #define GP_PRODUCT_NAME "$gp_product_name"
 _ACEOF
 
+cat >>confdefs.h <<\_ACEOF
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+_ACEOF
 
 cat >>confdefs.h <<_ACEOF
 #define PACKAGE_NAME "$gp_product_name"
