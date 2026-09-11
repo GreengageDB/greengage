@@ -1,0 +1,70 @@
+# FILE:    ci/Dockerfile.rockylinux
+# CONTEXT: Build Greengage on Rocky Linux <OS_VERSION>
+# PURPOSE: Multi-stage Docker build for Greengage database
+
+ARG OS_VERSION=8
+
+FROM rockylinux:${OS_VERSION} AS base
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+WORKDIR /home/gpadmin
+
+ARG OS_VERSION \
+    CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
+    OUTPUT_ARTIFACT_DIR=bin_gpdb \
+    SKIP_UNITTESTS=
+
+ENV LANG=en_US.UTF-8 \
+    OS_VERSION=$OS_VERSION \
+    TARGET_OS=rockylinux \
+    TARGET_OS_VERSION=$OS_VERSION \
+    CONFIGURE_FLAGS=$CONFIGURE_FLAGS \
+    OUTPUT_ARTIFACT_DIR=$OUTPUT_ARTIFACT_DIR \
+    SKIP_UNITTESTS=$SKIP_UNITTESTS
+
+COPY README.Rhel-Rocky.bash ./
+RUN set -eux; \
+    IS_DOCKER_BUILD=true ./README.Rhel-Rocky.bash; \
+    rm README.Rhel-Rocky.bash; \
+# Install pg_bsd_indent used by pgindent utility
+    wget --progress=dot:giga --no-hsts https://ftp.postgresql.org/pub/dev/pg_bsd_indent-1.3.tar.gz -O - | tar -xzf -; \
+    make install -C pg_bsd_indent; \
+    rm -r pg_bsd_indent; \
+# To run sshd directly, but not using service
+    mkdir -p /run/sshd; \
+# Alter precedence in favor of IPv4 during resolving
+    echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
+# Upgrade pip to support current package versions
+    python3 -m pip install --no-cache-dir --upgrade 'pip<=26.0.0'; \
+# Install Python packages
+    python3 -m pip install --no-cache-dir \
+        allure-behave==2.4.0 \
+        behave~=1.2.6 \
+        coverage~=4.5 \
+        'gsutil<=5.0.0' \
+        'mock<=5.0.0' \
+        protobuf==3.20.0 \
+        'psutil<=7.2.2' \
+        'pyyaml<=6.0.3' \
+        'psycopg2-binary<=2.9.12' \
+        'pytest<=9.0.0'; \
+# Cleanup to reduce image size
+    dnf clean all; \
+    rm -rf /tmp/* /var/tmp/* /var/cache/man/
+
+FROM base AS build
+
+COPY . gpdb_src
+
+# Compile with running mocking tests unless SKIP_UNITTESTS is set
+RUN mkdir "$OUTPUT_ARTIFACT_DIR"; \
+    gpdb_src/concourse/scripts/compile_gpdb.bash
+
+FROM base AS code
+COPY . gpdb_src
+RUN rm -rf gpdb_src/.git/
+
+FROM base AS test
+
+COPY --from=code  /home/gpadmin/gpdb_src gpdb_src
+COPY --from=build /home/gpadmin/$OUTPUT_ARTIFACT_DIR $OUTPUT_ARTIFACT_DIR
+COPY --from=build /home/gpadmin/gpdb_src/VERSION gpdb_src

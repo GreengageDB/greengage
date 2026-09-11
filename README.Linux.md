@@ -1,14 +1,10 @@
-## For RHEL/Rocky8:
+## For RHEL/Rocky (versions 8 or 9):
 
-  - For EL versions (> 8.0):
-    - Install git
-      ```bash
-      sudo yum install git
-      ```
-  - Install dependencies using README.Rhel-Rocky.bash script.
-       ```bash
-       ./README.Rhel-Rocky.bash
-       ```
+- Install dependencies using README.Rhel-Rocky.bash script:
+
+  ```bash
+  sudo ./README.Rhel-Rocky.bash
+  ```
 
 ## For Ubuntu:
 
