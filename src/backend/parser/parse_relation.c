@@ -3143,6 +3143,32 @@ get_tle_by_resno(List *tlist, AttrNumber resno)
 	return NULL;
 }
 
+
+/*
+ * Given a targetlist and a resname, return the resno of according attribute
+ *
+ * Returns NULL if resno is not present in list.
+ */
+AttrNumber
+get_tle_by_resname(List *tlist, const char *attrName)
+{
+	ListCell   *t;
+
+	foreach(t, tlist)
+	{
+		TargetEntry *tle = lfirst(t);
+
+		if (tle->resname &&
+			(strcmp(tle->resname, attrName) == 0))
+		{
+			/* We found it ! */
+			return tle->resno;
+		}
+	}
+
+	return InvalidAttrNumber;
+}
+
 /*
  * Given a Query and rangetable index, return relation's RowMarkClause if any
  *

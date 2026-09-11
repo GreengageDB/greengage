@@ -22,6 +22,8 @@
 #include "executor/execDML.h"
 #include "executor/instrument.h"
 #include "executor/nodeSplitUpdate.h"
+#include "parser/parsetree.h"
+#include "cdb/cdbutil.h"
 
 #include "utils/memutils.h"
 
@@ -43,6 +45,39 @@ ExecSplitUpdateExplainEnd(PlanState *planstate, struct StringInfoData *buf)
 	planstate->instrument->execmemused += SPLITUPDATE_MEM;
 }
 
+/*
+ * Evaluate the hash keys, and compute the target segment ID for the new row.
+ */
+static uint32
+evalHashKey(SplitUpdateState *node, Datum *values, bool *isnulls)
+{
+	SplitUpdate *plannode = (SplitUpdate *) node->ps.plan;
+	ExprContext *econtext = node->ps.ps_ExprContext;
+	MemoryContext oldContext;
+	unsigned int target_seg;
+	CdbHash	   *h = node->cdbhash;
+
+	ResetExprContext(econtext);
+
+	oldContext = MemoryContextSwitchTo(econtext->ecxt_per_tuple_memory);
+
+	cdbhashinit(h);
+
+	for (int i = 0; i < plannode->numHashAttrs; i++)
+	{
+		AttrNumber	keyattno = plannode->hashAttnos[i];
+
+		/*
+		 * Compute the hash function
+		 */
+		cdbhash(h, i + 1, values[keyattno - 1], isnulls[keyattno - 1]);
+	}
+	target_seg = cdbhashreduce(h);
+
+	MemoryContextSwitchTo(oldContext);
+
+	return target_seg;
+}
 
 /* Split TupleTableSlot into a DELETE and INSERT TupleTableSlot */
 static void
@@ -97,6 +132,15 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			deleteAtt = lnext(deleteAtt);
 			insertAtt = lnext(insertAtt);
 		}
+		else if (resno + 1 == node->output_segid_attno)
+		{
+			Assert(!nulls[node->input_segid_attno - 1]);
+
+			delete_values[resno] = values[node->input_segid_attno - 1];
+			delete_nulls[resno] = false;
+
+			/* compute the new value later, after we have processed all the other columns */
+		}
 		else
 		{
 			/*
@@ -105,6 +149,10 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 			 */
 			if (IsA(tle->expr, Var))
 			{
+				Var		   *var = (Var *) tle->expr;
+
+				Assert(var->varno == OUTER_VAR);
+
 				delete_values[resno] = values[((Var *)tle->expr)->varattno-1];
 				delete_nulls[resno] = nulls[((Var *)tle->expr)->varattno-1];
 
@@ -113,6 +161,17 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 
 				Assert(exprType((Node *) tle->expr) == slot->tts_tupleDescriptor->attrs[((Var *)tle->expr)->varattno-1]->atttypid);
 			}
+		}
+
+		/* Compute segment ID for the new row */
+		if (node->output_segid_attno > 0)
+		{
+			int32		target_seg;
+
+			target_seg = evalHashKey(node, insert_values, insert_nulls);
+
+			insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
+			insert_nulls[node->output_segid_attno - 1] = false;
 		}
 	}
 }
@@ -178,6 +237,7 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	bool    has_oids;
 
 	SplitUpdateState *splitupdatestate;
+	int			numsegments;
 
 	splitupdatestate = makeNode(SplitUpdateState);
 	splitupdatestate->ps.plan = (Plan *)node;
@@ -189,6 +249,8 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 */
 	Plan *outerPlan = outerPlan(node);
 	outerPlanState(splitupdatestate) = ExecInitNode(outerPlan, estate, eflags);
+
+	ExecAssignExprContext(estate, &splitupdatestate->ps);
 
 	ExecInitResultTupleSlot(estate, &splitupdatestate->ps);
 
@@ -203,11 +265,30 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	ExecSetSlotDescriptor(splitupdatestate->insertTuple, tupDesc);
 	ExecSetSlotDescriptor(splitupdatestate->deleteTuple, tupDesc);
 
+		/*
+	 * Look up the positions of the gp_segment_id in the subplan's target
+	 * list, and in the result.
+	 */
+	splitupdatestate->input_segid_attno =
+		get_tle_by_resname(outerPlan->targetlist, "gp_segment_id");
+	splitupdatestate->output_segid_attno =
+		get_tle_by_resname(node->plan.targetlist, "gp_segment_id");
+
 	/*
 	 * DML nodes do not project.
 	 */
 	ExecAssignResultTypeFromTL(&splitupdatestate->ps);
 	ExecAssignProjectionInfo(&splitupdatestate->ps, NULL);
+
+	/*
+	 * Initialize for computing hash key
+	 */
+	if (node->numHashAttrs > 0)
+	{
+		splitupdatestate->cdbhash = makeCdbHash(node->numHashSegments,
+												node->numHashAttrs,
+												node->hashFuncs);
+	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
 	{
