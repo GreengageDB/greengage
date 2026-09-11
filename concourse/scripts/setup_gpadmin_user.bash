@@ -78,6 +78,8 @@ setup_gpadmin_user() {
   echo -e "password\npassword" | passwd gpadmin
   # Add user to sudoers list required for gpinitsystem test
   echo "gpadmin ALL = NOPASSWD : ALL" >> /etc/sudoers
+  # Allow sudo to keep the PIP_BREAK_SYSTEM_PACKAGES environment variable
+  echo "Defaults  env_keep += \"PIP_BREAK_SYSTEM_PACKAGES\"" >> /etc/sudoers
   setup_ssh_for_user gpadmin
   transfer_ownership
   set_limits
