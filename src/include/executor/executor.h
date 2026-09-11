@@ -508,8 +508,8 @@ extern ResultRelInfo *targetid_get_partition(Oid targetid, EState *estate, bool 
 extern ResultRelInfo *slot_get_partition(TupleTableSlot *slot, EState *estate);
 extern ResultRelInfo *values_get_partition(Datum *values, bool *nulls,
 					 TupleDesc desc, EState *estate, bool openIndices);
-extern void PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *ao_segnos);
-extern void PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *ao_segnos);
+extern void PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *mapping);
+extern void PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *mapping);
 
 extern void SendAOTupCounts(EState *estate);
 extern bool already_under_executor_run(void);

@@ -4890,7 +4890,7 @@ PartInsertDescMemoryContext(EState *estate, ResultRelInfo *rri)
  * bookkeeping.
  */
 void
-PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *ao_segnos)
+PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *mapping)
 {
 	MemoryContext oldcxt;
 
@@ -4899,7 +4899,7 @@ PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *ao_segnos)
 		PartInsertDescTouch(estate, rri);
 		return;
 	}
-	ResultRelInfoSetSegno(rri, ao_segnos);
+	ResultRelInfoSetSegno(rri, mapping);
 	oldcxt = MemoryContextSwitchTo(PartInsertDescMemoryContext(estate, rri));
 	rri->ri_aoInsertDesc = appendonly_insert_init(rri->ri_RelationDesc,
 												  rri->ri_aosegno, false);
@@ -4908,7 +4908,7 @@ PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *ao_segnos)
 }
 
 void
-PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *ao_segnos)
+PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *mapping)
 {
 	MemoryContext oldcxt;
 
@@ -4917,10 +4917,10 @@ PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *ao_segnos)
 		PartInsertDescTouch(estate, rri);
 		return;
 	}
-	ResultRelInfoSetSegno(rri, ao_segnos);
+	ResultRelInfoSetSegno(rri, mapping);
 	oldcxt = MemoryContextSwitchTo(PartInsertDescMemoryContext(estate, rri));
 	rri->ri_aocsInsertDesc = aocs_insert_init(rri->ri_RelationDesc,
-											 rri->ri_aosegno, false);
+											  rri->ri_aosegno, false);
 	MemoryContextSwitchTo(oldcxt);
 	PartInsertDescTrackAndBound(estate, rri);
 }
