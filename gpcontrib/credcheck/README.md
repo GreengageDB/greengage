@@ -10,6 +10,7 @@
 	- [Force password change](#force-password-change)
 	- [Prohibit password changes](#disallow-password-change)
 	- [Warning before password expire](#warning-before-password-expire)
+	- [Last login information](#last-login-information)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
 	- [Authors](#authors)
@@ -108,6 +109,49 @@ credcheck.whitelist = 'admin,supuser'
 will disable any credcheck policy for password change of users named `admin` or `supuser`.
 
 To disable password policy checks for changes done by a superuser, enable GUC `credcheck.superuser_nocheck`.
+
+### [Last login information](#last-login-information)
+
+This feature is a last-login history modelled on the Unix last(1)/wtmp.
+Records user sessions (name, login time, duration, backend pid, source
+IP and port, and optionally the last SQL query) plus PostgreSQL
+boot/shutdown/crash markers. To enable this feature set `credcheck.lastlog`
+to `on`.
+
+The history ring lives in a mmap file in the data directory, so writes
+go through the kernel page cache and survive a postmaster crash. A dedicated
+background worker msync()s periodically at `credcheck.lastlog_flush_interval`
+seconds (default 0, at shutdown only) and writes the clean-shutdown marker on
+SIGTERM; an unclean previous shutdown is detected at startup and recorded as
+a crash record. Live sessions are kept in anonymous shared memory and finalized
+into the ring at backend exit.
+
+Number of records kept in the lastlog history ring is 1024, it should be upper
+than max_connections.
+
+New GUCs:
+credcheck.lastlog_query_size, credcheck.lastlog_track_query,
+
+A view `pg_lastlog` over `check_lastlog()` allows to look at the history.
+
+```
+contrib_regression=# select * from pg_lastlog;
+   type   | username |  pid   | client_addr | client_port |          login_time           |          logout_time          |    duration     |      state      | query 
+----------+----------+--------+-------------+-------------+-------------------------------+-------------------------------+-----------------+-----------------+-------
+ user     | gilles   | 148483 | [local]     |           0 | 2026-09-09 16:59:07.765016+02 |                               | 00:00:14.202368 | still connected | 
+ user     | gilles   | 148481 | [local]     |           0 | 2026-09-09 16:59:07.171284+02 | 2026-09-09 16:59:07.174723+02 | 00:00:00.003439 | disconnected    | 
+[...]
+ user     | gilles   | 145047 | [local]     |           0 | 2026-09-09 15:36:34.346523+02 | 2026-09-09 15:36:34.368934+02 | 00:00:00.022411 | disconnected    | 
+ user     | postgres | 144982 | [local]     |           0 | 2026-09-09 15:36:30.786325+02 | 2026-09-09 15:36:30.788083+02 | 00:00:00.001758 | disconnected    | 
+ user     | postgres | 144977 | [local]     |           0 | 2026-09-09 15:36:30.273365+02 | 2026-09-09 15:36:30.275044+02 | 00:00:00.001679 | disconnected    | 
+ user     | postgres | 144974 | [local]     |           0 | 2026-09-09 15:36:29.757562+02 | 2026-09-09 15:36:29.762573+02 | 00:00:00.005011 | disconnected    | 
+ boot     |          | 144960 |             |             | 2026-09-09 15:36:28.674986+02 |                               |                 | boot            | 
+ shutdown |          |        |             |             | 2026-09-09 15:36:28.490285+02 |                               |                 | shutdown        | 
+```
+
+It is also possible to store the last query executed by the user by enabling
+`credcheck.lastlog_track_query`. The query is truncated by default at 1024 bytes
+but this size can be increased using `credcheck.lastlog_query_size`.
 
 ### [Examples](#examples)
 
