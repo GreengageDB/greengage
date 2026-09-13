@@ -35,6 +35,9 @@
 #include "access/xlogreader.h"
 #endif
 
+#if PG_VERSION_NUM >= 190000
+#include "port.h"
+#endif
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_auth_members.h"
@@ -2298,7 +2301,11 @@ void
 lastlog_bgworker_main(Datum main_arg)
 {
 	pqsignal(SIGTERM, die);
+#if PG_VERSION_NUM >= 190000
+	pqsignal(SIGHUP, PG_SIG_IGN);
+#else
 	pqsignal(SIGHUP, SIG_IGN);
+#endif
 	BackgroundWorkerUnblockSignals();
 
 	/* write the clean-shutdown marker when we are asked to stop */
