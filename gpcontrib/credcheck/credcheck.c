@@ -70,7 +70,11 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
+#if PG_VERSION_NUM < 140000
 #include "utils/wait_event.h"
+#else
+#include "pgstat.h"
+#endif
 #include "libpq/pqsignal.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
