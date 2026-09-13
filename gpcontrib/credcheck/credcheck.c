@@ -70,7 +70,7 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
-#if PG_VERSION_NUM > 130000
+#if PG_VERSION_NUM >= 140000
 #include "utils/wait_event.h"
 #else
 #include "pgstat.h"
