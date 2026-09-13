@@ -48,6 +48,8 @@
 #if PG_VERSION_NUM >= 140000
 #include "common/hmac.h"
 #include "common/hashfn.h"
+#else
+#include "access/hash.h"
 #endif
 #include "common/sha2.h"
 #include "executor/spi.h"
