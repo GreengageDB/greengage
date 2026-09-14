@@ -5058,7 +5058,7 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 //		Check and set hash info in split node.
 //
 //---------------------------------------------------------------------------
-void 
+void
 CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 {
 	// If we're updating hash-distributed table we need to fill hash-related
