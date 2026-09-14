@@ -33,13 +33,14 @@ protected:
 		IStatistics::EStatsJoinType join_type);
 
 
-	// check if the join statistics object is empty output based on the input
-	// histograms and the join histograms
-	static BOOL JoinStatsAreEmpty(BOOL outer_is_empty, BOOL output_is_empty,
-								  const CHistogram *outer_histogram,
+	// check whether a single join predicate's histograms show that this
+	// predicate alone cannot produce any matches (i.e. no outer value has a
+	// candidate on the inner side for this column). Combining this signal
+	// across multiple AND-ed predicates is join-type-dependent and is done
+	// by the caller (SetResultingJoinStats), not here.
+	static BOOL JoinStatsAreEmpty(const CHistogram *outer_histogram,
 								  const CHistogram *inner_histogram,
-								  CHistogram *join_histogram,
-								  IStatistics::EStatsJoinType join_type);
+								  CHistogram *join_histogram);
 
 	// helper for joining histograms
 	static void JoinHistograms(
