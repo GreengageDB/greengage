@@ -34,8 +34,8 @@ RUN set -eux; \
 
 ENV LANG=en_US.UTF-8
 
-ARG WITH_PRODUCT_NAME
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend${WITH_PRODUCT_NAME:+ --with-product-name=${WITH_PRODUCT_NAME}}"
+ARG EXTRA_CONFIGURE_FLAGS
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend${EXTRA_CONFIGURE_FLAGS:+ ${EXTRA_CONFIGURE_FLAGS}}"
 
 FROM base AS build
 
