@@ -64,7 +64,7 @@ CAntiSemiJoinTest:
 AntiSemiJoin2Select-1 AntiSemiJoin2Select-2 NOT-IN-NotNullBoth NOT-IN-NullInner NOT-IN-NullOuter
 Correlated-AntiSemiJoin CorrelatedAntiSemiJoin-True Correlated-LASJ-With-Outer-Col NotInToLASJ
 Correlated-LASJ-With-Outer-Const Correlated-LASJ-With-Outer-Expr LeftOuter2InnerUnionAllAntiSemiJoin-Tpcds
-LASJ-Not-In-Force-Broadcast;
+LASJ-Not-In-Force-Broadcast LASJMultiplePredicates;
 
 CPredicateTest:
 ConvertBoolConstNullToConstTableFalseFilter 
