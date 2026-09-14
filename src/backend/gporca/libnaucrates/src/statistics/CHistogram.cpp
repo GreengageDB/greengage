@@ -987,14 +987,17 @@ CHistogram::NormalizeHistogram()
 	CDouble scale_factor =
 		std::max(DOUBLE(1.0), (CDouble(1.0) / GetFrequency()).Get());
 
-	// GetFrequency() can underflow toward the edge of double's range
-	// (e.g. from repeated bucket-splitting deep in a large join-order
-	// search) without being exactly zero, blowing scale_factor up to
-	// near-overflow and turning normalization into noise amplification.
-	// No real-world selectivity needs a scale factor near this large, so
-	// treat it as the trivially-empty case instead.
+	// GetFrequency() can underflow near double's range limit, blowing up
+	// scale_factor. Empty the histogram, same as above, so callers can
+	// detect this degenerate case via IsEmpty().
 	if (scale_factor.Get() > 1e15)
 	{
+		m_histogram_buckets->Release();
+		m_histogram_buckets = GPOS_NEW(m_mp) CBucketArray(m_mp);
+		m_null_freq = CDouble(0.0);
+		m_distinct_remaining = CDouble(0.0);
+		m_freq_remaining = CDouble(0.0);
+
 		return CDouble(GPOS_FP_ABS_MAX);
 	}
 
