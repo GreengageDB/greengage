@@ -314,14 +314,16 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	const ULONG num_join_conds = join_pred_stats_info->Size();
 
 	BOOL output_is_empty = false;
-	// For a LASJ, the anti-join produces no rows only if EVERY AND-ed
-	// predicate independently shows complete coverage (no outer value
-	// survives unmatched on that column) - a single predicate with
-	// surviving buckets is enough on its own to keep the anti-join
-	// non-empty, so predicates must be combined with AND here. This is the
-	// opposite of the OR used below for other join types, where a single
-	// AND-ed predicate with no possible matches is enough to make the whole
-	// (intersection-based) join empty.
+	// A single AND-ed predicate with surviving buckets is enough on its own
+	// to keep the LASJ non-empty, so predicates must be combined with AND
+	// here, not OR (which is correct below for other join types, where a
+	// single predicate with no possible matches already empties an
+	// intersection-based join). Note this AND is necessary but not
+	// sufficient for true emptiness: each predicate's coverage is judged
+	// from its own per-column histogram, with no visibility into whether
+	// the same inner row satisfies every predicate at once, so
+	// independent-but-individually-fully-covered columns can still make
+	// this wrongly conclude "empty".
 	BOOL lasj_all_preds_fully_covered = (num_join_conds > 0);
 	CDouble num_join_rows = 0;
 	// iterate over join's predicate(s)
