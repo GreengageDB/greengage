@@ -261,7 +261,10 @@ preprocess_targetlist(PlannerInfo *root)
  * fixup_columns_attnos
  *
  * Returns a bitmapset which contains attribute number of the parent
- * table based on the given bitmapset of the child.
+ * table based on the given bitmapset of the child. Allocates memory
+ * in current memory context.
+ * 
+ * The caller is responsible for cleaning memory up. 
  */
 static Bitmapset *
 fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
@@ -269,26 +272,28 @@ fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
 	Bitmapset  *result = NULL;
 	int			index = -1;
 
-	/*
-	 * obviously, no need to do anything here
-	 */
-	if (parentId == childId)
-		return columns;
-
 	while ((index = bms_next_member(columns, index)) >= 0)
 	{
 		char	   *attname;
+		AttrNumber 	attno = -1;
 
-		attname = get_attname(childId, index, false);
-		AttrNumber attno = get_attnum(parentId, attname);
-		if (!AttributeNumberIsValid(attno))
-			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
-				 attname, parentId);
+		/*
+		* obviously, no need to do anything here
+		*/
+		if (parentId != childId)
+		{
+			attname = get_attname(childId, index, false);
+			attno = get_attnum(parentId, attname);
+			if (!AttributeNumberIsValid(attno))
+				elog(ERROR, "column %s of relation %u has no match in relation %u",
+					attname, childId, parentId);
+			pfree(attname);
+		}
+		else
+			attno = index;
 
 		result = bms_add_member(result,
 								attno - FirstLowInvalidHeapAttributeNumber);
-
-		pfree(attname);
 	}
 
 	return result;
@@ -524,27 +529,41 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
 			classForm->relispartition)
 		{
-			Oid rootoid = get_top_level_partition_root(RelationGetRelid(rel));
-
-			Bitmapset *changed_cols_for_partition_check = fixup_columns_attnos(rootoid, RelationGetRelid(rel), changed_cols);
-
-			Relation rootRel = relation_open(rootoid, RowShareLock);
+			Oid 		rootoid = get_top_level_partition_root(RelationGetRelid(rel));
 			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
 
-			// Check if we're updating partitioning key columns of hash-distributed table
-			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy) &&
-				has_partition_attrs(rootRel, changed_cols_for_partition_check, NULL)) 
+			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy))
 			{
-				/*
-				 * We don't need split update on tuples from already hash
-				 * distributed leaf-partition, as they could possible be
-				 * transferred only to randomly distributed tables, where 
-				 * final segment doesn't matter.
-				 */
-				root->is_split_update = true;
+				List* ancestors = get_partition_ancestors(RelationGetRelid(rel));
+
+				ListCell *l;
+				foreach(l, ancestors)
+				{
+					Oid ancestoroid = lfirst_oid(l);
+
+					Bitmapset *changed_cols_for_partition_check = 
+						fixup_columns_attnos(ancestoroid, RelationGetRelid(rel), changed_cols);
+					
+					Relation ancestorRel = relation_open(ancestoroid, RowExclusiveLock);
+
+					/* Check if we're updating partitioning key columns of hash-distributed table */
+					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL)) 
+					{
+						/*
+						* We don't need split update on tuples from already hash
+						* distributed leaf-partition, as they could possible be
+						* transferred only to randomly distributed tables, where 
+						* final segment doesn't matter.
+						*/
+						root->is_split_update = true;
+					}
+					relation_close(ancestorRel, RowExclusiveLock);
+					bms_free(changed_cols_for_partition_check);
+				}
 			}
-			relation_close(rootRel, RowShareLock);
+			pfree(rootRelPolicy);
 		}
+		pfree(targetPolicy);
 	}
 
 	/*

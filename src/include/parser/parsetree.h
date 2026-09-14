@@ -59,7 +59,7 @@ extern bool get_rte_attribute_is_dropped(RangeTblEntry *rte,
 
 extern TargetEntry *get_tle_by_resno(List *tlist, AttrNumber resno);
 
-extern AttrNumber get_tle_by_resname(List *tlist, const char *attrName);
+extern AttrNumber get_resno_by_resname(List *tlist, const char *attrName);
 
 /* ----------------
  *		FOR UPDATE/SHARE info

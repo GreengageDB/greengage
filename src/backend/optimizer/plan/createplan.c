@@ -3244,7 +3244,6 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
 	GpPolicy   *cdbpolicy;
-	GpPolicy   *rootRelCdbpolicy = NULL;
 	int			attrIdx;
 	ListCell   *lc;
 	int			lastresno;
@@ -3342,6 +3341,8 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	 * hash redistributed. So we better off to use root's partition policy
 	 * that way we would statisfy all possible distributions.
 	 */
+	bool		use_root_policy = false;
+
 	Form_pg_class classForm = resultRel->rd_rel;
 	if ((classForm->relkind == RELKIND_RELATION ||
 		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
@@ -3349,13 +3350,14 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	{
 		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
 		rootRel = relation_open(rootoid, AccessShareLock);
-		rootRelCdbpolicy = rootRel->rd_cdbpolicy;
-	}
 
-	if (!GpPolicyIsHashPartitioned(cdbpolicy) && GpPolicyIsHashPartitioned(rootRelCdbpolicy)) 
-	{
-		cdbpolicy = rootRelCdbpolicy;
-		resultDesc = RelationGetDescr(rootRel);
+		if (!GpPolicyIsHashPartitioned(cdbpolicy) &&
+			GpPolicyIsHashPartitioned(rootRel->rd_cdbpolicy))
+		{
+			cdbpolicy = rootRel->rd_cdbpolicy;
+			resultDesc = RelationGetDescr(rootRel);
+			use_root_policy = true;
+		}
 	}
 
 	/* Look up the right hash functions for the hash expressions */
@@ -3364,7 +3366,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	for (i = 0; i < cdbpolicy->nattrs; i++)
 	{
 		AttrNumber	policy_attnum = cdbpolicy->attrs[i];
-		AttrNumber	leaf_attnum;
+		AttrNumber	leaf_attnum = policy_attnum;
 		Oid			typeoid = resultDesc->attrs[policy_attnum - 1].atttypid;
 		Oid			opfamily;
 
@@ -3375,19 +3377,16 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		 * resno == leaf_catalog_attnum. We must map the root's attnum to the
 		 * leaf's attnum via column name.
 		 */
-		if (cdbpolicy == rootRelCdbpolicy)
+		if (use_root_policy)
 		{
 			char *colname = get_attname(rootoid, policy_attnum, false);
 			leaf_attnum = get_attnum(RelationGetRelid(resultRel), colname);
 			if (!AttributeNumberIsValid(leaf_attnum))
-			elog(ERROR, "cache lookup failed for attribute %s of relation %u",
+				elog(ERROR, "cache lookup failed for attribute %s of relation %u",
 				 colname, rootoid);
 			pfree(colname);
 		}
-		else
-		{
-			leaf_attnum = policy_attnum;
-		}
+
 		hashAttnos[i] = leaf_attnum;
 
 		opfamily = get_opclass_family(cdbpolicy->opclasses[i]);
