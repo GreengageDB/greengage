@@ -237,7 +237,7 @@ define BUILD_STEPS
 	@$(MAKE) mkpgbouncer INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) copydocs INSTLOC=$(INSTLOC)
 	@$(MAKE) copylibs INSTLOC=$(INSTLOC)
-	@$(MAKE) greengage_path INSTLOC=$(INSTLOC)
+	@$(MAKE) greengage_path INSTLOC=$(INSTLOC) BUILDDIR=$(BUILDDIR)
 	@$(MAKE) clients INSTLOC=$(INSTLOC) CLIENTSINSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) set_scripts_version INSTLOC=$(CLIENTSINSTLOC)
 	@$(MAKE) copylicense INSTLOC=$(INSTLOC) \
@@ -706,6 +706,14 @@ copylibs :
 greengage_path:
 	mkdir -p $(INSTLOC)
 	$(BUILDDIR)/gpMgmt/bin/generate-greengage-path.sh no > $(INSTLOC)/greengage_path.sh
+	@# This makefile does not include src/Makefile.global, so the alias
+	@# derived from --with-product-name is read back from the generated
+	@# file.  Reading it here rather than in a $(shell) assignment keeps
+	@# sed to one run and lets its exit status fail the recipe.
+	@alias_name=`sed -n 's/^GP_ENV_SCRIPT_ALIAS = //p' \
+	                 $(BUILDDIR)/src/Makefile.global` && \
+	    { test -z "$$alias_name" || \
+	          ln -sf greengage_path.sh $(INSTLOC)/$$alias_name; }
 
 copylicense:
 	for proddir in $(INSTLOC) $(CLIENTSINSTLOC); do \

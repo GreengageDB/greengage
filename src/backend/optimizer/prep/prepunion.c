@@ -1845,14 +1845,18 @@ nested_subplan_mutator(Node *node, plan_tree_base_prefix *context)
 		{
 			PlannerInfo *root = (PlannerInfo*)context->node;
 			Plan *newsubplan = (Plan *) copyObject(planner_subplan_get_plan(root, sp));
-			PlannerInfo *newsubroot = makeNode(PlannerInfo);
-
-			memcpy(newsubroot, planner_subplan_get_root(root, sp), sizeof(PlannerInfo));
+			/*
+			 * glob->subroots must stay aligned with glob->subplans (same
+			 * length, indexed by plan_id). The duplicated subplan's subroot is
+			 * only ever read (never mutated through this slot), so reuse the
+			 * original subroot instead of a makeNode + memcpy shallow copy.
+			 */
+			PlannerInfo *subroot = planner_subplan_get_root(root, sp);
 
 			plan_tree_walker((Node *) newsubplan, nested_subplan_mutator, context);
 
 			root->glob->subplans = lappend(root->glob->subplans, newsubplan);
-			root->glob->subroots = lappend(root->glob->subroots, newsubroot);
+			root->glob->subroots = lappend(root->glob->subroots, subroot);
 
 			/*
 			 * expression_tree_mutator made a copy of the SubPlan already, so
