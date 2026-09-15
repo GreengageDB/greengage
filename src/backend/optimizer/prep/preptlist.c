@@ -286,7 +286,7 @@ fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
 			attno = get_attnum(parentId, attname);
 			if (!AttributeNumberIsValid(attno))
 				elog(ERROR, "column %s of relation %u has no match in relation %u",
-					attname, childId, parentId);
+					 attname, childId, parentId);
 			pfree(attname);
 		}
 		else
@@ -544,7 +544,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					Bitmapset *changed_cols_for_partition_check = 
 						fixup_columns_attnos(ancestoroid, RelationGetRelid(rel), changed_cols);
 					
-					Relation ancestorRel = relation_open(ancestoroid, RowExclusiveLock);
+					Relation ancestorRel = relation_open(ancestoroid, AccessShareLock);
 
 					/* Check if we're updating partitioning key columns of hash-distributed table */
 					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL)) 
@@ -557,7 +557,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 						*/
 						root->is_split_update = true;
 					}
-					relation_close(ancestorRel, RowExclusiveLock);
+					relation_close(ancestorRel, AccessShareLock);
 					bms_free(changed_cols_for_partition_check);
 				}
 			}
