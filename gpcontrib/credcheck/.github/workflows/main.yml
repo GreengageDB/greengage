@@ -58,6 +58,7 @@ jobs:
     - name: config
       run: |
         sudo pg_conftool $PGVERSION main set shared_preload_libraries credcheck
+        sudo sed -i '1i local   all   all   trust' /etc/postgresql/$PGVERSION/main/pg_hba.conf
         sudo service postgresql restart
 
     - name: test

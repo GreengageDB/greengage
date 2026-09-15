@@ -12,7 +12,7 @@ DROP USER aaa;
 -- production (the flag comes from pg_db_role_setting, not from a manual SET).
 SET credcheck.password_change_first_login = true;
 CREATE USER forced_login PASSWORD 'DummY1passWORD!';
-\c - forced_login;
+\c - forced_login
 
 -- Session/transaction-control statements that drivers and connection poolers
 -- must be able to issue while establishing a session (pgbouncer varcache_apply,
