@@ -5052,6 +5052,75 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
+//
+//	@doc:
+//		Check and set hash info in split node.
+//
+//---------------------------------------------------------------------------
+void
+CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
+{
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	if (m_result_rel_list != nullptr)
+	{
+		RangeTblEntry *rte =
+			rt_fetch(llast_int(m_result_rel_list),
+					 m_dxl_to_plstmt_context->GetRTableEntriesList());
+		Oid target_relid = rte->relid;
+
+		if (!OidIsValid(target_relid))
+			return;
+
+		gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
+
+		GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
+
+		// Check if it's hash distributed
+		if (policy == nullptr || !GpPolicyIsHashPartitioned(policy))
+			return;
+
+		int policy_nattrs = policy->nattrs;
+		TupleDesc resultDesc = RelationGetDescr(target_rel);
+
+		split->numHashAttrs = policy_nattrs;
+		split->numHashSegments = policy->numsegments;
+		split->hashAttnos =
+			(AttrNumber *) gpdb::GPDBAlloc(policy_nattrs * sizeof(AttrNumber));
+		split->hashFuncs = (Oid *) gpdb::GPDBAlloc(policy_nattrs * sizeof(Oid));
+
+		for (int i = 0; i < policy_nattrs; i++)
+		{
+			Form_pg_attribute att =
+				TupleDescAttr(resultDesc, policy->attrs[i] - 1);
+
+			const char *colname = NameStr(att->attname);
+
+			AttrNumber tlist_attno =
+				get_resno_by_resname(plan->targetlist, colname);
+			if (!AttributeNumberIsValid(tlist_attno))
+			{
+				char err_msg[256];
+				snprintf(
+					err_msg, 256,
+					"Couldn't find attribute number of \"%s\" column in plan's targetlist.",
+					colname);
+				GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg, nullptr);
+			}
+
+			Oid typeoid = att->atttypid;
+			Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+
+			split->hashAttnos[i] = tlist_attno;
+			split->hashFuncs[i] =
+				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSplit
 //
 //	@doc:
@@ -5115,6 +5184,10 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 
 	plan->lefttree = child_plan;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
+
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	SetSplitUpdateHashInfo(split, plan);
 
 	SetParamIds(plan);
 
