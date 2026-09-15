@@ -91,14 +91,6 @@ s/gpfdist is running on port \d+/gpfdist is running on port PORT/
 m/gpfdist:\/\/HOST:\d+/
 s/gpfdist:\/\/HOST:\d+/gpfdist:\/\/HOST:PORT/
 
-# Hai: change "gpfdist://HOST:PORT//data/home/gpadmin/pulse2-agent/agents/agent1/work/GPDB-main-opt-4xrhel57/rhel57_x86_64-1/cdbunit/cdbfast/gpload2/data/lineitem.tbl.small" into "gpfdist://HOST:PORT/PATH_TO_FILE"
-m/gpfdist:\/\/HOST:PORT\//
-s/gpfdist:\/\/HOST:PORT\/.+/gpfdist:\/\/HOST:PORT\/PATH_TO_FILE/
-
-# Hai: change "started gpfdist -p 8000 -P 9000 -f "/data/home/gpadmin/pulse2-agent/agents/agent1/work/GPDB-main-opt-4xrhel57/rhel57_x86_64-1/cdbunit/cdbfast/gpload2/data/lineitem.tbl.small" -t 30" to "started gpfdist -p 8000 -P 9000 -f CONFIG_FILE"
-m/\-f /
-s/\-f .+/-f CONFIG_FILE/
-
 # Hai: ignore "gpfdist says: ..."
 m/gpfdist says:/
 s/(gpfdist says:.*)/GP_IGNORE: $1/
