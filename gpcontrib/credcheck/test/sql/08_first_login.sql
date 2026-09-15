@@ -25,6 +25,11 @@ BEGIN;
 COMMIT;
 DISCARD ALL;
 
+-- The flag stays armed after DISCARD ALL (its default comes from the role
+-- settings), so real data access is still blocked -- and, unlike the swallowed
+-- pooler-setup error, this one reaches the client.
+SELECT 1;
+
 -- DDL and other utility statements remain blocked too.
 CREATE TABLE t_force (i int);
 
