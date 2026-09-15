@@ -35,6 +35,7 @@ operating systems:
   - Orca tests
   - Resource group tests
   - JIT tests (version 7.x only)
+  - pg_upgrade test (Ubuntu 22.04 only, no matrix)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
@@ -120,9 +121,9 @@ automatically upon the completion of the `Greengage CI` workflow.
   PR), SQL dumps are generated exclusively for verified, approved patches after
   they are merged into the main branches.
 - **Artifact Retention:** The generated SQL dump artifact is retained 90 days
-  after the last download. Each new run of the `behave tests gpexpand` workflow
-  (which consumes this artifact) resets this retention period when it downloads
-  the artifact.
+  after the last download. Each new run of the `behave tests gpexpand`
+  workflow or the `pg_upgrade` test (both consume this artifact) resets this
+  retention period when it downloads the artifact.
 
 ### Behavior
 
@@ -234,6 +235,8 @@ of the `greengagedb/greengage-ci` repository:
   [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
 - Resource group tests:
   [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
+- pg_upgrade test:
+  [README/REUSABLE-TESTS-PG_UPGRADE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-PG_UPGRADE.md)
 - Upload process:
   [README/REUSABLE-UPLOAD.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-UPLOAD.md)
 
@@ -252,3 +255,5 @@ of the `greengagedb/greengage-ci` repository:
   upload is skipped but other processes (GHCR upload, etc.) are unaffected.
 - For specific details on each stage, refer to the respective reusable workflow
   files and their READMEs in the `greengagedb/greengage-ci` repository.
+- The `pg_upgrade` job runs only for pull requests, after `build`, and only
+  for Ubuntu 22.04 — it does not participate in the OS matrix.

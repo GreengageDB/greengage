@@ -766,6 +766,8 @@ enum Edxltoken
 	EdxltokenSubtract,
 	EdxltokenMultiply,
 
+	EdxltokenSelectedPartitionSet,
+
 	EdxltokenSentinel
 };
 

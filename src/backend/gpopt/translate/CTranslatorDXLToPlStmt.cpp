@@ -562,6 +562,21 @@ CTranslatorDXLToPlStmt::TranslatePartOids(IMdIdArray *parts, INT lockmode)
 	return oids_list;
 }
 
+Bitmapset *
+CTranslatorDXLToPlStmt::TranslateCBitSet(CBitSet *set)
+{
+	Bitmapset *result = NULL;
+
+	CBitSetIter bsiter(*set);
+	while (bsiter.Advance())
+	{
+		auto value = bsiter.Bit();
+		result = gpdb::BmsAddMember(result, value);
+	}
+
+	return result;
+}
+
 List *
 CTranslatorDXLToPlStmt::TranslateJoinPruneParamids(
 	const ULongPtrArray *selector_ids, OID oid_type,
@@ -4281,6 +4296,12 @@ CTranslatorDXLToPlStmt::TranslateDXLDynTblScan(
 
 	dyn_seq_scan->partOids = TranslatePartOids(dyn_tbl_scan_dxlop->GetParts(),
 											   dxl_table_descr->LockMode());
+	if (nullptr != dyn_tbl_scan_dxlop->GetSelectedParts())
+		dyn_seq_scan->selected_parts =
+			TranslateCBitSet(dyn_tbl_scan_dxlop->GetSelectedParts());
+	else
+		dyn_seq_scan->selected_parts = gpdb::BmsAddRange(
+			nullptr, 0, dyn_tbl_scan_dxlop->GetParts()->Size() - 1);
 
 	OID oid_type =
 		CMDIdGPDB::CastMdid(m_md_accessor->PtMDType<IMDTypeInt4>()->MDId())
@@ -4559,6 +4580,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	DynamicForeignScan *dyn_foreign_scan = MakeNode(DynamicForeignScan);
 
 	IMdIdArray *parts = dyn_foreign_scan_dxlop->GetParts();
+	CBitSet *selected_parts = dyn_foreign_scan_dxlop->GetSelectedParts();
 
 	List *oids_list = NIL;
 	for (ULONG ul = 0; ul < parts->Size(); ul++)
@@ -4567,6 +4589,12 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 		oids_list = gpdb::LAppendOid(oids_list, part);
 	}
 
+	if (0 == selected_parts->Size())
+	{
+		GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiDXL2PlStmtConversion,
+				   GPOS_WSZ_LIT("Unexpected empty set of selected parts"));
+	}
+	dyn_foreign_scan->selected_parts = TranslateCBitSet(selected_parts);
 	dyn_foreign_scan->partOids = oids_list;
 
 	OID oid_type =
@@ -4594,7 +4622,10 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	// set the rte relid to the child, since we need to call the fdw api
 	// which assumes we're working with a foreign table. The root partition is
 	// not foreign!
-	Oid oid_first_child = CMDIdGPDB::CastMdid((*parts)[0])->Oid();
+	int firstForeignPartIdx =
+		gpdb::BmsNextMember(dyn_foreign_scan->selected_parts, -1);
+	Oid oid_first_child =
+		CMDIdGPDB::CastMdid((*parts)[firstForeignPartIdx])->Oid();
 	rte->relid = oid_first_child;
 	// need to lock foreign rel when calling out to CreateForeignScan
 	gpdb::GPDBLockRelationOid(
@@ -4609,7 +4640,7 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 											   index, qual, targetlist);
 
 	const IMDRelation *md_rel_first_part =
-		m_md_accessor->RetrieveRel((*parts)[0]);
+		m_md_accessor->RetrieveRel((*parts)[firstForeignPartIdx]);
 	ForeignScan *foreign_scan_first_part = CreateForeignScan(
 		oid_first_child, index, qual, targetlist,
 		m_dxl_to_plstmt_context->m_orig_query, rte, md_rel_first_part);
@@ -4632,6 +4663,10 @@ CTranslatorDXLToPlStmt::TranslateDXLDynForeignScan(
 	dyn_foreign_scan->fdw_private_list = NIL;
 	for (ULONG ul = 0; ul < parts->Size(); ul++)
 	{
+		if (!selected_parts->Get(ul))
+		{
+			continue;
+		}
 		rte->relid = CMDIdGPDB::CastMdid((*parts)[ul])->Oid();
 		gpdb::RelationWrapper childRel = gpdb::GetRelation(rte->relid);
 
