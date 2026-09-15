@@ -53,9 +53,23 @@ CLeftAntiSemiJoinStatsProcessor::JoinHistogramsLASJ(
 	if (!empty_histograms &&
 		CHistogram::JoinPredCmpTypeIsSupported(stats_cmp_type))
 	{
+		// If either side's histogram was derived from an unsupported-
+		// predicate filter, its bucket content doesn't reflect true
+		// post-filter value coverage (only its row count was scaled by a
+		// default selectivity guess) -- a "value ranges fully overlap ->
+		// every row matches" conclusion from it can't be trusted. Treat it
+		// the same as an explicit request to skip precise histogram
+		// computation, so we fall back to the same conservative default
+		// selectivity this class already uses in that case, instead of
+		// either a hard emptiness conclusion or the much more aggressive
+		// generic unsupported-join-predicate default below.
+		BOOL ignore_hist_computation = DoIgnoreLASJHistComputation ||
+									   histogram1->IsUnsupportedPredDerived() ||
+									   histogram2->IsUnsupportedPredDerived();
+
 		*result_hist1 = histogram1->MakeLASJHistogramNormalize(
 			stats_cmp_type, num_rows1, histogram2, scale_factor,
-			DoIgnoreLASJHistComputation);
+			ignore_hist_computation);
 		*result_hist2 = nullptr;
 
 		if ((*result_hist1)->IsEmpty())

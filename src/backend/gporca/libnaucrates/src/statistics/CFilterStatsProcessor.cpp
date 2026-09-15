@@ -361,6 +361,28 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
 
+			// this predicate has no single associated column, but still
+			// mark every column it actually touches: their row count was
+			// just reduced by the scale factor above without their
+			// histogram's value range being narrowed, so downstream
+			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
+			// over-trust them
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr != used_colids)
+			{
+				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+				{
+					ULONG used_colid = *(*used_colids)[uli];
+					CHistogram *used_col_histogram =
+						result_histograms->Find(&used_colid);
+					if (nullptr != used_col_histogram)
+					{
+						used_col_histogram->SetUnsupportedPredDerived();
+					}
+				}
+			}
+
 			continue;
 		}
 
@@ -757,6 +779,11 @@ CFilterStatsProcessor::MakeHistUnsupportedPred(
 	// generate after histogram
 	CHistogram *result_histogram = hist_before->CopyHistogram();
 	GPOS_ASSERT(nullptr != result_histogram);
+
+	// row count is scaled by a default selectivity guess below, but the
+	// bucket content is left unchanged/unnarrowed -- flag it so downstream
+	// value-range reasoning (e.g. LASJ coverage checks) doesn't over-trust it
+	result_histogram->SetUnsupportedPredDerived();
 
 	*last_scale_factor = *last_scale_factor * pred_stats->ScaleFactor();
 	*target_last_colid = colid;

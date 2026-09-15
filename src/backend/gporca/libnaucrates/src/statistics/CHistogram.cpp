@@ -935,8 +935,13 @@ CHistogram::MakeLASJHistogram(CStatsPred::EStatsCmpType stats_cmp_type,
 		// need to find a new candidate
 		GPOS_DELETE(candidate_bucket);
 		candidate_bucket = nullptr;
-
-		idx2++;
+		// Only advance to the next other-bucket once this one is proven not to
+		// extend past the candidate; otherwise keep it and pull a new
+		// candidate from 'this' instead.
+		if (nullptr != upper_split_bucket)
+		{
+			idx2++;
+		}
 	}
 
 	candidate_bucket = upper_split_bucket;
@@ -1024,6 +1029,10 @@ CHistogram::CopyHistogram() const
 	if (WereNDVsScaled())
 	{
 		histogram_copy->SetNDVScaled();
+	}
+	if (IsUnsupportedPredDerived())
+	{
+		histogram_copy->SetUnsupportedPredDerived();
 	}
 
 	return histogram_copy;

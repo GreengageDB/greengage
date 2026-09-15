@@ -95,6 +95,14 @@ private:
 	// is column statistics missing in the database
 	BOOL m_is_col_stats_missing;
 
+	// was this histogram produced by applying a predicate whose selectivity
+	// could not be modeled precisely (e.g. an unsupported/computed-expression
+	// filter that only scaled the row count via a default selectivity guess,
+	// without narrowing which values remain) -- consumers that reason about
+	// this histogram's value ranges (e.g. LASJ coverage checks) should not
+	// treat its bucket content as reliable when this is set
+	BOOL m_is_unsupported_pred_derived = false;
+
 	// return an array buckets after applying equality filter on the histogram buckets
 	CBucketArray *MakeBucketsWithEqualityFilter(CPoint *point) const;
 
@@ -237,6 +245,15 @@ public:
 	// set null frequency
 	void SetNullFrequency(CDouble null_freq);
 
+	// mark this histogram as derived from an unsupported-predicate filter
+	// (row count scaled by a default selectivity guess, bucket content
+	// unchanged/unnarrowed)
+	void
+	SetUnsupportedPredDerived()
+	{
+		m_is_unsupported_pred_derived = true;
+	}
+
 	// set information about the scaling of NDVs
 	void
 	SetNDVScaled()
@@ -342,6 +359,15 @@ public:
 	IsColStatsMissing() const
 	{
 		return m_is_col_stats_missing;
+	}
+
+	// was this histogram derived by applying an unsupported-predicate
+	// filter, so its bucket content should not be trusted for value-range
+	// reasoning (e.g. LASJ coverage checks)
+	BOOL
+	IsUnsupportedPredDerived() const
+	{
+		return m_is_unsupported_pred_derived;
 	}
 
 	// print function
