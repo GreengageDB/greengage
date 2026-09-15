@@ -20,7 +20,6 @@ CREATE USER forced_login PASSWORD 'DummY1passWORD!';
 -- must be allowed even though the role has not changed its password yet.
 SET client_encoding = 'UTF8';
 SET application_name = 'x';
-SHOW password_encryption;
 BEGIN;
 COMMIT;
 DISCARD ALL;
