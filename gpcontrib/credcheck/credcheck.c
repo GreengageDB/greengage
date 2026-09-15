@@ -2686,6 +2686,63 @@ _PG_fini(void)
 	ClientAuthentication_hook = prev_ClientAuthentication;
 }
 
+/*
+ * When a role must change its password first, we only want to allow the
+ * password change itself (ALTER ROLE, handled by the caller) plus the handful
+ * of harmless session/transaction-control statements that clients and
+ * connection poolers unavoidably issue while establishing a session:
+ *
+ *   - SET / RESET               (T_VariableSetStmt)   e.g. pgbouncer's
+ *                                                     varcache_apply, and the
+ *                                                     "SET extra_float_digits",
+ *                                                     "SET application_name",
+ *                                                     "SET client_encoding"
+ *                                                     that libpq/JDBC/psql send
+ *                                                     at connection time
+ *   - SHOW                      (T_VariableShowStmt)  incl. the
+ *                                                     "show password_encryption"
+ *                                                     issued by \password
+ *   - BEGIN/COMMIT/ROLLBACK/... (T_TransactionStmt)
+ *   - DISCARD [ALL]             (T_DiscardStmt)       pgbouncer server_reset_query
+ *
+ * None of these can read or write data or escalate privileges, and actual
+ * data access remains blocked in the ExecutorStart hook. Rejecting them here
+ * broke session setup through pgbouncer: the error is raised during the
+ * pooler's internal varcache_apply / setup phase, so pgbouncer closes the
+ * server connection and only logs "varcache_apply failed: ... you must change
+ * your password first." -- the client never receives it and just sees a failed
+ * connection. Letting these through lets the session establish, after which the
+ * user's first real query is blocked with an error that does reach them.
+ */
+static bool
+is_force_change_allowed_stmt(Node *parsetree)
+{
+	switch (nodeTag(parsetree))
+	{
+		case T_VariableSetStmt:
+		{
+			VariableSetStmt *setstmt = (VariableSetStmt *) parsetree;
+
+			/*
+			 * Defense in depth: never let a forced session turn the flag off
+			 * with SET. Only a superuser could (the GUC is SUSET), but keep
+			 * the invariant explicit regardless.
+			 */
+			if (setstmt->name != NULL &&
+				pg_strcasecmp(setstmt->name,
+							  "credcheck_internal.force_change_password") == 0)
+				return false;
+			return true;
+		}
+		case T_VariableShowStmt:
+		case T_TransactionStmt:
+		case T_DiscardStmt:
+			return true;
+		default:
+			return false;
+	}
+}
+
 static void
 cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 {
@@ -2730,13 +2787,16 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 							errmsg(gettext_noop("you are not allowed to change password."))));
 
 			/*
-			 * When first login we don't allow anything else than password change.
-			 * Command \password issue a "show password_encryption" query after
-			 * change password prompts, allow it. The \password command will be
-			 * rejected anyway because it uses encrypted password.
+			 * When first login we don't allow anything else than the password
+			 * change (ALTER ROLE) and the harmless session/transaction-control
+			 * statements that drivers and poolers must issue to set up a
+			 * session (see is_force_change_allowed_stmt). The \password command
+			 * issues "show password_encryption" before prompting, which is now
+			 * covered by the T_VariableShowStmt case. \password itself is
+			 * rejected anyway because it sends an encrypted password.
 			 */
 			if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
-				&& strcmp(debug_query_string, "show password_encryption") != 0)
+				&& !is_force_change_allowed_stmt(parsetree))
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 							errmsg(gettext_noop("you must change your password first."))));
