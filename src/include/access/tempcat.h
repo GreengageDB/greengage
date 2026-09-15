@@ -1,0 +1,137 @@
+/*-------------------------------------------------------------------------
+ *
+ * tempcat.h
+ *	  In-memory catalog for temporary table metadata.
+ *
+ * When gp_enable_temp_memory_catalog is on, temporary table metadata is
+ * kept in backend-private memory instead of on-disk pg_catalog tables.
+ * This header declares the public API: catalog DML redirects, scan
+ * helpers, transaction callbacks, and the BEGIN/END_TEMP_TABLE_SCOPE
+ * macros that DDL code uses to activate the in-memory path.
+ *
+ * Internal to the server. Not part of any public or extension API.
+ *
+ * Portions Copyright (c) 1996-2016, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/include/access/tempcat.h
+ *
+ *-------------------------------------------------------------------------
+ */
+
+#ifndef _TEMP_CAT_H
+#define _TEMP_CAT_H
+
+#include "postgres_ext.h"
+#include "access/htup.h"
+#include "access/heapam.h"
+#include "access/sdir.h"
+#include "access/genam.h"
+#include "catalog/catalog.h"
+#include "catalog/indexing.h"
+#include "storage/itemptr.h"
+#include "utils/relcache.h"
+
+/*
+ * Flag stored in ItemPointerData.ip_posid to mark tuple as virtual. We can
+ * safely store a flag in higher bits of ip_posid since it's maximum value is
+ * very limited. See MaxHeapTuplesPerPage.
+ */
+#define TEMPCAT_ITEM_POINTER_BIT 0x0800
+
+/* Determine whether ItemPointer is virtual */
+#define IsTempcatItemPointer(ptr) \
+	( ((ptr)->ip_posid & TEMPCAT_ITEM_POINTER_BIT) != 0 )
+	
+typedef struct TempCatScanData TempCatScanData;
+
+/* Heap operations for virtual tuples */
+extern void      tempcat_insert(Relation relation, HeapTuple htup);
+extern void      tempcat_delete(Relation relation, ItemPointer ptr);
+extern void      tempcat_update(Relation relation, ItemPointer ptr, HeapTuple htup);
+extern void      tempcat_update_inplace(Relation relation, HeapTuple htup);
+
+/* Scan operations for virtual tuples */
+extern TempCatScanData* tempcat_beginscan(Relation rel, int nkeys, ScanKey key);
+extern void      tempcat_endscan(TempCatScanData* scan);
+extern void      tempcat_rescan(TempCatScanData* scan, ScanKey keys, int nkeys);
+extern HeapTuple tempcat_getnext(TempCatScanData* scan, BufferHeapTupleTableSlot* bslot);
+extern bool      tempcat_is_fetched(TempCatScanData* scan);
+extern bool      tempcat_relation_has_entries(Relation rel);
+
+/* Transaction support */
+extern void      tempcat_begin_transaction(void);
+extern void      tempcat_end_transaction(void);
+extern void      tempcat_abort_transaction(void);
+extern void      tempcat_begin_subtransaction(void);
+extern void      tempcat_commit_subtransaction(void);
+extern void      tempcat_abort_subtransaction(void);
+
+/*
+ * Temp table scope.
+ *
+ * Wraps a DDL code path that targets a temporary table. When the
+ * enable_temp_memory_catalog GUC is on and isTemp is true, catalog DML
+ * inside the scope (CatalogTupleInsert, etc.) is redirected to the
+ * in-memory virtual catalog (tempcat) instead of writing to pg_catalog.
+ *
+ * BEGIN_TEMP_TABLE_SCOPE(isTemp) / END_TEMP_TABLE_SCOPE() save and
+ * restore the scope flag, so nesting is safe.
+ *
+ * On the error path END_TEMP_TABLE_SCOPE() is never reached, and the flag is restored by the
+ * transaction machinery in xact.c instead.  AbortSubTransaction() restores
+ * the value saved by PushTransaction(), and AbortTransaction() /
+ * CommitTransaction() reset it to false at the top level.  Between them
+ * every error exit is covered, since catching an error and continuing in
+ * the same transaction is only legal via a subtransaction.
+ */
+extern bool enable_temp_memory_catalog;
+extern bool temp_table_scope;
+
+#define BEGIN_TEMP_TABLE_SCOPE(isTemp) \
+	do { \
+		const bool _temp_scope_save = temp_table_scope; \
+		if (enable_temp_memory_catalog && (isTemp)) \
+			temp_table_scope = true; \
+		{
+
+#define END_TEMP_TABLE_SCOPE() \
+		} \
+		temp_table_scope = _temp_scope_save; \
+	} while (0)
+
+/* Raw scope flag.  Catalog DML sites must use IsTempTableScopeFor() instead. */
+#define IsTempTableScope()  (temp_table_scope)
+
+/*
+ * Should a write to `rel` be redirected into the in-memory catalog?
+ *
+ * Being inside a temp table scope is not sufficient.  The CatalogTuple*
+ * wrappers surprisingly are also used to write ordinary relations that are not catalogs at
+ * all.
+ */
+#define IsTempTableScopeFor(rel)  (temp_table_scope && IsCatalogRelation(rel))
+
+/* Dirty tracking for tempcat versioning */
+extern bool tempcat_is_dirty(void);
+extern void tempcat_clear_dirty(void);
+
+/*
+ * Serialize the current tempcat snapshot state into a byte buffer for
+ * transmission via shared memory (DSM segment).
+ *
+ * *len is set to the size of the serialized data.
+ * Returns a palloc'd buffer that the caller must pfree.
+ */
+extern void tempcat_serialize(int *len, char **data);
+
+/*
+ * Deserialize tempcat state from a byte buffer, populating the
+ * in-memory catalog.
+ *
+ * Typically called on reader QEs to receive state serialized by
+ * the writer QE on the same segment via SharedLocalSnapshotSlot.
+ */
+extern void tempcat_deserialize(int len, const char *data);
+
+#endif   /* _TEMP_CAT_H */

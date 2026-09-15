@@ -18,6 +18,8 @@
 # required setup steps
 test: test_setup
 
+test: temp_memory_catalog
+
 test: planhints rowhints joinhints
 
 test: pg_dump_binary_upgrade
