@@ -667,8 +667,8 @@ select gp_segment_id, * from sales_1_prt_3_2_prt_usa;
 select gp_segment_id, * from sales_1_prt_4_2_prt_asia;
 
 -- see if update is done with splitting and explicit redistribution
-explain update sales set date='2011-01-01' where amount=1234;
-explain update sales set region='usa' where region='asia';
+explain (costs off) update sales set date='2011-01-01' where amount=1234;
+explain (costs off) update sales set region='usa' where region='asia';
 
 -- update key columns so partition change will be triggered
 update sales set date='2011-01-01' where amount=1234;

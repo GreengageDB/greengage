@@ -6758,42 +6758,42 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Update on rank  (cost=0.00..861.12 rows=101 width=34)
+EXPLAIN (COSTS OFF) UPDATE rank SET year=2006 WHERE gender='f';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on rank
    Update on rank_1_prt_2
    Update on rank_1_prt_3
    Update on rank_1_prt_extra
-   ->  Seq Scan on rank_1_prt_2  (cost=0.00..286.50 rows=20 width=34)
+   ->  Seq Scan on rank_1_prt_2
          Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..287.31 rows=40 width=34)
-         ->  Split  (cost=0.00..286.50 rows=40 width=34)
-               ->  Seq Scan on rank_1_prt_3  (cost=0.00..286.50 rows=20 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank_1_prt_3
                      Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..287.31 rows=40 width=34)
-         ->  Split  (cost=0.00..286.50 rows=40 width=34)
-               ->  Seq Scan on rank_1_prt_extra  (cost=0.00..286.50 rows=20 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank_1_prt_extra
                      Filter: (gender = 'f'::bpchar)
  Optimizer: Postgres-based planner
 (15 rows)
 
-EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Update on rank2  (cost=0.00..1810.64 rows=227 width=34)
+EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on rank2
    Update on rank2_1_prt_2
    Update on rank2_1_prt_3
    Update on rank2_1_prt_extra
-   ->  Seq Scan on rank2_1_prt_2  (cost=0.00..602.33 rows=45 width=34)
+   ->  Seq Scan on rank2_1_prt_2
          Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..604.15 rows=91 width=34)
-         ->  Split  (cost=0.00..602.33 rows=91 width=34)
-               ->  Seq Scan on rank2_1_prt_3  (cost=0.00..602.33 rows=45 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank2_1_prt_3
                      Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..604.15 rows=91 width=34)
-         ->  Split  (cost=0.00..602.33 rows=91 width=34)
-               ->  Seq Scan on rank2_1_prt_extra  (cost=0.00..602.33 rows=45 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank2_1_prt_extra
                      Filter: (gender = 'f'::bpchar)
  Optimizer: Postgres-based planner
 (15 rows)
@@ -6877,32 +6877,32 @@ SELECT gp_segment_id, * FROM rank4_1_prt_5;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
- Update on rank4  (cost=0.00..1435.73 rows=182 width=35)
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006 WHERE gender='f';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on rank4
    Update on rank4_1_prt_2
    Update on rank4_1_prt_3
    Update on rank4_1_prt_4
    Update on rank4_1_prt_5
    Update on rank4_1_prt_extra
-   ->  Seq Scan on rank4_1_prt_2  (cost=0.00..286.50 rows=20 width=34)
+   ->  Seq Scan on rank4_1_prt_2
          Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..287.31 rows=40 width=34)
-         ->  Split  (cost=0.00..286.50 rows=40 width=34)
-               ->  Seq Scan on rank4_1_prt_3  (cost=0.00..286.50 rows=20 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank4_1_prt_3
                      Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..287.31 rows=40 width=34)
-         ->  Split  (cost=0.00..286.50 rows=40 width=34)
-               ->  Seq Scan on rank4_1_prt_4  (cost=0.00..286.50 rows=20 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank4_1_prt_4
                      Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..287.31 rows=40 width=38)
-         ->  Split  (cost=0.00..286.50 rows=40 width=38)
-               ->  Seq Scan on rank4_1_prt_5  (cost=0.00..286.50 rows=20 width=38)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank4_1_prt_5
                      Filter: (gender = 'f'::bpchar)
-   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..287.31 rows=40 width=34)
-         ->  Split  (cost=0.00..286.50 rows=40 width=34)
-               ->  Seq Scan on rank4_1_prt_extra  (cost=0.00..286.50 rows=20 width=34)
+   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank4_1_prt_extra
                      Filter: (gender = 'f'::bpchar)
  Optimizer: Postgres-based planner
 (25 rows)

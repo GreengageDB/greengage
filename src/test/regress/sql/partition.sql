@@ -4336,8 +4336,8 @@ SELECT gp_segment_id, * FROM rank_1_prt_3;
 SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
-EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
 
 -- update key columns so partition change will be triggered
 UPDATE rank SET year=2006 WHERE gender='f';
@@ -4394,7 +4394,7 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006 WHERE gender='f';
 
 UPDATE rank4 SET year=2006 WHERE gender='f';
 

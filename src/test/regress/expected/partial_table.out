@@ -4592,10 +4592,10 @@ select gp_segment_id, * from sales_1_prt_4_2_prt_asia;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-explain update sales set date='2011-01-01' where amount=1234;
-                                                     QUERY PLAN                                                     
---------------------------------------------------------------------------------------------------------------------
- Update on sales  (cost=0.00..2358.19 rows=285 width=64)
+explain (costs off) update sales set date='2011-01-01' where amount=1234;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ Update on sales
    Update on sales_1_prt_2_2_prt_asia
    Update on sales_1_prt_2_2_prt_usa
    Update on sales_1_prt_2_2_prt_other_regions
@@ -4608,76 +4608,76 @@ explain update sales set date='2011-01-01' where amount=1234;
    Update on sales_1_prt_outlying_dates_2_prt_asia
    Update on sales_1_prt_outlying_dates_2_prt_usa
    Update on sales_1_prt_outlying_dates_2_prt_other_regions
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_2_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_2_2_prt_asia
                      Filter: (amount = '1234'::numeric)
-   ->  Seq Scan on sales_1_prt_2_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+   ->  Seq Scan on sales_1_prt_2_2_prt_usa
          Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_2_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_2_2_prt_other_regions
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_3_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_3_2_prt_asia
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_3_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_3_2_prt_usa
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice5; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_3_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice5; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_3_2_prt_other_regions
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice6; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_4_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice6; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_4_2_prt_asia
                      Filter: (amount = '1234'::numeric)
-   ->  Seq Scan on sales_1_prt_4_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+   ->  Seq Scan on sales_1_prt_4_2_prt_usa
          Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice7; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_4_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice7; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_4_2_prt_other_regions
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice8; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice8; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_asia
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice9; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_usa  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice9; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_usa
                      Filter: (amount = '1234'::numeric)
-   ->  Explicit Redistribute Motion 3:3  (slice10; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_other_regions  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice10; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_other_regions
                      Filter: (amount = '1234'::numeric)
  Optimizer: Postgres-based planner
 (58 rows)
 
-explain update sales set region='usa' where region='asia';
-                                                QUERY PLAN                                                 
------------------------------------------------------------------------------------------------------------
- Update on sales  (cost=0.00..786.41 rows=104 width=64)
+explain (costs off) update sales set region='usa' where region='asia';
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Update on sales
    Update on sales_1_prt_2_2_prt_asia
    Update on sales_1_prt_3_2_prt_asia
    Update on sales_1_prt_4_2_prt_asia
    Update on sales_1_prt_outlying_dates_2_prt_asia
-   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_2_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_2_2_prt_asia
                      Filter: (region = 'asia'::text)
-   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_3_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_3_2_prt_asia
                      Filter: (region = 'asia'::text)
-   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_4_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_4_2_prt_asia
                      Filter: (region = 'asia'::text)
-   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)  (cost=0.00..196.60 rows=26 width=64)
-         ->  Split  (cost=0.00..196.08 rows=26 width=64)
-               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_asia  (cost=0.00..196.08 rows=13 width=64)
+   ->  Explicit Redistribute Motion 3:3  (slice4; segments: 3)
+         ->  Split
+               ->  Seq Scan on sales_1_prt_outlying_dates_2_prt_asia
                      Filter: (region = 'asia'::text)
  Optimizer: Postgres-based planner
 (22 rows)

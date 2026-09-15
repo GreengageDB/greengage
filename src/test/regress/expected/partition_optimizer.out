@@ -6729,27 +6729,27 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank  (cost=0.00..431.00 rows=1 width=34)
+EXPLAIN (COSTS OFF) UPDATE rank SET year=2006 WHERE gender='f';
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Update on rank
+   ->  Result
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+               ->  Split
+                     ->  Dynamic Seq Scan on rank
                            Number of partitions to scan: 3 (out of 3)
                            Filter: (gender = 'f'::bpchar)
  Optimizer: GPORCA
 (8 rows)
 
-EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank2  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank2  (cost=0.00..431.00 rows=1 width=34)
+EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Update on rank2
+   ->  Result
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+               ->  Split
+                     ->  Dynamic Seq Scan on rank2
                            Number of partitions to scan: 3 (out of 3)
                            Filter: (gender = 'f'::bpchar)
  Optimizer: GPORCA
@@ -6834,14 +6834,14 @@ SELECT gp_segment_id, * FROM rank4_1_prt_5;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank4  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank4  (cost=0.00..431.00 rows=1 width=34)
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006 WHERE gender='f';
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Update on rank4
+   ->  Result
+         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+               ->  Split
+                     ->  Dynamic Seq Scan on rank4
                            Number of partitions to scan: 5 (out of 5)
                            Filter: (gender = 'f'::bpchar)
  Optimizer: GPORCA
