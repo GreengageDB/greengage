@@ -511,10 +511,10 @@ CJoinStatsProcessor::CalcJoinCardinality(
 	if (IsLASJ && 0 < num_join_conds)
 	{
 		// For a LASJ, a row survives the AND-ed anti-join condition if it
-		// fails to match on ANY single predicate (survives(x) iff there is
-		// no y satisfying every predicate at once). A row that survives
-		// even one predicate alone therefore also survives the combined
-		// condition, so:
+		// fails to match on ANY single predicate (survives(x) if and only if
+		// there is no y satisfying every predicate at once). A row that
+		// survives even one predicate alone therefore also survives the
+		// combined condition, so:
 		//     survivors(combined) >= max(survivors(P1), survivors(P2), ...)
 		// Since scale_factor = left_num_rows / survivors, that means the
 		// combined scale factor is bounded by the LEAST restrictive
