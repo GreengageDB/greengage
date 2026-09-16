@@ -122,12 +122,28 @@ CStatsPredUtils::StatsCmpType(IMDId *mdid)
 //---------------------------------------------------------------------------
 CStatsPred *
 CStatsPredUtils::CreateStatsPredUnsupported(CMemoryPool *mp,
-											CExpression *,	// predicate_expr,
-											CColRefSet *	//outer_refs
-)
+											CExpression *predicate_expr,
+											CColRefSet *outer_refs)
 {
-	return GPOS_NEW(mp)
-		CStatsPredUnsupported(gpos::ulong_max, CStatsPred::EstatscmptOther);
+	// Record every local column the predicate touches, so
+	// callers can flag those columns' histograms as not precisely narrowed
+	// by this predicate.
+	ULongPtrArray *used_colids = GPOS_NEW(mp) ULongPtrArray(mp);
+	CColRefSet *used_col_refs = predicate_expr->DeriveUsedColumns();
+	if (nullptr != used_col_refs)
+	{
+		CColRefSet *local_col_refs =
+			GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
+		if (nullptr != outer_refs)
+		{
+			local_col_refs->Exclude(outer_refs);
+		}
+		local_col_refs->ExtractColIds(mp, used_colids);
+		local_col_refs->Release();
+	}
+
+	return GPOS_NEW(mp) CStatsPredUnsupported(
+		gpos::ulong_max, CStatsPred::EstatscmptOther, used_colids);
 }
 
 //---------------------------------------------------------------------------
