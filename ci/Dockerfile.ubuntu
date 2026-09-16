@@ -33,7 +33,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /var/cache/man/
 
 ENV LANG=en_US.UTF-8
-ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
+
+ARG EXTRA_CONFIGURE_FLAGS
+ENV CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend${EXTRA_CONFIGURE_FLAGS:+ ${EXTRA_CONFIGURE_FLAGS}}"
 
 FROM base AS build
 
