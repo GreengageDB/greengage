@@ -1481,6 +1481,7 @@ class gpexpand(object):
             join pg_depend d on c.oid = d.objid
             where
             c.relkind = 'r' and
+            c.relstorage = 'h' and
             d.deptype = 'e' and
             d.objsubid = 0 and
             d.classid = 'pg_class'::regclass and
