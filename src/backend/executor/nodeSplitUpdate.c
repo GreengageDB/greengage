@@ -18,11 +18,9 @@
 
 #include "cdb/cdbhash.h"
 #include "cdb/cdbutil.h"
-#include "cdb/cdbvars.h"
 #include "commands/tablecmds.h"
 #include "executor/instrument.h"
 #include "executor/nodeSplitUpdate.h"
-#include "parser/parsetree.h"
 
 #include "utils/memutils.h"
 

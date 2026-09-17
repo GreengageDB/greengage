@@ -87,7 +87,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRef *pcrSegmentId = popUpdate->PcrSegmentId();
 	BOOL fSplit = popUpdate->FSplit();
 
-	BOOL fNeedsResJunk = false;
+	BOOL needsResJunk = false;
 	if (fSplit)
 	{
 		CDistributionSpec *pdsTable = CPhysical::PdsCompute(mp, ptabdesc, pdrgpcrDelete, pcrSegmentId);
@@ -117,7 +117,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 			// the update does NOT change the distribution key.
 			if (!updatedCols->FIntersects(distributionCols))
 			{
-				fNeedsResJunk = true;
+				needsResJunk = true;
 			}
 
 			updatedCols->Release();
@@ -150,7 +150,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		pexprSplit = GPOS_NEW(mp) CExpression(
 			mp,
 			GPOS_NEW(mp) CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert,
-									   pcrCtid, pcrSegmentId, pcrAction, fNeedsResJunk),
+									   pcrCtid, pcrSegmentId, pcrAction, needsResJunk),
 			pexprChild, pexprProjList);
 	}
 	else

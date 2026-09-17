@@ -108,7 +108,6 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 
 		if (CLogicalDML::EdmlDelete == edmlop || !fSplit ||
 			(is_update_without_changing_distribution_key && fSplit))
-		// if (CLogicalDML::EdmlDelete == edmlop || !fSplit)
 		{
 			m_pds->Release();
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();

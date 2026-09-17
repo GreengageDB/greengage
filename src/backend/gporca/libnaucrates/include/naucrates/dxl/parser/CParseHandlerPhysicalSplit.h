@@ -49,7 +49,7 @@ private:
 	// segmentId column id
 	ULONG m_segid_colid;
 
-	BOOL m_fNeedsResJunk;
+	BOOL m_needsResJunk;
 
 	// process the start of an element
 	void StartElement(

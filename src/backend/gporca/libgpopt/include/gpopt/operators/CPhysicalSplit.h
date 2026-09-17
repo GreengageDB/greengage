@@ -49,7 +49,7 @@ private:
 	// required columns by local members
 	CColRefSet *m_pcrsRequiredLocal;
 
-	BOOL m_fNeedsResJunk;
+	BOOL m_needsResJunk;
 
 public:
 	CPhysicalSplit(const CPhysicalSplit &) = delete;
@@ -57,7 +57,7 @@ public:
 	// ctor
 	CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 				   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
-				   CColRef *pcrSegmentId, CColRef *pcrAction, BOOL fNeedsResJunk);
+				   CColRef *pcrSegmentId, CColRef *pcrAction, BOOL needsResJunk);
 
 	// dtor
 	~CPhysicalSplit() override;
@@ -115,7 +115,7 @@ public:
 	BOOL
 	NeedsResJunk() const
 	{
-		return m_fNeedsResJunk;
+		return m_needsResJunk;
 	}
 
 	// match function

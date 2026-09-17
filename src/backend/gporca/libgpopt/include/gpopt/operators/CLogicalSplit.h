@@ -47,7 +47,7 @@ private:
 	// action column
 	CColRef *m_pcrAction;
 
-	BOOL m_NeedsResJunk;
+	BOOL m_needsResJunk;
 
 public:
 	CLogicalSplit(const CLogicalSplit &) = delete;
@@ -116,7 +116,7 @@ public:
 	BOOL
 	NeedsResJunk() const
 	{
-		return m_NeedsResJunk;
+		return m_needsResJunk;
 	}
 
 	// operator specific hash function

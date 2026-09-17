@@ -49,7 +49,7 @@ private:
 	ULONG m_segid_colid;
 
 	// special field for creation of resjunk columns
-	BOOL m_fNeedsResJunk;
+	BOOL m_needsResJunk;
 
 public:
 	CDXLPhysicalSplit(const CDXLPhysicalSplit &) = delete;
@@ -57,7 +57,7 @@ public:
 	// ctor
 	CDXLPhysicalSplit(CMemoryPool *mp, ULongPtrArray *delete_colid_array,
 					  ULongPtrArray *insert_colid_array, ULONG action_colid,
-					  ULONG ctid_colid, ULONG segid_colid, BOOL fNeedsResJunk);
+					  ULONG ctid_colid, ULONG segid_colid, BOOL needsResJunk);
 
 	// dtor
 	~CDXLPhysicalSplit() override;
@@ -107,7 +107,7 @@ public:
 	ULONG
 	GetNeedsResJunk() const
 	{
-		return m_fNeedsResJunk;
+		return m_needsResJunk;
 	}
 
 #ifdef GPOS_DEBUG

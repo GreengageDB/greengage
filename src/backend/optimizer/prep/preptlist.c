@@ -45,6 +45,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/relation.h"
+#include "catalog/partition.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
@@ -52,10 +53,9 @@
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
+#include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
-#include "partitioning/partdesc.h"
-#include "catalog/partition.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -279,9 +279,7 @@ fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
 
 	while ((index = bms_next_member(columns, index)) >= 0)
 	{
-		AttrNumber 	attno = -1;
-
-		attno = part_attnos[index - 1];
+		AttrNumber 	attno = part_attnos[index - 1];
 
 		result = bms_add_member(result,
 								attno - FirstLowInvalidHeapAttributeNumber);
