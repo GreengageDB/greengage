@@ -92,9 +92,9 @@ CParseHandlerPhysicalSplit::StartElement(const XMLCh *const,  // element_uri,
 
 	const XMLCh *needsResJunk =
 		attrs.getValue(CDXLTokens::XmlstrToken(EdxltokenTypeBool));
-	if (nullptr != fNeedsResJunk)
+	if (nullptr != needsResJunk)
 	{
-		m_fNeedsResJunk = CDXLOperatorFactory::ConvertAttrValueToBool(
+		m_needsResJunk = CDXLOperatorFactory::ConvertAttrValueToBool(
 			m_parse_handler_mgr->GetDXLMemoryManager(), needsResJunk,
 			EdxltokenTypeBool, EdxltokenPhysicalSplit);
 	}
