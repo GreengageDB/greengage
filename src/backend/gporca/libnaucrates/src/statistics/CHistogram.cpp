@@ -935,8 +935,13 @@ CHistogram::MakeLASJHistogram(CStatsPred::EStatsCmpType stats_cmp_type,
 		// need to find a new candidate
 		GPOS_DELETE(candidate_bucket);
 		candidate_bucket = nullptr;
-
-		idx2++;
+		// Only advance to the next other-bucket once this one is proven not to
+		// extend past the candidate; otherwise keep it and pull a new
+		// candidate from 'this' instead.
+		if (nullptr != upper_split_bucket)
+		{
+			idx2++;
+		}
 	}
 
 	candidate_bucket = upper_split_bucket;
@@ -981,6 +986,20 @@ CHistogram::NormalizeHistogram()
 
 	CDouble scale_factor =
 		std::max(DOUBLE(1.0), (CDouble(1.0) / GetFrequency()).Get());
+
+	// GetFrequency() can underflow near double's range limit, blowing up
+	// scale_factor. Empty the histogram, same as above, so callers can
+	// detect this degenerate case via IsEmpty().
+	if (scale_factor.Get() > 1e15)
+	{
+		m_histogram_buckets->Release();
+		m_histogram_buckets = GPOS_NEW(m_mp) CBucketArray(m_mp);
+		m_null_freq = CDouble(0.0);
+		m_distinct_remaining = CDouble(0.0);
+		m_freq_remaining = CDouble(0.0);
+
+		return CDouble(GPOS_FP_ABS_MAX);
+	}
 
 	// if the scale factor is 1.0, we don't need to copy the buckets
 	if (scale_factor != DOUBLE(1.0))

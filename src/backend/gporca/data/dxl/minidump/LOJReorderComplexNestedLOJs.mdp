@@ -1587,10 +1587,10 @@
         </dxl:And>
       </dxl:LogicalJoin>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="3199596">
+    <dxl:Plan Id="0" SpaceSize="1545782">
       <dxl:HashJoin JoinType="Inner">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="2586.298194" Rows="6.196244" Width="56"/>
+          <dxl:Cost StartupCost="0" TotalCost="2586.298155" Rows="5.996444" Width="56"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="t1a">
