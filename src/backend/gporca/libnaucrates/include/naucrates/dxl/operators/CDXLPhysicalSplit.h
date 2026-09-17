@@ -48,13 +48,16 @@ private:
 	// segmentid column id
 	ULONG m_segid_colid;
 
+	// special field for creation of resjunk columns
+	BOOL m_fNeedsResJunk;
+
 public:
 	CDXLPhysicalSplit(const CDXLPhysicalSplit &) = delete;
 
 	// ctor
 	CDXLPhysicalSplit(CMemoryPool *mp, ULongPtrArray *delete_colid_array,
 					  ULongPtrArray *insert_colid_array, ULONG action_colid,
-					  ULONG ctid_colid, ULONG segid_colid);
+					  ULONG ctid_colid, ULONG segid_colid, BOOL fNeedsResJunk);
 
 	// dtor
 	~CDXLPhysicalSplit() override;
@@ -98,6 +101,13 @@ public:
 	GetSegmentIdColId() const
 	{
 		return m_segid_colid;
+	}
+
+	// segmentid column id
+	ULONG
+	GetNeedsResJunk() const
+	{
+		return m_fNeedsResJunk;
 	}
 
 #ifdef GPOS_DEBUG

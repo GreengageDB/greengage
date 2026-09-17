@@ -267,30 +267,21 @@ preprocess_targetlist(PlannerInfo *root)
  * The caller is responsible for cleaning memory up. 
  */
 static Bitmapset *
-fixup_columns_attnos(Oid parentId, Oid childId, Bitmapset *columns)
+fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
 {
 	Bitmapset  *result = NULL;
 	int			index = -1;
+	AttrNumber *part_attnos;
+
+	part_attnos = convert_tuples_by_name_map(RelationGetDescr(parent), 
+											 RelationGetDescr(child), 
+											 "could not convert row type");
 
 	while ((index = bms_next_member(columns, index)) >= 0)
 	{
-		char	   *attname;
 		AttrNumber 	attno = -1;
 
-		/*
-		* obviously, no need to do anything here
-		*/
-		if (parentId != childId)
-		{
-			attname = get_attname(childId, index, false);
-			attno = get_attnum(parentId, attname);
-			if (!AttributeNumberIsValid(attno))
-				elog(ERROR, "column %s of relation %u has no match in relation %u",
-					 attname, childId, parentId);
-			pfree(attname);
-		}
-		else
-			attno = index;
+		attno = part_attnos[index - 1];
 
 		result = bms_add_member(result,
 								attno - FirstLowInvalidHeapAttributeNumber);
@@ -525,26 +516,31 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 		 * of tuples only on one segment.
 		 */
 		Form_pg_class classForm = rel->rd_rel;
-		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
-			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
-			classForm->relispartition)
+		if (!key_col_updated &&
+			classForm->relispartition &&
+			!GpPolicyIsHashPartitioned(targetPolicy))
 		{
 			Oid 		rootoid = get_top_level_partition_root(RelationGetRelid(rel));
 			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
 
-			if (GpPolicyIsHashPartitioned(rootRelPolicy) && !GpPolicyIsHashPartitioned(targetPolicy))
+			if (GpPolicyIsHashPartitioned(rootRelPolicy))
 			{
 				List* ancestors = get_partition_ancestors(RelationGetRelid(rel));
 
 				ListCell *l;
 				foreach(l, ancestors)
 				{
-					Oid ancestoroid = lfirst_oid(l);
+					Oid 		ancestoroid;
+					Relation	ancestorRel;
+					Bitmapset  *changed_cols_for_partition_check;
 
-					Bitmapset *changed_cols_for_partition_check = 
-						fixup_columns_attnos(ancestoroid, RelationGetRelid(rel), changed_cols);
+					ancestoroid = lfirst_oid(l);
+					ancestorRel = relation_open(ancestoroid, AccessShareLock);
+
+					changed_cols_for_partition_check = 
+						fixup_columns_attnos(ancestorRel, rel, changed_cols);
 					
-					Relation ancestorRel = relation_open(ancestoroid, AccessShareLock);
+					
 
 					/* Check if we're updating partitioning key columns of hash-distributed table */
 					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL)) 

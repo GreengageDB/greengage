@@ -5187,8 +5187,26 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 
 	// If we're updating hash-distributed table we need to fill hash-related
 	// fields.
-	SetSplitUpdateHashInfo(split, plan);
+	if (phy_split_dxlop->GetNeedsResJunk())
+	{
+		ListCell *lc;
+		foreach (lc, plan->targetlist)
+		{
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
 
+			// Mark internal DML junk columns as resjunk = true so they are not
+			// projected to the parent ModifyTable node as regular data columns.
+			if (te->resname != NULL)
+			{
+				if (strcmp(te->resname, "ctid") == 0 ||
+					strcmp(te->resname, "gp_segment_id") == 0)
+				{
+					te->resjunk = true;
+				}
+			}
+		}
+		SetSplitUpdateHashInfo(split, plan);
+	}
 	SetParamIds(plan);
 
 	// cleanup

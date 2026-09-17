@@ -152,24 +152,14 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 		}
 	}
 
-	/* Compute segment ID for the new row in case we need it for redistribution by hash */
+	/* Compute segment ID for the new row */
 	if (node->output_segid_attno > 0)
 	{
-		Datum		target_seg;
+		int32		target_seg;
 
-		if (node->cdbhash != NULL)
-		{
-			target_seg = Int32GetDatum(evalHashKey(node, insert_values, insert_nulls));
-		}
-		else if (node->input_segid_attno > 0)
-		{
-			Assert(!nulls[node->input_segid_attno - 1]);
-			target_seg = values[node->input_segid_attno - 1];
-		}
-		else
-			target_seg = Int32GetDatum(GpIdentity.segindex);
+		target_seg = evalHashKey(node, insert_values, insert_nulls);
 
-		insert_values[node->output_segid_attno - 1] = target_seg;
+		insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
 		insert_nulls[node->output_segid_attno - 1] = false;
 	}
 }
@@ -261,8 +251,10 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 * Look up the positions of the gp_segment_id in the subplan's target
 	 * list, and in the result.
 	 */
-	splitupdatestate->input_segid_attno = get_resno_by_resname(outerPlan->targetlist, "gp_segment_id");
-	splitupdatestate->output_segid_attno = get_resno_by_resname(node->plan.targetlist, "gp_segment_id");
+	splitupdatestate->input_segid_attno =
+		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
+	splitupdatestate->output_segid_attno =
+		ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
 
 	/*
 	 * DML nodes do not project.

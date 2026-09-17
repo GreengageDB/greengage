@@ -34,7 +34,8 @@ CLogicalSplit::CLogicalSplit(CMemoryPool *mp)
 	  m_pdrgpcrInsert(nullptr),
 	  m_pcrCtid(nullptr),
 	  m_pcrSegmentId(nullptr),
-	  m_pcrAction(nullptr)
+	  m_pcrAction(nullptr),
+	  m_NeedsResJunk(false)
 {
 	m_fPattern = true;
 }
@@ -49,13 +50,14 @@ CLogicalSplit::CLogicalSplit(CMemoryPool *mp)
 //---------------------------------------------------------------------------
 CLogicalSplit::CLogicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 							 CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
-							 CColRef *pcrSegmentId, CColRef *pcrAction)
+							 CColRef *pcrSegmentId, CColRef *pcrAction, BOOL needsResJunk)
 	: CLogical(mp),
 	  m_pdrgpcrDelete(pdrgpcrDelete),
 	  m_pdrgpcrInsert(pdrgpcrInsert),
 	  m_pcrCtid(pcrCtid),
 	  m_pcrSegmentId(pcrSegmentId),
-	  m_pcrAction(pcrAction)
+	  m_pcrAction(pcrAction),
+	  m_NeedsResJunk(needsResJunk)
 
 {
 	GPOS_ASSERT(nullptr != pdrgpcrDelete);
@@ -105,7 +107,8 @@ CLogicalSplit::Matches(COperator *pop) const
 			   m_pcrSegmentId == popSplit->PcrSegmentId() &&
 			   m_pcrAction == popSplit->PcrAction() &&
 			   m_pdrgpcrDelete->Equals(popSplit->PdrgpcrDelete()) &&
-			   m_pdrgpcrInsert->Equals(popSplit->PdrgpcrInsert());
+			   m_pdrgpcrInsert->Equals(popSplit->PdrgpcrInsert()) &&
+			   m_NeedsResJunk == popSplit->NeedsResJunk();
 	}
 
 	return false;
@@ -156,7 +159,7 @@ CLogicalSplit::PopCopyWithRemappedColumns(CMemoryPool *mp,
 		CUtils::PcrRemap(m_pcrAction, colref_mapping, must_exist);
 
 	return GPOS_NEW(mp) CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
-									  pcrSegmentId, pcrAction);
+									  pcrSegmentId, pcrAction, m_NeedsResJunk);
 }
 
 //---------------------------------------------------------------------------
@@ -273,6 +276,8 @@ CLogicalSplit::OsPrint(IOstream &os) const
 	m_pcrSegmentId->OsPrint(os);
 	os << ", ";
 	m_pcrAction->OsPrint(os);
+	os << ", ";
+	os << "NeedsResJunk: " << m_NeedsResJunk;
 
 	return os;
 }

@@ -5476,9 +5476,11 @@ CTranslatorExprToDXL::PdxlnSplit(CExpression *pexpr,
 	pdrgpcrRequired->Release();
 	pcrsRequired->Release();
 
+	BOOL fNeedsResJunk = popSplit->NeedsResJunk();
+
 	CDXLPhysicalSplit *pdxlopSplit = GPOS_NEW(m_mp)
 		CDXLPhysicalSplit(m_mp, delete_colid_array, insert_colid_array,
-						  action_colid, ctid_colid, segid_colid);
+						  action_colid, ctid_colid, segid_colid, fNeedsResJunk);
 
 	// project list
 	CColRefSet *pcrsOutput = pexpr->Prpp()->PcrsRequired();

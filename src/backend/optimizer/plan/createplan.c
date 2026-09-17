@@ -3243,6 +3243,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Relation	resultRel;
 	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
+	TupleDesc	prevResultDesc;
 	GpPolicy   *cdbpolicy;
 	int			attrIdx;
 	ListCell   *lc;
@@ -3251,6 +3252,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	AttrNumber *hashAttnos;
 	int			i;
 	Oid 		rootoid = InvalidOid;
+	AttrNumber *part_attnos = NULL;
 
 	resultRel = relation_open(planner_rt_fetch(path->resultRelation, root)->relid, NoLock);
 	resultDesc = RelationGetDescr(resultRel);
@@ -3344,17 +3346,16 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	bool		use_root_policy = false;
 
 	Form_pg_class classForm = resultRel->rd_rel;
-	if ((classForm->relkind == RELKIND_RELATION ||
-		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
-		classForm->relispartition)
+	if (classForm->relispartition && 
+		!GpPolicyIsHashPartitioned(cdbpolicy))
 	{
 		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
 		rootRel = relation_open(rootoid, AccessShareLock);
 
-		if (!GpPolicyIsHashPartitioned(cdbpolicy) &&
-			GpPolicyIsHashPartitioned(rootRel->rd_cdbpolicy))
+		if (GpPolicyIsHashPartitioned(rootRel->rd_cdbpolicy))
 		{
 			cdbpolicy = rootRel->rd_cdbpolicy;
+			prevResultDesc = resultDesc;
 			resultDesc = RelationGetDescr(rootRel);
 			use_root_policy = true;
 		}
@@ -3363,6 +3364,20 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	/* Look up the right hash functions for the hash expressions */
 	hashFuncs = palloc(cdbpolicy->nattrs * sizeof(Oid));
 	hashAttnos = palloc(cdbpolicy->nattrs * sizeof(AttrNumber));
+
+	/*
+	 * If we are using the root partition's distribution policy,
+	 * attnums at cdbpolicy->attrs is the catalog attnum of the root table.
+	 * However, the subplan's targetlist is built for the LEAF table. So we
+	 * must map the root's attnum to the leaf's attnum.
+	 */
+	if (use_root_policy) 
+	{
+		part_attnos = convert_tuples_by_name_map(prevResultDesc, 
+												 resultDesc,
+												 "could not convert row type");
+	}
+	
 	for (i = 0; i < cdbpolicy->nattrs; i++)
 	{
 		AttrNumber	policy_attnum = cdbpolicy->attrs[i];
@@ -3370,21 +3385,10 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 		Oid			typeoid = resultDesc->attrs[policy_attnum - 1].atttypid;
 		Oid			opfamily;
 
-		/*
-		 * If we are using the root partition's distribution policy,
-		 * policy_attnum is the catalog attnum of the root table. However, the
-		 * subplan's targetlist is built for the LEAF table, where 
-		 * resno == leaf_catalog_attnum. We must map the root's attnum to the
-		 * leaf's attnum via column name.
-		 */
-		if (use_root_policy)
+		/* Apply mapping if needed */
+		if (part_attnos)
 		{
-			char *colname = get_attname(rootoid, policy_attnum, false);
-			leaf_attnum = get_attnum(RelationGetRelid(resultRel), colname);
-			if (!AttributeNumberIsValid(leaf_attnum))
-				elog(ERROR, "cache lookup failed for attribute %s of relation %u",
-					 colname, rootoid);
-			pfree(colname);
+			leaf_attnum = part_attnos[policy_attnum - 1];
 		}
 
 		hashAttnos[i] = leaf_attnum;
