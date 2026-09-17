@@ -287,6 +287,8 @@ fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
 								attno - FirstLowInvalidHeapAttributeNumber);
 	}
 
+	pfree(part_attnos);
+
 	return result;
 }
 
@@ -516,7 +518,8 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 		 * of tuples only on one segment.
 		 */
 		Form_pg_class classForm = rel->rd_rel;
-		if (!key_col_updated &&
+		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
+			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
 			classForm->relispartition &&
 			!GpPolicyIsHashPartitioned(targetPolicy))
 		{

@@ -3346,7 +3346,9 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	bool		use_root_policy = false;
 
 	Form_pg_class classForm = resultRel->rd_rel;
-	if (classForm->relispartition && 
+	if ((classForm->relkind == RELKIND_RELATION ||
+		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
+		classForm->relispartition && 
 		!GpPolicyIsHashPartitioned(cdbpolicy))
 	{
 		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
@@ -3405,6 +3407,8 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	relation_close(resultRel, NoLock);
 	if (rootRel)
 		relation_close(rootRel, AccessShareLock);
+
+	pfree(part_attnos);
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,
