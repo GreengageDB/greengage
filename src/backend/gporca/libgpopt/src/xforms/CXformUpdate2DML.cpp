@@ -91,7 +91,8 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	if (fSplit)
 	{
 		CDistributionSpec *pdsTable = CPhysical::PdsCompute(mp, ptabdesc, pdrgpcrDelete, pcrSegmentId);
-		if (CDistributionSpec::EdtHashed == pdsTable->Edt())
+		if (CDistributionSpec::EdtHashed == pdsTable->Edt() &&
+			ptabdesc->ConvertHashToRandom())
 		{
 			CDistributionSpecHashed *pdsHash = CDistributionSpecHashed::PdsConvert(pdsTable);
 			CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
