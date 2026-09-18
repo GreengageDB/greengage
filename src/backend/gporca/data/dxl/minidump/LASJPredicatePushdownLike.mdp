@@ -2,9 +2,9 @@
 <dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 	Objective: LASJ cardinality must not collapse when a single-table
-	ON-clause predicate that gets pushed down to a pre-join filter is an
-	unsupported LIKE comparison between two columns (no constant operand
-	to extract the match pattern from).
+	ON-clause predicate that gets pushed down to a pre-join filter is a
+	LIKE comparison between two columns, rather than a column and a
+	constant pattern.
 
 	create table t_left_txt (id1 text, val1 int);
 	create table t_right_txt(id2 text, val2 text);
@@ -23,7 +23,7 @@
 	where r.id2 is NULL;
 
 	- r.id2 like r.val2 has no constant pattern operand (both sides are
-	columns), so it is pushed down as an unsupported predicate. val2 is
+	columns), so it is still pushed down to a Filter on the scan. val2 is
 	"<id2>%" on odd rows (r.id2 always matches its own prefix pattern) and
 	an unmatchable literal on even rows, giving the same 50/100-row split
 	as the other LASJ pushdown tests.

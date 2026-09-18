@@ -2,9 +2,9 @@
 <dxl:DXLMessage xmlns:dxl="http://greengagedb.org/dxl/2010/12/">
   <dxl:Comment><![CDATA[
 	Objective: LASJ cardinality must not collapse when a single-table
-	ON-clause predicate that gets pushed down to a pre-join filter is an
-	unsupported scalar array comparison (ANY/ALL) whose left-hand side is
-	an expression, not a plain (possibly cast) column reference.
+	ON-clause predicate that gets pushed down to a pre-join filter is a
+	scalar array comparison (ANY/ALL) whose left-hand side is an
+	expression, not a plain (possibly cast) column reference.
 
 	create table t_left (id1 int, val1 int);
 	create table t_right(id2 int, val2 int);
@@ -22,9 +22,8 @@
 
 	- (r.id2 % 2) = ANY(ARRAY[1]) is equivalent to r.id2 % 2 = 1, but its
 	left-hand side (a modulo expression) is not a plain or cast column
-	reference, so it is not recognized as a supported array comparison and
-	is pushed down as an unsupported predicate, same 50/100-row split as
-	the plain "r.id2 % 2 = 1" case.
+	reference, so it is still pushed down to a Filter on the scan, same
+	50/100-row split as the plain "r.id2 % 2 = 1" case.
   ]]>
   </dxl:Comment>
   <dxl:Thread Id="0">
