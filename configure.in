@@ -82,6 +82,17 @@ fi
 
 AC_DEFINE_UNQUOTED(GP_PRODUCT_NAME, ["$gp_product_name"],
                    [Product name used in version strings])
+dnl AC_INIT has already written PACKAGE_NAME and PACKAGE_STRING to confdefs.h,
+dnl and confdefs.h is the preamble of every test program configure compiles.
+dnl A second definition with a different value makes the compiler warn about a
+dnl redefined macro in every one of them, and the checks that run with
+dnl ac_c_werror_flag set (the CFLAGS probes, PGAC_C_INLINE, ...) then fail on
+dnl that warning alone.  Undefine first.  config.status only reads the
+dnl "#define" lines of confdefs.h, so the header still gets the last value.
+cat >>confdefs.h <<\_ACEOF
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+_ACEOF
 AC_DEFINE_UNQUOTED(PACKAGE_NAME, ["$gp_product_name"],
                    [Define to the full name of this package.])
 AC_DEFINE_UNQUOTED(PACKAGE_STRING, ["$gp_product_name $PACKAGE_VERSION"],
