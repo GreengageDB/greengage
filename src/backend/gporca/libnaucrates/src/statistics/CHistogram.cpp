@@ -1044,6 +1044,10 @@ CHistogram::CopyHistogram() const
 	{
 		histogram_copy->SetNDVScaled();
 	}
+	if (IsUnsupportedPredDerived())
+	{
+		histogram_copy->SetUnsupportedPredDerived();
+	}
 
 	return histogram_copy;
 }
