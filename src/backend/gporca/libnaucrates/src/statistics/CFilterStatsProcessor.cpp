@@ -520,6 +520,13 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	UlongToHistogramMap *disjunctive_result_histograms =
 		GPOS_NEW(mp) UlongToHistogramMap(mp);
 
+	// columns touched by an unsupported multi-column predicate anywhere in
+	// this disjunction. disjunctive_result_histograms is only filled in
+	// incrementally as the loop below runs, so these columns are not
+	// guaranteed to have an entry yet; the actual marking happens once
+	// AddHistograms() has backfilled every column further down.
+	CBitSet *unsupported_pred_used_colids = GPOS_NEW(mp) CBitSet(mp);
+
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
 	// This is set to input_rows since SF = 1 / selectivity. So if SF is large, then we are less selective.
@@ -543,6 +550,22 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
+
+			// remember every column this predicate actually touches: their
+			// row count was just reduced by the scale factor above without
+			// their histogram's value range being narrowed, so downstream
+			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
+			// over-trust them.
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr != used_colids)
+			{
+				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+				{
+					(void) unsupported_pred_used_colids->ExchangeSet(
+						*(*used_colids)[uli]);
+				}
+			}
 
 			continue;
 		}
@@ -672,6 +695,22 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 
 	CHistogram::AddHistograms(mp, input_histograms,
 							  disjunctive_result_histograms);
+
+	// every column is now guaranteed to have an entry (backfilled above from
+	// a copy of the input histogram where no disjunct touched it directly),
+	// so mark the ones touched by an unsupported multi-column predicate
+	CBitSetIter used_colid_iter(*unsupported_pred_used_colids);
+	while (used_colid_iter.Advance())
+	{
+		ULONG used_colid = used_colid_iter.Bit();
+		CHistogram *used_col_histogram =
+			disjunctive_result_histograms->Find(&used_colid);
+		if (nullptr != used_col_histogram)
+		{
+			used_col_histogram->SetUnsupportedPredDerived();
+		}
+	}
+	unsupported_pred_used_colids->Release();
 
 	non_updatable_cols->Release();
 
