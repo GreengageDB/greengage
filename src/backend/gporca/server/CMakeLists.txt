@@ -65,7 +65,7 @@ AntiSemiJoin2Select-1 AntiSemiJoin2Select-2 NOT-IN-NotNullBoth NOT-IN-NullInner 
 Correlated-AntiSemiJoin CorrelatedAntiSemiJoin-True Correlated-LASJ-With-Outer-Col NotInToLASJ
 Correlated-LASJ-With-Outer-Const Correlated-LASJ-With-Outer-Expr LeftOuter2InnerUnionAllAntiSemiJoin-Tpcds
 LASJ-Not-In-Force-Broadcast LASJMultiplePredicates LASJPredicatePushdown
-LASJPredicatePushdownDisjunction;
+LASJPredicatePushdownDisjunction LASJPredicatePushdownArrayCmp LASJPredicatePushdownLike;
 
 CPredicateTest:
 ConvertBoolConstNullToConstTableFalseFilter 
