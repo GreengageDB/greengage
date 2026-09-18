@@ -429,6 +429,15 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			if (parentidx == NULL)
 				continue;
 
+			/*
+			 * If the parent index belongs to an extension, ATTACH PARTITION
+			 * will auto-create/attach a matching child index, so skip
+			 * dumping this one to avoid a duplicate.
+			 */
+			if (parentidx->indextable->dobj.ext_member &&
+				!(parentidx->dobj.dump & DUMP_COMPONENT_DEFINITION))
+				index->dobj.dump = DUMP_COMPONENT_NONE;
+
 			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
 
 			attachinfo->dobj.objType = DO_INDEX_ATTACH;
