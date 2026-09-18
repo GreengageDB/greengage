@@ -3150,7 +3150,7 @@ get_tle_by_resno(List *tlist, AttrNumber resno)
  * Returns NULL if resno is not present in list.
  */
 AttrNumber
-get_tle_by_resname(List *tlist, const char *attrName)
+get_resno_by_resname(List *tlist, const char *attrName)
 {
 	ListCell   *t;
 

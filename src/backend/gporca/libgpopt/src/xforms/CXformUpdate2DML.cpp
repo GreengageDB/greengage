@@ -89,6 +89,41 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRef *pcrTupleOid = popUpdate->PcrTupleOid();
 	CColRef *pcrTableOid = popUpdate->PcrTableOid();
 
+	BOOL needsResJunk = false;
+	CDistributionSpec *pdsTable = CPhysical::PdsCompute(mp, ptabdesc, pdrgpcrDelete, pcrSegmentId);
+	if (CDistributionSpec::EdtHashed == pdsTable->Edt() &&
+		ptabdesc->ConvertHashToRandom())
+	{
+		CDistributionSpecHashed *pdsHash = CDistributionSpecHashed::PdsConvert(pdsTable);
+		CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
+		CColRefSet *distributionCols = pdsHash->PcrsUsed(mp);
+
+		const ULONG num_cols = pdrgpcrInsert->Size();
+		for (ULONG ul = 0; ul < num_cols; ul++)
+		{
+			CColRef *pcrInsert = (*pdrgpcrInsert)[ul];
+			CColRef *pcrDelete = (*pdrgpcrDelete)[ul];
+			
+			// If the insert column is different from the delete column, 
+			// it means the column is modified. We track the 'Delete' column 
+			// because it represents the original table column (pdrgpcrSource).
+			if (pcrInsert != pcrDelete)
+			{
+				updatedCols->Include(pcrDelete);
+			}
+		}
+
+		// If updated columns do not intersect with distribution columns,
+		// the update does NOT change the distribution key.
+		if (!updatedCols->FIntersects(distributionCols))
+		{
+			needsResJunk = true;
+		}
+
+		updatedCols->Release();
+		distributionCols->Release();
+	}
+
 	// child of update operator
 	CExpression *pexprChild = (*pexpr)[0];
 	pexprChild->AddRef();
@@ -125,7 +160,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CExpression *pexprSplit = GPOS_NEW(mp) CExpression(
 		mp,
 		GPOS_NEW(mp) CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
-								   pcrSegmentId, pcrAction, pcrTupleOid),
+								   pcrSegmentId, pcrAction, pcrTupleOid, needsResJunk),
 		pexprChild, pexprProjList);
 
 	// add assert checking that no NULL values are inserted for nullable columns or no check constraints are violated

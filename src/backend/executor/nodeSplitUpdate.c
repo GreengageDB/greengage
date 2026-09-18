@@ -237,7 +237,6 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	bool    has_oids;
 
 	SplitUpdateState *splitupdatestate;
-	int			numsegments;
 
 	splitupdatestate = makeNode(SplitUpdateState);
 	splitupdatestate->ps.plan = (Plan *)node;
@@ -265,14 +264,14 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	ExecSetSlotDescriptor(splitupdatestate->insertTuple, tupDesc);
 	ExecSetSlotDescriptor(splitupdatestate->deleteTuple, tupDesc);
 
-		/*
+	/*
 	 * Look up the positions of the gp_segment_id in the subplan's target
 	 * list, and in the result.
 	 */
 	splitupdatestate->input_segid_attno =
-		get_tle_by_resname(outerPlan->targetlist, "gp_segment_id");
+		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
 	splitupdatestate->output_segid_attno =
-		get_tle_by_resname(node->plan.targetlist, "gp_segment_id");
+		ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
 
 	/*
 	 * DML nodes do not project.

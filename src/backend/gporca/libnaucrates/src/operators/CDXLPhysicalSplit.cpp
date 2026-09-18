@@ -32,7 +32,7 @@ CDXLPhysicalSplit::CDXLPhysicalSplit(CMemoryPool *mp,
 									 ULongPtrArray *insert_colid_array,
 									 ULONG action_colid, ULONG ctid_colid,
 									 ULONG segid_colid, BOOL preserve_oids,
-									 ULONG tuple_oid)
+									 ULONG tuple_oid, BOOL needsResJunk)
 	: CDXLPhysical(mp),
 	  m_deletion_colid_array(delete_colid_array),
 	  m_insert_colid_array(insert_colid_array),
@@ -40,7 +40,8 @@ CDXLPhysicalSplit::CDXLPhysicalSplit(CMemoryPool *mp,
 	  m_ctid_colid(ctid_colid),
 	  m_segid_colid(segid_colid),
 	  m_preserve_oids(preserve_oids),
-	  m_tuple_oid(tuple_oid)
+	  m_tuple_oid(tuple_oid),
+	  m_needsResJunk(needsResJunk)
 {
 	GPOS_ASSERT(NULL != delete_colid_array);
 	GPOS_ASSERT(NULL != insert_colid_array);
@@ -132,6 +133,9 @@ CDXLPhysicalSplit::SerializeToDXL(CXMLSerializer *xml_serializer,
 		xml_serializer->AddAttribute(
 			CDXLTokens::GetDXLTokenStr(EdxltokenTupleOidColId), m_tuple_oid);
 	}
+
+	xml_serializer->AddAttribute(
+		CDXLTokens::GetDXLTokenStr(EdxltokenTypeBool), m_needsResJunk);
 
 	dxlnode->SerializePropertiesToDXL(xml_serializer);
 

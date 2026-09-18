@@ -54,6 +54,9 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid;
 
+	// special field for creation of resjunk columns
+	BOOL m_needsResJunk;
+
 	// private copy ctor
 	CDXLPhysicalSplit(const CDXLPhysicalSplit &);
 
@@ -62,7 +65,7 @@ public:
 	CDXLPhysicalSplit(CMemoryPool *mp, ULongPtrArray *delete_colid_array,
 					  ULongPtrArray *insert_colid_array, ULONG action_colid,
 					  ULONG ctid_colid, ULONG segid_colid, BOOL preserve_oids,
-					  ULONG tuple_oid);
+					  ULONG tuple_oid, BOOL needsResJunk);
 
 	// dtor
 	virtual ~CDXLPhysicalSplit();
@@ -120,6 +123,13 @@ public:
 	GetTupleOid() const
 	{
 		return m_tuple_oid;
+	}
+
+	// segmentid column id
+	ULONG
+	GetNeedsResJunk() const 
+	{
+		return m_needsResJunk;
 	}
 
 #ifdef GPOS_DEBUG
