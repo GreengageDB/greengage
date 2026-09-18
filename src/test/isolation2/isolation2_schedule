@@ -9,6 +9,8 @@ test: prepare_limit
 test: pg_rewind_fail_missing_xlog
 test: prepared_xact_deadlock_pg_rewind
 test: ao_partition_lock query_gp_partitions_view
+test: partition_insert_desc_lru
+test: partition_insert_desc_lru_mem
 test: dml_on_root_locks_all_parts
 
 test: select_dropped_table

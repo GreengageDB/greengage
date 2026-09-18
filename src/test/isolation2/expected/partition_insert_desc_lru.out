@@ -1,0 +1,105 @@
+-- Concurrency properties of gp_max_partition_open_insert_descs (bounded set of
+-- open per-partition AO/AOCS insert descriptors).
+--
+-- When the LRU evicts a leaf partition's insert descriptor mid-statement it
+-- flushes that leaf's buffered rows to the segment file. This must NOT make the
+-- rows visible to other sessions before commit, and the transaction-scoped
+-- 'append-only segment file' lock taken when the descriptor was opened must
+-- stay held across the eviction (released only at commit/abort).
+
+create table pdlru_iso (id int, part int, v text) with (appendonly=true, orientation=column) distributed by (id) partition by range (part) (start (0) end (20) every (1));
+CREATE
+
+-- ============ commit path ============
+
+1: begin;
+BEGIN
+1: set gp_max_partition_open_insert_descs = 1;
+SET
+-- open + lock leaf 0's segfile on every segment
+1: insert into pdlru_iso select g, 0 from generate_series(1, 2000) g;
+INSERT 2000
+-- touch 18 other leaves; with limit 1 this evicts (flushes + closes) leaf 0
+1: insert into pdlru_iso select g, (g % 18) + 1 from generate_series(1, 6000) g;
+INSERT 6000
+
+-- concurrent reader: leaf 0's flushed-but-uncommitted rows must be invisible
+2: select count(*) from pdlru_iso where part = 0;
+ count 
+-------
+ 0     
+(1 row)
+
+-- the 'append-only segment file' locks are still held despite the eviction
+2: select locktype, mode, granted from gp_dist_random('pg_locks') where locktype = 'append-only segment file' group by 1, 2, 3;
+ locktype                 | mode                | granted 
+--------------------------+---------------------+---------
+ append-only segment file | AccessExclusiveLock | t       
+(1 row)
+
+-- session 1 writes leaf 0 again (transparent re-open) and commits
+1: insert into pdlru_iso select g, 0 from generate_series(2001, 2100) g;
+INSERT 100
+1: end;
+END
+
+2: select count(*) from pdlru_iso where part = 0;
+ count 
+-------
+ 2100  
+(1 row)
+2: select count(*) as dup_tids from ( select gp_segment_id, ctid from pdlru_iso where part = 0 group by 1, 2 having count(*) > 1) d;
+ dup_tids 
+----------
+ 0        
+(1 row)
+-- locks released after commit
+2: select count(*) from gp_dist_random('pg_locks') where locktype = 'append-only segment file';
+ count 
+-------
+ 0     
+(1 row)
+
+-- ============ abort path ============
+
+-- leaf 19 is untouched by everything above
+1: begin;
+BEGIN
+1: set gp_max_partition_open_insert_descs = 1;
+SET
+1: insert into pdlru_iso select g, 19 from generate_series(1, 2000) g;
+INSERT 2000
+1: insert into pdlru_iso select g, (g % 17) + 1 from generate_series(1, 6000) g;
+INSERT 6000
+1: abort;
+ABORT
+
+-- nothing from the aborted transaction survived
+2: select count(*) from pdlru_iso where part = 19;
+ count 
+-------
+ 0     
+(1 row)
+2: select count(*) from pdlru_iso;
+ count 
+-------
+ 8100  
+(1 row)
+
+-- the leaf whose descriptor was evicted inside the aborted txn still works
+3: set gp_max_partition_open_insert_descs = 2;
+SET
+3: insert into pdlru_iso select g, 19 from generate_series(1, 500) g;
+INSERT 500
+3: select count(*) from pdlru_iso where part = 19;
+ count 
+-------
+ 500   
+(1 row)
+
+1q: ... <quitting>
+2q: ... <quitting>
+3q: ... <quitting>
+
+drop table pdlru_iso;
+DROP
