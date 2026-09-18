@@ -56,7 +56,7 @@ apt-get install -y \
 
 curl -fsSL greengagedb.org/repositories/gpg | gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
 echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
-      https://greengagedb.org/repositories/ubuntu/22.04/x86_64 \
+      https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
       greengagedb main" \
       | tee /etc/apt/sources.list.d/greengagedb.list
 
