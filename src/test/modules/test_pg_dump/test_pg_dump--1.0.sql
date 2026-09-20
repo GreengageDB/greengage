@@ -62,3 +62,7 @@ GRANT EXECUTE ON FUNCTION regress_pg_dump_schema.test_func() TO regress_dump_tes
 CREATE AGGREGATE regress_pg_dump_schema.test_agg(int2)
 (SFUNC = int2_sum, STYPE = int8);
 GRANT EXECUTE ON FUNCTION regress_pg_dump_schema.test_agg(int2) TO regress_dump_test_role;
+
+CREATE TABLE regress_pg_dump_schema.parttab (col1 int, col2 int)
+    PARTITION BY RANGE (col2);
+CREATE UNIQUE INDEX ON regress_pg_dump_schema.parttab (col1, col2);
