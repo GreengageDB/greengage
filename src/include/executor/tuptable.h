@@ -259,7 +259,17 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;			 /* scan for this tuple */
-	Bitmapset *tts_is_valid;		 /* per-attribute valid flag */
+
+	/*
+	 * Per-attribute valid flag, indexed directly by attnum (0..natts-1),
+	 * allocated once per slot (sized to tts_tupleDescriptor->natts) and
+	 * reused for the slot's lifetime. A dense bool array rather than a
+	 * Bitmapset: reads/writes are a single inlined array access instead of
+	 * an out-of-line bms_is_member()/bms_add_member() call plus word/bit
+	 * arithmetic, which matters since this is consulted and updated on
+	 * every attribute access of every tuple in an AOCS scan.
+	 */
+	bool	   *tts_is_valid;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot

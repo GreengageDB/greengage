@@ -135,8 +135,26 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 
 	vslot_aocs->current_scan = NULL;
 
-	bms_free(vslot_aocs->tts_is_valid);
-	vslot_aocs->tts_is_valid = NULL;
+	/*
+	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
+	 * path of every AOCS scan. tts_is_valid is allocated exactly once per
+	 * slot (sized to the full tuple descriptor, so it never needs to grow)
+	 * and reused for the slot's lifetime; here we just reset it back to
+	 * all-false with a plain memset, no allocation involved after the
+	 * first row.
+	 */
+	if (likely(vslot_aocs->tts_is_valid != NULL))
+	{
+		memset(vslot_aocs->tts_is_valid, 0,
+			   slot->tts_tupleDescriptor->natts * sizeof(bool));
+	}
+	else
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+		vslot_aocs->tts_is_valid = palloc0(slot->tts_tupleDescriptor->natts * sizeof(bool));
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 /*
@@ -167,7 +185,6 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 {
 	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-	MemoryContext oldContext;
 
 	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 							attno,
@@ -175,10 +192,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 							scan->columnScanInfo.attnum_to_rownum)))
 	{
 		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-
-		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-		MemoryContextSwitchTo(oldContext);
+		slotAocs->tts_is_valid[attno] = true;
 
 		return;
 	}
@@ -257,9 +271,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 
 	datumstreamread_get(ds, &d[attno], &null[attno]);
 
-	oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-	slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-	MemoryContextSwitchTo(oldContext);
+	slotAocs->tts_is_valid[attno] = true;
 }
 
 static bool
@@ -281,7 +293,7 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
  	AttrNumber	attno = -1;
 	while ((attno = bms_next_member(attrs, attno)) >= 0)
 	{
-		if (unlikely(bms_is_member(attno, slotAocs->tts_is_valid)))
+		if (unlikely(slotAocs->tts_is_valid[attno]))
 			continue;
 
 		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
@@ -294,7 +306,7 @@ static bool
 tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 {
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	return bms_is_member(attnum, slotAocs->tts_is_valid);
+	return slotAocs->tts_is_valid != NULL && slotAocs->tts_is_valid[attnum];
 }
 
 static void
@@ -319,7 +331,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
 		if (unlikely((attno < slot->tts_nvalid) ||
-					bms_is_member(attno, slotAocs->tts_is_valid)))
+					slotAocs->tts_is_valid[attno]))
 			continue;
 
 		if (unlikely(attno >= natts))
@@ -510,11 +522,16 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	{
 		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
 		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
-		MemoryContext oldContext;
 
-		oldContext = MemoryContextSwitchTo(dstslot->tts_mcxt);
-		dstslot_aocs->tts_is_valid = bms_copy(srcslot_aocs->tts_is_valid);
-		MemoryContextSwitchTo(oldContext);
+		/*
+		 * tts_virtual_aocs_clear() above already allocated (sized to
+		 * dstslot's full attribute count) and zeroed dstslot_aocs->tts_is_valid,
+		 * so just copy over the flags for the attributes srcslot has;
+		 * srcdesc->natts <= dstslot's natts per the Assert above.
+		 */
+		if (srcslot_aocs->tts_is_valid != NULL)
+			memcpy(dstslot_aocs->tts_is_valid, srcslot_aocs->tts_is_valid,
+				   srcdesc->natts * sizeof(bool));
 	}
 
 	dstslot->tts_nvalid = srcdesc->natts;

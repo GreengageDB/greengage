@@ -1418,7 +1418,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	MemoryContext oldContext;
 
 	Assert(ScanDirectionIsForward(direction));
 
@@ -1571,9 +1570,7 @@ ReadNext:
 		 */
 		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-		MemoryContextSwitchTo(oldContext);
+		slotAocs->tts_is_valid[attno] = true;
 
 		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 		if (rowNum == InvalidAORowNum &&
