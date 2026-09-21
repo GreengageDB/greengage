@@ -4557,9 +4557,24 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 		foreach (lc, plan->targetlist)
 		{
 			TargetEntry *te = (TargetEntry *) lfirst(lc);
- 
+
 			// Mark internal DML junk columns as resjunk = true so they are not
 			// projected to the parent ModifyTable node as regular data columns.
+			if (te->resname != NULL)
+			{
+				if (strcmp(te->resname, "ctid") == 0 ||
+					strcmp(te->resname, "gp_segment_id") == 0)
+				{
+					te->resjunk = true;
+				}
+			}
+		}
+		// We also need to do the same for child plan, as segment id is taken
+		// from it's tuples.
+		foreach (lc, child_plan->targetlist)
+		{
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
+
 			if (te->resname != NULL)
 			{
 				if (strcmp(te->resname, "ctid") == 0 ||
