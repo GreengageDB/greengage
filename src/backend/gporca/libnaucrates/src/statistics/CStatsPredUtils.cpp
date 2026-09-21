@@ -130,14 +130,18 @@ CStatsPredUtils::ExtractUsedColIds(CMemoryPool *mp, CExpression *predicate_expr,
 	CColRefSet *used_col_refs = predicate_expr->DeriveUsedColumns();
 	if (nullptr != used_col_refs)
 	{
-		CColRefSet *local_col_refs =
-			GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
-		if (nullptr != outer_refs)
+		if (nullptr == outer_refs)
 		{
-			local_col_refs->Exclude(outer_refs);
+			used_col_refs->ExtractColIds(mp, used_colids);
 		}
-		local_col_refs->ExtractColIds(mp, used_colids);
-		local_col_refs->Release();
+		else
+		{
+			CColRefSet *local_col_refs =
+				GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
+			local_col_refs->Exclude(outer_refs);
+			local_col_refs->ExtractColIds(mp, used_colids);
+			local_col_refs->Release();
+		}
 	}
 
 	return used_colids;
