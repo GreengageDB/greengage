@@ -18,7 +18,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target_os: [ubuntu]
+        include:
+          - target_os: ubuntu
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -27,6 +30,7 @@ jobs:
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
