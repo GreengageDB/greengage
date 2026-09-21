@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC1091
 # ----------------------------------------------------------------------
 # Define ARCH values
 # ----------------------------------------------------------------------
@@ -10,22 +11,22 @@ case "$(uname -s)" in
     fi
 
     if [ -f /etc/altlinux-release ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/' | cut -d'.' -f1,2)_$(uname -m)"
+        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/' | cut -d'.' -f1,2)_$(uname -m)"
     fi
     if [ -f /etc/rocky-release ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}$(echo ${VERSION_ID} | cut -d. -f1)_$(uname -m))"
+        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}$(echo "${VERSION_ID}" | cut -d. -f1)_$(uname -m)")"
     fi
 
     if [ -f /etc/astra_version ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/')"
+        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/')"
     fi
 
     if [ -f /etc/redos-release ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID} | sed 's/-/_/')"
+        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/')"
     fi
 
     if [ -z "${BLD_ARCH_HOST}" ] && [ -f /etc/os-release ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo ${ID}${VERSION_ID}_$(uname -m))"
+        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}_$(uname -m)")"
     fi
     ;;
     *)
