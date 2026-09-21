@@ -1733,6 +1733,61 @@ CDXLUtils::SerializeToCommaSeparatedString(CMemoryPool *mp,
 	return dxl_string;
 }
 
+// Serialize CBitSet into a string, optimized for long ranges of set bits.
+// Ranges are separated by commas. The start and end of the range are separated
+// by a colon.
+CWStringDynamic *
+CDXLUtils::SerializeCBitSetToCommaSeparatedRangesString(CMemoryPool *mp,
+														const CBitSet *set)
+{
+	if (0 == set->Size())
+	{
+		GPOS_RAISE(CException::ExmaInvalid, CException::ExmiInvalid,
+				   GPOS_WSZ_LIT("Invalid empty selected parts set"));
+	}
+
+	CWStringDynamic *str = GPOS_NEW(mp) CWStringDynamic(mp);
+	CBitSetIter bsiter(*set);
+	bsiter.Advance();
+
+	ULONG rangeStart = bsiter.Bit();
+	ULONG rangeEnd = bsiter.Bit();
+
+	while (bsiter.Advance())
+	{
+		auto value = bsiter.Bit();
+		if (value - rangeEnd == 1)
+		{
+			rangeEnd = value;
+		}
+		else
+		{
+			if (rangeEnd - rangeStart == 0)
+			{
+				str->AppendFormat(GPOS_WSZ_LIT("%d,"), rangeStart);
+			}
+			else
+			{
+				str->AppendFormat(GPOS_WSZ_LIT("%d:%d,"), rangeStart, rangeEnd);
+			}
+
+			rangeStart = value;
+			rangeEnd = value;
+		}
+	}
+
+	if (rangeEnd - rangeStart == 0)
+	{
+		str->AppendFormat(GPOS_WSZ_LIT("%d"), rangeStart);
+	}
+	else
+	{
+		str->AppendFormat(GPOS_WSZ_LIT("%d:%d"), rangeStart, rangeEnd);
+	}
+
+	return str;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CDXLUtils::CreateMultiByteCharStringFromWCString

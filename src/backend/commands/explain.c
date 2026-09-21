@@ -2352,7 +2352,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
 					"Number of partitions to scan", buf,
-					list_length(((DynamicSeqScan *)plan)->partOids),es);
+					bms_num_members(((DynamicSeqScan *)plan)->selected_parts),es);
 			}
 			show_scan_qual(plan->qual, "Filter", planstate, ancestors, es);
 			if (plan->qual)
@@ -2499,7 +2499,7 @@ ExplainNode(PlanState *planstate, List *ancestors,
 				buf = psprintf("(out of %d)",  countLeafPartTables(relid));
 				ExplainPropertyInteger(
 					"Number of partitions to scan", buf,
-					list_length(((DynamicForeignScan *)plan)->partOids),es);
+					bms_num_members(((DynamicForeignScan *)plan)->selected_parts),es);
 				// TODO: Maybe add show_foreignscan_info here? We'd need to populate the planstate
 			}
 			else
