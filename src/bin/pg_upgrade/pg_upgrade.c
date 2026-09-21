@@ -275,15 +275,6 @@ main(int argc, char **argv)
 
 	stop_postmaster(false);
 
-	/*
-	 * Most failures happen in create_new_objects(), which has completed at
-	 * this point.  We do this here because it is just before linking, which
-	 * will link the old and new cluster data files, preventing the old
-	 * cluster from being safely started once the new cluster is started.
-	 */
-	if (user_opts.transfer_mode == TRANSFER_MODE_LINK)
-		disable_old_cluster();
-
 	transfer_all_new_tablespaces(&old_cluster.dbarr, &new_cluster.dbarr,
 								 old_cluster.pgdata, new_cluster.pgdata);
 
@@ -311,6 +302,17 @@ main(int argc, char **argv)
 		freeze_master_data();
 		stop_postmaster(false);
 	}
+
+	/*
+	 * Most failures happen in create_new_objects(), which has completed
+	 * well before this point. Disabling the old cluster only now, after
+	 * transfer_all_new_tablespaces() has linked the old and new cluster
+	 * data files and freeze_master_data() has completed successfully,
+	 * keeps the old cluster's pg_control untouched, and the old cluster
+	 * startable, through any failure in either of those two steps.
+	 */
+	if (user_opts.transfer_mode == TRANSFER_MODE_LINK)
+		disable_old_cluster();
 
 	/* For non-master segments, uniquify the system identifier. */
 	if (!is_greengage_dispatcher_mode())
