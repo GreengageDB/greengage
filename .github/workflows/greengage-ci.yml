@@ -30,13 +30,6 @@ jobs:
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
-  pg_upgrade-test:
-    needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-pg_upgrade.yml@v56
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
-
   behave-tests:
     needs: build  # Wait for build to complete
     if: github.event_name == 'pull_request'  # Only for PR
@@ -49,60 +42,6 @@ jobs:
       packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v51
-    with:
-      version: 7
-      target_os: ${{ matrix.target_os }}
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
-
-  regression-tests:
-    needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
-    permissions:
-      contents: read  # Explicit for default behavior
-      packages: read  # Explicit for GHCR access clarity
-      actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v51
-    with:
-      version: 7
-      target_os: ${{ matrix.target_os }}
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
-
-  orca-tests:
-    needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
-    permissions:
-      contents: read  # Explicit for default behavior
-      packages: read  # Explicit for GHCR access clarity
-      actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v51
-    with:
-      version: 7
-      target_os: ${{ matrix.target_os }}
-    secrets:
-      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
-
-  resgroup-tests:
-    needs: build
-    if: github.event_name == 'pull_request'  # Only for PR
-    strategy:
-      fail-fast: false
-      matrix:
-        target_os: [ubuntu]
-    permissions:
-      contents: read  # Explicit for default behavior
-      packages: read  # Explicit for GHCR access clarity
-      actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v31
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
@@ -127,27 +66,67 @@ jobs:
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
-  upload:
-    if: github.event_name == 'push'  # For push to main or tags
-    needs: build  # For push (main or tags)
+  orca-tests:
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
     strategy:
       fail-fast: false
       matrix:
         target_os: [ubuntu]
     permissions:
       contents: read  # Explicit for default behavior
-      packages: write # Required for GHCR access
+      packages: read  # Explicit for GHCR access clarity
       actions: write  # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-orca.yml@v51
     with:
       version: 7
       target_os: ${{ matrix.target_os }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
-  # Rebuild prod-ready version without debug extensions and pack it to deb
+  pg_upgrade-test:
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-pg_upgrade.yml@v56
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  regression-tests:
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-regression.yml@v51
+    with:
+      version: 7
+      target_os: ${{ matrix.target_os }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  resgroup-tests:
+    needs: build
+    if: github.event_name == 'pull_request'  # Only for PR
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: read  # Explicit for GHCR access clarity
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-resgroup.yml@v31
+    with:
+      version: 7
+      target_os: ${{ matrix.target_os }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
   package:
     needs: build
     strategy:
@@ -167,3 +146,23 @@ jobs:
       test_docker: ${{ matrix.target_os }}:${{ matrix.target_os_version || '22.04' }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    if: github.event_name == 'push'  # For push to main or tags
+    needs: build  # For push (main or tags)
+    strategy:
+      fail-fast: false
+      matrix:
+        target_os: [ubuntu]
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions: write  # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-upload.yml@v28
+    with:
+      version: 7
+      target_os: ${{ matrix.target_os }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
