@@ -1419,6 +1419,16 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 
+	/*
+	 * Callers of aocs_getnext() are required to have already called
+	 * ExecClearTuple(slot) at least once (which allocates slotAocs->tts_is_valid)
+	 * before the first call for a given slot -- this function writes directly
+	 * into tts_is_valid[attno] below without checking. See the callers in
+	 * aocsam_handler.c, aocsam.c and aocs_compaction.c for the required
+	 * "ExecClearTuple() before the scan loop" pattern.
+	 */
+	Assert(slotAocs->tts_is_valid != NULL);
+
 	Assert(ScanDirectionIsForward(direction));
 
 	/* should not be in ANALYZE/SampleScan - we use a different API */
@@ -3586,6 +3596,14 @@ aocs_writecol_rewritesegfiles(
 	/* expected first row number of the next varblock */
 	int64 expectedFRN = -1;
 	Assert(list_length(idesc->newcolvals) > 0);
+
+	/*
+	 * aocs_getnext() requires the slot to have already been cleared once
+	 * (see its header comment) -- the ExecClearTuple() at the bottom of
+	 * this loop only primes it for the *next* iteration, so the very first
+	 * call needs its own clear here.
+	 */
+	ExecClearTuple(oldslot);
 
 	/* Loop over each row in the segment. */
 	while (aocs_getnext(scanDesc, ForwardScanDirection, oldslot))

@@ -307,6 +307,14 @@ AOCSSegmentFileFullCompaction(Relation aorel,
 	 */
 	estate->gp_bypass_unique_check = true;
 
+	/*
+	 * aocs_getnext() requires the slot to have already been cleared once
+	 * (see its header comment) -- the ExecClearTuple() at the bottom of
+	 * this loop only primes it for the *next* iteration, so the very first
+	 * call needs its own clear here.
+	 */
+	ExecClearTuple(slot);
+
 	while (aocs_getnext(scanDesc, ForwardScanDirection, slot))
 	{
 		CHECK_FOR_INTERRUPTS();
