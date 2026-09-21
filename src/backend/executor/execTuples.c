@@ -137,22 +137,54 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 
 	/*
 	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
-	 * path of every AOCS scan. tts_is_valid is allocated exactly once per
-	 * slot (sized to the full tuple descriptor, so it never needs to grow)
-	 * and reused for the slot's lifetime; here we just reset it back to
-	 * all-false with a plain memset, no allocation involved after the
-	 * first row.
+	 * path of every AOCS scan, so the common case (buffer already allocated
+	 * for the slot's current attribute count) just resets it to all-false
+	 * with a plain memset -- no allocation involved after the first row.
+	 *
+	 * Two things make tts_tupleDescriptor unsafe to dereference unconditionally
+	 * here:
+	 *
+	 * 1) A slot can be cleared before it has ever had a descriptor at all --
+	 *    ExecSetSlotDescriptor() itself calls ExecClearTuple() *before*
+	 *    installing the (possibly first-ever) descriptor, e.g. for a
+	 *    freshly-made junk-filter slot in ExecInitJunkFilterInsertion(). At
+	 *    that point tts_tupleDescriptor is still NULL.
+	 *
+	 * 2) Even once a slot has a descriptor, it isn't guaranteed to keep the
+	 *    same size for its whole lifetime: ExecSetSlotDescriptor() can
+	 *    re-describe an *existing* slot to a different (typically wider)
+	 *    tupdesc -- e.g. ExecInitJunkFilterInsertion() widening an
+	 *    UPDATE/DELETE junk-filter slot from the subplan's target list to the
+	 *    full relation width. Because that call clears before swapping in the
+	 *    new descriptor, tts_tupleDescriptor->natts can differ from what
+	 *    tts_is_valid was last allocated for by the time we get back here.
+	 *
+	 * So: no descriptor yet -> just drop any existing array and defer
+	 * allocation to whenever a real descriptor is actually attached; sizes
+	 * mismatched -> reallocate; otherwise reuse the existing buffer.
 	 */
-	if (likely(vslot_aocs->tts_is_valid != NULL))
+	if (slot->tts_tupleDescriptor == NULL)
+	{
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+		vslot_aocs->tts_is_valid = NULL;
+		vslot_aocs->tts_is_valid_natts = 0;
+	}
+	else if (likely(vslot_aocs->tts_is_valid != NULL &&
+					vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
 	{
 		memset(vslot_aocs->tts_is_valid, 0,
-			   slot->tts_tupleDescriptor->natts * sizeof(bool));
+			   vslot_aocs->tts_is_valid_natts * sizeof(bool));
 	}
 	else
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
 
-		vslot_aocs->tts_is_valid = palloc0(slot->tts_tupleDescriptor->natts * sizeof(bool));
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+
+		vslot_aocs->tts_is_valid_natts = slot->tts_tupleDescriptor->natts;
+		vslot_aocs->tts_is_valid = palloc0(vslot_aocs->tts_is_valid_natts * sizeof(bool));
 		MemoryContextSwitchTo(oldContext);
 	}
 }
