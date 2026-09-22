@@ -104,7 +104,7 @@ public:
 	}
 
 	// segmentid column id
-	ULONG
+	BOOL
 	GetNeedsResJunk() const
 	{
 		return m_needsResJunk;

@@ -3405,11 +3405,10 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	splitupdate->numHashSegments = cdbpolicy->numsegments;
 
 	relation_close(resultRel, NoLock);
-	if (use_root_policy)
-	{
+	if (rootRel)
 		relation_close(rootRel, AccessShareLock);
+	if(part_attnos)
 		pfree(part_attnos);
-	}
 
 	/*
 	 * A SplitUpdate also computes the target segment ID, based on other columns,

@@ -5205,6 +5205,21 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 				}
 			}
 		}
+		// We also need to do the same for child plan, as segment id is taken
+		// from it's tuples.
+		foreach (lc, child_plan->targetlist)
+		{
+			TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+			if (te->resname != NULL)
+			{
+				if (strcmp(te->resname, "ctid") == 0 ||
+					strcmp(te->resname, "gp_segment_id") == 0)
+				{
+					te->resjunk = true;
+				}
+			}
+		}
 		SetSplitUpdateHashInfo(split, plan);
 	}
 	SetParamIds(plan);

@@ -33,7 +33,8 @@ using namespace gpopt;
 //---------------------------------------------------------------------------
 CPhysicalSplit::CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 							   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
-							   CColRef *pcrSegmentId, CColRef *pcrAction, BOOL needsResJunk)
+							   CColRef *pcrSegmentId, CColRef *pcrAction,
+							   BOOL needsResJunk)
 	: CPhysical(mp),
 	  m_pdrgpcrDelete(pdrgpcrDelete),
 	  m_pdrgpcrInsert(pdrgpcrInsert),
@@ -480,7 +481,6 @@ CPhysicalSplit::OsPrint(IOstream &os) const
 	m_pcrAction->OsPrint(os);
 	os << ", ";
 	os << "NeedsResJunk: " << m_needsResJunk;
-	
 
 	return os;
 }

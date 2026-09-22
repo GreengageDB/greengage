@@ -57,7 +57,8 @@ public:
 	// ctor
 	CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 				   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
-				   CColRef *pcrSegmentId, CColRef *pcrAction, BOOL needsResJunk);
+				   CColRef *pcrSegmentId, CColRef *pcrAction,
+				   BOOL needsResJunk);
 
 	// dtor
 	~CPhysicalSplit() override;
