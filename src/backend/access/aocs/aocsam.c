@@ -195,9 +195,23 @@ open_ds_write(Relation rel, DatumStreamWrite **ds, TupleDesc relationTupleDesc, 
  * means all columns.
  */
 static void
-open_ds_read(Relation rel, DatumStreamRead **ds, TupleDesc relationTupleDesc,
+open_ds_read(Relation rel, DatumStreamRead **ds, DatumStreamRead **ds_arena_out,
+			 TupleDesc relationTupleDesc,
 			 AttrNumber *proj_atts, AttrNumber num_proj_atts, bool checksum)
 {
+	/*
+	 * Back ds[] for the projected columns with one contiguous allocation
+	 * instead of num_proj_atts separate palloc calls (each of which used to
+	 * land ~2.5x sizeof(DatumStreamRead) apart from the next, interleaved
+	 * with per-column title-string and compression-state allocations).
+	 * Cache-miss profiling (cachegrind) showed the per-row field reads on
+	 * ds[attno] in tts_virtual_aocs_fetch_attr() as a top D1-miss hotspot;
+	 * this shrinks the memory footprint those reads scatter across.
+	 */
+	DatumStreamRead *ds_arena = num_proj_atts > 0 ?
+		(DatumStreamRead *) palloc0(num_proj_atts * sizeof(DatumStreamRead)) : NULL;
+	*ds_arena_out = ds_arena;
+
 	/*
 	 *  RelationGetAttributeOptions does not always success return opts. e.g.
 	 *  `ALTER TABLE ADD COLUMN` with an illegal option.
@@ -266,13 +280,16 @@ open_ds_read(Relation rel, DatumStreamRead **ds, TupleDesc relationTupleDesc,
 						 attno + 1,
 						 NameStr(attr->attname));
 
-		ds[attno] = create_datumstreamread(ct,
-										   clvl,
-										   checksum,
-										   blksz,
-										   attr,
-										   RelationGetRelationName(rel),
-										    /* title */ titleBuf.data);
+		ds[attno] = &ds_arena[i];
+		init_datumstreamread(ds[attno],
+							ct,
+							clvl,
+							checksum,
+							blksz,
+							attr,
+							RelationGetRelationName(rel),
+							 /* title */ titleBuf.data);
+		ds[attno]->is_arena_member = true;
 	}
 
 	for (int i = 0; i < RelationGetNumberOfAttributes(rel); i++)
@@ -281,7 +298,7 @@ open_ds_read(Relation rel, DatumStreamRead **ds, TupleDesc relationTupleDesc,
 }
 
 static void
-close_ds_read(DatumStreamRead **ds, AttrNumber natts)
+close_ds_read(DatumStreamRead **ds, DatumStreamRead **ds_arena, AttrNumber natts)
 {
 	for (AttrNumber attno = 0; attno < natts; attno++)
 	{
@@ -290,6 +307,17 @@ close_ds_read(DatumStreamRead **ds, AttrNumber natts)
 			destroy_datumstreamread(ds[attno]);
 			ds[attno] = NULL;
 		}
+	}
+
+	/*
+	 * The per-column structs above are members of *ds_arena (see
+	 * open_ds_read()) and were left un-pfree()ed by destroy_datumstreamread();
+	 * free the whole contiguous block here in one shot.
+	 */
+	if (*ds_arena)
+	{
+		pfree(*ds_arena);
+		*ds_arena = NULL;
 	}
 }
 
@@ -422,6 +450,7 @@ initscan_with_colinfo(AOCSScanDesc scan)
 												anchor_colno);
 
 	open_ds_read(scan->rs_base.rs_rd, scan->columnScanInfo.ds,
+				 &scan->columnScanInfo.ds_arena,
 				 scan->columnScanInfo.relationTupleDesc,
 				 scan->columnScanInfo.proj_atts, scan->columnScanInfo.num_proj_atts,
 				 scan->checksum);
@@ -805,7 +834,7 @@ aocs_rescan(AOCSScanDesc scan)
 {
 	close_cur_scan_seg(scan);
 	if (scan->columnScanInfo.ds)
-		close_ds_read(scan->columnScanInfo.ds, scan->columnScanInfo.relationTupleDesc->natts);
+		close_ds_read(scan->columnScanInfo.ds, &scan->columnScanInfo.ds_arena, scan->columnScanInfo.relationTupleDesc->natts);
 	initscan_with_colinfo(scan);
 
 
@@ -887,7 +916,7 @@ aocs_endscan(AOCSScanDesc scan)
 	{
 		Assert(scan->columnScanInfo.proj_atts);
 
-		close_ds_read(scan->columnScanInfo.ds, scan->columnScanInfo.relationTupleDesc->natts);
+		close_ds_read(scan->columnScanInfo.ds, &scan->columnScanInfo.ds_arena, scan->columnScanInfo.relationTupleDesc->natts);
 		pfree(scan->columnScanInfo.ds);
 		scan->columnScanInfo.ds = NULL;
 	}

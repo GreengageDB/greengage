@@ -168,6 +168,15 @@ typedef struct DatumStreamRead
 	bool		need_close_file;
 
 	bool		noBlocksRead;
+
+	/*
+	 * True when this struct is a member of a caller-owned, contiguously
+	 * palloc'ed array (see open_ds_read() in aocsam.c) rather than its own
+	 * independent palloc chunk. destroy_datumstreamread() must not pfree()
+	 * the struct itself in that case -- the caller owns and frees the whole
+	 * array as one chunk.
+	 */
+	bool		is_arena_member;
 }	DatumStreamRead;
 
 /*
@@ -265,6 +274,21 @@ extern DatumStreamWrite *create_datumstreamwrite(
 						bool needsWAL);
 
 extern DatumStreamRead *create_datumstreamread(
+					   char *compName,
+					   int32 compLevel,
+					   bool checksum,
+					   int32 maxsz,
+					   Form_pg_attribute attr,
+					   char *relname,
+					   char *title);
+
+/*
+ * Initialize an already-allocated DatumStreamRead (e.g. one element of a
+ * caller-owned array) in place. Sets is_arena_member so
+ * destroy_datumstreamread() knows not to pfree() acc itself.
+ */
+extern void init_datumstreamread(
+					   DatumStreamRead *acc,
 					   char *compName,
 					   int32 compLevel,
 					   bool checksum,

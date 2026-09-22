@@ -258,6 +258,15 @@ typedef struct AOCSScanDescData
 		int64 			   *attnum_to_rownum;
 
 		struct DatumStreamRead **ds;
+
+		/*
+		 * Contiguous array backing ds[] for the projected columns, one
+		 * palloc'ed block instead of num_proj_atts separate allocations --
+		 * improves cache locality for the per-row, per-column struct field
+		 * reads in tts_virtual_aocs_fetch_attr(). NULL until open_ds_read()
+		 * runs; owned and freed as a single chunk alongside ds[].
+		 */
+		struct DatumStreamRead *ds_arena;
 	} columnScanInfo;
 
 	struct AOCSFileSegInfo **seginfo;
