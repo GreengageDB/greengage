@@ -445,3 +445,31 @@ explain select * from t1, t2 where t1.a = t2.a and t1.b = t2.b and t1.b = '2015-
 
 RESET optimizer_join_order;
 RESET optimizer_trace_fallback;
+
+create function bfv_explain_analyze_rows(query text)
+returns table (optimizer_name text, plan_rows bigint, actual_rows bigint)
+language plpgsql
+as $$
+declare
+  whole_plan json;
+begin
+  execute 'explain (analyze, format json) ' || query into whole_plan;
+  optimizer_name := whole_plan->0->>'Optimizer';
+  plan_rows := (whole_plan->0->'Plan'->>'Plan Rows')::bigint;
+  actual_rows := (whole_plan->0->'Plan'->>'Actual Rows')::bigint;
+  return next;
+end;
+$$;
+
+create table empty_except_p1(a int, b int) distributed by (a);
+create table empty_except_p2(a int, b int) distributed by (a);
+insert into empty_except_p2 select i, i from generate_series(1, 100) i;
+create table empty_except_t3(a int, b int) distributed by (a);
+insert into empty_except_t3 select i, i from generate_series(1, 1000) i;
+
+analyze empty_except_p1;
+analyze empty_except_p2;
+analyze empty_except_t3;
+
+select * from bfv_explain_analyze_rows(
+  'select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
