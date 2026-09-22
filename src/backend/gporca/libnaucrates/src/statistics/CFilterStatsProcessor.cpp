@@ -731,39 +731,57 @@ CFilterStatsProcessor::MakeHistSimpleFilter(CMemoryPool *mp,
 											CDouble *last_scale_factor,
 											ULONG *target_last_colid)
 {
+	CHistogram *result_histogram = nullptr;
+
 	if (CStatsPred::EsptPoint == pred_stats->GetPredStatsType())
 	{
 		CStatsPredPoint *point_pred_stats =
 			CStatsPredPoint::ConvertPredStats(pred_stats);
-		return MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
-								   last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
+								last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
 	{
 		CStatsPredLike *like_pred_stats =
 			CStatsPredLike::ConvertPredStats(pred_stats);
 
-		return MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
-								  last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
+							   last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
 	{
 		CStatsPredArrayCmp *arraycmp_pred_stats =
 			CStatsPredArrayCmp::ConvertPredStats(pred_stats);
 
-		return MakeHistArrayCmpAnyFilter(mp, arraycmp_pred_stats, filter_colids,
-										 hist_before, last_scale_factor,
-										 target_last_colid);
+		result_histogram = MakeHistArrayCmpAnyFilter(
+			mp, arraycmp_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
+	}
+	else
+	{
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+
+		result_histogram = MakeHistUnsupportedPred(
+			unsupported_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
 	}
 
-	CStatsPredUnsupported *unsupported_pred_stats =
-		CStatsPredUnsupported::ConvertPredStats(pred_stats);
+	// a filter on this column narrows its value range or scales its row
+	// count, but it can't undo an earlier, unsupported predicate in this
+	// same conjunction/disjunction having already scaled this column's row
+	// count by a guess without genuinely narrowing it - most of the
+	// concrete histogram builders above construct a brand-new CHistogram
+	// rather than deriving one from hist_before, so that earlier mark isn't
+	// carried over on its own and has to be propagated here explicitly.
+	if (nullptr != result_histogram && hist_before->IsUnsupportedPredDerived())
+	{
+		result_histogram->SetUnsupportedPredDerived();
+	}
 
-	return MakeHistUnsupportedPred(unsupported_pred_stats, filter_colids,
-								   hist_before, last_scale_factor,
-								   target_last_colid);
+	return result_histogram;
 }
 
 // create a new histograms after applying the point filter

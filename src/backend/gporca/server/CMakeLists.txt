@@ -66,7 +66,8 @@ Correlated-AntiSemiJoin CorrelatedAntiSemiJoin-True Correlated-LASJ-With-Outer-C
 Correlated-LASJ-With-Outer-Const Correlated-LASJ-With-Outer-Expr LeftOuter2InnerUnionAllAntiSemiJoin-Tpcds
 LASJ-Not-In-Force-Broadcast LASJMultiplePredicates LASJPredicatePushdown
 LASJPredicatePushdownDisjunction LASJPredicatePushdownArrayCmp LASJPredicatePushdownLike
-LASJPredicatePushdownMultiColumnA LASJPredicatePushdownMultiColumnB;
+LASJPredicatePushdownMultiColumnA LASJPredicatePushdownMultiColumnB
+LASJPredicatePushdownRepeatedColumn;
 
 CPredicateTest:
 ConvertBoolConstNullToConstTableFalseFilter 
