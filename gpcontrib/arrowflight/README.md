@@ -143,13 +143,21 @@ setup when required, and plan validation have succeeded.
 - `auto_commit` is the default. Every QE ingest is independent. If one stream fails after another stream commits, the
   remote table can contain a partial result.
 - `required` asks the server for its Flight SQL capabilities before data transfer. The coordinator begins one remote
-  transaction, passes its opaque transaction ID to every QE ingest, rolls it back on Greengage abort, and commits it
+  transaction per local transaction, reuses it for subsequent INSERTs through the same foreign server,
+  passes its opaque transaction ID to every QE ingest, rolls it back on Greengage abort, and commits it
   during Greengage `PRE_COMMIT`. The statement fails before streaming if the server does not explicitly advertise bulk
   ingest and transaction support.
 
+Only one foreign server can participate in `required` writes within a local transaction. A write through a second
+server is rejected before its remote execution. Nested writes inside an existing remote transaction require the
+server to support Flight SQL savepoints. If the first write occurs inside a local savepoint, rolling back that
+savepoint rolls back the newly created remote transaction. Failure to roll back a remote savepoint prevents any
+subsequent commit of that transaction. Reads currently execute outside the write transaction and do not see its
+uncommitted rows.
+
 With `write_routing_mode=planned`, `required` additionally requires the plan response to declare
-`transaction_scope=cluster`. This proves that the transaction handle created at the control endpoint is valid at every
-direct worker route.
+`transaction_scope=cluster`. The service must guarantee that the transaction handle created at the control endpoint
+is valid at every direct worker route; declaring this capability does not replace integration testing of the service.
 
 This makes the remote QE streams all-or-nothing, but it is not an XA transaction between Greengage and the remote
 database. A failure after the remote `PRE_COMMIT` succeeds but before the local commit completes can leave the two
@@ -192,6 +200,10 @@ ingest stream after `ExecuteIngest` starts.
 Active readers and writers are registered with the Greengage
 `ResourceOwner`. Query cancellation, errors, and transaction abort close Flight streams and release client resources.
 Read rescans are not supported; a plan that requires rescan fails instead of replaying an already consumed stream.
+Abort callbacks share a five-second budget for remote cleanup, even when `timeout_ms` has no deadline. A shorter
+configured timeout still applies. Failed cleanup is reported as a warning; a disconnected server must eventually
+expire abandoned transactions and ingest plans. Completed ingest plans are released from the local registry after
+each statement.
 
 ## SQL Contract
 
@@ -260,7 +272,7 @@ The `rows` option is only a planner estimate. It does not limit the number of ro
 | `tls_client_cert_file`        |           none | PEM client certificate for mTLS. Must be paired with the client key.                                                                                                  |
 | `tls_client_key_file`         |           none | PEM client private key for mTLS. Must be paired with the client certificate.                                                                                          |
 | `auth_token_file`             |           none | File containing a Bearer token sent with Flight RPCs.                                                                                                                 |
-| `endpoint_location_allowlist` |           none | Comma-separated exact `grpc+tcp://host:port` or `grpc+tls://host:port` locations allowed in `FlightInfo`. Without it, only the configured server location is allowed. |
+| `endpoint_location_allowlist` |           none | Comma-separated exact `grpc+tcp://host:port` or `grpc+tls://host:port` locations allowed in `FlightInfo` and planned write routes. Without it, only the configured server location is allowed. |
 | `timeout_ms`                  |           `-1` | Flight RPC timeout in milliseconds; `-1` means no deadline.                                                                                                           |
 | `max_endpoints`               |        `10000` | Maximum endpoints accepted in one `FlightInfo`.                                                                                                                       |
 | `max_plan_bytes`              |     `16777216` | Maximum serialized `FlightInfo` or MPP ingest plan size dispatched to QEs.                                                                                            |
@@ -331,16 +343,16 @@ CREATE SERVER analytics_flightsql
         );
 ```
 
-The server location from `host` and `port` is always trusted. Every different location advertised in `FlightInfo` must
-match
-`endpoint_location_allowlist` exactly. This prevents a remote server from redirecting segment QEs, together with their
+The server location from `host` and `port` is always trusted. Every different location advertised in `FlightInfo` or
+a planned write route must match `endpoint_location_allowlist` exactly. This prevents a remote server from redirecting
+segment QEs, together with their
 Bearer header and mTLS identity, to an unconfigured host. The allowlist transport must match `tls`: use
 `grpc+tls` with TLS and `grpc+tcp` without it. Certificate SANs must cover the configured host and every allowlisted TLS
 endpoint host.
 
 Planned writes apply the same TLS, mTLS, and Bearer settings to the control endpoint and every direct worker route. The
-plan is rejected if a route changes the configured TLS mode. Certificates used by direct workers must cover their
-advertised host names.
+plan is rejected if a route changes the configured TLS mode or is outside the allowlist. Certificates used by direct
+workers must cover their advertised host names.
 
 The credentials are one service identity shared by all users of the foreign server; the FDW does not implement
 `USER MAPPING`, username/password authentication, Flight `Handshake`, OAuth/OIDC, or per-user tokens. The remote Flight
@@ -454,6 +466,11 @@ standard Flight SQL transaction removes its data. A worker failure inside a save
 is aborted before its remote transaction is rolled back. An abandoned plan with a short lease verifies that the control
 plane expires state without another client RPC.
 
+Additional cases cover dropped and reordered columns, missing or duplicate result fields, repeated INSERTs in one
+transaction, prepared INSERTs, nested savepoints, and PL/pgSQL exception recovery. Delayed rollback and abort responses
+check the cleanup deadline; failed savepoint recovery must prevent commit. The route validation tests also reject
+malformed and unapproved worker locations before any ingest stream opens.
+
 The same suite creates a temporary CA and verifies mTLS plus Bearer authentication for read, write, transaction, and
 redirected endpoint calls. Negative cases cover plaintext, missing client certificate, untrusted CA, missing or wrong
 token, and a location missing from the endpoint allowlist:
@@ -529,6 +546,8 @@ The measured peak therefore includes that server-side materialization.
   silently fall back to `origin`.
 - `auto_commit` writes can leave partial remote results after a multi-QE failure.
 - `required` depends on standard transaction capabilities advertised and implemented by the remote Flight SQL server.
+- `required` writes use one foreign server per local transaction; nested writes in an existing remote transaction
+  require Flight SQL savepoints. Reads do not participate in the write transaction.
 - `required` is atomic across remote QE streams, not across the final Greengage and remote commits; prepared/XA
   transactions are not supported.
 - Flight RPC failures are not retried automatically. Rerunning an

@@ -33,10 +33,12 @@ extern "C"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/walkers.h"
 #include "parser/parsetree.h"
+#include "portability/instr_time.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/timestamp.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -57,8 +59,12 @@ enum FlightSqlScanPrivateIndex
 	FLIGHTSQL_PRIVATE_QUERY,
 	FLIGHTSQL_PRIVATE_FLIGHT_INFO,
 	FLIGHTSQL_PRIVATE_PROJECTED_ATTRS,
-	FLIGHTSQL_PRIVATE_PROJECT_ALL
+	FLIGHTSQL_PRIVATE_PROJECT_ALL,
+	FLIGHTSQL_PRIVATE_MARKER
 };
+
+#define FLIGHTSQL_PLAN_MARKER "flightsql_fdw"
+#define FLIGHTSQL_CLEANUP_TIMEOUT_MS 5000
 
 typedef struct FlightSqlPlanState
 {
@@ -112,21 +118,36 @@ enum FlightSqlModifyPrivateIndex
 	FLIGHTSQL_MODIFY_TRANSACTION_ID,
 	FLIGHTSQL_MODIFY_WRITE_ROUTING_MODE,
 	FLIGHTSQL_MODIFY_MPP_PLAN,
+	FLIGHTSQL_MODIFY_ENDPOINT_ALLOWLIST,
+	FLIGHTSQL_MODIFY_MARKER,
 	FLIGHTSQL_MODIFY_NUM_ITEMS
 };
 
+typedef struct FlightSqlRemoteSavepoint
+{
+	char	   *savepoint_id;
+	int			depth;
+	struct FlightSqlRemoteSavepoint *next;
+} FlightSqlRemoteSavepoint;
+
 typedef struct FlightSqlRemoteTransaction
 {
+	MemoryContext context;
+	Oid			serverid;
 	char	   *url;
 	char	   *transaction_id;
 	ArrowFlightSecurityOptions security_options;
 	SubTransactionId subtransaction_id;
 	bool		finished;
+	bool		failed;
+	int			depth;
+	FlightSqlRemoteSavepoint *savepoints;
 	struct FlightSqlRemoteTransaction *next;
 } FlightSqlRemoteTransaction;
 
 typedef struct FlightSqlRemotePlan
 {
+	MemoryContext context;
 	QueryDesc  *owner_query_desc;
 	char	   *url;
 	char	   *serialized_plan;
@@ -163,15 +184,16 @@ static bool flightsql_plan_contains_scan(PlannedStmt *stmt);
 static void flightsql_prepare_plan_for_dispatch(QueryDesc *query_desc);
 static bool flightsql_prepare_plan_walker(Node *node,
 										   FlightSqlDispatchContext *context);
-static bool flightsql_is_relation(Oid relid);
+static bool flightsql_has_marker(List *fdw_private, int index);
 static void flightsql_validate_mpp_contract(Oid foreigntableid);
 static void flightsql_validate_transaction_mode(const char *mode);
 static void flightsql_validate_write_routing_mode(const char *mode);
 static void flightsql_validate_write_capabilities(
 	const char *mode, const ArrowFlightSqlCapabilities *capabilities);
-static void flightsql_register_remote_transaction(
-	const char *url, const char *transaction_id,
-	const ArrowFlightSecurityOptions *security);
+static FlightSqlRemoteTransaction *flightsql_get_remote_transaction(
+	Oid serverid, const char *url,
+	const ArrowFlightSecurityOptions *security,
+	const ArrowFlightSqlCapabilities *capabilities);
 static void flightsql_xact_callback(XactEvent event, void *arg);
 static void flightsql_subxact_callback(SubXactEvent event,
 										SubTransactionId my_subid,
@@ -261,6 +283,9 @@ static bool flightsql_executor_hook_registered = false;
 static bool flightsql_xact_callback_registered = false;
 static FlightSqlRemoteTransaction *flightsql_remote_transactions = NULL;
 static FlightSqlRemotePlan *flightsql_remote_plans = NULL;
+static bool flightsql_cleanup_active = false;
+static instr_time flightsql_cleanup_start;
+static TimestampTz flightsql_cleanup_statement = 0;
 
 extern "C" Datum
 flightsql_fdw_handler(PG_FUNCTION_ARGS)
@@ -549,10 +574,11 @@ flightsql_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	query = flightsql_build_query(foreigntableid, projected_attrs,
 								  remote_exprs, baserel->relid,
 								  &project_all);
-	fdw_private = list_make4(makeString(query),
+	fdw_private = list_make5(makeString(query),
 							 makeString(pstrdup("")),
 							 projected_attrs,
-							 makeInteger(project_all ? 1 : 0));
+							 makeInteger(project_all ? 1 : 0),
+							 makeString(pstrdup(FLIGHTSQL_PLAN_MARKER)));
 
 	return make_foreignscan(tlist, local_exprs, baserel->relid, NIL,
 							fdw_private, NIL, remote_exprs, outer_plan);
@@ -561,6 +587,8 @@ flightsql_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 static void
 flightsql_ExecutorStart(QueryDesc *query_desc, int eflags)
 {
+	/* A new execution may follow a recovered subtransaction error. */
+	flightsql_cleanup_active = false;
 	if (Gp_role == GP_ROLE_DISPATCH &&
 		(eflags & EXEC_FLAG_EXPLAIN_ONLY) == 0 &&
 		flightsql_plan_contains_scan(query_desc->plannedstmt))
@@ -642,16 +670,17 @@ flightsql_prepare_plan_walker(Node *node, FlightSqlDispatchContext *context)
 			RangeTblEntry *rte =
 				rt_fetch(result_relation, context->stmt->rtable);
 
-			(void) private_cell;
-				if (rte->rtekind == RTE_RELATION &&
-					flightsql_is_relation(rte->relid))
-				{
-					context->found = true;
-					if (context->prepare)
-						flightsql_PrepareForeignModifyForDispatch(
-							modify, target_index, rte->relid,
-							context->query_desc);
-				}
+			if (rte->rtekind == RTE_RELATION &&
+				flightsql_has_marker((List *) lfirst(private_cell),
+									 FLIGHTSQL_MODIFY_MARKER))
+			{
+				context->found = true;
+				if (!context->prepare)
+					return true;
+				flightsql_PrepareForeignModifyForDispatch(
+					modify, target_index, rte->relid,
+					context->query_desc);
+			}
 			target_index++;
 		}
 	}
@@ -667,12 +696,13 @@ flightsql_prepare_plan_walker(Node *node, FlightSqlDispatchContext *context)
 
 			if (rte->rtekind == RTE_RELATION)
 			{
-				if (flightsql_is_relation(rte->relid))
+				if (flightsql_has_marker(scan->fdw_private,
+										 FLIGHTSQL_PRIVATE_MARKER))
 				{
 					context->found = true;
-					if (context->prepare)
-						flightsql_PrepareForeignScanForDispatch(scan,
-															  rte->relid);
+					if (!context->prepare)
+						return true;
+					flightsql_PrepareForeignScanForDispatch(scan, rte->relid);
 				}
 			}
 		}
@@ -684,19 +714,16 @@ flightsql_prepare_plan_walker(Node *node, FlightSqlDispatchContext *context)
 }
 
 static bool
-flightsql_is_relation(Oid relid)
+flightsql_has_marker(List *fdw_private, int index)
 {
-	ForeignTable *table;
-	ForeignServer *server;
-	ForeignDataWrapper *wrapper;
-
-	if (get_rel_relkind(relid) != RELKIND_FOREIGN_TABLE)
+	if (fdw_private == NIL || !IsA(fdw_private, List) ||
+		list_length(fdw_private) != index + 1)
 		return false;
 
-	table = GetForeignTable(relid);
-	server = GetForeignServer(table->serverid);
-	wrapper = GetForeignDataWrapper(server->fdwid);
-	return strcmp(wrapper->fdwname, "flightsql_fdw") == 0;
+	Node	   *marker = (Node *) list_nth(fdw_private, index);
+
+	return marker != NULL && IsA(marker, String) &&
+		strcmp(strVal(marker), FLIGHTSQL_PLAN_MARKER) == 0;
 }
 
 static void
@@ -722,14 +749,12 @@ flightsql_PrepareForeignScanForDispatch(ForeignScan *node,
 								  1024, INT_MAX);
 	const char *query;
 	char	   *serialized;
-	ArrowFlightSqlCapabilities capabilities;
 
 	flightsql_validate_mpp_contract(foreigntableid);
-	if (list_length(node->fdw_private) != 4)
+	if (!flightsql_has_marker(node->fdw_private, FLIGHTSQL_PRIVATE_MARKER))
 		elog(ERROR, "flightsql_fdw: invalid private scan state");
 
 	query = strVal(list_nth(node->fdw_private, FLIGHTSQL_PRIVATE_QUERY));
-	af_flightsql_get_capabilities(url, &security, &capabilities);
 	serialized = af_flightsql_execute_query(url, query, max_endpoints,
 											max_plan_bytes, &security);
 	(void) list_nth_replace(node->fdw_private,
@@ -770,6 +795,13 @@ flightsql_PrepareForeignModifyForDispatch(ModifyTable *node,
 		intVal(list_nth(fdw_private, FLIGHTSQL_MODIFY_TIMEOUT_MS));
 	flightsql_validate_transaction_mode(mode);
 	flightsql_validate_write_routing_mode(routing_mode);
+	if (strcmp(mode, AF_FLIGHT_SQL_WRITE_TRANSACTION_REQUIRED) == 0 &&
+		flightsql_remote_transactions != NULL &&
+		flightsql_remote_transactions->serverid != server->serverid)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("required Flight SQL writes cannot use multiple foreign servers in one transaction"),
+				 errhint("Use a separate Greengage transaction for each foreign server.")));
 	af_flightsql_get_capabilities(url, &security, &capabilities);
 	flightsql_validate_write_capabilities(mode, &capabilities);
 
@@ -785,14 +817,13 @@ flightsql_PrepareForeignModifyForDispatch(ModifyTable *node,
 
 	if (strcmp(mode, AF_FLIGHT_SQL_WRITE_TRANSACTION_REQUIRED) == 0)
 	{
-		char	   *transaction_id =
-			af_flightsql_begin_transaction(url, &security);
+		FlightSqlRemoteTransaction *transaction =
+			flightsql_get_remote_transaction(server->serverid, url,
+											 &security, &capabilities);
 
-		flightsql_register_remote_transaction(
-			url, transaction_id, &security);
 		(void) list_nth_replace(
 			fdw_private, FLIGHTSQL_MODIFY_TRANSACTION_ID,
-			makeString(transaction_id));
+			makeString(pstrdup(transaction->transaction_id)));
 	}
 
 	if (strcmp(routing_mode, AF_FLIGHT_SQL_WRITE_ROUTING_PLANNED) == 0)
@@ -861,7 +892,7 @@ flightsql_BeginForeignScan(ForeignScanState *node, int eflags)
 		return;
 	if (rel == NULL)
 		elog(ERROR, "flightsql_fdw: scan relation is not available");
-	if (list_length(scan->fdw_private) != 4)
+	if (!flightsql_has_marker(scan->fdw_private, FLIGHTSQL_PRIVATE_MARKER))
 		elog(ERROR, "flightsql_fdw: invalid private scan state");
 
 	table = GetForeignTable(RelationGetRelid(rel));
@@ -946,7 +977,7 @@ flightsql_ExplainForeignScan(ForeignScanState *node, ExplainState *es)
 {
 	ForeignScan *scan = (ForeignScan *) node->ss.ps.plan;
 
-	if (list_length(scan->fdw_private) == 4)
+	if (flightsql_has_marker(scan->fdw_private, FLIGHTSQL_PRIVATE_MARKER))
 		ExplainPropertyText("Flight SQL query",
 							strVal(list_nth(scan->fdw_private,
 										  FLIGHTSQL_PRIVATE_QUERY)),
@@ -1068,6 +1099,10 @@ flightsql_PlanForeignModify(PlannerInfo *root, ModifyTable *plan,
 		result = lappend(result, makeString(pstrdup(routing_mode)));
 	}
 	result = lappend(result, makeString(pstrdup("")));
+	result = lappend(result, makeString(pstrdup(
+		flightsql_get_option_or_default(server->options,
+									   "endpoint_location_allowlist", ""))));
+	result = lappend(result, makeString(pstrdup(FLIGHTSQL_PLAN_MARKER)));
 	return result;
 }
 
@@ -1116,6 +1151,9 @@ flightsql_BeginForeignModify(ModifyTableState *mtstate, ResultRelInfo *rinfo,
 	state->security_options.auth_token_file =
 		pstrdup(strVal(list_nth(fdw_private,
 							   FLIGHTSQL_MODIFY_AUTH_TOKEN_FILE)));
+	state->security_options.endpoint_location_allowlist =
+		pstrdup(strVal(list_nth(fdw_private,
+							   FLIGHTSQL_MODIFY_ENDPOINT_ALLOWLIST)));
 	state->transaction_id =
 		pstrdup(strVal(list_nth(fdw_private,
 							   FLIGHTSQL_MODIFY_TRANSACTION_ID)));
@@ -1134,8 +1172,8 @@ flightsql_BeginForeignModify(ModifyTableState *mtstate, ResultRelInfo *rinfo,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 					 errmsg("Flight SQL MPP ingest plan was not prepared on the dispatcher")));
 		af_flightsql_mpp_select_route(
-			state->serialized_mpp_plan, GpIdentity.segindex,
-			getgpsegmentCount(), &state->mpp_route);
+			state->url, state->serialized_mpp_plan, GpIdentity.segindex,
+			getgpsegmentCount(), &state->security_options, &state->mpp_route);
 		state->url = state->mpp_route.url;
 	}
 	rinfo->ri_FdwState = state;
@@ -1370,22 +1408,87 @@ flightsql_validate_write_capabilities(
 				 errdetail("Server: %s %s.", server_name, server_version)));
 }
 
-static void
-flightsql_register_remote_transaction(
-	const char *url, const char *transaction_id,
-	const ArrowFlightSecurityOptions *security)
+static bool
+flightsql_same_string(const char *a, const char *b)
+{
+	return strcmp(a == NULL ? "" : a, b == NULL ? "" : b) == 0;
+}
+
+static FlightSqlRemoteTransaction *
+flightsql_get_remote_transaction(
+	Oid serverid, const char *url,
+	const ArrowFlightSecurityOptions *security,
+	const ArrowFlightSqlCapabilities *capabilities)
 {
 	MemoryContext old_context;
-	FlightSqlRemoteTransaction *transaction;
+	FlightSqlRemoteTransaction *transaction = flightsql_remote_transactions;
+	int			depth = GetCurrentTransactionNestLevel();
 
-	if (transaction_id == NULL || transaction_id[0] == '\0')
-		elog(ERROR, "flightsql_fdw received an empty transaction id");
+	/* Without two-phase commit, do not enlist a second remote server. */
+	if (transaction != NULL)
+	{
+		if (transaction->serverid != serverid)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("required Flight SQL writes cannot use multiple foreign servers in one transaction"),
+					 errhint("Use a separate Greengage transaction for each foreign server.")));
+		if (transaction->failed || transaction->finished)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("Flight SQL transaction state is uncertain"),
+					 errhint("Roll back the Greengage transaction.")));
+		if (!flightsql_same_string(transaction->url, url) ||
+			!flightsql_same_string(transaction->security_options.tls_ca_file,
+								 security->tls_ca_file) ||
+			!flightsql_same_string(transaction->security_options.tls_client_cert_file,
+								 security->tls_client_cert_file) ||
+			!flightsql_same_string(transaction->security_options.tls_client_key_file,
+								 security->tls_client_key_file) ||
+			!flightsql_same_string(transaction->security_options.auth_token_file,
+								 security->auth_token_file) ||
+			!flightsql_same_string(transaction->security_options.endpoint_location_allowlist,
+								 security->endpoint_location_allowlist))
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					 errmsg("cannot change Flight SQL connection options during an active remote transaction")));
 
-	old_context = MemoryContextSwitchTo(TopTransactionContext);
+		if (transaction->depth < depth && capabilities->transaction_support < 2)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("Flight SQL server does not support savepoints for nested writes")));
+		while (transaction->depth < depth)
+		{
+			FlightSqlRemoteSavepoint *savepoint;
+			char		name[64];
+			char	   *savepoint_id;
+
+			snprintf(name, sizeof(name), "greengage_%d", transaction->depth + 1);
+			/* An ambiguous BeginSavepoint result must not permit a later commit. */
+			transaction->failed = true;
+			savepoint_id = af_flightsql_begin_savepoint(
+				url, transaction->transaction_id, name, security);
+			old_context = MemoryContextSwitchTo(transaction->context);
+			savepoint = (FlightSqlRemoteSavepoint *) palloc0(sizeof(*savepoint));
+			savepoint->savepoint_id = pstrdup(savepoint_id);
+			savepoint->depth = ++transaction->depth;
+			savepoint->next = transaction->savepoints;
+			transaction->savepoints = savepoint;
+			MemoryContextSwitchTo(old_context);
+			pfree(savepoint_id);
+			transaction->failed = false;
+		}
+		return transaction;
+	}
+
+	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
+		"Flight SQL transaction", ALLOCSET_SMALL_SIZES);
+
+	old_context = MemoryContextSwitchTo(context);
 	transaction =
 		(FlightSqlRemoteTransaction *) palloc0(sizeof(*transaction));
+	transaction->context = context;
+	transaction->serverid = serverid;
 	transaction->url = pstrdup(url);
-	transaction->transaction_id = pstrdup(transaction_id);
 	transaction->security_options.tls_ca_file =
 		pstrdup(security->tls_ca_file == NULL ? "" :
 				security->tls_ca_file);
@@ -1402,11 +1505,46 @@ flightsql_register_remote_transaction(
 		pstrdup(security->endpoint_location_allowlist == NULL ? "" :
 				security->endpoint_location_allowlist);
 	transaction->subtransaction_id = GetCurrentSubTransactionId();
-	transaction->next = flightsql_remote_transactions;
-	flightsql_remote_transactions = transaction;
+	transaction->depth = depth;
 	MemoryContextSwitchTo(old_context);
 
 	flightsql_ensure_xact_callbacks();
+	/* Allocate the registry entry before the remote transaction is opened. */
+	flightsql_remote_transactions = transaction;
+	old_context = MemoryContextSwitchTo(context);
+	transaction->transaction_id = af_flightsql_begin_transaction(url, security);
+	MemoryContextSwitchTo(old_context);
+	return transaction;
+}
+
+/* Keep one budget while abort unwinds several nested subtransactions. */
+static void
+flightsql_begin_cleanup(void)
+{
+	TimestampTz statement = GetCurrentStatementStartTimestamp();
+
+	if (!flightsql_cleanup_active || flightsql_cleanup_statement != statement)
+	{
+		INSTR_TIME_SET_CURRENT(flightsql_cleanup_start);
+		flightsql_cleanup_statement = statement;
+		flightsql_cleanup_active = true;
+	}
+}
+
+static int
+flightsql_cleanup_timeout(int configured_timeout)
+{
+	instr_time now;
+	int			remaining;
+
+	Assert(flightsql_cleanup_active);
+	INSTR_TIME_SET_CURRENT(now);
+	INSTR_TIME_SUBTRACT(now, flightsql_cleanup_start);
+	remaining = FLIGHTSQL_CLEANUP_TIMEOUT_MS -
+		(int) INSTR_TIME_GET_MILLISEC(now);
+	if (remaining <= 0 || in_error_recursion_trouble())
+		return -1;
+	return configured_timeout > 0 ? Min(remaining, configured_timeout) : remaining;
 }
 
 static void
@@ -1415,14 +1553,24 @@ flightsql_finish_remote_transaction(
 	bool error_on_failure)
 {
 	char	   *error;
+	int			timeout_ms = 0;
 
-	if (transaction == NULL || transaction->finished)
+	if (transaction == NULL || transaction->finished ||
+		transaction->transaction_id == NULL)
 		return;
 
-	error =
+	if (commit && transaction->failed)
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("cannot commit an uncertain Flight SQL transaction"),
+				 errhint("Roll back the Greengage transaction.")));
+	if (!commit)
+		timeout_ms = flightsql_cleanup_timeout(
+			af_get_url_int_option(transaction->url, "timeout_ms", -1, -1, INT_MAX));
+	error = timeout_ms < 0 ? pstrdup("Flight SQL cleanup deadline exceeded") :
 		af_flightsql_end_transaction(
 			transaction->url, transaction->transaction_id, commit,
-			&transaction->security_options);
+			timeout_ms, &transaction->security_options);
 	if (error == NULL)
 	{
 		transaction->finished = true;
@@ -1437,8 +1585,10 @@ flightsql_finish_remote_transaction(
 				 errdetail_internal("%s", error)));
 
 	ereport(WARNING,
-			(errmsg("could not rollback Flight SQL transaction"),
+			(errmsg("could not %s Flight SQL transaction",
+					commit ? "commit" : "rollback"),
 			 errdetail_internal("%s", error)));
+	pfree(error);
 	transaction->finished = true;
 }
 
@@ -1457,8 +1607,12 @@ flightsql_register_remote_plan(
 		plan_id[0] == '\0')
 		elog(ERROR, "flightsql_fdw received an invalid MPP plan");
 
-	old_context = MemoryContextSwitchTo(TopTransactionContext);
+	MemoryContext context = AllocSetContextCreate(TopTransactionContext,
+		"Flight SQL ingest plan", ALLOCSET_SMALL_SIZES);
+
+	old_context = MemoryContextSwitchTo(context);
 	plan = (FlightSqlRemotePlan *) palloc0(sizeof(*plan));
+	plan->context = context;
 	plan->owner_query_desc = owner_query_desc;
 	plan->url = pstrdup(url);
 	plan->serialized_plan = pstrdup(serialized_plan);
@@ -1492,16 +1646,20 @@ flightsql_finish_remote_plan(
 	FlightSqlRemotePlan *plan, bool complete, bool error_on_failure)
 {
 	char	   *error;
+	int			timeout_ms;
 
 	if (plan == NULL || plan->finished)
 		return;
 
-	error = complete ?
+	timeout_ms = complete ? plan->timeout_ms :
+		flightsql_cleanup_timeout(plan->timeout_ms);
+	error = !complete && timeout_ms < 0 ?
+		pstrdup("Flight SQL cleanup deadline exceeded") : complete ?
 		af_flightsql_mpp_complete_plan(
-			plan->url, plan->serialized_plan, plan->timeout_ms,
+			plan->url, plan->serialized_plan, timeout_ms,
 			plan->max_plan_bytes, &plan->security_options) :
 		af_flightsql_mpp_abort_plan(
-			plan->url, plan->serialized_plan, plan->timeout_ms,
+			plan->url, plan->serialized_plan, timeout_ms,
 			plan->max_plan_bytes, &plan->security_options);
 	if (error == NULL)
 	{
@@ -1517,22 +1675,30 @@ flightsql_finish_remote_plan(
 				 errdetail_internal("%s", error)));
 
 	ereport(WARNING,
-			(errmsg("could not abort Flight SQL MPP ingest plan"),
+			(errmsg("could not %s Flight SQL MPP ingest plan",
+					complete ? "complete" : "abort"),
 			 errdetail_internal("%s", error)));
+	pfree(error);
 	plan->finished = true;
 }
 
 static void
 flightsql_complete_query_plans(QueryDesc *query_desc)
 {
-	FlightSqlRemotePlan *plan;
+	FlightSqlRemotePlan **link = &flightsql_remote_plans;
 
-	for (plan = flightsql_remote_plans;
-		 plan != NULL;
-		 plan = plan->next)
+	while (*link != NULL)
 	{
-		if (plan->owner_query_desc == query_desc && !plan->finished)
+		FlightSqlRemotePlan *plan = *link;
+
+		if (plan->owner_query_desc == query_desc)
+		{
 			flightsql_finish_remote_plan(plan, true, true);
+			*link = plan->next;
+			MemoryContextDelete(plan->context);
+		}
+		else
+			link = &plan->next;
 	}
 }
 
@@ -1609,6 +1775,7 @@ flightsql_xact_callback(XactEvent event, void *arg)
 
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
+			flightsql_begin_cleanup();
 			for (plan = flightsql_remote_plans;
 				 plan != NULL;
 				 plan = plan->next)
@@ -1620,6 +1787,7 @@ flightsql_xact_callback(XactEvent event, void *arg)
 					transaction, false, false);
 			flightsql_remote_transactions = NULL;
 			flightsql_remote_plans = NULL;
+			flightsql_cleanup_active = false;
 			break;
 
 		case XACT_EVENT_COMMIT:
@@ -1627,6 +1795,7 @@ flightsql_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PREPARE:
 			flightsql_remote_transactions = NULL;
 			flightsql_remote_plans = NULL;
+			flightsql_cleanup_active = false;
 			break;
 	}
 }
@@ -1639,8 +1808,15 @@ flightsql_subxact_callback(SubXactEvent event,
 {
 	FlightSqlRemoteTransaction **link = &flightsql_remote_transactions;
 	FlightSqlRemotePlan **plan_link = &flightsql_remote_plans;
+	int			depth = GetCurrentTransactionNestLevel();
 
 	(void) arg;
+	if (event != SUBXACT_EVENT_PRE_COMMIT_SUB &&
+		event != SUBXACT_EVENT_COMMIT_SUB &&
+		event != SUBXACT_EVENT_ABORT_SUB)
+		return;
+	if (event == SUBXACT_EVENT_ABORT_SUB)
+		flightsql_begin_cleanup();
 	while (*plan_link != NULL)
 	{
 		FlightSqlRemotePlan *plan = *plan_link;
@@ -1660,6 +1836,7 @@ flightsql_subxact_callback(SubXactEvent event,
 		{
 			flightsql_finish_remote_plan(plan, false, false);
 			*plan_link = plan->next;
+			MemoryContextDelete(plan->context);
 		}
 		else
 			plan_link = &plan->next;
@@ -1668,26 +1845,75 @@ flightsql_subxact_callback(SubXactEvent event,
 	while (*link != NULL)
 	{
 		FlightSqlRemoteTransaction *transaction = *link;
+		FlightSqlRemoteSavepoint *savepoint = transaction->savepoints;
 
-		if (transaction->subtransaction_id != my_subid)
+		if (transaction->subtransaction_id == my_subid)
 		{
+			if (event == SUBXACT_EVENT_ABORT_SUB)
+			{
+				flightsql_finish_remote_transaction(transaction, false, false);
+				*link = transaction->next;
+				MemoryContextDelete(transaction->context);
+				continue;
+			}
+			if (event == SUBXACT_EVENT_COMMIT_SUB)
+			{
+				transaction->subtransaction_id = parent_subid;
+				transaction->depth--;
+			}
 			link = &transaction->next;
 			continue;
 		}
 
-		if (event == SUBXACT_EVENT_COMMIT_SUB)
+		if (savepoint != NULL && savepoint->depth == depth &&
+			(event == SUBXACT_EVENT_PRE_COMMIT_SUB ||
+			 event == SUBXACT_EVENT_ABORT_SUB))
 		{
-			transaction->subtransaction_id = parent_subid;
-			link = &transaction->next;
+			char	   *error = NULL;
+			bool		release = event == SUBXACT_EVENT_PRE_COMMIT_SUB;
+			bool		previous_failure = transaction->failed;
+			int			timeout_ms = 0;
+			int			configured_timeout = af_get_url_int_option(
+				transaction->url, "timeout_ms", -1, -1, INT_MAX);
+
+			if (release && transaction->failed)
+				ereport(ERROR,
+						(errcode(ERRCODE_FDW_ERROR),
+						 errmsg("cannot release a savepoint in an uncertain Flight SQL transaction")));
+			transaction->failed = true;
+			if (!release)
+				timeout_ms = flightsql_cleanup_timeout(configured_timeout);
+			error = timeout_ms < 0 ? pstrdup("Flight SQL cleanup deadline exceeded") :
+				af_flightsql_end_savepoint(transaction->url, savepoint->savepoint_id,
+										  release, timeout_ms, &transaction->security_options);
+			/* Flight SQL rollback preserves the savepoint, unlike release. */
+			if (!release && error == NULL)
+			{
+				timeout_ms = flightsql_cleanup_timeout(configured_timeout);
+				error = timeout_ms < 0 ? pstrdup("Flight SQL cleanup deadline exceeded") :
+					af_flightsql_end_savepoint(transaction->url, savepoint->savepoint_id,
+											  true, timeout_ms, &transaction->security_options);
+			}
+			if (error != NULL)
+			{
+				if (release)
+					ereport(ERROR,
+							(errcode(ERRCODE_FDW_ERROR),
+							 errmsg("could not release Flight SQL savepoint"),
+							 errdetail_internal("%s", error)));
+				ereport(WARNING,
+						(errmsg("could not roll back Flight SQL savepoint"),
+						 errdetail_internal("%s", error)));
+				pfree(error);
+			}
+			else
+				transaction->failed = previous_failure;
+			transaction->savepoints = savepoint->next;
+			transaction->depth--;
+			pfree(savepoint->savepoint_id);
+			pfree(savepoint);
 		}
-		else if (event == SUBXACT_EVENT_ABORT_SUB)
-		{
-			flightsql_finish_remote_transaction(
-				transaction, false, false);
-			*link = transaction->next;
-		}
-		else
-			link = &transaction->next;
+		link = &transaction->next;
 	}
 }
 

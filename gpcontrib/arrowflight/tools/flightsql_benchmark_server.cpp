@@ -33,6 +33,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -48,6 +50,7 @@ namespace mpp = greengage::flight::sql::mpp::v1;
 
 constexpr const char *kReadTable = "af_perf_read";
 constexpr const char *kWriteTable = "af_perf_write";
+constexpr const char *kMetricsTable = "af_txn_metrics";
 constexpr const char *kReadHandlePrefix = "read:";
 constexpr const char *kWriteHandlePrefix = "write:";
 constexpr const char *kMppCreateAction =
@@ -379,6 +382,18 @@ ParseReadHandle(const std::string &handle, int *endpoint_count,
 		*endpoint < *endpoint_count;
 }
 
+std::shared_ptr<arrow::Schema>
+ReadFixtureSchema(const std::shared_ptr<arrow::Schema> &schema,
+	const std::string &variant)
+{
+	auto fields = schema->fields();
+	if (variant == "duplicate:")
+		fields.at(1) = fields.at(1)->WithName("id");
+	else if (variant == "alias:")
+		fields.at(0) = fields.at(0)->WithName("local_id");
+	return arrow::schema(fields, schema->metadata());
+}
+
 std::filesystem::path
 BenchIpcPath(const std::string &root, int segment)
 {
@@ -526,11 +541,11 @@ WriteBenchIpcFiles(const std::string &root)
 }
 
 arrow::Result<std::vector<std::shared_ptr<arrow::RecordBatch>>>
-ReadIpcBatches(const std::string &root, int segment)
+ReadBatchFile(const std::filesystem::path &path)
 {
 	ARROW_ASSIGN_OR_RAISE(
 		auto input,
-		arrow::io::ReadableFile::Open(BenchIpcPath(root, segment).string()));
+		arrow::io::ReadableFile::Open(path.string()));
 	ARROW_ASSIGN_OR_RAISE(
 		auto reader,
 		arrow::ipc::RecordBatchStreamReader::Open(input));
@@ -550,6 +565,29 @@ ReadIpcBatches(const std::string &root, int segment)
 		return arrow::Status::Invalid("benchmark IPC stream has no batches");
 
 	return batches;
+}
+
+arrow::Result<std::vector<std::shared_ptr<arrow::RecordBatch>>>
+ReadIpcBatches(const std::string &root, int segment)
+{
+	return ReadBatchFile(BenchIpcPath(root, segment));
+}
+
+arrow::Status
+WriteBatchFile(const std::filesystem::path &path,
+	const std::vector<std::shared_ptr<arrow::RecordBatch>> &batches)
+{
+	const std::string temporary = path.string() + ".tmp";
+	ARROW_ASSIGN_OR_RAISE(auto output,
+		arrow::io::FileOutputStream::Open(temporary));
+	ARROW_ASSIGN_OR_RAISE(auto writer,
+		arrow::ipc::MakeStreamWriter(output, batches.front()->schema()));
+	for (const auto &batch : batches)
+		ARROW_RETURN_NOT_OK(writer->WriteRecordBatch(*batch));
+	ARROW_RETURN_NOT_OK(writer->Close());
+	ARROW_RETURN_NOT_OK(output->Close());
+	std::filesystem::rename(temporary, path);
+	return arrow::Status::OK();
 }
 
 arrow::Result<std::vector<std::shared_ptr<arrow::RecordBatch>>>
@@ -774,6 +812,13 @@ class BenchmarkFlightSqlServer
 						INT_MAX / 4)),
 		  transactional_(
 			  GetEnvBool("ARROWFLIGHT_BENCH_TRANSACTIONAL", true)),
+		  savepoints_(
+			  GetEnvBool("ARROWFLIGHT_BENCH_SAVEPOINTS", false)),
+		  end_transaction_delay_ms_(
+			  GetEnvInt("ARROWFLIGHT_BENCH_END_TRANSACTION_DELAY_MS", 0, 0,
+						INT_MAX / 4)),
+		  mpp_abort_delay_ms_(
+			  GetEnvInt("ARROWFLIGHT_MPP_ABORT_DELAY_MS", 0, 0, INT_MAX / 4)),
 		  read_delay_ms_(
 			  GetEnvInt("ARROWFLIGHT_BENCH_READ_DELAY_MS", 0, 0,
 						INT_MAX / 4)),
@@ -797,6 +842,8 @@ class BenchmarkFlightSqlServer
 						INT_MAX / 4)),
 		  mpp_cluster_transactions_(
 			  GetEnvBool("ARROWFLIGHT_MPP_CLUSTER_TRANSACTIONS", true)),
+		  mpp_readback_(
+			  GetEnvBool("ARROWFLIGHT_BENCH_MPP_READBACK", false)),
 		  mpp_lease_ms_(
 			  GetEnvInt("ARROWFLIGHT_MPP_LEASE_MS", 5 * 60 * 1000,
 						50, 24 * 60 * 60 * 1000)),
@@ -831,6 +878,9 @@ class BenchmarkFlightSqlServer
 		RegisterSqlInfo(
 			arrow::flight::sql::SqlInfoOptions::FLIGHT_SQL_SERVER_TRANSACTION,
 			static_cast<int32_t>(
+				transactional_ && savepoints_ ?
+				arrow::flight::sql::SqlInfoOptions::
+					SQL_SUPPORTED_TRANSACTION_SAVEPOINT :
 				transactional_ ?
 				arrow::flight::sql::SqlInfoOptions::
 					SQL_SUPPORTED_TRANSACTION_TRANSACTION :
@@ -941,8 +991,22 @@ class BenchmarkFlightSqlServer
 				  << statement_number << " sql=" << command.query
 				  << std::endl;
 
-		if (QueryReferencesTable(command.query, kReadTable))
+		if (QueryReferencesTable(command.query, kMetricsTable))
 		{
+			ARROW_ASSIGN_OR_RAISE(auto batch, TransactionMetrics());
+			schema = batch->schema();
+			ARROW_ASSIGN_OR_RAISE(auto endpoint,
+				MakeStatementEndpoint(kMetricsTable, advertised_location_));
+			endpoints.push_back(std::move(endpoint));
+			total_rows = 1;
+		}
+		else if (QueryReferencesTable(command.query, kReadTable))
+		{
+			const std::string variant =
+				QueryReferencesTable(command.query, "af_perf_read_schema_duplicate") ?
+				"duplicate:" :
+				QueryReferencesTable(command.query, "af_perf_read_schema_alias") ?
+				"alias:" : "";
 			const int endpoint_count =
 				QueryEndpointCount(command.query, kReadTable, endpoints_);
 
@@ -951,13 +1015,14 @@ class BenchmarkFlightSqlServer
 					"ARROWFLIGHT_BENCH_IPC_DIR is required");
 
 			ARROW_ASSIGN_OR_RAISE(schema, ReadIpcSchema(ipc_dir_));
+			schema = ReadFixtureSchema(schema, variant);
 			for (int endpoint_index = 0;
 				 endpoint_index < endpoint_count; endpoint_index++)
 				{
 					ARROW_ASSIGN_OR_RAISE(
 						auto endpoint,
 						MakeStatementEndpoint(
-							std::string(kReadHandlePrefix) +
+							variant + kReadHandlePrefix +
 							std::to_string(endpoint_count) + ":" +
 							std::to_string(endpoint_index),
 							advertised_location_));
@@ -969,6 +1034,8 @@ class BenchmarkFlightSqlServer
 		else if (QueryReferencesTable(command.query, kWriteTable))
 		{
 			std::lock_guard<std::mutex> guard(write_mutex_);
+
+			ARROW_RETURN_NOT_OK(LoadCommittedMppWrites());
 
 			if (write_streams_.empty())
 			{
@@ -1015,8 +1082,24 @@ class BenchmarkFlightSqlServer
 		std::shared_ptr<arrow::Schema> schema;
 		int			stream = -1;
 		int			endpoint_count = -1;
+		std::string read_handle = command.statement_handle;
+		std::string variant;
+		for (const char *prefix : {"duplicate:", "alias:"})
+		{
+			if (read_handle.rfind(prefix, 0) == 0)
+			{
+				variant = prefix;
+				read_handle.erase(0, variant.size());
+				break;
+			}
+		}
 
-		if (ParseReadHandle(command.statement_handle, &endpoint_count,
+		if (command.statement_handle == kMetricsTable)
+		{
+			ARROW_ASSIGN_OR_RAISE(auto batch, TransactionMetrics());
+			batches.push_back(std::move(batch));
+		}
+		else if (ParseReadHandle(read_handle, &endpoint_count,
 							&stream))
 		{
 			ARROW_ASSIGN_OR_RAISE(
@@ -1024,6 +1107,9 @@ class BenchmarkFlightSqlServer
 				ReadEndpointBatches(
 					ipc_dir_, segments_, endpoint_count, stream));
 			ARROW_ASSIGN_OR_RAISE(schema, ReadIpcSchema(ipc_dir_));
+			schema = ReadFixtureSchema(schema, variant);
+			for (auto &batch : batches)
+				batch = arrow::RecordBatch::Make(schema, batch->num_rows(), batch->columns());
 		}
 		else if (command.statement_handle.rfind(kWriteHandlePrefix, 0) == 0 &&
 				 ParseNonNegativeInt(
@@ -1062,6 +1148,7 @@ class BenchmarkFlightSqlServer
 		const arrow::flight::sql::StatementIngest &command,
 		arrow::flight::FlightMessageReader *reader) override
 	{
+		ingest_count_.fetch_add(1);
 		if (command.table != kWriteTable)
 			return arrow::Status::NotImplemented(
 				"unsupported benchmark ingest table: ", command.table);
@@ -1181,7 +1268,8 @@ class BenchmarkFlightSqlServer
 		ARROW_ASSIGN_OR_RAISE(auto schema, reader->GetSchema());
 		std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 		int64_t rows = 0;
-		int64_t retained_bytes = 0;
+		int64_t batch_count = 0;
+		int64_t received_bytes = 0;
 
 		if (mpp_stream)
 		{
@@ -1219,11 +1307,13 @@ class BenchmarkFlightSqlServer
 				std::this_thread::sleep_for(
 					std::chrono::milliseconds(ingest_delay_ms_));
 			rows += chunk.data->num_rows();
-			retained_bytes += arrow::util::TotalBufferSize(*chunk.data);
-			batches.push_back(std::move(chunk.data));
+			batch_count++;
+			received_bytes += arrow::util::TotalBufferSize(*chunk.data);
+			if (!mpp_stream || mpp_readback_)
+				batches.push_back(std::move(chunk.data));
 		}
 
-		if (batches.empty())
+		if (batch_count == 0)
 			return arrow::Status::Invalid(
 				"benchmark ingest stream has no batches");
 		if (stream == fail_ingest_stream_ ||
@@ -1238,20 +1328,25 @@ class BenchmarkFlightSqlServer
 
 		if (mpp_stream)
 		{
+			if (mpp_readback_)
+				ARROW_RETURN_NOT_OK(WriteBatchFile(
+					mpp_plan_dir /
+						("route_" + std::to_string(mpp_segment_index) + ".arrow"),
+					batches));
 			WriteFile(
 				mpp_plan_dir /
 					("route_" + std::to_string(mpp_segment_index) +
 					 ".done"),
 				std::to_string(rows) + " " +
-				std::to_string(batches.size()) + " " +
-				std::to_string(retained_bytes) + " " +
+				std::to_string(batch_count) + " " +
+				std::to_string(received_bytes) + " " +
 				mpp_worker_id_);
 			std::cerr << "flightsql_mpp_worker worker="
 					  << mpp_worker_id_
 					  << " segment=" << mpp_segment_index
 					  << " rows=" << rows
-					  << " batches=" << batches.size()
-					  << " bytes=" << retained_bytes << std::endl;
+					  << " batches=" << batch_count
+					  << " bytes=" << received_bytes << std::endl;
 			return rows;
 		}
 
@@ -1292,27 +1387,18 @@ class BenchmarkFlightSqlServer
 		const int transaction_number = next_transaction_.fetch_add(1);
 		std::string transaction_id("transaction\0", 12);
 
-		transaction_id += std::to_string(transaction_number);
-			if (MppControlEnabled())
-			{
-				std::lock_guard<std::mutex> guard(mpp_state_mutex_);
-				const std::string transaction_hex =
-					HexEncode(transaction_id);
+		transaction_id += instance_id_ + ":" + std::to_string(transaction_number);
+		std::scoped_lock guard(write_mutex_, mpp_state_mutex_);
+		if (MppControlEnabled())
+		{
+			const std::string transaction_hex = HexEncode(transaction_id);
 
 			WriteFile(
 				std::filesystem::path(mpp_state_dir_) /
 					"transactions" / (transaction_hex + ".active"),
 				"active");
 		}
-		else
-		{
-			std::lock_guard<std::mutex> guard(write_mutex_);
-
-			transactions_.emplace(
-				transaction_id,
-				std::map<int,
-						 std::vector<std::shared_ptr<arrow::RecordBatch>>>{});
-		}
+		transactions_.emplace(transaction_id, BatchStreams{});
 		std::cerr << "flightsql_benchmark_begin transaction_number="
 				  << transaction_number
 				  << " transaction_bytes=" << transaction_id.size()
@@ -1327,15 +1413,21 @@ class BenchmarkFlightSqlServer
 		const arrow::flight::sql::ActionEndTransactionRequest &request)
 		override
 	{
+		end_started_count_.fetch_add(1);
+		std::this_thread::sleep_for(
+			std::chrono::milliseconds(end_transaction_delay_ms_));
 		const bool commit =
 			request.action ==
 			arrow::flight::sql::ActionEndTransactionRequest::kCommit;
 
-			if (MppControlEnabled())
-			{
-				std::lock_guard<std::mutex> guard(mpp_state_mutex_);
-				const std::string transaction_hex =
-					HexEncode(request.transaction_id);
+		std::scoped_lock guard(write_mutex_, mpp_state_mutex_);
+		auto transaction = transactions_.find(request.transaction_id);
+
+		if (transaction == transactions_.end())
+			return arrow::Status::KeyError("unknown benchmark transaction");
+		if (MppControlEnabled())
+		{
+			const std::string transaction_hex = HexEncode(request.transaction_id);
 			const std::filesystem::path transaction_dir =
 				std::filesystem::path(mpp_state_dir_) / "transactions";
 			const std::filesystem::path active =
@@ -1350,20 +1442,7 @@ class BenchmarkFlightSqlServer
 					 (commit ? ".committed" : ".rolledback")),
 				commit ? "committed" : "rolledback");
 			std::filesystem::remove(active);
-			std::cerr << "flightsql_benchmark_end transaction_bytes="
-					  << request.transaction_id.size()
-					  << " action="
-					  << (commit ? "commit" : "rollback")
-					  << " scope=cluster" << std::endl;
-			return arrow::Status::OK();
 		}
-
-		std::lock_guard<std::mutex> guard(write_mutex_);
-		auto transaction = transactions_.find(request.transaction_id);
-
-		if (transaction == transactions_.end())
-			return arrow::Status::KeyError(
-				"unknown benchmark transaction");
 
 		if (commit)
 		{
@@ -1371,14 +1450,165 @@ class BenchmarkFlightSqlServer
 				write_streams_[stream.first] = std::move(stream.second);
 		}
 		transactions_.erase(transaction);
+		savepoint_states_.erase(request.transaction_id);
+		(commit ? commit_count_ : rollback_count_).fetch_add(1);
 		std::cerr << "flightsql_benchmark_end transaction_bytes="
 				  << request.transaction_id.size()
 				  << " action=" << (commit ? "commit" : "rollback")
+				  << (MppControlEnabled() ? " scope=cluster" : "")
 				  << std::endl;
 		return arrow::Status::OK();
 	}
 
+	arrow::Result<arrow::flight::sql::ActionBeginSavepointResult>
+	BeginSavepoint(
+		const arrow::flight::ServerCallContext & /*context*/,
+		const arrow::flight::sql::ActionBeginSavepointRequest &request) override
+	{
+		if (!transactional_ || !savepoints_)
+			return arrow::Status::NotImplemented("benchmark savepoints are disabled");
+		std::scoped_lock guard(write_mutex_, mpp_state_mutex_);
+		auto transaction = transactions_.find(request.transaction_id);
+		if (transaction == transactions_.end())
+			return arrow::Status::KeyError("unknown benchmark transaction");
+		SavepointState state;
+		state.id = std::string("savepoint\0", 10) + instance_id_ + ":" +
+			std::to_string(next_savepoint_.fetch_add(1));
+		state.streams = transaction->second;
+		state.plans = TransactionPlans(request.transaction_id);
+		savepoint_states_[request.transaction_id].push_back(state);
+		return arrow::flight::sql::ActionBeginSavepointResult{state.id};
+	}
+
+	arrow::Status
+	EndSavepoint(
+		const arrow::flight::ServerCallContext & /*context*/,
+		const arrow::flight::sql::ActionEndSavepointRequest &request) override
+	{
+		const bool rollback = request.action ==
+			arrow::flight::sql::ActionEndSavepointRequest::kRollback;
+		std::this_thread::sleep_for(std::chrono::milliseconds(GetEnvInt(
+			"ARROWFLIGHT_BENCH_END_SAVEPOINT_DELAY_MS", 0, 0, INT_MAX / 4)));
+		if (rollback && GetEnvBool("ARROWFLIGHT_BENCH_FAIL_SAVEPOINT_ROLLBACK", false))
+			return arrow::Status::Invalid("injected benchmark savepoint rollback failure");
+		std::scoped_lock guard(write_mutex_, mpp_state_mutex_);
+		for (auto &transaction : savepoint_states_)
+		{
+			auto &states = transaction.second;
+			auto state = std::find_if(states.begin(), states.end(),
+				[&request](const SavepointState &item)
+				{
+					return item.id == request.savepoint_id;
+				});
+			if (state == states.end())
+				continue;
+			if (rollback)
+			{
+				transactions_.at(transaction.first) = state->streams;
+				for (const auto &plan : TransactionPlans(transaction.first))
+				{
+					if (state->plans.count(plan) == 0)
+						WriteFile(PlanDirectory(plan) / "status", "aborted");
+				}
+				states.erase(state + 1, states.end());
+				savepoint_rollback_count_.fetch_add(1);
+			}
+			else
+			{
+				states.erase(state);
+				savepoint_release_count_.fetch_add(1);
+			}
+			return arrow::Status::OK();
+		}
+		return arrow::Status::KeyError("unknown benchmark savepoint");
+	}
+
   private:
+	using BatchStreams = std::map<int,
+		std::vector<std::shared_ptr<arrow::RecordBatch>>>;
+	struct SavepointState
+	{
+		std::string id;
+		BatchStreams streams;
+		std::set<std::string> plans;
+	};
+
+	std::set<std::string>
+	TransactionPlans(const std::string &transaction_id) const
+	{
+		std::set<std::string> plans;
+		if (!MppControlEnabled())
+			return plans;
+		for (const auto &entry : std::filesystem::directory_iterator(
+			std::filesystem::path(mpp_state_dir_) / "plans"))
+		{
+			if (entry.is_directory() &&
+				std::filesystem::exists(entry.path() / "transaction") &&
+				ReadStateFile(entry.path() / "transaction") == HexEncode(transaction_id))
+				plans.insert(entry.path().filename().string());
+		}
+		return plans;
+	}
+
+	arrow::Status
+	LoadCommittedMppWrites()
+	{
+		if (!MppControlEnabled())
+			return arrow::Status::OK();
+		for (const auto &entry : std::filesystem::directory_iterator(
+			std::filesystem::path(mpp_state_dir_) / "plans"))
+		{
+			const auto path = entry.path();
+			if (!entry.is_directory() ||
+				!std::filesystem::exists(path / "status") ||
+				ReadStateFile(path / "status") != "completed")
+				continue;
+			const std::string transaction = ReadStateFile(path / "transaction");
+			if (!transaction.empty() && !std::filesystem::exists(
+				std::filesystem::path(mpp_state_dir_) / "transactions" /
+					(transaction + ".committed")))
+				continue;
+			for (const auto &route : std::filesystem::directory_iterator(path))
+			{
+				if (route.path().extension() != ".arrow" ||
+					loaded_mpp_files_.count(route.path().string()) != 0)
+					continue;
+				ARROW_ASSIGN_OR_RAISE(auto batches, ReadBatchFile(route.path()));
+				write_streams_[next_write_stream_.fetch_add(1)] = std::move(batches);
+				loaded_mpp_files_.insert(route.path().string());
+			}
+		}
+		return arrow::Status::OK();
+	}
+
+	arrow::Result<std::shared_ptr<arrow::RecordBatch>>
+	TransactionMetrics()
+	{
+		const std::vector<std::pair<std::string, int64_t>> values = {
+			{"begin_count", next_transaction_.load()},
+			{"commit_count", commit_count_.load()},
+			{"rollback_count", rollback_count_.load()},
+			{"ingest_count", ingest_count_.load()},
+			{"savepoint_begin_count", next_savepoint_.load()},
+			{"savepoint_release_count", savepoint_release_count_.load()},
+			{"savepoint_rollback_count", savepoint_rollback_count_.load()},
+			{"mpp_create_count", mpp_create_count_.load()},
+			{"mpp_abort_count", mpp_abort_count_.load()},
+			{"end_started_count", end_started_count_.load()},
+			{"abort_started_count", abort_started_count_.load()}};
+		std::vector<std::shared_ptr<arrow::Field>> fields;
+		std::vector<std::shared_ptr<arrow::Array>> arrays;
+		for (const auto &value : values)
+		{
+			fields.push_back(arrow::field(value.first, arrow::int64()));
+			arrow::Int64Builder builder;
+			ARROW_RETURN_NOT_OK(builder.Append(value.second));
+			ARROW_ASSIGN_OR_RAISE(auto array, builder.Finish());
+			arrays.push_back(std::move(array));
+		}
+		return arrow::RecordBatch::Make(arrow::schema(fields), 1, arrays);
+	}
+
 	std::filesystem::path
 	PlanDirectory(const std::string &operation_id) const
 	{
@@ -1653,7 +1883,8 @@ class BenchmarkFlightSqlServer
 			mpp::IngestRoute *route = response.add_routes();
 
 			route->set_segment_index(static_cast<uint32_t>(index));
-			route->set_location(mpp_worker_locations_[index]);
+			route->set_location(GetEnvString(
+				"ARROWFLIGHT_MPP_ROUTE_LOCATION_OVERRIDE", mpp_worker_locations_[index]));
 			route->set_route_token(route_token);
 			route->set_worker_id(worker_id);
 			WriteFile(
@@ -1674,6 +1905,7 @@ class BenchmarkFlightSqlServer
 		WriteFile(plan_dir / "create_response", serialized);
 		WriteFile(plan_dir / "status", "created");
 		plan_creation.Commit();
+		mpp_create_count_.fetch_add(1);
 		std::cerr << "flightsql_mpp_plan event=create operation="
 				  << request.client_operation_id()
 				  << " routes=" << request.segment_count()
@@ -1798,6 +2030,9 @@ class BenchmarkFlightSqlServer
 	std::string
 	AbortMppPlan(const arrow::Buffer &body)
 	{
+		abort_started_count_.fetch_add(1);
+		std::this_thread::sleep_for(
+			std::chrono::milliseconds(mpp_abort_delay_ms_));
 		const mpp::MppIngestPlanRequest request =
 			ParsePlanRequest(body);
 		const std::filesystem::path plan_dir =
@@ -1815,6 +2050,7 @@ class BenchmarkFlightSqlServer
 
 		if (!already_terminal)
 			WriteFile(plan_dir / "status", "aborted");
+		mpp_abort_count_.fetch_add(1);
 
 		mpp::AbortMppIngestPlanResponse response;
 		std::string serialized;
@@ -1838,6 +2074,9 @@ class BenchmarkFlightSqlServer
 	int endpoints_;
 	int rows_per_segment_;
 	bool transactional_;
+	bool savepoints_;
+	int end_transaction_delay_ms_;
+	int mpp_abort_delay_ms_;
 	int read_delay_ms_;
 	int ingest_delay_ms_;
 	int fail_ingest_stream_;
@@ -1847,11 +2086,25 @@ class BenchmarkFlightSqlServer
 	std::vector<std::string> mpp_worker_locations_;
 	int mpp_fail_segment_;
 	bool mpp_cluster_transactions_;
+	bool mpp_readback_;
 	int mpp_lease_ms_;
 	int mpp_janitor_interval_ms_;
 	std::atomic<int> statement_queries_{0};
 	std::atomic<int> next_write_stream_{0};
 	std::atomic<int> next_transaction_{0};
+	std::atomic<int> next_savepoint_{0};
+	std::atomic<int64_t> commit_count_{0};
+	std::atomic<int64_t> rollback_count_{0};
+	std::atomic<int64_t> ingest_count_{0};
+	std::atomic<int64_t> savepoint_release_count_{0};
+	std::atomic<int64_t> savepoint_rollback_count_{0};
+	std::atomic<int64_t> mpp_create_count_{0};
+	std::atomic<int64_t> mpp_abort_count_{0};
+	std::atomic<int64_t> end_started_count_{0};
+	std::atomic<int64_t> abort_started_count_{0};
+	const std::string instance_id_ =
+		std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+		":" + std::to_string(std::random_device{}());
 	std::atomic<int> active_reads_{0};
 	std::atomic<int> active_ingests_{0};
 	std::atomic<bool> mpp_janitor_stop_{false};
@@ -1861,12 +2114,10 @@ class BenchmarkFlightSqlServer
 	std::mutex mpp_janitor_mutex_;
 	std::condition_variable mpp_janitor_cv_;
 	std::thread mpp_janitor_;
-	std::map<int, std::vector<std::shared_ptr<arrow::RecordBatch>>>
-		write_streams_;
-	std::map<
-		std::string,
-		std::map<int, std::vector<std::shared_ptr<arrow::RecordBatch>>>>
-		transactions_;
+	BatchStreams write_streams_;
+	std::map<std::string, BatchStreams> transactions_;
+	std::map<std::string, std::vector<SavepointState>> savepoint_states_;
+	std::set<std::string> loaded_mpp_files_;
 };
 
 class BenchmarkFlightServer : public arrow::flight::FlightServerBase

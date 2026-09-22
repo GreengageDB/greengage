@@ -43,6 +43,10 @@ x-flightsql-synthetic-command: &flightsql-synthetic-command |
   mkdir -p /tmp/flightsql-ipc
   /tmp/flightsql-benchmark-server --write-bench-ipc /tmp/flightsql-ipc
   export ARROWFLIGHT_BENCH_IPC_DIR=/tmp/flightsql-ipc
+  if [ "$${FLIGHTSQL_TRANSACTION_FIXTURE:-0}" = 1 ]; then
+    exec bash gpcontrib/arrowflight/tools/run_flightsql_transaction_fixture.sh \
+      /tmp/flightsql-benchmark-server
+  fi
   exec /tmp/flightsql-benchmark-server "$${FLIGHTSQL_SYNTHETIC_PORT}"
 
 services:
@@ -145,6 +149,7 @@ services:
       ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
       ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
       ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
+      ARROWFLIGHT_BENCH_SAVEPOINTS: "true"
       ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
       ARROWFLIGHT_MPP_WORKERS: "grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023"
       FLIGHTSQL_SYNTHETIC_PORT: "9020"
@@ -201,6 +206,7 @@ services:
       ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
       ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
       ARROWFLIGHT_MPP_WORKER_ID: worker-0
+      ARROWFLIGHT_BENCH_MPP_READBACK: "true"
       FLIGHTSQL_SYNTHETIC_PORT: "9021"
     command:
       - *flightsql-synthetic-command
@@ -216,6 +222,7 @@ services:
       ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
       ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
       ARROWFLIGHT_MPP_WORKER_ID: worker-1
+      ARROWFLIGHT_BENCH_MPP_READBACK: "true"
       FLIGHTSQL_SYNTHETIC_PORT: "9022"
     command:
       - *flightsql-synthetic-command
@@ -231,6 +238,7 @@ services:
       ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
       ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
       ARROWFLIGHT_MPP_WORKER_ID: worker-2
+      ARROWFLIGHT_BENCH_MPP_READBACK: "true"
       FLIGHTSQL_SYNTHETIC_PORT: "9023"
     command:
       - *flightsql-synthetic-command
@@ -246,8 +254,33 @@ services:
       ARROWFLIGHT_BENCH_TRANSACTIONAL: "true"
       ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
       ARROWFLIGHT_MPP_WORKER_ID: worker-2
+      ARROWFLIGHT_BENCH_MPP_READBACK: "true"
       ARROWFLIGHT_MPP_FAIL_SEGMENT: "2"
       FLIGHTSQL_SYNTHETIC_PORT: "9024"
+    command:
+      - *flightsql-synthetic-command
+
+  flightsql-txn-faults:
+    <<: *flightsql-synthetic
+    hostname: flightsql-txn-faults
+    volumes:
+      - ../..:/workspace:ro
+      - flightsql-mpp-state:/var/lib/flightsql-mpp
+    environment:
+      ARROWFLIGHT_BENCH_SEGMENTS: "3"
+      ARROWFLIGHT_BENCH_ENDPOINTS: "3"
+      ARROWFLIGHT_BENCH_ROWS_PER_SEGMENT: "1000"
+      ARROWFLIGHT_BENCH_BATCH_ROWS: "128"
+      ARROWFLIGHT_BENCH_LABEL_WIDTH: "24"
+      FLIGHTSQL_TRANSACTION_FIXTURE: "1"
+      ARROWFLIGHT_MPP_STATE_DIR: /var/lib/flightsql-mpp
+      FLIGHTSQL_SYNTHETIC_PORT: "9030"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "for port in 9030 9031 9032 9033 9034; do (exec 3<>/dev/tcp/127.0.0.1/$$port) || exit 1; done"]
+      interval: 1s
+      timeout: 3s
+      retries: 120
+      start_period: 10s
     command:
       - *flightsql-synthetic-command
 

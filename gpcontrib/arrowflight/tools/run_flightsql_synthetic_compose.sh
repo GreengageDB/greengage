@@ -76,6 +76,7 @@ compose up -d --no-deps --wait --wait-timeout 300 \
   flightsql-mpp-worker-1 \
   flightsql-mpp-worker-2 \
   flightsql-mpp-worker-fail \
+  flightsql-txn-faults \
   greengage
 
 for service in \
@@ -91,6 +92,7 @@ for service in \
   flightsql-mpp-worker-1 \
   flightsql-mpp-worker-2 \
   flightsql-mpp-worker-fail \
+  flightsql-txn-faults \
   greengage; do
   machine="$(compose exec -T "${service}" uname -m)"
   if [ "${machine}" != "aarch64" ] && [ "${machine}" != "arm64" ]; then
@@ -132,9 +134,20 @@ compose exec -T greengage bash -lc "
 
     cd /home/gpadmin/gpdb_src/gpcontrib/arrowflight_test
     make -s installcheck USE_ARROW_FLIGHT=1
+    bash tools/run_flightsql_mpp_route_test.sh
     bash tools/run_flightsql_synthetic_integration.sh
+    bash tools/run_flightsql_schema_integration.sh
     bash tools/run_flightsql_mpp_integration.sh
     bash tools/run_flightsql_security_integration.sh
+    FLIGHTSQL_TXN_HOST=flightsql-txn-faults \
+    FLIGHTSQL_TXN_NO_SP_HOST=flightsql-synthetic \
+    FLIGHTSQL_TXN_END_DELAY_HOST=flightsql-txn-faults \
+    FLIGHTSQL_TXN_MPP_DELAY_HOST=flightsql-txn-faults \
+    FLIGHTSQL_TXN_MPP_DELAY_ALLOWLIST=grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-fail:9024 \
+    FLIGHTSQL_TXN_SP_FAIL_HOST=flightsql-txn-faults \
+    FLIGHTSQL_TXN_SP_DELAY_HOST=flightsql-txn-faults \
+    FLIGHTSQL_TXN_REQUIRE_FAULTS=1 \
+      bash tools/run_flightsql_transaction_integration.sh
   '
 "
 

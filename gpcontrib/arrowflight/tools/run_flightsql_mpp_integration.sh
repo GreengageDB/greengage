@@ -9,6 +9,7 @@ set -euo pipefail
 : "${FLIGHTSQL_MPP_FAIL_CONTROL_PORT:=9025}"
 : "${FLIGHTSQL_MPP_NO_CLUSTER_CONTROL_HOST:=flightsql-mpp-no-cluster-control}"
 : "${FLIGHTSQL_MPP_NO_CLUSTER_CONTROL_PORT:=9026}"
+: "${FLIGHTSQL_MPP_WORKER_ALLOWLIST:=grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023,grpc+tcp://flightsql-mpp-worker-fail:9024}"
 
 suffix="${FLIGHTSQL_TEST_SUFFIX:-$$}"
 source_table="flightsql_mpp_source_${suffix}"
@@ -56,6 +57,7 @@ FOREIGN DATA WRAPPER flightsql_fdw
 OPTIONS (
     host '${FLIGHTSQL_MPP_CONTROL_HOST}',
     port '${FLIGHTSQL_MPP_CONTROL_PORT}',
+    endpoint_location_allowlist '${FLIGHTSQL_MPP_WORKER_ALLOWLIST}',
     write_routing_mode 'planned',
     write_transaction_mode 'auto_commit'
 );
@@ -65,6 +67,7 @@ FOREIGN DATA WRAPPER flightsql_fdw
 OPTIONS (
     host '${FLIGHTSQL_MPP_CONTROL_HOST}',
     port '${FLIGHTSQL_MPP_CONTROL_PORT}',
+    endpoint_location_allowlist '${FLIGHTSQL_MPP_WORKER_ALLOWLIST}',
     write_routing_mode 'planned',
     write_transaction_mode 'required'
 );
@@ -74,6 +77,7 @@ FOREIGN DATA WRAPPER flightsql_fdw
 OPTIONS (
     host '${FLIGHTSQL_MPP_FAIL_CONTROL_HOST}',
     port '${FLIGHTSQL_MPP_FAIL_CONTROL_PORT}',
+    endpoint_location_allowlist '${FLIGHTSQL_MPP_WORKER_ALLOWLIST}',
     write_routing_mode 'planned',
     write_transaction_mode 'required'
 );
@@ -83,6 +87,7 @@ FOREIGN DATA WRAPPER flightsql_fdw
 OPTIONS (
     host '${FLIGHTSQL_MPP_NO_CLUSTER_CONTROL_HOST}',
     port '${FLIGHTSQL_MPP_NO_CLUSTER_CONTROL_PORT}',
+    endpoint_location_allowlist '${FLIGHTSQL_MPP_WORKER_ALLOWLIST}',
     write_routing_mode 'planned',
     write_transaction_mode 'required'
 );
@@ -208,6 +213,21 @@ no_cluster_status=$?
 set -e
 test "${no_cluster_status}" -ne 0
 grep -q "requires cluster-scoped transactions" <<<"${no_cluster_error}"
+
+# Direct worker routes require an explicit allowlist on the control server.
+psql -X -q -v ON_ERROR_STOP=1 postgres \
+  -c "ALTER SERVER ${auto_server} OPTIONS (DROP endpoint_location_allowlist)"
+set +e
+route_error="$(
+  psql -X -v ON_ERROR_STOP=1 postgres \
+    -c "INSERT INTO ${auto_table} SELECT * FROM ${source_table}" 2>&1
+)"
+route_status=$?
+set -e
+test "${route_status}" -ne 0
+grep -q "route location is not allowed" <<<"${route_error}"
+psql -X -q -v ON_ERROR_STOP=1 postgres \
+  -c "ALTER SERVER ${auto_server} OPTIONS (ADD endpoint_location_allowlist '${FLIGHTSQL_MPP_WORKER_ALLOWLIST}')"
 
 PGOPTIONS='-c optimizer=on -c timezone=UTC' \
   psql -X -v ON_ERROR_STOP=1 postgres <<SQL

@@ -50,6 +50,8 @@ extern "C"
 #include <arrow/type.h>
 #include <arrow/util/config.h>
 
+#include "flightsql_endpoint.h"
+
 #include <chrono>
 #include <exception>
 #include <fstream>
@@ -200,7 +202,7 @@ static void af_flightsql_copy_capabilities(
 static char *af_flightsql_begin_transaction_impl(
 	const char *url, const ArrowFlightSecurityOptions *security_options);
 static std::string af_flightsql_end_transaction_impl(
-	const char *url, const char *transaction_id, bool commit,
+	const char *url, const char *transaction_id, bool commit, int timeout_ms,
 	const ArrowFlightSecurityOptions *security_options);
 
 class ArrowFlightStreamState
@@ -243,8 +245,6 @@ public:
 	std::vector<int> attr_batch_indexes;
 	int			expected_batch_columns = -1;
 	int64		next_row = 0;
-	bool		projection_pushdown_requested = false;
-	bool		projection_pushdown_required = false;
 	bool		tls_enabled = false;
 	bool		auth_enabled = false;
 	bool		flight_sql_mode = false;
@@ -535,7 +535,7 @@ af_flightsql_open_next_endpoint(ArrowFlightStreamState *state,
 static void *
 af_flightsql_stream_open(
 	TupleDesc tupdesc, const char *url, const char *serialized_flight_info,
-	bool project_all, const bool *projected_attrs,
+	const bool *projected_attrs,
 	const ArrowFlightSecurityOptions *security_options)
 {
 	std::unique_ptr<ArrowFlightStreamState> state =
@@ -553,8 +553,6 @@ af_flightsql_stream_open(
 	af_flightsql_initialize_state(state.get(), tupdesc, url,
 								  security_options);
 	state->flight_sql_mode = true;
-	state->projection_pushdown_requested = !project_all;
-	state->projection_pushdown_required = !project_all;
 	state->descriptor = "CommandStatementQuery";
 
 	encoded_len = strlen(serialized_flight_info);
@@ -740,31 +738,7 @@ af_validate_arrow_schema(ArrowFlightStreamState *state,
 	state->attr_batch_indexes.assign(tupdesc->natts, -1);
 	state->expected_batch_columns = schema->num_fields();
 
-	if (schema->num_fields() == tupdesc->natts)
-	{
-		if (state->projection_pushdown_required)
-			throw std::runtime_error(
-				"projected Flight SQL query returned the full remote schema");
-
-		for (i = 0; i < tupdesc->natts; i++)
-		{
-			state->attr_batch_indexes[i] = i;
-
-			if (projected_attrs != nullptr && !projected_attrs[i])
-				continue;
-
-			af_validate_arrow_attr(TupleDescAttr(tupdesc, i),
-								   schema->field(i)->type());
-		}
-		return;
-	}
-
-	if (!state->projection_pushdown_requested)
-		throw std::runtime_error("Arrow Flight stream has " +
-								 std::to_string(schema->num_fields()) +
-								 " columns, external table expects " +
-								 std::to_string(tupdesc->natts));
-
+	/* SQL aliases use local names; dropped attributes have no stream field. */
 	for (int field_index = 0; field_index < schema->num_fields(); field_index++)
 	{
 		const std::string& name = schema->field(field_index)->name();
@@ -772,11 +746,10 @@ af_validate_arrow_schema(ArrowFlightStreamState *state,
 			af_find_projected_attr_by_name(tupdesc, projected_attrs, name);
 
 		if (attr_index < 0)
-			throw std::runtime_error("Arrow Flight projected stream returned unexpected column \"" +
-									 name + "\"");
+			continue;
 
 		if (state->attr_batch_indexes[attr_index] >= 0)
-			throw std::runtime_error("Arrow Flight projected stream returned duplicate column \"" +
+			throw std::runtime_error("Arrow Flight stream returned duplicate column \"" +
 									 name + "\"");
 
 		state->attr_batch_indexes[attr_index] = field_index;
@@ -789,9 +762,9 @@ af_validate_arrow_schema(ArrowFlightStreamState *state,
 		if (TupleDescAttr(tupdesc, i)->attisdropped)
 			continue;
 
-		if (projected_attrs != nullptr && projected_attrs[i] &&
+		if ((projected_attrs == nullptr || projected_attrs[i]) &&
 			state->attr_batch_indexes[i] < 0)
-			throw std::runtime_error("Arrow Flight projected stream did not return requested column \"" +
+			throw std::runtime_error("Arrow Flight stream did not return requested column \"" +
 									 std::string(NameStr(TupleDescAttr(tupdesc, i)->attname)) +
 									 "\"");
 	}
@@ -1365,37 +1338,11 @@ static void
 af_arrow_parse_endpoint_location_allowlist(ArrowFlightStreamState *state,
 										   const std::string& value)
 {
-	size_t		start = 0;
-
 	if (state == nullptr || value.empty())
 		return;
-	if (value.size() > AF_MAX_ENDPOINT_LOCATION_ALLOWLIST_BYTES)
-		throw std::runtime_error(
-			"Flight SQL endpoint_location_allowlist is too large");
-
-	while (start < value.size())
-	{
-		size_t		end = value.find(',', start);
-		std::string entry =
-			value.substr(start, end == std::string::npos ?
-							std::string::npos : end - start);
-		arrow::flight::Location location =
-			af_arrow_value_or_throw(
-				arrow::flight::Location::Parse(entry),
-				"parse Flight SQL endpoint_location_allowlist entry");
-		const char *expected_scheme =
-			state->tls_enabled ? "grpc+tls" : "grpc+tcp";
-
-		if (location.scheme() != expected_scheme)
-			throw std::runtime_error(
-				"Flight SQL endpoint_location_allowlist entry uses an "
-				"unexpected transport scheme");
-		state->allowed_endpoint_locations.push_back(std::move(location));
-
-		if (end == std::string::npos)
-			break;
-		start = end + 1;
-	}
+	state->allowed_endpoint_locations =
+		flightsql::ParseEndpointLocationAllowlist(
+			value, state->tls_enabled, AF_MAX_ENDPOINT_LOCATION_ALLOWLIST_BYTES);
 }
 
 static bool
@@ -1405,16 +1352,8 @@ af_arrow_endpoint_location_allowed(
 {
 	if (state == nullptr)
 		return false;
-	if (location.Equals(state->origin_location))
-		return true;
-
-	for (const arrow::flight::Location& allowed :
-		 state->allowed_endpoint_locations)
-	{
-		if (location.Equals(allowed))
-			return true;
-	}
-	return false;
+	return flightsql::EndpointLocationAllowed(
+		state->origin_location, state->allowed_endpoint_locations, location);
 }
 
 static std::string
@@ -2188,6 +2127,103 @@ af_flightsql_copy_capabilities(
 	target->default_isolation_known = source.default_isolation_known;
 }
 
+/* Validate PG options before any C++ objects that ERROR could bypass exist. */
+static void
+af_flightsql_validate_transaction_url(const char *url)
+{
+	ArrowFlightConnection connection;
+
+	af_parse_flight_connection(url, &connection);
+	(void) af_get_url_int_option(url, "timeout_ms", -1, -1, INT_MAX);
+	(void) af_get_url_int_option(url, "max_batch_bytes",
+								 AF_DEFAULT_MAX_BATCH_BYTES, 0, INT_MAX);
+}
+
+static char *
+af_flightsql_transaction_url_error(const char *url)
+{
+	MemoryContext context = CurrentMemoryContext;
+	char	   *volatile error = NULL;
+
+	/* Keep PG longjmp entirely within a frame containing only C data. */
+	PG_TRY();
+	{
+		af_flightsql_validate_transaction_url(url);
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(context);
+		ErrorData  *edata = CopyErrorData();
+
+		FlushErrorState();
+		error = pstrdup(edata->message);
+		FreeErrorData(edata);
+	}
+	PG_END_TRY();
+	return error;
+}
+
+static char *
+af_flightsql_encode_control_id(const std::string& id, const char *kind)
+{
+	int			encoded_capacity;
+	int			encoded_len;
+	char	   *encoded;
+
+	if (id.empty())
+		throw std::runtime_error(std::string("Flight SQL server returned an empty ") +
+								 kind + " id");
+	if (id.size() > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
+		throw std::runtime_error(std::string("Flight SQL ") + kind +
+								 " id exceeds the supported size");
+
+	encoded_capacity = pg_b64_enc_len((int) id.size());
+	/* OOM must unwind the client and transaction before PostgreSQL ERROR. */
+	encoded = (char *) palloc_extended(encoded_capacity + 1, MCXT_ALLOC_NO_OOM);
+	if (encoded == nullptr)
+		throw std::bad_alloc();
+	encoded_len = pg_b64_encode(id.data(), (int) id.size(), encoded);
+	encoded[encoded_len] = '\0';
+	return encoded;
+}
+
+static std::string
+af_flightsql_decode_control_id(const char *encoded_id, const char *kind)
+{
+	const size_t max_encoded_len =
+		pg_b64_enc_len(AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES);
+	size_t		encoded_len;
+	int			decoded_len;
+	std::string id;
+	std::string canonical;
+
+	if (encoded_id == nullptr || encoded_id[0] == '\0')
+		throw std::runtime_error(std::string("Flight SQL ") + kind + " id is empty");
+	encoded_len = strnlen(encoded_id, max_encoded_len + 1);
+	if (encoded_len > max_encoded_len)
+		throw std::runtime_error(std::string("Flight SQL ") + kind +
+								 " id exceeds the supported size");
+
+	/* Capacity includes padding bytes; apply the limit to the decoded length. */
+	id.resize(pg_b64_dec_len((int) encoded_len));
+	decoded_len = pg_b64_decode(encoded_id, (int) encoded_len, id.data());
+	if (decoded_len <= 0)
+		throw std::runtime_error(std::string("Flight SQL ") + kind +
+								 " id is not valid base64");
+	if (decoded_len > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
+		throw std::runtime_error(std::string("Flight SQL ") + kind +
+								 " id exceeds the supported size");
+	id.resize(decoded_len);
+
+	/* The PG decoder accepts misplaced padding and nonzero padding bits. */
+	canonical.resize(pg_b64_enc_len(decoded_len));
+	pg_b64_encode(id.data(), decoded_len, canonical.data());
+	if (canonical != encoded_id)
+		throw std::runtime_error(std::string("Flight SQL ") + kind +
+								 " id is not valid base64");
+	return id;
+}
+
 static char *
 af_flightsql_begin_transaction_impl(
 	const char *url, const ArrowFlightSecurityOptions *security_options)
@@ -2200,76 +2236,71 @@ af_flightsql_begin_transaction_impl(
 			sql_client.BeginTransaction(state->call_options),
 			"begin Flight SQL transaction");
 
-	if (!transaction.is_valid())
-		throw std::runtime_error(
-			"Flight SQL server returned an empty transaction id");
+	return af_flightsql_encode_control_id(transaction.transaction_id(), "transaction");
+}
 
-	const std::string& transaction_id = transaction.transaction_id();
-	int			encoded_capacity;
-	int			encoded_len;
-	char	   *encoded;
+static char *
+af_flightsql_begin_savepoint_impl(
+	const char *url, const char *encoded_transaction_id, const char *name,
+	const ArrowFlightSecurityOptions *security_options)
+{
+	arrow::flight::sql::Transaction transaction(
+		af_flightsql_decode_control_id(encoded_transaction_id, "transaction"));
 
-	if (transaction_id.size() > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
-		throw std::runtime_error(
-			"Flight SQL transaction id exceeds the supported size");
+	if (name == nullptr)
+		throw std::runtime_error("Flight SQL savepoint name is null");
 
-	encoded_capacity = pg_b64_enc_len((int) transaction_id.size());
-	encoded = (char *) palloc(encoded_capacity + 1);
-	encoded_len = pg_b64_encode(transaction_id.data(),
-								(int) transaction_id.size(), encoded);
-	encoded[encoded_len] = '\0';
-	return encoded;
+	std::unique_ptr<ArrowFlightStreamState> state =
+		af_flightsql_connect(url, security_options);
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
+	arrow::flight::sql::Savepoint savepoint =
+		af_arrow_value_or_throw(
+			sql_client.BeginSavepoint(state->call_options, transaction, name),
+			"begin Flight SQL savepoint");
+
+	return af_flightsql_encode_control_id(savepoint.savepoint_id(), "savepoint");
 }
 
 static std::string
 af_flightsql_end_transaction_impl(
 	const char *url, const char *encoded_transaction_id, bool commit,
-	const ArrowFlightSecurityOptions *security_options)
+	int timeout_ms, const ArrowFlightSecurityOptions *security_options)
 {
-	try
-	{
-		int			encoded_len;
-		int			decoded_capacity;
-		int			decoded_len;
-		std::string transaction_id;
+	arrow::flight::sql::Transaction transaction(
+		af_flightsql_decode_control_id(encoded_transaction_id, "transaction"));
+	std::unique_ptr<ArrowFlightStreamState> state =
+		af_flightsql_connect(url, security_options);
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
 
-		if (encoded_transaction_id == nullptr ||
-			encoded_transaction_id[0] == '\0')
-			throw std::runtime_error("Flight SQL transaction id is empty");
+	if (timeout_ms > 0)
+		state->call_options.timeout =
+			arrow::flight::TimeoutDuration((double) timeout_ms / 1000.0);
+	arrow::Status status = commit ?
+		sql_client.Commit(state->call_options, transaction) :
+		sql_client.Rollback(state->call_options, transaction);
 
-		encoded_len = strlen(encoded_transaction_id);
-		decoded_capacity = pg_b64_dec_len(encoded_len);
-		if (decoded_capacity > AF_FLIGHT_SQL_MAX_TRANSACTION_ID_BYTES)
-			throw std::runtime_error(
-				"Flight SQL transaction id exceeds the supported size");
-		transaction_id.resize(decoded_capacity);
-		decoded_len = pg_b64_decode(encoded_transaction_id, encoded_len,
-									transaction_id.data());
-		if (decoded_len <= 0)
-			throw std::runtime_error(
-				"Flight SQL transaction id is not valid base64");
-		transaction_id.resize(decoded_len);
+	return status.ok() ? "" : status.ToString();
+}
 
-		std::unique_ptr<ArrowFlightStreamState> state =
-			af_flightsql_connect(url, security_options);
-		arrow::flight::sql::FlightSqlClient sql_client(state->client);
-		arrow::flight::sql::Transaction transaction(transaction_id);
-		arrow::Status status = commit ?
-			sql_client.Commit(state->call_options, transaction) :
-			sql_client.Rollback(state->call_options, transaction);
+static std::string
+af_flightsql_end_savepoint_impl(
+	const char *url, const char *encoded_savepoint_id, bool release,
+	int timeout_ms, const ArrowFlightSecurityOptions *security_options)
+{
+	arrow::flight::sql::Savepoint savepoint(
+		af_flightsql_decode_control_id(encoded_savepoint_id, "savepoint"));
+	std::unique_ptr<ArrowFlightStreamState> state =
+		af_flightsql_connect(url, security_options);
+	arrow::flight::sql::FlightSqlClient sql_client(state->client);
 
-		if (!status.ok())
-			return status.ToString();
-		return "";
-	}
-	catch (const std::exception& ex)
-	{
-		return ex.what();
-	}
-	catch (...)
-	{
-		return "unknown Flight SQL transaction exception";
-	}
+	if (timeout_ms > 0)
+		state->call_options.timeout =
+			arrow::flight::TimeoutDuration((double) timeout_ms / 1000.0);
+	arrow::Status status = release ?
+		sql_client.Release(state->call_options, savepoint) :
+		sql_client.Rollback(state->call_options, savepoint);
+
+	return status.ok() ? "" : status.ToString();
 }
 
 #endif /* USE_ARROW_FLIGHT */
@@ -2361,23 +2392,25 @@ af_flightsql_begin_transaction(
 	const char *url, const ArrowFlightSecurityOptions *security_options)
 {
 #ifdef USE_ARROW_FLIGHT
+	char		error[1024];
+
+	af_flightsql_validate_transaction_url(url);
 	try
 	{
 		return af_flightsql_begin_transaction_impl(url, security_options);
 	}
 	catch (const std::exception& ex)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("could not begin Flight SQL transaction: %s",
-						ex.what())));
+		strlcpy(error, ex.what(), sizeof(error));
 	}
 	catch (...)
 	{
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_ERROR),
-				 errmsg("could not begin Flight SQL transaction: unknown C++ exception")));
+		strlcpy(error, "unknown C++ exception", sizeof(error));
 	}
+	/* Even the caught C++ exception has been destroyed before PG longjmp. */
+	ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("could not begin Flight SQL transaction: %s", error)));
 #else
 	(void) url;
 	(void) security_options;
@@ -2389,19 +2422,113 @@ af_flightsql_begin_transaction(
 
 char *
 af_flightsql_end_transaction(
-	const char *url, const char *transaction_id, bool commit,
+	const char *url, const char *transaction_id, bool commit, int timeout_ms,
 	const ArrowFlightSecurityOptions *security_options)
 {
 #ifdef USE_ARROW_FLIGHT
-	std::string error =
-		af_flightsql_end_transaction_impl(
-			url, transaction_id, commit, security_options);
+	char		error[1024];
+	char	   *validation_error = af_flightsql_transaction_url_error(url);
 
-	return error.empty() ? NULL : pstrdup(error.c_str());
+	if (validation_error != NULL)
+		return validation_error;
+	try
+	{
+		std::string result = af_flightsql_end_transaction_impl(
+			url, transaction_id, commit, timeout_ms, security_options);
+
+		if (result.empty())
+			return NULL;
+		strlcpy(error, result.c_str(), sizeof(error));
+	}
+	catch (const std::exception& ex)
+	{
+		strlcpy(error, ex.what(), sizeof(error));
+	}
+	catch (...)
+	{
+		strlcpy(error, "unknown Flight SQL transaction exception", sizeof(error));
+	}
+	return pstrdup(error);
 #else
 	(void) url;
 	(void) transaction_id;
 	(void) commit;
+	(void) timeout_ms;
+	(void) security_options;
+	return pstrdup("Arrow Flight SQL support is not compiled in");
+#endif
+}
+
+char *
+af_flightsql_begin_savepoint(
+	const char *url, const char *transaction_id, const char *name,
+	const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	char		error[1024];
+
+	af_flightsql_validate_transaction_url(url);
+	try
+	{
+		return af_flightsql_begin_savepoint_impl(
+			url, transaction_id, name, security_options);
+	}
+	catch (const std::exception& ex)
+	{
+		strlcpy(error, ex.what(), sizeof(error));
+	}
+	catch (...)
+	{
+		strlcpy(error, "unknown C++ exception", sizeof(error));
+	}
+	ereport(ERROR,
+			(errcode(ERRCODE_FDW_ERROR),
+			 errmsg("could not begin Flight SQL savepoint: %s", error)));
+#else
+	(void) url;
+	(void) transaction_id;
+	(void) name;
+	(void) security_options;
+	af_check_arrow_flight_linkage();
+#endif
+
+	return NULL;
+}
+
+char *
+af_flightsql_end_savepoint(
+	const char *url, const char *savepoint_id, bool release, int timeout_ms,
+	const ArrowFlightSecurityOptions *security_options)
+{
+#ifdef USE_ARROW_FLIGHT
+	char		error[1024];
+	char	   *validation_error = af_flightsql_transaction_url_error(url);
+
+	if (validation_error != NULL)
+		return validation_error;
+	try
+	{
+		std::string result = af_flightsql_end_savepoint_impl(
+			url, savepoint_id, release, timeout_ms, security_options);
+
+		if (result.empty())
+			return NULL;
+		strlcpy(error, result.c_str(), sizeof(error));
+	}
+	catch (const std::exception& ex)
+	{
+		strlcpy(error, ex.what(), sizeof(error));
+	}
+	catch (...)
+	{
+		strlcpy(error, "unknown Flight SQL savepoint exception", sizeof(error));
+	}
+	return pstrdup(error);
+#else
+	(void) url;
+	(void) savepoint_id;
+	(void) release;
+	(void) timeout_ms;
 	(void) security_options;
 	return pstrdup("Arrow Flight SQL support is not compiled in");
 #endif
@@ -2425,7 +2552,7 @@ af_flightsql_stream_next_slot(
 			*flight_state =
 				af_flightsql_stream_open(
 					RelationGetDescr(rel), url, serialized_flight_info,
-					project_all, projected_attrs, security_options);
+					projected_attrs, security_options);
 			af_resource_attach(flight_state);
 		}
 

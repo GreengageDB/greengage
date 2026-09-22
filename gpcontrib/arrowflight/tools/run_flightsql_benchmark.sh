@@ -423,6 +423,7 @@ OPTIONS (
     mpp_execute 'all segments',
     host 'flightsql-mpp-control',
     port '9020',
+    endpoint_location_allowlist 'grpc+tcp://flightsql-mpp-worker-0:9021,grpc+tcp://flightsql-mpp-worker-1:9022,grpc+tcp://flightsql-mpp-worker-2:9023',
     timeout_ms '60000',
     max_endpoints '1000',
     max_plan_bytes '16777216',

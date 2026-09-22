@@ -169,10 +169,21 @@ TupleTableSlot *af_flightsql_stream_next_slot(
 void		af_flightsql_get_capabilities(
 	const char *url, const ArrowFlightSecurityOptions *security_options,
 	ArrowFlightSqlCapabilities *capabilities);
+/*
+ * Begin returns a palloc'd base64 ID or raises ERROR. End returns a palloc'd
+ * error or NULL; timeout_ms > 0 overrides the configured timeout, 0 inherits it.
+ * Rolling back a savepoint does not release it.
+ */
 char	   *af_flightsql_begin_transaction(
 	const char *url, const ArrowFlightSecurityOptions *security_options);
 char	   *af_flightsql_end_transaction(
-	const char *url, const char *transaction_id, bool commit,
+	const char *url, const char *transaction_id, bool commit, int timeout_ms,
+	const ArrowFlightSecurityOptions *security_options);
+char	   *af_flightsql_begin_savepoint(
+	const char *url, const char *transaction_id, const char *name,
+	const ArrowFlightSecurityOptions *security_options);
+char	   *af_flightsql_end_savepoint(
+	const char *url, const char *savepoint_id, bool release, int timeout_ms,
 	const ArrowFlightSecurityOptions *security_options);
 bool		af_flightsql_mpp_action_supported(
 	const char *url, int timeout_ms,
@@ -187,7 +198,9 @@ char	   *af_flightsql_mpp_create_plan(
 	const ArrowFlightSecurityOptions *security_options,
 	char **plan_id, bool *cluster_transaction);
 void		af_flightsql_mpp_select_route(
-	const char *serialized_plan, int segment_index, int segment_count,
+	const char *origin_url, const char *serialized_plan,
+	int segment_index, int segment_count,
+	const ArrowFlightSecurityOptions *security_options,
 	ArrowFlightSqlMppRoute *route);
 char	   *af_flightsql_mpp_complete_plan(
 	const char *url, const char *serialized_plan, int timeout_ms,
