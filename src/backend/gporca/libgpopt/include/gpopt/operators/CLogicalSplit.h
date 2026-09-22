@@ -47,6 +47,7 @@ private:
 	// action column
 	CColRef *m_pcrAction;
 
+	// special field for resjunk flag assignation
 	BOOL m_needsResJunk;
 
 public:
@@ -112,7 +113,7 @@ public:
 		return m_pcrAction;
 	}
 
-	// resjunk
+	// resjunk flag assignation
 	BOOL
 	NeedsResJunk() const
 	{

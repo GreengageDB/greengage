@@ -49,6 +49,7 @@ private:
 	// required columns by local members
 	CColRefSet *m_pcrsRequiredLocal;
 
+	// special field for resjunk flag assignation
 	BOOL m_needsResJunk;
 
 public:
@@ -112,7 +113,7 @@ public:
 		return m_pdrgpcrInsert;
 	}
 
-	// resjunk
+	// resjunk flag assignation
 	BOOL
 	NeedsResJunk() const
 	{

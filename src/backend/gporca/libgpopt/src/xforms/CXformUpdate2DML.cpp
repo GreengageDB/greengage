@@ -93,7 +93,6 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 		CDistributionSpec *pdsTable =
 			CPhysical::PdsCompute(mp, ptabdesc, pdrgpcrDelete, pcrSegmentId);
 
-
 		if (CDistributionSpec::EdtHashed == pdsTable->Edt() &&
 			ptabdesc->ConvertHashToRandom())
 
@@ -129,7 +128,6 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 			GPOS_NEW(mp)
 				CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
 							  pcrSegmentId, pcrAction, needsResJunk),
-
 			pexprChild, pexprProjList);
 	}
 	else

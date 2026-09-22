@@ -48,7 +48,7 @@ private:
 	// segmentid column id
 	ULONG m_segid_colid;
 
-	// special field for creation of resjunk columns
+	// special field for resjunk flag assignation
 	BOOL m_needsResJunk;
 
 public:
@@ -103,7 +103,7 @@ public:
 		return m_segid_colid;
 	}
 
-	// segmentid column id
+	// resjunk flag assignation
 	BOOL
 	GetNeedsResJunk() const
 	{

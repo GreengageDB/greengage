@@ -3348,7 +3348,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Form_pg_class classForm = resultRel->rd_rel;
 	if ((classForm->relkind == RELKIND_RELATION ||
 		classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
-		classForm->relispartition && 
+		classForm->relispartition &&
 		!GpPolicyIsHashPartitioned(cdbpolicy))
 	{
 		rootoid = get_top_level_partition_root(RelationGetRelid(resultRel));
@@ -3373,13 +3373,13 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	 * However, the subplan's targetlist is built for the LEAF table. So we
 	 * must map the root's attnum to the leaf's attnum.
 	 */
-	if (use_root_policy) 
+	if (use_root_policy)
 	{
-		part_attnos = convert_tuples_by_name_map(prevResultDesc, 
+		part_attnos = convert_tuples_by_name_map(prevResultDesc,
 												 resultDesc,
 												 "could not convert row type");
 	}
-	
+
 	for (i = 0; i < cdbpolicy->nattrs; i++)
 	{
 		AttrNumber	policy_attnum = cdbpolicy->attrs[i];

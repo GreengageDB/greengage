@@ -264,7 +264,7 @@ preprocess_targetlist(PlannerInfo *root)
  * table based on the given bitmapset of the child. Allocates memory
  * in current memory context.
  * 
- * The caller is responsible for cleaning memory up. 
+ * The caller is responsible for cleaning memory up.
  */
 static Bitmapset *
 fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
@@ -273,8 +273,8 @@ fixup_columns_attnos(Relation parent, Relation child, Bitmapset *columns)
 	int			index = -1;
 	AttrNumber *part_attnos;
 
-	part_attnos = convert_tuples_by_name_map(RelationGetDescr(parent), 
-											 RelationGetDescr(child), 
+	part_attnos = convert_tuples_by_name_map(RelationGetDescr(parent),
+											 RelationGetDescr(child),
 											 "could not convert row type");
 
 	while ((index = bms_next_member(columns, index)) >= 0)
@@ -540,16 +540,14 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 
 					changed_cols_for_partition_check = 
 						fixup_columns_attnos(ancestorRel, rel, changed_cols);
-					
-					
 
 					/* Check if we're updating partitioning key columns of hash-distributed table */
-					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL)) 
+					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL))
 					{
 						/*
 						* We don't need split update on tuples from already hash
 						* distributed leaf-partition, as they could possible be
-						* transferred only to randomly distributed tables, where 
+						* transferred only to randomly distributed tables, where
 						* final segment doesn't matter.
 						*/
 						root->is_split_update = true;

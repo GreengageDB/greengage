@@ -76,7 +76,7 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 		//         the random partitions using a hash function, which can still be considered "random"
 		// Delete: Use a "strict random" distribution, which will use a routed repartition operator,
 		//         based on the gp_segment_id of the row, which will work for both hash and random partitions
-		// Update: With and without updating the distribution key uses same logic as delete, unless it's 
+		// Update: With and without updating the distribution key uses same logic as delete, unless it's
 		//         "in-place update" optimization.
 
 		if (CLogicalDML::EdmlInsert != edmlop || fSplit)
