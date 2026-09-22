@@ -1435,7 +1435,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	Assert((scan->rs_base.rs_flags & SO_TYPE_ANALYZE) == 0);
 	Assert((scan->rs_base.rs_flags & SO_TYPE_SAMPLESCAN) == 0);
 
-	if (scan->columnScanInfo.relationTupleDesc == NULL)
+	if (unlikely(scan->columnScanInfo.relationTupleDesc == NULL))
 	{
 		scan->columnScanInfo.relationTupleDesc = slot->tts_tupleDescriptor;
 		/* Pin it! ... and of course release it upon destruction / rescan */
@@ -1519,13 +1519,13 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		AOCSFileSegInfo *curseginfo;
 ReadNext:
 		/* If necessary, open next seg */
-		if (scan->cur_seg < 0 || err < 0)
+		if (unlikely(scan->cur_seg < 0 || err < 0))
 		{
 			/*
 			 * Bail out early if we do not have any column in the projection.
 			 * Placing here in order to have less impact on the hot path. 
 			 */
-			if (scan->columnScanInfo.num_proj_atts == 0)
+			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
 				slotAocs->current_scan = NULL;
 				return false;
@@ -1554,7 +1554,7 @@ ReadNext:
 
 		err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
 		Assert(err >= 0);
-		if (err == 0)
+		if (unlikely(err == 0))
 		{
 			err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
 			if (err < 0)
@@ -1600,7 +1600,7 @@ ReadNext:
 			AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
 		}
 
-		if (!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId))
+		if (unlikely(!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId)))
 		{
 			/* The tuple is invisible */
 			rowNum = InvalidAORowNum;
