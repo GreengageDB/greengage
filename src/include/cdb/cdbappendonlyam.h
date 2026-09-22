@@ -58,11 +58,18 @@
  * Check if an attribute value is missing in an AO/CO row according to the row number
  * and the mapping from attnum to "lastrownum" for the corresponding table/segment.
  *
- * See comment for AppendOnlyExecutorReadBlock_BindingInit() for an explanation 
+ * See comment for AppendOnlyExecutorReadBlock_BindingInit() for an explanation
  * on AO tables, which applies to CO tables as well.
+ *
+ * attnum_to_rownum is NULL when the relation has never had a column added via
+ * ALTER TABLE ADD COLUMN (the common case), in which case no attribute value
+ * can ever be "missing" -- short-circuit before indexing so this per-row,
+ * per-attribute check doesn't pull a cold cache line out of the mapping array
+ * for tables that don't need it at all.
  */
 #define AO_ATTR_VAL_IS_MISSING(rowNum, colno, segmentFileNum, attnum_to_rownum) \
-		((rowNum) <= (attnum_to_rownum)[(colno) * MAX_AOREL_CONCURRENCY + (segmentFileNum)])
+		((attnum_to_rownum) != NULL && \
+		 (rowNum) <= (attnum_to_rownum)[(colno) * MAX_AOREL_CONCURRENCY + (segmentFileNum)])
 
 extern AppendOnlyBlockDirectory *GetAOBlockDirectory(Relation relation);
 
