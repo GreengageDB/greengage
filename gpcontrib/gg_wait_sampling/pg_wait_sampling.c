@@ -66,7 +66,7 @@ static int	nesting_level = 0;
 
 /* Pointers to shared memory objects */
 shm_mq	   *pgws_collector_mq = NULL;
-QueryItem   *pgws_proc_query_items = NULL;
+uint64	   *pgws_proc_queryids = NULL;
 CollectorShmqHeader *pgws_collector_hdr = NULL;
 
 /* Receiver (backend) local shm_mq pointers */
@@ -155,7 +155,6 @@ bool		pgws_sampleCpu = true;
 
 /*---- GGDB funcs ----*/
 static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
-static QueryItem ggws_calculate_query_item(uint64 queryId, bool with_commandId);
 
 /*
  * Calculate max processes count.
@@ -232,7 +231,7 @@ pgws_shmem_size(void)
 
 	shm_toc_estimate_chunk(&e, sizeof(CollectorShmqHeader));
 	shm_toc_estimate_chunk(&e, (Size) COLLECTOR_QUEUE_SIZE);
-	shm_toc_estimate_chunk(&e, sizeof(QueryItem) * get_max_procs_count());
+	shm_toc_estimate_chunk(&e, sizeof(uint64) * get_max_procs_count());
 
 	shm_toc_estimate_keys(&e, nkeys);
 	size = shm_toc_estimate(&e);
@@ -285,10 +284,10 @@ pgws_shmem_startup(void)
 		shm_toc_insert(toc, 0, pgws_collector_hdr);
 		pgws_collector_mq = shm_toc_allocate(toc, COLLECTOR_QUEUE_SIZE);
 		shm_toc_insert(toc, 1, pgws_collector_mq);
-		pgws_proc_query_items = shm_toc_allocate(toc,
-											  sizeof(QueryItem) * get_max_procs_count());
-		shm_toc_insert(toc, 2, pgws_proc_query_items);
-		MemSet(pgws_proc_query_items, 0, sizeof(QueryItem) * get_max_procs_count());
+		pgws_proc_queryids = shm_toc_allocate(toc,
+											  sizeof(uint64) * get_max_procs_count());
+		shm_toc_insert(toc, 2, pgws_proc_queryids);
+		MemSet(pgws_proc_queryids, 0, sizeof(uint64) * get_max_procs_count());
 	}
 	else
 	{
@@ -296,7 +295,7 @@ pgws_shmem_startup(void)
 		toc = shm_toc_attach(PG_WAIT_SAMPLING_MAGIC, pgws);
 		pgws_collector_hdr = shm_toc_lookup(toc, 0, false);
 		pgws_collector_mq = shm_toc_lookup(toc, 1, false);
-		pgws_proc_query_items = shm_toc_lookup(toc, 2, false);
+		pgws_proc_queryids = shm_toc_lookup(toc, 2, false);
 	}
 
 	pgws_lss = ShmemInitStruct("pg_wait_sampling_locks", sizeof(pgwsLockSharedState), &locks_found);
@@ -529,6 +528,39 @@ typedef struct
 	TimestampTz ts;
 } WaitCurrentContext;
 
+/*
+ * Result row types come from the SQL declarations of the functions, so that
+ * one library serves both the 1.1 declarations (with a tmid column, always
+ * NULL now) and the 1.2 ones. The largest declared row has this many columns.
+ */
+#define GGWS_MAX_RESULT_COLS 9
+
+static TupleDesc
+ggws_result_tupdesc(FunctionCallInfo fcinfo)
+{
+	TupleDesc	tupdesc;
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("function returning record called in context that cannot accept type record")));
+	Assert(tupdesc->natts <= GGWS_MAX_RESULT_COLS);
+
+	return BlessTupleDesc(tupdesc);
+}
+
+/* Whether the declared row type still carries the pre-1.2 tmid column. */
+static bool
+ggws_tupdesc_has_tmid(TupleDesc tupdesc)
+{
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		if (strcmp(NameStr(TupleDescAttr(tupdesc, i)->attname), "tmid") == 0)
+			return true;
+	}
+	return false;
+}
+
 PG_FUNCTION_INFO_V1(pg_wait_sampling_get_current);
 Datum
 pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
@@ -541,7 +573,6 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 
@@ -550,25 +581,7 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		params->ts = GetCurrentTimestamp();
 
 		funcctx->user_fctx = params;
-		tupdesc = CreateTemplateTupleDesc(8);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "type",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "event",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "queryid",
-						   INT8OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "mppsessionid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "command_id",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "tmid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "segid",
-						   INT4OID, -1, 0);
-
-		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
 
 		LWLockAcquire(ProcArrayLock, LW_SHARED);
 
@@ -583,7 +596,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 			item = &params->items[0];
 			item->pid = proc->pid;
 			item->wait_event_info = proc->wait_event_info;
-			item->query_item = pgws_proc_query_items[proc - ProcGlobal->allProcs];
+			item->query_info = (WSQueryInfo) {0, proc->mppSessionId, proc->queryCommandId};
+			item->query_info.queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
 			funcctx->max_calls = 1;
 		}
 		else
@@ -605,7 +619,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 
 				params->items[j].pid = proc->pid;
 				params->items[j].wait_event_info = proc->wait_event_info;
-				params->items[j].query_item = pgws_proc_query_items[i];
+				params->items[j].query_info = (WSQueryInfo) {0, proc->mppSessionId, proc->queryCommandId};
+				params->items[j].query_info.queryId = pgws_proc_queryids[i];
 				j++;
 			}
 			funcctx->max_calls = j;
@@ -623,8 +638,9 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
 		HeapTuple	tuple;
-		Datum		values[8];
-		bool		nulls[8];
+		Datum		values[GGWS_MAX_RESULT_COLS];
+		bool		nulls[GGWS_MAX_RESULT_COLS];
+		int			col;
 		const char *event_type,
 				   *event;
 		HistoryItem *item;
@@ -647,11 +663,13 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		else
 			nulls[2] = true;
 
-		values[3] = UInt64GetDatum(item->query_item.queryId);
-		values[4] = Int32GetDatum(item->query_item.ssid);
-		values[5] = Int32GetDatum(item->query_item.ccnt);
-		values[6] = Int32GetDatum(item->query_item.tmid);
-		values[7] = Int32GetDatum(GpIdentity.segindex);
+		values[3] = UInt64GetDatum(item->query_info.queryId);
+		values[4] = Int32GetDatum(item->query_info.ssid);
+		values[5] = Int32GetDatum(item->query_info.ccnt);
+		col = 6;
+		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+			nulls[col++] = true;
+		values[col] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
@@ -764,7 +782,6 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -777,30 +794,7 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = profile;
 		funcctx->max_calls = profile->count;
 
-		/* Make tuple descriptor */
-		tupdesc = CreateTemplateTupleDesc(9);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "type",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "event",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "queryid",
-						   INT8OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "count",
-						   INT8OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "mppsessionid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "command_id",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "tmid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "segid",
-						   INT4OID, -1, 0);
-#if PG_VERSION_NUM >= 190000
-		TupleDescFinalize(tupdesc);
-#endif
-		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -813,8 +807,9 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
 		/* for each row */
-		Datum		values[9];
-		bool		nulls[9];
+		Datum		values[GGWS_MAX_RESULT_COLS];
+		bool		nulls[GGWS_MAX_RESULT_COLS];
+		int			col;
 		HeapTuple	tuple;
 		ProfileItem *item;
 		const char *event_type,
@@ -840,21 +835,22 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 
 		if (pgws_profileQueries)
 		{
-			values[3] = UInt64GetDatum(item->query_item.queryId);
-			values[5] = Int32GetDatum(item->query_item.ssid);
-			values[6] = Int32GetDatum(item->query_item.ccnt);
-			values[7] = Int32GetDatum(item->query_item.tmid);
+			values[3] = UInt64GetDatum(item->query_info.queryId);
+			values[5] = Int32GetDatum(item->query_info.ssid);
+			values[6] = Int32GetDatum(item->query_info.ccnt);
 		}
 		else
 		{
 			values[3] = (Datum) 0;
 			values[5] = (Datum) 0;
 			values[6] = (Datum) 0;
-			values[7] = (Datum) 0;
 		}
 
 		values[4] = UInt64GetDatum(item->count);
-		values[8] = Int32GetDatum(GpIdentity.segindex);
+		col = 7;
+		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+			nulls[col++] = true;
+		values[col] = Int32GetDatum(GpIdentity.segindex);
 
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
@@ -905,7 +901,6 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -918,30 +913,7 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = history;
 		funcctx->max_calls = history->count;
 
-		/* Make tuple descriptor */
-		tupdesc = CreateTemplateTupleDesc(9);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "sample_ts",
-						   TIMESTAMPTZOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "type",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "event",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "queryid",
-						   INT8OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "mppsessionid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "command_id",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "tmid",
-						   INT4OID, -1, 0);
-		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "segid",
-						   INT4OID, -1, 0);
-#if PG_VERSION_NUM >= 190000
-		TupleDescFinalize(tupdesc);
-#endif
-		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -955,8 +927,9 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 	{
 		HeapTuple	tuple;
 		HistoryItem *item;
-		Datum		values[9];
-		bool		nulls[9];
+		Datum		values[GGWS_MAX_RESULT_COLS];
+		bool		nulls[GGWS_MAX_RESULT_COLS];
+		int			col;
 		const char *event_type,
 				   *event;
 
@@ -979,11 +952,13 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		else
 			nulls[3] = true;
 
-		values[4] = UInt64GetDatum(item->query_item.queryId);
-		values[5] = Int32GetDatum(item->query_item.ssid);
-		values[6] = Int32GetDatum(item->query_item.ccnt);
-		values[7] = Int32GetDatum(item->query_item.tmid);
-		values[8] = Int32GetDatum(GpIdentity.segindex);
+		values[4] = UInt64GetDatum(item->query_info.queryId);
+		values[5] = Int32GetDatum(item->query_info.ssid);
+		values[6] = Int32GetDatum(item->query_info.ccnt);
+		col = 7;
+		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+			nulls[col++] = true;
+		values[col] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
 		history->index++;
@@ -1015,12 +990,12 @@ pgws_planner_hook(Query *parse,
 {
 	PlannedStmt *result;
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = {0};
+	uint64		save_queryId = 0;
 
 	if (pgws_enabled(nesting_level))
 	{
-		save_query_item = pgws_proc_query_items[i];
-		pgws_proc_query_items[i] = ggws_calculate_query_item(parse->queryId, false);
+		save_queryId = pgws_proc_queryids[i];
+		pgws_proc_queryids[i] = parse->queryId;
 	}
 
 	nesting_level++;
@@ -1054,17 +1029,17 @@ pgws_planner_hook(Query *parse,
 		result->queryId = parse->queryId;
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1081,7 +1056,7 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	if (pgws_enabled(nesting_level))
-		pgws_proc_query_items[i] = ggws_calculate_query_item(queryDesc->plannedstmt->queryId, true);
+		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
 		prev_ExecutorStart(queryDesc, eflags);
 	else
@@ -1098,7 +1073,7 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 )
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = pgws_proc_query_items[i];
+	uint64		save_queryId = pgws_proc_queryids[i];
 
 	nesting_level++;
 	PG_TRY();
@@ -1117,17 +1092,17 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 #endif
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1137,7 +1112,7 @@ static void
 pgws_ExecutorFinish(QueryDesc *queryDesc)
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = pgws_proc_query_items[i];
+	uint64		save_queryId = pgws_proc_queryids[i];
 
 	nesting_level++;
 	PG_TRY();
@@ -1148,14 +1123,14 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 			standard_ExecutorFinish(queryDesc);
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_query_items[i] = save_query_item;
+		pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1170,7 +1145,7 @@ pgws_ExecutorEnd(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	if (nesting_level == 0)
-		pgws_proc_query_items[i] = (QueryItem) {0};
+		pgws_proc_queryids[i] = UINT64CONST(0);
 
 	if (prev_ExecutorEnd)
 		prev_ExecutorEnd(queryDesc);
@@ -1196,12 +1171,12 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 )
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = (QueryItem) {0};
+	uint64		save_queryId = 0;
 
 	if (pgws_enabled(nesting_level))
 	{
-		save_query_item = pgws_proc_query_items[i];
-		pgws_proc_query_items[i] = ggws_calculate_query_item(pstmt->queryId, true);
+		save_queryId = pgws_proc_queryids[i];
+		pgws_proc_queryids[i] = pstmt->queryId;
 	}
 
 	nesting_level++;
@@ -1235,33 +1210,20 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 				);
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-}
-
-static QueryItem
-ggws_calculate_query_item(uint64 queryId, bool with_commandId)
-{
-	QueryItem query_item = {0};
-	query_item.ssid = gp_session_id;
-	gp_gettmid(&query_item.tmid);
-	query_item.queryId = queryId;
-	/* Until ExecutorStart() the commandId is not relevant */
-	if (with_commandId)
-		query_item.ccnt = MyProc->queryCommandId;
-	return query_item;
 }
 
 static void

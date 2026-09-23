@@ -24,16 +24,15 @@
 typedef struct
 {
 	uint64		queryId;	/* queryId from Query */
-	int32		tmid;		/* transaction time */
 	int32		ssid;		/* session id */
 	int32		ccnt;		/* command count */
-} QueryItem;
+} WSQueryInfo;
 
 typedef struct
 {
 	int			pid;
 	uint32		wait_event_info;
-	QueryItem	query_item;
+	WSQueryInfo	query_info;
 	uint64		count;
 } ProfileItem;
 
@@ -41,7 +40,7 @@ typedef struct
 {
 	int			pid;
 	uint32		wait_event_info;
-	QueryItem	query_item;
+	WSQueryInfo	query_info;
 	TimestampTz ts;
 } HistoryItem;
 
@@ -84,7 +83,7 @@ extern bool pgws_sampleCpu;
 
 /* pg_wait_sampling.c */
 extern shm_mq *pgws_collector_mq;
-extern QueryItem *pgws_proc_query_items;
+extern uint64	   *pgws_proc_queryids;
 extern CollectorShmqHeader *pgws_collector_hdr;
 
 extern pgwsLockSharedState *pgws_lss;

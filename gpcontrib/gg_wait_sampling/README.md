@@ -86,7 +86,6 @@ This adaptation differs from upstream pg_wait_sampling in several ways:
     - queryid
     - mppsessionid
     - command_id
-    - tmid
     - segid
  - Cluster-wide profile reset is implemented through view which calls helper functions
  function on all segments.
@@ -106,7 +105,6 @@ all processed including background workers on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
 | segid        | int4        | Segment id              |
 
 `gg_wait_sampling.gg_wait_sampling_get_current(pid int4)` returns the same table for single given
@@ -126,7 +124,6 @@ in-memory ring buffer on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
 | segid        | int4        | Segment id              |
 
 #### Wait profile
@@ -143,11 +140,50 @@ in-memory hash table on coordinator and all segments.
 | count        | text        | Count of samples        |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
 | segid        | int4        | Segment id              |
 
+#### Query identity
+
+`queryid` is the query fingerprint computed at the end of parse analysis, the
+same 64-bit hash `pg_stat_statements` uses. On the coordinator it is computed
+by `gg_wait_sampling` itself when no other extension has set it, so it is
+available without `pg_stat_statements`; when both are loaded the values are
+identical. Segments receive it inside the dispatched plan. Utility statements
+have `queryid` 0. It is recorded from the planner and executor hooks, so a
+backend that waits before planning starts, for example on a relation lock
+taken during parse analysis, is sampled with `queryid` 0.
+
+`mppsessionid` and `command_id` are read from the backend's `PGPROC` entry at
+sampling time and do not depend on any hook. They are therefore present for
+every sampled process of a session, including a backend blocked during parse
+analysis and the QEs of that session on the segments.
+
+Two properties of `command_id` follow from how the server numbers commands:
+
+ * The coordinator increments the counter when it receives a statement and
+   once more when the query descriptor is created, so a backend sampled while
+   parsing or planning reports a `command_id` one less than the value it
+   reports during execution. The execution value is the one dispatched to the
+   segments and printed as `cmd` in the log prefix.
+ * On the coordinator the counter keeps its last value after a statement
+   finishes, so an idle backend waiting for the client is sampled with the
+   `mppsessionid` and `command_id` of its previous statement and `queryid` 0.
+   QEs reset the counter to 0 when they become idle.
+
+#### Upgrading from 1.1
+
+Version 1.2 drops the `tmid` column from all functions and views. The library
+derives its result row type from the SQL declaration of the calling function,
+so the new library keeps serving the 1.1 objects: with them `tmid` is always
+NULL. Install the new library on every host, restart the cluster, then update
+the extension in every database where it is installed whenever convenient:
+
+```sql
+ALTER EXTENSION gg_wait_sampling UPDATE;
+```
+
 #### Resetting the profile
-Profile reset requires superuser privilege. In version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.
+Profile reset requires superuser privilege. Since version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.
 
 Reset the profile across the entire cluster (coordinator and all segments):
 ```sql

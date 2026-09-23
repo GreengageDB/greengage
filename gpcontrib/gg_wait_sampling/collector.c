@@ -185,10 +185,10 @@ probe_waits(History *observations, HTAB *profile_hash,
 		if (!pgws_should_sample_proc(proc, &item.pid, &item.wait_event_info))
 			continue;
 
+		item.query_info = (WSQueryInfo) {0, proc->mppSessionId, proc->queryCommandId};
+
 		if (pgws_profileQueries)
-			item.query_item = pgws_proc_query_items[i];
-		else
-			item.query_item = (QueryItem) {0};
+			item.query_info.queryId = pgws_proc_queryids[i];
 
 		item.ts = ts;
 
@@ -306,7 +306,7 @@ make_profile_hash(void)
 	if (pgws_profileQueries)
 		hash_ctl.keysize = offsetof(ProfileItem, count);
 	else
-		hash_ctl.keysize = offsetof(ProfileItem, query_item);
+		hash_ctl.keysize = offsetof(ProfileItem, query_info);
 
 	hash_ctl.entrysize = sizeof(ProfileItem);
 	return hash_create("Waits profile hash", 1024, &hash_ctl,
