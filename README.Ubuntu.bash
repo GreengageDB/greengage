@@ -46,8 +46,6 @@ apt-get install -y \
 	openssl \
 	pkg-config \
 	protobuf-compiler \
-	python3.11 \
-	python3.11-dev \
 	python3-dev \
 	python3-pip \
 	python3-psutil \
