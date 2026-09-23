@@ -322,9 +322,34 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
 
- 	AttrNumber	attno = -1;
-	while ((attno = bms_next_member(attrs, attno)) >= 0)
+	if (unlikely(slotAocs->tts_cached_attrs != attrs))
 	{
+		int			count = bms_num_members(attrs);
+		AttrNumber	attno = -1;
+		int			i = 0;
+
+		if (count > slotAocs->tts_cached_attrs_capacity)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+			if (slotAocs->tts_cached_attrs_arr != NULL)
+				pfree(slotAocs->tts_cached_attrs_arr);
+			slotAocs->tts_cached_attrs_arr = palloc(count * sizeof(AttrNumber));
+			slotAocs->tts_cached_attrs_capacity = count;
+			MemoryContextSwitchTo(oldContext);
+		}
+
+		while ((attno = bms_next_member(attrs, attno)) >= 0)
+			slotAocs->tts_cached_attrs_arr[i++] = attno;
+
+		slotAocs->tts_cached_attrs_count = count;
+		slotAocs->tts_cached_attrs = attrs;
+	}
+
+	for (int i = 0; i < slotAocs->tts_cached_attrs_count; i++)
+	{
+		AttrNumber	attno = slotAocs->tts_cached_attrs_arr[i];
+
 		if (unlikely(slotAocs->tts_is_valid[attno]))
 			continue;
 
