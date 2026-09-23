@@ -1,0 +1,81 @@
+-- Session id and command id of a coordinator backend must be reported even
+-- when the backend blocks before the planner and executor hooks have run,
+-- for example on a relation lock taken during parse analysis.
+CREATE EXTENSION gg_wait_sampling;
+CREATE EXTENSION
+CREATE TABLE t_wait_qd (id INT, val TEXT) DISTRIBUTED BY (id);
+CREATE TABLE
+INSERT INTO t_wait_qd VALUES (1,'a'),(2,'b'),(3,'c');
+INSERT 0 3
+
+-- Poll pg_stat_activity until the given query is waiting on a lock on the
+-- coordinator, so that the checks below don't depend on timing.
+CREATE FUNCTION wait_for_lock_wait(q text) RETURNS bool AS $$ DECLARE i int := 0; BEGIN LOOP PERFORM 1 FROM pg_stat_activity WHERE query = q AND wait_event_type = 'Lock' AND pid <> pg_backend_pid(); IF FOUND THEN RETURN true; END IF; i := i + 1; IF i > 600 THEN RETURN false; END IF; PERFORM pg_sleep(0.05); END LOOP; END; $$ LANGUAGE plpgsql;
+CREATE FUNCTION
+
+SELECT * FROM gg_wait_sampling_reset_profile ORDER BY gp_segment_id;
+ gp_segment_id | done 
+---------------+------
+ -1            | t    
+ 0             | t    
+ 1             | t    
+ 2             | t    
+(4 rows)
+
+-- Session 1 holds an exclusive lock on the coordinator and on the segments.
+1: BEGIN;
+BEGIN
+1: LOCK TABLE t_wait_qd IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE
+
+-- Session 2 blocks on the coordinator while parse analysis opens the table.
+2&: SELECT count(*) FROM t_wait_qd;  <waiting ...>
+SELECT wait_for_lock_wait('SELECT count(*) FROM t_wait_qd;');
+ wait_for_lock_wait 
+--------------------
+ t                  
+(1 row)
+
+-- Current waits: the blocked backend must carry its session id and a
+-- command id although no plan exists yet.
+SELECT c.event_type, c.event, c.segid, c.mppsessionid = s.sess_id AS session_matches, c.command_id > 0 AS has_command_id FROM gg_wait_sampling_get_current_coordinator() c JOIN pg_stat_activity s ON s.pid = c.pid WHERE s.query = 'SELECT count(*) FROM t_wait_qd;';
+ event_type | event    | segid | session_matches | has_command_id 
+------------+----------+-------+-----------------+----------------
+ Lock       | relation | -1    | t               | t              
+(1 row)
+
+-- Let the collector take a few samples, then check history and profile too.
+SELECT pg_sleep(0.5);
+ pg_sleep 
+----------
+          
+(1 row)
+
+SELECT DISTINCT h.event_type, h.event, h.segid, h.mppsessionid = s.sess_id AS session_matches, h.command_id > 0 AS has_command_id FROM gg_wait_sampling_get_history_coordinator() h JOIN pg_stat_activity s ON s.pid = h.pid WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND h.event_type = 'Lock';
+ event_type | event    | segid | session_matches | has_command_id 
+------------+----------+-------+-----------------+----------------
+ Lock       | relation | -1    | t               | t              
+(1 row)
+
+SELECT DISTINCT p.event_type, p.event, p.segid, p.mppsessionid = s.sess_id AS session_matches, p.command_id > 0 AS has_command_id FROM gg_wait_sampling_get_profile_coordinator() p JOIN pg_stat_activity s ON s.pid = p.pid WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND p.event_type = 'Lock';
+ event_type | event    | segid | session_matches | has_command_id 
+------------+----------+-------+-----------------+----------------
+ Lock       | relation | -1    | t               | t              
+(1 row)
+
+1: COMMIT;
+COMMIT
+2<:  <... completed>
+ count 
+-------
+ 3     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+
+DROP FUNCTION wait_for_lock_wait(text);
+DROP FUNCTION
+DROP TABLE t_wait_qd;
+DROP TABLE
+DROP EXTENSION gg_wait_sampling;
+DROP EXTENSION
