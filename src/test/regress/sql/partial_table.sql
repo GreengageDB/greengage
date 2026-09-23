@@ -630,10 +630,9 @@ set search_path=test_partial_table,public;
 copy partial_rpt_to to stdout;
 
 --
--- Test that segment is choosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tupre routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
-create extension if not exists gp_debug_numsegments;
 select gp_debug_set_create_table_default_numsegments(2);
 -- create different kinds of partitioned tables
 create table sales (trans_id int, date date, amount decimal(9,2), region text)

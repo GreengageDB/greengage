@@ -49,7 +49,7 @@ private:
 	// segmentId column id
 	ULONG m_segid_colid;
 
-	// special field for resjunk flag assignation
+	// special field for resjunk flag assignment
 	BOOL m_needsResJunk;
 
 	// process the start of an element

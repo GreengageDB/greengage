@@ -6698,11 +6698,9 @@ SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_ao_acl_1_prt_3
 (1 row)
 
 --
--- Test that segment is choosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tupre routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
-NOTICE:  extension "gp_debug_numsegments" already exists, skipping
 SELECT gp_debug_set_create_table_default_numsegments(2);
  gp_debug_set_create_table_default_numsegments 
 -----------------------------------------------
@@ -6827,7 +6825,7 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 (0 rows)
 
 --
--- Test that segment is choosen correctly in case of insertion also
+-- Test that segment is chosen correctly in case of insertion also
 --
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -6848,7 +6846,7 @@ SELECT gp_segment_id, * FROM rank3_1_prt_2;
 (1 row)
 
 --
--- Test that segment is choosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly even in case of different attribute number
 --
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -6918,6 +6916,65 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
  gp_segment_id | id | rank | gender | count | year 
 ---------------+----+------+--------+-------+------
+(0 rows)
+
+--
+-- Test that segment is chosen correctly even in case of different attribute number
+--
+CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+INSERT INTO rank5 VALUES (543,1,2006,'m',1);
+INSERT INTO rank5 VALUES (543,1,2007,'f',1);
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+ALTER TABLE rank5_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+(1 row)
+
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             0 | 543 |    1 | 2007 | f      |     1
+(1 row)
+
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on rank5
+   Update on rank5_1_prt_2
+   Update on rank5_1_prt_3
+   Update on rank5_1_prt_extra
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_2
+                     Filter: (gender = 'f'::bpchar)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_3
+                     Filter: (gender = 'f'::bpchar)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_extra
+                     Filter: (gender = 'f'::bpchar)
+ Optimizer: Postgres-based planner
+(17 rows)
+
+UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             1 | 544 |    1 | 2006 | f      |     1
+             2 | 543 |    1 | 2006 | m      |     1
+(2 rows)
+
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+ gp_segment_id | id | rank | year | gender | count 
+---------------+----+------+------+--------+-------
 (0 rows)
 
 SELECT gp_debug_reset_create_table_default_numsegments();

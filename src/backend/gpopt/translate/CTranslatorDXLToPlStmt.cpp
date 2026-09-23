@@ -5051,6 +5051,36 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 }
 
 //---------------------------------------------------------------------------
+//	@function: set_resjunk_flag
+//
+//	@doc: Update given targetlist. Set resjunk flag to true for ctid and
+//	    gp_segment_id attributes. Originally this function was inteded to be
+//	    used only with split-update node, as it's executor needs this flags to
+//	    be setted. But it also can be used anywhere it's effect needed.
+//
+//---------------------------------------------------------------------------
+static void
+set_resjunk_flag(List *list)
+{
+	ListCell *lc;
+	foreach (lc, list)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+		// Mark internal DML junk columns as resjunk = true so they are not
+		// projected to the parent ModifyTable node as regular data columns.
+		if (te->resname != NULL)
+		{
+			if (strcmp(te->resname, "ctid") == 0 ||
+				strcmp(te->resname, "gp_segment_id") == 0)
+			{
+				te->resjunk = true;
+			}
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
 //
@@ -5189,37 +5219,10 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
-		ListCell *lc;
-		foreach (lc, plan->targetlist)
-		{
-			TargetEntry *te = (TargetEntry *) lfirst(lc);
-
-			// Mark internal DML junk columns as resjunk = true so they are not
-			// projected to the parent ModifyTable node as regular data columns.
-			if (te->resname != NULL)
-			{
-				if (strcmp(te->resname, "ctid") == 0 ||
-					strcmp(te->resname, "gp_segment_id") == 0)
-				{
-					te->resjunk = true;
-				}
-			}
-		}
+		set_resjunk_flag(plan->targetlist);
 		// We also need to do the same for child plan, as segment id is taken
 		// from it's tuples.
-		foreach (lc, child_plan->targetlist)
-		{
-			TargetEntry *te = (TargetEntry *) lfirst(lc);
-
-			if (te->resname != NULL)
-			{
-				if (strcmp(te->resname, "ctid") == 0 ||
-					strcmp(te->resname, "gp_segment_id") == 0)
-				{
-					te->resjunk = true;
-				}
-			}
-		}
+		set_resjunk_flag(child_plan->targetlist);
 		SetSplitUpdateHashInfo(split, plan);
 	}
 	SetParamIds(plan);

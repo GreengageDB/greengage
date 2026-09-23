@@ -4296,10 +4296,9 @@ ALTER TABLE t_part_ao_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLU
 SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_ao_acl_1_prt_30'::regclass AND attacl IS NOT NULL;
 
 --
--- Test that segment is choosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tupre routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
-CREATE extension IF NOT EXISTS gp_debug_numsegments;
 SELECT gp_debug_set_create_table_default_numsegments(2);
 -- create different kinds of partitioned tables
 CREATE TABLE rank (id INT, rank INT, year INT, gender CHAR(1), count INT)
@@ -4350,7 +4349,7 @@ SELECT gp_segment_id, * FROM rank_1_prt_3;
 SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 --
--- Test that segment is choosen correctly in case of insertion also
+-- Test that segment is chosen correctly in case of insertion also
 --
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -4370,7 +4369,7 @@ INSERT INTO rank3 VALUES (543,1,2007,'f',1);
 SELECT gp_segment_id, * FROM rank3_1_prt_2;
 
 --
--- Test that segment is choosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly even in case of different attribute number
 --
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -4400,6 +4399,32 @@ UPDATE rank4 SET year=2006 WHERE gender='f';
 
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
+
+--
+-- Test that segment is chosen correctly even in case of different attribute number
+--
+CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+
+INSERT INTO rank5 VALUES (543,1,2006,'m',1);
+INSERT INTO rank5 VALUES (543,1,2007,'f',1);
+
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+
+ALTER TABLE rank5_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+
+UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
 
 SELECT gp_debug_reset_create_table_default_numsegments();
 
