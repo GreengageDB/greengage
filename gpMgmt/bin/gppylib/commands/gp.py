@@ -327,6 +327,28 @@ class PgCtlStopArgs(CmdArgs):
         self.append("stop")
 
 
+class PgCtlStatusArgs(CmdArgs):
+    """
+    Used by SegmentStatus to format the pg_ctl command
+    to get status of a backend postmaster
+
+    >>> str(PgCtlStatusArgs("/data1/coordinator/gpseg-1"))
+    '$GPHOME/bin/pg_ctl -D /data1/coordinator/gpseg-1 status'
+
+    """
+
+    def __init__(self, datadir):
+        """
+        @param datadir: database data directory
+        """
+        CmdArgs.__init__(self, [
+            "$GPHOME/bin/pg_ctl",
+            "-D", str(datadir),
+        ])
+        self.append("status")
+
+
+
 class CoordinatorStart(Command):
     def __init__(self, name, dataDir, port, era,
                  wrapper, wrapper_args, specialMode=None, restrictedMode=False, timeout=SEGMENT_TIMEOUT_DEFAULT,
@@ -444,6 +466,25 @@ class SegmentStop(Command):
         return cmd
 
 #-----------------------------------------------
+class SegmentStatus(Command):
+    def __init__(self, name, dataDir, ctxt=LOCAL, remoteHost=None):
+
+        self.cmdStr = str( PgCtlStatusArgs(dataDir) )
+        Command.__init__(self, name, self.cmdStr, ctxt, remoteHost)
+
+    @staticmethod
+    def local(name, dataDir):
+        cmd=SegmentStatus(name, dataDir)
+        cmd.run(validateAfter=False)
+        return cmd
+
+    @staticmethod
+    def remote(name, hostname, dataDir):
+        cmd=SegmentStatus(name, dataDir, ctxt=REMOTE, remoteHost=hostname)
+        cmd.run(validateAfter=False)
+        return cmd
+
+#-----------------------------------------------
 class SegmentIsShutDown(Command):
     """
     Get the pg_controldata status, and check that it says 'shut down'
@@ -455,7 +496,7 @@ class SegmentIsShutDown(Command):
     def is_shutdown(self):
         for key, value in self.results.split_stdout():
             if key == 'Database cluster state':
-                return value.strip() == 'shut down'
+                return value.strip() == 'shut down' or value.strip() == 'shut down in recovery'
         return False
 
     @staticmethod
@@ -1396,6 +1437,20 @@ def conflict_with_gpexpand(utility, refuse_phase1=True, refuse_phase2=False):
 
     return (True, "")
 
+
+def check_pid_file(coordinator_data_directory, pid_filename):
+    is_running = False
+    try:
+        with open(os.path.join(coordinator_data_directory, pid_filename), 'r') as fp:
+            pid = int(fp.readline().strip())
+        is_running = check_pid(pid)
+    except IOError:
+        pass
+    except Exception:
+        raise
+
+    return is_running
+
 #=-=-=-=-=-=-=-=-=-= Bash Migration Helper Functions =-=-=-=-=-=-=-=-
 
 def start_standbycoordinator(host, datadir, port, era=None,
@@ -1690,6 +1745,20 @@ class GpRecoverSeg(Command):
        self.remoteHost = remoteHost
 
        cmdStr = "$GPHOME/bin/gprecoverseg %s" % (options)
+       Command.__init__(self,name,cmdStr,ctxt,remoteHost)
+
+class GpMoveMirrors(Command):
+   """
+   This command will execute the gpmovemirror utility
+   """
+
+   def __init__(self, name, options = "", ctxt = LOCAL, remoteHost = None):
+       self.name = name
+       self.options = options
+       self.ctxt = ctxt
+       self.remoteHost = remoteHost
+
+       cmdStr = "$GPHOME/bin/gpmovemirrors %s" % (options)
        Command.__init__(self,name,cmdStr,ctxt,remoteHost)
 
 class IfAddrs:

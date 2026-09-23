@@ -643,6 +643,8 @@ cdblegacyhash_oidvector(PG_FUNCTION_ARGS)
 	int			len;
 	void	   *buf;		/* pointer to the data */
 
+	check_valid_oidvector(oidvec_buf);
+
 	len = oidvec_buf->dim1 * sizeof(Oid);
 	buf = oidvec_buf->values;
 

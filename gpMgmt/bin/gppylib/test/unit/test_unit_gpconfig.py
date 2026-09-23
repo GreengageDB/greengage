@@ -42,6 +42,7 @@ class GpConfig(GpTestCase):
         self.subject = imp.load_source('gpconfig', gpconfig_file)
         self.subject.LOGGER = Mock(spec=['log', 'warn', 'info', 'debug', 'error', 'warning', 'fatal'])
         self.subject.check_gpexpand = lambda : (True, "")
+        self.subject.check_ggrebalance = lambda : (True, "")
 
         self.conn = Mock()
         self.cursor = FakeCursor()

@@ -12,7 +12,7 @@ DOCS= gpactivatestandby_help gpaddmirrors_help gpcheckperf_help \
 	gpinitstandby_help gpinitsystem_help gpload_help gplogfilter_help \
 	gprecoverseg_help \
 	gpreload_help gpsync_help gpssh-exkeys_help gpssh_help gpstart_help \
-	gpstate_help gpstop_help
+	gpstate_help gpstop_help ggrebalance_help
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(prefix)/docs/cli_help'

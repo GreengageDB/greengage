@@ -93,14 +93,14 @@ def impl(context, view_name, table_name, schema_name):
 
 @given('a view "{view_name}" exists on table "{table_name}"')
 def impl(context, view_name, table_name):
-    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname))) as conn:
-        create_view_on_table(context.conn, view_name, table_name)
+    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)) as conn:
+        create_view_on_table(conn, view_name, table_name)
 
 
 @given('a materialized view "{view_name}" exists on table "{table_name}"')
 def impl(context, view_name, table_name):
-    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname))) as conn:
-        create_materialized_view_on_table_in_schema(context.conn, viewname=view_name,
+    with closing(dbconn.connect(dbconn.DbURL(dbname=context.dbname), unsetSearchPath=False)) as conn:
+        create_materialized_view_on_table_in_schema(conn, viewname=view_name,
                                                      tablename=table_name)
 
 

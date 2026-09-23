@@ -6,6 +6,7 @@ from gppylib.db import dbconn
 from gppylib.commands.gp import GpSegStopCmd
 from gppylib.commands import base
 from gppylib import gplog
+from gppylib.fault_injection import *
 
 from gppylib.operations.segment_reconfigurer import SegmentReconfigurer
 
@@ -116,6 +117,8 @@ class GpSegmentRebalanceOperation:
                 pool.addCommand(cmd)
 
             base.join_and_indicate_progress(pool)
+
+            inject_fault('GpSegmentRebalanceOperation_rebalance_at_seg_stop')
             
             failed_count = 0
             completed = pool.getCompletedItems()

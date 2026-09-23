@@ -27,7 +27,7 @@ fi
 EOF
 
 cat <<"EOF"
-PYTHONPATH="${GPHOME}/lib/python"
+PYTHONPATH="${GPHOME}/lib/python:${GPHOME}/lib/python/vendor"
 PATH="${GPHOME}/bin:${PATH}"
 LD_LIBRARY_PATH="${GPHOME}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 

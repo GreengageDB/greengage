@@ -101,5 +101,9 @@ void close_progress(void);
 
 /* util.c */
 void make_outputdirs_gp(char *pgdata);
+void check_skipped_due_to_missing_function(void);
+
+/* server.c */
+bool createSupportFunctionOrDie(PGconn *conn, char *query);
 
 #endif /* PG_UPGRADE_GREENGAGE_H */

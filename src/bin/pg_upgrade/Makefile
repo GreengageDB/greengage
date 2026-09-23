@@ -38,7 +38,8 @@ clean distclean maintainer-clean:
 	rm -f pg_upgrade$(X) $(OBJS)
 	rm -rf analyze_new_cluster.sh delete_old_cluster.sh log/ tmp_check/ \
 				 reindex_hash.sql clusterConfigPostgresAddonsFile clusterConfigFile \
-				 gpdemo-env.sh hostfile regression.diffs aomd_filehandler.c
+				 gpdemo-env.sh hostfile regression.diffs partitions_regression.diffs \
+				 aomd_filehandler.c
 
 greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_filehandler.c
 	rm -f $@ && cd greengage && $(LN_S) ../$< aomd_filehandler.c
@@ -53,10 +54,10 @@ greengage/aomd_filehandler.c: $(top_srcdir)/src/backend/access/appendonly/aomd_f
 NOTSUBMAKEMAKE=$(MAKE)
 
 check: test_gpdb.sh all
-	bash $< -C -r -s -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
+	bash $< -C -r -s -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir) -f $(top_builddir)/src/bin/pg_upgrade/test_gpdb_pre.sql
 
 perfcheck: test_gpdb.sh all
-	bash $< -p -r -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir)
+	bash $< -p -r -O $(top_builddir)/gpAux/gpdemo/datadirs/ -b $(DESTDIR)$(bindir) -f $(top_builddir)/src/bin/pg_upgrade/test_gpdb_pre.sql
 
 # installcheck is not supported because there's no meaningful way to test
 # pg_upgrade against a single already-running server

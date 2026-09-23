@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # src/bin/pg_upgrade/test_gpdb.sh
 #
 # Test driver for upgrading a Greengage cluster with pg_upgrade.
@@ -10,9 +9,9 @@
 # database, though of course you can run ICW into the gpdemo cluster before
 # upgrading to get some coverage of object types.
 #
-# The test first performs a pg_dumpall, then initializes a new
+# The test first performs a series of pg_dumps from the each database, then initializes a new
 # gpdemo cluster and upgrades the pre-upgrade cluster into it. After the 
-# upgrade it performs another pg_dumpall, if the two dumps match then the 
+# upgrade it performs another series of pg_dumps, if the dumps match then the
 # upgrade created a new identical copy of the cluster.
 
 # Here are two example runs, one for a 7 cluster and then one for a 6 cluster:
@@ -25,7 +24,7 @@
 #
 # It has been tested on demo clusters transitioning from (7 to 7).
 # Details on how to run transition from 6 to 7 are described in
-# src/bin/pg_upgrade/README.test.md
+# ci/readme.md
 
 OLD_BINDIR=
 OLD_DATADIR=
@@ -65,6 +64,15 @@ retain_tempdir=0
 # to upgrade to the new cluster.  This tests the nominal production use case.
 # GPDB_UPGRADE_FIXME: what about the pg_upgrade precheck for upgrade?
 perf_test=0
+
+# This script is run to test pg_upgrade from Greengage 6, to Greengage 7,
+# so perform additional steps to ensure that it completes successfully
+# (for example, avoid dumping partitioned tables with pg_dump)
+cross_version_upgrade=0
+
+# If it is specified, run a seperate script to delete/change objects failing
+# to upgrade. It comes handy when testing regression dump.
+cleanup_script=""
 
 # Not all platforms have a realpath binary in PATH, most notably macOS doesn't,
 # so provide an alternative implementation. Returns an absolute path in the
@@ -167,6 +175,99 @@ check_vacuum_worked()
 	return 0
 }
 
+dump_database_schema()
+{
+	set -o pipefail
+
+	local dump_path="$1"
+	local partitions_dump_path="$2"
+	local partitions_query="$3"
+	local queries_query="$4"
+	local pgopts="$5"
+
+	# To dump schemas, use pg_dump from NEW_BINDIR. Note, that we intentionally don't use pg_dumpall,
+	# and dump each database by hand, because we need to be able to exclude specific
+	# objects from the dumps, and it is possible only with regular pg_dump.
+	if (( !$perf_test )) ; then
+		local databases_string
+		databases_string=$(PGOPTIONS="${pgopts}" psql template1 -c "COPY (SELECT datname FROM pg_database WHERE datname != 'template0' ORDER BY (datname)) TO STDOUT;");
+		if (( $? )) ; then
+			echo "ERROR: Failure encountered while dumping databases"
+			exit 1
+		fi
+
+		local -a databases
+		readarray -t databases <<< ${databases_string}
+
+		local database
+		for database in "${databases[@]}"; do
+			# We are getting '\' symbol automatically escaped to '\\', convert is back
+			database=$(sed 's/\\\\/\\/g' <<< "${database}")
+
+			# When upgrading Greengage 6 to Greengage 7, partitioned tables would cause
+			# pre- and post-upgrade dumps to differ, because the way they are dumped depends
+			# on the version of the source cluster. So, make pg_dump ignore them and compare
+			# them separately.
+			local -a args_to_ignore_partitions=()
+			if (( $cross_version_upgrade )); then
+				local partitions_string
+				partitions_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${partitions_query}")
+				if (( $? )) ; then
+					echo "ERROR: Failure encountered while dumping databases"
+					exit 1
+				fi
+
+				local -a partitions
+				readarray -t partitions <<< ${partitions_string}
+
+				local partition
+				for partition in "${partitions[@]}"; do
+					if [ -z "${partition}" ]; then
+						continue
+					fi
+					args_to_ignore_partitions+=(-T)
+					args_to_ignore_partitions+=("${partition}")
+				done
+
+				# And now, create a separate dump for each partitioned table, by manually getting
+				# their contents. Do this the way as in the pg_dump (see dumpTableData_copy).
+				# Use the --extra-float-digits option to make sure that floats
+				# are dumped identically.
+				# Also, sort the rows, as their order may differ between the versions.
+				local queries_string
+				queries_string=$(PGOPTIONS="${pgopts}" psql "${database}" -c "${queries_query}")
+				if (( $? )) ; then
+					echo "ERROR: Failure encountered while dumping databases"
+					exit 1
+				fi
+
+				local -a queries
+				readarray -t queries <<< ${queries_string}
+
+				local query
+				for query in "${queries[@]}"; do
+					echo "${query}" >> "${partitions_dump_path}"
+					PGOPTIONS="-c extra_float_digits=-3 ${pgopts}" psql "${database}" -c "${query}" | sort >> "${partitions_dump_path}"
+					if (( $? )) ; then
+						echo "ERROR: Failure encountered while dumping databases"
+						exit 1
+					fi
+				done
+			fi
+
+			PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dump "${database}" "${args_to_ignore_partitions[@]}" ${DUMP_OPTS} >> "${dump_path}"
+			if (( $? )) ; then
+				echo "ERROR: Failure encountered while dumping databases"
+				exit 1
+			fi
+
+		done
+		echo done
+	fi
+
+	set +o pipefail
+}
+
 upgrade_qd()
 {
 	mkdir -p $1
@@ -215,11 +316,14 @@ usage()
 	echo " -O <dir>     old cluster data directory"
 	echo " -b <dir>     new cluster executable directory"
 	echo " -B <dir>     old cluster executable directory (defaults to new binaries)"
+	echo " -f <file>    Script to run in the old cluster before performing upgrade (defaults to none)"
+	echo " -d <string>  Specify additional pg_dump options"
 	echo " -s           Run smoketest only"
 	echo " -C           Skip gpcheckcat test"
 	echo " -m           Upgrade mirrors"
 	echo " -r           Retain temporary installation after test, even on success"
 	echo " -p           pg_upgrade performance checking only"
+	echo " -x           test pg_upgrade from Greengage 6 to Greengage 7"
 	exit 0
 }
 
@@ -265,9 +369,48 @@ diff_and_exit() {
 	export COORDINATOR_DATA_DIRECTORY="${NEW_DATADIR}/qddir/demoDataDir-1"
 	${NEW_BINDIR}/gpstart -a ${args}
 
+	local dump_path="$temp_root/dump2.sql"
+	local partitions_dump_path="$temp_root/dump_partitions2.sql"
+	local partitions_query=$(cat <<- EOF
+		COPY (
+			WITH partitions AS (
+				SELECT DISTINCT (pg_partition_tree(oid)).relid
+				FROM pg_class
+			) SELECT FORMAT('%s.%s', quote_ident(n.nspname), quote_ident(c.relname)) out
+			FROM partitions p
+				JOIN pg_class c ON p.relid = c.oid
+				JOIN pg_namespace n ON c.relnamespace = n.oid
+			ORDER BY(out)
+		) TO STDOUT;
+	EOF
+	)
+	local queries_query=$(cat <<- EOF
+		COPY (
+			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) COLLATE "default" out
+			FROM (
+				SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+				quote_ident(c.relname)) name,
+				string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+				FROM pg_class c
+					JOIN pg_namespace n ON c.relnamespace = n.oid
+					JOIN pg_attribute a ON a.attrelid = c.oid
+				WHERE c.relkind = 'p'
+					AND a.attnum > 0::pg_catalog.int2
+					AND a.attisdropped = false
+					AND EXISTS (
+						SELECT 1
+						FROM pg_partition_tree(c.oid)
+						WHERE parentrelid IS NULL
+					)
+				GROUP BY (n.nspname, c.relname)
+			) subq
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
 	echo -n 'Dumping database schema after upgrade... '
-	PGOPTIONS="${pgopts}" ${NEW_BINDIR}/pg_dumpall ${DUMP_OPTS} -f "$temp_root/dump2.sql"
-	echo done
+	dump_database_schema "${dump_path}" "${partitions_dump_path}" "${partitions_query}" "${queries_query}" "${pgopts}"
+
 
 	${NEW_BINDIR}/gpstop -a ${args}
 	COORDINATOR_DATA_DIRECTORY=""; unset COORDINATOR_DATA_DIRECTORY
@@ -280,7 +423,7 @@ diff_and_exit() {
 	# broken for other reasons, it is hard to judge whether we need all of them.
 	sed -i "s/Dumped from database version [0-9.]*$/Dumped from database version XXX/g" $temp_root/dump1.sql $temp_root/dump2.sql
 	
-	# Since we've used the same pg_dumpall binary to create both dumps, whitespace
+	# Since we've used the same pg_dump binary to create both dumps, whitespace
 	# shouldn't be a cause of difference in the files but it is. Partitioning info
 	# is generated via backend functionality in the cluster being dumped, and not
 	# in pg_dump, so whitespace changes can trip up the diff.
@@ -293,12 +436,24 @@ diff_and_exit() {
 		exit 1
 	fi
 
+	if (( $cross_version_upgrade )); then
+		if ! diff -w "$temp_root/dump_partitions1.sql" "$temp_root/dump_partitions2.sql" >/dev/null; then
+			diff -wdu "$temp_root/dump_partitions1.sql" "$temp_root/dump_partitions2.sql" | tee partitions_regression.diffs
+			echo "Error: before and after partition dumps differ"
+			exit 1
+		fi
+	fi
+
 	# Final sanity checks.
 	if (( ! $smoketest )); then
 		check_distinct_system_ids
 	fi
 
 	rm -f regression.diffs
+	if (( $cross_version_upgrade )); then
+		rm -f partitions_regression.diffs
+	fi
+
 	echo "Passed"
 	exit 0
 }
@@ -320,7 +475,7 @@ main() {
 	local temp_root=`pwd`/tmp_check
 	local base_dir=`pwd`
 	
-	while getopts ":O:b:B:sCkKmrp" opt; do
+	while getopts ":O:b:B:f:d:sCkKmrpx" opt; do
 		case ${opt} in
 			O )
 				realpath OLD_DATADIR "${OPTARG}"
@@ -330,6 +485,12 @@ main() {
 				;;
 			B )
 				realpath OLD_BINDIR "${OPTARG}"
+				;;
+			f )
+				realpath cleanup_script "${OPTARG}"
+				;;
+			d )
+				DUMP_OPTS+=" ${OPTARG}"
 				;;
 			s )
 				smoketest=1
@@ -349,6 +510,9 @@ main() {
 				perf_test=1
 				gpcheckcat=0
 				run_check_vacuum_worked=0
+				;;
+			x )
+				cross_version_upgrade=1
 				;;
 			* )
 				usage
@@ -392,8 +556,8 @@ main() {
 	fi
 	
 	# Run any pre-upgrade tasks to prep the cluster
-	if [ -f "test_gpdb_pre.sql" ]; then
-		if ! ${OLD_BINDIR}/psql -f test_gpdb_pre.sql -v ON_ERROR_STOP=1 postgres; then
+	if [ -n "$cleanup_script" ]; then
+		if ! ${OLD_BINDIR}/psql -f "$cleanup_script" -v ON_ERROR_STOP=1 postgres; then
 			echo "ERROR: unable to execute pre-upgrade cleanup"
 			exit 1
 		fi
@@ -409,13 +573,43 @@ main() {
 			exit 1
 		fi
 	fi
-	
-	# yes, use pg_dumpall from NEW_BINDIR
-	if (( !$perf_test )) ; then
-		echo -n 'Dumping database schema before upgrade... '
-		${NEW_BINDIR}/pg_dumpall ${DUMP_OPTS} -f "$temp_root/dump1.sql"
-		echo done
-	fi
+
+	local dump_path="$temp_root/dump1.sql"
+	local partitions_dump_path="$temp_root/dump_partitions1.sql"
+	# Queries to get all partitioned tables, used in cross-version upgrade
+	local partitions_query=$(cat <<- EOF
+		COPY (
+			SELECT DISTINCT FORMAT('%s.%s', quote_ident(schemaname), quote_ident(tablename)) out
+			FROM pg_partitions
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
+	local queries_query=$(cat <<- EOF
+		COPY (
+			SELECT FORMAT('COPY %s (%s) TO STDOUT;', name, attrs) out
+			FROM (
+				SELECT FORMAT('%s.%s', quote_ident(n.nspname),
+				quote_ident(c.relname)) name,
+				string_agg(quote_ident(a.attname), ',' ORDER BY a.attnum) attrs
+				FROM pg_class c
+					JOIN pg_namespace n ON c.relnamespace = n.oid
+					JOIN pg_attribute a ON a.attrelid = c.oid
+					WHERE a.attnum > 0::pg_catalog.int2
+						AND a.attisdropped = false
+						AND EXISTS (
+							SELECT 1
+							FROM pg_partition p
+							WHERE p.parrelid = c.oid
+						)
+				GROUP BY (n.nspname, c.relname)
+			) subq
+			ORDER BY (out)
+		) TO STDOUT;
+	EOF
+	)
+	echo -n 'Dumping database schema before upgrade... '
+	dump_database_schema "${dump_path}" "${partitions_dump_path}" "${partitions_query}" "${queries_query}" ""
 	
 	${OLD_BINDIR}/gpstop -a
 	

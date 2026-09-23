@@ -30,12 +30,14 @@
 #include "replication/origin.h"
 #include "storage/bufmgr.h"
 #include "storage/proc.h"
+#include "utils/faultinjector.h"
 #include "utils/memutils.h"
 #include "pg_trace.h"
 
 #ifdef USE_ZSTD
 /* Zstandard library is provided */
 #include <zstd.h>
+#include <zstd_errors.h>
 /* zstandard compression level to use. */
 #define COMPRESS_LEVEL 3
 #endif
@@ -476,6 +478,28 @@ XLogInsert_Internal(RmgrId rmid, uint8 info, TransactionId headerXid)
 		EndPos = XLogInsertRecord(rdt, fpw_lsn, curinsert_flags, num_fpw);
 	} while (EndPos == InvalidXLogRecPtr);
 
+	/*
+	 * A record carrying block references modifies one or more relation pages.
+	 * Temporary relations never emit such records (their data is not
+	 * WAL-logged at all) and unlogged relations emit them only for their init
+	 * forks, so this implies a durable change to a permanent relation.
+	 * Remember it so the dispatcher can tell a transaction that did real work
+	 * (which needs a two-phase commit) apart from one that only touched
+	 * temporary objects (which can use a one-phase commit).
+	 *
+	 * Require an assigned top-level xid, so that only records attributable to
+	 * the current transaction count.  Read-only transactions can emit
+	 * block-carrying records as a side effect of scanning - opportunistic
+	 * page pruning (XLOG_HEAP2_CLEAN) and hint-bit full-page images
+	 * (XLOG_FPI_FOR_HINT) are logged without an xid - and must not be forced
+	 * into a needless two-phase commit by them.  Every genuine modification
+	 * of a permanent relation runs with an assigned xid before its first
+	 * block-carrying record, so this loses no true positive.
+	 */
+	if (max_registered_block_id > 0 &&
+		TransactionIdIsValid(GetTopTransactionIdIfAny()))
+		MarkWalWriteForPermanentRel();
+
 	XLogResetInsertion();
 
 	return EndPos;
@@ -824,6 +848,7 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 {
 #ifdef USE_ZSTD
 	static ZSTD_CCtx  *cxt = NULL;      /* ZSTD compression context */
+	static bool	compression_failure_logged = false;
 	int32		orig_len = BLCKSZ - hole_length;
 	int32		len;
 	int32		extra_bytes = 0;
@@ -851,18 +876,57 @@ XLogCompressBackupBlock(char *page, uint16 hole_offset, uint16 hole_length,
 	if (!cxt)
 	{
 		cxt = ZSTD_createCCtx();
+
+#ifdef FAULT_INJECTOR
+		/*
+		 * Forget the context to imitate context creation failure, producing 
+		 * an out of memory log record.
+		 */
+		if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block") == FaultInjectorTypeSkip)
+			cxt = NULL;
+#endif
 		if (!cxt)
-			elog(ERROR, "out of memory");
+		{
+			if (!compression_failure_logged)
+			{
+				elog(LOG, "out of memory while allocating ZSTD compression context");
+				compression_failure_logged = true;
+			}
+			return false;
+		}
+		compression_failure_logged = false;
 	}
 
+	size_t dest_capacity = BLCKSZ;
+
+#ifdef FAULT_INJECTOR
+	/*
+	 * Shrink the output buffer so ZSTD_compressCCtx() genuinely returns
+	 * ZSTD_error_dstSize_tooSmall below, regardless of how compressible
+	 * the input actually is.
+	 */
+	if (SIMPLE_FAULT_INJECTOR("xlog_compress_backup_block_dstsize_too_small") == FaultInjectorTypeSkip)
+		dest_capacity = 1;
+#endif
+
 	len = ZSTD_compressCCtx(cxt,
-							dest, BLCKSZ,
+							dest, dest_capacity,
 							source, orig_len,
 							COMPRESS_LEVEL);
 
 	if (ZSTD_isError(len))
-		elog(ERROR, "compression failed: %s uncompressed len %d",
-			 ZSTD_getErrorName(len), orig_len);
+	{
+		if (ZSTD_getErrorCode(len) != ZSTD_error_dstSize_tooSmall && !compression_failure_logged)
+		{
+			elog(LOG, "compression failed: %s uncompressed len %d",
+				ZSTD_getErrorName(len), orig_len);
+
+			compression_failure_logged = true;
+		}
+		return false;
+	}
+
+	compression_failure_logged = false;
 
 	/*
 	 * We recheck the actual size even if ZSTD reports success and

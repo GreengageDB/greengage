@@ -1,0 +1,229 @@
+create extension if not exists test_metadata;
+begin;
+-- Create two queues
+SELECT test_create_metadata_queue() as queue1
+\gset
+SELECT test_create_metadata_queue() as queue2
+\gset
+-- Test on all segments
+SELECT gp_segment_id, test_send_metadata(150, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |                150
+             1 |                150
+             2 |                150
+(3 rows)
+
+-- Read metadata collected on coordinator
+SELECT test_check_metadata(:queue1);
+WARNING:  Custom metadata received, len=150, id=0
+WARNING:  Custom metadata received, len=150, id=1
+WARNING:  Custom metadata received, len=150, id=2
+ test_check_metadata 
+---------------------
+                   3
+(1 row)
+
+SELECT test_check_metadata(:queue2);
+ test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Clean metadata on coordinator
+SELECT test_clean_metadata(:queue1);
+ test_clean_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Check that metadata has been cleaned on coordinator
+SELECT test_check_metadata(:queue1);
+ test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Test longer metadata
+SELECT gp_segment_id, test_send_metadata(150000, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |             150000
+             1 |             150000
+             2 |             150000
+(3 rows)
+
+SELECT gp_segment_id, test_send_metadata(1500000, gp_segment_id, :queue2)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |            1500000
+             1 |            1500000
+             2 |            1500000
+(3 rows)
+
+SELECT gp_segment_id, test_send_metadata(15000000, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |           15000000
+             1 |           15000000
+             2 |           15000000
+(3 rows)
+
+SELECT gp_segment_id, test_send_metadata(150000000, gp_segment_id, :queue2)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |          150000000
+             1 |          150000000
+             2 |          150000000
+(3 rows)
+
+SELECT gp_segment_id, test_send_empty_metadata(:queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending empty metadata...
+WARNING:  Empty metadata sent!
+ gp_segment_id | test_send_empty_metadata 
+---------------+--------------------------
+             0 |                        0
+             1 |                        0
+             2 |                        0
+(3 rows)
+
+-- Read metadata collected on coordinator
+SELECT test_check_metadata(:queue1);
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=0, id=-1
+WARNING:  Custom metadata received, len=15000000, id=0
+WARNING:  Custom metadata received, len=150000, id=0
+WARNING:  Custom metadata received, len=15000000, id=1
+WARNING:  Custom metadata received, len=150000, id=1
+WARNING:  Custom metadata received, len=15000000, id=2
+WARNING:  Custom metadata received, len=150000, id=2
+ test_check_metadata 
+---------------------
+                   9
+(1 row)
+
+SELECT test_check_metadata(:queue2);
+WARNING:  Custom metadata received, len=150000000, id=0
+WARNING:  Custom metadata received, len=1500000, id=0
+WARNING:  Custom metadata received, len=150000000, id=1
+WARNING:  Custom metadata received, len=1500000, id=1
+WARNING:  Custom metadata received, len=150000000, id=2
+WARNING:  Custom metadata received, len=1500000, id=2
+ test_check_metadata 
+---------------------
+                   6
+(1 row)
+
+SELECT test_count_metadata(:queue1);
+ test_count_metadata 
+---------------------
+                   9
+(1 row)
+
+SELECT test_count_metadata(:queue2);
+ test_count_metadata 
+---------------------
+                   6
+(1 row)
+
+SELECT test_clean_metadata(:queue1);
+ test_clean_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_clean_metadata(:queue2);
+ test_clean_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_check_metadata(:queue1);
+ test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_check_metadata(:queue2);
+ test_check_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_count_metadata(:queue1);
+ test_count_metadata 
+---------------------
+                   0
+(1 row)
+
+SELECT test_count_metadata(:queue2);
+ test_count_metadata 
+---------------------
+                   0
+(1 row)
+
+-- Delete two queues
+SELECT test_delete_metadata_queue(:queue1);
+ test_delete_metadata_queue 
+----------------------------
+                          0
+(1 row)
+
+SELECT test_delete_metadata_queue(:queue2);
+ test_delete_metadata_queue 
+----------------------------
+                          0
+(1 row)
+
+commit;
+-- Test error in transaction handling
+begin;
+SELECT test_create_metadata_queue() as queue1
+\gset
+SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, :queue1)
+    FROM gp_dist_random('gp_id');
+WARNING:  Sending custom metadata...
+WARNING:  Custom metadata sent!
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |                 42
+             2 |                 42
+             1 |                 42
+(3 rows)
+
+SELECT 1/0; -- Error
+WARNING:  Metadata queue 2 was not deleted in transaction after use
+ERROR:  division by zero
+rollback;
+-- Test sending to non-existent queue
+begin;
+SELECT gp_segment_id, test_send_metadata(42, gp_segment_id, 10000)
+    FROM gp_dist_random('gp_id');
+WARNING:  Could not recieve chunk. No metadata queue with id 10000
+WARNING:  Could not recieve chunk. No metadata queue with id 10000
+WARNING:  Could not recieve chunk. No metadata queue with id 10000
+ gp_segment_id | test_send_metadata 
+---------------+--------------------
+             0 |                 42
+             1 |                 42
+             2 |                 42
+(3 rows)
+
+rollback;

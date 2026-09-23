@@ -2011,7 +2011,7 @@ psql_completion(const char *text, int start, int end)
 					  "ENABLE", "INHERIT", "NO INHERIT", "RENAME", "RESET",
 					  "OWNER TO", "SET", "VALIDATE CONSTRAINT",
 					  "REPLICA IDENTITY", "ATTACH PARTITION",
-					  "DETACH PARTITION", "REPACK BY COLUMNS (",
+					  "DETACH PARTITION", "REBALANCE","REPACK BY COLUMNS (",
 					  "EXCHANGE", "SPLIT", "TRUNCATE", "FORCE", "NO FORCE");
 
 	else if (Matches("ALTER", "TABLE", MatchAny, "ADD"))

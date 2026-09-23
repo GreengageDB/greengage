@@ -134,6 +134,11 @@ bool AggregateExists(Oid oid);
 // add member to Bitmapset
 Bitmapset *BmsAddMember(Bitmapset *a, int x);
 
+// get the next member of Bitmapset
+int BmsNextMember(const Bitmapset *a, int prevbit);
+
+Bitmapset *BmsAddRange(Bitmapset *a, int lower, int upper);
+
 // create a copy of an object
 void *CopyObject(void *from);
 
@@ -292,8 +297,11 @@ Oid GetTypeRelid(Oid typid);
 // name of the type with the given oid
 char *GetTypeName(Oid typid);
 
-// number of GP segments
+// total number of GP segments
 int GetGPSegmentCount(void);
+
+// target number of GP segments to use
+int GetGPTargetSegmentCount(void);
 
 // heap attribute is null
 bool HeapAttIsNull(HeapTuple tup, int attnum);

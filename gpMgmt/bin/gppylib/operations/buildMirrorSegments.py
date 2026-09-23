@@ -21,6 +21,7 @@ from gppylib.system import configurationInterface as configInterface
 from gppylib.commands.gp import is_pid_postmaster, get_pid_from_remotehost
 from gppylib.commands.unix import check_pid_on_remotehost
 from gppylib.programs.clsRecoverSegment_triples import RecoveryTriplet
+from gppylib.fault_injection import *
 
 logger = gplog.get_default_logger()
 
@@ -313,6 +314,7 @@ class GpMirrorListToBuild:
             dbconn.execSQL(conn,"SELECT gp_request_fts_probe_scan()")
         conn.close()
 
+    @wrap_func_with_faults
     def _update_config(self, recovery_info_by_host, gpArray):
         # should use mainUtils.getProgramName but I can't make it work!
         programName = os.path.split(sys.argv[0])[-1]
@@ -587,6 +589,7 @@ class GpMirrorListToBuild:
         self._remove_progress_files(recovery_info_by_host, recovery_results)
         return recovery_results
 
+    @wrap_func_with_faults
     def _do_recovery(self, recovery_info_by_host, gpEnv):
         """
         # Recover and start segments using gpsegrecovery, which will internally call either

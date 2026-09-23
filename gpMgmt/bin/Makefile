@@ -7,7 +7,7 @@ ifneq "$(wildcard $(top_builddir)/src/Makefile.global)" ""
 include $(top_builddir)/src/Makefile.global
 endif
 
-SUBDIRS = stream gpcheckcat_modules gpconfig_modules gpssh_modules gppylib lib
+SUBDIRS = stream gpcheckcat_modules gpconfig_modules gpssh_modules gppylib lib ggrebalance_modules
 SUBDIRS += ifaddrs
 
 $(recurse)
@@ -16,7 +16,8 @@ PROGRAMS= analyzedb gpactivatestandby gpaddmirrors gpcheckcat gpcheckperf \
 	gpcheckresgroupimpl gpconfig gpdeletesystem gpexpand gpinitstandby \
 	gpinitsystem gpload gpload.py gplogfilter gpmovemirrors \
 	gprecoverseg gpreload gpsync gpsd gpssh gpssh-exkeys gpstart \
-	gpstate gpstop minirepro gpmemwatcher gpmemreport gpcheckresgroupv2impl
+	gpstate gpstop minirepro gpmemwatcher gpmemreport gpcheckresgroupv2impl \
+	ggrebalance
 
 installdirs:
 	$(MKDIR_P) '$(DESTDIR)$(bindir)/lib'
@@ -109,7 +110,8 @@ unitdevel:
 	@echo "Running pure unit tests..."
 	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
 	    python3 -m unittest discover --verbose -s $(SRC)/gppylib -p "test_unit*.py"
-
+	PYTHONPATH=$(SERVER_SRC):$(SERVER_SBIN):$(PYTHONPATH):$(PYTHONSRC_INSTALL_PYTHON_PATH):$(SRC)/ext:$(SBIN_DIR):$(LIB_DIR):$(PYLIB_DIR)/mock-1.0.1 \
+	    python3 -m unittest discover --verbose -s $(SRC)/ggrebalance_modules -t $(SRC)
 
 .PHONY: installcheck-bash
 installcheck-bash:

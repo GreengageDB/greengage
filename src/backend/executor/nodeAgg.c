@@ -434,7 +434,7 @@ static void hashagg_recompile_expressions(AggState *aggstate, bool minslot,
 static long hash_choose_num_buckets(double hashentrysize,
 									long estimated_nbuckets,
 									Size memory);
-static int hash_choose_num_partitions(AggState *aggstate,
+static int hash_choose_num_partitions(Size mem_limit,
 									  double input_groups,
 									  double hashentrysize,
 									  int used_bits,
@@ -1856,30 +1856,23 @@ hashagg_recompile_expressions(AggState *aggstate, bool minslot, bool nullcheck)
  * ngroups limit becomes important when we expect transition values to grow
  * substantially larger than the initial value.
  */
-void
-hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_groups, int used_bits,
-					Size *mem_limit, uint64 *ngroups_limit,
+Size
+hash_agg_set_limits2(AggState *aggstate, double hashentrysize, double input_groups, int used_bits,
+					Size mem_limit, uint64 *ngroups_limit,
 					int *num_partitions)
 {
+	Assert(mem_limit > 0);
 	int npartitions;
 	Size partition_mem;
-	uint64 strict_memlimit = work_mem;
-
-	if (aggstate)
-	{
-		uint64 operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);
-		if (operator_mem < strict_memlimit)
-			strict_memlimit = operator_mem;
-	}
 
 	/* if not expected to spill, use all of work_mem */
-	if (input_groups * hashentrysize < strict_memlimit * 1024L)
+	/* streaming is never spill */
+	if ((aggstate && aggstate->streaming) || input_groups * hashentrysize < mem_limit)
 	{
 		if (num_partitions != NULL)
 			*num_partitions = 0;
-		*mem_limit = strict_memlimit * 1024L;
-		*ngroups_limit = *mem_limit / hashentrysize;
-		return;
+		*ngroups_limit = mem_limit / hashentrysize;
+		return mem_limit;
 	}
 
 	/*
@@ -1888,7 +1881,7 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 	 * once. Then, subtract that from the memory available for holding hash
 	 * tables.
 	 */
-	npartitions = hash_choose_num_partitions(aggstate,
+	npartitions = hash_choose_num_partitions(mem_limit,
 											 input_groups,
 											 hashentrysize,
 											 used_bits,
@@ -1905,15 +1898,39 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 	 * minimum number of partitions, so we aren't going to dramatically exceed
 	 * work mem anyway.
 	 */
-	if (strict_memlimit * 1024L > 4 * partition_mem)
-		*mem_limit = strict_memlimit * 1024L - partition_mem;
+	Size adjusted_mem_limit;
+	if (mem_limit > 4 * partition_mem)
+		adjusted_mem_limit = mem_limit - partition_mem;
 	else
-		*mem_limit = strict_memlimit * 1024L * 0.75;
+		adjusted_mem_limit = mem_limit * 0.75;
 
-	if (*mem_limit > hashentrysize)
-		*ngroups_limit = *mem_limit / hashentrysize;
+	if (adjusted_mem_limit > hashentrysize)
+		*ngroups_limit = adjusted_mem_limit / hashentrysize;
 	else
 		*ngroups_limit = 1;
+
+	return adjusted_mem_limit;
+}
+
+/*
+ * Use hash_agg_set_limits2 instead. Left for ABI compatibility.
+ */
+void
+hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_groups, int used_bits,
+					Size *mem_limit, uint64 *ngroups_limit,
+					int *num_partitions)
+{
+	uint64 strict_memlimit = work_mem;
+
+	if (aggstate)
+	{
+		uint64 operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);
+		if (operator_mem < strict_memlimit)
+			strict_memlimit = operator_mem;
+	}
+	*mem_limit = hash_agg_set_limits2(aggstate, hashentrysize, input_groups,
+									  used_bits, strict_memlimit * 1024,
+									  ngroups_limit, num_partitions);
 }
 
 /*
@@ -2128,34 +2145,27 @@ hash_choose_num_buckets(double hashentrysize, long ngroups, Size memory)
  * *log2_npartitions to the log2() of the number of partitions.
  */
 static int
-hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashentrysize,
+hash_choose_num_partitions(Size mem_limit, double input_groups, double hashentrysize,
 						   int used_bits, int *log2_npartitions)
 {
+	Assert(mem_limit > 0);
 	Size	mem_wanted;
 	int		partition_limit;
 	int		npartitions;
 	int		partition_bits;
-	uint64	strict_memlimit = work_mem;
-
-	if (aggstate)
-	{
-		uint64 operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);
-		if (operator_mem < strict_memlimit)
-			strict_memlimit = operator_mem;
-	}
 
 	/*
 	 * Avoid creating so many partitions that the memory requirements of the
 	 * open partition files are greater than 1/4 of work_mem.
 	 */
 	partition_limit =
-		(strict_memlimit * 1024L * 0.25 - HASHAGG_READ_BUFFER_SIZE) /
+		(mem_limit * 0.25 - HASHAGG_READ_BUFFER_SIZE) /
 		HASHAGG_WRITE_BUFFER_SIZE;
 
 	mem_wanted = HASHAGG_PARTITION_FACTOR * input_groups * hashentrysize;
 
 	/* make enough partitions so that each one is likely to fit in memory */
-	npartitions = 1 + (mem_wanted / (strict_memlimit * 1024L));
+	npartitions = 1 + (mem_wanted / mem_limit);
 
 	if (npartitions > partition_limit)
 		npartitions = partition_limit;
@@ -2787,8 +2797,8 @@ agg_refill_hash_table(AggState *aggstate)
 	batch = linitial(aggstate->hash_batches);
 	aggstate->hash_batches = list_delete_first(aggstate->hash_batches);
 
-	hash_agg_set_limits(aggstate, aggstate->hashentrysize, batch->input_card,
-						batch->used_bits, &aggstate->hash_mem_limit,
+	aggstate->hash_mem_limit = hash_agg_set_limits2(aggstate, aggstate->hashentrysize, batch->input_card,
+						batch->used_bits, PlanStateOperatorMemKB((PlanState *) aggstate) * 1024,
 						&aggstate->hash_ngroups_limit, NULL);
 
 	/*
@@ -3194,7 +3204,7 @@ hashagg_spill_init(AggState *aggstate, HashAggSpill *spill, HashTapeInfo *tapein
 	int		npartitions;
 	int     partition_bits;
 
-	npartitions = hash_choose_num_partitions(aggstate,
+	npartitions = hash_choose_num_partitions(aggstate->hash_mem_limit,
 		input_groups, hashentrysize, used_bits, &partition_bits);
 
 	spill->partitions = palloc0(sizeof(int) * npartitions);
@@ -3940,10 +3950,11 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 		for (i = 0; i < aggstate->num_hashes; i++)
 			totalGroups += aggstate->perhash[i].aggnode->numGroups;
 
-		hash_agg_set_limits(aggstate, aggstate->hashentrysize, totalGroups, 0,
-							&aggstate->hash_mem_limit,
-							&aggstate->hash_ngroups_limit,
-							&aggstate->hash_planned_partitions);
+		aggstate->hash_mem_limit =
+				hash_agg_set_limits2(aggstate, aggstate->hashentrysize, totalGroups, 0,
+									PlanStateOperatorMemKB((PlanState *) aggstate) * 1024,
+									&aggstate->hash_ngroups_limit,
+									&aggstate->hash_planned_partitions);
 		find_hash_columns(aggstate);
 
 		/* Skip massive memory allocation if we are just doing EXPLAIN */

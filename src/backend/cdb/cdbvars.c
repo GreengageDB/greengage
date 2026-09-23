@@ -274,6 +274,7 @@ int			gp_hashjoin_tuples_per_bucket = 5;
 int			gp_motion_slice_noop = 0;
 
 /* Greengage Database Experimental Feature GUCs */
+bool		gp_enable_explain_rows_out = false;
 bool		gp_enable_explain_allstat = false;
 bool		gp_enable_motion_deadlock_sanity = false;	/* planning time sanity
 														 * check */
@@ -333,6 +334,8 @@ bool		log_autostats = true;
 
 /* GUC to toggle JIT instrumentation output for EXPLAIN */
 bool		gp_explain_jit = true;
+
+int		gp_segment_number_for_table_shrink = 0;
 
 /* --------------------------------------------------------------------------------------------------
  * Server debugging

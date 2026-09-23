@@ -1163,7 +1163,6 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	CdbPathLocus group_locus;
 	bool		needs_redistribute;
 	double		dNumGroups;
-	Size		hashentrysize;
 
 	group_locus = choose_grouping_locus(root,
 										initial_agg_path,
@@ -1181,30 +1180,21 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 	else
 		dNumGroups = ctx->dNumGroupsTotal;
 
-	/* Would the hash table fit in memory? */
-	hashentrysize = MAXALIGN(initial_agg_path->pathtarget->width) + MAXALIGN(SizeofMinimalTupleHeader);
+	Path *path = cdbpath_create_motion_path(root, initial_agg_path, NIL, false,
+											group_locus);
 
-	if (enable_hashagg_disk ||
-		hashentrysize * dNumGroups < work_mem * 1024L)
-	{
-		Path	   *path;
-
-		path = cdbpath_create_motion_path(root, initial_agg_path, NIL, false,
-										  group_locus);
-
-		path = (Path *) create_agg_path(root,
-										output_rel,
-										path,
-										ctx->target,
-										AGG_HASHED,
-										ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
-										false, /* streaming */
-										ctx->final_groupClause,
-										ctx->havingQual,
-										ctx->agg_final_costs,
-										dNumGroups);
-		add_path(output_rel, path);
-	}
+	path = (Path *) create_agg_path(root,
+									output_rel,
+									path,
+									ctx->target,
+									AGG_HASHED,
+									ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
+									false, /* streaming */
+									ctx->final_groupClause,
+									ctx->havingQual,
+									ctx->agg_final_costs,
+									dNumGroups);
+	add_path(output_rel, path);
 
 	/*
 	 * Like in the Group Agg case, if the final result needs to be brough to
@@ -1220,28 +1210,22 @@ add_second_stage_hash_agg_path(PlannerInfo *root,
 		CdbPathLocus singleQE_locus;
 		CdbPathLocus_MakeSingleQE(&singleQE_locus, getgpsegmentCount());
 
-		hashentrysize = MAXALIGN(initial_agg_path->pathtarget->width) + MAXALIGN(SizeofMinimalTupleHeader);
-		if (hashentrysize * ctx->dNumGroupsTotal <= work_mem * 1024L)
-		{
-			Path	   *path;
+		Path *path = cdbpath_create_motion_path(root, initial_agg_path,
+												NIL, false,
+												singleQE_locus);
 
-			path = cdbpath_create_motion_path(root, initial_agg_path,
-											  NIL, false,
-											  singleQE_locus);
-
-			path = (Path *) create_agg_path(root,
-											output_rel,
-											path,
-											ctx->target,
-											AGG_HASHED,
-											ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
-											false, /* streaming */
-											ctx->final_groupClause,
-											ctx->havingQual,
-											ctx->agg_final_costs,
-											ctx->dNumGroupsTotal);
-			add_path(output_rel, path);
-		}
+		path = (Path *) create_agg_path(root,
+										output_rel,
+										path,
+										ctx->target,
+										AGG_HASHED,
+										ctx->hasAggs ? AGGSPLIT_FINAL_DESERIAL : AGGSPLIT_SIMPLE,
+										false, /* streaming */
+										ctx->final_groupClause,
+										ctx->havingQual,
+										ctx->agg_final_costs,
+										ctx->dNumGroupsTotal);
+		add_path(output_rel, path);
 	}
 }
 

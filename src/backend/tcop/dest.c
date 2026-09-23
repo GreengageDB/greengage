@@ -266,8 +266,18 @@ ReadyForQuery(CommandDest dest)
 					pq_sendint64(&buf, VmemTracker_GetMaxReservedVmemBytes());
 					pq_endmessage(&buf);
 
+					/*
+					 * Tell the dispatcher whether this QE did durable work that
+					 * requires a two-phase commit.  We report whether the
+					 * transaction wrote WAL for a permanent relation rather than
+					 * whether it wrote any WAL at all: a transaction that only
+					 * took locks or touched temporary objects still emits
+					 * lock/invalidation WAL, but that does not need a two-phase
+					 * commit, so the dispatcher can use a cheaper one-phase
+					 * commit.
+					 */
 					pq_beginmessage(&buf, 'x'); /* wrote_xlog */
-					pq_sendbyte(&buf, TransactionDidWriteXLog());
+					pq_sendbyte(&buf, TransactionWroteWalForPermanentRel());
 					pq_endmessage(&buf);
 				}
 

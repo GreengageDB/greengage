@@ -29,6 +29,7 @@ test: uao_crash_compaction_row
 test: crash_recovery
 test: crash_recovery_redundant_dtx
 test: crash_recovery_dtm
+test: dtx_onephase_commit
 test: unlogged_heap_tables
 test: unlogged_appendonly_tables
 test: udf_exception_blocks_panic_scenarios
@@ -36,6 +37,8 @@ test: ao_same_trans_truncate_crash
 test: frozen_insert_crash
 
 test: prevent_ao_wal
+
+test: ao_temp
 
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
@@ -108,6 +111,10 @@ test: external_table
 test: pqsignal
 
 test: fsync_ao
+
+# Tests on xlog compression errors
+test: xlog_compress_backup_block_fail
+test: xlog_compress_backup_block_dstsize_too_small
 
 # Disable auto-vacuum for below tests
 test: disable_autovacuum
@@ -381,6 +388,7 @@ test: brin_heap
 
 # Intensive tests for BRIN
 test: uao/brin_chain_row uao/brin_chain_column
+test: rebalance_numsegments
 
 test: lock_status
 # Test 'dependency' drops plpython3u language by its design.

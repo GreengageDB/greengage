@@ -37,11 +37,14 @@ try:
     from gppylib.commands.unix import *
     from gppylib.commands.gp import conflict_with_gpexpand
     from gppylib.system.info import *
+    from gppylib.system.environment import GpCoordinatorEnvironment
+    from gppylib.commands.gp import check_pid_file, get_coordinatordatadir
     from gpcheckcat_modules.unique_index_violation_check import UniqueIndexViolationCheck
     from gpcheckcat_modules.leaked_schema_dropper import LeakedSchemaDropper
     from gpcheckcat_modules.repair import Repair
     from gpcheckcat_modules.foreign_key_check import ForeignKeyCheck
     from gpcheckcat_modules.orphaned_toast_tables_check import OrphanedToastTablesCheck
+    from ggrebalance_modules.rebalance_schema import RebalanceSchema
 except ImportError as e:
     sys.exit('Error: unable to import module: ' + str(e))
 
@@ -3731,6 +3734,20 @@ def check_gpexpand():
         myprint(msg)
         sys.exit(1)
 
+def check_ggrebalance():
+    if is_ggrebalance_running():
+        myprint("ERROR: Using gpcheckcat is not supported during cluster rebalancing")
+        sys.exit(1)
+
+def is_ggrebalance_running():
+    coordinator_data_directory = get_coordinatordatadir()
+    # Checks if there is an instance of ggrebalance running
+    if check_pid_file(coordinator_data_directory, 'ggrebalance.pid'):
+        return True
+    # Checks if ggrebalance was interrupted and didn't finish its work
+    gpEnv = GpCoordinatorEnvironment(coordinator_data_directory, False, verbose=False)
+    return RebalanceSchema.checkOperationInProgress(gpEnv)
+
 def check_test_subset_parameter_count():
     test_option_count = 0
     if GV.opt['-R']:
@@ -3770,6 +3787,8 @@ def main():
 
     # gpcheckcat should check gpexpand running status
     check_gpexpand()
+    # gpcheckcat should check ggrebalance running status
+    check_ggrebalance()
 
     GV.cfg = getGPConfiguration()
     truncate_batch_size(len(GV.cfg.keys()))

@@ -404,6 +404,10 @@ cdbllize_adjust_top_path(PlannerInfo *root, Path *best_path,
 		Assert(rte->rtekind == RTE_RELATION);
 
 		targetPolicy = GpPolicyFetch(rte->relid);
+		if (targetPolicy->ptype == POLICYTYPE_PARTITIONED &&
+			gp_segment_number_for_table_shrink > 0)
+			targetPolicy->numsegments =
+					Min(targetPolicy->numsegments, gp_segment_number_for_table_shrink);
 	}
 
 	if (query->commandType == CMD_SELECT && query->parentStmtType == PARENTSTMTTYPE_CTAS)

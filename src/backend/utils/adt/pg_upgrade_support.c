@@ -26,6 +26,8 @@
 #include "miscadmin.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/memutils.h"
+#include "utils/syscache.h"
 
 
 #define GET_STR(textp) DatumGetCString(DirectFunctionCall1(textout, PointerGetDatum(textp)))
@@ -38,14 +40,134 @@ do {															\
 				 (errmsg("function can only be called when server is in binary upgrade mode")))); \
 } while (0)
 
+typedef struct
+{
+	Oid		schema_oid;
+	char	name[NAMEDATALEN];
+} CreatedName;
+
+/* Initialized on the first use in RememberCreatedName() */
+static HTAB *created_names = NULL;
+
+static void
+InitCreatedArrayNamesHash()
+{
+	HASHCTL ctl;
+	MemSet(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(CreatedName);
+	ctl.entrysize = sizeof(CreatedName);
+	ctl.hcxt = TopMemoryContext;
+	created_names = hash_create("Created names during pg_upgrade",
+								128,
+								&ctl,
+								HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+}
+
+static void
+RememberCreatedName(char *typname, Oid schema)
+{
+	/* Zero out padding bytes for HASH_BLOBS */
+	CreatedName key = {0};
+	if (created_names == NULL)
+		InitCreatedArrayNamesHash();
+	key.schema_oid = schema;
+	strlcpy(key.name, typname, NAMEDATALEN);
+	hash_search(created_names, &key, HASH_ENTER, NULL);
+}
+
+/*
+ * makeArrayTypeNameUpgrade
+ *     A wrapper around makeArrayTypeName, that also checks if the newly
+ *     generated name collides with the ones already assigned
+ *     during upgrade.
+ */
+static char *
+makeArrayTypeNameUpgrade(const char *typeName, Oid typeNamespace)
+{
+	CreatedName key;
+	char *arr, *new_arr;
+	int iteration = 0;
+
+	/* Make sure that the initial name is allocated by us */
+	arr = palloc(NAMEDATALEN);
+	strlcpy(arr, typeName, NAMEDATALEN);
+
+	while (true)
+	{
+		new_arr = makeArrayTypeName(arr, typeNamespace);
+		pfree(arr);
+		arr = new_arr;
+
+		key = (CreatedName) {0};
+		key.schema_oid = typeNamespace;
+		strlcpy(key.name, arr, NAMEDATALEN);
+		if (!created_names || !hash_search(created_names, &key, HASH_FIND, NULL))
+			break;
+
+		if (iteration >= NAMEDATALEN)
+		{
+			/*
+			 * If we end up with a name that consists entirely of underscores
+			 * ((NAMEDATALEN - 1) underscores, and one character for a null terminator),
+			 * and it is not present in the catalog, makeArrayTypeName will return
+			 * this name over and over again, leaving us stack in an infinite loop.
+			 *
+			 * In such case, abort when we know that we've seen every possible name.
+			 */
+			break;
+		}
+
+		iteration += 1;
+	}
+
+	return arr;
+}
+
 Datum
 binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 {
+	CreatedName   key = {0};
+	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
+	Oid         old_type_oid;
 	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
+	char       *moved_array_typname;
+	bool        in_catalog;
 
 	CHECK_IS_BINARY_UPGRADE;
+
+	old_type_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid,
+								   CStringGetDatum(typname),
+								   ObjectIdGetDatum(typnamespaceoid));
+	in_catalog = OidIsValid(old_type_oid);
+
+	oldctx = MemoryContextSwitchTo(TopMemoryContext);
+	key.schema_oid = typnamespaceoid;
+	strlcpy(key.name, typname, NAMEDATALEN);
+	if (in_catalog || (created_names && hash_search(created_names, &key, HASH_FIND, NULL)))
+	{
+		/*
+		 * When database wants to create a regular type, and
+		 * there is already an array type with the same name
+		 * in the cluster, exising array type would be renamed,
+		 * getting the next free name via an additional call to
+		 * makeArrayType. So remember it as created too.
+		 *
+		 * Also, the whole logic descripted here works only if existing
+		 * type is an array type. If it not, it wouldn't be possible
+		 * to move existing type, and upgrade would fail. But it would
+		 * happed regardless of what we are doing here, so let's
+		 * not complicate the logic.
+		 */
+		moved_array_typname = makeArrayTypeNameUpgrade(typname, typnamespaceoid);
+		RememberCreatedName(moved_array_typname, typnamespaceoid);
+	}
+
+	/* Remember that we've already taken this name */
+	RememberCreatedName(typname, typnamespaceoid);
+	MemoryContextSwitchTo(oldctx);
+
 	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
 						typnamespaceoid, InvalidOid, InvalidOid);
 
@@ -55,11 +177,19 @@ binary_upgrade_set_next_pg_type_oid(PG_FUNCTION_ARGS)
 Datum
 binary_upgrade_set_next_array_pg_type_oid(PG_FUNCTION_ARGS)
 {
+	MemoryContext oldctx;
 	Oid			typoid = PG_GETARG_OID(0);
 	Oid			typnamespaceoid = PG_GETARG_OID(1);
-	char	   *typname = GET_STR(PG_GETARG_TEXT_P(2));
+	char	   *relname = GET_STR(PG_GETARG_TEXT_P(2));
+	char       *typname;
 
 	CHECK_IS_BINARY_UPGRADE;
+
+	oldctx = MemoryContextSwitchTo(TopMemoryContext);
+	typname = makeArrayTypeNameUpgrade(relname, typnamespaceoid);
+	RememberCreatedName(typname, typnamespaceoid);
+	MemoryContextSwitchTo(oldctx);
+
 	AddPreassignedOidFromBinaryUpgrade(typoid, TypeRelationId, typname,
 						typnamespaceoid, InvalidOid, InvalidOid);
 

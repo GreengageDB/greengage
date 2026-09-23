@@ -1,0 +1,6 @@
+# test_metadata.control
+comment = 'Test extension for custom protocol metadata'
+default_version = '1.0'
+module_pathname = '$libdir/test_metadata'
+relocatable = false
+schema = public

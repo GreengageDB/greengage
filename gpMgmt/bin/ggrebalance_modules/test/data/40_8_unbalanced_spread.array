@@ -1,0 +1,90 @@
+# Coordinator
+1|-1|p|p|s|u|cdw|cdw|5432|/data/coordinator
+# SDW1
+2|0|p|p|s|u|sdw1|sdw1|7000|/data/primary0
+3|1|p|p|s|u|sdw1|sdw1|7001|/data/primary1
+4|2|p|p|s|u|sdw1|sdw1|7002|/data/primary2
+5|3|p|p|s|u|sdw1|sdw1|7003|/data/primary3
+6|4|p|p|s|u|sdw1|sdw1|7004|/data/primary4
+47|5|m|m|s|u|sdw1|sdw1|8005|/data/mirror5
+50|8|m|m|s|u|sdw1|sdw1|8008|/data/mirror8
+60|18|m|m|s|u|sdw1|sdw1|8018|/data/mirror18
+69|27|m|m|s|u|sdw1|sdw1|8027|/data/mirror27
+75|33|m|m|s|u|sdw1|sdw1|8033|/data/mirror33
+# SDW2
+7|5|p|p|s|u|sdw2|sdw2|7005|/data/primary5
+8|6|p|p|s|u|sdw2|sdw2|7006|/data/primary6
+9|7|p|p|s|u|sdw2|sdw2|7007|/data/primary7
+10|8|p|p|s|u|sdw2|sdw2|7008|/data/primary8
+11|9|p|p|s|u|sdw2|sdw2|7009|/data/primary9
+12|10|p|p|s|u|sdw2|sdw2|7010|/data/primary10
+42|0|m|m|s|u|sdw2|sdw2|8000|/data/mirror0
+53|11|m|m|s|u|sdw2|sdw2|8011|/data/mirror11
+56|14|m|m|s|u|sdw2|sdw2|8014|/data/mirror14
+70|28|m|m|s|u|sdw2|sdw2|8028|/data/mirror28
+72|30|m|m|s|u|sdw2|sdw2|8030|/data/mirror30
+# SDW3
+13|11|p|p|s|u|sdw3|sdw3|7011|/data/primary11
+14|12|p|p|s|u|sdw3|sdw3|7012|/data/primary12
+15|13|p|p|s|u|sdw3|sdw3|7013|/data/primary13
+16|14|p|p|s|u|sdw3|sdw3|7014|/data/primary14
+17|15|p|p|s|u|sdw3|sdw3|7015|/data/primary15
+18|16|p|p|s|u|sdw3|sdw3|7016|/data/primary16
+43|1|m|m|s|u|sdw3|sdw3|8001|/data/mirror1
+51|9|m|m|s|u|sdw3|sdw3|8009|/data/mirror9
+62|20|m|m|s|u|sdw3|sdw3|8020|/data/mirror20
+71|29|m|m|s|u|sdw3|sdw3|8029|/data/mirror29
+78|36|m|m|s|u|sdw3|sdw3|8036|/data/mirror36
+# SDW4
+19|17|p|p|s|u|sdw4|sdw4|7017|/data/primary17
+20|18|p|p|s|u|sdw4|sdw4|7018|/data/primary18
+21|19|p|p|s|u|sdw4|sdw4|7019|/data/primary19
+22|20|p|p|s|u|sdw4|sdw4|7020|/data/primary20
+46|4|m|m|s|u|sdw4|sdw4|8004|/data/mirror4
+52|10|m|m|s|u|sdw4|sdw4|8010|/data/mirror10
+63|21|m|m|s|u|sdw4|sdw4|8021|/data/mirror21
+66|24|m|m|s|u|sdw4|sdw4|8024|/data/mirror24
+68|26|m|m|s|u|sdw4|sdw4|8026|/data/mirror26
+81|39|m|m|s|u|sdw4|sdw4|8039|/data/mirror39
+# SDW5
+23|21|p|p|s|u|sdw5|sdw5|7021|/data/primary21
+24|22|p|p|s|u|sdw5|sdw5|7022|/data/primary22
+25|23|p|p|s|u|sdw5|sdw5|7023|/data/primary23
+26|24|p|p|s|u|sdw5|sdw5|7024|/data/primary24
+27|25|p|p|s|u|sdw5|sdw5|7025|/data/primary25
+28|26|p|p|s|u|sdw5|sdw5|7026|/data/primary26
+48|6|m|m|s|u|sdw5|sdw5|8006|/data/mirror6
+54|12|m|m|s|u|sdw5|sdw5|8012|/data/mirror12
+57|15|m|m|s|u|sdw5|sdw5|8015|/data/mirror15
+73|31|m|m|s|u|sdw5|sdw5|8031|/data/mirror31
+76|34|m|m|s|u|sdw5|sdw5|8034|/data/mirror34
+# SDW6
+29|27|p|p|s|u|sdw6|sdw6|7027|/data/primary27
+30|28|p|p|s|u|sdw6|sdw6|7028|/data/primary28
+31|29|p|p|s|u|sdw6|sdw6|7029|/data/primary29
+32|30|p|p|s|u|sdw6|sdw6|7030|/data/primary30
+33|31|p|p|s|u|sdw6|sdw6|7031|/data/primary31
+44|2|m|m|s|u|sdw6|sdw6|8002|/data/mirror2
+55|13|m|m|s|u|sdw6|sdw6|8013|/data/mirror13
+64|22|m|m|s|u|sdw6|sdw6|8022|/data/mirror22
+74|32|m|m|s|u|sdw6|sdw6|8032|/data/mirror32
+80|38|m|m|s|u|sdw6|sdw6|8038|/data/mirror38
+# SDW7
+34|32|p|p|s|u|sdw7|sdw7|7032|/data/primary32
+35|33|p|p|s|u|sdw7|sdw7|7033|/data/primary33
+36|34|p|p|s|u|sdw7|sdw7|7034|/data/primary34
+37|35|p|p|s|u|sdw7|sdw7|7035|/data/primary35
+49|7|m|m|s|u|sdw7|sdw7|8007|/data/mirror7
+58|16|m|m|s|u|sdw7|sdw7|8016|/data/mirror16
+61|19|m|m|s|u|sdw7|sdw7|8019|/data/mirror19
+67|25|m|m|s|u|sdw7|sdw7|8025|/data/mirror25
+79|37|m|m|s|u|sdw7|sdw7|8037|/data/mirror37
+# SDW8
+38|36|p|p|s|u|sdw8|sdw8|7036|/data/primary36
+39|37|p|p|s|u|sdw8|sdw8|7037|/data/primary37
+40|38|p|p|s|u|sdw8|sdw8|7038|/data/primary38
+41|39|p|p|s|u|sdw8|sdw8|7039|/data/primary39
+45|3|m|m|s|u|sdw8|sdw8|8003|/data/mirror3
+59|17|m|m|s|u|sdw8|sdw8|8017|/data/mirror17
+65|23|m|m|s|u|sdw8|sdw8|8023|/data/mirror23
+77|35|m|m|s|u|sdw8|sdw8|8035|/data/mirror35

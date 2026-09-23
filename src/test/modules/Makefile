@@ -25,5 +25,6 @@ SUBDIRS = \
 
 # GPDB subdirs
 SUBDIRS += test_planner
+SUBDIRS += test_metadata
 
 $(recurse)

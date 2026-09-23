@@ -1,0 +1,54 @@
+# Coordinator
+1|-1|p|p|s|u|cdw|cdw|5432|/data/coordinator
+# SDW1
+2|0|p|p|s|u|sdw1|sdw1|40000|/data/primary0
+3|1|p|p|s|u|sdw1|sdw1|40001|/data/primary1
+4|2|p|p|s|u|sdw1|sdw1|40002|/data/primary2
+5|3|p|p|s|u|sdw1|sdw1|40003|/data/primary3
+6|4|p|p|s|u|sdw1|sdw1|40004|/data/primary4
+7|5|p|p|s|u|sdw1|sdw1|40005|/data/primary5
+32|6|m|m|s|u|sdw1|sdw1|50006|/data/mirror6
+35|9|m|m|s|u|sdw1|sdw1|50009|/data/mirror9
+38|12|m|m|s|u|sdw1|sdw1|50012|/data/mirror12
+41|15|m|m|s|u|sdw1|sdw1|50015|/data/mirror15
+44|18|m|m|s|u|sdw1|sdw1|50018|/data/mirror18
+47|21|m|m|s|u|sdw1|sdw1|50021|/data/mirror21
+# SDW2
+8|6|p|p|s|u|sdw2|sdw2|40006|/data/primary6
+9|7|p|p|s|u|sdw2|sdw2|40007|/data/primary7
+10|8|p|p|s|u|sdw2|sdw2|40008|/data/primary8
+11|9|p|p|s|u|sdw2|sdw2|40009|/data/primary9
+12|10|p|p|s|u|sdw2|sdw2|40010|/data/primary10
+13|11|p|p|s|u|sdw2|sdw2|40011|/data/primary11
+26|0|m|m|s|u|sdw2|sdw2|50000|/data/mirror0
+29|3|m|m|s|u|sdw2|sdw2|50003|/data/mirror3
+39|13|m|m|s|u|sdw2|sdw2|50013|/data/mirror13
+42|16|m|m|s|u|sdw2|sdw2|50016|/data/mirror16
+45|19|m|m|s|u|sdw2|sdw2|50019|/data/mirror19
+48|22|m|m|s|u|sdw2|sdw2|50022|/data/mirror22
+# SDW3
+14|12|p|p|s|u|sdw3|sdw3|40012|/data/primary12
+15|13|p|p|s|u|sdw3|sdw3|40013|/data/primary13
+16|14|p|p|s|u|sdw3|sdw3|40014|/data/primary14
+17|15|p|p|s|u|sdw3|sdw3|40015|/data/primary15
+18|16|p|p|s|u|sdw3|sdw3|40016|/data/primary16
+19|17|p|p|s|u|sdw3|sdw3|40017|/data/primary17
+27|1|m|m|s|u|sdw3|sdw3|50001|/data/mirror1
+30|4|m|m|s|u|sdw3|sdw3|50004|/data/mirror4
+33|7|m|m|s|u|sdw3|sdw3|50007|/data/mirror7
+36|10|m|m|s|u|sdw3|sdw3|50010|/data/mirror10
+46|20|m|m|s|u|sdw3|sdw3|50020|/data/mirror20
+49|23|m|m|s|u|sdw3|sdw3|50023|/data/mirror23
+# SDW4
+20|18|p|p|s|u|sdw4|sdw4|40018|/data/primary18
+21|19|p|p|s|u|sdw4|sdw4|40019|/data/primary19
+22|20|p|p|s|u|sdw4|sdw4|40020|/data/primary20
+23|21|p|p|s|u|sdw4|sdw4|40021|/data/primary21
+24|22|p|p|s|u|sdw4|sdw4|40022|/data/primary22
+25|23|p|p|s|u|sdw4|sdw4|40023|/data/primary23
+28|2|m|m|s|u|sdw4|sdw4|50002|/data/mirror2
+31|5|m|m|s|u|sdw4|sdw4|50005|/data/mirror5
+34|8|m|m|s|u|sdw4|sdw4|50008|/data/mirror8
+37|11|m|m|s|u|sdw4|sdw4|50011|/data/mirror11
+40|14|m|m|s|u|sdw4|sdw4|50014|/data/mirror14
+43|17|m|m|s|u|sdw4|sdw4|50017|/data/mirror17

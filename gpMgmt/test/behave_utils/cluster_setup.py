@@ -21,7 +21,7 @@ class GpDeleteSystem(Command):
 
 
 class TestCluster:
-    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0'):
+    def __init__(self, hosts = None, base_dir = '/tmp/default_gpinitsystem', hba_hostnames='0', number_of_segments = 2):
         """
         hosts: lists of cluster hosts. coordinator host will be assumed to be the first element.
         base_dir: cluster directory
@@ -55,7 +55,7 @@ class TestCluster:
         # Test metadata
         # Whether to do gpinitsystem or not
         self.mirror_enabled = False
-        self.number_of_segments = 2
+        self.number_of_segments = number_of_segments
         self.number_of_hosts = len(self.hosts)-1
 
         self.number_of_expansion_hosts = 0

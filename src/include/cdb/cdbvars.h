@@ -433,6 +433,8 @@ extern int gp_udpic_network_disable_ipv6;
  */
 extern uint32 gp_interconnect_id;
 
+extern int gp_segment_number_for_table_shrink;
+
 /* --------------------------------------------------------------------------------------------------
  * Logging
  */
@@ -604,6 +606,12 @@ extern bool gp_enable_dqa_pruning;
  * see gp_eqger_preunique.
  */
 extern bool gp_enable_preunique;
+
+/*
+ * May Greengage print statistics as average, minimum and maximum rows out
+ * during EXPLAIN ANALYZE?
+ */
+extern bool gp_enable_explain_rows_out;
 
 /* May Greengage dump statistics for all segments as a huge ugly string
  * during EXPLAIN ANALYZE?

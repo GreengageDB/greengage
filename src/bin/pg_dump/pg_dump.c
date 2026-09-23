@@ -906,6 +906,18 @@ main(int argc, char **argv)
 	}
 
 	/*
+	 * Without dumpGpPolicy, no CREATE TABLE carries a DISTRIBUTED BY/
+	 * RANDOMLY/REPLICATED clause, so --binary-upgrade has no way to tell
+	 * what policy each table's transplanted segment files actually match --
+	 * whatever policy restore ends up assigning will be wrong.
+	 */
+	if (dopt.binary_upgrade && !dopt.dumpGpPolicy)
+	{
+		pg_log_error("options \"--binary-upgrade\" and \"--no-gp-syntax\" cannot be used together");
+		exit_nicely(1);
+	}
+
+	/*
 	 * Disable security label support if server version < v9.1.x (prevents
 	 * access to nonexistent pg_seclabel catalog)
 	 */
@@ -2341,7 +2353,8 @@ dumpTableData_insert(Archive *fout, const void *dcontext)
 	PGresult   *res;
 	int			nfields,
 				i;
-	int			rows_per_statement = dopt->dump_inserts;
+	int			rows_per_statement = dopt->dump_inserts > 0 ?
+		dopt->dump_inserts : DUMP_DEFAULT_ROWS_PER_INSERT;
 	int			rows_this_statement = 0;
 
 	/* Temporary allows to access to foreign tables to dump data */
@@ -2677,17 +2690,20 @@ dumpTableData(Archive *fout, const TableDataInfo *tdinfo)
 		 forcePartitionRootLoad(tbinfo)))
 	{
 		TableInfo  *parentTbinfo;
+		char	   *sanitized;
 
 		parentTbinfo = getRootTableInfo(tbinfo);
 		copyFrom = fmtQualifiedDumpable(parentTbinfo);
+		sanitized = sanitize_line(copyFrom, true);
 		printfPQExpBuffer(copyBuf, "-- load via partition root %s",
-						  copyFrom);
+						  sanitized);
+		free(sanitized);
 		tdDefn = pg_strdup(copyBuf->data);
 	}
 	else
 		copyFrom = fmtQualifiedDumpable(tbinfo);
 
-	if (dopt->dump_inserts == 0)
+	if (dopt->dump_inserts == 0 && !tdinfo->isCoordOnly)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
@@ -2860,6 +2876,7 @@ makeTableDataInfo(DumpOptions *dopt, TableInfo *tbinfo)
 	tdinfo->dobj.namespace = tbinfo->dobj.namespace;
 	tdinfo->tdtable = tbinfo;
 	tdinfo->filtercond = NULL;	/* might get set later */
+	tdinfo->isCoordOnly = false;/* might get set later */
 	addObjectDependency(&tdinfo->dobj, tbinfo->dobj.dumpId);
 
 	/* A TableDataInfo contains data, of course */
@@ -4879,7 +4896,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 	PGresult   *res;
 	Oid			pg_type_array_oid = tyinfo->typarrayoid;
 	Oid			pg_type_array_ns_oid = tyinfo->typarrayns;
-	char	*pg_type_array_name = tyinfo->typarrayname;
 
 
 	simple_oid_list_append(&preassigned_oids, tyinfo->dobj.catId.oid);
@@ -4917,7 +4933,6 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 
 		pg_type_array_oid = next_possible_free_oid;
 		pg_type_array_ns_oid = tyinfo->dobj.namespace->dobj.catId.oid;
-		pg_type_array_name = psprintf("_%s", tyinfo->dobj.name);
 	}
 
 	if (OidIsValid(pg_type_array_oid))
@@ -4929,7 +4944,7 @@ binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 						  "SELECT pg_catalog.binary_upgrade_set_next_array_pg_type_oid('%u'::pg_catalog.oid, "
 						  "'%u'::pg_catalog.oid, $_GPDB_$%s$_GPDB_$::text);\n\n",
 						  pg_type_array_oid, pg_type_array_ns_oid,
-						  pg_type_array_name);
+						  tyinfo->dobj.name /* leave the target cluster decide the name of this type */);
 	}
 
 	destroyPQExpBuffer(upgrade_query);
@@ -9216,6 +9231,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	{
 		Oid			attrelid = atooid(PQgetvalue(res, r, i_attrelid));
 		TableInfo  *tbinfo = NULL;
+		bool        tableHasDroppedAttrs = false;
 		int			numatts;
 		bool		hasdefaults;
 
@@ -9300,6 +9316,9 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, PQfnumber(res, "attencoding")));
 			else
 				tbinfo->attencoding[j] = NULL;
+
+			if (tbinfo->attisdropped[j])
+				tableHasDroppedAttrs = true;
 		}
 
 		if (hasdefaults)
@@ -9308,6 +9327,80 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			if (tbloids->len > 1)	/* do we have more than the '{'? */
 				appendPQExpBufferChar(tbloids, ',');
 			appendPQExpBuffer(tbloids, "%u", tbinfo->dobj.catId.oid);
+		}
+
+		/*
+		 * GPDB: If root partition has a dropped attribute, check if its child
+		 * partitions do too. If all the child partitions have the same
+		 * dropped attribute then continue as normal. If none of the child
+		 * partitions have a dropped attribute, we will suppress the dropped
+		 * attribute from being dumped later in the CREATE TABLE PARTITION BY
+		 * DDL along with the respective ALTER TABLE DROP COLUMN. Child and
+		 * subroot partitions do not have their own DDL; they are completely
+		 * delegated by the root partition DDL.
+		 *
+		 * Note: This assumes that the dropped column reference is the same
+		 * between the root partition and its child partitions.
+		 */
+		if (fout->remoteVersion < GPDB7_MAJOR_PGVERSION &&
+			dopt->binary_upgrade &&
+			tbinfo->parparent &&
+			tableHasDroppedAttrs)
+		{
+			int numDistinctNatts;
+			int childPartNumNatts;
+			PGresult   *attsRes;
+
+			pg_log_info("checking if root partition table \"%s\" with dropped column(s) is synchronized with its child partitions",
+						tbinfo->dobj.name);
+
+			resetPQExpBuffer(q);
+			appendPQExpBuffer(q,
+							  "SELECT DISTINCT c.relnatts "
+							  "FROM pg_catalog.pg_class c "
+							  "JOIN pg_catalog.pg_partition_rule rule "
+							  "		ON c.oid = rule.parchildrelid "
+							  "JOIN pg_catalog.pg_partition par "
+							  "		ON rule.paroid = par.oid "
+							  "WHERE par.parrelid = '%u'::pg_catalog.oid "
+							  "		AND NOT par.paristemplate "
+							  "		AND NOT EXISTS ( "
+							  "			SELECT 1 FROM pg_catalog.pg_partition_rule child "
+							  "			WHERE child.parparentrule = rule.oid "
+							  "		); ",
+							  tbinfo->dobj.catId.oid);
+
+			attsRes = ExecuteSqlQuery(fout, q->data, PGRES_TUPLES_OK);
+			numDistinctNatts = PQntuples(attsRes);
+			Assert(numDistinctNatts > 0);
+
+			/*
+			 * We encountered a heterogeneous partition table where all the
+			 * child partitions are not synchronized with the number of
+			 * attributes (e.g. one has a dropped column while the others do
+			 * not).
+			 */
+			if (numDistinctNatts != 1)
+			{
+				pg_log_error("invalid heterogeneous partition table detected with root partition table \"%s\"",
+							 tbinfo->dobj.name);
+				exit_nicely(1);
+			}
+
+			/*
+			 * If the number of attributes from the child partitions match the
+			 * root partition then keep the dropped column reference. If they
+			 * do not match, then ignore the dropped column reference when
+			 * dumping the partition table DDL.
+			 */
+			childPartNumNatts = atoi(PQgetvalue(attsRes, 0, 0));
+			if (childPartNumNatts != numatts)
+			{
+				pg_log_info("suppressing dropped column(s) for root partition table \"%s\"",
+							tbinfo->dobj.name);
+				tbinfo->ignoreRootPartDroppedAttr = true;
+			}
+			PQclear(attsRes);
 		}
 	}
 
@@ -9627,7 +9720,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 bool
 shouldPrintColumn(const DumpOptions *dopt, const TableInfo *tbinfo, int colno)
 {
-	if (dopt->binary_upgrade)
+	if (dopt->binary_upgrade && !tbinfo->ignoreRootPartDroppedAttr)
 		return true;
 	if (tbinfo->attisdropped[colno])
 		return false;
@@ -17130,14 +17223,26 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 				PQExpBuffer 	partquery = createPQExpBuffer();
 				PGresult	   *partres;
 
-				appendPQExpBuffer(partquery, "SELECT DISTINCT(child.oid) "
-											 "FROM pg_catalog.pg_partition part, "
-											 "     pg_catalog.pg_partition_rule rule, "
-											 "     pg_catalog.pg_class child "
-											 "WHERE part.parrelid = '%u'::pg_catalog.oid "
-											 "  AND rule.paroid = part.oid "
-											 "  AND child.oid = rule.parchildrelid",
-											 tbinfo->dobj.catId.oid);
+				appendPQExpBuffer(partquery,
+								 "WITH RECURSIVE parts AS ("
+								 "    SELECT rule.parchildrelid AS childoid,"
+								 "            rule.oid AS ruleoid,"
+								 "            part.parlevel,"
+								 "            ARRAY[rule.parisdefault::int * 100000 + rule.parruleord] AS path"
+								 "     FROM pg_catalog.pg_partition part"
+								 "     JOIN pg_catalog.pg_partition_rule rule ON rule.paroid = part.oid"
+								 "     WHERE part.parrelid = '%u'::pg_catalog.oid"
+								 "       AND part.parlevel = 0"
+								 "   UNION ALL"
+								 "     SELECT rule.parchildrelid, rule.oid, part.parlevel,"
+								 "            p.path || (rule.parisdefault::int * 100000 + rule.parruleord)"
+								 "     FROM parts p"
+								 "     JOIN pg_catalog.pg_partition_rule rule ON rule.parparentrule = p.ruleoid"
+								 "     JOIN pg_catalog.pg_partition part ON part.oid = rule.paroid"
+								 "                                      AND NOT part.paristemplate)"
+								 " SELECT childoid FROM parts"
+								 " ORDER BY parlevel, path",
+					tbinfo->dobj.catId.oid);
 				partres = ExecuteSqlQuery(fout, partquery->data, PGRES_TUPLES_OK);
 
 				/* It really should..  */
@@ -17623,7 +17728,7 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 
 			for (j = 0; j < tbinfo->numatts; j++)
 			{
-				if (tbinfo->attisdropped[j])
+				if (tbinfo->attisdropped[j] && !tbinfo->ignoreRootPartDroppedAttr)
 				{
 					appendPQExpBufferStr(q, "\n-- For binary upgrade, recreate dropped column.\n");
 					appendPQExpBuffer(q, "UPDATE pg_catalog.pg_attribute\n"
@@ -19752,6 +19857,14 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 					{
 						if (strlen(extconditionarray[j]) > 0)
 							configtbl->dataObj->filtercond = pg_strdup(extconditionarray[j]);
+
+						/*
+						 * A config table is coordinator-only (entry policy)
+						 * if it has no distribution policy row.
+						 */
+						Assert(configtbl->distclause);
+						configtbl->dataObj->isCoordOnly =
+							 configtbl->distclause[0] == '\0';
 					}
 				}
 			}

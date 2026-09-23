@@ -417,6 +417,8 @@ extern bool IsTransactionState(void);
 extern bool IsAbortInProgress(void);
 extern bool IsAbortedTransactionBlockState(void);
 extern bool TransactionDidWriteXLog(void);
+extern void MarkWalWriteForPermanentRel(void);
+extern bool TransactionWroteWalForPermanentRel(void);
 extern bool TopXactExecutorDidWriteXLog(void);
 extern void GetAllTransactionXids(
 	DistributedTransactionId	*distribXid,
