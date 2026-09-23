@@ -526,39 +526,89 @@ typedef struct
 {
 	HistoryItem *items;
 	TimestampTz ts;
+	bool		has_tmid;		/* declared result row has a tmid column */
 } WaitCurrentContext;
 
 /*
- * Result row types come from the SQL declarations of the functions, so that
- * one library serves both the 1.1 declarations (with a tmid column, always
- * NULL now) and the 1.2 ones. The largest declared row has this many columns.
+ * GGDB: the result row type of each function is taken from the SQL
+ * declaration of the calling function rather than built here, so that one
+ * library serves both the 1.1 declarations, which still have a tmid column,
+ * and the 1.2 ones. The declaration is validated against the column types the
+ * function fills: the only accepted variation is an int4 column named tmid at
+ * its 1.1 position, which is always returned as NULL.
  */
+typedef struct
+{
+	int			ncols;			/* columns without tmid */
+	int			tmid_pos;		/* 0-based position of tmid in the 1.1 declaration */
+	const Oid  *types;			/* ncols entries */
+} ggws_result_shape;
+
 #define GGWS_MAX_RESULT_COLS 9
 
+static const Oid ggws_current_types[] =
+	{INT4OID, TEXTOID, TEXTOID, INT8OID, INT4OID, INT4OID, INT4OID};
+static const ggws_result_shape ggws_current_shape =
+	{lengthof(ggws_current_types), 6, ggws_current_types};
+
+static const Oid ggws_profile_types[] =
+	{INT4OID, TEXTOID, TEXTOID, INT8OID, INT8OID, INT4OID, INT4OID, INT4OID};
+static const ggws_result_shape ggws_profile_shape =
+	{lengthof(ggws_profile_types), 7, ggws_profile_types};
+
+static const Oid ggws_history_types[] =
+	{INT4OID, TIMESTAMPTZOID, TEXTOID, TEXTOID, INT8OID, INT4OID, INT4OID, INT4OID};
+static const ggws_result_shape ggws_history_shape =
+	{lengthof(ggws_history_types), 7, ggws_history_types};
+
 static TupleDesc
-ggws_result_tupdesc(FunctionCallInfo fcinfo)
+ggws_result_tupdesc(FunctionCallInfo fcinfo, const ggws_result_shape *shape,
+					bool *has_tmid)
 {
 	TupleDesc	tupdesc;
+	int			expected = 0;
 
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("function returning record called in context that cannot accept type record")));
-	Assert(tupdesc->natts <= GGWS_MAX_RESULT_COLS);
 
-	return BlessTupleDesc(tupdesc);
-}
+	StaticAssertStmt(lengthof(ggws_history_types) + 1 <= GGWS_MAX_RESULT_COLS,
+					 "GGWS_MAX_RESULT_COLS is too small");
 
-/* Whether the declared row type still carries the pre-1.2 tmid column. */
-static bool
-ggws_tupdesc_has_tmid(TupleDesc tupdesc)
-{
+	*has_tmid = (tupdesc->natts == shape->ncols + 1);
+	if (tupdesc->natts != shape->ncols && !*has_tmid)
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("function result type does not match the gg_wait_sampling declaration"),
+				 errdetail("Expected %d or %d columns, got %d.",
+						   shape->ncols, shape->ncols + 1, tupdesc->natts)));
+
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		if (strcmp(NameStr(TupleDescAttr(tupdesc, i)->attname), "tmid") == 0)
-			return true;
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+		Oid			want;
+
+		if (*has_tmid && i == shape->tmid_pos)
+		{
+			if (attr->atttypid != INT4OID ||
+				strcmp(NameStr(attr->attname), "tmid") != 0)
+				ereport(ERROR,
+						(errcode(ERRCODE_DATATYPE_MISMATCH),
+						 errmsg("function result type does not match the gg_wait_sampling declaration"),
+						 errdetail("Column %d must be \"tmid\" of type int4.", i + 1)));
+			continue;
+		}
+		want = shape->types[expected++];
+		if (attr->atttypid != want)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATATYPE_MISMATCH),
+					 errmsg("function result type does not match the gg_wait_sampling declaration"),
+					 errdetail("Column %d has type %s, expected %s.", i + 1,
+							   format_type_be(attr->atttypid), format_type_be(want))));
 	}
-	return false;
+
+	return BlessTupleDesc(tupdesc);
 }
 
 PG_FUNCTION_INFO_V1(pg_wait_sampling_get_current);
@@ -581,7 +631,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		params->ts = GetCurrentTimestamp();
 
 		funcctx->user_fctx = params;
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_current_shape,
+												   &params->has_tmid);
 
 		LWLockAcquire(ProcArrayLock, LW_SHARED);
 
@@ -596,8 +647,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 			item = &params->items[0];
 			item->pid = proc->pid;
 			item->wait_event_info = proc->wait_event_info;
-			item->query_info = (WSQueryInfo) {0, proc->mppSessionId, proc->queryCommandId};
-			item->query_info.queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
+			item->queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
+			pgws_proc_identity(proc, item->wait_event_info, &item->ssid, &item->ccnt);
 			funcctx->max_calls = 1;
 		}
 		else
@@ -619,8 +670,9 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 
 				params->items[j].pid = proc->pid;
 				params->items[j].wait_event_info = proc->wait_event_info;
-				params->items[j].query_info = (WSQueryInfo) {0, proc->mppSessionId, proc->queryCommandId};
-				params->items[j].query_info.queryId = pgws_proc_queryids[i];
+				params->items[j].queryId = pgws_proc_queryids[i];
+				pgws_proc_identity(proc, params->items[j].wait_event_info,
+								   &params->items[j].ssid, &params->items[j].ccnt);
 				j++;
 			}
 			funcctx->max_calls = j;
@@ -663,11 +715,11 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		else
 			nulls[2] = true;
 
-		values[3] = UInt64GetDatum(item->query_info.queryId);
-		values[4] = Int32GetDatum(item->query_info.ssid);
-		values[5] = Int32GetDatum(item->query_info.ccnt);
+		values[3] = UInt64GetDatum(item->queryId);
+		values[4] = Int32GetDatum(item->ssid);
+		values[5] = Int32GetDatum(item->ccnt);
 		col = 6;
-		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+		if (params->has_tmid)
 			nulls[col++] = true;
 		values[col] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
@@ -685,6 +737,7 @@ typedef struct
 {
 	Size		count;
 	ProfileItem *items;
+	bool		has_tmid;		/* declared result row has a tmid column */
 } Profile;
 
 /* Get array (history or profile data) from shared memory */
@@ -794,7 +847,8 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = profile;
 		funcctx->max_calls = profile->count;
 
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_profile_shape,
+												   &profile->has_tmid);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -835,9 +889,9 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 
 		if (pgws_profileQueries)
 		{
-			values[3] = UInt64GetDatum(item->query_info.queryId);
-			values[5] = Int32GetDatum(item->query_info.ssid);
-			values[6] = Int32GetDatum(item->query_info.ccnt);
+			values[3] = UInt64GetDatum(item->queryId);
+			values[5] = Int32GetDatum(item->ssid);
+			values[6] = Int32GetDatum(item->ccnt);
 		}
 		else
 		{
@@ -848,7 +902,7 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 
 		values[4] = UInt64GetDatum(item->count);
 		col = 7;
-		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+		if (profile->has_tmid)
 			nulls[col++] = true;
 		values[col] = Int32GetDatum(GpIdentity.segindex);
 
@@ -913,7 +967,8 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = history;
 		funcctx->max_calls = history->count;
 
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo);
+		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_history_shape,
+												   &history->has_tmid);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -952,11 +1007,11 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		else
 			nulls[3] = true;
 
-		values[4] = UInt64GetDatum(item->query_info.queryId);
-		values[5] = Int32GetDatum(item->query_info.ssid);
-		values[6] = Int32GetDatum(item->query_info.ccnt);
+		values[4] = UInt64GetDatum(item->queryId);
+		values[5] = Int32GetDatum(item->ssid);
+		values[6] = Int32GetDatum(item->ccnt);
 		col = 7;
-		if (ggws_tupdesc_has_tmid(funcctx->tuple_desc))
+		if (history->has_tmid)
 			nulls[col++] = true;
 		values[col] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);

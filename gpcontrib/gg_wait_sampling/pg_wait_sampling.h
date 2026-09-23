@@ -11,6 +11,8 @@
 #define __PG_WAIT_SAMPLING_H__
 
 #include "datatype/timestamp.h"
+#include "pgstat.h"
+#include "storage/proc.h"
 #include "storage/latch.h"
 #include "storage/lwlock.h"
 #include "storage/shm_mq.h"
@@ -23,16 +25,11 @@
 
 typedef struct
 {
-	uint64		queryId;	/* queryId from Query */
-	int32		ssid;		/* session id */
-	int32		ccnt;		/* command count */
-} WSQueryInfo;
-
-typedef struct
-{
 	int			pid;
 	uint32		wait_event_info;
-	WSQueryInfo	query_info;
+	uint64		queryId;
+	int32		ssid;			/* GGDB session id */
+	int32		ccnt;			/* GGDB command id */
 	uint64		count;
 } ProfileItem;
 
@@ -40,7 +37,9 @@ typedef struct
 {
 	int			pid;
 	uint32		wait_event_info;
-	WSQueryInfo	query_info;
+	uint64		queryId;
+	int32		ssid;			/* GGDB session id */
+	int32		ccnt;			/* GGDB command id */
 	TimestampTz ts;
 } HistoryItem;
 
@@ -50,7 +49,24 @@ typedef struct
 	Size		index;
 	Size		count;
 	HistoryItem *items;
+	bool		has_tmid;		/* declared result row has a tmid column */
 } History;
+
+/*
+ * GGDB: session id and command id of a sampled process are read from its
+ * PGPROC entry, so they are available whatever phase of a statement the
+ * process is in, including waits before parsing. A process waiting for its
+ * client is idle, or between messages of one command: it is attributed to
+ * the session but to no command, so that an idle backend produces a single
+ * profile entry rather than one per command it ever ran.
+ */
+static inline void
+pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
+				   int32 *ssid, int32 *ccnt)
+{
+	*ssid = proc->mppSessionId;
+	*ccnt = (wait_event_info == WAIT_EVENT_CLIENT_READ) ? 0 : proc->queryCommandId;
+}
 
 typedef enum
 {

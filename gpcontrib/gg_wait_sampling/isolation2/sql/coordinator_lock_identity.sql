@@ -47,6 +47,14 @@ WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND p.event_type = 'Lock';
 
 1: COMMIT;
 2<:
+
+-- Once its statement is done the backend waits for the client: it keeps its
+-- session id but is attributed to no command.
+SELECT c.event, c.mppsessionid = s.sess_id AS session_matches, c.command_id, c.queryid
+FROM gg_wait_sampling_get_current_coordinator() c
+JOIN pg_stat_activity s ON s.pid = c.pid
+WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND s.state = 'idle';
+
 1q:
 2q:
 
