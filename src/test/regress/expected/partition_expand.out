@@ -1130,4 +1130,3 @@ select gp_debug_reset_create_table_default_numsegments();
  
 (1 row)
 
-drop extension gp_debug_numsegments;

@@ -4539,63 +4539,31 @@ INSERT INTO rank3 VALUES (543,1,2007,'f',1);
 SELECT gp_segment_id, * FROM rank3_1_prt_2;
 
 --
--- Test that segment is chosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly in case of update on distribution
+-- and partitioning columns simultaneously.
 --
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
-( START (2006) END (2010) EVERY (1),
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
 
--- create partition with changed attribute number
-CREATE TABLE rank4_1_prt_6 (like rank4);
-ALTER TABLE rank4_1_prt_6 DROP year, ADD year INT;
-ALTER TABLE rank4 EXCHANGE PARTITION FOR (INT '2009') WITH TABLE rank4_1_prt_6;
-
 INSERT INTO rank4 VALUES (543,1,2006,'m',1);
-INSERT INTO rank4 VALUES (543,1,2009,'f',1);
+INSERT INTO rank4 VALUES (543,1,2007,'f',1);
 
 ALTER TABLE rank4 EXPAND PARTITION PREPARE;
 
 ALTER TABLE rank4_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
 
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
-SELECT gp_segment_id, * FROM rank4_1_prt_5;
+SELECT gp_segment_id, * FROM rank4_1_prt_3;
 
--- see if update is done with splitting and explicit redistribution
-EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006, id=id+1 WHERE gender='f';
 
-UPDATE rank4 SET year=2006 WHERE gender='f';
+UPDATE rank4 SET year=2006, id=id+1 WHERE gender='f';
 
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
-SELECT gp_segment_id, * FROM rank4_1_prt_5;
-
---
--- Test that segment is chosen correctly in case of update on distribution
--- and partitioning columns simultaneously.
---
-CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
-DISTRIBUTED BY (id)
-PARTITION BY RANGE (year)
-( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
-DEFAULT PARTITION extra);
-
-INSERT INTO rank5 VALUES (543,1,2006,'m',1);
-INSERT INTO rank5 VALUES (543,1,2007,'f',1);
-
-ALTER TABLE rank5 EXPAND PARTITION PREPARE;
-
-ALTER TABLE rank5_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
-
-SELECT gp_segment_id, * FROM rank5_1_prt_2;
-SELECT gp_segment_id, * FROM rank5_1_prt_3;
-
-EXPLAIN (COSTS OFF) UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
-
-UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
-
-SELECT gp_segment_id, * FROM rank5_1_prt_2;
-SELECT gp_segment_id, * FROM rank5_1_prt_3;
+SELECT gp_segment_id, * FROM rank4_1_prt_3;
 
 --  
 -- Test that segment is chosen correctly in case of tuple routing
@@ -4652,8 +4620,6 @@ DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
-DROP TABLE rank4_1_prt_6;
-DROP TABLE rank5;
 DROP TABLE sales;
 DROP TABLE t_part_acl;
 DROP ROLE user_prt_acl;

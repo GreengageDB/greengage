@@ -532,4 +532,3 @@ abort;
 
 --cleanup
 select gp_debug_reset_create_table_default_numsegments();
-drop extension gp_debug_numsegments;

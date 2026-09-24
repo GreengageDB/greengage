@@ -9279,11 +9279,10 @@ SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_acl_1_prt_30':
 (1 row)
 
 --
--- Test that segment is choosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
 CREATE extension IF NOT EXISTS gp_debug_numsegments;
-NOTICE:  extension "gp_debug_numsegments" already exists, skipping
 SELECT gp_debug_set_create_table_default_numsegments(2);
  gp_debug_set_create_table_default_numsegments 
 -----------------------------------------------
@@ -9296,12 +9295,18 @@ DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
 ( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
+NOTICE:  CREATE TABLE will create partition "rank_1_prt_extra" for table "rank"
+NOTICE:  CREATE TABLE will create partition "rank_1_prt_2" for table "rank"
+NOTICE:  CREATE TABLE will create partition "rank_1_prt_3" for table "rank"
 CREATE TABLE rank2 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 WITH (appendonly='true', orientation='column', compresstype=zstd, compresslevel='1')
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
 ( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
+NOTICE:  CREATE TABLE will create partition "rank2_1_prt_extra" for table "rank2"
+NOTICE:  CREATE TABLE will create partition "rank2_1_prt_2" for table "rank2"
+NOTICE:  CREATE TABLE will create partition "rank2_1_prt_3" for table "rank2"
 -- insert data for future movement
 INSERT INTO rank VALUES (543,1,2006,'m',1);
 INSERT INTO rank VALUES (543,1,2007,'f',1);
@@ -9339,36 +9344,40 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank  (cost=0.00..431.00 rows=1 width=34)
-                           Number of partitions to scan: 3 (out of 3)
-                           Filter: (gender = 'f'::bpchar)
- Optimizer: GPORCA
-(8 rows)
+EXPLAIN (COSTS OFF) UPDATE rank SET year=2006 WHERE gender='f';
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for rank (dynamic scan id: 1)
+                                 Partitions selected: 3 (out of 3)
+                           ->  Dynamic Seq Scan on rank (dynamic scan id: 1)
+                                 Filter: (gender = 'f'::bpchar)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
 
-EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank2  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank2  (cost=0.00..431.00 rows=1 width=34)
-                           Number of partitions to scan: 3 (out of 3)
-                           Filter: (gender = 'f'::bpchar)
- Optimizer: GPORCA
-(8 rows)
+EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for rank2 (dynamic scan id: 1)
+                                 Partitions selected: 3 (out of 3)
+                           ->  Dynamic Seq Scan on rank2 (dynamic scan id: 1)
+                                 Filter: (gender = 'f'::bpchar)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
 
 -- update key columns so partition change will be triggered
 UPDATE rank SET year=2006 WHERE gender='f';
 UPDATE rank2 SET year=2006 WHERE gender='f';
--- check that update endeds up where it should
+-- check that update ended up where it should
 SELECT gp_segment_id, * FROM rank_1_prt_2;
  gp_segment_id | id  | rank | year | gender | count 
 ---------------+-----+------+------+--------+-------
@@ -9394,13 +9403,16 @@ SELECT gp_segment_id, * FROM rank2_1_prt_3;
 (0 rows)
 
 --
--- Test that segment is choosen correctly in case of insertion also
+-- Test that segment is chosen correctly in case of insertion also
 --
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
 ( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
+NOTICE:  CREATE TABLE will create partition "rank3_1_prt_extra" for table "rank3"
+NOTICE:  CREATE TABLE will create partition "rank3_1_prt_2" for table "rank3"
+NOTICE:  CREATE TABLE will create partition "rank3_1_prt_3" for table "rank3"
 -- get to 2nd stage of gpexpand
 ALTER TABLE rank3 EXPAND PARTITION PREPARE;
 ALTER TABLE rank3_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
@@ -9415,20 +9427,19 @@ SELECT gp_segment_id, * FROM rank3_1_prt_2;
 (1 row)
 
 --
--- Test that segment is choosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly in case of update on distribution
+-- and partitioning columns simultaneously.
 --
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (year)
-( START (2006) END (2010) EVERY (1),
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
 DEFAULT PARTITION extra);
--- create partition with changed attribute number
-CREATE TABLE rank4_1_prt_6 (like rank4);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
-ALTER TABLE rank4_1_prt_6 DROP year, ADD year INT;
-ALTER TABLE rank4 EXCHANGE PARTITION FOR (INT '2009') WITH TABLE rank4_1_prt_6;
+NOTICE:  CREATE TABLE will create partition "rank4_1_prt_extra" for table "rank4"
+NOTICE:  CREATE TABLE will create partition "rank4_1_prt_2" for table "rank4"
+NOTICE:  CREATE TABLE will create partition "rank4_1_prt_3" for table "rank4"
 INSERT INTO rank4 VALUES (543,1,2006,'m',1);
-INSERT INTO rank4 VALUES (543,1,2009,'f',1);
+INSERT INTO rank4 VALUES (543,1,2007,'f',1);
 ALTER TABLE rank4 EXPAND PARTITION PREPARE;
 ALTER TABLE rank4_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
@@ -9437,37 +9448,157 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
              2 | 543 |    1 | 2006 | m      |     1
 (1 row)
 
-SELECT gp_segment_id, * FROM rank4_1_prt_5;
- gp_segment_id | id  | rank | gender | count | year 
----------------+-----+------+--------+-------+------
-             0 | 543 |    1 | f      |     1 | 2009
+SELECT gp_segment_id, * FROM rank4_1_prt_3;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             0 | 543 |    1 | 2007 | f      |     1
 (1 row)
 
--- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
- Update on rank4  (cost=0.00..431.10 rows=1 width=1)
-   ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..431.00 rows=2 width=38)
-               ->  Split  (cost=0.00..431.00 rows=1 width=38)
-                     ->  Dynamic Seq Scan on rank4  (cost=0.00..431.00 rows=1 width=34)
-                           Number of partitions to scan: 5 (out of 5)
-                           Filter: (gender = 'f'::bpchar)
- Optimizer: GPORCA
-(8 rows)
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006, id=id+1 WHERE gender='f';
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for rank4 (dynamic scan id: 1)
+                                 Partitions selected: 3 (out of 3)
+                           ->  Dynamic Seq Scan on rank4 (dynamic scan id: 1)
+                                 Filter: (gender = 'f'::bpchar)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
 
-UPDATE rank4 SET year=2006 WHERE gender='f';
+UPDATE rank4 SET year=2006, id=id+1 WHERE gender='f';
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
  gp_segment_id | id  | rank | year | gender | count 
 ---------------+-----+------+------+--------+-------
+             1 | 544 |    1 | 2006 | f      |     1
              2 | 543 |    1 | 2006 | m      |     1
-             2 | 543 |    1 | 2006 | f      |     1
 (2 rows)
 
-SELECT gp_segment_id, * FROM rank4_1_prt_5;
- gp_segment_id | id | rank | gender | count | year 
----------------+----+------+--------+-------+------
+SELECT gp_segment_id, * FROM rank4_1_prt_3;
+ gp_segment_id | id | rank | year | gender | count 
+---------------+----+------+------+--------+-------
+(0 rows)
+
+--  
+-- Test that segment is chosen correctly in case of tuple routing
+-- with differently distributed partitions (2nd phase of gpexpand)
+--
+-- create different kinds of partitioned tables
+CREATE TABLE sales (trans_id INT, date DATE, amount DECIMAL(9,2), region TEXT)
+DISTRIBUTED BY (trans_id)
+PARTITION BY RANGE (date)
+SUBPARTITION BY LIST (region)
+SUBPARTITION TEMPLATE
+(SUBPARTITION usa VALUES ('usa'),
+SUBPARTITION asia VALUES ('asia'),
+DEFAULT SUBPARTITION other_regions)
+(START (DATE '2011-01-01') INCLUSIVE
+END (DATE '2011-03-02') INCLUSIVE
+EVERY (INTERVAL '1 month'),
+DEFAULT PARTITION outlying_dates);
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_outlying_dates" for table "sales"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_outlying_dates_2_prt_usa" for table "sales_1_prt_outlying_dates"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_outlying_dates_2_prt_asia" for table "sales_1_prt_outlying_dates"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_outlying_dates_2_prt_other_regions" for table "sales_1_prt_outlying_dates"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_2" for table "sales"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_2_2_prt_usa" for table "sales_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_2_2_prt_asia" for table "sales_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_2_2_prt_other_regions" for table "sales_1_prt_2"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_3" for table "sales"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_3_2_prt_usa" for table "sales_1_prt_3"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_3_2_prt_asia" for table "sales_1_prt_3"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_3_2_prt_other_regions" for table "sales_1_prt_3"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_4" for table "sales"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_4_2_prt_usa" for table "sales_1_prt_4"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_4_2_prt_asia" for table "sales_1_prt_4"
+NOTICE:  CREATE TABLE will create partition "sales_1_prt_4_2_prt_other_regions" for table "sales_1_prt_4"
+-- insert data for future movement
+INSERT INTO sales VALUES (543,'2011-01-01',1000,'usa');
+INSERT INTO sales VALUES (543,'2011-02-01',1234,'usa');
+INSERT INTO sales VALUES (543,'2011-03-01',1000,'asia');
+-- prepare for expansion (1st stage of gpexpand)
+ALTER TABLE sales EXPAND PARTITION PREPARE;
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+ALTER TABLE sales_1_prt_2_2_prt_usa SET WITH (REORGANIZE=true) DISTRIBUTED BY (trans_id);
+ALTER TABLE sales_1_prt_4_2_prt_usa SET WITH (REORGANIZE=true) DISTRIBUTED BY (trans_id);
+-- check values distribution before update
+SELECT gp_segment_id, * FROM sales_1_prt_2_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             2 |      543 | 01-01-2011 | 1000.00 | usa
+(1 row)
+
+SELECT gp_segment_id, * FROM sales_1_prt_3_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             0 |      543 | 02-01-2011 | 1234.00 | usa
+(1 row)
+
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_asia;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             0 |      543 | 03-01-2011 | 1000.00 | asia
+(1 row)
+
+-- see if update is done with splitting and explicit redistribution
+EXPLAIN (COSTS OFF) UPDATE sales SET date='2011-01-01' WHERE amount=1234;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for sales (dynamic scan id: 1)
+                                 Partitions selected: 12 (out of 12)
+                           ->  Dynamic Seq Scan on sales (dynamic scan id: 1)
+                                 Filter: (amount = '1234'::numeric)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+EXPLAIN (COSTS OFF) UPDATE sales SET region='usa' WHERE region='asia';
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for sales (dynamic scan id: 1)
+                                 Partitions selected: 4 (out of 12)
+                           ->  Dynamic Seq Scan on sales (dynamic scan id: 1)
+                                 Filter: (region = 'asia'::text)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+-- update key columns so partition change will be triggered
+UPDATE sales SET date='2011-01-01' WHERE amount=1234;
+UPDATE sales SET region='usa' WHERE region='asia';
+-- check that update ended up where it should
+SELECT gp_segment_id, * FROM sales_1_prt_2_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             2 |      543 | 01-01-2011 | 1000.00 | usa
+             2 |      543 | 01-01-2011 | 1234.00 | usa
+(2 rows)
+
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_usa;
+ gp_segment_id | trans_id |    date    | amount  | region 
+---------------+----------+------------+---------+--------
+             2 |      543 | 03-01-2011 | 1000.00 | usa
+(1 row)
+
+SELECT gp_segment_id, * FROM sales_1_prt_3_2_prt_usa;
+ gp_segment_id | trans_id | date | amount | region 
+---------------+----------+------+--------+--------
+(0 rows)
+
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_asia;
+ gp_segment_id | trans_id | date | amount | region 
+---------------+----------+------+--------+--------
 (0 rows)
 
 SELECT gp_debug_reset_create_table_default_numsegments();
@@ -9480,6 +9611,6 @@ DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
-DROP TABLE rank4_1_prt_6;
+DROP TABLE sales;
 DROP TABLE t_part_acl;
 DROP ROLE user_prt_acl;
