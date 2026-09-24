@@ -1,0 +1,61 @@
+# .github/workflows/greengage-no-tests.yml
+name: Greengage CI (No Tests)
+
+on:
+  push:
+    branches: ['7.x'] # Trigger on push to main (after merged PR)
+    tags:     ['7.*'] # Trigger on tags for versioned releases
+  pull_request:
+    branches: ['**']  # Trigger on pull requests for all branches
+
+# Concurrency control to cancel previous runs on new push to same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true  # Automatically cancel any previous runs for the same group
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_os: rockylinux
+            target_os_version: "8"
+          - target_os: rockylinux
+            target_os_version: "9"
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions:  write # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v42
+    with:
+      version: 7
+      target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
+
+  package:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_os: rockylinux
+            target_os_version: "8"
+            test_install: false
+          - target_os: rockylinux
+            target_os_version: "9"
+            test_install: false
+    permissions:
+      contents: read  # Explicit for default behavior
+      packages: write # Required for GHCR access
+      actions:  write # Required for artifact upload
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v47
+    with:
+      version: 7
+      target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
+      test_install: ${{ matrix.test_install }}
+    secrets:
+      ghcr_token: ${{ secrets.GITHUB_TOKEN }}
