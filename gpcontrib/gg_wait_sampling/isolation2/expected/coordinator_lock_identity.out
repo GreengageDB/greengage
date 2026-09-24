@@ -38,11 +38,21 @@ SELECT wait_for_lock_wait('SELECT count(*) FROM t_wait_qd;');
 
 -- Current waits: the blocked backend must carry its session id and a
 -- command id although no plan exists yet.
-SELECT c.event_type, c.event, c.segid, c.mppsessionid = s.sess_id AS session_matches, c.command_id > 0 AS has_command_id FROM gg_wait_sampling_get_current_coordinator() c JOIN pg_stat_activity s ON s.pid = c.pid WHERE s.query = 'SELECT count(*) FROM t_wait_qd;';
- event_type | event    | segid | session_matches | has_command_id 
-------------+----------+-------+-----------------+----------------
- Lock       | relation | -1    | t               | t              
+SELECT c.event_type, c.event, c.segid, c.mppsessionid = s.sess_id AS session_matches, c.command_id > 0 AS has_command_id, c.tmid = floor(extract(epoch FROM pg_postmaster_start_time()))::int4 AS tmid_matches FROM gg_wait_sampling_get_current_coordinator() c JOIN pg_stat_activity s ON s.pid = c.pid WHERE s.query = 'SELECT count(*) FROM t_wait_qd;';
+ event_type | event    | segid | session_matches | has_command_id | tmid_matches 
+------------+----------+-------+-----------------+----------------+--------------
+ Lock       | relation | -1    | t               | t              | t            
 (1 row)
+
+-- The QEs of session 1 on the segments report the coordinator's start time
+-- as tmid, not their own postmaster's.
+SELECT c.segid, bool_and(c.tmid = floor(extract(epoch FROM pg_postmaster_start_time()))::int4) AS tmid_matches FROM gg_wait_sampling_get_current_segments() c JOIN gp_stat_activity s ON s.pid = c.pid AND s.gp_segment_id = c.segid WHERE s.sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query = 'LOCK TABLE t_wait_qd IN ACCESS EXCLUSIVE MODE;') GROUP BY c.segid ORDER BY c.segid;
+ segid | tmid_matches 
+-------+--------------
+ 0     | t            
+ 1     | t            
+ 2     | t            
+(3 rows)
 
 -- Let the collector take a few samples, then check history and profile too.
 SELECT pg_sleep(0.5);

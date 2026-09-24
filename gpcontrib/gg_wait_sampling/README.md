@@ -86,6 +86,7 @@ This adaptation differs from upstream pg_wait_sampling in several ways:
     - queryid
     - mppsessionid
     - command_id
+    - tmid
     - segid
  - Cluster-wide profile reset is implemented through view which calls helper functions
  function on all segments.
@@ -105,6 +106,7 @@ all processed including background workers on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
 
 `gg_wait_sampling.gg_wait_sampling_get_current(pid int4)` returns the same table for single given
@@ -124,6 +126,7 @@ in-memory ring buffer on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
 
 #### Wait profile
@@ -140,6 +143,7 @@ in-memory hash table on coordinator and all segments.
 | count        | text        | Count of samples        |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
 
 #### Query identity
@@ -176,24 +180,21 @@ Properties of `command_id` that follow from how the server numbers commands:
    idle backend produces one profile entry rather than one per command it
    ever ran.
 
+`tmid` is the postmaster start time of the coordinator the session belongs
+to, as seconds since the epoch. A QE receives it from the coordinator when it
+is started, so every process of a session reports the same value on every
+node, and sessions from different coordinator incarnations, for example after
+a failover to the standby, can be told apart. A backend captures it once, at
+the first statement it plans or executes, or at authentication for external
+clients; a QE that has not run its first statement yet reports the value last
+captured on its node. Background workers and auxiliary processes report 0.
+
 If `gg_wait_sampling.profile_queries` is set to `none`, the profile has no
-per-command dimension and reports `queryid`, `mppsessionid` and `command_id`
-as 0. The history always records the identity of the sampled process.
-
-#### Upgrading from 1.1
-
-Version 1.2 drops the `tmid` column from all functions and views. The library
-derives its result row type from the SQL declaration of the calling function,
-so the new library keeps serving the 1.1 objects: with them `tmid` is always
-NULL. Install the new library on every host, restart the cluster, then update
-the extension in every database where it is installed whenever convenient:
-
-```sql
-ALTER EXTENSION gg_wait_sampling UPDATE;
-```
+per-command dimension and reports `queryid`, `mppsessionid`, `command_id` and
+`tmid` as 0. The history always records the identity of the sampled process.
 
 #### Resetting the profile
-Profile reset requires superuser privilege. Since version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.
+Profile reset requires superuser privilege. In version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.
 
 Reset the profile across the entire cluster (coordinator and all segments):
 ```sql

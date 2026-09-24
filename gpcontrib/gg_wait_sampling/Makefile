@@ -4,7 +4,7 @@ MODULE_big = gg_wait_sampling
 OBJS = pg_wait_sampling.o collector.o
 
 EXTENSION = gg_wait_sampling
-DATA = gg_wait_sampling--1.1.sql gg_wait_sampling--1.1--1.2.sql
+DATA = gg_wait_sampling--1.1.sql
 
 REGRESS = setup load queries gg_queries teardown
 

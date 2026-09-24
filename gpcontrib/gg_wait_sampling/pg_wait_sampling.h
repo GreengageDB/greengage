@@ -30,6 +30,7 @@ typedef struct
 	uint64		queryId;
 	int32		ssid;			/* GGDB session id */
 	int32		ccnt;			/* GGDB command id */
+	int32		tmid;			/* GGDB coordinator start time */
 	uint64		count;
 } ProfileItem;
 
@@ -40,6 +41,7 @@ typedef struct
 	uint64		queryId;
 	int32		ssid;			/* GGDB session id */
 	int32		ccnt;			/* GGDB command id */
+	int32		tmid;			/* GGDB coordinator start time */
 	TimestampTz ts;
 } HistoryItem;
 
@@ -49,8 +51,13 @@ typedef struct
 	Size		index;
 	Size		count;
 	HistoryItem *items;
-	bool		has_tmid;		/* declared result row has a tmid column */
 } History;
+
+/* pg_wait_sampling.c: coordinator start time per PGPROC, see below */
+extern int32   *pgws_proc_tmids;
+struct CollectorShmqHeader;
+
+extern int32 pgws_cluster_tmid(void);
 
 /*
  * GGDB: session id and command id of a sampled process are read from its
@@ -59,13 +66,23 @@ typedef struct
  * client is idle, or between messages of one command: it is attributed to
  * the session but to no command, so that an idle backend produces a single
  * profile entry rather than one per command it ever ran.
+ *
+ * The coordinator start time (tmid) of the process's session is constant for
+ * the life of a backend. It is captured once into pgws_proc_tmids, indexed by
+ * PGPROC number like pgws_proc_queryids, at the first hook the backend runs.
+ * QD-to-QE connections skip client authentication, so a QE captures it at its
+ * first statement; until then the value last captured on this node is used,
+ * since every session on a node belongs to the same coordinator.
  */
 static inline void
 pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
-				   int32 *ssid, int32 *ccnt)
+				   int32 *ssid, int32 *ccnt, int32 *tmid)
 {
 	*ssid = proc->mppSessionId;
 	*ccnt = (wait_event_info == WAIT_EVENT_CLIENT_READ) ? 0 : proc->queryCommandId;
+	*tmid = pgws_proc_tmids[proc - ProcGlobal->allProcs];
+	if (*tmid == 0 && *ssid > 0)
+		*tmid = pgws_cluster_tmid();
 }
 
 typedef enum
@@ -80,6 +97,12 @@ typedef struct
 {
 	Latch	   *latch;
 	SHMRequest	request;
+	/*
+	 * GGDB: start time of the coordinator that the sessions on this node
+	 * belong to, as last captured by any of its backends. Used for a QE that
+	 * has not captured its own value yet.
+	 */
+	int32		cluster_tmid;
 } CollectorShmqHeader;
 
 /* LWLock pointers */

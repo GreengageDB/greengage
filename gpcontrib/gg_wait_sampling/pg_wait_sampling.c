@@ -43,6 +43,8 @@
 
 /* GGDB adaptation headers */
 #include "cdb/cdbvars.h"
+#include "executor/instrument.h"
+#include "libpq/auth.h"
 #include "parser/analyze.h"
 #include "utils/queryjumble.h"
 
@@ -60,6 +62,7 @@ static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 static planner_hook_type planner_hook_next = NULL;
 static ProcessUtility_hook_type prev_ProcessUtility = NULL;
 static post_parse_analyze_hook_type prev_post_parse_analyze = NULL;
+static ClientAuthentication_hook_type prev_ClientAuthentication = NULL;
 
 /* Current nesting depth of planner/Executor calls */
 static int	nesting_level = 0;
@@ -67,6 +70,7 @@ static int	nesting_level = 0;
 /* Pointers to shared memory objects */
 shm_mq	   *pgws_collector_mq = NULL;
 uint64	   *pgws_proc_queryids = NULL;
+int32	   *pgws_proc_tmids = NULL;
 CollectorShmqHeader *pgws_collector_hdr = NULL;
 
 /* Receiver (backend) local shm_mq pointers */
@@ -155,6 +159,8 @@ bool		pgws_sampleCpu = true;
 
 /*---- GGDB funcs ----*/
 static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
+static void ggws_ClientAuthentication(Port *port, int status);
+static void ggws_capture_tmid(void);
 
 /*
  * Calculate max processes count.
@@ -227,11 +233,12 @@ pgws_shmem_size(void)
 
 	shm_toc_initialize_estimator(&e);
 
-	nkeys = 3;
+	nkeys = 4;
 
 	shm_toc_estimate_chunk(&e, sizeof(CollectorShmqHeader));
 	shm_toc_estimate_chunk(&e, (Size) COLLECTOR_QUEUE_SIZE);
 	shm_toc_estimate_chunk(&e, sizeof(uint64) * get_max_procs_count());
+	shm_toc_estimate_chunk(&e, sizeof(int32) * get_max_procs_count());
 
 	shm_toc_estimate_keys(&e, nkeys);
 	size = shm_toc_estimate(&e);
@@ -282,12 +289,17 @@ pgws_shmem_startup(void)
 
 		pgws_collector_hdr = shm_toc_allocate(toc, sizeof(CollectorShmqHeader));
 		shm_toc_insert(toc, 0, pgws_collector_hdr);
+		pgws_collector_hdr->cluster_tmid = 0;
 		pgws_collector_mq = shm_toc_allocate(toc, COLLECTOR_QUEUE_SIZE);
 		shm_toc_insert(toc, 1, pgws_collector_mq);
 		pgws_proc_queryids = shm_toc_allocate(toc,
 											  sizeof(uint64) * get_max_procs_count());
 		shm_toc_insert(toc, 2, pgws_proc_queryids);
 		MemSet(pgws_proc_queryids, 0, sizeof(uint64) * get_max_procs_count());
+		pgws_proc_tmids = shm_toc_allocate(toc,
+										   sizeof(int32) * get_max_procs_count());
+		shm_toc_insert(toc, 3, pgws_proc_tmids);
+		MemSet(pgws_proc_tmids, 0, sizeof(int32) * get_max_procs_count());
 	}
 	else
 	{
@@ -296,6 +308,7 @@ pgws_shmem_startup(void)
 		pgws_collector_hdr = shm_toc_lookup(toc, 0, false);
 		pgws_collector_mq = shm_toc_lookup(toc, 1, false);
 		pgws_proc_queryids = shm_toc_lookup(toc, 2, false);
+		pgws_proc_tmids = shm_toc_lookup(toc, 3, false);
 	}
 
 	pgws_lss = ShmemInitStruct("pg_wait_sampling_locks", sizeof(pgwsLockSharedState), &locks_found);
@@ -386,6 +399,8 @@ _PG_init(void)
 	ProcessUtility_hook = pgws_ProcessUtility;
 	prev_post_parse_analyze = post_parse_analyze_hook;
 	post_parse_analyze_hook = ggws_post_parse_analyze;
+	prev_ClientAuthentication = ClientAuthentication_hook;
+	ClientAuthentication_hook = ggws_ClientAuthentication;
 
 	/* Define GUC variables */
 	DefineCustomIntVariable("gg_wait_sampling.history_size",
@@ -526,90 +541,7 @@ typedef struct
 {
 	HistoryItem *items;
 	TimestampTz ts;
-	bool		has_tmid;		/* declared result row has a tmid column */
 } WaitCurrentContext;
-
-/*
- * GGDB: the result row type of each function is taken from the SQL
- * declaration of the calling function rather than built here, so that one
- * library serves both the 1.1 declarations, which still have a tmid column,
- * and the 1.2 ones. The declaration is validated against the column types the
- * function fills: the only accepted variation is an int4 column named tmid at
- * its 1.1 position, which is always returned as NULL.
- */
-typedef struct
-{
-	int			ncols;			/* columns without tmid */
-	int			tmid_pos;		/* 0-based position of tmid in the 1.1 declaration */
-	const Oid  *types;			/* ncols entries */
-} ggws_result_shape;
-
-#define GGWS_MAX_RESULT_COLS 9
-
-static const Oid ggws_current_types[] =
-	{INT4OID, TEXTOID, TEXTOID, INT8OID, INT4OID, INT4OID, INT4OID};
-static const ggws_result_shape ggws_current_shape =
-	{lengthof(ggws_current_types), 6, ggws_current_types};
-
-static const Oid ggws_profile_types[] =
-	{INT4OID, TEXTOID, TEXTOID, INT8OID, INT8OID, INT4OID, INT4OID, INT4OID};
-static const ggws_result_shape ggws_profile_shape =
-	{lengthof(ggws_profile_types), 7, ggws_profile_types};
-
-static const Oid ggws_history_types[] =
-	{INT4OID, TIMESTAMPTZOID, TEXTOID, TEXTOID, INT8OID, INT4OID, INT4OID, INT4OID};
-static const ggws_result_shape ggws_history_shape =
-	{lengthof(ggws_history_types), 7, ggws_history_types};
-
-static TupleDesc
-ggws_result_tupdesc(FunctionCallInfo fcinfo, const ggws_result_shape *shape,
-					bool *has_tmid)
-{
-	TupleDesc	tupdesc;
-	int			expected = 0;
-
-	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("function returning record called in context that cannot accept type record")));
-
-	StaticAssertStmt(lengthof(ggws_history_types) + 1 <= GGWS_MAX_RESULT_COLS,
-					 "GGWS_MAX_RESULT_COLS is too small");
-
-	*has_tmid = (tupdesc->natts == shape->ncols + 1);
-	if (tupdesc->natts != shape->ncols && !*has_tmid)
-		ereport(ERROR,
-				(errcode(ERRCODE_DATATYPE_MISMATCH),
-				 errmsg("function result type does not match the gg_wait_sampling declaration"),
-				 errdetail("Expected %d or %d columns, got %d.",
-						   shape->ncols, shape->ncols + 1, tupdesc->natts)));
-
-	for (int i = 0; i < tupdesc->natts; i++)
-	{
-		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
-		Oid			want;
-
-		if (*has_tmid && i == shape->tmid_pos)
-		{
-			if (attr->atttypid != INT4OID ||
-				strcmp(NameStr(attr->attname), "tmid") != 0)
-				ereport(ERROR,
-						(errcode(ERRCODE_DATATYPE_MISMATCH),
-						 errmsg("function result type does not match the gg_wait_sampling declaration"),
-						 errdetail("Column %d must be \"tmid\" of type int4.", i + 1)));
-			continue;
-		}
-		want = shape->types[expected++];
-		if (attr->atttypid != want)
-			ereport(ERROR,
-					(errcode(ERRCODE_DATATYPE_MISMATCH),
-					 errmsg("function result type does not match the gg_wait_sampling declaration"),
-					 errdetail("Column %d has type %s, expected %s.", i + 1,
-							   format_type_be(attr->atttypid), format_type_be(want))));
-	}
-
-	return BlessTupleDesc(tupdesc);
-}
 
 PG_FUNCTION_INFO_V1(pg_wait_sampling_get_current);
 Datum
@@ -623,6 +555,7 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
+		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 
@@ -631,8 +564,25 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		params->ts = GetCurrentTimestamp();
 
 		funcctx->user_fctx = params;
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_current_shape,
-												   &params->has_tmid);
+		tupdesc = CreateTemplateTupleDesc(8);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "type",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "event",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "queryid",
+						   INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "mppsessionid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "command_id",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "tmid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "segid",
+						   INT4OID, -1, 0);
+
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
 		LWLockAcquire(ProcArrayLock, LW_SHARED);
 
@@ -648,7 +598,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 			item->pid = proc->pid;
 			item->wait_event_info = proc->wait_event_info;
 			item->queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
-			pgws_proc_identity(proc, item->wait_event_info, &item->ssid, &item->ccnt);
+			pgws_proc_identity(proc, item->wait_event_info, &item->ssid, &item->ccnt,
+							   &item->tmid);
 			funcctx->max_calls = 1;
 		}
 		else
@@ -672,7 +623,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 				params->items[j].wait_event_info = proc->wait_event_info;
 				params->items[j].queryId = pgws_proc_queryids[i];
 				pgws_proc_identity(proc, params->items[j].wait_event_info,
-								   &params->items[j].ssid, &params->items[j].ccnt);
+								   &params->items[j].ssid, &params->items[j].ccnt,
+								   &params->items[j].tmid);
 				j++;
 			}
 			funcctx->max_calls = j;
@@ -690,9 +642,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
 		HeapTuple	tuple;
-		Datum		values[GGWS_MAX_RESULT_COLS];
-		bool		nulls[GGWS_MAX_RESULT_COLS];
-		int			col;
+		Datum		values[8];
+		bool		nulls[8];
 		const char *event_type,
 				   *event;
 		HistoryItem *item;
@@ -718,10 +669,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		values[3] = UInt64GetDatum(item->queryId);
 		values[4] = Int32GetDatum(item->ssid);
 		values[5] = Int32GetDatum(item->ccnt);
-		col = 6;
-		if (params->has_tmid)
-			nulls[col++] = true;
-		values[col] = Int32GetDatum(GpIdentity.segindex);
+		values[6] = Int32GetDatum(item->tmid);
+		values[7] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
 		SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
@@ -737,7 +686,6 @@ typedef struct
 {
 	Size		count;
 	ProfileItem *items;
-	bool		has_tmid;		/* declared result row has a tmid column */
 } Profile;
 
 /* Get array (history or profile data) from shared memory */
@@ -835,6 +783,7 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
+		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -847,8 +796,30 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = profile;
 		funcctx->max_calls = profile->count;
 
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_profile_shape,
-												   &profile->has_tmid);
+		/* Make tuple descriptor */
+		tupdesc = CreateTemplateTupleDesc(9);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "type",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "event",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "queryid",
+						   INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "count",
+						   INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "mppsessionid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "command_id",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "tmid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "segid",
+						   INT4OID, -1, 0);
+#if PG_VERSION_NUM >= 190000
+		TupleDescFinalize(tupdesc);
+#endif
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -861,9 +832,8 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
 		/* for each row */
-		Datum		values[GGWS_MAX_RESULT_COLS];
-		bool		nulls[GGWS_MAX_RESULT_COLS];
-		int			col;
+		Datum		values[9];
+		bool		nulls[9];
 		HeapTuple	tuple;
 		ProfileItem *item;
 		const char *event_type,
@@ -892,19 +862,18 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 			values[3] = UInt64GetDatum(item->queryId);
 			values[5] = Int32GetDatum(item->ssid);
 			values[6] = Int32GetDatum(item->ccnt);
+			values[7] = Int32GetDatum(item->tmid);
 		}
 		else
 		{
 			values[3] = (Datum) 0;
 			values[5] = (Datum) 0;
 			values[6] = (Datum) 0;
+			values[7] = (Datum) 0;
 		}
 
 		values[4] = UInt64GetDatum(item->count);
-		col = 7;
-		if (profile->has_tmid)
-			nulls[col++] = true;
-		values[col] = Int32GetDatum(GpIdentity.segindex);
+		values[8] = Int32GetDatum(GpIdentity.segindex);
 
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
@@ -955,6 +924,7 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
+		TupleDesc	tupdesc;
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -967,8 +937,30 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		funcctx->user_fctx = history;
 		funcctx->max_calls = history->count;
 
-		funcctx->tuple_desc = ggws_result_tupdesc(fcinfo, &ggws_history_shape,
-												   &history->has_tmid);
+		/* Make tuple descriptor */
+		tupdesc = CreateTemplateTupleDesc(9);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "pid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "sample_ts",
+						   TIMESTAMPTZOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 3, "type",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 4, "event",
+						   TEXTOID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 5, "queryid",
+						   INT8OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 6, "mppsessionid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 7, "command_id",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 8, "tmid",
+						   INT4OID, -1, 0);
+		TupleDescInitEntry(tupdesc, (AttrNumber) 9, "segid",
+						   INT4OID, -1, 0);
+#if PG_VERSION_NUM >= 190000
+		TupleDescFinalize(tupdesc);
+#endif
+		funcctx->tuple_desc = BlessTupleDesc(tupdesc);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
@@ -982,9 +974,8 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 	{
 		HeapTuple	tuple;
 		HistoryItem *item;
-		Datum		values[GGWS_MAX_RESULT_COLS];
-		bool		nulls[GGWS_MAX_RESULT_COLS];
-		int			col;
+		Datum		values[9];
+		bool		nulls[9];
 		const char *event_type,
 				   *event;
 
@@ -1010,10 +1001,8 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		values[4] = UInt64GetDatum(item->queryId);
 		values[5] = Int32GetDatum(item->ssid);
 		values[6] = Int32GetDatum(item->ccnt);
-		col = 7;
-		if (history->has_tmid)
-			nulls[col++] = true;
-		values[col] = Int32GetDatum(GpIdentity.segindex);
+		values[7] = Int32GetDatum(item->tmid);
+		values[8] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
 		history->index++;
@@ -1046,6 +1035,8 @@ pgws_planner_hook(Query *parse,
 	PlannedStmt *result;
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
+
+	ggws_capture_tmid();
 
 	if (pgws_enabled(nesting_level))
 	{
@@ -1110,6 +1101,7 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	int			i = MyProc - ProcGlobal->allProcs;
 
+	ggws_capture_tmid();
 	if (pgws_enabled(nesting_level))
 		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
@@ -1225,6 +1217,8 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 #endif
 )
 {
+	ggws_capture_tmid();
+
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
 
@@ -1284,6 +1278,8 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 static void
 ggws_post_parse_analyze(ParseState *pstate, Query *query)
 {
+	ggws_capture_tmid();
+
 	if (prev_post_parse_analyze)
 		prev_post_parse_analyze(pstate, query);
 
@@ -1307,4 +1303,54 @@ ggws_post_parse_analyze(ParseState *pstate, Query *query)
 	JumbleState *jstate = JumbleQuery(query);
 
 	freeJumbleState(jstate);
+}
+
+/*
+ * The coordinator start time of a session (tmid) reaches a QE in the startup
+ * packet, so it is final before any hook runs, and it never changes for the
+ * life of a backend. Capture it once, at the first hook this backend runs,
+ * and publish it as the node-wide value for backends that have not reached a
+ * hook yet. QD-to-QE connections short-circuit client authentication, so the
+ * authentication hook only covers external clients; the planner, executor,
+ * utility and parse hooks cover QEs. Background workers and auxiliary
+ * processes run none of these and keep 0 in their slot.
+ */
+static bool ggws_tmid_captured = false;
+
+static void
+ggws_reset_tmid(int code, Datum arg)
+{
+	pgws_proc_tmids[MyProc - ProcGlobal->allProcs] = 0;
+}
+
+static void
+ggws_capture_tmid(void)
+{
+	int32		tmid;
+
+	if (ggws_tmid_captured || MyProc == NULL || pgws_proc_tmids == NULL)
+		return;
+
+	gp_gettmid(&tmid);
+	pgws_proc_tmids[MyProc - ProcGlobal->allProcs] = tmid;
+	if (gp_session_id > 0)
+		pgws_collector_hdr->cluster_tmid = tmid;
+	on_shmem_exit(ggws_reset_tmid, 0);
+	ggws_tmid_captured = true;
+}
+
+int32
+pgws_cluster_tmid(void)
+{
+	return pgws_collector_hdr->cluster_tmid;
+}
+
+static void
+ggws_ClientAuthentication(Port *port, int status)
+{
+	if (prev_ClientAuthentication)
+		prev_ClientAuthentication(port, status);
+
+	if (status == STATUS_OK)
+		ggws_capture_tmid();
 }
