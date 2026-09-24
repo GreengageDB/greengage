@@ -115,6 +115,40 @@ CStatsPredUtils::StatsCmpType(IMDId *mdid)
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CStatsPredUtils::ExtractUsedColIds
+//
+//	@doc:
+//		Record every local column referenced by predicate_expr (excluding
+//		outer_refs), so callers can flag those columns' histograms as not
+//		precisely narrowed by an unsupported predicate.
+//---------------------------------------------------------------------------
+ULongPtrArray *
+CStatsPredUtils::ExtractUsedColIds(CMemoryPool *mp, CExpression *predicate_expr,
+								   CColRefSet *outer_refs)
+{
+	ULongPtrArray *used_colids = GPOS_NEW(mp) ULongPtrArray(mp);
+	CColRefSet *used_col_refs = predicate_expr->DeriveUsedColumns();
+	if (nullptr != used_col_refs)
+	{
+		if (nullptr == outer_refs)
+		{
+			used_col_refs->ExtractColIds(mp, used_colids);
+		}
+		else
+		{
+			CColRefSet *local_col_refs =
+				GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
+			local_col_refs->Exclude(outer_refs);
+			local_col_refs->ExtractColIds(mp, used_colids);
+			local_col_refs->Release();
+		}
+	}
+
+	return used_colids;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CStatsPredUtils::CreateStatsPredUnsupported
 //
 //	@doc:
@@ -122,12 +156,14 @@ CStatsPredUtils::StatsCmpType(IMDId *mdid)
 //---------------------------------------------------------------------------
 CStatsPred *
 CStatsPredUtils::CreateStatsPredUnsupported(CMemoryPool *mp,
-											CExpression *,	// predicate_expr,
-											CColRefSet *	//outer_refs
-)
+											CExpression *predicate_expr,
+											CColRefSet *outer_refs)
 {
-	return GPOS_NEW(mp)
-		CStatsPredUnsupported(gpos::ulong_max, CStatsPred::EstatscmptOther);
+	ULongPtrArray *used_colids =
+		ExtractUsedColIds(mp, predicate_expr, outer_refs);
+
+	return GPOS_NEW(mp) CStatsPredUnsupported(
+		gpos::ulong_max, CStatsPred::EstatscmptOther, used_colids);
 }
 
 //---------------------------------------------------------------------------
@@ -734,7 +770,7 @@ CStatsPredUtils::AddSupportedStatsFilters(CMemoryPool *mp,
 
 	if (COperator::EopScalarArrayCmp == predicate_expr->Pop()->Eopid())
 	{
-		ProcessArrayCmp(mp, predicate_expr, pred_stats_array);
+		ProcessArrayCmp(mp, predicate_expr, pred_stats_array, outer_refs);
 	}
 	else
 	{
@@ -983,8 +1019,7 @@ CStatsPredUtils::IsPredScalarIdentIsNotNull(CExpression *predicate_expr)
 //---------------------------------------------------------------------------
 CStatsPred *
 CStatsPredUtils::GetStatsPredLike(CMemoryPool *mp, CExpression *predicate_expr,
-								  CColRefSet *	//outer_refs,
-)
+								  CColRefSet *outer_refs)
 {
 	GPOS_ASSERT(nullptr != predicate_expr);
 	GPOS_ASSERT(CPredicateUtils::FLikePredicate(predicate_expr));
@@ -1010,8 +1045,10 @@ CStatsPredUtils::GetStatsPredLike(CMemoryPool *mp, CExpression *predicate_expr,
 
 	if (nullptr == expr_scalar_ident || nullptr == expr_scalar_const)
 	{
-		return GPOS_NEW(mp)
-			CStatsPredUnsupported(gpos::ulong_max, CStatsPred::EstatscmptLike);
+		ULongPtrArray *used_colids =
+			ExtractUsedColIds(mp, predicate_expr, outer_refs);
+		return GPOS_NEW(mp) CStatsPredUnsupported(
+			gpos::ulong_max, CStatsPred::EstatscmptLike, used_colids);
 	}
 
 	CScalarIdent *scalar_ident_op =
@@ -1053,7 +1090,8 @@ CStatsPredUtils::GetStatsPredLike(CMemoryPool *mp, CExpression *predicate_expr,
 //---------------------------------------------------------------------------
 void
 CStatsPredUtils::ProcessArrayCmp(CMemoryPool *mp, CExpression *predicate_expr,
-								 CStatsPredPtrArry *result_pred_stats)
+								 CStatsPredPtrArry *result_pred_stats,
+								 CColRefSet *outer_refs)
 {
 	GPOS_ASSERT(nullptr != result_pred_stats);
 	GPOS_ASSERT(nullptr != predicate_expr);
@@ -1071,8 +1109,10 @@ CStatsPredUtils::ProcessArrayCmp(CMemoryPool *mp, CExpression *predicate_expr,
 	if (!is_supported_array_cmp)
 	{
 		// unsupported predicate for stats calculations
+		ULongPtrArray *used_colids =
+			ExtractUsedColIds(mp, predicate_expr, outer_refs);
 		result_pred_stats->Append(GPOS_NEW(mp) CStatsPredUnsupported(
-			gpos::ulong_max, CStatsPred::EstatscmptOther));
+			gpos::ulong_max, CStatsPred::EstatscmptOther, used_colids));
 		return;
 	}
 

@@ -361,6 +361,28 @@ CFilterStatsProcessor::MakeHistHashMapConjFilter(
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
 
+			// This predicate has no single associated column, but still
+			// mark every column it actually touches: their row count was
+			// just reduced by the scale factor above without their
+			// histogram's value range being narrowed, so downstream
+			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
+			// over-trust them.
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr != used_colids)
+			{
+				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+				{
+					ULONG used_colid = *(*used_colids)[uli];
+					CHistogram *used_col_histogram =
+						result_histograms->Find(&used_colid);
+					if (nullptr != used_col_histogram)
+					{
+						used_col_histogram->SetUnsupportedPredDerived();
+					}
+				}
+			}
+
 			continue;
 		}
 
@@ -498,6 +520,13 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	UlongToHistogramMap *disjunctive_result_histograms =
 		GPOS_NEW(mp) UlongToHistogramMap(mp);
 
+	// columns touched by an unsupported multi-column predicate anywhere in
+	// this disjunction. disjunctive_result_histograms is only filled in
+	// incrementally as the loop below runs, so these columns are not
+	// guaranteed to have an entry yet; the actual marking happens once
+	// AddHistograms() has backfilled every column further down.
+	CBitSet *unsupported_pred_used_colids = GPOS_NEW(mp) CBitSet(mp);
+
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
 	// This is set to input_rows since SF = 1 / selectivity. So if SF is large, then we are less selective.
@@ -521,6 +550,22 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
+
+			// remember every column this predicate actually touches: their
+			// row count was just reduced by the scale factor above without
+			// their histogram's value range being narrowed, so downstream
+			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
+			// over-trust them.
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr != used_colids)
+			{
+				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+				{
+					(void) unsupported_pred_used_colids->ExchangeSet(
+						*(*used_colids)[uli]);
+				}
+			}
 
 			continue;
 		}
@@ -651,6 +696,22 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	CHistogram::AddHistograms(mp, input_histograms,
 							  disjunctive_result_histograms);
 
+	// every column is now guaranteed to have an entry (backfilled above from
+	// a copy of the input histogram where no disjunct touched it directly),
+	// so mark the ones touched by an unsupported multi-column predicate
+	CBitSetIter used_colid_iter(*unsupported_pred_used_colids);
+	while (used_colid_iter.Advance())
+	{
+		ULONG used_colid = used_colid_iter.Bit();
+		CHistogram *used_col_histogram =
+			disjunctive_result_histograms->Find(&used_colid);
+		if (nullptr != used_col_histogram)
+		{
+			used_col_histogram->SetUnsupportedPredDerived();
+		}
+	}
+	unsupported_pred_used_colids->Release();
+
 	non_updatable_cols->Release();
 
 	// clean up
@@ -670,39 +731,57 @@ CFilterStatsProcessor::MakeHistSimpleFilter(CMemoryPool *mp,
 											CDouble *last_scale_factor,
 											ULONG *target_last_colid)
 {
+	CHistogram *result_histogram = nullptr;
+
 	if (CStatsPred::EsptPoint == pred_stats->GetPredStatsType())
 	{
 		CStatsPredPoint *point_pred_stats =
 			CStatsPredPoint::ConvertPredStats(pred_stats);
-		return MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
-								   last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistPointFilter(point_pred_stats, filter_colids, hist_before,
+								last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptLike == pred_stats->GetPredStatsType())
 	{
 		CStatsPredLike *like_pred_stats =
 			CStatsPredLike::ConvertPredStats(pred_stats);
 
-		return MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
-								  last_scale_factor, target_last_colid);
+		result_histogram =
+			MakeHistLikeFilter(like_pred_stats, filter_colids, hist_before,
+							   last_scale_factor, target_last_colid);
 	}
-
-	if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
+	else if (CStatsPred::EsptArrayCmp == pred_stats->GetPredStatsType())
 	{
 		CStatsPredArrayCmp *arraycmp_pred_stats =
 			CStatsPredArrayCmp::ConvertPredStats(pred_stats);
 
-		return MakeHistArrayCmpAnyFilter(mp, arraycmp_pred_stats, filter_colids,
-										 hist_before, last_scale_factor,
-										 target_last_colid);
+		result_histogram = MakeHistArrayCmpAnyFilter(
+			mp, arraycmp_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
+	}
+	else
+	{
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+
+		result_histogram = MakeHistUnsupportedPred(
+			unsupported_pred_stats, filter_colids, hist_before,
+			last_scale_factor, target_last_colid);
 	}
 
-	CStatsPredUnsupported *unsupported_pred_stats =
-		CStatsPredUnsupported::ConvertPredStats(pred_stats);
+	// a filter on this column narrows its value range or scales its row
+	// count, but it can't undo an earlier, unsupported predicate in this
+	// same conjunction/disjunction having already scaled this column's row
+	// count by a guess without genuinely narrowing it - most of the
+	// concrete histogram builders above construct a brand-new CHistogram
+	// rather than deriving one from hist_before, so that earlier mark isn't
+	// carried over on its own and has to be propagated here explicitly.
+	if (nullptr != result_histogram && hist_before->IsUnsupportedPredDerived())
+	{
+		result_histogram->SetUnsupportedPredDerived();
+	}
 
-	return MakeHistUnsupportedPred(unsupported_pred_stats, filter_colids,
-								   hist_before, last_scale_factor,
-								   target_last_colid);
+	return result_histogram;
 }
 
 // create a new histograms after applying the point filter
@@ -757,6 +836,11 @@ CFilterStatsProcessor::MakeHistUnsupportedPred(
 	// generate after histogram
 	CHistogram *result_histogram = hist_before->CopyHistogram();
 	GPOS_ASSERT(nullptr != result_histogram);
+
+	// row count is scaled by a default selectivity guess below, but the
+	// bucket content is left unchanged/unnarrowed - flag it so downstream
+	// value-range reasoning (e.g. LASJ coverage checks) doesn't over-trust it
+	result_histogram->SetUnsupportedPredDerived();
 
 	*last_scale_factor = *last_scale_factor * pred_stats->ScaleFactor();
 	*target_last_colid = colid;
