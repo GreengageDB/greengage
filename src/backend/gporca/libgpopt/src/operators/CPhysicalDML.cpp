@@ -79,37 +79,9 @@ CPhysicalDML::CPhysicalDML(CMemoryPool *mp, CLogicalDML::EDMLOperator edmlop,
 		//         the random partitions using a hash function, which can still be considered "random"
 		// Delete: Use a "strict random" distribution, which will use a routed repartition operator,
 		//         based on the gp_segment_id of the row, which will work for both hash and random partitions
-		// Update without updating the distribution key: Same method as for delete
-		// Update of the distribution key: This will be handled with a Split node below the DML node,
-		//         with the split deleting the existing rows and this DML node inserting the new rows,
-		//         so this is handled here like an insert, using hash distribution for all partitions.
-		BOOL is_update_without_changing_distribution_key = false;
+		// Update with and without updating the distribution key: Same method as for delete
 
-		if (CLogicalDML::EdmlUpdate == edmlop)
-		{
-			CDistributionSpecHashed *hashDistSpec =
-				CDistributionSpecHashed::PdsConvert(m_pds);
-			CColRefSet *updatedCols = GPOS_NEW(mp) CColRefSet(mp);
-			CColRefSet *distributionCols = hashDistSpec->PcrsUsed(mp);
-
-			// compute a ColRefSet of the updated columns
-			for (ULONG c = 0; c < pdrgpcrSource->Size(); c++)
-			{
-				if (pbsModified->Get(c))
-				{
-					updatedCols->Include((*pdrgpcrSource)[c]);
-				}
-			}
-
-			is_update_without_changing_distribution_key =
-				!updatedCols->FIntersects(distributionCols);
-
-			updatedCols->Release();
-			distributionCols->Release();
-		}
-
-		if (CLogicalDML::EdmlDelete == edmlop ||
-			is_update_without_changing_distribution_key)
+		if (CLogicalDML::EdmlInsert != edmlop)
 		{
 			m_pds->Release();
 			m_pds = GPOS_NEW(mp) CDistributionSpecRandom();

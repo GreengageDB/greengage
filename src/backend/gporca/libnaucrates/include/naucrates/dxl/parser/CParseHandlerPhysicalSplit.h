@@ -55,6 +55,8 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid_col_oid;
 
+	BOOL m_needsResJunk;
+
 	// private copy ctor
 	CParseHandlerPhysicalSplit(const CParseHandlerPhysicalSplit &);
 

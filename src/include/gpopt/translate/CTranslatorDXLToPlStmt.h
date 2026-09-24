@@ -395,6 +395,9 @@ private:
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
 
+	// Check and set hash info for splitupdate node
+	void SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan);
+
 	// translate a Split operator
 	Plan *TranslateDXLSplit(
 		const CDXLNode *split_dxlnode, CDXLTranslateContext *output_context,

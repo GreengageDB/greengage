@@ -89,6 +89,14 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRef *pcrTupleOid = popUpdate->PcrTupleOid();
 	CColRef *pcrTableOid = popUpdate->PcrTableOid();
 
+	BOOL needsResJunk = false;
+	CDistributionSpec *pdsTable = CPhysical::PdsCompute(mp, ptabdesc, pdrgpcrDelete, pcrSegmentId);
+	if (CDistributionSpec::EdtHashed == pdsTable->Edt() &&
+		ptabdesc->ConvertHashToRandom())
+	{
+			needsResJunk = true;
+	}
+
 	// child of update operator
 	CExpression *pexprChild = (*pexpr)[0];
 	pexprChild->AddRef();
@@ -125,7 +133,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CExpression *pexprSplit = GPOS_NEW(mp) CExpression(
 		mp,
 		GPOS_NEW(mp) CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
-								   pcrSegmentId, pcrAction, pcrTupleOid),
+								   pcrSegmentId, pcrAction, pcrTupleOid, needsResJunk),
 		pexprChild, pexprProjList);
 
 	// add assert checking that no NULL values are inserted for nullable columns or no check constraints are violated

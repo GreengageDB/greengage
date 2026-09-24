@@ -89,6 +89,8 @@ CXformImplementSplit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CColRef *pcrSegmentId = popSplit->PcrSegmentId();
 	CColRef *pcrTupleOid = popSplit->PcrTupleOid();
 
+	BOOL needsResJunk = popSplit->NeedsResJunk();
+
 	// child of Split operator
 	CExpression *pexprChild = (*pexpr)[0];
 	CExpression *pexprProjList = (*pexpr)[1];
@@ -99,7 +101,7 @@ CXformImplementSplit::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	CExpression *pexprAlt = GPOS_NEW(mp) CExpression(
 		mp,
 		GPOS_NEW(mp) CPhysicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
-									pcrSegmentId, pcrAction, pcrTupleOid),
+									pcrSegmentId, pcrAction, pcrTupleOid, needsResJunk),
 		pexprChild, pexprProjList);
 	// add alternative to transformation result
 	pxfres->Add(pexprAlt);
