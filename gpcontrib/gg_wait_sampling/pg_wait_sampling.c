@@ -68,6 +68,7 @@ static int	nesting_level = 0;
 /* Pointers to shared memory objects */
 shm_mq	   *pgws_collector_mq = NULL;
 uint64	   *pgws_proc_queryids = NULL;
+bool	   *pgws_proc_active = NULL;
 CollectorShmqHeader *pgws_collector_hdr = NULL;
 
 /* Receiver (backend) local shm_mq pointers */
@@ -229,11 +230,12 @@ pgws_shmem_size(void)
 
 	shm_toc_initialize_estimator(&e);
 
-	nkeys = 3;
+	nkeys = 4;
 
 	shm_toc_estimate_chunk(&e, sizeof(CollectorShmqHeader));
 	shm_toc_estimate_chunk(&e, (Size) COLLECTOR_QUEUE_SIZE);
 	shm_toc_estimate_chunk(&e, sizeof(uint64) * get_max_procs_count());
+	shm_toc_estimate_chunk(&e, sizeof(bool) * get_max_procs_count());
 
 	shm_toc_estimate_keys(&e, nkeys);
 	size = shm_toc_estimate(&e);
@@ -291,6 +293,10 @@ pgws_shmem_startup(void)
 											  sizeof(uint64) * get_max_procs_count());
 		shm_toc_insert(toc, 2, pgws_proc_queryids);
 		MemSet(pgws_proc_queryids, 0, sizeof(uint64) * get_max_procs_count());
+		pgws_proc_active = shm_toc_allocate(toc,
+											sizeof(bool) * get_max_procs_count());
+		shm_toc_insert(toc, 3, pgws_proc_active);
+		MemSet(pgws_proc_active, 0, sizeof(bool) * get_max_procs_count());
 	}
 	else
 	{
@@ -299,6 +305,7 @@ pgws_shmem_startup(void)
 		pgws_collector_hdr = shm_toc_lookup(toc, 0, false);
 		pgws_collector_mq = shm_toc_lookup(toc, 1, false);
 		pgws_proc_queryids = shm_toc_lookup(toc, 2, false);
+		pgws_proc_active = shm_toc_lookup(toc, 3, false);
 	}
 
 	pgws_lss = ShmemInitStruct("pg_wait_sampling_locks", sizeof(pgwsLockSharedState), &locks_found);
@@ -1025,6 +1032,7 @@ pgws_planner_hook(Query *parse,
 	uint64		save_queryId = 0;
 
 	ggws_capture_tmid();
+	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
 	{
@@ -1062,6 +1070,7 @@ pgws_planner_hook(Query *parse,
 		 */
 		result->queryId = parse->queryId;
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1070,6 +1079,7 @@ pgws_planner_hook(Query *parse,
 	PG_CATCH();
 	{
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1090,6 +1100,7 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	ggws_capture_tmid();
+	pgws_proc_active[i] = true;
 	if (pgws_enabled(nesting_level))
 		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
@@ -1110,6 +1121,7 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = pgws_proc_queryids[i];
 
+	pgws_proc_active[i] = true;
 	nesting_level++;
 	PG_TRY();
 	{
@@ -1126,6 +1138,7 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 			standard_ExecutorRun(queryDesc, direction, count);
 #endif
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1134,6 +1147,7 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 	PG_CATCH();
 	{
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1149,6 +1163,7 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = pgws_proc_queryids[i];
 
+	pgws_proc_active[i] = true;
 	nesting_level++;
 	PG_TRY();
 	{
@@ -1157,6 +1172,7 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 		else
 			standard_ExecutorFinish(queryDesc);
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1165,6 +1181,7 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 	PG_CATCH();
 	{
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
@@ -1180,7 +1197,10 @@ pgws_ExecutorEnd(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	if (nesting_level == 0)
+	{
 		pgws_proc_queryids[i] = UINT64CONST(0);
+		pgws_proc_active[i] = false;
+	}
 
 	if (prev_ExecutorEnd)
 		prev_ExecutorEnd(queryDesc);
@@ -1205,10 +1225,11 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 #endif
 )
 {
-	ggws_capture_tmid();
-
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
+
+	ggws_capture_tmid();
+	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
 	{
@@ -1246,6 +1267,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 #endif
 				);
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1254,6 +1276,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 	PG_CATCH();
 	{
 		nesting_level--;
+		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))

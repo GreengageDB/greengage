@@ -5,9 +5,9 @@ CREATE EXTENSION gg_wait_sampling;
 CREATE TABLE t_wait_qd (id INT, val TEXT) DISTRIBUTED BY (id);
 INSERT INTO t_wait_qd VALUES (1,'a'),(2,'b'),(3,'c');
 
--- Poll pg_stat_activity until the given query is waiting on a lock on the
--- coordinator, so that the checks below don't depend on timing.
-CREATE FUNCTION wait_for_lock_wait(q text) RETURNS bool AS $$ DECLARE i int := 0; BEGIN LOOP PERFORM 1 FROM pg_stat_activity WHERE query = q AND wait_event_type = 'Lock' AND pid <> pg_backend_pid(); IF FOUND THEN RETURN true; END IF; i := i + 1; IF i > 600 THEN RETURN false; END IF; PERFORM pg_sleep(0.05); END LOOP; END; $$ LANGUAGE plpgsql;
+-- Poll pg_stat_activity until the given query is in the given wait event on
+-- the coordinator, so that the checks below don't depend on timing.
+CREATE FUNCTION wait_for_wait_event(q text, ev text) RETURNS bool AS $$ DECLARE i int := 0; BEGIN LOOP PERFORM 1 FROM pg_stat_activity WHERE query = q AND wait_event = ev AND pid <> pg_backend_pid(); IF FOUND THEN RETURN true; END IF; i := i + 1; IF i > 600 THEN RETURN false; END IF; PERFORM pg_sleep(0.05); END LOOP; END; $$ LANGUAGE plpgsql;
 
 SELECT * FROM gg_wait_sampling_reset_profile ORDER BY gp_segment_id;
 
@@ -17,7 +17,7 @@ SELECT * FROM gg_wait_sampling_reset_profile ORDER BY gp_segment_id;
 
 -- Session 2 blocks on the coordinator while parse analysis opens the table.
 2&: SELECT count(*) FROM t_wait_qd;
-SELECT wait_for_lock_wait('SELECT count(*) FROM t_wait_qd;');
+SELECT wait_for_wait_event('SELECT count(*) FROM t_wait_qd;', 'relation');
 
 -- Current waits: the blocked backend must carry its session id and a
 -- command id although no plan exists yet.
@@ -59,14 +59,15 @@ WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND p.event_type = 'Lock';
 
 -- Once its statement is done the backend waits for the client: it keeps its
 -- session id but is attributed to no command.
+SELECT wait_for_wait_event('SELECT count(*) FROM t_wait_qd;', 'ClientRead');
 SELECT c.event, c.mppsessionid = s.sess_id AS session_matches, c.command_id, c.queryid
 FROM gg_wait_sampling_get_current_coordinator() c
 JOIN pg_stat_activity s ON s.pid = c.pid
-WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND s.state = 'idle';
+WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND s.wait_event = 'ClientRead';
 
 1q:
 2q:
 
-DROP FUNCTION wait_for_lock_wait(text);
+DROP FUNCTION wait_for_wait_event(text, text);
 DROP TABLE t_wait_qd;
 DROP EXTENSION gg_wait_sampling;

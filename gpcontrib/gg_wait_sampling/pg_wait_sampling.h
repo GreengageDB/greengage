@@ -91,6 +91,7 @@ extern bool pgws_sampleCpu;
 /* pg_wait_sampling.c */
 extern shm_mq *pgws_collector_mq;
 extern uint64	   *pgws_proc_queryids;
+extern bool	   *pgws_proc_active;
 extern CollectorShmqHeader *pgws_collector_hdr;
 
 extern pgwsLockSharedState *pgws_lss;
@@ -100,10 +101,17 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
 /*
  * GGDB: session id and command id of a sampled process are read from its
  * PGPROC entry, so they are available whatever phase of a statement the
- * process is in, including waits before parsing. A process waiting for its
- * client is idle, or between messages of one command: it is attributed to
- * the session but to no command, so that an idle backend produces a single
- * profile entry rather than one per command it ever ran.
+ * process is in, including waits before parsing. Processes without a session
+ * report 0 rather than InvalidGpSessionId.
+ *
+ * The coordinator keeps queryCommandId after a statement ends, so a backend
+ * waiting for its client outside a statement (idle, idle in transaction, or
+ * between the messages of an extended-protocol command) would be attributed
+ * to its previous command and every command would leave a profile entry. Such
+ * a wait is attributed to no command instead. A client read inside a
+ * statement, for example COPY FROM STDIN on the coordinator or a QE reading
+ * the COPY data from the QD, keeps its command id: pgws_proc_active marks the
+ * backends that are inside a statement the hooks are tracking.
  *
  * tmid is the coordinator's postmaster start time. A QE receives it in its
  * startup packet, so every backend of a session on any node knows it; each
@@ -116,8 +124,11 @@ static inline void
 pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
 				   int32 *ssid, int32 *ccnt, int32 *tmid)
 {
-	*ssid = proc->mppSessionId;
-	*ccnt = (wait_event_info == WAIT_EVENT_CLIENT_READ) ? 0 : proc->queryCommandId;
+	bool		idle = (wait_event_info == WAIT_EVENT_CLIENT_READ &&
+						!pgws_proc_active[proc - ProcGlobal->allProcs]);
+
+	*ssid = (proc->mppSessionId > 0) ? proc->mppSessionId : 0;
+	*ccnt = idle ? 0 : proc->queryCommandId;
 	*tmid = (*ssid > 0) ? pgws_collector_hdr->cluster_tmid : 0;
 }
 

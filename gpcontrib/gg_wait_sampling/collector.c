@@ -184,6 +184,9 @@ probe_waits(History *observations, HTAB *profile_hash,
 				   *observation;
 		PGPROC	   *proc = &ProcGlobal->allProcs[i];
 
+		/* The item is a hash key with padding: no uninitialized bytes. */
+		MemSet(&item, 0, sizeof(item));
+
 		if (!pgws_should_sample_proc(proc, &item.pid, &item.wait_event_info))
 			continue;
 

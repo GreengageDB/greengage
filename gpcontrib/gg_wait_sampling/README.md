@@ -160,25 +160,32 @@ taken during parse analysis, is sampled with `queryid` 0.
 `mppsessionid` and `command_id` are read from the backend's `PGPROC` entry at
 sampling time and do not depend on any hook. They are therefore present for
 every sampled process of a session, including a backend blocked during parse
-analysis and the QEs of that session on the segments.
+analysis and the QEs of that session on the segments. Processes without a
+session, that is background and auxiliary processes and utility-mode
+connections to a segment, report `mppsessionid` 0.
 
 Properties of `command_id` that follow from how the server numbers commands:
 
  * The coordinator increments the counter when it receives a statement and
-   once more when the query descriptor is created, so a backend sampled while
-   parsing or planning reports a `command_id` one less than the value it
-   reports during execution. The execution value is the one dispatched to the
-   segments and printed as `cmd` in the log prefix. Waits after the executor
-   has finished, for example during the two-phase commit dispatch, are again
-   reported under the parsing value.
+   once more when the statement starts running, in `CreateQueryDesc` for a
+   plan and in `ProcessUtility` for a utility statement. A backend sampled
+   while parsing or planning therefore reports a `command_id` one less than
+   the value it reports while running, and the running value is the one
+   dispatched to the segments and printed as `cmd` in the log prefix. Waits
+   after the statement has finished running, for example during the two-phase
+   commit dispatch, are again reported under the parsing value.
  * With the extended query protocol the coordinator increments the counter
-   only when a query descriptor is created, so a backend that blocks during
+   only when the statement starts running, so a backend that blocks during
    parse analysis of a Parse message reports the `command_id` of its previous
    statement, or 0 for the first statement of the session.
- * A process waiting for its client (`ClientRead`) is treated as idle: it is
-   sampled with its `mppsessionid` but `command_id` 0 and `queryid` 0, so an
-   idle backend produces one profile entry rather than one per command it
-   ever ran.
+ * The coordinator keeps the last value after a statement ends. A backend
+   waiting for its client (`ClientRead`) outside a statement, that is idle,
+   idle in transaction, or between the messages of an extended-protocol
+   command, is reported with `command_id` 0 so that an idle backend produces
+   one profile entry rather than one per command it ever ran; its `queryid`
+   is 0 as well because the hooks clear it when the statement ends. A client
+   read inside a statement, for example `COPY FROM STDIN` on the coordinator
+   or a QE reading the COPY data from the coordinator, keeps its `command_id`.
 
 `tmid` is the postmaster start time of the coordinator the session belongs
 to, as seconds since the epoch. A QE receives it from the coordinator when it
