@@ -96,6 +96,7 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 	{
 			needsResJunk = true;
 	}
+	pdsTable->Release();
 
 	// child of update operator
 	CExpression *pexprChild = (*pexpr)[0];

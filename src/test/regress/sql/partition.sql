@@ -4465,7 +4465,7 @@ ALTER TABLE t_part_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLUSIV
 SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_acl_1_prt_30'::regclass AND attacl IS NOT NULL;
 
 --
--- Test that segment is choosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
 CREATE extension IF NOT EXISTS gp_debug_numsegments;
@@ -4505,21 +4505,21 @@ SELECT gp_segment_id, * FROM rank_1_prt_3;
 SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank SET year=2006 WHERE gender='f';
-EXPLAIN UPDATE rank2 SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
 
 -- update key columns so partition change will be triggered
 UPDATE rank SET year=2006 WHERE gender='f';
 UPDATE rank2 SET year=2006 WHERE gender='f';
 
--- check that update endeds up where it should
+-- check that update ended up where it should
 SELECT gp_segment_id, * FROM rank_1_prt_2;
 SELECT gp_segment_id, * FROM rank2_1_prt_2;
 SELECT gp_segment_id, * FROM rank_1_prt_3;
 SELECT gp_segment_id, * FROM rank2_1_prt_3;
 
 --
--- Test that segment is choosen correctly in case of insertion also
+-- Test that segment is chosen correctly in case of insertion also
 --
 CREATE TABLE rank3 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -4539,7 +4539,7 @@ INSERT INTO rank3 VALUES (543,1,2007,'f',1);
 SELECT gp_segment_id, * FROM rank3_1_prt_2;
 
 --
--- Test that segment is choosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly even in case of different attribute number
 --
 CREATE TABLE rank4 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
@@ -4563,12 +4563,88 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
 
 -- see if update is done with splitting and explicit redistribution
-EXPLAIN UPDATE rank4 SET year=2006 WHERE gender='f';
+EXPLAIN (COSTS OFF) UPDATE rank4 SET year=2006 WHERE gender='f';
 
 UPDATE rank4 SET year=2006 WHERE gender='f';
 
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
+
+--
+-- Test that segment is chosen correctly in case of update on distribution
+-- and partitioning columns simultaneously.
+--
+CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+
+INSERT INTO rank5 VALUES (543,1,2006,'m',1);
+INSERT INTO rank5 VALUES (543,1,2007,'f',1);
+
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+
+ALTER TABLE rank5_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+
+UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+
+--  
+-- Test that segment is chosen correctly in case of tuple routing
+-- with differently distributed partitions (2nd phase of gpexpand)
+--
+-- create different kinds of partitioned tables
+CREATE TABLE sales (trans_id INT, date DATE, amount DECIMAL(9,2), region TEXT)
+DISTRIBUTED BY (trans_id)
+PARTITION BY RANGE (date)
+SUBPARTITION BY LIST (region)
+SUBPARTITION TEMPLATE
+(SUBPARTITION usa VALUES ('usa'),
+SUBPARTITION asia VALUES ('asia'),
+DEFAULT SUBPARTITION other_regions)
+(START (DATE '2011-01-01') INCLUSIVE
+END (DATE '2011-03-02') INCLUSIVE
+EVERY (INTERVAL '1 month'),
+DEFAULT PARTITION outlying_dates);
+
+-- insert data for future movement
+INSERT INTO sales VALUES (543,'2011-01-01',1000,'usa');
+INSERT INTO sales VALUES (543,'2011-02-01',1234,'usa');
+INSERT INTO sales VALUES (543,'2011-03-01',1000,'asia');
+
+-- prepare for expansion (1st stage of gpexpand)
+ALTER TABLE sales EXPAND PARTITION PREPARE;
+
+-- complete expansion for some leafs, thus simulating middle of 2nd stage of gpexpand
+ALTER TABLE sales_1_prt_2_2_prt_usa SET WITH (REORGANIZE=true) DISTRIBUTED BY (trans_id);
+ALTER TABLE sales_1_prt_4_2_prt_usa SET WITH (REORGANIZE=true) DISTRIBUTED BY (trans_id);
+
+-- check values distribution before update
+SELECT gp_segment_id, * FROM sales_1_prt_2_2_prt_usa;
+SELECT gp_segment_id, * FROM sales_1_prt_3_2_prt_usa;
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_asia;
+
+-- see if update is done with splitting and explicit redistribution
+EXPLAIN (COSTS OFF) UPDATE sales SET date='2011-01-01' WHERE amount=1234;
+EXPLAIN (COSTS OFF) UPDATE sales SET region='usa' WHERE region='asia';
+
+-- update key columns so partition change will be triggered
+UPDATE sales SET date='2011-01-01' WHERE amount=1234;
+UPDATE sales SET region='usa' WHERE region='asia';
+
+-- check that update ended up where it should
+SELECT gp_segment_id, * FROM sales_1_prt_2_2_prt_usa;
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_usa;
+SELECT gp_segment_id, * FROM sales_1_prt_3_2_prt_usa;
+SELECT gp_segment_id, * FROM sales_1_prt_4_2_prt_asia;
 
 SELECT gp_debug_reset_create_table_default_numsegments();
 
@@ -4577,5 +4653,7 @@ DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
 DROP TABLE rank4_1_prt_6;
+DROP TABLE rank5;
+DROP TABLE sales;
 DROP TABLE t_part_acl;
 DROP ROLE user_prt_acl;

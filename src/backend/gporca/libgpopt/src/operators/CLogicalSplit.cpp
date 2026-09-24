@@ -53,7 +53,8 @@ CLogicalSplit::CLogicalSplit(CMemoryPool *mp)
 CLogicalSplit::CLogicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 							 CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
 							 CColRef *pcrSegmentId, CColRef *pcrAction,
-							 CColRef *pcrTupleOid, BOOL needsResJunk)
+							 CColRef *pcrTupleOid,
+							 BOOL needsResJunk)
 	: CLogical(mp),
 	  m_pdrgpcrDelete(pdrgpcrDelete),
 	  m_pdrgpcrInsert(pdrgpcrInsert),
@@ -171,7 +172,8 @@ CLogicalSplit::PopCopyWithRemappedColumns(CMemoryPool *mp,
 	}
 
 	return GPOS_NEW(mp) CLogicalSplit(mp, pdrgpcrDelete, pdrgpcrInsert, pcrCtid,
-									  pcrSegmentId, pcrAction, pcrTupleOid, m_needsResJunk);
+									  pcrSegmentId, pcrAction, pcrTupleOid,
+									  m_needsResJunk);
 }
 
 //---------------------------------------------------------------------------

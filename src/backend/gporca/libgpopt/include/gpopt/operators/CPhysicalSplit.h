@@ -52,6 +52,7 @@ private:
 	// required columns by local members
 	CColRefSet *m_pcrsRequiredLocal;
 
+	// special field for resjunk flag assignment
 	BOOL m_needsResJunk;
 
 	// private copy ctor
@@ -62,7 +63,8 @@ public:
 	CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 				   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
 				   CColRef *pcrSegmentId, CColRef *pcrAction,
-				   CColRef *pcrTupleOid, BOOL needsResJunk);
+				   CColRef *pcrTupleOid,
+				   BOOL needsResJunk);
 
 	// dtor
 	virtual ~CPhysicalSplit();
@@ -123,7 +125,7 @@ public:
 		return m_pcrTupleOid;
 	}
 
-	// resjunk
+	// resjunk flag
 	BOOL
 	NeedsResJunk() const
 	{

@@ -50,6 +50,7 @@ private:
 	// tuple oid column
 	CColRef *m_pcrTupleOid;
 
+	// special field for resjunk flag assignment
 	BOOL m_needsResJunk;
 
 	// private copy ctor
@@ -124,7 +125,7 @@ public:
 		return m_pcrTupleOid;
 	}
 
-	// resjunk
+	// resjunk flag
 	BOOL
 	NeedsResJunk() const
 	{

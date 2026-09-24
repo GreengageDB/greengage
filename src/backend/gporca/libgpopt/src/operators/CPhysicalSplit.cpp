@@ -34,7 +34,8 @@ using namespace gpopt;
 CPhysicalSplit::CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 							   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
 							   CColRef *pcrSegmentId, CColRef *pcrAction,
-							   CColRef *pcrTupleOid, BOOL needsResJunk)
+							   CColRef *pcrTupleOid,
+							   BOOL needsResJunk)
 	: CPhysical(mp),
 	  m_pdrgpcrDelete(pdrgpcrDelete),
 	  m_pdrgpcrInsert(pdrgpcrInsert),

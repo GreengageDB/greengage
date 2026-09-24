@@ -135,7 +135,7 @@ CDXLPhysicalSplit::SerializeToDXL(CXMLSerializer *xml_serializer,
 	}
 
 	xml_serializer->AddAttribute(
-		CDXLTokens::GetDXLTokenStr(EdxltokenTypeBool), m_needsResJunk);
+		CDXLTokens::GetDXLTokenStr(EdxltokenNeedsResJunk), m_needsResJunk);
 
 	dxlnode->SerializePropertiesToDXL(xml_serializer);
 

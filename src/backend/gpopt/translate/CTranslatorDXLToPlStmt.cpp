@@ -4393,14 +4393,45 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array)
 }
 
 //---------------------------------------------------------------------------
+//	@function: set_resjunk_flag
+//
+//	@doc: Update given targetlist. Set resjunk flag to true for ctid and
+//	    gp_segment_id attributes. Originally this function was intended to be
+//	    used only with split-update node, as its executor needs this flags to
+//	    be set. But it also can be used anywhere its effect needed.
+//
+//---------------------------------------------------------------------------
+static void
+set_resjunk_flag(List *list)
+{
+	ListCell *lc;
+	foreach (lc, list)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+		// Mark internal DML junk columns as resjunk = true so they are not
+		// projected to the parent ModifyTable node as regular data columns.
+		if (te->resname != NULL)
+		{
+			if (strcmp(te->resname, "ctid") == 0 ||
+				strcmp(te->resname, "gp_segment_id") == 0)
+			{
+				te->resjunk = true;
+			}
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
 //
 //	@doc:
-//		Check and set hash info in split node.
+//		Check and set hash info in split node. Returns according flag:
+//		true if info was set and false if not.
 //
 //---------------------------------------------------------------------------
-void
+BOOL
 CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 {
 	// If we're updating hash-distributed table we need to fill hash-related
@@ -4413,7 +4444,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 		Oid target_relid = rte->relid;
 
 		if (!OidIsValid(target_relid))
-			return;
+			return false;
 
 		Relation target_rel = gpdb::GetRelation(target_relid);
 
@@ -4423,8 +4454,9 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 		if (policy == nullptr || !GpPolicyIsHashPartitioned(policy))
 		{
 			gpdb::CloseRelation(target_rel);
-			return; 
+			return false;
 		}
+
 		int policy_nattrs = policy->nattrs;
 		TupleDesc resultDesc = RelationGetDescr(target_rel);
 
@@ -4445,7 +4477,6 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 				get_resno_by_resname(plan->targetlist, colname);
 			if (!AttributeNumberIsValid(tlist_attno))
 			{
-				gpdb::CloseRelation(target_rel);
 				char err_msg[256];
 				snprintf(
 					err_msg, 256,
@@ -4455,15 +4486,16 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 			}
 
 			Oid typeoid = att->atttypid;
-			Oid opfamily =
-				gpdb::GetOpclassFamily(policy->opclasses[i]);
+			Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
 
 			split->hashAttnos[i] = tlist_attno;
 			split->hashFuncs[i] =
 				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
 		}
 		gpdb::CloseRelation(target_rel);
+		return true;
 	} 
+	return false;
 }
 
 //---------------------------------------------------------------------------
@@ -4553,38 +4585,14 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
-		ListCell *lc;
-		foreach (lc, plan->targetlist)
+		BOOL hash_info_updated = SetSplitUpdateHashInfo(split, plan);
+		if (hash_info_updated)
 		{
-			TargetEntry *te = (TargetEntry *) lfirst(lc);
-
-			// Mark internal DML junk columns as resjunk = true so they are not
-			// projected to the parent ModifyTable node as regular data columns.
-			if (te->resname != NULL)
-			{
-				if (strcmp(te->resname, "ctid") == 0 ||
-					strcmp(te->resname, "gp_segment_id") == 0)
-				{
-					te->resjunk = true;
-				}
-			}
+			set_resjunk_flag(plan->targetlist);
+			// We also need to do the same for child plan, as segment id is
+			// taken from its tuples.
+			set_resjunk_flag(child_plan->targetlist);
 		}
-		// We also need to do the same for child plan, as segment id is taken
-		// from it's tuples.
-		foreach (lc, child_plan->targetlist)
-		{
-			TargetEntry *te = (TargetEntry *) lfirst(lc);
-
-			if (te->resname != NULL)
-			{
-				if (strcmp(te->resname, "ctid") == 0 ||
-					strcmp(te->resname, "gp_segment_id") == 0)
-				{
-					te->resjunk = true;
-				}
-			}
-		}
-		SetSplitUpdateHashInfo(split, plan);
 	}
 
 	SetParamIds(plan);

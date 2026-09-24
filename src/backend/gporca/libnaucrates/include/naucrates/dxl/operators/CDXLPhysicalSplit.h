@@ -54,7 +54,7 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid;
 
-	// special field for creation of resjunk columns
+	// special field for resjunk flag assignment
 	BOOL m_needsResJunk;
 
 	// private copy ctor
@@ -125,7 +125,7 @@ public:
 		return m_tuple_oid;
 	}
 
-	// segmentid column id
+	// resjunk flag
 	ULONG
 	GetNeedsResJunk() const 
 	{

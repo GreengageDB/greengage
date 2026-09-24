@@ -162,17 +162,17 @@ SplitTupleTableSlot(TupleTableSlot *slot,
 				Assert(exprType((Node *) tle->expr) == slot->tts_tupleDescriptor->attrs[((Var *)tle->expr)->varattno-1]->atttypid);
 			}
 		}
+	}
 
-		/* Compute segment ID for the new row */
-		if (node->output_segid_attno > 0)
-		{
-			int32		target_seg;
+	/* Compute segment ID for the new row */
+	if (node->output_segid_attno > 0)
+	{
+		int32		target_seg;
 
-			target_seg = evalHashKey(node, insert_values, insert_nulls);
+		target_seg = evalHashKey(node, insert_values, insert_nulls);
 
-			insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
-			insert_nulls[node->output_segid_attno - 1] = false;
-		}
+		insert_values[node->output_segid_attno - 1] = Int32GetDatum(target_seg);
+		insert_nulls[node->output_segid_attno - 1] = false;
 	}
 }
 
