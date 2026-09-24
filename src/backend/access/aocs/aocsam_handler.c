@@ -1556,6 +1556,14 @@ aoco_relation_cluster_internals(Relation OldHeap, Relation NewHeap, TupleDesc ol
 	}
 	SIMPLE_FAULT_INJECTOR("cluster_ao_seq_scan_begin");
 
+	/*
+	 * aocs_getnext() requires the slot to have already been cleared once
+	 * (see its header comment) -- the ExecClearTuple() at the bottom of
+	 * this loop only primes it for the *next* iteration, so the very first
+	 * call needs its own clear here.
+	 */
+	ExecClearTuple(slot);
+
 	while (aocs_getnext(scan, ForwardScanDirection, slot))
 	{
 		Datum	   *slot_values;

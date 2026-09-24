@@ -135,8 +135,58 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 
 	vslot_aocs->current_scan = NULL;
 
-	bms_free(vslot_aocs->tts_is_valid);
-	vslot_aocs->tts_is_valid = NULL;
+	/*
+	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
+	 * path of every AOCS scan, so the common case (buffer already allocated
+	 * for the slot's current attribute count) just resets it to all-false
+	 * with a plain memset -- no allocation involved after the first row.
+	 *
+	 * Two things make tts_tupleDescriptor unsafe to dereference unconditionally
+	 * here:
+	 *
+	 * 1) A slot can be cleared before it has ever had a descriptor at all --
+	 *    ExecSetSlotDescriptor() itself calls ExecClearTuple() *before*
+	 *    installing the (possibly first-ever) descriptor, e.g. for a
+	 *    freshly-made junk-filter slot in ExecInitJunkFilterInsertion(). At
+	 *    that point tts_tupleDescriptor is still NULL.
+	 *
+	 * 2) Even once a slot has a descriptor, it isn't guaranteed to keep the
+	 *    same size for its whole lifetime: ExecSetSlotDescriptor() can
+	 *    re-describe an *existing* slot to a different (typically wider)
+	 *    tupdesc -- e.g. ExecInitJunkFilterInsertion() widening an
+	 *    UPDATE/DELETE junk-filter slot from the subplan's target list to the
+	 *    full relation width. Because that call clears before swapping in the
+	 *    new descriptor, tts_tupleDescriptor->natts can differ from what
+	 *    tts_is_valid was last allocated for by the time we get back here.
+	 *
+	 * So: no descriptor yet -> just drop any existing array and defer
+	 * allocation to whenever a real descriptor is actually attached; sizes
+	 * mismatched -> reallocate; otherwise reuse the existing buffer.
+	 */
+	if (slot->tts_tupleDescriptor == NULL)
+	{
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+		vslot_aocs->tts_is_valid = NULL;
+		vslot_aocs->tts_is_valid_natts = 0;
+	}
+	else if (likely(vslot_aocs->tts_is_valid != NULL &&
+					vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
+	{
+		memset(vslot_aocs->tts_is_valid, 0,
+			   vslot_aocs->tts_is_valid_natts * sizeof(bool));
+	}
+	else
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+
+		vslot_aocs->tts_is_valid_natts = slot->tts_tupleDescriptor->natts;
+		vslot_aocs->tts_is_valid = palloc0(vslot_aocs->tts_is_valid_natts * sizeof(bool));
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 /*
@@ -167,7 +217,6 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 {
 	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-	MemoryContext oldContext;
 
 	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 							attno,
@@ -175,10 +224,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 							scan->columnScanInfo.attnum_to_rownum)))
 	{
 		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-
-		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-		MemoryContextSwitchTo(oldContext);
+		slotAocs->tts_is_valid[attno] = true;
 
 		return;
 	}
@@ -257,9 +303,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 
 	datumstreamread_get(ds, &d[attno], &null[attno]);
 
-	oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-	slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-	MemoryContextSwitchTo(oldContext);
+	slotAocs->tts_is_valid[attno] = true;
 }
 
 static bool
@@ -278,10 +322,35 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
 
- 	AttrNumber	attno = -1;
-	while ((attno = bms_next_member(attrs, attno)) >= 0)
+	if (unlikely(slotAocs->tts_cached_attrs != attrs))
 	{
-		if (unlikely(bms_is_member(attno, slotAocs->tts_is_valid)))
+		int			count = bms_num_members(attrs);
+		AttrNumber	attno = -1;
+		int			i = 0;
+
+		if (count > slotAocs->tts_cached_attrs_capacity)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+			if (slotAocs->tts_cached_attrs_arr != NULL)
+				pfree(slotAocs->tts_cached_attrs_arr);
+			slotAocs->tts_cached_attrs_arr = palloc(count * sizeof(AttrNumber));
+			slotAocs->tts_cached_attrs_capacity = count;
+			MemoryContextSwitchTo(oldContext);
+		}
+
+		while ((attno = bms_next_member(attrs, attno)) >= 0)
+			slotAocs->tts_cached_attrs_arr[i++] = attno;
+
+		slotAocs->tts_cached_attrs_count = count;
+		slotAocs->tts_cached_attrs = attrs;
+	}
+
+	for (int i = 0; i < slotAocs->tts_cached_attrs_count; i++)
+	{
+		AttrNumber	attno = slotAocs->tts_cached_attrs_arr[i];
+
+		if (unlikely(slotAocs->tts_is_valid[attno]))
 			continue;
 
 		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
@@ -294,7 +363,7 @@ static bool
 tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 {
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	return bms_is_member(attnum, slotAocs->tts_is_valid);
+	return slotAocs->tts_is_valid != NULL && slotAocs->tts_is_valid[attnum];
 }
 
 static void
@@ -319,7 +388,7 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
 		if (unlikely((attno < slot->tts_nvalid) ||
-					bms_is_member(attno, slotAocs->tts_is_valid)))
+					slotAocs->tts_is_valid[attno]))
 			continue;
 
 		if (unlikely(attno >= natts))
@@ -510,11 +579,16 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	{
 		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
 		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
-		MemoryContext oldContext;
 
-		oldContext = MemoryContextSwitchTo(dstslot->tts_mcxt);
-		dstslot_aocs->tts_is_valid = bms_copy(srcslot_aocs->tts_is_valid);
-		MemoryContextSwitchTo(oldContext);
+		/*
+		 * tts_virtual_aocs_clear() above already allocated (sized to
+		 * dstslot's full attribute count) and zeroed dstslot_aocs->tts_is_valid,
+		 * so just copy over the flags for the attributes srcslot has;
+		 * srcdesc->natts <= dstslot's natts per the Assert above.
+		 */
+		if (srcslot_aocs->tts_is_valid != NULL)
+			memcpy(dstslot_aocs->tts_is_valid, srcslot_aocs->tts_is_valid,
+				   srcdesc->natts * sizeof(bool));
 	}
 
 	dstslot->tts_nvalid = srcdesc->natts;

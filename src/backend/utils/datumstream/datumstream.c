@@ -648,6 +648,23 @@ create_datumstreamread(
 {
 	DatumStreamRead *acc = palloc0(sizeof(DatumStreamRead));
 
+	init_datumstreamread(acc, compName, compLevel, checksum, maxsz, attr,
+						 relname, title);
+
+	return acc;
+}
+
+void
+init_datumstreamread(
+					 DatumStreamRead *acc,
+					 char *compName,
+					 int32 compLevel,
+					 bool checksum,
+					 int32 maxsz,
+					 Form_pg_attribute attr,
+					 char *relname,
+					 char *title)
+{
 	PGFunction *compressionFunctions;
 	CompressionState *compressionState;
 
@@ -756,8 +773,6 @@ create_datumstreamread(
 							(acc->ao_attr.checksum ? "true" : "false"))));
 		}
 	}
-
-	return acc;
 }
 
 void
@@ -797,7 +812,15 @@ destroy_datumstreamread(DatumStreamRead * ds)
 	{
 		pfree(ds->title);
 	}
-	pfree(ds);
+
+	/*
+	 * If ds is a member of a caller-owned contiguous array (see
+	 * open_ds_read() in aocsam.c), the caller owns and frees the whole
+	 * array as one chunk -- pfree()ing an interior pointer here would
+	 * corrupt the allocator.
+	 */
+	if (!ds->is_arena_member)
+		pfree(ds);
 }
 
 

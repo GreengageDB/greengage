@@ -828,7 +828,7 @@ AppendOnlyExecutorReadBlock_BindingInit(AppendOnlyExecutorReadBlock *executorRea
 
 	/* for any row to be read, there's at least one column data in the row */
 	Assert(largestAttnum > 0);
-	Assert(executorReadBlock->attnum_to_rownum != NULL);
+	/* attnum_to_rownum is NULL when this relation never had a column added */
 
 	/* Find the number of attributes that are not missing in the row. */
 	while (largestAttnum < slot->tts_tupleDescriptor->natts && 
