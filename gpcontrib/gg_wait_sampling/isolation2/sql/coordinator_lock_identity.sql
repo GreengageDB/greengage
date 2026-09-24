@@ -2,6 +2,12 @@
 -- when the backend blocks before the planner and executor hooks have run,
 -- for example on a relation lock taken during parse analysis.
 CREATE EXTENSION gg_wait_sampling;
+
+-- Processes without a session (background workers, auxiliary processes) report
+-- mppsessionid 0, never InvalidGpSessionId.
+SELECT count(*) = 0 AS no_negative_session_ids FROM gg_wait_sampling_current WHERE mppsessionid < 0;
+SELECT count(*) > 0 AS has_sessionless_processes FROM gg_wait_sampling_current WHERE mppsessionid = 0;
+
 CREATE TABLE t_wait_qd (id INT, val TEXT) DISTRIBUTED BY (id);
 INSERT INTO t_wait_qd VALUES (1,'a'),(2,'b'),(3,'c');
 

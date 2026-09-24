@@ -157,7 +157,7 @@ bool		pgws_sampleCpu = true;
 
 /*---- GGDB funcs ----*/
 static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
-static void ggws_capture_tmid(void);
+static void ggws_backend_init(void);
 
 /*
  * Calculate max processes count.
@@ -1031,7 +1031,7 @@ pgws_planner_hook(Query *parse,
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
 
-	ggws_capture_tmid();
+	ggws_backend_init();
 	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
@@ -1099,8 +1099,14 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	int			i = MyProc - ProcGlobal->allProcs;
 
-	ggws_capture_tmid();
-	pgws_proc_active[i] = true;
+	ggws_backend_init();
+
+	/*
+	 * No in-statement flag here: a failure in ExecutorStart (a dispatch
+	 * error, a cancel, a lock timeout in InitPlan) never reaches ExecutorEnd,
+	 * which would have to clear it, and no client read happens between
+	 * ExecutorStart and ExecutorRun that would need it.
+	 */
 	if (pgws_enabled(nesting_level))
 		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
@@ -1228,7 +1234,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
 
-	ggws_capture_tmid();
+	ggws_backend_init();
 	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
@@ -1289,7 +1295,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 static void
 ggws_post_parse_analyze(ParseState *pstate, Query *query)
 {
-	ggws_capture_tmid();
+	ggws_backend_init();
 
 	if (prev_post_parse_analyze)
 		prev_post_parse_analyze(pstate, query);
@@ -1317,15 +1323,23 @@ ggws_post_parse_analyze(ParseState *pstate, Query *query)
 }
 
 /*
+ * Per-backend setup, done once from the first hook that runs.
+ *
  * Publish the coordinator's postmaster start time (tmid) for this node. A QE
  * receives it in its startup packet, so it is final before any hook runs and
- * never changes for the life of a backend; do it once per backend, from the
- * first hook that runs. After a failover the first QE of the new coordinator
+ * never changes for the life of a backend. After a failover the first QE of the new coordinator
  * overwrites the old value. Utility-mode connections to a segment have no
  * session and their own postmaster's time, so they publish nothing.
  */
+/* Leave nothing behind in this PGPROC slot for the next process using it. */
 static void
-ggws_capture_tmid(void)
+ggws_reset_proc_slot(int code, Datum arg)
+{
+	pgws_proc_active[MyProc - ProcGlobal->allProcs] = false;
+}
+
+static void
+ggws_backend_init(void)
 {
 	static bool done = false;
 
@@ -1335,4 +1349,5 @@ ggws_capture_tmid(void)
 
 	if (gp_session_id > 0)
 		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
+	on_shmem_exit(ggws_reset_proc_slot, 0);
 }
