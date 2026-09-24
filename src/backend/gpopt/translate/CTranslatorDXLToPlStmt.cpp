@@ -5056,7 +5056,7 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 //	@doc: Update given targetlist. Set resjunk flag to true for ctid and
 //	    gp_segment_id attributes. Originally this function was intended to be
 //	    used only with split-update node, as its executor needs this flags to
-//	    be set. But it also can be used anywhere it's effect needed.
+//	    be set. But it also can be used anywhere its effect needed.
 //
 //---------------------------------------------------------------------------
 static void
@@ -5086,7 +5086,7 @@ set_resjunk_flag(List *list)
 //
 //	@doc:
 //		Check and set hash info in split node. Returns according flag:
-//		true if info was setted and false if not.
+//		true if info was set and false if not.
 //
 //---------------------------------------------------------------------------
 BOOL
@@ -5227,7 +5227,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 		{
 			set_resjunk_flag(plan->targetlist);
 			// We also need to do the same for child plan, as segment id is
-			// taken from it's tuples.
+			// taken from its tuples.
 			set_resjunk_flag(child_plan->targetlist);
 		}
 	}

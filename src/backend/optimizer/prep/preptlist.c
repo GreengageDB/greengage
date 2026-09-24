@@ -553,6 +553,9 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					}
 					relation_close(ancestorRel, AccessShareLock);
 					bms_free(changed_cols_for_partition_check);
+
+					if (root->is_split_update)
+						break;
 				}
 				list_free(ancestors);
 			}
