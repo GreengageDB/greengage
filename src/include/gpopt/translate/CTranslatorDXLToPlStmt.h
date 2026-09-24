@@ -397,7 +397,7 @@ private:
 	);
 
 	// Check and set hash info for splitupdate node
-	void SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan);
+	BOOL SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan);
 
 	// translate a Split operator
 	Plan *TranslateDXLSplit(

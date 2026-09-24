@@ -5054,9 +5054,9 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 //	@function: set_resjunk_flag
 //
 //	@doc: Update given targetlist. Set resjunk flag to true for ctid and
-//	    gp_segment_id attributes. Originally this function was inteded to be
-//	    used only with split-update node, as it's executor needs this flags to
-//	    be setted. But it also can be used anywhere it's effect needed.
+//	    gp_segment_id attributes. Originally this function was intended to be
+//	    used only with split-update node, as its executor needs this flags to
+//	    be set. But it also can be used anywhere it's effect needed.
 //
 //---------------------------------------------------------------------------
 static void
@@ -5085,10 +5085,11 @@ set_resjunk_flag(List *list)
 //		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
 //
 //	@doc:
-//		Check and set hash info in split node.
+//		Check and set hash info in split node. Returns according flag:
+//		true if info was setted and false if not.
 //
 //---------------------------------------------------------------------------
-void
+BOOL
 CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 {
 	// If we're updating hash-distributed table we need to fill hash-related
@@ -5100,8 +5101,8 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 					 m_dxl_to_plstmt_context->GetRTableEntriesList());
 		Oid target_relid = rte->relid;
 
-		if (!OidIsValid(target_relid))
-			return;
+		if (!OidIsValid(target_relid)) 
+			return false;
 
 		gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
 
@@ -5109,7 +5110,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 
 		// Check if it's hash distributed
 		if (policy == nullptr || !GpPolicyIsHashPartitioned(policy))
-			return;
+			return false;
 
 		int policy_nattrs = policy->nattrs;
 		TupleDesc resultDesc = RelationGetDescr(target_rel);
@@ -5146,7 +5147,9 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 			split->hashFuncs[i] =
 				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
 		}
+		return true;
 	}
+	return false;
 }
 
 //---------------------------------------------------------------------------
@@ -5219,11 +5222,14 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
-		set_resjunk_flag(plan->targetlist);
-		// We also need to do the same for child plan, as segment id is taken
-		// from it's tuples.
-		set_resjunk_flag(child_plan->targetlist);
-		SetSplitUpdateHashInfo(split, plan);
+		BOOL hash_info_updated = SetSplitUpdateHashInfo(split, plan);
+		if (hash_info_updated) 
+		{
+			set_resjunk_flag(plan->targetlist);
+			// We also need to do the same for child plan, as segment id is
+			// taken from it's tuples.
+			set_resjunk_flag(child_plan->targetlist);
+		}
 	}
 	SetParamIds(plan);
 

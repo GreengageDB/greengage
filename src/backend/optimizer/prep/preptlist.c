@@ -541,20 +541,20 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					changed_cols_for_partition_check = 
 						fixup_columns_attnos(ancestorRel, rel, changed_cols);
 
-					/* Check if we're updating partitioning key columns of hash-distributed table */
+					/* Check if we're updating partitioning key columns of
+					 * hash-distributed table. We don't need split update on
+					 * tuples from already hash distributed leaf-partition, as
+					 * they could possible be transferred only to randomly
+					 * distributed tables, where final segment doesn't matter.
+					 */
 					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL))
 					{
-						/*
-						* We don't need split update on tuples from already hash
-						* distributed leaf-partition, as they could possible be
-						* transferred only to randomly distributed tables, where
-						* final segment doesn't matter.
-						*/
 						root->is_split_update = true;
 					}
 					relation_close(ancestorRel, AccessShareLock);
 					bms_free(changed_cols_for_partition_check);
 				}
+				list_free(ancestors);
 			}
 			pfree(rootRelPolicy);
 		}

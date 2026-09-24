@@ -1327,12 +1327,12 @@ CXformUtils::PexprLogicalDMLOverProject(CMemoryPool *mp,
 		}
 	}
 
-	BOOL is_split = CLogicalDML::EdmlDelete == edmlop ? true : false;
 	CExpression *pexprDML = GPOS_NEW(mp) CExpression(
 		mp,
 		GPOS_NEW(mp) CLogicalDML(mp, edmlop, ptabdesc, colref_array,
 								 GPOS_NEW(mp) CBitSet(mp) /*pbsModified*/,
-								 pcrAction, pcrCtid, pcrSegmentId, is_split),
+								 pcrAction, pcrCtid, pcrSegmentId,
+								 CLogicalDML::EdmlDelete == edmlop),
 		pexprProject);
 
 	CExpression *pexprOutput = pexprDML;

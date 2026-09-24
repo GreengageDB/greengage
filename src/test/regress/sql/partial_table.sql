@@ -673,7 +673,7 @@ explain (costs off) update sales set region='usa' where region='asia';
 update sales set date='2011-01-01' where amount=1234;
 update sales set region='usa' where region='asia';
 
--- check that update endeds up where it should
+-- check that update ended up where it should
 select gp_segment_id, * from sales_1_prt_2_2_prt_usa;
 select gp_segment_id, * from sales_1_prt_4_2_prt_usa;
 select gp_segment_id, * from sales_1_prt_3_2_prt_usa;

@@ -3341,7 +3341,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	 * leaf-tables partitioning policy alone, as it may be 2 stage of gpexpand
 	 * where some tables are still distributed randomly and some are already
 	 * hash redistributed. So we better off to use root's partition policy
-	 * that way we would statisfy all possible distributions.
+	 * that way we would satisfy all possible distributions.
 	 */
 	bool		use_root_policy = false;
 
@@ -3407,7 +3407,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	relation_close(resultRel, NoLock);
 	if (rootRel)
 		relation_close(rootRel, AccessShareLock);
-	if(part_attnos)
+	if (part_attnos)
 		pfree(part_attnos);
 
 	/*

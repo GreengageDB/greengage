@@ -2822,7 +2822,7 @@ make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti)
 	if (has_update_triggers(rte->relid, false))
 		ereport(ERROR,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
-				 errmsg("UPDATE on distributed key column not allowed on relation with update triggers")));
+				 errmsg("UPDATE that may move tuples across segments is not allowed on a relation with update triggers")));
 
 	/* Add action column at the end of targetlist */
 	actionExpr = makeNode(DMLActionExpr);

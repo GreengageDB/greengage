@@ -4342,7 +4342,7 @@ EXPLAIN (COSTS OFF) UPDATE rank2 SET year=2006 WHERE gender='f';
 UPDATE rank SET year=2006 WHERE gender='f';
 UPDATE rank2 SET year=2006 WHERE gender='f';
 
--- check that update endeds up where it should
+-- check that update ended up where it should
 SELECT gp_segment_id, * FROM rank_1_prt_2;
 SELECT gp_segment_id, * FROM rank2_1_prt_2;
 SELECT gp_segment_id, * FROM rank_1_prt_3;
@@ -4401,7 +4401,8 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
 
 --
--- Test that segment is chosen correctly even in case of different attribute number
+-- Test that segment is chosen correctly in case of update on distribution
+-- and partitioning columns simultaneously.
 --
 CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
 DISTRIBUTED BY (id)
