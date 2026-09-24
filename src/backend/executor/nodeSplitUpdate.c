@@ -265,15 +265,6 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	ExecSetSlotDescriptor(splitupdatestate->deleteTuple, tupDesc);
 
 	/*
-	 * Look up the positions of the gp_segment_id in the subplan's target
-	 * list, and in the result.
-	 */
-	splitupdatestate->input_segid_attno =
-		ExecFindJunkAttributeInTlist(outerPlan->targetlist, "gp_segment_id");
-	splitupdatestate->output_segid_attno =
-		ExecFindJunkAttributeInTlist(node->plan.targetlist, "gp_segment_id");
-
-	/*
 	 * DML nodes do not project.
 	 */
 	ExecAssignResultTypeFromTL(&splitupdatestate->ps);
@@ -284,9 +275,25 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 	 */
 	if (node->numHashAttrs > 0)
 	{
+		/*
+		* Look up the positions of the gp_segment_id in the subplan's target
+		* list, and in the result.
+		*/
+		splitupdatestate->input_segid_attno =
+			ExecFindJunkAttributeInTlist(outerPlan->targetlist,
+										 "gp_segment_id");
+		splitupdatestate->output_segid_attno =
+			ExecFindJunkAttributeInTlist(node->plan.targetlist,
+										 "gp_segment_id");
+
 		splitupdatestate->cdbhash = makeCdbHash(node->numHashSegments,
 												node->numHashAttrs,
 												node->hashFuncs);
+	}
+	else 
+	{
+		splitupdatestate->input_segid_attno = InvalidAttrNumber;
+		splitupdatestate->output_segid_attno = InvalidAttrNumber;
 	}
 
 	if (estate->es_instrument && (estate->es_instrument & INSTRUMENT_CDB))
