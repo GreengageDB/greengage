@@ -138,7 +138,7 @@ CLogicalLeftAntiSemiJoin::PstatsDerive(CMemoryPool *mp,
 		);
 	if (outer_stats->IsEmpty() &&
 		CXform::ExfDifferenceAll2LeftAntiSemiJoin ==
-			CLogicalLeftAntiSemiJoin::PopConvert(exprhdl.Pop())->OriginXform())
+			CLogicalJoin::PopConvert(exprhdl.Pop())->OriginXform())
 	{
 		pstatsLASJoin->Release();
 		pstatsLASJoin = outer_stats->CopyStats(mp);
