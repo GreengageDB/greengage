@@ -5051,6 +5051,108 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 }
 
 //---------------------------------------------------------------------------
+//	@function: set_resjunk_flag
+//
+//	@doc: Update given targetlist. Set resjunk flag to true for ctid and
+//	    gp_segment_id attributes. Originally this function was intended to be
+//	    used only with split-update node, as its executor needs this flags to
+//	    be set. But it also can be used anywhere its effect needed.
+//
+//---------------------------------------------------------------------------
+static void
+set_resjunk_flag(List *list)
+{
+	ListCell *lc;
+	foreach (lc, list)
+	{
+		TargetEntry *te = (TargetEntry *) lfirst(lc);
+
+		// Mark internal DML junk columns as resjunk = true so they are not
+		// projected to the parent ModifyTable node as regular data columns.
+		if (te->resname != NULL)
+		{
+			if (strcmp(te->resname, "ctid") == 0 ||
+				strcmp(te->resname, "gp_segment_id") == 0)
+			{
+				te->resjunk = true;
+			}
+		}
+	}
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
+//
+//	@doc:
+//		Check and set hash info in split node. Returns according flag:
+//		true if info was set and false if not.
+//
+//---------------------------------------------------------------------------
+BOOL
+CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
+{
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	if (m_result_rel_list != nullptr)
+	{
+		RangeTblEntry *rte =
+			rt_fetch(llast_int(m_result_rel_list),
+					 m_dxl_to_plstmt_context->GetRTableEntriesList());
+		Oid target_relid = rte->relid;
+
+		if (!OidIsValid(target_relid))
+			return false;
+
+		gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
+
+		GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
+
+		// Check if it's hash distributed
+		if (policy == nullptr || !GpPolicyIsHashPartitioned(policy))
+			return false;
+
+		int policy_nattrs = policy->nattrs;
+		TupleDesc resultDesc = RelationGetDescr(target_rel);
+
+		split->numHashAttrs = policy_nattrs;
+		split->numHashSegments = policy->numsegments;
+		split->hashAttnos =
+			(AttrNumber *) gpdb::GPDBAlloc(policy_nattrs * sizeof(AttrNumber));
+		split->hashFuncs = (Oid *) gpdb::GPDBAlloc(policy_nattrs * sizeof(Oid));
+
+		for (int i = 0; i < policy_nattrs; i++)
+		{
+			Form_pg_attribute att =
+				TupleDescAttr(resultDesc, policy->attrs[i] - 1);
+
+			const char *colname = NameStr(att->attname);
+
+			AttrNumber tlist_attno =
+				get_resno_by_resname(plan->targetlist, colname);
+			if (!AttributeNumberIsValid(tlist_attno))
+			{
+				char err_msg[256];
+				snprintf(
+					err_msg, 256,
+					"Couldn't find attribute number of \"%s\" column in plan's targetlist.",
+					colname);
+				GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg, nullptr);
+			}
+
+			Oid typeoid = att->atttypid;
+			Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+
+			split->hashAttnos[i] = tlist_attno;
+			split->hashFuncs[i] =
+				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+		}
+		return true;
+	}
+	return false;
+}
+
+//---------------------------------------------------------------------------
 //	@function:
 //		CTranslatorDXLToPlStmt::TranslateDXLSplit
 //
@@ -5116,6 +5218,19 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	plan->lefttree = child_plan;
 	plan->plan_node_id = m_dxl_to_plstmt_context->GetNextPlanId();
 
+	// If we're updating hash-distributed table we need to fill hash-related
+	// fields.
+	if (phy_split_dxlop->GetNeedsResJunk())
+	{
+		BOOL hash_info_updated = SetSplitUpdateHashInfo(split, plan);
+		if (hash_info_updated)
+		{
+			set_resjunk_flag(plan->targetlist);
+			// We also need to do the same for child plan, as segment id is
+			// taken from its tuples.
+			set_resjunk_flag(child_plan->targetlist);
+		}
+	}
 	SetParamIds(plan);
 
 	// cleanup

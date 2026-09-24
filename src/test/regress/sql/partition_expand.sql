@@ -558,4 +558,3 @@ alter table t2_partition_expand set distributed by (a);
 
 --cleanup
 select gp_debug_reset_create_table_default_numsegments();
-drop extension gp_debug_numsegments;
