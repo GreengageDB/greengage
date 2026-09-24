@@ -44,7 +44,6 @@
 /* GGDB adaptation headers */
 #include "cdb/cdbvars.h"
 #include "executor/instrument.h"
-#include "libpq/auth.h"
 #include "parser/analyze.h"
 #include "utils/queryjumble.h"
 
@@ -62,7 +61,6 @@ static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 static planner_hook_type planner_hook_next = NULL;
 static ProcessUtility_hook_type prev_ProcessUtility = NULL;
 static post_parse_analyze_hook_type prev_post_parse_analyze = NULL;
-static ClientAuthentication_hook_type prev_ClientAuthentication = NULL;
 
 /* Current nesting depth of planner/Executor calls */
 static int	nesting_level = 0;
@@ -70,7 +68,6 @@ static int	nesting_level = 0;
 /* Pointers to shared memory objects */
 shm_mq	   *pgws_collector_mq = NULL;
 uint64	   *pgws_proc_queryids = NULL;
-int32	   *pgws_proc_tmids = NULL;
 CollectorShmqHeader *pgws_collector_hdr = NULL;
 
 /* Receiver (backend) local shm_mq pointers */
@@ -159,7 +156,6 @@ bool		pgws_sampleCpu = true;
 
 /*---- GGDB funcs ----*/
 static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
-static void ggws_ClientAuthentication(Port *port, int status);
 static void ggws_capture_tmid(void);
 
 /*
@@ -233,12 +229,11 @@ pgws_shmem_size(void)
 
 	shm_toc_initialize_estimator(&e);
 
-	nkeys = 4;
+	nkeys = 3;
 
 	shm_toc_estimate_chunk(&e, sizeof(CollectorShmqHeader));
 	shm_toc_estimate_chunk(&e, (Size) COLLECTOR_QUEUE_SIZE);
 	shm_toc_estimate_chunk(&e, sizeof(uint64) * get_max_procs_count());
-	shm_toc_estimate_chunk(&e, sizeof(int32) * get_max_procs_count());
 
 	shm_toc_estimate_keys(&e, nkeys);
 	size = shm_toc_estimate(&e);
@@ -296,10 +291,6 @@ pgws_shmem_startup(void)
 											  sizeof(uint64) * get_max_procs_count());
 		shm_toc_insert(toc, 2, pgws_proc_queryids);
 		MemSet(pgws_proc_queryids, 0, sizeof(uint64) * get_max_procs_count());
-		pgws_proc_tmids = shm_toc_allocate(toc,
-										   sizeof(int32) * get_max_procs_count());
-		shm_toc_insert(toc, 3, pgws_proc_tmids);
-		MemSet(pgws_proc_tmids, 0, sizeof(int32) * get_max_procs_count());
 	}
 	else
 	{
@@ -308,7 +299,6 @@ pgws_shmem_startup(void)
 		pgws_collector_hdr = shm_toc_lookup(toc, 0, false);
 		pgws_collector_mq = shm_toc_lookup(toc, 1, false);
 		pgws_proc_queryids = shm_toc_lookup(toc, 2, false);
-		pgws_proc_tmids = shm_toc_lookup(toc, 3, false);
 	}
 
 	pgws_lss = ShmemInitStruct("pg_wait_sampling_locks", sizeof(pgwsLockSharedState), &locks_found);
@@ -399,8 +389,6 @@ _PG_init(void)
 	ProcessUtility_hook = pgws_ProcessUtility;
 	prev_post_parse_analyze = post_parse_analyze_hook;
 	post_parse_analyze_hook = ggws_post_parse_analyze;
-	prev_ClientAuthentication = ClientAuthentication_hook;
-	ClientAuthentication_hook = ggws_ClientAuthentication;
 
 	/* Define GUC variables */
 	DefineCustomIntVariable("gg_wait_sampling.history_size",
@@ -1306,51 +1294,22 @@ ggws_post_parse_analyze(ParseState *pstate, Query *query)
 }
 
 /*
- * The coordinator start time of a session (tmid) reaches a QE in the startup
- * packet, so it is final before any hook runs, and it never changes for the
- * life of a backend. Capture it once, at the first hook this backend runs,
- * and publish it as the node-wide value for backends that have not reached a
- * hook yet. QD-to-QE connections short-circuit client authentication, so the
- * authentication hook only covers external clients; the planner, executor,
- * utility and parse hooks cover QEs. Background workers and auxiliary
- * processes run none of these and keep 0 in their slot.
+ * Publish the coordinator's postmaster start time (tmid) for this node. A QE
+ * receives it in its startup packet, so it is final before any hook runs and
+ * never changes for the life of a backend; do it once per backend, from the
+ * first hook that runs. After a failover the first QE of the new coordinator
+ * overwrites the old value. Utility-mode connections to a segment have no
+ * session and their own postmaster's time, so they publish nothing.
  */
-static bool ggws_tmid_captured = false;
-
-static void
-ggws_reset_tmid(int code, Datum arg)
-{
-	pgws_proc_tmids[MyProc - ProcGlobal->allProcs] = 0;
-}
-
 static void
 ggws_capture_tmid(void)
 {
-	int32		tmid;
+	static bool done = false;
 
-	if (ggws_tmid_captured || MyProc == NULL || pgws_proc_tmids == NULL)
+	if (done)
 		return;
+	done = true;
 
-	gp_gettmid(&tmid);
-	pgws_proc_tmids[MyProc - ProcGlobal->allProcs] = tmid;
 	if (gp_session_id > 0)
-		pgws_collector_hdr->cluster_tmid = tmid;
-	on_shmem_exit(ggws_reset_tmid, 0);
-	ggws_tmid_captured = true;
-}
-
-int32
-pgws_cluster_tmid(void)
-{
-	return pgws_collector_hdr->cluster_tmid;
-}
-
-static void
-ggws_ClientAuthentication(Port *port, int status)
-{
-	if (prev_ClientAuthentication)
-		prev_ClientAuthentication(port, status);
-
-	if (status == STATUS_OK)
-		ggws_capture_tmid();
+		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
 }

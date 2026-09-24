@@ -184,10 +184,11 @@ Properties of `command_id` that follow from how the server numbers commands:
 to, as seconds since the epoch. A QE receives it from the coordinator when it
 is started, so every process of a session reports the same value on every
 node, and sessions from different coordinator incarnations, for example after
-a failover to the standby, can be told apart. A backend captures it once, at
-the first statement it plans or executes, or at authentication for external
-clients; a QE that has not run its first statement yet reports the value last
-captured on its node. Background workers and auxiliary processes report 0.
+a failover to the standby, can be told apart. The value is kept once per node:
+on the coordinator the collector takes it from its own postmaster, on a
+segment the QEs publish it when they run their first statement. Processes
+without a session, that is background and auxiliary processes and utility-mode
+connections to a segment, report 0.
 
 If `gg_wait_sampling.profile_queries` is set to `none`, the profile has no
 per-command dimension and reports `queryid`, `mppsessionid`, `command_id` and

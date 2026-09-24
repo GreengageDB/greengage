@@ -12,6 +12,8 @@
 #include <signal.h>
 
 #include "compat.h"
+#include "cdb/cdbvars.h"
+#include "executor/instrument.h"
 #include "miscadmin.h"
 #include "pg_wait_sampling.h"
 #include "pgstat.h"
@@ -365,6 +367,14 @@ pgws_collector_main(Datum main_arg)
 
 	profile_hash = make_profile_hash();
 	pgws_collector_hdr->latch = &MyProc->procLatch;
+
+	/*
+	 * GGDB: on the coordinator node the collector's own postmaster is the
+	 * coordinator, so seed tmid here; sessions then have it before any of
+	 * their backends runs a statement. Segments learn it from their QEs.
+	 */
+	if (IS_QUERY_DISPATCHER())
+		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
 
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "gg_wait_sampling collector");
 	collector_context = AllocSetContextCreate(TopMemoryContext,

@@ -53,38 +53,6 @@ typedef struct
 	HistoryItem *items;
 } History;
 
-/* pg_wait_sampling.c: coordinator start time per PGPROC, see below */
-extern int32   *pgws_proc_tmids;
-struct CollectorShmqHeader;
-
-extern int32 pgws_cluster_tmid(void);
-
-/*
- * GGDB: session id and command id of a sampled process are read from its
- * PGPROC entry, so they are available whatever phase of a statement the
- * process is in, including waits before parsing. A process waiting for its
- * client is idle, or between messages of one command: it is attributed to
- * the session but to no command, so that an idle backend produces a single
- * profile entry rather than one per command it ever ran.
- *
- * The coordinator start time (tmid) of the process's session is constant for
- * the life of a backend. It is captured once into pgws_proc_tmids, indexed by
- * PGPROC number like pgws_proc_queryids, at the first hook the backend runs.
- * QD-to-QE connections skip client authentication, so a QE captures it at its
- * first statement; until then the value last captured on this node is used,
- * since every session on a node belongs to the same coordinator.
- */
-static inline void
-pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
-				   int32 *ssid, int32 *ccnt, int32 *tmid)
-{
-	*ssid = proc->mppSessionId;
-	*ccnt = (wait_event_info == WAIT_EVENT_CLIENT_READ) ? 0 : proc->queryCommandId;
-	*tmid = pgws_proc_tmids[proc - ProcGlobal->allProcs];
-	if (*tmid == 0 && *ssid > 0)
-		*tmid = pgws_cluster_tmid();
-}
-
 typedef enum
 {
 	NO_REQUEST,
@@ -98,9 +66,9 @@ typedef struct
 	Latch	   *latch;
 	SHMRequest	request;
 	/*
-	 * GGDB: start time of the coordinator that the sessions on this node
-	 * belong to, as last captured by any of its backends. Used for a QE that
-	 * has not captured its own value yet.
+	 * GGDB: postmaster start time of the coordinator that the sessions on
+	 * this node belong to (tmid). Every session on a node belongs to the same
+	 * coordinator, so one value per node is enough. See pgws_proc_identity().
 	 */
 	int32		cluster_tmid;
 } CollectorShmqHeader;
@@ -128,6 +96,30 @@ extern CollectorShmqHeader *pgws_collector_hdr;
 extern pgwsLockSharedState *pgws_lss;
 
 extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event_info_p);
+
+/*
+ * GGDB: session id and command id of a sampled process are read from its
+ * PGPROC entry, so they are available whatever phase of a statement the
+ * process is in, including waits before parsing. A process waiting for its
+ * client is idle, or between messages of one command: it is attributed to
+ * the session but to no command, so that an idle backend produces a single
+ * profile entry rather than one per command it ever ran.
+ *
+ * tmid is the coordinator's postmaster start time. A QE receives it in its
+ * startup packet, so every backend of a session on any node knows it; each
+ * backend publishes it once, from the first hook it runs, into the collector
+ * header, and the collector seeds it on the coordinator node from its own
+ * postmaster. Processes without a session (background and auxiliary
+ * processes, utility-mode connections to a segment) report 0.
+ */
+static inline void
+pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
+				   int32 *ssid, int32 *ccnt, int32 *tmid)
+{
+	*ssid = proc->mppSessionId;
+	*ccnt = (wait_event_info == WAIT_EVENT_CLIENT_READ) ? 0 : proc->queryCommandId;
+	*tmid = (*ssid > 0) ? pgws_collector_hdr->cluster_tmid : 0;
+}
 
 /* collector.c */
 extern void pgws_register_wait_collector(void);
