@@ -5101,7 +5101,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 					 m_dxl_to_plstmt_context->GetRTableEntriesList());
 		Oid target_relid = rte->relid;
 
-		if (!OidIsValid(target_relid)) 
+		if (!OidIsValid(target_relid))
 			return false;
 
 		gpdb::RelationWrapper target_rel = gpdb::GetRelation(target_relid);
@@ -5223,7 +5223,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
 		BOOL hash_info_updated = SetSplitUpdateHashInfo(split, plan);
-		if (hash_info_updated) 
+		if (hash_info_updated)
 		{
 			set_resjunk_flag(plan->targetlist);
 			// We also need to do the same for child plan, as segment id is
