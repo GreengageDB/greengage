@@ -630,7 +630,7 @@ set search_path=test_partial_table,public;
 copy partial_rpt_to to stdout;
 
 --
--- Test that segment is chosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
 select gp_debug_set_create_table_default_numsegments(2);

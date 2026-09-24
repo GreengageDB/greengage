@@ -4296,7 +4296,7 @@ ALTER TABLE t_part_ao_acl ADD PARTITION "30" START (21) INCLUSIVE END (30) EXCLU
 SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_ao_acl_1_prt_30'::regclass AND attacl IS NOT NULL;
 
 --
--- Test that segment is chosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
 SELECT gp_debug_set_create_table_default_numsegments(2);

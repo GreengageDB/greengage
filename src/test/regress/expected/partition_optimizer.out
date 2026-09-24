@@ -6669,7 +6669,7 @@ SELECT attname, attacl FROM pg_attribute WHERE attrelid = 't_part_ao_acl_1_prt_3
 (1 row)
 
 --
--- Test that segment is chosen correctly in case of tupre routing
+-- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
 SELECT gp_debug_set_create_table_default_numsegments(2);
