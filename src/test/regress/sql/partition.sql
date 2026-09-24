@@ -4433,6 +4433,7 @@ DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
 DROP TABLE rank4_1_prt_6;
+DROP TABLE rank5;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;
