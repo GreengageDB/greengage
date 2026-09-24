@@ -254,6 +254,20 @@ typedef struct AOCSScanDescData
 		/* Indicate if we proj some/all of the columns */
 		AOCSProjectionKind 		projKind;
 
+		/*
+		 * True when the scan node has no local qual (WHERE-clause-style
+		 * filter) of its own, per the qual list passed to
+		 * aoco_beginscan_extractcolumns(). In that case, laziness in
+		 * tts_virtual_aocs_gettargetattr() buys nothing -- there is no
+		 * filtering step that might discard the tuple before all projected
+		 * columns are needed -- but it still costs an extra re-entry into
+		 * the AOCS fetch path for every ancestor join level that touches
+		 * this slot. When set, tts_virtual_aocs_gettargetattr() eagerly
+		 * fetches every projected column on first touch instead, matching
+		 * the pre-lazy-fetch behavior of the old aocs_getnext().
+		 */
+		bool					eagerFetch;
+
 		/* attnum to rownum mapping, used in reading missing column value */
 		int64 			   *attnum_to_rownum;
 

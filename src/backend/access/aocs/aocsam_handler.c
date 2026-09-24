@@ -580,6 +580,14 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot,
 							projKind,
 							flags);
 
+	/*
+	 * No local qual on this scan means there's no filtering step that could
+	 * discard the tuple before all projected columns are needed, so the
+	 * lazy per-attribute fetch in tts_virtual_aocs_gettargetattr() buys
+	 * nothing here -- see the comment on eagerFetch.
+	 */
+	aoscan->columnScanInfo.eagerFetch = (qual == NIL);
+
 	if (needFree)
 		pfree(proj);
 	return (TableScanDesc)aoscan;

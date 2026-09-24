@@ -306,6 +306,8 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 	slotAocs->tts_is_valid[attno] = true;
 }
 
+static void tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts);
+
 static bool
 tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 {
@@ -316,6 +318,29 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
 	if (unlikely(scan == NULL))
 		return false;
+
+	/*
+	 * Already fully materialized for this tuple (either by a prior
+	 * gettargetattr call below, or by getsomeattrs()) -- nothing left for
+	 * any ancestor join level to fetch. Mirrors the fast path ordinary
+	 * (non-AOCS) slots get for free via slot_getsomeattrs()'s natts <=
+	 * tts_nvalid check.
+	 */
+	if (unlikely(slot->tts_nvalid >= slot->tts_tupleDescriptor->natts))
+		return true;
+
+	/*
+	 * No local qual on this scan (see eagerFetch comment in cdbaocsam.h):
+	 * there is no filtering step that might discard the tuple before all
+	 * projected columns are needed, so fetch everything now instead of
+	 * paying for a separate lazy fetch at every ancestor join level that
+	 * references a different subset of this scan's columns.
+	 */
+	if (unlikely(scan->columnScanInfo.eagerFetch))
+	{
+		tts_virtual_aocs_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
+		return true;
+	}
 
 	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
