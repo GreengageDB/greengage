@@ -406,8 +406,23 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
-	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 
+	/*
+	 * Once we're materializing via getsomeattrs at all (as opposed to the
+	 * qual-driven gettargetattr lazy path), there's no benefit in stopping
+	 * partway through proj_atts just because this particular caller only
+	 * asked for `natts`: proj_atts already IS the complete, fixed set of
+	 * columns this query will ever need from this scan (computed once at
+	 * scan setup from the whole plan, not just this call site), and by the
+	 * time generic getsomeattrs is invoked at all the row has typically
+	 * already survived any filtering. If natts grows across repeated calls
+	 * for the same tuple (e.g. different callers wanting progressively
+	 * more columns), each call would otherwise redo this loop. So fetch
+	 * everything in proj_atts in one pass instead, matching the
+	 * pre-lazy-fetch aocs_getnext() behavior, and record that the full
+	 * descriptor width is now valid so any later gettargetattr/getsomeattrs
+	 * call on this tuple hits the already-fully-fetched fast path.
+	 */
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
@@ -416,18 +431,11 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 					slotAocs->tts_is_valid[attno]))
 			continue;
 
-		if (unlikely(attno >= natts))
-		{
-			if (attno < anchor_attr)
-				continue;
-			break;
-		}
-
 		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
 									 attno, d, null);
 	}
 
-	slot->tts_nvalid = natts;
+	slot->tts_nvalid = Max(natts, slot->tts_tupleDescriptor->natts);
 }
 
 /*
