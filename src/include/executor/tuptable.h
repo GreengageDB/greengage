@@ -259,7 +259,43 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;			 /* scan for this tuple */
-	Bitmapset *tts_is_valid;		 /* per-attribute valid flag */
+
+	/*
+	 * Per-attribute valid flag, indexed directly by attnum (0..natts-1).
+	 * A dense bool array rather than a Bitmapset: reads/writes are a single
+	 * inlined array access instead of an out-of-line
+	 * bms_is_member()/bms_add_member() call plus word/bit arithmetic, which
+	 * matters since this is consulted and updated on every attribute access
+	 * of every tuple in an AOCS scan.
+	 *
+	 * Normally allocated once per slot (sized to tts_tupleDescriptor->natts)
+	 * and reused for the slot's lifetime -- but the descriptor is NOT
+	 * guaranteed to stay the same size for that lifetime: ExecSetSlotDescriptor()
+	 * can re-describe an existing slot (e.g. ExecInitJunkFilterInsertion()
+	 * widening an UPDATE/DELETE junk-filter slot to the full relation width).
+	 * tts_is_valid_natts records the size this array was actually allocated
+	 * for, so tts_virtual_aocs_clear() can tell when it must reallocate
+	 * instead of reusing/memset-ing a now too-small buffer.
+	 */
+	bool	   *tts_is_valid;
+	int			tts_is_valid_natts;
+
+	/*
+	 * gettargetattr() is called once per tuple with a Bitmapset of the
+	 * attnos an expression step needs, but that Bitmapset is built once
+	 * per compiled ExprEvalStep (op->d.fetch.all_vars) and its pointer
+	 * stays stable across every tuple of the scan -- only its members
+	 * differ between distinct expression steps. Re-walking it via
+	 * bms_next_member() on every single tuple is therefore redundant
+	 * work. Cache the flattened, plain-array form of the last-seen
+	 * Bitmapset (keyed by pointer identity, not value) so repeat calls
+	 * with the same attrs just do a tight sequential array scan instead.
+	 * Grows but never shrinks; freed only when the slot itself is.
+	 */
+	Bitmapset  *tts_cached_attrs;
+	AttrNumber *tts_cached_attrs_arr;
+	int			tts_cached_attrs_count;
+	int			tts_cached_attrs_capacity;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot

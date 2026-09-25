@@ -580,6 +580,14 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot,
 							projKind,
 							flags);
 
+	/*
+	 * No local qual on this scan means there's no filtering step that could
+	 * discard the tuple before all projected columns are needed, so the
+	 * lazy per-attribute fetch in tts_virtual_aocs_gettargetattr() buys
+	 * nothing here -- see the comment on eagerFetch.
+	 */
+	aoscan->columnScanInfo.eagerFetch = (qual == NIL);
+
 	if (needFree)
 		pfree(proj);
 	return (TableScanDesc)aoscan;
@@ -1555,6 +1563,14 @@ aoco_relation_cluster_internals(Relation OldHeap, Relation NewHeap, TupleDesc ol
 		pgstat_progress_update_multi_param(2, prog_index, prog_val);
 	}
 	SIMPLE_FAULT_INJECTOR("cluster_ao_seq_scan_begin");
+
+	/*
+	 * aocs_getnext() requires the slot to have already been cleared once
+	 * (see its header comment) -- the ExecClearTuple() at the bottom of
+	 * this loop only primes it for the *next* iteration, so the very first
+	 * call needs its own clear here.
+	 */
+	ExecClearTuple(slot);
 
 	while (aocs_getnext(scan, ForwardScanDirection, slot))
 	{

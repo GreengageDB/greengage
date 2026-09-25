@@ -885,7 +885,11 @@ GetNextNAvailableFilenums(Oid relid, int n)
  * attnum to lastrownum for every possible segno. See comments of 
  * AppendOnlyExecutorReadBlock_BindingInit() for the usage of the mapping.
  *
- * Return a palloc'ed array based on the number of attributes.
+ * Return a palloc'ed array based on the number of attributes, or NULL if
+ * this relation has no lastrownums entries at all (i.e. it never had a
+ * column added via ALTER TABLE ADD COLUMN) -- callers treat NULL as "no
+ * attribute value can ever be missing", letting them skip both this
+ * allocation and the per-row AO_ATTR_VAL_IS_MISSING() lookup entirely.
  */
 int64 *
 GetAttnumToLastrownumMapping(Oid relid, int natts)
@@ -896,6 +900,7 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 	ScanKeyData 	skey[1];
 	HeapTuple	tup;
 	bool 		isnull;
+	bool		found_any = false;
 
 	Assert(OidIsValid(relid));
 
@@ -927,6 +932,8 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 		if (isnull)
 			continue;
 
+		found_any = true;
+
 		deconstruct_array(DatumGetArrayTypeP(col),
 								INT8OID, 8, true, 'i',
 								&rownums, NULL, &n);
@@ -947,6 +954,12 @@ GetAttnumToLastrownumMapping(Oid relid, int natts)
 
 	systable_endscan(scan);
 	heap_close(rel, AccessShareLock);
+
+	if (!found_any)
+	{
+		pfree(attnum_to_lastrownum);
+		return NULL;
+	}
 
 	return attnum_to_lastrownum;
 }

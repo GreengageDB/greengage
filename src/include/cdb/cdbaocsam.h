@@ -177,9 +177,6 @@ typedef struct AOCSScanDescData
 	/* AM dependant part of the descriptor */
 	enum AOCSScanDescIdentifier descIdentifier;
 
-	/* synthetic system attributes */
-	ItemPointerData cdb_fake_ctid;
-
 	/*
 	 * used by `analyze`
 	 */
@@ -254,10 +251,33 @@ typedef struct AOCSScanDescData
 		/* Indicate if we proj some/all of the columns */
 		AOCSProjectionKind 		projKind;
 
+		/*
+		 * True when the scan node has no local qual (WHERE-clause-style
+		 * filter) of its own, per the qual list passed to
+		 * aoco_beginscan_extractcolumns(). In that case, laziness in
+		 * tts_virtual_aocs_gettargetattr() buys nothing -- there is no
+		 * filtering step that might discard the tuple before all projected
+		 * columns are needed -- but it still costs an extra re-entry into
+		 * the AOCS fetch path for every ancestor join level that touches
+		 * this slot. When set, tts_virtual_aocs_gettargetattr() eagerly
+		 * fetches every projected column on first touch instead, matching
+		 * the pre-lazy-fetch behavior of the old aocs_getnext().
+		 */
+		bool					eagerFetch;
+
 		/* attnum to rownum mapping, used in reading missing column value */
 		int64 			   *attnum_to_rownum;
 
 		struct DatumStreamRead **ds;
+
+		/*
+		 * Contiguous array backing ds[] for the projected columns, one
+		 * palloc'ed block instead of num_proj_atts separate allocations --
+		 * improves cache locality for the per-row, per-column struct field
+		 * reads in tts_virtual_aocs_fetch_attr(). NULL until open_ds_read()
+		 * runs; owned and freed as a single chunk alongside ds[].
+		 */
+		struct DatumStreamRead *ds_arena;
 	} columnScanInfo;
 
 	struct AOCSFileSegInfo **seginfo;
