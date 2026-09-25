@@ -646,6 +646,14 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 					num_rows_disj_child, &output_rows);
 				cumulative_rows = output_rows;
 
+				// a union can't undo either side's unsupported-predicate
+				// imprecision on this column
+				if (previous_histogram->IsUnsupportedPredDerived() ||
+					disjunctive_child_col_histogram->IsUnsupportedPredDerived())
+				{
+					new_histogram->SetUnsupportedPredDerived();
+				}
+
 				GPOS_DELETE(previous_histogram);
 				GPOS_DELETE(disjunctive_child_col_histogram);
 				previous_histogram = new_histogram;

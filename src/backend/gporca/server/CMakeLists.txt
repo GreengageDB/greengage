@@ -67,7 +67,7 @@ Correlated-LASJ-With-Outer-Const Correlated-LASJ-With-Outer-Expr LeftOuter2Inner
 LASJ-Not-In-Force-Broadcast LASJMultiplePredicates LASJPredicatePushdown
 LASJPredicatePushdownDisjunction LASJPredicatePushdownArrayCmp LASJPredicatePushdownLike
 LASJPredicatePushdownMultiColumnA LASJPredicatePushdownMultiColumnB
-LASJPredicatePushdownRepeatedColumn;
+LASJPredicatePushdownRepeatedColumn LASJPredicatePushdownRepeatedColumnDisjunction;
 
 CPredicateTest:
 ConvertBoolConstNullToConstTableFalseFilter 

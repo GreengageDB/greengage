@@ -711,6 +711,14 @@ CStatisticsUtils::UpdateDisjStatistics(
 					input_disjunct_rows, result_histogram, local_rows,
 					&output_rows);
 
+			// a union can't undo either side's unsupported-predicate
+			// imprecision on this column
+			if (previous_histogram->IsUnsupportedPredDerived() ||
+				result_histogram->IsUnsupportedPredDerived())
+			{
+				new_histogram->SetUnsupportedPredDerived();
+			}
+
 			GPOS_DELETE(previous_histogram);
 			previous_histogram = new_histogram;
 		}
@@ -920,6 +928,14 @@ CStatisticsUtils::MergeHistogramMapsForDisjPreds(CMemoryPool *mp,
 					CHistogram *normalized_union_histogram =
 						histogram1->MakeUnionHistogramNormalize(
 							rows1, histogram2, rows2, &output_rows);
+
+					// a union can't undo either side's unsupported-predicate
+					// imprecision on this column
+					if (histogram1->IsUnsupportedPredDerived() ||
+						histogram2->IsUnsupportedPredDerived())
+					{
+						normalized_union_histogram->SetUnsupportedPredDerived();
+					}
 
 					AddHistogram(mp, colid, normalized_union_histogram,
 								 merged_hmap, true /* fReplaceOld */);
