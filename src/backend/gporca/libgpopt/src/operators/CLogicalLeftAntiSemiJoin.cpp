@@ -136,6 +136,13 @@ CLogicalLeftAntiSemiJoin::PstatsDerive(CMemoryPool *mp,
 		outer_stats->CalcLASJoinStats(mp, inner_side_stats, join_preds_stats,
 									  true /* DoIgnoreLASJHistComputation */
 		);
+	if (outer_stats->IsEmpty() &&
+		CXform::ExfDifferenceAll2LeftAntiSemiJoin ==
+			CLogicalJoin::PopConvert(exprhdl.Pop())->OriginXform())
+	{
+		pstatsLASJoin->Release();
+		pstatsLASJoin = outer_stats->CopyStats(mp);
+	}
 
 	// Check whether a row plan hint exists for this join operators relations.
 	// And if one does exist, then evaluate the hint to overwrite the estimated
