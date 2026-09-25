@@ -164,7 +164,7 @@ The workflow is parameterized to support flexibility:
 - **Target OS**: Supports multiple operating systems, defined in the matrix
   strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
   existing artifact naming; Ubuntu 24.04 support is currently available for
-  version 6.x only.
+  version 6.x and for the `build` job of version 7.x
 
 ## Usage
 
