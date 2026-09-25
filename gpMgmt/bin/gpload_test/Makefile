@@ -19,13 +19,7 @@ GPTest.pm:
 
 .PHONY: installcheck
 	
-ifeq "$(findstring CentOS release 6., $(OS))" "CentOS release 6."
-installcheck: gpdiff.pl gpstringsubs.pl
-	@echo "skip gpload test for centos6"
-else ifeq "$(findstring CentOS Linux release 7., $(OS))" "CentOS Linux release 7."
-installcheck: gpdiff.pl gpstringsubs.pl
-	@echo "skip gpload test for centos7"
-else ifeq "$(findstring Red Hat Enterprise Linux Server, $(OS))" "Red Hat Enterprise Linux Server"
+ifeq "$(findstring Red Hat Enterprise Linux Server, $(OS))" "Red Hat Enterprise Linux Server"
 installcheck: gpdiff.pl gpstringsubs.pl
 	@echo "skip gpload test for Red Hat"
 else

@@ -3184,20 +3184,21 @@ fixup_subplan_walker(Node *node, SubPlanWalkerContext *context)
 			 * there is more than one subplan node which refer to the same
 			 * plan_id. In this case create a duplicate subplan, append it to
 			 * the glob->subplans and update the plan_id of the subplan to
-			 * refer to the new copy of the subplan node. Note since subroot
-			 * is not used there is no need of new subroot, and initplans are
+			 * refer to the new copy of the subplan node. glob->subroots must
+			 * stay aligned with glob->subplans (same length, indexed by
+			 * plan_id); the duplicate's subroot is only ever read (e.g. by
+			 * apply_shareinput_xslice), never mutated through this slot, so we
+			 * reuse the original subroot instead of copying it. Initplans are
 			 * not needed to be duplicated.
 			 */
 			PlannerInfo *root = (PlannerInfo *) context->base.node;
 			Plan	    *dupsubplan = (Plan *) copyObject(planner_subplan_get_plan(root, subplan));
+			PlannerInfo *subroot = planner_subplan_get_root(root, subplan);
 			int			 newplan_id = list_length(root->glob->subplans) + 1;
-			PlannerInfo *dupsubroot = makeNode(PlannerInfo);
-
-			memcpy(dupsubroot, planner_subplan_get_root(root, subplan), sizeof(PlannerInfo));
-			root->glob->subroots = lappend(root->glob->subroots, dupsubroot);
 
 			subplan->plan_id = newplan_id;
 			root->glob->subplans = lappend(root->glob->subplans, dupsubplan);
+			root->glob->subroots = lappend(root->glob->subroots, subroot);
 			context->bms_subplans = bms_add_member(context->bms_subplans, newplan_id);
 			return false;
 		}
