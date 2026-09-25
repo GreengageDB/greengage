@@ -20,8 +20,6 @@ jobs:
       matrix:
         include:
           - target_os: rockylinux
-            target_os_version: "8"
-          - target_os: rockylinux
             target_os_version: "9"
     permissions:
       contents: read  # Explicit for default behavior
