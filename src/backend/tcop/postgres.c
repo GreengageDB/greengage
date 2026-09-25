@@ -274,8 +274,9 @@ static bool renice_current_process(int nice_level)
 	int prio_out = -1;
 	elog(DEBUG2, "Current nice level of the process: %d",
 			getpriority(PRIO_PROCESS, 0));
+	errno = 0;
 	prio_out = setpriority(PRIO_PROCESS, 0, nice_level);
-	if (prio_out == -1)
+	if (prio_out == -1 && errno != 0)
 	{
 		int save_errno = errno;
 		switch (save_errno)
