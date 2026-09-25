@@ -593,8 +593,7 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 			item->pid = proc->pid;
 			item->wait_event_info = proc->wait_event_info;
 			item->queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
-			pgws_proc_identity(proc, item->wait_event_info, &item->ssid, &item->ccnt,
-							   &item->tmid);
+			pgws_proc_identity(proc, item);
 			funcctx->max_calls = 1;
 		}
 		else
@@ -617,9 +616,7 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 				params->items[j].pid = proc->pid;
 				params->items[j].wait_event_info = proc->wait_event_info;
 				params->items[j].queryId = pgws_proc_queryids[i];
-				pgws_proc_identity(proc, params->items[j].wait_event_info,
-								   &params->items[j].ssid, &params->items[j].ccnt,
-								   &params->items[j].tmid);
+				pgws_proc_identity(proc, &params->items[j]);
 				j++;
 			}
 			funcctx->max_calls = j;
@@ -1032,7 +1029,6 @@ pgws_planner_hook(Query *parse,
 	uint64		save_queryId = 0;
 
 	ggws_backend_init();
-	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
 	{
@@ -1070,7 +1066,6 @@ pgws_planner_hook(Query *parse,
 		 */
 		result->queryId = parse->queryId;
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1079,7 +1074,6 @@ pgws_planner_hook(Query *parse,
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1100,13 +1094,6 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	ggws_backend_init();
-
-	/*
-	 * No in-statement flag here: a failure in ExecutorStart (a dispatch
-	 * error, a cancel, a lock timeout in InitPlan) never reaches ExecutorEnd,
-	 * which would have to clear it, and no client read happens between
-	 * ExecutorStart and ExecutorRun that would need it.
-	 */
 	if (pgws_enabled(nesting_level))
 		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
@@ -1127,7 +1114,6 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = pgws_proc_queryids[i];
 
-	pgws_proc_active[i] = true;
 	nesting_level++;
 	PG_TRY();
 	{
@@ -1144,7 +1130,6 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 			standard_ExecutorRun(queryDesc, direction, count);
 #endif
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1153,7 +1138,6 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1169,7 +1153,6 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = pgws_proc_queryids[i];
 
-	pgws_proc_active[i] = true;
 	nesting_level++;
 	PG_TRY();
 	{
@@ -1178,7 +1161,6 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 		else
 			standard_ExecutorFinish(queryDesc);
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
@@ -1187,7 +1169,6 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
 		pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
@@ -1203,10 +1184,7 @@ pgws_ExecutorEnd(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	if (nesting_level == 0)
-	{
 		pgws_proc_queryids[i] = UINT64CONST(0);
-		pgws_proc_active[i] = false;
-	}
 
 	if (prev_ExecutorEnd)
 		prev_ExecutorEnd(queryDesc);
@@ -1233,8 +1211,18 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 {
 	int			i = MyProc - ProcGlobal->allProcs;
 	uint64		save_queryId = 0;
+	bool		save_active = pgws_proc_active[i];
 
 	ggws_backend_init();
+
+	/*
+	 * A utility statement may read from the client while it runs: COPY FROM
+	 * STDIN on the coordinator, or a QE reading the COPY data from the QD.
+	 * Such a ClientRead is not idle and keeps its command id. No other
+	 * statement reads from the client, so the flag is set only here; the
+	 * previous value is restored on exit, which keeps it set for an outer
+	 * utility statement.
+	 */
 	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
@@ -1273,7 +1261,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 #endif
 				);
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
+		pgws_proc_active[i] = save_active;
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
@@ -1282,7 +1270,7 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_active[i] = (nesting_level > 0);
+		pgws_proc_active[i] = save_active;
 		if (nesting_level == 0)
 			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))

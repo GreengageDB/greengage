@@ -89,10 +89,10 @@ extern int	pgws_profileQueries;
 extern bool pgws_sampleCpu;
 
 /* pg_wait_sampling.c */
-extern shm_mq *pgws_collector_mq;
-extern uint64	   *pgws_proc_queryids;
-extern bool	   *pgws_proc_active;
 extern CollectorShmqHeader *pgws_collector_hdr;
+extern shm_mq *pgws_collector_mq;
+extern uint64 *pgws_proc_queryids;
+extern bool	  *pgws_proc_active;
 
 extern pgwsLockSharedState *pgws_lss;
 
@@ -111,7 +111,7 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
  * a wait is attributed to no command instead. A client read inside a
  * statement, for example COPY FROM STDIN on the coordinator or a QE reading
  * the COPY data from the QD, keeps its command id: pgws_proc_active marks the
- * backends that are inside a statement the hooks are tracking.
+ * backends that are inside a utility statement.
  *
  * tmid is the coordinator's postmaster start time. A QE receives it in its
  * startup packet, so every backend of a session on any node knows it; each
@@ -121,15 +121,14 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
  * processes, utility-mode connections to a segment) report 0.
  */
 static inline void
-pgws_proc_identity(PGPROC *proc, uint32 wait_event_info,
-				   int32 *ssid, int32 *ccnt, int32 *tmid)
+pgws_proc_identity(PGPROC *proc, HistoryItem *item)
 {
-	bool		idle = (wait_event_info == WAIT_EVENT_CLIENT_READ &&
+	bool		idle = (item->wait_event_info == WAIT_EVENT_CLIENT_READ &&
 						!pgws_proc_active[proc - ProcGlobal->allProcs]);
 
-	*ssid = (proc->mppSessionId > 0) ? proc->mppSessionId : 0;
-	*ccnt = idle ? 0 : proc->queryCommandId;
-	*tmid = (*ssid > 0) ? pgws_collector_hdr->cluster_tmid : 0;
+	item->ssid = (proc->mppSessionId > 0) ? proc->mppSessionId : 0;
+	item->ccnt = idle ? 0 : proc->queryCommandId;
+	item->tmid = (item->ssid > 0) ? pgws_collector_hdr->cluster_tmid : 0;
 }
 
 /* collector.c */

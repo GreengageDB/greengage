@@ -194,7 +194,7 @@ probe_waits(History *observations, HTAB *profile_hash,
 			item.queryId = pgws_proc_queryids[i];
 		else
 			item.queryId = UINT64CONST(0);
-		pgws_proc_identity(proc, item.wait_event_info, &item.ssid, &item.ccnt, &item.tmid);
+		pgws_proc_identity(proc, &item);
 
 		item.ts = ts;
 
