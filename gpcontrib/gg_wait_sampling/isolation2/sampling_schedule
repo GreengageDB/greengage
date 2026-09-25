@@ -1,2 +1,3 @@
 test: lock_wait_events
+test: coordinator_lock_identity
 test: teardown

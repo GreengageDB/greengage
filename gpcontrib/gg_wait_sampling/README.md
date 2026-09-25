@@ -106,7 +106,7 @@ all processed including background workers on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
 
 `gg_wait_sampling.gg_wait_sampling_get_current(pid int4)` returns the same table for single given
@@ -126,7 +126,7 @@ in-memory ring buffer on coordinator and all segments.
 | queryid      | int8        | Id of query             |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
 
 #### Wait profile
@@ -143,8 +143,63 @@ in-memory hash table on coordinator and all segments.
 | count        | text        | Count of samples        |
 | mppsessionid | int4        | Greengage session id    |
 | command_id   | int4        | Greengage command id    |
-| tmid         | int4        | Transaction time        |
+| tmid         | int4        | Coordinator start time  |
 | segid        | int4        | Segment id              |
+
+#### Query identity
+
+`queryid` is the query fingerprint computed at the end of parse analysis, the
+same 64-bit hash `pg_stat_statements` uses. On the coordinator it is computed
+by `gg_wait_sampling` itself when no other extension has set it, so it is
+available without `pg_stat_statements`; when both are loaded the values are
+identical. Segments receive it inside the dispatched plan. Utility statements
+have `queryid` 0. It is recorded from the planner and executor hooks, so a
+backend that waits before planning starts, for example on a relation lock
+taken during parse analysis, is sampled with `queryid` 0.
+
+`mppsessionid` and `command_id` are read from the backend's `PGPROC` entry at
+sampling time and do not depend on any hook. They are therefore present for
+every sampled process of a session, including a backend blocked during parse
+analysis and the QEs of that session on the segments. Processes without a
+session, that is background and auxiliary processes and utility-mode
+connections to a segment, report `mppsessionid` 0.
+
+Properties of `command_id` that follow from how the server numbers commands:
+
+ * The coordinator increments the counter when it receives a statement and
+   once more when the statement starts running, in `CreateQueryDesc` for a
+   plan and in `ProcessUtility` for a utility statement. A backend sampled
+   while parsing or planning therefore reports a `command_id` one less than
+   the value it reports while running, and the running value is the one
+   dispatched to the segments and printed as `cmd` in the log prefix. Waits
+   after the statement has finished running, for example during the two-phase
+   commit dispatch, are again reported under the parsing value.
+ * With the extended query protocol the coordinator increments the counter
+   only when the statement starts running, so a backend that blocks during
+   parse analysis of a Parse message reports the `command_id` of its previous
+   statement, or 0 for the first statement of the session.
+ * The coordinator keeps the last value after a statement ends. A backend
+   waiting for its client (`ClientRead`) outside a statement, that is idle,
+   idle in transaction, or between the messages of an extended-protocol
+   command, is reported with `command_id` 0 so that an idle backend produces
+   one profile entry rather than one per command it ever ran; its `queryid`
+   is 0 as well because the hooks clear it when the statement ends. A client
+   read inside a statement, for example `COPY FROM STDIN` on the coordinator
+   or a QE reading the COPY data from the coordinator, keeps its `command_id`.
+
+`tmid` is the postmaster start time of the coordinator the session belongs
+to, as seconds since the epoch. A QE receives it from the coordinator when it
+is started, so every process of a session reports the same value on every
+node, and sessions from different coordinator incarnations, for example after
+a failover to the standby, can be told apart. The value is kept once per node:
+on the coordinator the collector takes it from its own postmaster, on a
+segment the QEs publish it when they run their first statement. Processes
+without a session, that is background and auxiliary processes and utility-mode
+connections to a segment, report 0.
+
+If `gg_wait_sampling.profile_queries` is set to `none`, the profile has no
+per-command dimension and reports `queryid`, `mppsessionid`, `command_id` and
+`tmid` as 0. The history always records the identity of the sampled process.
 
 #### Resetting the profile
 Profile reset requires superuser privilege. In version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.

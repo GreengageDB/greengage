@@ -43,6 +43,7 @@
 
 /* GGDB adaptation headers */
 #include "cdb/cdbvars.h"
+#include "executor/instrument.h"
 #include "parser/analyze.h"
 #include "utils/queryjumble.h"
 
@@ -66,7 +67,8 @@ static int	nesting_level = 0;
 
 /* Pointers to shared memory objects */
 shm_mq	   *pgws_collector_mq = NULL;
-QueryItem   *pgws_proc_query_items = NULL;
+uint64	   *pgws_proc_queryids = NULL;
+bool	   *pgws_proc_active = NULL;
 CollectorShmqHeader *pgws_collector_hdr = NULL;
 
 /* Receiver (backend) local shm_mq pointers */
@@ -155,7 +157,7 @@ bool		pgws_sampleCpu = true;
 
 /*---- GGDB funcs ----*/
 static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
-static QueryItem ggws_calculate_query_item(uint64 queryId, bool with_commandId);
+static void ggws_backend_init(void);
 
 /*
  * Calculate max processes count.
@@ -228,11 +230,12 @@ pgws_shmem_size(void)
 
 	shm_toc_initialize_estimator(&e);
 
-	nkeys = 3;
+	nkeys = 4;
 
 	shm_toc_estimate_chunk(&e, sizeof(CollectorShmqHeader));
 	shm_toc_estimate_chunk(&e, (Size) COLLECTOR_QUEUE_SIZE);
-	shm_toc_estimate_chunk(&e, sizeof(QueryItem) * get_max_procs_count());
+	shm_toc_estimate_chunk(&e, sizeof(uint64) * get_max_procs_count());
+	shm_toc_estimate_chunk(&e, sizeof(bool) * get_max_procs_count());
 
 	shm_toc_estimate_keys(&e, nkeys);
 	size = shm_toc_estimate(&e);
@@ -283,12 +286,17 @@ pgws_shmem_startup(void)
 
 		pgws_collector_hdr = shm_toc_allocate(toc, sizeof(CollectorShmqHeader));
 		shm_toc_insert(toc, 0, pgws_collector_hdr);
+		pgws_collector_hdr->cluster_tmid = 0;
 		pgws_collector_mq = shm_toc_allocate(toc, COLLECTOR_QUEUE_SIZE);
 		shm_toc_insert(toc, 1, pgws_collector_mq);
-		pgws_proc_query_items = shm_toc_allocate(toc,
-											  sizeof(QueryItem) * get_max_procs_count());
-		shm_toc_insert(toc, 2, pgws_proc_query_items);
-		MemSet(pgws_proc_query_items, 0, sizeof(QueryItem) * get_max_procs_count());
+		pgws_proc_queryids = shm_toc_allocate(toc,
+											  sizeof(uint64) * get_max_procs_count());
+		shm_toc_insert(toc, 2, pgws_proc_queryids);
+		MemSet(pgws_proc_queryids, 0, sizeof(uint64) * get_max_procs_count());
+		pgws_proc_active = shm_toc_allocate(toc,
+											sizeof(bool) * get_max_procs_count());
+		shm_toc_insert(toc, 3, pgws_proc_active);
+		MemSet(pgws_proc_active, 0, sizeof(bool) * get_max_procs_count());
 	}
 	else
 	{
@@ -296,7 +304,8 @@ pgws_shmem_startup(void)
 		toc = shm_toc_attach(PG_WAIT_SAMPLING_MAGIC, pgws);
 		pgws_collector_hdr = shm_toc_lookup(toc, 0, false);
 		pgws_collector_mq = shm_toc_lookup(toc, 1, false);
-		pgws_proc_query_items = shm_toc_lookup(toc, 2, false);
+		pgws_proc_queryids = shm_toc_lookup(toc, 2, false);
+		pgws_proc_active = shm_toc_lookup(toc, 3, false);
 	}
 
 	pgws_lss = ShmemInitStruct("pg_wait_sampling_locks", sizeof(pgwsLockSharedState), &locks_found);
@@ -583,7 +592,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 			item = &params->items[0];
 			item->pid = proc->pid;
 			item->wait_event_info = proc->wait_event_info;
-			item->query_item = pgws_proc_query_items[proc - ProcGlobal->allProcs];
+			item->queryId = pgws_proc_queryids[proc - ProcGlobal->allProcs];
+			pgws_proc_identity(proc, item);
 			funcctx->max_calls = 1;
 		}
 		else
@@ -605,7 +615,8 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 
 				params->items[j].pid = proc->pid;
 				params->items[j].wait_event_info = proc->wait_event_info;
-				params->items[j].query_item = pgws_proc_query_items[i];
+				params->items[j].queryId = pgws_proc_queryids[i];
+				pgws_proc_identity(proc, &params->items[j]);
 				j++;
 			}
 			funcctx->max_calls = j;
@@ -647,10 +658,10 @@ pg_wait_sampling_get_current(PG_FUNCTION_ARGS)
 		else
 			nulls[2] = true;
 
-		values[3] = UInt64GetDatum(item->query_item.queryId);
-		values[4] = Int32GetDatum(item->query_item.ssid);
-		values[5] = Int32GetDatum(item->query_item.ccnt);
-		values[6] = Int32GetDatum(item->query_item.tmid);
+		values[3] = UInt64GetDatum(item->queryId);
+		values[4] = Int32GetDatum(item->ssid);
+		values[5] = Int32GetDatum(item->ccnt);
+		values[6] = Int32GetDatum(item->tmid);
 		values[7] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
@@ -840,10 +851,10 @@ pg_wait_sampling_get_profile(PG_FUNCTION_ARGS)
 
 		if (pgws_profileQueries)
 		{
-			values[3] = UInt64GetDatum(item->query_item.queryId);
-			values[5] = Int32GetDatum(item->query_item.ssid);
-			values[6] = Int32GetDatum(item->query_item.ccnt);
-			values[7] = Int32GetDatum(item->query_item.tmid);
+			values[3] = UInt64GetDatum(item->queryId);
+			values[5] = Int32GetDatum(item->ssid);
+			values[6] = Int32GetDatum(item->ccnt);
+			values[7] = Int32GetDatum(item->tmid);
 		}
 		else
 		{
@@ -979,10 +990,10 @@ pg_wait_sampling_get_history(PG_FUNCTION_ARGS)
 		else
 			nulls[3] = true;
 
-		values[4] = UInt64GetDatum(item->query_item.queryId);
-		values[5] = Int32GetDatum(item->query_item.ssid);
-		values[6] = Int32GetDatum(item->query_item.ccnt);
-		values[7] = Int32GetDatum(item->query_item.tmid);
+		values[4] = UInt64GetDatum(item->queryId);
+		values[5] = Int32GetDatum(item->ssid);
+		values[6] = Int32GetDatum(item->ccnt);
+		values[7] = Int32GetDatum(item->tmid);
 		values[8] = Int32GetDatum(GpIdentity.segindex);
 		tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
 
@@ -1015,12 +1026,14 @@ pgws_planner_hook(Query *parse,
 {
 	PlannedStmt *result;
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = {0};
+	uint64		save_queryId = 0;
+
+	ggws_backend_init();
 
 	if (pgws_enabled(nesting_level))
 	{
-		save_query_item = pgws_proc_query_items[i];
-		pgws_proc_query_items[i] = ggws_calculate_query_item(parse->queryId, false);
+		save_queryId = pgws_proc_queryids[i];
+		pgws_proc_queryids[i] = parse->queryId;
 	}
 
 	nesting_level++;
@@ -1054,17 +1067,17 @@ pgws_planner_hook(Query *parse,
 		result->queryId = parse->queryId;
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1080,8 +1093,9 @@ pgws_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	int			i = MyProc - ProcGlobal->allProcs;
 
+	ggws_backend_init();
 	if (pgws_enabled(nesting_level))
-		pgws_proc_query_items[i] = ggws_calculate_query_item(queryDesc->plannedstmt->queryId, true);
+		pgws_proc_queryids[i] = queryDesc->plannedstmt->queryId;
 	if (prev_ExecutorStart)
 		prev_ExecutorStart(queryDesc, eflags);
 	else
@@ -1098,7 +1112,7 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 )
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = pgws_proc_query_items[i];
+	uint64		save_queryId = pgws_proc_queryids[i];
 
 	nesting_level++;
 	PG_TRY();
@@ -1117,17 +1131,17 @@ pgws_ExecutorRun(QueryDesc *queryDesc,
 #endif
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1137,7 +1151,7 @@ static void
 pgws_ExecutorFinish(QueryDesc *queryDesc)
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = pgws_proc_query_items[i];
+	uint64		save_queryId = pgws_proc_queryids[i];
 
 	nesting_level++;
 	PG_TRY();
@@ -1148,14 +1162,14 @@ pgws_ExecutorFinish(QueryDesc *queryDesc)
 			standard_ExecutorFinish(queryDesc);
 		nesting_level--;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
-		pgws_proc_query_items[i] = save_query_item;
+		pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
@@ -1170,7 +1184,7 @@ pgws_ExecutorEnd(QueryDesc *queryDesc)
 	int			i = MyProc - ProcGlobal->allProcs;
 
 	if (nesting_level == 0)
-		pgws_proc_query_items[i] = (QueryItem) {0};
+		pgws_proc_queryids[i] = UINT64CONST(0);
 
 	if (prev_ExecutorEnd)
 		prev_ExecutorEnd(queryDesc);
@@ -1196,12 +1210,25 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 )
 {
 	int			i = MyProc - ProcGlobal->allProcs;
-	QueryItem	save_query_item = (QueryItem) {0};
+	uint64		save_queryId = 0;
+	bool		save_active = pgws_proc_active[i];
+
+	ggws_backend_init();
+
+	/*
+	 * A utility statement may read from the client while it runs: COPY FROM
+	 * STDIN on the coordinator, or a QE reading the COPY data from the QD.
+	 * Such a ClientRead is not idle and keeps its command id. No other
+	 * statement reads from the client, so the flag is set only here; the
+	 * previous value is restored on exit, which keeps it set for an outer
+	 * utility statement.
+	 */
+	pgws_proc_active[i] = true;
 
 	if (pgws_enabled(nesting_level))
 	{
-		save_query_item = pgws_proc_query_items[i];
-		pgws_proc_query_items[i] = ggws_calculate_query_item(pstmt->queryId, true);
+		save_queryId = pgws_proc_queryids[i];
+		pgws_proc_queryids[i] = pstmt->queryId;
 	}
 
 	nesting_level++;
@@ -1234,39 +1261,30 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 #endif
 				);
 		nesting_level--;
+		pgws_proc_active[i] = save_active;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 	}
 	PG_CATCH();
 	{
 		nesting_level--;
+		pgws_proc_active[i] = save_active;
 		if (nesting_level == 0)
-			pgws_proc_query_items[i] = (QueryItem) {0};
+			pgws_proc_queryids[i] = UINT64CONST(0);
 		else if (pgws_enabled(nesting_level))
-			pgws_proc_query_items[i] = save_query_item;
+			pgws_proc_queryids[i] = save_queryId;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 }
 
-static QueryItem
-ggws_calculate_query_item(uint64 queryId, bool with_commandId)
-{
-	QueryItem query_item = {0};
-	query_item.ssid = gp_session_id;
-	gp_gettmid(&query_item.tmid);
-	query_item.queryId = queryId;
-	/* Until ExecutorStart() the commandId is not relevant */
-	if (with_commandId)
-		query_item.ccnt = MyProc->queryCommandId;
-	return query_item;
-}
-
 static void
 ggws_post_parse_analyze(ParseState *pstate, Query *query)
 {
+	ggws_backend_init();
+
 	if (prev_post_parse_analyze)
 		prev_post_parse_analyze(pstate, query);
 
@@ -1290,4 +1308,34 @@ ggws_post_parse_analyze(ParseState *pstate, Query *query)
 	JumbleState *jstate = JumbleQuery(query);
 
 	freeJumbleState(jstate);
+}
+
+/*
+ * Per-backend setup, done once from the first hook that runs.
+ *
+ * Publish the coordinator's postmaster start time (tmid) for this node. A QE
+ * receives it in its startup packet, so it is final before any hook runs and
+ * never changes for the life of a backend. After a failover the first QE of the new coordinator
+ * overwrites the old value. Utility-mode connections to a segment have no
+ * session and their own postmaster's time, so they publish nothing.
+ */
+/* Leave nothing behind in this PGPROC slot for the next process using it. */
+static void
+ggws_reset_proc_slot(int code, Datum arg)
+{
+	pgws_proc_active[MyProc - ProcGlobal->allProcs] = false;
+}
+
+static void
+ggws_backend_init(void)
+{
+	static bool done = false;
+
+	if (done)
+		return;
+	done = true;
+
+	if (gp_session_id > 0)
+		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
+	on_shmem_exit(ggws_reset_proc_slot, 0);
 }

@@ -9,8 +9,11 @@ CREATE ROLE role_wait_test RESOURCE GROUP rg_wait_test;
 1:SET ROLE role_wait_test;
 1&:BEGIN;
 
--- gg_wait_sampling_current shows the current wait event
-SELECT query, queryid, mppsessionid, command_id, wait_event_type
+-- gg_wait_sampling_current shows the current wait event. The session id
+-- and command id come from the backend's PGPROC, so they are reported even
+-- though the backend blocks before parsing its statement.
+SELECT query, queryid, mppsessionid = sess_id AS session_matches,
+       command_id > 0 AS has_command_id, wait_event_type
 FROM gg_wait_sampling_current JOIN pg_stat_activity USING(pid)
 WHERE wait_event_type='ResourceGroup';
 

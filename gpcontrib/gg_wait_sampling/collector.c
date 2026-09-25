@@ -12,6 +12,8 @@
 #include <signal.h>
 
 #include "compat.h"
+#include "cdb/cdbvars.h"
+#include "executor/instrument.h"
 #include "miscadmin.h"
 #include "pg_wait_sampling.h"
 #include "pgstat.h"
@@ -182,13 +184,17 @@ probe_waits(History *observations, HTAB *profile_hash,
 				   *observation;
 		PGPROC	   *proc = &ProcGlobal->allProcs[i];
 
+		/* The item is a hash key with padding: no uninitialized bytes. */
+		MemSet(&item, 0, sizeof(item));
+
 		if (!pgws_should_sample_proc(proc, &item.pid, &item.wait_event_info))
 			continue;
 
 		if (pgws_profileQueries)
-			item.query_item = pgws_proc_query_items[i];
+			item.queryId = pgws_proc_queryids[i];
 		else
-			item.query_item = (QueryItem) {0};
+			item.queryId = UINT64CONST(0);
+		pgws_proc_identity(proc, &item);
 
 		item.ts = ts;
 
@@ -306,7 +312,7 @@ make_profile_hash(void)
 	if (pgws_profileQueries)
 		hash_ctl.keysize = offsetof(ProfileItem, count);
 	else
-		hash_ctl.keysize = offsetof(ProfileItem, query_item);
+		hash_ctl.keysize = offsetof(ProfileItem, queryId);
 
 	hash_ctl.entrysize = sizeof(ProfileItem);
 	return hash_create("Waits profile hash", 1024, &hash_ctl,
@@ -364,6 +370,14 @@ pgws_collector_main(Datum main_arg)
 
 	profile_hash = make_profile_hash();
 	pgws_collector_hdr->latch = &MyProc->procLatch;
+
+	/*
+	 * GGDB: on the coordinator node the collector's own postmaster is the
+	 * coordinator, so seed tmid here; sessions then have it before any of
+	 * their backends runs a statement. Segments learn it from their QEs.
+	 */
+	if (IS_QUERY_DISPATCHER())
+		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
 
 	CurrentResourceOwner = ResourceOwnerCreate(NULL, "gg_wait_sampling collector");
 	collector_context = AllocSetContextCreate(TopMemoryContext,
