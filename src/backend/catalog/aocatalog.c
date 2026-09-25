@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "access/heapam.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/aoblkdir.h"
 #include "catalog/aocatalog.h"
@@ -135,6 +136,17 @@ CreateAOAuxiliaryTable(
 	 * destroyed when its primary is, so there is no need to handle
 	 * the aovisimap relation as temp.
 	 */
+
+	/*
+	 * For a temporary append-only table, route the auxiliary catalog rows
+	 * (gp_fastsequence initial entries, the aux->base pg_depend dependency,
+	 * and the pg_appendonly aux-OID update) into the in-memory virtual
+	 * catalog (tempcat).  heap_create_with_catalog() and index_create()
+	 * already redirect their own writes based on the auxiliary table's
+	 * persistence, but the entries below would otherwise hit disk.
+	 */
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	aoauxiliary_relid = heap_create_with_catalog(aoauxiliary_relname,
 											     namespaceid,
 											     rel->rd_rel->reltablespace,
@@ -238,6 +250,8 @@ CreateAOAuxiliaryTable(
 	 * Make changes visible
 	 */
 	CommandCounterIncrement();
+
+	END_TEMP_TABLE_SCOPE();
 
 	return true;
 }

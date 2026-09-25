@@ -16,6 +16,7 @@
 
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -96,8 +97,12 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 
 	tup = heap_form_tuple(tupDesc, values, nulls);
 
+	BEGIN_TEMP_TABLE_SCOPE(isTemp);
+
 	CatalogTupleInsert(nspdesc, tup);
 	Assert(OidIsValid(nspoid));
+
+	END_TEMP_TABLE_SCOPE();
 
 	table_close(nspdesc, RowExclusiveLock);
 
