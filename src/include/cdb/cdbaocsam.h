@@ -177,9 +177,6 @@ typedef struct AOCSScanDescData
 	/* AM dependant part of the descriptor */
 	enum AOCSScanDescIdentifier descIdentifier;
 
-	/* synthetic system attributes */
-	ItemPointerData cdb_fake_ctid;
-
 	/*
 	 * used by `analyze`
 	 */

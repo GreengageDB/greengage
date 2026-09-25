@@ -398,8 +398,6 @@ initscan_with_colinfo(AOCSScanDesc scan)
 	scan->cur_seg = -1;
 	scan->segrowsprocessed = 0;
 
-	ItemPointerSet(&scan->cdb_fake_ctid, 0, 0);
-
 	scan->totalBytesRead = 0;
 
 	/* if the table has zero column, the rest of this function is no-op */
@@ -1609,8 +1607,6 @@ ReadNext:
 		 */
 		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-		slotAocs->tts_is_valid[attno] = true;
-
 		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 		if (rowNum == InvalidAORowNum &&
 			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
@@ -1635,7 +1631,8 @@ ReadNext:
 			rowNum = InvalidAORowNum;
 			goto ReadNext;
 		}
-		scan->cdb_fake_ctid = *((ItemPointer) &aoTupleId);
+
+		slotAocs->tts_is_valid[attno] = true;
 
 		/*
 		 * Only the anchor column (attno above, not necessarily attribute 0)
@@ -1650,7 +1647,7 @@ ReadNext:
 		 */
 		slot->tts_nvalid = 0;
 
-		slot->tts_tid = scan->cdb_fake_ctid;
+		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
 		slotAocs->current_scan = (void*)scan;
 		return true;
