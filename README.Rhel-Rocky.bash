@@ -9,25 +9,10 @@ set -euxo pipefail
 
 dnf -y install epel-release
 
-# Detect OS version if not already set
-export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
-
-perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
 python_packages="python3.12 python3.12-devel python3.12-pip python3.12-setuptools"
+perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base  perl-FindBin perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
 
-case "$OS_VERSION" in
-    8)
-        dnf config-manager --set-enabled powertools
-        ;;
-    9)
-        dnf config-manager --set-enabled crb
-        perl_packages="$perl_packages  perl-FindBin perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
-        ;;
-    *)
-        echo "Unsupported Rocky Linux version: $OS_VERSION"
-        exit 1
-        ;;
-esac
+dnf config-manager --set-enabled crb
 
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
