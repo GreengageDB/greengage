@@ -27,12 +27,15 @@
 #include "storage/block.h"
 #include "utils/rel.h"
 #include "utils/snapshot.h"
+#include "cdb/cdbappendonlyam.h"
 #include "cdb/cdbappendonlyblockdirectory.h"
 #include "cdb/cdbappendonlystoragelayer.h"
 #include "cdb/cdbappendonlystorageread.h"
 #include "cdb/cdbappendonlystoragewrite.h"
 #include "utils/datumstream.h"
+#include "utils/guc.h"
 #include "nodes/execnodes.h"
+#include "pgstat.h"
 
 /*
  * AOCSInsertDescData is used for inserting data into append-only columnar
@@ -534,6 +537,121 @@ AOCSScanDesc_UpdateTotalBytesRead(AOCSScanDesc scan, AttrNumber attno)
 		scan->totalBytesRead += scan->columnScanInfo.ds[attno]->ao_read.current.compressedLen;
 	else
 		scan->totalBytesRead += scan->columnScanInfo.ds[attno]->ao_read.current.uncompressedLen;
+}
+
+/*
+ * Fetch a single AOCS column's value for the tuple identified by 'tid'/
+ * 'rowNum' into d[attno]/null[attno], advancing (and if needed
+ * repositioning) that column's DatumStreamRead as necessary, and marking
+ * the attribute valid in slotAocs->tts_is_valid.
+ *
+ * Defined here (rather than as a static function local to one .c file) so
+ * that both execTuples.c's slot-level lazy-fetch path and aocsam.c's
+ * aocs_getnext() eager-fetch path can call it as a fully-inlined,
+ * zero-call-overhead operation from their own translation unit, without
+ * duplicating its body -- aocs_getnext() and the VirtualTupleTableSlotAOCS
+ * fetch functions live in different .c files, so a plain non-static
+ * function here would not be inlinable across that boundary without LTO.
+ */
+static pg_attribute_always_inline void
+tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
+							 AOCSScanDesc scan,
+							 AOCSFileSegInfo *curseginfo,
+							 AOTupleId *tid,
+							 int64 rowNum,
+							 AttrNumber attno,
+							 Datum *d,
+							 bool *null)
+{
+	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
+	int			err PG_USED_FOR_ASSERTS_ONLY;
+
+	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
+							attno,
+							curseginfo->segno,
+							scan->columnScanInfo.attnum_to_rownum)))
+	{
+		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+		slotAocs->tts_is_valid[attno] = true;
+
+		return;
+	}
+
+	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
+	Assert(ds);
+
+	if (unlikely(ds->noBlocksRead || rowNum > ds->blockFirstRowNum + ds->blockRowCount - 1))
+	{
+		if (!scan->blockDirectory && scan->aocsfetch)
+		{
+			AppendOnlyBlockDirectoryEntry dirEntry;
+			bool res PG_USED_FOR_ASSERTS_ONLY;
+			res = AppendOnlyBlockDirectory_GetEntry(
+								  &scan->aocsfetch->blockDirectory,
+								  tid,
+								  attno,
+								  &dirEntry,
+								  scan->columnScanInfo.attnum_to_rownum);
+			Assert(res);
+
+			Assert(dirEntry.range.fileOffset <= ds->ao_read.logicalEof);
+			AppendOnlyStorageRead_SetTemporaryStart(&ds->ao_read,
+													dirEntry.range.fileOffset,
+													dirEntry.range.afterFileOffset);
+		}
+
+		while (true)
+		{
+			bool read_ok PG_USED_FOR_ASSERTS_ONLY;
+			read_ok = datumstreamread_block_info(ds);
+			Assert(read_ok);
+
+			if (rowNum <= ds->blockFirstRowNum + ds->blockRowCount - 1)
+			{
+				int64 blocksRead;
+				/* read a new buffer to consume */
+				datumstreamread_block_content(ds);
+
+				if (scan->blockDirectory)
+				{
+					AppendOnlyBlockDirectory_InsertEntry(scan->blockDirectory,
+														 attno,
+														 ds->blockFirstRowNum,
+														 ds->blockFileOffset,
+														 ds->blockRowCount);
+				}
+
+				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+				blocksRead =
+					RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead);
+				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+											blocksRead);
+
+				break;
+			}
+			else
+			{
+				bool save_gp_appendonly_verify_block_checksums = gp_appendonly_verify_block_checksums;
+				gp_appendonly_verify_block_checksums = false;
+				AppendOnlyStorageRead_SkipCurrentBlock(&ds->ao_read);
+				gp_appendonly_verify_block_checksums = save_gp_appendonly_verify_block_checksums;
+			}
+		}
+	}
+
+	err = datumstreamread_advance(ds);
+	Assert(err >= 0);
+
+	int32 rowNumInBlock = rowNum - ds->blockFirstRowNum;
+	while (rowNumInBlock > datumstreamread_nth(ds))
+	{
+		err = datumstreamread_advance(ds);
+		Assert(err > 0);
+	}
+
+	datumstreamread_get(ds, &d[attno], &null[attno]);
+
+	slotAocs->tts_is_valid[attno] = true;
 }
 
 static inline int64
