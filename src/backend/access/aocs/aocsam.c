@@ -1441,7 +1441,6 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 
 	AOTupleId	aoTupleId;
 	int64		rowNum = InvalidAORowNum;
-	int64		nthInBlock;
 	int			err = 0;
 	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
@@ -1607,23 +1606,21 @@ ReadNext:
 		 */
 		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
-		nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+		scan->segrowsprocessed++;
+
 		if (rowNum == InvalidAORowNum &&
 			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
 		{
+			int64 nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
 			Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
 			rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
 		}
-
-		scan->segrowsprocessed++;
-		if (rowNum == InvalidAORowNum)
-		{
-			AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
-		}
 		else
 		{
-			AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
+			rowNum = scan->segrowsprocessed;
 		}
+
+		AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
 
 		if (unlikely(!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId)))
 		{
