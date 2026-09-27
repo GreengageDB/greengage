@@ -608,22 +608,17 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
 	}
 
-	if (TTS_IS_VIRTUAL_AOCS(srcslot))
-	{
-		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
-		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
-
-		/*
-		 * tts_virtual_aocs_clear() above already allocated (sized to
-		 * dstslot's full attribute count) and zeroed dstslot_aocs->tts_is_valid,
-		 * so just copy over the flags for the attributes srcslot has;
-		 * srcdesc->natts <= dstslot's natts per the Assert above.
-		 */
-		if (srcslot_aocs->tts_is_valid != NULL)
-			memcpy(dstslot_aocs->tts_is_valid, srcslot_aocs->tts_is_valid,
-				   srcdesc->natts * sizeof(bool));
-	}
-
+	/*
+	 * dstslot_aocs->tts_is_valid is intentionally left as zeroed by
+	 * tts_virtual_aocs_clear() above, not copied from srcslot: every reader
+	 * of tts_is_valid[] either lives behind slot_is_attr_valid()'s
+	 * "tts_nvalid > attnum" fast path (which tts_nvalid below already
+	 * satisfies for the whole copied range) or behind gettargetattr()/
+	 * getsomeattrs()'s "current_scan == NULL" guard (which is true for
+	 * dstslot, since tts_virtual_aocs_clear() just nulled it) -- so nothing
+	 * can ever observe tts_is_valid on a slot that just went through
+	 * copyslot.
+	 */
 	dstslot->tts_nvalid = srcdesc->natts;
 	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
 
