@@ -1616,8 +1616,14 @@ ReadNext:
 		}
 
 		scan->segrowsprocessed++;
-		rowNum = (rowNum == InvalidAORowNum) ? scan->segrowsprocessed : rowNum;
-		AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
+		if (rowNum == InvalidAORowNum)
+		{
+			AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
+		}
+		else
+		{
+			AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
+		}
 
 		if (unlikely(!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId)))
 		{
@@ -1629,42 +1635,17 @@ ReadNext:
 		slotAocs->tts_is_valid[attno] = true;
 
 		/*
-		 * No local qual on this scan (see eagerFetch comment below /
-		 * aoco_beginscan_extractcolumns()): there is no filtering step that
-		 * might discard the tuple before all projected columns are needed,
-		 * so fetch everything now, while curseginfo/rowNum/aoTupleId are
-		 * still live locals here, instead of leaving it for the executor's
-		 * first gettargetattr()/getsomeattrs() call to redo the same
-		 * curseginfo/rowNum lookups from scratch.
+		 * Only the anchor column (attno above, not necessarily attribute 0)
+		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
+		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
+		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
+		 * hold here since the anchor column can be any attribute. Keep
+		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
+		 * a stale count from a previous tuple and instead always go through
+		 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
+		 * which consults tts_is_valid per attribute.
 		 */
-		if (likely(scan->columnScanInfo.eagerFetch))
-		{
-			for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
-			{
-				AttrNumber	pattno = scan->columnScanInfo.proj_atts[i];
-
-				if (likely(!slotAocs->tts_is_valid[pattno]))
-					tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo,
-												 &aoTupleId, rowNum, pattno,
-												 d, null);
-			}
-			slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
-		}
-		else
-		{
-			/*
-			 * Only the anchor column (attno above, not necessarily attribute 0)
-			 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
-			 * validity is tracked via tts_is_valid, not via tts_nvalid: the
-			 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
-			 * hold here since the anchor column can be any attribute. Keep
-			 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
-			 * a stale count from a previous tuple and instead always go through
-			 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
-			 * which consults tts_is_valid per attribute.
-			 */
-			slot->tts_nvalid = 0;
-		}
+		slot->tts_nvalid = 0;
 
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
