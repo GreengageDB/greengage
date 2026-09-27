@@ -5053,31 +5053,16 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 //---------------------------------------------------------------------------
 //	@function: set_resjunk_flag
 //
-//	@doc: Update given targetlist. Set resjunk flag to true for ctid and
-//	    gp_segment_id attributes. Originally this function was intended to be
-//	    used only with split-update node, as its executor needs this flags to
-//	    be set. But it also can be used anywhere its effect needed.
+//	@doc: Set resjunk flag to true for TargetEntry from given context on given
+//		  id.
 //
 //---------------------------------------------------------------------------
 static void
-set_resjunk_flag(List *list)
+set_resjunk_flag(const CDXLTranslateContext *context, const ULONG id)
 {
-	ListCell *lc;
-	foreach (lc, list)
-	{
-		TargetEntry *te = (TargetEntry *) lfirst(lc);
-
-		// Mark internal DML junk columns as resjunk = true so they are not
-		// projected to the parent ModifyTable node as regular data columns.
-		if (te->resname != NULL)
-		{
-			if (strcmp(te->resname, "ctid") == 0 ||
-				strcmp(te->resname, "gp_segment_id") == 0)
-			{
-				te->resjunk = true;
-			}
-		}
-	}
+	TargetEntry *te = (TargetEntry *) context->GetTargetEntry(id);
+	GPOS_ASSERT(te != nullptr);
+	te->resjunk = true;
 }
 
 //---------------------------------------------------------------------------
@@ -5225,10 +5210,38 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 		BOOL hash_info_updated = SetSplitUpdateHashInfo(split, plan);
 		if (hash_info_updated)
 		{
-			set_resjunk_flag(plan->targetlist);
-			// We also need to do the same for child plan, as segment id is
-			// taken from its tuples.
-			set_resjunk_flag(child_plan->targetlist);
+			// Junk flag setting for child and output plans.
+			ULONG split_ctid_colid = phy_split_dxlop->GetCtIdColId();
+			ULONG split_segid_colid = phy_split_dxlop->GetSegmentIdColId();
+
+			// Set junk attributes to target list entries of output plan.
+			set_resjunk_flag(output_context, split_ctid_colid);
+			set_resjunk_flag(output_context, split_segid_colid);
+
+			// Iterate through projection list to get gp_segment_id and ctid
+			const ULONG proj_arity = project_list_dxlnode->Arity();
+			for (ULONG ul = 0; ul < proj_arity; ++ul)
+			{
+				CDXLNode *proj_elem_dxlnode = (*project_list_dxlnode)[ul];
+				CDXLScalarProjElem *proj_elem =
+					CDXLScalarProjElem::Cast(proj_elem_dxlnode->GetOperator());
+
+				// Check if this projection element is ctid or gp_segment_id for output plan
+				if (proj_elem->IsColDefined(split_ctid_colid) ||
+					proj_elem->IsColDefined(split_segid_colid))
+				{
+					CDXLNode *expr_dxlnode = (*proj_elem_dxlnode)[0];
+
+					// Extract the child node's ColId
+					ULONG child_colid =
+						CDXLScalarIdent::Cast(expr_dxlnode->GetOperator())
+							->GetDXLColRef()
+							->Id();
+
+					// Look up the TargetEntry in the child's translation context
+					set_resjunk_flag(&child_context, child_colid);
+				}
+			}
 		}
 	}
 	SetParamIds(plan);

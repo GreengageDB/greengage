@@ -4427,6 +4427,38 @@ UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
 SELECT gp_segment_id, * FROM rank5_1_prt_2;
 SELECT gp_segment_id, * FROM rank5_1_prt_3;
 
+--
+-- Test that segment is chosen correctly in case of update on partitioning
+-- columns where plan contains 'fake' gp_segment_id column.
+--
+CREATE TABLE t (id INT, year INT, r INT) DISTRIBUTED BY (id)
+PARTITION BY RANGE (year) (START (2006) END (2008) EVERY (1));
+CREATE TABLE o (id INT) DISTRIBUTED BY (id);
+
+ALTER TABLE o EXPAND TABLE;
+
+INSERT INTO o SELECT generate_series(1, 600);
+INSERT INTO t SELECT i, 2007, 0 FROM generate_series(1, 600) i;
+
+ALTER TABLE t EXPAND PARTITION PREPARE;
+ALTER TABLE t_1_prt_1 SET WITH (REORGANIZE = TRUE) DISTRIBUTED BY (id);
+
+SELECT string_agg(id::text, ',') AS ids
+FROM (SELECT id FROM t_1_prt_2 WHERE gp_segment_id = 1 ORDER BY ctid LIMIT 5) s \gset
+
+-- If gp_segment_id column were treated incorrectly: 
+-- delete part will go to segment 0 ("id % 1 AS gp_segment_id" will always give
+-- 0), so it will delete nothing (as real query shows that delete's tuple id
+-- resides on segment 1 - by defenition of ids); 
+-- but insert will go to 0 too and successfully insert something. 
+-- That way we will get duplicates, which we will check on next query.
+UPDATE t SET year = 2006, r = o.gp_segment_id
+FROM (SELECT id, id % 1 AS gp_segment_id FROM o) o
+WHERE t.id = o.id AND t.id IN (:ids);
+
+-- Check duplicates
+SELECT count(*), count(DISTINCT id) FROM t;
+
 SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
@@ -4435,6 +4467,8 @@ DROP TABLE rank3;
 DROP TABLE rank4;
 DROP TABLE rank4_1_prt_6;
 DROP TABLE rank5;
+DROP TABLE t;
+DROP TABLE o;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;
