@@ -1,0 +1,75 @@
+services:
+  clickhouse1:
+    image: clickhouse/clickhouse-server:26.4.4.38-alpine
+    hostname: clickhouse1
+    ports:
+      - "${FLIGHTSQL_CLICKHOUSE_HTTP_PORT:-18123}:8123"
+      - "${FLIGHTSQL_CLICKHOUSE_PORT:-19005}:9005"
+    volumes:
+      - ./tools/clickhouse_flightsql/arrowflight.xml:/etc/clickhouse-server/config.d/arrowflight.xml:ro
+      - ./tools/clickhouse_flightsql/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./tools/clickhouse_flightsql/distributed.xml:/etc/clickhouse-server/users.d/distributed.xml:ro
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - --query
+        - SELECT 1
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  clickhouse2:
+    image: clickhouse/clickhouse-server:26.4.4.38-alpine
+    hostname: clickhouse2
+    ports:
+      - "${FLIGHTSQL_CLICKHOUSE_HTTP_PORT_2:-18124}:8123"
+      - "${FLIGHTSQL_CLICKHOUSE_PORT_2:-19006}:9005"
+    volumes:
+      - ./tools/clickhouse_flightsql/arrowflight.xml:/etc/clickhouse-server/config.d/arrowflight.xml:ro
+      - ./tools/clickhouse_flightsql/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
+      - ./tools/clickhouse_flightsql/distributed.xml:/etc/clickhouse-server/users.d/distributed.xml:ro
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    healthcheck:
+      test:
+        - CMD
+        - clickhouse-client
+        - --query
+        - SELECT 1
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  greengage:
+    image: ${FLIGHTSQL_GG_IMAGE:-greengage-u22-arm64-flight-sql-test:latest}
+    platform: ${FLIGHTSQL_GG_PLATFORM:-linux/arm64}
+    build:
+      context: ../..
+      args:
+        GREENGAGE_BASE_IMAGE: ${FLIGHTSQL_GG_BASE_IMAGE:-greengage7-u22-arm64-dev:latest}
+      dockerfile_inline: |
+        ARG GREENGAGE_BASE_IMAGE=greengage7-u22-arm64-dev:latest
+        FROM $${GREENGAGE_BASE_IMAGE}
+        USER root
+        COPY ci/scripts/install_arrow_flight_deps.bash /tmp/install_arrow_flight_deps.bash
+        RUN bash /tmp/install_arrow_flight_deps.bash && \
+            rm -f /tmp/install_arrow_flight_deps.bash
+    hostname: greengage
+    privileged: true
+    init: true
+    user: root
+    working_dir: /home/gpadmin
+    volumes:
+      - ../..:/workspace:ro
+    depends_on:
+      clickhouse1:
+        condition: service_healthy
+      clickhouse2:
+        condition: service_healthy
+    entrypoint: sleep
+    command: infinity

@@ -1,0 +1,7 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <insert_distributed_sync>1</insert_distributed_sync>
+        </default>
+    </profiles>
+</clickhouse>
