@@ -64,6 +64,9 @@ dnf -y install \
     python3 \
     python3-devel \
     python3-pip \
+    python3-psutil \
+    python3-pyyaml \
+    python3-psycopg2 \
     python3-setuptools \
     readline-devel \
     rpm-build \

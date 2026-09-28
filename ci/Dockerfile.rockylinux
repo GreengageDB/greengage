@@ -32,9 +32,6 @@ RUN set -eux; \
         gsutil==5.37 \
         mock==5.0.0 \
         protobuf==3.20.0 \
-        psutil==7.2.2 \
-        pyyaml==6.0.3 \
-        psycopg2-binary==2.9.12 \
         pytest==8.4.2; \
 # Cleanup to reduce image size
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
