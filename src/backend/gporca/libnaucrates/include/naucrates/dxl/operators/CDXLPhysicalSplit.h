@@ -127,7 +127,7 @@ public:
 
 	// resjunk flag
 	ULONG
-	GetNeedsResJunk() const 
+	GetNeedsResJunk() const
 	{
 		return m_needsResJunk;
 	}

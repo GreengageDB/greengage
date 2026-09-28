@@ -26,11 +26,11 @@ extern "C" {
 #include "nodes/nodes.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
+#include "parser/parsetree.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/typcache.h"
 #include "utils/uri.h"
-#include "parser/parsetree.h"
 }
 #include "gpos/base.h"
 
@@ -4479,7 +4479,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan)
 		}
 		gpdb::CloseRelation(target_rel);
 		return true;
-	} 
+	}
 	return false;
 }
 
