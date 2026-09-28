@@ -170,15 +170,9 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 		vslot_aocs->tts_is_valid = NULL;
 		vslot_aocs->tts_is_valid_natts = 0;
 	}
-	else if (likely(vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
+	else if (likely(vslot_aocs->tts_is_valid != NULL &&
+					vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
 	{
-		/*
-		 * tts_is_valid_natts is only ever non-zero paired with a non-NULL
-		 * tts_is_valid (see the other two branches), so this can only be
-		 * reached with tts_is_valid == NULL if natts == 0 (a zero-column
-		 * tupdesc); assert rather than pay for a runtime check on every row.
-		 */
-		Assert(vslot_aocs->tts_is_valid != NULL);
 		memset(vslot_aocs->tts_is_valid, 0,
 			   vslot_aocs->tts_is_valid_natts * sizeof(bool));
 	}
