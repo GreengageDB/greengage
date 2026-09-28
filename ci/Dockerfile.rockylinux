@@ -27,15 +27,15 @@ RUN set -eux; \
 # Install Python packages
     python3 -m pip install --no-cache-dir \
         allure-behave==2.4.0 \
-        behave~=1.2.6 \
-        coverage~=4.5 \
-        gsutil \
-        'mock<=5.0.0' \
+        behave==1.2.6 \
+        coverage==4.5.4 \
+        gsutil==5.37 \
+        mock==5.0.0 \
         protobuf==3.20.0 \
-        psutil \
-        pyyaml \
-        psycopg2-binary \
-        pytest; \
+        psutil==7.2.2 \
+        pyyaml==6.0.3 \
+        psycopg2-binary==2.9.12 \
+        pytest==8.4.2; \
 # Cleanup to reduce image size
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
 
