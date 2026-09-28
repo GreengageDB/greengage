@@ -12,9 +12,9 @@
 
 #include "datatype/timestamp.h"
 #include "pgstat.h"
-#include "storage/proc.h"
 #include "storage/latch.h"
 #include "storage/lwlock.h"
+#include "storage/proc.h"
 #include "storage/shm_mq.h"
 
 #define	PG_WAIT_SAMPLING_MAGIC		0xCA94B107

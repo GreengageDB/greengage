@@ -48,14 +48,16 @@ SELECT pg_sleep(0.5);
 
 SELECT DISTINCT h.event_type, h.event, h.segid,
        h.mppsessionid = s.sess_id AS session_matches,
-       h.command_id > 0 AS has_command_id
+       h.command_id > 0 AS has_command_id,
+       h.tmid = floor(extract(epoch FROM pg_postmaster_start_time()))::int4 AS tmid_matches
 FROM gg_wait_sampling_get_history_coordinator() h
 JOIN pg_stat_activity s ON s.pid = h.pid
 WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND h.event_type = 'Lock';
 
 SELECT DISTINCT p.event_type, p.event, p.segid,
        p.mppsessionid = s.sess_id AS session_matches,
-       p.command_id > 0 AS has_command_id
+       p.command_id > 0 AS has_command_id,
+       p.tmid = floor(extract(epoch FROM pg_postmaster_start_time()))::int4 AS tmid_matches
 FROM gg_wait_sampling_get_profile_coordinator() p
 JOIN pg_stat_activity s ON s.pid = p.pid
 WHERE s.query = 'SELECT count(*) FROM t_wait_qd;' AND p.event_type = 'Lock';
