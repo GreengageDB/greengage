@@ -82,7 +82,7 @@ dnf -y install \
     $python_packages $perl_packages
 
 python3 -m pip install --no-cache-dir --upgrade pip
-python3 -m pip install --no-cache-dir future=1.0.0
+python3 -m pip install --no-cache-dir future==1.0.0
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
