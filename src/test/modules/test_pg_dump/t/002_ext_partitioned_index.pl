@@ -29,6 +29,16 @@ $node->safe_psql(
 	CREATE TABLE regress_pg_dump_schema.parttab_1
 		PARTITION OF regress_pg_dump_schema.parttab
 		FOR VALUES FROM (1) TO (100);
+	COMMENT ON INDEX regress_pg_dump_schema.parttab_1_col1_col2_idx IS 'child';
+	CREATE TABLE regress_pg_dump_schema.parttab_2
+		PARTITION OF regress_pg_dump_schema.parttab
+		FOR VALUES FROM (100) TO (200) PARTITION BY RANGE (col1);
+	CREATE TABLE regress_pg_dump_schema.parttab_2_1
+		PARTITION OF regress_pg_dump_schema.parttab_2
+		FOR VALUES FROM (1) TO (100);
+	CREATE TABLE regress_pg_dump_schema.parttab_pk_1
+		PARTITION OF regress_pg_dump_schema.parttab_pk
+		FOR VALUES FROM (1) TO (100);
 });
 
 my $create_child_index = qr/^
@@ -36,6 +46,18 @@ my $create_child_index = qr/^
 	$/xm;
 my $attach_child_index = qr/^
 	\QALTER INDEX regress_pg_dump_schema.parttab_col1_col2_idx ATTACH PARTITION regress_pg_dump_schema.parttab_1_col1_col2_idx;\E
+	$/xm;
+my $create_grandchild_index = qr/^
+	\QCREATE UNIQUE INDEX parttab_2_1_col1_col2_idx ON regress_pg_dump_schema.parttab_2_1 USING btree (col1, col2);\E
+	$/xm;
+my $attach_grandchild_index = qr/^
+	\QALTER INDEX regress_pg_dump_schema.parttab_2_col1_col2_idx ATTACH PARTITION regress_pg_dump_schema.parttab_2_1_col1_col2_idx;\E
+	$/xm;
+my $add_child_pkey = qr/^
+	\s+\QADD CONSTRAINT parttab_pk_1_pkey PRIMARY KEY (col1, col2);\E
+	$/xm;
+my $comment_child_index = qr/^
+	\QCOMMENT ON INDEX regress_pg_dump_schema.parttab_1_col1_col2_idx IS 'child';\E
 	$/xm;
 my $attach_partition = qr/^
 	\QALTER TABLE ONLY regress_pg_dump_schema.parttab ATTACH PARTITION regress_pg_dump_schema.parttab_1 FOR VALUES FROM (1) TO (100);\E
@@ -55,8 +77,15 @@ unlike($dump, $create_child_index,
 	'dump does not create the child index of the extension index');
 unlike($dump, $attach_child_index,
 	'dump does not attach the child index of the extension index');
+unlike($dump, $create_grandchild_index,
+	'dump does not create the grandchild index of the extension index');
+unlike($dump, $attach_grandchild_index,
+	'dump does not attach the grandchild index of the extension index');
+unlike($dump, $add_child_pkey,
+	'dump does not add the child primary key of the extension table');
+like($dump, $comment_child_index, 'dump keeps the child index comment');
 
-# Restore the dump and check that the partition ends up with exactly one
+# Restore the dump and check that each partition ends up with exactly one
 # index, the one created by ATTACH PARTITION.
 $node->safe_psql('postgres', 'CREATE DATABASE restored');
 $node->command_ok(
@@ -68,15 +97,29 @@ $node->command_ok(
 
 is( $node->safe_psql(
 		'restored', q{
-		SELECT indexrelid::regclass, i.inhparent::regclass
+		SELECT indrelid::regclass, indexrelid::regclass, i.inhparent::regclass
 		FROM pg_index
 		LEFT JOIN pg_inherits i ON i.inhrelid = indexrelid
-		WHERE indrelid = 'regress_pg_dump_schema.parttab_1'::regclass
+		WHERE indrelid::regclass::text IN
+			('regress_pg_dump_schema.parttab_1',
+			 'regress_pg_dump_schema.parttab_2',
+			 'regress_pg_dump_schema.parttab_2_1',
+			 'regress_pg_dump_schema.parttab_pk_1')
 		ORDER BY 1;
 	}),
-	'regress_pg_dump_schema.parttab_1_col1_col2_idx|regress_pg_dump_schema.parttab_col1_col2_idx',
-	'restored partition has a single index, attached to the extension index'
+	join("\n",
+		'regress_pg_dump_schema.parttab_1|regress_pg_dump_schema.parttab_1_col1_col2_idx|regress_pg_dump_schema.parttab_col1_col2_idx',
+		'regress_pg_dump_schema.parttab_2|regress_pg_dump_schema.parttab_2_col1_col2_idx|regress_pg_dump_schema.parttab_col1_col2_idx',
+		'regress_pg_dump_schema.parttab_2_1|regress_pg_dump_schema.parttab_2_1_col1_col2_idx|regress_pg_dump_schema.parttab_2_col1_col2_idx',
+		'regress_pg_dump_schema.parttab_pk_1|regress_pg_dump_schema.parttab_pk_1_pkey|regress_pg_dump_schema.parttab_pk_pkey'),
+	'restored partitions have a single index each, attached to the parent index'
 );
+
+is( $node->safe_psql(
+		'restored',
+		q{SELECT obj_description('regress_pg_dump_schema.parttab_1_col1_col2_idx'::regclass)}),
+	'child',
+	'restored child index keeps its comment');
 
 #########################################
 # Binary upgrade dump
@@ -94,6 +137,12 @@ like($dump, $create_child_index,
 	'binary upgrade dump creates the child index of the extension index');
 like($dump, $attach_child_index,
 	'binary upgrade dump attaches the child index of the extension index');
+like($dump, $create_grandchild_index,
+	'binary upgrade dump creates the grandchild index of the extension index');
+like($dump, $attach_grandchild_index,
+	'binary upgrade dump attaches the grandchild index of the extension index');
+like($dump, $add_child_pkey,
+	'binary upgrade dump adds the child primary key of the extension table');
 
 $node->stop('fast');
 

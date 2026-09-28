@@ -398,6 +398,21 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 	}
 }
 
+static bool
+hasExtensionAncestorIndex(IndxInfo *idx)
+{
+	while (idx != NULL)
+	{
+		if (idx->indextable->dobj.ext_member &&
+			!(idx->dobj.dump & DUMP_COMPONENT_DEFINITION))
+			return true;
+		if (idx->parentidx == 0)
+			break;
+		idx = findIndexByOid(idx->parentidx);
+	}
+	return false;
+}
+
 /*
  * flagInhIndexes -
  *	 Create IndexAttachInfo objects for partitioned indexes, and add
@@ -430,13 +445,22 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 				continue;
 
 			/*
-			 * If the parent index belongs to an extension, ATTACH PARTITION
+			 * If an ancestor index belongs to an extension, ATTACH PARTITION
 			 * will auto-create/attach a matching child index, so skip
-			 * dumping this one to avoid a duplicate.
+			 * dumping this one and its constraint to avoid a duplicate.
 			 */
-			if (parentidx->indextable->dobj.ext_member &&
-				!(parentidx->dobj.dump & DUMP_COMPONENT_DEFINITION))
-				index->dobj.dump = DUMP_COMPONENT_NONE;
+			if (hasExtensionAncestorIndex(parentidx))
+			{
+				index->dobj.dump &= ~DUMP_COMPONENT_DEFINITION;
+				if (index->indexconstraint != 0)
+				{
+					DumpableObject *constraint;
+
+					constraint = findObjectByDumpId(index->indexconstraint);
+					if (constraint != NULL)
+						constraint->dump &= ~DUMP_COMPONENT_DEFINITION;
+				}
+			}
 
 			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
 

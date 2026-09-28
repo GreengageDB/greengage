@@ -66,3 +66,7 @@ GRANT EXECUTE ON FUNCTION regress_pg_dump_schema.test_agg(int2) TO regress_dump_
 CREATE TABLE regress_pg_dump_schema.parttab (col1 int, col2 int)
     PARTITION BY RANGE (col2);
 CREATE UNIQUE INDEX ON regress_pg_dump_schema.parttab (col1, col2);
+
+CREATE TABLE regress_pg_dump_schema.parttab_pk (col1 int, col2 int)
+    PARTITION BY RANGE (col2);
+ALTER TABLE regress_pg_dump_schema.parttab_pk ADD PRIMARY KEY (col1, col2);
