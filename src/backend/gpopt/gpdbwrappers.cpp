@@ -1402,7 +1402,7 @@ gpdb::ListNthOid(List *list, int n)
 	return 0;
 }
 
-Oid
+int
 gpdb::ListLastInt(List *list)
 {
 	GP_WRAP_START;

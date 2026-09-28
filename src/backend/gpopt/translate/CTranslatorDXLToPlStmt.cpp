@@ -5060,7 +5060,7 @@ CTranslatorDXLToPlStmt::GetDXLDatumGPDBHash(CDXLDatumArray *dxl_datum_array,
 static void
 set_resjunk_flag(const CDXLTranslateContext *context, const ULONG id)
 {
-	TargetEntry *te = (TargetEntry *) context->GetTargetEntry(id);
+	TargetEntry *te = const_cast<TargetEntry *>(context->GetTargetEntry(id));
 	GPOS_ASSERT(te != nullptr);
 	te->resjunk = true;
 }
@@ -5070,12 +5070,13 @@ set_resjunk_flag(const CDXLTranslateContext *context, const ULONG id)
 //		CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo
 //
 //	@doc:
-//		Check and set hash info in split node. Returns according flag:
-//		true if info was set and false if not.
+//		Check and set hash info in split node.
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTranslateContext *output_context)
+CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(
+	SplitUpdate *split, const CDXLTranslateContext *output_context,
+	ULongPtrArray *delete_colids)
 {
 	// List of result relations shouldn't be null, as we could get here only
 	// with DML query.
@@ -5088,10 +5089,8 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTra
 	if (target_relid == InvalidOid)
 	{
 		char err_msg[256];
-		snprintf(
-			err_msg, 256,
-			"Couldn't fetch target relid for \"%i\" id.",
-			id);
+		snprintf(err_msg, 256, "Couldn't fetch target relid for \"%i\" id.",
+				 id);
 		GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg, nullptr);
 	}
 
@@ -5100,7 +5099,8 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTra
 	GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
 
 	// If we're here, relation must have hash distribution.
-	GPOS_ASSERT(policy && policy->ptype == POLICYTYPE_PARTITIONED);
+	GPOS_ASSERT(policy && policy->ptype == POLICYTYPE_PARTITIONED &&
+				policy->nattrs > 0);
 
 	int policy_nattrs = policy->nattrs;
 	TupleDesc resultDesc = target_rel->rd_att;
@@ -5113,17 +5113,24 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTra
 
 	for (int i = 0; i < policy_nattrs; i++)
 	{
-		Form_pg_attribute att =
-				&(resultDesc->attrs[(policy->attrs[i] - 1)]);
-		AttrNumber tlist_attno =
-			output_context->GetTargetEntry(policy->attrs[i] - 1)->resno;
+		// Position of the column among non-dropped columns
+		ULONG pos = 0;
+		for (AttrNumber a = 1; a < policy->attrs[i]; a++)
+		{
+			if (!(&(resultDesc)->attrs[(a - 1)])->attisdropped)
+				pos++;
+		}
+		ULONG colid = *(*delete_colids)[pos];
+
+		const TargetEntry *te = output_context->GetTargetEntry(colid);
+		const Form_pg_attribute att =
+			&(resultDesc->attrs[(policy->attrs[i] - 1)]);
 
 		Oid typeoid = att->atttypid;
 		Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
 
-		split->hashAttnos[i] = tlist_attno;
-		split->hashFuncs[i] =
-			gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+		split->hashAttnos[i] = te->resno;
+		split->hashFuncs[i] = gpdb::GetHashProcInOpfamily(opfamily, typeoid);
 	}
 }
 
@@ -5197,7 +5204,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
-		SetSplitUpdateHashInfo(split, output_context);
+		SetSplitUpdateHashInfo(split, output_context, deletion_colid_array);
 		// Junk flag setting for child and output plans.
 		ULONG split_ctid_colid = phy_split_dxlop->GetCtIdColId();
 		ULONG split_segid_colid = phy_split_dxlop->GetSegmentIdColId();

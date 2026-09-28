@@ -397,7 +397,9 @@ private:
 	);
 
 	// Check and set hash info for splitupdate node
-	void SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTranslateContext *output_context);
+	void SetSplitUpdateHashInfo(SplitUpdate *split,
+								const CDXLTranslateContext *output_context,
+								ULongPtrArray *delete_colids);
 
 	// translate a Split operator
 	Plan *TranslateDXLSplit(
