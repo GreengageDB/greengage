@@ -317,11 +317,6 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	if (unlikely(slot->tts_nvalid >= slot->tts_tupleDescriptor->natts))
 		return true;
 
-	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
-	int64		rowNum = AOTupleIdGet_rowNum(tid);
-	Assert(rowNum != InvalidAORowNum);
-
 	/*
 	 * No local qual on this scan (see eagerFetch comment in cdbaocsam.h):
 	 * there is no filtering step that might discard the tuple before all
@@ -331,21 +326,14 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	 */
 	if (unlikely(scan->columnScanInfo.eagerFetch))
 	{
-		for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
-		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-			if (unlikely((attno < slot->tts_nvalid) ||
-						slotAocs->tts_is_valid[attno]))
-				continue;
-
-			tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
-										 attno, d, null);
-		}
-
-		slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
+		tts_virtual_aocs_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
 		return true;
 	}
+
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
 
 	if (unlikely(slotAocs->tts_cached_attrs != attrs))
 	{
