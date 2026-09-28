@@ -3243,7 +3243,7 @@ create_splitupdate_plan(PlannerInfo *root, SplitUpdatePath *path)
 	Relation	resultRel;
 	Relation	rootRel = NULL;
 	TupleDesc	resultDesc;
-	TupleDesc	prevResultDesc;
+	TupleDesc	prevResultDesc = NULL;
 	GpPolicy   *cdbpolicy;
 	int			attrIdx;
 	ListCell   *lc;

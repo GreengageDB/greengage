@@ -263,7 +263,7 @@ preprocess_targetlist(PlannerInfo *root)
  * Returns a bitmapset which contains attribute number of the parent
  * table based on the given bitmapset of the child. Allocates memory
  * in current memory context.
- * 
+ *
  * The caller is responsible for cleaning memory up.
  */
 static Bitmapset *
@@ -538,7 +538,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					ancestoroid = lfirst_oid(l);
 					ancestorRel = relation_open(ancestoroid, AccessShareLock);
 
-					changed_cols_for_partition_check = 
+					changed_cols_for_partition_check =
 						fixup_columns_attnos(ancestorRel, rel, changed_cols);
 
 					/* Check if we're updating partitioning key columns of

@@ -1402,6 +1402,17 @@ gpdb::ListNthOid(List *list, int n)
 	return 0;
 }
 
+Oid
+gpdb::ListLastInt(List *list, int n)
+{
+	GP_WRAP_START;
+	{
+		return llast_int(list, n);
+	}
+	GP_WRAP_END;
+	return 0;
+}
+
 bool
 gpdb::ListMemberOid(List *list, Oid oid)
 {

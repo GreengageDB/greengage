@@ -95,7 +95,6 @@ CXformUpdate2DML::Transform(CXformContext *pxfctxt, CXformResult *pxfres,
 
 		if (CDistributionSpec::EdtHashed == pdsTable->Edt() &&
 			ptabdesc->ConvertHashToRandom())
-
 			needsResJunk = true;
 
 		pdsTable->Release();
