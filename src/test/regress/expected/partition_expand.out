@@ -175,9 +175,8 @@ select count(*) from t_hash_partition_1_prt_2;
     19
 (1 row)
 
+analyze t_hash_partition;
 select count(*) from t_hash_partition;
-NOTICE:  One or more columns in the following table(s) do not have statistics: t_hash_partition
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     59
@@ -633,9 +632,8 @@ select count(*) from t_hash_subpartition_1_prt_region1;
      3
 (1 row)
 
+analyze t_hash_subpartition;
 select count(*) from t_hash_subpartition;
-NOTICE:  One or more columns in the following table(s) do not have statistics: t_hash_subpartition
-HINT:  For non-partitioned tables, run analyze <table_name>(<column_list>). For partitioned tables, run analyze rootpartition <table_name>(<column_list>). See log for columns missing statistics.
  count 
 -------
     11

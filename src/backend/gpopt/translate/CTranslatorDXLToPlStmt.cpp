@@ -4443,7 +4443,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(
 		GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
 
 		// Check if it's hash distributed
-		GPOS_ASSERT(policy != nullptr && !GpPolicyIsHashPartitioned(policy));
+		GPOS_ASSERT(policy != nullptr && GpPolicyIsHashPartitioned(policy));
 
 		int policy_nattrs = policy->nattrs;
 		TupleDesc resultDesc = RelationGetDescr(target_rel);

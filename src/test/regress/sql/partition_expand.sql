@@ -70,6 +70,7 @@ select count(*) from t_hash_partition_1_prt_2;
 select count(*) from t_hash_partition_1_prt_2 where a=2;
 insert into t_hash_partition_1_prt_2 values(8,1,1);
 select count(*) from t_hash_partition_1_prt_2;
+analyze t_hash_partition;
 select count(*) from t_hash_partition;
 
 drop table t_hash_partition;
@@ -254,6 +255,7 @@ select * from t_hash_subpartition_1_prt_region1_2_prt_china;
 insert into t_hash_subpartition_1_prt_region1_2_prt_china values(1,'CHINA');
 select count(*) from t_hash_subpartition_1_prt_region1_2_prt_china;
 select count(*) from t_hash_subpartition_1_prt_region1;
+analyze t_hash_subpartition;
 select count(*) from t_hash_subpartition;
 
 drop table t_hash_subpartition;
