@@ -8,9 +8,6 @@ FROM rockylinux:${OS_VERSION} AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/gpadmin
 
-ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
-    SKIP_UNITTESTS=
-
 COPY README.Rhel-Rocky.bash ./
 RUN set -eux; \
     IS_DOCKER_BUILD=true ./README.Rhel-Rocky.bash; \
@@ -37,6 +34,9 @@ RUN set -eux; \
         pytest==8.4.2; \
 # Cleanup to reduce image size
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
+
+ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
+    SKIP_UNITTESTS=
 
 ENV LANG=en_US.UTF-8 \
     TARGET_OS=rockylinux \
