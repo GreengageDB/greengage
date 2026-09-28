@@ -5075,13 +5075,13 @@ set_resjunk_flag(const CDXLTranslateContext *context, const ULONG id)
 //
 //---------------------------------------------------------------------------
 void
-CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan, const CDXLTranslateContext *output_context)
+CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, const CDXLTranslateContext *output_context)
 {
 	// List of result relations shouldn't be null, as we could get here only
 	// with DML query.
 	GPOS_ASSERT(m_result_rel_list != nullptr);
 
-	Index id = static_cast<Index>(ListLastInt(m_result_rel_list));
+	Index id = static_cast<Index>(gpdb::ListLastInt(m_result_rel_list));
 	RangeTblEntry *rte = m_dxl_to_plstmt_context->GetRTEByIndex(id);
 	Oid target_relid = rte->relid;
 
@@ -5103,6 +5103,7 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan, c
 	GPOS_ASSERT(policy && policy->ptype == POLICYTYPE_PARTITIONED);
 
 	int policy_nattrs = policy->nattrs;
+	TupleDesc resultDesc = target_rel->rd_att;
 
 	split->numHashAttrs = policy_nattrs;
 	split->numHashSegments = policy->numsegments;
@@ -5112,6 +5113,8 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(SplitUpdate *split, Plan *plan, c
 
 	for (int i = 0; i < policy_nattrs; i++)
 	{
+		Form_pg_attribute att =
+				&(resultDesc->attrs[(policy->attrs[i] - 1)]);
 		AttrNumber tlist_attno =
 			output_context->GetTargetEntry(policy->attrs[i] - 1)->resno;
 
@@ -5194,7 +5197,7 @@ CTranslatorDXLToPlStmt::TranslateDXLSplit(
 	// fields.
 	if (phy_split_dxlop->GetNeedsResJunk())
 	{
-		SetSplitUpdateHashInfo(split, plan, output_context);
+		SetSplitUpdateHashInfo(split, output_context);
 		// Junk flag setting for child and output plans.
 		ULONG split_ctid_colid = phy_split_dxlop->GetCtIdColId();
 		ULONG split_segid_colid = phy_split_dxlop->GetSegmentIdColId();
