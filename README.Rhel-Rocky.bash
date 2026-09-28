@@ -10,7 +10,6 @@ set -euxo pipefail
 dnf -y install epel-release
 dnf config-manager --set-enabled crb
 
-# shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
     apr-devel \
     apr-util-devel \
@@ -78,8 +77,7 @@ dnf -y install \
     vim \
     wget \
     xerces-c-devel \
-    zlib-devel \
-    $python_packages $perl_packages
+    zlib-devel
 
 python3 -m pip install --no-cache-dir --upgrade pip
 python3 -m pip install --no-cache-dir future==1.0.0
