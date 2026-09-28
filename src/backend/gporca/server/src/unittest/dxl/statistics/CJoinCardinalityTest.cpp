@@ -22,7 +22,10 @@
 #include "gpos/string/CWStringDynamic.h"
 
 #include "naucrates/dxl/CDXLUtils.h"
+#include "naucrates/statistics/CLeftOuterJoinStatsProcessor.h"
 #include "naucrates/statistics/CStatisticsUtils.h"
+#include "naucrates/statistics/CStatsPredConj.h"
+#include "naucrates/statistics/CStatsPredUnsupported.h"
 
 #include "unittest/base.h"
 #include "unittest/dxl/statistics/CCardinalityTestUtils.h"
@@ -36,6 +39,8 @@ CJoinCardinalityTest::EresUnittest()
 	CUnittest rgutSharedOptCtxt[] = {
 		GPOS_UNITTEST_FUNC(CJoinCardinalityTest::EresUnittest_Join),
 		GPOS_UNITTEST_FUNC(CJoinCardinalityTest::EresUnittest_JoinNDVRemain),
+		GPOS_UNITTEST_FUNC(
+			CJoinCardinalityTest::EresUnittest_LOJUnsupportedPred),
 	};
 
 	// run tests with shared optimization context first
@@ -374,6 +379,128 @@ CJoinCardinalityTest::PdrgpstatspredjoinNullableCols(CMemoryPool *mp)
 		GPOS_NEW(mp) CStatsPredJoin(1, CStatsPred::EstatscmptEq, 2));
 
 	return join_preds_stats;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CJoinCardinalityTest::EresUnittest_LOJUnsupportedPred
+//
+//	@doc:
+//		Left outer join whose ON clause has a join predicate that cannot be
+//		modeled by histograms (e.g. f(outer.a) = g(inner.b)), in addition
+//		to a supported equality predicate.
+//
+//		The supported predicate alone matches every outer row (the outer
+//		values are contained in the inner values), so the unsupported
+//		predicate is the only thing that can produce null-extended rows.
+//		Its default selectivity must therefore show up as a null fraction
+//		on the inner columns, and the total row count must still be at
+//		least the outer row count.
+//
+//---------------------------------------------------------------------------
+GPOS_RESULT
+CJoinCardinalityTest::EresUnittest_LOJUnsupportedPred()
+{
+	CAutoMemoryPool amp;
+	CMemoryPool *mp = amp.Pmp();
+
+	const ULONG outer_colid = 0;
+	const ULONG inner_colid = 8;
+	const CDouble num_rows(100.0);
+
+	// outer and inner columns: values in [0, 1000), 10 distinct values per
+	// bucket, no nulls, no remaining NDVs -> NDV 100 on 100 rows
+	UlongToHistogramMap *outer_histograms =
+		GPOS_NEW(mp) UlongToHistogramMap(mp);
+	outer_histograms->Insert(
+		GPOS_NEW(mp) ULONG(outer_colid),
+		CCardinalityTestUtils::PhistInt4Remain(
+			mp, 10 /*num_of_buckets*/, 10.0 /*dNDVPerBucket*/,
+			false /*fNullFreq*/, 0.0 /*num_NDV_remain*/));
+	UlongToDoubleMap *outer_widths = GPOS_NEW(mp) UlongToDoubleMap(mp);
+	outer_widths->Insert(GPOS_NEW(mp) ULONG(outer_colid),
+						 GPOS_NEW(mp) CDouble(4.0));
+	CStatistics *outer_stats = GPOS_NEW(mp) CStatistics(
+		mp, outer_histograms, outer_widths, num_rows, false /*is_empty*/);
+
+	UlongToHistogramMap *inner_histograms =
+		GPOS_NEW(mp) UlongToHistogramMap(mp);
+	inner_histograms->Insert(
+		GPOS_NEW(mp) ULONG(inner_colid),
+		CCardinalityTestUtils::PhistInt4Remain(
+			mp, 10 /*num_of_buckets*/, 10.0 /*dNDVPerBucket*/,
+			false /*fNullFreq*/, 0.0 /*num_NDV_remain*/));
+	UlongToDoubleMap *inner_widths = GPOS_NEW(mp) UlongToDoubleMap(mp);
+	inner_widths->Insert(GPOS_NEW(mp) ULONG(inner_colid),
+						 GPOS_NEW(mp) CDouble(4.0));
+	CStatistics *inner_stats = GPOS_NEW(mp) CStatistics(
+		mp, inner_histograms, inner_widths, num_rows, false /*is_empty*/);
+
+	// supported join predicate: outer.0 = inner.8
+	CStatsPredJoinArray *join_preds_stats =
+		GPOS_NEW(mp) CStatsPredJoinArray(mp);
+	join_preds_stats->Append(GPOS_NEW(mp) CStatsPredJoin(
+		outer_colid, CStatsPred::EstatscmptEq, inner_colid));
+
+	// baseline: the supported predicate matches every outer row, so the
+	// inner column has no nulls after the LOJ
+	CStatistics *loj_stats =
+		CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
+			mp, outer_stats, inner_stats, join_preds_stats);
+	GPOS_UNITTEST_ASSERT(nullptr != loj_stats);
+	CCardinalityTestUtils::PrintStats(mp, loj_stats);
+	GPOS_UNITTEST_ASSERT(loj_stats->Rows() == num_rows);
+	GPOS_UNITTEST_ASSERT(loj_stats->GetHistogram(inner_colid)->GetNullFreq() <
+						 CStatistics::Epsilon);
+	loj_stats->Release();
+
+	// now add an unsupported join predicate; it gets the default
+	// selectivity, so only 40% of the matched pairs survive it, and the
+	// outer rows that lose their (single) match must come back as
+	// null-extended rows
+	CStatsPredPtrArry *unsupported_preds = GPOS_NEW(mp) CStatsPredPtrArry(mp);
+	unsupported_preds->Append(GPOS_NEW(mp) CStatsPredUnsupported(
+		gpos::ulong_max, CStatsPred::EstatscmptOther));
+	CStatsPredConj *unsupported_pred_stats =
+		GPOS_NEW(mp) CStatsPredConj(unsupported_preds);
+	const CDouble default_selectivity = CHistogram::DefaultSelectivity;
+
+	loj_stats = CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
+		mp, outer_stats, inner_stats, join_preds_stats, unsupported_pred_stats);
+	GPOS_UNITTEST_ASSERT(nullptr != loj_stats);
+	CCardinalityTestUtils::PrintStats(mp, loj_stats);
+
+	// Card(LOJ) = Card(matched) + Card(null-extended) = 40 + 60 = 100
+	GPOS_UNITTEST_ASSERT(loj_stats->Rows() == num_rows);
+
+	// inner column: 60% of the rows are null-extended
+	const CHistogram *inner_hist = loj_stats->GetHistogram(inner_colid);
+	GPOS_UNITTEST_ASSERT(nullptr != inner_hist);
+	CDouble expected_null_freq = 1.0 - default_selectivity;
+	CDouble null_freq_diff(
+		fabs((inner_hist->GetNullFreq() - expected_null_freq).Get()));
+	GPOS_UNITTEST_ASSERT(null_freq_diff < 0.01);
+
+	// outer column: still well defined, no nulls, and every outer row
+	// is accounted for (frequencies sum up to one)
+	const CHistogram *outer_hist = loj_stats->GetHistogram(outer_colid);
+	GPOS_UNITTEST_ASSERT(nullptr != outer_hist);
+	GPOS_UNITTEST_ASSERT(outer_hist->IsWellDefined());
+	GPOS_UNITTEST_ASSERT(outer_hist->GetNullFreq() < CStatistics::Epsilon);
+	CDouble outer_freq_diff(
+		fabs((CStatisticsUtils::GetFrequency(outer_hist->GetBuckets()) - 1.0)
+				 .Get()));
+	GPOS_UNITTEST_ASSERT(outer_freq_diff < 0.01);
+
+	// clean up
+	loj_stats->Release();
+	unsupported_pred_stats->Release();
+	join_preds_stats->Release();
+	inner_stats->Release();
+	outer_stats->Release();
+
+	return GPOS_OK;
 }
 
 // EOF
