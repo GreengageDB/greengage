@@ -40,9 +40,6 @@ jobs:
       matrix:
         include:
           - target_os: rockylinux
-            target_os_version: "8"
-            test_install: false
-          - target_os: rockylinux
             target_os_version: "9"
             test_install: false
     permissions:
