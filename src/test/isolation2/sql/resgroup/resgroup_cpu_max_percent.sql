@@ -17,7 +17,7 @@ CREATE LANGUAGE plpython3u;
 CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$
     import os
     return os.cpu_count()
-$$ LANGUAGE plpython3u;
+$$ LANGUAGE plpython3u IMMUTABLE;
 
 DROP TABLE IF EXISTS cpu_usage_samples;
 CREATE TABLE cpu_usage_samples (sample text);

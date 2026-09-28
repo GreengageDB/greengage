@@ -22,7 +22,7 @@ ERROR:  language "plpython3u" already exists
 -- helper functions, tables and views
 --
 
-CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$ import os return os.cpu_count() $$ LANGUAGE plpython3u;
+CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$ import os return os.cpu_count() $$ LANGUAGE plpython3u IMMUTABLE;
 CREATE FUNCTION
 
 DROP TABLE IF EXISTS cpu_usage_samples;
