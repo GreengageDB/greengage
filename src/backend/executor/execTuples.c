@@ -221,19 +221,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 							 Datum *d,
 							 bool *null)
 {
-	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-
-	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
-							attno,
-							curseginfo->segno,
-							scan->columnScanInfo.attnum_to_rownum)))
-	{
-		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-		slotAocs->tts_is_valid[attno] = true;
-
-		return;
-	}
 
 	DatumStreamRead *ds = scan->columnScanInfo.ds[attno];
 	Assert(ds);
