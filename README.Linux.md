@@ -1,4 +1,4 @@
-## For RHEL/Rocky (versions 8 or 9):
+## For RHEL/Rocky 9:
 
 - Install dependencies using README.Rhel-Rocky.bash script:
 

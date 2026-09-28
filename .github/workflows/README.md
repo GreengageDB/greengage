@@ -11,47 +11,36 @@ different branches and configurations.
 Whenever the list of **NAMES of required jobs** in the workflow (including any
 **reusable workflows**) is **added, removed, or renamed**, you must contact a
 repository administrator to update the **Branch Protection Rules** accordingly.
-
 Without this, new, deleted, or renamed jobs will not be recognized as required
 when checking Pull Requests.
 
 ## Greengage CI
 
-The `Greengage CI` workflow is the main CI pipeline for the Greengage project.
-It builds Docker images, runs tests, uploads images, and builds packages for
-supported target operating systems.
+The `Greengage CI` workflow triggers on:
 
-### Key Features
+- **Push events** to versioned release branches (`6.x`, `7.x`) after
+  merged PR, or versioned release tags (`6.*`, `7.*`).
+- **Pull requests** to any branch.
 
-- **Triggers:** Runs on push events to versioned release branches (`6.x`,
-  `7.x`) after merged PRs, versioned release tags (`6.*`, `7.*`), and pull
-  requests to any branch.
+It executes the following jobs in a matrix strategy for multiple target
+operating systems:
 
-- **Multi-OS Matrix:** Builds images for multiple target operating systems
-  using a matrix strategy.
-
-- **Build:** Constructs and pushes Docker images to the GitHub Container
-  Registry (GHCR) with development commit SHA and branch name tags. Runs for
-  pull requests and all push events.
-
-- **Tests:** Runs multiple test suites for pull requests. The available
+- **Build**: Constructs and pushes Docker images to the GitHub Container
+  Registry (GHCR) with development commit SHA tag and branchname tag. Runs for
+  pull requests and all push events (default branch and tags).
+- **Tests**: Runs multiple test suites only for pull requests. The available
   suites depend on the branch version:
-
   - Behave tests
   - Regression tests
   - Orca tests
   - Resource group tests
   - JIT tests (version 7.x only)
-  -pg_upgrade test (Ubuntu 22.04 only, no matrix)
-
-- **Upload:** Retags and pushes final Docker images to GHCR and optionally
-  DockerHub. Runs for push to the default branch (retags to `latest`) and
-  tags after build.
-
-- **Package:** Builds Debian and RPM packages for supported target
-  operating systems and optionally tests deployment. Debian packages are
-  supported for versions 6.x and 7.x.
-  RPM packages are currently supported for version 6.x only.
+  - pg_upgrade test (Ubuntu 22.04 only, no matrix)
+- **Upload**: Retags and pushes final Docker images to GHCR and optionally
+  DockerHub. Runs for push to the default branch (retags to `latest`) and tags
+  after build.
+- **Package**: Builds Debian packages and optionally tests deployment.
+  Currently supported for version 6.x only.
 
 ## Greengage CI (No Tests)
 

@@ -8,28 +8,8 @@
 set -euxo pipefail
 
 dnf -y install epel-release
+dnf config-manager --set-enabled crb
 
-# Detect OS version if not already set
-export OS_VERSION="${OS_VERSION:-$(grep -oP '(?<= release )\d+' /etc/redhat-release)}"
-
-perl_packages="perl-Env perl-ExtUtils-Embed perl-IPC-Run perl-JSON perl-Test-Base"
-python_packages="python3.12 python3.12-devel python3.12-pip python3.12-setuptools"
-
-case "$OS_VERSION" in
-    8)
-        dnf config-manager --set-enabled powertools
-        ;;
-    9)
-        dnf config-manager --set-enabled crb
-        perl_packages="$perl_packages  perl-FindBin perl-Opcode perl-Test-Simple perl-Thread-Queue perl-devel"
-        ;;
-    *)
-        echo "Unsupported Rocky Linux version: $OS_VERSION"
-        exit 1
-        ;;
-esac
-
-# shellcheck disable=SC2086 # intentional: word splitting for package lists
 dnf -y install \
     apr-devel \
     apr-util-devel \
@@ -70,7 +50,21 @@ dnf -y install \
     openssh-server \
     openssl-devel \
     pam-devel \
+    perl-devel \
+    perl-Env \
+    perl-ExtUtils-Embed \
+    perl-FindBin \
+    perl-IPC-Run \
+    perl-JSON \
+    perl-Opcode \
+    perl-Test-Base \
+    perl-Test-Simple \
+    perl-Thread-Queue \
     procps-ng \
+    python3 \
+    python3-devel \
+    python3-pip \
+    python3-setuptools \
     readline-devel \
     rpm-build \
     rsync \
@@ -83,32 +77,10 @@ dnf -y install \
     vim \
     wget \
     xerces-c-devel \
-    zlib-devel \
-    $python_packages $perl_packages
+    zlib-devel
 
-# Register python3.12 as default python3 via alternatives
-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
-alternatives --set python3 /usr/bin/python3.12
-
-# pip3 and pip may be regular files on Rocky 9 — remove before registering
-if [ ! -L /usr/bin/pip3 ]; then rm -f /usr/bin/pip3; fi
-if [ ! -L /usr/bin/pip ];  then rm -f /usr/bin/pip;  fi
-alternatives --install  /usr/bin/pip3 pip3 /usr/bin/pip3.12 1
-alternatives --install  /usr/bin/pip  pip  /usr/bin/pip3.12 1
-alternatives --set pip3 /usr/bin/pip3.12
-alternatives --set pip  /usr/bin/pip3.12
-ln -sf ./pip3.12 /usr/bin/pip-3
-
-# Debug
-python3 --version
-pip3    --version
-pip     --version
-
-# Upgrade pip to support current package versions
 python3 -m pip install --no-cache-dir --upgrade pip
-
-# 'future' is not available as a system package for python3.12
-python3 -m pip install --no-cache-dir future
+python3 -m pip install --no-cache-dir future==1.0.0
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
