@@ -8,7 +8,6 @@
 set -euxo pipefail
 
 dnf -y install epel-release
-
 dnf config-manager --set-enabled crb
 
 # shellcheck disable=SC2086 # intentional: word splitting for package lists
@@ -82,9 +81,7 @@ dnf -y install \
     zlib-devel \
     $python_packages $perl_packages
 
-# Upgrade pip to support current package versions
 python3 -m pip install --no-cache-dir --upgrade pip
-
 python3 -m pip install --no-cache-dir future=1.0.0
 
 # Build zstd with static library (not available as a package on Rocky)
