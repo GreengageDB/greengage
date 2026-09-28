@@ -130,7 +130,7 @@ requireSuperuser(void)
 static void
 requireWriteServerFilesPrivilege(void)
 {
-	if (!is_member_of_role(GetUserId(), DEFAULT_ROLE_WRITE_SERVER_FILES))
+	if (!is_member_of_role(GetUserId(), ROLE_PG_WRITE_SERVER_FILES))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser or a member of the pg_write_server_files role to use this function")));
@@ -145,7 +145,7 @@ requireWriteServerFilesPrivilege(void)
 static void
 requireReadServerFilesPrivilege(void)
 {
-	if (!is_member_of_role(GetUserId(), DEFAULT_ROLE_READ_SERVER_FILES))
+	if (!is_member_of_role(GetUserId(), ROLE_PG_READ_SERVER_FILES))
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser or a member of the pg_read_server_files role to use this function")));
