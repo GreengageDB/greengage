@@ -2713,6 +2713,7 @@ _readCookedConstraint(void)
 	READ_NODE_FIELD(expr);
 	READ_BOOL_FIELD(is_local);
 	READ_INT_FIELD(inhcount);
+	READ_BOOL_FIELD(is_no_inherit);
 
 	READ_DONE();
 }
