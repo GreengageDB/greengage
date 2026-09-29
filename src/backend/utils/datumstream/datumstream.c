@@ -189,14 +189,14 @@ datumstreamread_getlarge(DatumStreamRead * acc, Datum *datum, bool *null)
 				/*
 				 * It is ok to get the same object more than once.
 				 */
-				if (Debug_datumstream_read_print_varlena_info)
+				if (unlikely(Debug_datumstream_read_print_varlena_info))
 				{
 					datumstreamread_print_large_varlena_info(
 															 acc,
 														 acc->buffer_beginp);
 				}
 
-				if (Debug_appendonly_print_scan_tuple)
+				if (unlikely(Debug_appendonly_print_scan_tuple))
 				{
 
 
@@ -1139,7 +1139,7 @@ datumstreamread_block_info(DatumStreamRead * acc)
 	acc->blockFileOffset = acc->ao_read.current.headerOffsetInFile;
 	acc->blockRowCount = acc->getBlockInfo.rowCnt;
 
-	if (Debug_appendonly_print_scan)
+	if (unlikely(Debug_appendonly_print_scan))
 		elog(LOG,
 			 "Datum stream read get block typeInfo for table '%s' "
 		 "(contentLen %d, execBlockKind = %d, firstRowNum " INT64_FORMAT ", "
@@ -1250,7 +1250,7 @@ datumstreamread_block_content(DatumStreamRead * acc)
 		}
 
 
-		if (Debug_appendonly_print_datumstream)
+		if (unlikely(Debug_appendonly_print_datumstream))
 			elog(LOG,
 				 "datumstream_read_block_content filePathName %s firstRowNum " INT64_FORMAT " rowCnt %u "
 				 "ndatum %u contentLen %d datump %p",
@@ -1298,7 +1298,7 @@ datumstreamread_block_content(DatumStreamRead * acc)
 		acc->buffer_beginp = acc->large_object_buffer;
 		acc->largeObjectState = DatumStreamLargeObjectState_HaveAoContent;
 
-		if (Debug_datumstream_read_check_large_varlena_integrity)
+		if (unlikely(Debug_datumstream_read_check_large_varlena_integrity))
 		{
 			datumstreamread_check_large_varlena_integrity(
 														  acc,
@@ -1341,7 +1341,7 @@ datumstreamread_block(DatumStreamRead * acc,
 	if (!readOK)
 		return -1;
 
-	if (Debug_appendonly_print_datumstream)
+	if (unlikely(Debug_appendonly_print_datumstream))
 		elog(LOG,
 			 "datumstream_read_block filePathName %s ndatum %u datump %p "
 			 "firstRow " INT64_FORMAT " rowCnt %u contentLen %u ",
@@ -1364,7 +1364,7 @@ datumstreamread_block(DatumStreamRead * acc,
 	acc->blockFileOffset = acc->ao_read.current.headerOffsetInFile;
 	acc->blockRowCount = acc->getBlockInfo.rowCnt;
 
-	if (Debug_appendonly_print_scan)
+	if (unlikely(Debug_appendonly_print_scan))
 		elog(LOG,
 			 "Datum stream read get block typeInfo for table '%s' "
 		 "(contentLen %d, execBlockKind = %d, firstRowNum " INT64_FORMAT ", "
@@ -1501,7 +1501,7 @@ datumstreamread_find_block(DatumStreamRead * datumStream,
 			datumStreamFetchDesc->currentBlock.firstRowNum + datumStream->getBlockInfo.rowCnt - 1;
 		datumStreamFetchDesc->currentBlock.gotContents = false;
 
-		if (Debug_appendonly_print_datumstream)
+		if (unlikely(Debug_appendonly_print_datumstream))
 			elog(LOG,
 				 "datumstream_find_block filePathName %s fileOffset " INT64_FORMAT " firstRowNum " INT64_FORMAT "  "
 				 "rowCnt %u lastRowNum " INT64_FORMAT " ",
@@ -1552,7 +1552,7 @@ datumstreamread_find_block(DatumStreamRead * datumStream,
 				datumStreamFetchDesc->currentBlock.firstRowNum + rowCnt - 1;
 		}
 
-		if (Debug_appendonly_print_datumstream)
+		if (unlikely(Debug_appendonly_print_datumstream))
 			elog(LOG,
 				 "datumstream_find_block filePathName %s fileOffset " INT64_FORMAT " firstRowNum " INT64_FORMAT " "
 				 "rowCnt %u lastRowNum " INT64_FORMAT " ",
@@ -1589,7 +1589,7 @@ datumstreamread_find_block(DatumStreamRead * datumStream,
 									datumStream->getBlockInfo.contentLen
 									)));
 				}
-				if (Debug_appendonly_print_datumstream)
+				if (unlikely(Debug_appendonly_print_datumstream))
 					elog(LOG,
 						 "datumstream_find_block filePathName %s fileOffset " INT64_FORMAT " firstRowNum " INT64_FORMAT " "
 						 "rowCnt %u lastRowNum " INT64_FORMAT " "
