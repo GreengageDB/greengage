@@ -403,6 +403,7 @@ double		optimizer_sort_factor;
 
 /* Optimizer hints */
 int			optimizer_join_arity_for_associativity_commutativity;
+int			optimizer_join_arity_for_associativity;
 int         optimizer_array_expansion_threshold;
 int         optimizer_join_order_threshold;
 int			optimizer_join_order;
@@ -4682,6 +4683,17 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&optimizer_join_arity_for_associativity_commutativity,
 		18, 0, INT_MAX,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"optimizer_join_arity_for_associativity", PGC_USERSET, QUERY_TUNING_METHOD,
+			gettext_noop("Maximum number of children n-ary-join have to use associativity transform when optimizer_enable_associativity is off"),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&optimizer_join_arity_for_associativity,
+		5, 0, INT_MAX,
 		NULL, NULL, NULL
 	},
 

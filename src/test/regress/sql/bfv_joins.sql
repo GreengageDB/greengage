@@ -752,6 +752,67 @@ explain select * from big_table, empty_table where s = i;
 drop table big_table;
 drop table empty_table;
 
+--
+-- ORCA: the join associativity xform is used for small n-ary joins even when
+-- optimizer_enable_associativity is off, so the plan does not depend on the
+-- join order in the query text. Joining a with big first allows an Index NLJ.
+--
+create table jas_a as select x, x % 10 + 1 as y, x % 10 + 1 as z
+	from generate_series(1, 1000) x distributed by (x);
+create table jas_b as select x as y from generate_series(1, 10) x distributed by (y);
+create table jas_c as select x as z from generate_series(1, 10) x distributed by (z);
+create table jas_big as select x from generate_series(1, 100000) x distributed by (x);
+create index on jas_a(x);
+create index on jas_big(x);
+analyze jas_a;
+analyze jas_b;
+analyze jas_c;
+analyze jas_big;
+-- force the stats to make jas_big look big to the optimizer
+set allow_system_table_mods = on;
+update pg_class set reltuples = 10000000 where oid = 'jas_big'::regclass;
+reset allow_system_table_mods;
+
+show optimizer_enable_associativity;
+show optimizer_join_arity_for_associativity;
+
+-- the n-ary join has 4 children, below the limit: the same plan for both
+-- join orders
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+explain (costs off) select count(*) from jas_a join jas_big using (x)
+	join jas_b using (y) join jas_c using (z) where jas_a.x > 900;
+select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+select count(*) from jas_a join jas_big using (x)
+	join jas_b using (y) join jas_c using (z) where jas_a.x > 900;
+
+-- at the limit
+set optimizer_join_arity_for_associativity = 4;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+
+-- above the limit: the plan depends on the join order again
+set optimizer_join_arity_for_associativity = 3;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+explain (costs off) select count(*) from jas_a join jas_big using (x)
+	join jas_b using (y) join jas_c using (z) where jas_a.x > 900;
+
+-- 0 disables associativity for joins of any size
+set optimizer_join_arity_for_associativity = 0;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+
+-- optimizer_enable_associativity enables it for joins of any size
+set optimizer_enable_associativity = on;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900;
+
+reset optimizer_enable_associativity;
+reset optimizer_join_arity_for_associativity;
+drop table jas_a, jas_b, jas_c, jas_big;
+
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
 set client_min_messages='warning';

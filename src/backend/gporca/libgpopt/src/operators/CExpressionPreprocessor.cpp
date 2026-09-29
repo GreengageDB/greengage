@@ -991,11 +991,17 @@ CExpressionPreprocessor::PexprCollapseJoins(CMemoryPool *mp, CExpression *pexpr)
 		ULONG ulJoinArityLimit =
 			optimizer_config->GetHint()
 				->UlJoinArityForAssociativityCommutativity();
+		ULONG ulJoinArityLimitForAssociativity =
+			optimizer_config->GetHint()->UlJoinArityForAssociativity();
 
 		// The last child of an n-ary join expression is the scalar expression
 		if (pexprNAryJoin->Arity() - 1 > ulJoinArityLimit)
 		{
 			GPOPT_DISABLE_XFORM(CXform::ExfJoinCommutativity);
+			GPOPT_DISABLE_XFORM(CXform::ExfJoinAssociativity);
+		}
+		else if (pexprNAryJoin->Arity() - 1 > ulJoinArityLimitForAssociativity)
+		{
 			GPOPT_DISABLE_XFORM(CXform::ExfJoinAssociativity);
 		}
 
