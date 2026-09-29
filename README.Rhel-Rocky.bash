@@ -109,7 +109,7 @@ if [[ ! -f /.dockerenv && -z "${IS_DOCKER_BUILD:-}" ]]; then
     systemctl disable --now firewalld.service || true
 
     # Configure kernel parameters
-    cat >> /etc/sysctl.d/10-gpdb.conf << EOF
+    cat > /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536
 kernel.msgmni = 2048
@@ -169,7 +169,7 @@ EOF
     sysctl -p /etc/sysctl.d/10-gpdb.conf
 
     # Configure system limits
-    cat >> /etc/security/limits.d/10-nproc.conf << EOF
+    cat > /etc/security/limits.d/10-nproc.conf << EOF
 * soft nofile 524288
 * hard nofile 524288
 * soft nproc 131072
