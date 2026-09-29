@@ -567,7 +567,7 @@ main() {
 	# (limited) catalog checking inside pg_upgrade, it won't catch all issues, and
 	# upgrading a faulty catalog won't work.
 	if (( $gpcheckcat )) ; then
-		${OLD_BINDIR}/gpcheckcat
+		${OLD_BINDIR}/gpcheckcat -A
 		if (( $? )) ; then
 			echo "ERROR: gpcheckcat reported catalog issues, fix before upgrading"
 			exit 1
