@@ -218,6 +218,15 @@ struct TupleTableSlotOps
 	/*
 	 * Fill up target entries of tts_values and tts_isnull arrays with
 	 * values from the tuple contained in the slot.
+	 *
+	 * No slot type currently implements this (superseded by fetchattr()
+	 * below); kept only because the LLVM JIT expression compiler still
+	 * generates a call to slot_gettargetattr() as a first attempt ahead of
+	 * its own EEOP_SCAN_FETCHSOME deform logic, mirroring
+	 * ExecInterpExpr()'s interpreted EEOP_SCAN_FETCHSOME handling. Since it
+	 * always returns false now, that JIT path is a harmless no-op that
+	 * simply falls through -- not updated to match the interpreter's
+	 * fetchattr()-based skip logic to avoid touching LLVM IR generation.
 	 */
 	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
 
@@ -225,6 +234,16 @@ struct TupleTableSlotOps
 	 * Check if value for attnum in tts_values and tts_isnull arrays is valid.
 	 */
 	bool		(*is_attr_valid) (TupleTableSlot *slot, int attnum);
+
+	/*
+	 * Fetch exactly one attribute on demand. Unlike getsomeattrs() (a whole
+	 * 0..N-1 range), this exists so a single EEOP_SCAN_VAR reference -- e.g.
+	 * one Var inside a short-circuited qual branch whose EEOP_SCAN_FETCHSOME
+	 * step skipped the bulk fetch precisely because this callback is
+	 * non-NULL (see EEOP_SCAN_FETCHSOME in execExprInterp.c) -- can fetch
+	 * just the one column it actually needs, with no per-call allocation.
+	 */
+	void		(*fetchattr) (TupleTableSlot *slot, int attnum);
 };
 
 /*
@@ -279,23 +298,6 @@ typedef struct VirtualTupleTableSlotAOCS
 	 */
 	bool	   *tts_is_valid;
 	int			tts_is_valid_natts;
-
-	/*
-	 * gettargetattr() is called once per tuple with a Bitmapset of the
-	 * attnos an expression step needs, but that Bitmapset is built once
-	 * per compiled ExprEvalStep (op->d.fetch.all_vars) and its pointer
-	 * stays stable across every tuple of the scan -- only its members
-	 * differ between distinct expression steps. Re-walking it via
-	 * bms_next_member() on every single tuple is therefore redundant
-	 * work. Cache the flattened, plain-array form of the last-seen
-	 * Bitmapset (keyed by pointer identity, not value) so repeat calls
-	 * with the same attrs just do a tight sequential array scan instead.
-	 * Grows but never shrinks; freed only when the slot itself is.
-	 */
-	Bitmapset  *tts_cached_attrs;
-	AttrNumber *tts_cached_attrs_arr;
-	int			tts_cached_attrs_count;
-	int			tts_cached_attrs_capacity;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
@@ -386,6 +388,18 @@ extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
 extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
+
+/*
+ * PROTOTYPE: fetch exactly one attribute, for slot types that support it
+ * (see TupleTableSlotOps.fetchattr). Does nothing if the slot type has no
+ * fetchattr callback -- always safe to call speculatively.
+ */
+static inline void
+slot_fetchattr(TupleTableSlot *slot, int attnum)
+{
+	if (slot->tts_ops->fetchattr)
+		slot->tts_ops->fetchattr(slot, attnum);
+}
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);

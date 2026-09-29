@@ -580,14 +580,6 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot,
 							projKind,
 							flags);
 
-	/*
-	 * No local qual on this scan means there's no filtering step that could
-	 * discard the tuple before all projected columns are needed, so the
-	 * lazy per-attribute fetch in tts_virtual_aocs_gettargetattr() buys
-	 * nothing here -- see the comment on eagerFetch.
-	 */
-	aoscan->columnScanInfo.eagerFetch = (qual == NIL);
-
 	if (needFree)
 		pfree(proj);
 	return (TableScanDesc)aoscan;
@@ -739,11 +731,11 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 		 * tts_is_valid. If tts_nvalid were left at natts, slot_getattr()/
 		 * slot_is_attr_valid() would trust it and return stale data from a
 		 * previous tuple instead of going through is_attr_valid()/
-		 * gettargetattr() to lazily fetch the column on demand. So reset it
-		 * to 0 here to force every later attribute access through the
-		 * AOCS-specific lazy-fetch path. This is skipped for AOCS_PROJ_ANY
-		 * (e.g. count(*)) since that projection never reads column values,
-		 * only row identity.
+		 * fetchattr()/getsomeattrs() to lazily fetch the column on demand.
+		 * So reset it to 0 here to force every later attribute access
+		 * through the AOCS-specific lazy-fetch path. This is skipped for
+		 * AOCS_PROJ_ANY (e.g. count(*)) since that projection never reads
+		 * column values, only row identity.
 		 */
 		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY)
 			slot->tts_nvalid = 0;
