@@ -14,11 +14,6 @@ CREATE LANGUAGE plpython3u;
 -- helper functions, tables and views
 --
 
-CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$
-    import os
-    return os.cpu_count()
-$$ LANGUAGE plpython3u IMMUTABLE;
-
 DROP TABLE IF EXISTS cpu_usage_samples;
 CREATE TABLE cpu_usage_samples (sample text);
 
@@ -58,20 +53,20 @@ CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
     FROM generate_series(1, 50000) i distributed randomly;
 
-CREATE OR REPLACE FUNCTION complex_compute(i int, ncores int)
+CREATE OR REPLACE FUNCTION complex_compute(i int)
 RETURNS int AS $$
     results = 1
-    for j in range(1, ncores * 5000 + 50000 + i):
-        results = (results * j) % 1000003
+    for j in range(1, 50000 + i):
+        results = (results * j) % 35969
     return results
 $$ LANGUAGE plpython3u;
 
 CREATE VIEW busy AS
-    WITH t1 as (select random(), complex_compute(c1, get_cpu_cores()) from bigtable),
-    t2 as (select random(), complex_compute(c1, get_cpu_cores()) from bigtable),
-    t3 as (select random(), complex_compute(c1, get_cpu_cores()) from bigtable),
-    t4 as (select random(), complex_compute(c1, get_cpu_cores()) from bigtable),
-    t5 as (select random(), complex_compute(c1, get_cpu_cores()) from bigtable)
+    WITH t1 as (select random(), complex_compute(c1) from bigtable),
+    t2 as (select random(), complex_compute(c1) from bigtable),
+    t3 as (select random(), complex_compute(c1) from bigtable),
+    t4 as (select random(), complex_compute(c1) from bigtable),
+    t5 as (select random(), complex_compute(c1) from bigtable)
     SELECT count(*)
     FROM
     t1, t2, t3, t4, t5;
@@ -102,8 +97,8 @@ ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int, int) TO role1_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int, int) TO role2_cpu_test;
+GRANT ALL ON FUNCTION complex_compute(int) TO role1_cpu_test;
+GRANT ALL ON FUNCTION complex_compute(int) TO role2_cpu_test;
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT ALL ON busy TO role2_cpu_test;
 
@@ -433,8 +428,8 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:ALTER RESOURCE GROUP admin_group SET cpu_max_percent 10;
 
 -- cleanup
-2:REVOKE ALL ON FUNCTION complex_compute(int, int) FROM role1_cpu_test;
-2:REVOKE ALL ON FUNCTION complex_compute(int, int) FROM role2_cpu_test;
+2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role1_cpu_test;
+2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role2_cpu_test;
 2:REVOKE ALL ON busy FROM role1_cpu_test;
 2:REVOKE ALL ON busy FROM role2_cpu_test;
 2:DROP ROLE role1_cpu_test;
