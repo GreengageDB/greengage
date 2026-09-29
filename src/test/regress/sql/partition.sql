@@ -4459,6 +4459,34 @@ WHERE t.id = o.id AND t.id IN (:ids);
 -- Check duplicates
 SELECT count(*), count(DISTINCT id) FROM t;
 
+--
+-- Test that segment is chosen correctly when ORCA's column ids of the target
+-- table don't match its attribute numbers: the root has a dropped column
+-- before the distribution key, and the UPDATE has a CTE.
+--
+CREATE TABLE rank6 (junk INT, id INT, year INT) DISTRIBUTED BY (id)
+PARTITION BY RANGE (year) (START (2006) END (2008) EVERY (1));
+ALTER TABLE rank6 DROP COLUMN junk;
+INSERT INTO rank6 SELECT i, 2007 FROM generate_series(1, 60) i;
+
+ALTER TABLE rank6 EXPAND PARTITION PREPARE;
+ALTER TABLE rank6_1_prt_1 SET WITH (REORGANIZE = TRUE) DISTRIBUTED BY (id);
+
+EXPLAIN (COSTS OFF) UPDATE rank6 SET year = 2006 WHERE id <= 20;
+UPDATE rank6 SET year = 2006 WHERE id <= 20;
+
+EXPLAIN (COSTS OFF) WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank6 SET year = 2006 FROM w WHERE rank6.id = w.id;
+WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank6 SET year = 2006 FROM w WHERE rank6.id = w.id;
+
+-- All moved rows must be on the segment given by their hash (o is hash
+-- distributed by id on the full cluster), and there must be no duplicates.
+SELECT count(*) AS moved,
+       count(*) FILTER (WHERE r.gp_segment_id <> o.gp_segment_id) AS misplaced
+FROM rank6_1_prt_1 r JOIN o USING (id);
+SELECT count(*), count(DISTINCT id) FROM rank6;
+
 SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
@@ -4469,6 +4497,7 @@ DROP TABLE rank4_1_prt_6;
 DROP TABLE rank5;
 DROP TABLE t;
 DROP TABLE o;
+DROP TABLE rank6;
 DROP TABLE t_part_acl;
 DROP TABLE t_part_ao_acl;
 DROP ROLE user_prt_acl;

@@ -516,7 +516,8 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 		 * of tuples only on one segment.
 		 */
 		Form_pg_class classForm = rel->rd_rel;
-		if (!key_col_updated && (classForm->relkind == RELKIND_RELATION ||
+		if (!key_col_updated && root->inhTargetKind != INHKIND_NONE &&
+			(classForm->relkind == RELKIND_RELATION ||
 			classForm->relkind == RELKIND_PARTITIONED_TABLE) &&
 			classForm->relispartition &&
 			!GpPolicyIsHashPartitioned(targetPolicy))

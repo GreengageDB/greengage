@@ -2817,7 +2817,7 @@ make_splitupdate_path(PlannerInfo *root, Path *subpath, Index rti)
 	 * segments and they may require cross segments data changes.
 	 *
 	 * So an update trigger is not allowed when updating the
-	 * distribution key.
+	 * distribution key or partition key.
 	 */
 	if (has_update_triggers(rte->relid, false))
 		ereport(ERROR,
