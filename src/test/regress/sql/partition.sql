@@ -4487,7 +4487,21 @@ SELECT count(*) AS moved,
 FROM rank6_1_prt_1 r JOIN o USING (id);
 SELECT count(*), count(DISTINCT id) FROM rank6;
 
+-- Updates on leaf partitions shouldn't be planned with split update as update
+-- on leaf partition suppose to not move rows away from this partition thus,
+-- keeping distribution the same. 
+EXPLAIN (COSTS OFF) UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
+
 SELECT gp_debug_reset_create_table_default_numsegments();
+
+-- A BEFORE UPDATE trigger must not prevent such an UPDATE.
+CREATE FUNCTION rank6_trg() RETURNS trigger LANGUAGE plpgsql AS
+$$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER rank6_tr BEFORE UPDATE ON rank6_1_prt_2
+FOR EACH ROW EXECUTE FUNCTION rank6_trg();
+UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
+DROP TRIGGER rank6_tr ON rank6_1_prt_2;
+DROP FUNCTION rank6_trg();
 
 DROP TABLE rank;
 DROP TABLE rank2;
