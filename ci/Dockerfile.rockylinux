@@ -35,16 +35,16 @@ RUN set -eux; \
 # Cleanup to reduce image size
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
 
-ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
-    SKIP_UNITTESTS=
+ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend"
 
 ENV LANG=en_US.UTF-8 \
     TARGET_OS=rockylinux \
     CONFIGURE_FLAGS=$CONFIGURE_FLAGS \
-    OUTPUT_ARTIFACT_DIR=bin_gpdb \
-    SKIP_UNITTESTS=$SKIP_UNITTESTS
+    OUTPUT_ARTIFACT_DIR=bin_gpdb
 
 FROM base AS build
+
+ARG SKIP_UNITTESTS=
 
 COPY . gpdb_src
 
