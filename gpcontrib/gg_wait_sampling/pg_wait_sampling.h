@@ -101,7 +101,9 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
 /*
  * GGDB: session id and command id of a sampled process are read from its
  * PGPROC entry, so they are available whatever phase of a statement the
- * process is in, including waits before parsing. Processes without a session
+ * process is in, including waits before parsing. The session id is the one
+ * pg_stat_activity.sess_id shows: on the coordinator background processes
+ * carry one too, on a segment only QEs do. Processes without a session
  * report 0 rather than InvalidGpSessionId.
  *
  * The coordinator keeps queryCommandId after a statement ends, so a backend
@@ -117,8 +119,7 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
  * startup packet, so every backend of a session on any node knows it; each
  * backend publishes it once, from the first hook it runs, into the collector
  * header, and the collector seeds it on the coordinator node from its own
- * postmaster. Processes without a session (background and auxiliary
- * processes, utility-mode connections to a segment) report 0.
+ * postmaster. Processes without a session report 0.
  */
 static inline void
 pgws_proc_identity(PGPROC *proc, HistoryItem *item)

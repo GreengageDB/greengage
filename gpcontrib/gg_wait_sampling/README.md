@@ -160,9 +160,12 @@ taken during parse analysis, is sampled with `queryid` 0.
 `mppsessionid` and `command_id` are read from the backend's `PGPROC` entry at
 sampling time and do not depend on any hook. They are therefore present for
 every sampled process of a session, including a backend blocked during parse
-analysis and the QEs of that session on the segments. Processes without a
-session, that is background and auxiliary processes and utility-mode
-connections to a segment, report `mppsessionid` 0.
+analysis and the QEs of that session on the segments. `mppsessionid` is the
+value `pg_stat_activity.sess_id` shows for the process: on the coordinator
+every process that connects to a database carries one, background workers
+included, while on a segment only the QEs do. Processes without a session,
+that is auxiliary processes, segment background workers and utility-mode
+connections to a segment, report 0.
 
 Properties of `command_id` that follow from how the server numbers commands:
 
@@ -174,10 +177,13 @@ Properties of `command_id` that follow from how the server numbers commands:
    dispatched to the segments and printed as `cmd` in the log prefix. Waits
    after the statement has finished running, for example during the two-phase
    commit dispatch, are again reported under the parsing value.
- * With the extended query protocol the coordinator increments the counter
-   only when the statement starts running, so a backend that blocks during
-   parse analysis of a Parse message reports the `command_id` of its previous
-   statement, or 0 for the first statement of the session.
+ * Only a simple-protocol statement and the Execute of a utility statement
+   advance the counter persistently; a plannable statement takes its number
+   in `CreateQueryDesc` and the previous value is restored when it finishes.
+   With the extended query protocol a backend that blocks during Parse or
+   Bind of a plannable statement therefore reports the `command_id` of its
+   last simple-protocol or utility statement, or 0 if there was none, which
+   is also the value an idle backend reports.
  * The coordinator keeps the last value after a statement ends. A backend
    waiting for its client (`ClientRead`) outside a statement, that is idle,
    idle in transaction, or between the messages of an extended-protocol
@@ -194,12 +200,12 @@ node, and sessions from different coordinator incarnations, for example after
 a failover to the standby, can be told apart. The value is kept once per node:
 on the coordinator the collector takes it from its own postmaster, on a
 segment the QEs publish it when they run their first statement. Processes
-without a session, that is background and auxiliary processes and utility-mode
-connections to a segment, report 0.
+without a session report 0.
 
 If `gg_wait_sampling.profile_queries` is set to `none`, the profile has no
 per-command dimension and reports `queryid`, `mppsessionid`, `command_id` and
-`tmid` as 0. The history always records the identity of the sampled process.
+`tmid` as 0. The history then records `queryid` 0 as well, but always keeps
+`mppsessionid`, `command_id` and `tmid` of the sampled process.
 
 #### Resetting the profile
 Profile reset requires superuser privilege. In version 1.1, reset is implemented as views rather than callable functions, which enables clean cluster-wide reset.

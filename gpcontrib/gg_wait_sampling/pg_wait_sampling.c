@@ -1310,11 +1310,17 @@ ggws_post_parse_analyze(ParseState *pstate, Query *query)
 	freeJumbleState(jstate);
 }
 
-/* Leave nothing behind in this PGPROC slot for the next process using it. */
+/*
+ * Leave nothing behind in this PGPROC slot for the next process using it: a
+ * FATAL exit in the middle of a statement skips the hooks' PG_CATCH blocks.
+ */
 static void
 ggws_reset_proc_slot(int code, Datum arg)
 {
-	pgws_proc_active[MyProc - ProcGlobal->allProcs] = false;
+	int			i = MyProc - ProcGlobal->allProcs;
+
+	pgws_proc_active[i] = false;
+	pgws_proc_queryids[i] = UINT64CONST(0);
 }
 
 /*

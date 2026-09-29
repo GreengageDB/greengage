@@ -4,17 +4,23 @@
 CREATE EXTENSION gg_wait_sampling;
 CREATE EXTENSION
 
--- Processes without a session (background workers, auxiliary processes) report
--- mppsessionid 0, never InvalidGpSessionId.
+-- mppsessionid is what pg_stat_activity.sess_id shows for the process, with
+-- InvalidGpSessionId reported as 0; on the coordinator that includes the
+-- background workers.
 SELECT count(*) = 0 AS no_negative_session_ids FROM gg_wait_sampling_current WHERE mppsessionid < 0;
  no_negative_session_ids 
 -------------------------
  t                       
 (1 row)
-SELECT count(*) > 0 AS has_sessionless_processes FROM gg_wait_sampling_current WHERE mppsessionid = 0;
- has_sessionless_processes 
----------------------------
- t                         
+SELECT count(*) = 0 AS session_ids_match_pg_stat_activity FROM gg_wait_sampling_get_current_coordinator() c JOIN pg_stat_activity s USING (pid) WHERE c.mppsessionid <> greatest(s.sess_id, 0);
+ session_ids_match_pg_stat_activity 
+------------------------------------
+ t                                  
+(1 row)
+SELECT count(*) > 0 AS background_processes_have_sessions FROM gg_wait_sampling_get_current_coordinator() c JOIN pg_stat_activity s USING (pid) WHERE s.backend_type <> 'client backend' AND c.mppsessionid > 0;
+ background_processes_have_sessions 
+------------------------------------
+ t                                  
 (1 row)
 
 CREATE TABLE t_wait_qd (id INT, val TEXT) DISTRIBUTED BY (id);
