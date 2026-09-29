@@ -297,98 +297,41 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 static void tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts);
 
 static bool
-tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
-{
-	Datum	   *d = slot->tts_values;
-	bool	   *null = slot->tts_isnull;
-
-	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
-	if (unlikely(scan == NULL))
-		return false;
-
-	/*
-	 * Already fully materialized for this tuple (either by a prior
-	 * gettargetattr call below, or by getsomeattrs()) -- nothing left for
-	 * any ancestor join level to fetch. Mirrors the fast path ordinary
-	 * (non-AOCS) slots get for free via slot_getsomeattrs()'s natts <=
-	 * tts_nvalid check.
-	 */
-	if (unlikely(slot->tts_nvalid >= slot->tts_tupleDescriptor->natts))
-		return true;
-
-	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
-	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
-	int64		rowNum = AOTupleIdGet_rowNum(tid);
-	Assert(rowNum != InvalidAORowNum);
-
-	/*
-	 * No local qual on this scan (see eagerFetch comment in cdbaocsam.h):
-	 * there is no filtering step that might discard the tuple before all
-	 * projected columns are needed, so fetch everything now instead of
-	 * paying for a separate lazy fetch at every ancestor join level that
-	 * references a different subset of this scan's columns.
-	 */
-	if (unlikely(scan->columnScanInfo.eagerFetch))
-	{
-		for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
-		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-
-			if (unlikely((attno < slot->tts_nvalid) ||
-						slotAocs->tts_is_valid[attno]))
-				continue;
-
-			tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
-										 attno, d, null);
-		}
-
-		slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
-		return true;
-	}
-
-	if (unlikely(slotAocs->tts_cached_attrs != attrs))
-	{
-		int			count = bms_num_members(attrs);
-		AttrNumber	attno = -1;
-		int			i = 0;
-
-		if (count > slotAocs->tts_cached_attrs_capacity)
-		{
-			MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-
-			if (slotAocs->tts_cached_attrs_arr != NULL)
-				pfree(slotAocs->tts_cached_attrs_arr);
-			slotAocs->tts_cached_attrs_arr = palloc(count * sizeof(AttrNumber));
-			slotAocs->tts_cached_attrs_capacity = count;
-			MemoryContextSwitchTo(oldContext);
-		}
-
-		while ((attno = bms_next_member(attrs, attno)) >= 0)
-			slotAocs->tts_cached_attrs_arr[i++] = attno;
-
-		slotAocs->tts_cached_attrs_count = count;
-		slotAocs->tts_cached_attrs = attrs;
-	}
-
-	for (int i = 0; i < slotAocs->tts_cached_attrs_count; i++)
-	{
-		AttrNumber	attno = slotAocs->tts_cached_attrs_arr[i];
-
-		if (unlikely(slotAocs->tts_is_valid[attno]))
-			continue;
-
-		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
-									 attno, d, null);
-	}
-	return true;
-}
-
-static bool
 tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 {
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 	return slotAocs->tts_is_valid != NULL && slotAocs->tts_is_valid[attnum];
+}
+
+/*
+ * PROTOTYPE: fetch exactly one attribute (see TupleTableSlotOps.fetchattr).
+ * Used by EEOP_SCAN_VAR's lazy path when the qual's upfront
+ * EEOP_SCAN_FETCHSOME step has been skipped for this scan (see
+ * ExecPushExprSetupSteps in execExpr.c) so that a Var reference inside a
+ * short-circuited branch doesn't force every other qual-referenced column
+ * -- including ones in a sibling branch that's never reached -- to be
+ * fetched too.
+ */
+static void
+tts_virtual_aocs_fetchattr(TupleTableSlot *slot, int attnum)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+
+	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
+	AOCSScanDesc scan = (AOCSScanDesc) slotAocs->current_scan;
+
+	if (unlikely(scan == NULL) || slotAocs->tts_is_valid[attnum])
+		return;
+
+	AOCSFileSegInfo *curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId  *tid = (AOTupleId *) &slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+
+	Assert(rowNum != InvalidAORowNum);
+
+	tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
+								 attnum, d, null);
 }
 
 static void
@@ -408,20 +351,18 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	Assert(rowNum != InvalidAORowNum);
 
 	/*
-	 * Once we're materializing via getsomeattrs at all (as opposed to the
-	 * qual-driven gettargetattr lazy path), there's no benefit in stopping
-	 * partway through proj_atts just because this particular caller only
-	 * asked for `natts`: proj_atts already IS the complete, fixed set of
-	 * columns this query will ever need from this scan (computed once at
-	 * scan setup from the whole plan, not just this call site), and by the
-	 * time generic getsomeattrs is invoked at all the row has typically
-	 * already survived any filtering. If natts grows across repeated calls
-	 * for the same tuple (e.g. different callers wanting progressively
-	 * more columns), each call would otherwise redo this loop. So fetch
-	 * everything in proj_atts in one pass instead, matching the
-	 * pre-lazy-fetch aocs_getnext() behavior, and record that the full
-	 * descriptor width is now valid so any later gettargetattr/getsomeattrs
-	 * call on this tuple hits the already-fully-fetched fast path.
+	 * There's no benefit in stopping partway through proj_atts just because
+	 * this particular caller only asked for `natts`: proj_atts already IS
+	 * the complete, fixed set of columns this query will ever need from
+	 * this scan (computed once at scan setup from the whole plan, not just
+	 * this call site), and a qual's own Vars are fetched lazily via
+	 * EEOP_SCAN_VAR before getsomeattrs is ever reached for them. If natts
+	 * grows across repeated calls for the same tuple (e.g. different
+	 * callers wanting progressively more columns), each call would
+	 * otherwise redo this loop. So fetch everything in proj_atts in one
+	 * pass instead, and record that the full descriptor width is now valid
+	 * so any later getsomeattrs call on this tuple hits the
+	 * already-fully-fetched fast path.
 	 */
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
@@ -613,7 +554,7 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	 * tts_virtual_aocs_clear() above, not copied from srcslot: every reader
 	 * of tts_is_valid[] either lives behind slot_is_attr_valid()'s
 	 * "tts_nvalid > attnum" fast path (which tts_nvalid below already
-	 * satisfies for the whole copied range) or behind gettargetattr()/
+	 * satisfies for the whole copied range) or behind fetchattr()/
 	 * getsomeattrs()'s "current_scan == NULL" guard (which is true for
 	 * dstslot, since tts_virtual_aocs_clear() just nulled it) -- so nothing
 	 * can ever observe tts_is_valid on a slot that just went through
@@ -1428,7 +1369,8 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsVirtualAOCS = {
@@ -1450,8 +1392,9 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.copy_heap_tuple = tts_virtual_aocs_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
 
-	.gettargetattr = tts_virtual_aocs_gettargetattr,
-	.is_attr_valid = tts_virtual_aocs_is_attr_valid
+	.gettargetattr = NULL,
+	.is_attr_valid = tts_virtual_aocs_is_attr_valid,
+	.fetchattr = tts_virtual_aocs_fetchattr
 };
 
 const TupleTableSlotOps TTSOpsHeapTuple = {
@@ -1471,7 +1414,8 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsMinimalTuple = {
@@ -1491,7 +1435,8 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsBufferHeapTuple = {
@@ -1511,7 +1456,8 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 
@@ -2348,7 +2294,10 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
  * attributes, for slot types that support it (see TupleTableSlotOps).
  *
  * Returns false, doing nothing, if the slot type has no gettargetattr
- * callback, so the caller can fall back to slot_getsomeattrs().
+ * callback, so the caller can fall back to slot_getsomeattrs(). No slot type
+ * currently implements the callback (see the comment on
+ * TupleTableSlotOps.gettargetattr) -- only the LLVM JIT expression compiler
+ * still calls this, always getting false back.
  */
 bool
 slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)

@@ -1639,7 +1639,7 @@ ReadNext:
 		 * hold here since the anchor column can be any attribute. Keep
 		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
 		 * a stale count from a previous tuple and instead always go through
-		 * the AOCS-specific is_attr_valid()/gettargetattr() lazy-fetch path,
+		 * the AOCS-specific is_attr_valid()/fetchattr() lazy-fetch path,
 		 * which consults tts_is_valid per attribute.
 		 */
 		slot->tts_nvalid = 0;
