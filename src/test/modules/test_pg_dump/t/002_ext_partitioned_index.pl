@@ -1,10 +1,7 @@
-# Test dumping a partition of an extension-owned partitioned table that
-# has an extension-owned partitioned index.
-#
-# The child index is created automatically when the partition is attached,
-# so a regular dump must not contain a separate CREATE INDEX for it, or the
-# restore would end up with a duplicate index on the partition.  A binary
-# upgrade dump still has to create and attach the child index explicitly.
+# Test dumping partitions (direct, sub-partitions, primary key) of an
+# extension-owned partitioned table with an extension-owned index: the child
+# index must not be dumped separately, except in a binary upgrade dump.  Also
+# check that the comment of a renamed child index is lost on restore.
 
 use strict;
 use warnings;
@@ -105,7 +102,7 @@ is( $node->safe_psql(
 			 'regress_pg_dump_schema.parttab_2',
 			 'regress_pg_dump_schema.parttab_2_1',
 			 'regress_pg_dump_schema.parttab_pk_1')
-		ORDER BY 1;
+		ORDER BY indrelid::regclass::text;
 	}),
 	join("\n",
 		'regress_pg_dump_schema.parttab_1|regress_pg_dump_schema.parttab_1_col1_col2_idx|regress_pg_dump_schema.parttab_col1_col2_idx',
@@ -143,6 +140,77 @@ like($dump, $attach_grandchild_index,
 	'binary upgrade dump attaches the grandchild index of the extension index');
 like($dump, $add_child_pkey,
 	'binary upgrade dump adds the child primary key of the extension table');
+
+#########################################
+# Renamed child index with a comment: the comment is dumped under the old
+# name, which ATTACH PARTITION does not recreate.
+
+$node->safe_psql('postgres', 'CREATE DATABASE renamed');
+$node->safe_psql(
+	'renamed', q{
+	CREATE EXTENSION test_pg_dump;
+	CREATE TABLE regress_pg_dump_schema.parttab_1
+		PARTITION OF regress_pg_dump_schema.parttab
+		FOR VALUES FROM (1) TO (100);
+	ALTER INDEX regress_pg_dump_schema.parttab_1_col1_col2_idx
+		RENAME TO parttab_1_renamed_idx;
+	COMMENT ON INDEX regress_pg_dump_schema.parttab_1_renamed_idx IS 'renamed';
+	CREATE TABLE regress_pg_dump_schema.parttab_pk_1
+		PARTITION OF regress_pg_dump_schema.parttab_pk
+		FOR VALUES FROM (1) TO (100);
+	ALTER INDEX regress_pg_dump_schema.parttab_pk_1_pkey
+		RENAME TO parttab_pk_1_renamed_pkey;
+	COMMENT ON CONSTRAINT parttab_pk_1_renamed_pkey
+		ON regress_pg_dump_schema.parttab_pk_1 IS 'renamed pkey';
+});
+
+$node->command_ok(
+	[ 'pg_dump', '--no-sync', "--file=$tempdir/renamed.sql", 'renamed' ],
+	'pg_dump of renamed child indexes runs');
+
+$dump = slurp_file("$tempdir/renamed.sql");
+
+like(
+	$dump,
+	qr/^\QCOMMENT ON INDEX regress_pg_dump_schema.parttab_1_renamed_idx IS 'renamed';\E$/m,
+	'dump comments on the child index under its old name');
+like(
+	$dump,
+	qr/^\QCOMMENT ON CONSTRAINT parttab_pk_1_renamed_pkey ON regress_pg_dump_schema.parttab_pk_1 IS 'renamed pkey';\E$/m,
+	'dump comments on the child constraint under its old name');
+unlike($dump, qr/CREATE UNIQUE INDEX parttab_1_renamed_idx/,
+	'dump does not create the renamed child index');
+
+$node->safe_psql('postgres', 'CREATE DATABASE renamed_restored_stop');
+my ($ret, $stdout, $stderr) =
+  $node->psql('renamed_restored_stop', $dump, on_error_stop => 1);
+isnt($ret, 0, 'restore with ON_ERROR_STOP fails on the renamed child index');
+
+$node->safe_psql('postgres', 'CREATE DATABASE renamed_restored');
+($ret, $stdout, $stderr) =
+  $node->psql('renamed_restored', $dump, on_error_stop => 0);
+like(
+	$stderr,
+	qr/relation "regress_pg_dump_schema.parttab_1_renamed_idx" does not exist/,
+	'restore reports the missing renamed child index');
+like(
+	$stderr,
+	qr/constraint "parttab_pk_1_renamed_pkey" for table "parttab_pk_1" does not exist/,
+	'restore reports the missing renamed child constraint');
+
+is( $node->safe_psql(
+		'renamed_restored', q{
+		SELECT indexrelid::regclass, obj_description(indexrelid, 'pg_class')
+		FROM pg_index
+		WHERE indrelid::regclass::text IN
+			('regress_pg_dump_schema.parttab_1',
+			 'regress_pg_dump_schema.parttab_pk_1')
+		ORDER BY indrelid::regclass::text;
+	}),
+	join("\n",
+		'regress_pg_dump_schema.parttab_1_col1_col2_idx|',
+		'regress_pg_dump_schema.parttab_pk_1_pkey|'),
+	'restored child indexes get generated names and lose their comments');
 
 $node->stop('fast');
 
