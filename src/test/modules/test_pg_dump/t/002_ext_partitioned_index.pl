@@ -144,6 +144,10 @@ like($dump, $add_child_pkey,
 #########################################
 # Renamed child index with a comment: the comment is dumped under the old
 # name, which ATTACH PARTITION does not recreate.
+#
+# TODO: this is a known limitation, not the intended behavior.  If it is
+# fixed, the child indexes should keep their names and comments, and the
+# checks below should be inverted.
 
 $node->safe_psql('postgres', 'CREATE DATABASE renamed');
 $node->safe_psql(
