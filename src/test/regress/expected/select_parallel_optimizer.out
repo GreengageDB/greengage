@@ -1188,6 +1188,31 @@ ORDER BY 1, 2, 3;
 ------------------------------+---------------------------+-------------+--------------
 (0 rows)
 
+EXPLAIN (VERBOSE, COSTS OFF)
+SELECT generate_series(1, two), array(select generate_series(1, two))
+  FROM tenk1 ORDER BY tenthous;
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Gather Motion 3:1  (slice1; segments: 3)
+   Output: (generate_series(1, tenk1.two)), ((SubPlan 1)), tenk1.tenthous
+   Merge Key: tenk1.tenthous
+   ->  ProjectSet
+         Output: generate_series(1, tenk1.two), (SubPlan 1), tenk1.tenthous
+         ->  Result
+               Output: tenk1.two, tenk1.tenthous
+               ->  Sort
+                     Output: tenk1.tenthous, tenk1.two
+                     Sort Key: tenk1.tenthous
+                     ->  Seq Scan on public.tenk1
+                           Output: tenk1.tenthous, tenk1.two
+         SubPlan 1
+           ->  ProjectSet
+                 Output: generate_series(1, tenk1.two)
+                 ->  Result
+ Optimizer: Postgres query optimizer
+ Settings: min_parallel_table_scan_size = '0', parallel_setup_cost = '0', parallel_tuple_cost = '0'
+(18 rows)
+
 -- test passing expanded-value representations to workers
 CREATE FUNCTION make_some_array(int,int) returns int[] as
 $$declare x int[];

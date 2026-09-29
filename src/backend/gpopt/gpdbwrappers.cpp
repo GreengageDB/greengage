@@ -2549,7 +2549,7 @@ gpdb::GetRelChildIndexes(Oid reloid)
 		{
 			return NIL;
 		}
-		partoids = find_inheritance_children(reloid, false, NoLock);
+		partoids = find_inheritance_children(reloid, NoLock);
 	}
 	GP_WRAP_END;
 
@@ -2580,7 +2580,7 @@ gpdb::GPDBRelationGetPartitionDesc(Relation rel)
 {
 	GP_WRAP_START;
 	{
-		return RelationGetPartitionDesc(rel, false);
+		return RelationGetPartitionDesc(rel, true);
 	}
 	GP_WRAP_END;
 }

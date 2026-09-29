@@ -16,13 +16,13 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <sys/time.h>
 #include <time.h>
 
 #ifdef WIN32
 #include "win32.h"
 #else
 #include <unistd.h>
-#include <sys/time.h>
 #endif
 
 #include "libpq-fe.h"
@@ -61,7 +61,7 @@ PQuntrace(PGconn *conn)
 
 /* Set flags for current tracing session */
 void
-PQtraceSetFlags(PGconn *conn, int flags)
+PQsetTraceFlags(PGconn *conn, int flags)
 {
 	if (conn == NULL)
 		return;
@@ -304,7 +304,7 @@ pqTraceOutputD(FILE *f, bool toServer, const char *message, int *cursor)
 /* NoticeResponse / ErrorResponse */
 static void
 pqTraceOutputNR(FILE *f, const char *type, const char *message, int *cursor,
-				int length, bool regress)
+				bool regress)
 {
 	fprintf(f, "%s\t", type);
 	for (;;)
@@ -324,7 +324,7 @@ pqTraceOutputNR(FILE *f, const char *type, const char *message, int *cursor,
 
 /* Execute(F) or ErrorResponse(B) */
 static void
-pqTraceOutputE(FILE *f, bool toServer, const char *message, int *cursor, int length, bool regress)
+pqTraceOutputE(FILE *f, bool toServer, const char *message, int *cursor, bool regress)
 {
 	if (toServer)
 	{
@@ -333,7 +333,7 @@ pqTraceOutputE(FILE *f, bool toServer, const char *message, int *cursor, int len
 		pqTraceOutputInt32(f, message, cursor, false);
 	}
 	else
-		pqTraceOutputNR(f, "ErrorResponse", message, cursor, length, regress);
+		pqTraceOutputNR(f, "ErrorResponse", message, cursor, regress);
 }
 
 /* CopyFail */
@@ -549,7 +549,16 @@ pqTraceOutputMessage(PGconn *conn, const char *message, bool toServer)
 	length = (int) pg_ntoh32(length);
 	logCursor += 4;
 
-	fprintf(conn->Pfdebug, "%s\t%d\t", prefix, length);
+	/*
+	 * In regress mode, suppress the length of ErrorResponse and
+	 * NoticeResponse.  The F (file name), L (line number) and R (routine
+	 * name) fields can change as server code is modified, and if their
+	 * lengths differ from the originals, that would break tests.
+	 */
+	if (regress && !toServer && (id == 'E' || id == 'N'))
+		fprintf(conn->Pfdebug, "%s\tNN\t", prefix);
+	else
+		fprintf(conn->Pfdebug, "%s\t%d\t", prefix, length);
 
 	switch (id)
 	{
@@ -586,7 +595,7 @@ pqTraceOutputMessage(PGconn *conn, const char *message, bool toServer)
 			break;
 		case 'E':				/* Execute(F) or Error Response(B) */
 			pqTraceOutputE(conn->Pfdebug, toServer, message, &logCursor,
-						   length, regress);
+						   regress);
 			break;
 		case 'f':				/* Copy Fail */
 			pqTraceOutputf(conn->Pfdebug, message, &logCursor);
@@ -616,7 +625,7 @@ pqTraceOutputMessage(PGconn *conn, const char *message, bool toServer)
 			break;
 		case 'N':
 			pqTraceOutputNR(conn->Pfdebug, "NoticeResponse", message,
-							&logCursor, length, regress);
+							&logCursor, regress);
 			break;
 		case 'P':				/* Parse */
 			pqTraceOutputP(conn->Pfdebug, message, &logCursor, regress);
@@ -635,7 +644,7 @@ pqTraceOutputMessage(PGconn *conn, const char *message, bool toServer)
 			if (!toServer)
 				pqTraceOutputS(conn->Pfdebug, message, &logCursor);
 			else
-				fprintf(conn->Pfdebug, "Sync");	/* no message content */
+				fprintf(conn->Pfdebug, "Sync"); /* no message content */
 			break;
 		case 't':				/* Parameter Description */
 			pqTraceOutputt(conn->Pfdebug, message, &logCursor, regress);

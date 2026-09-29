@@ -9,6 +9,8 @@ top_builddir = ../../../..
 include $(top_builddir)/src/Makefile.global
 override CPPFLAGS := -I$(libpq_srcdir) $(CPPFLAGS)
 
+override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
+
 # keep this list arranged alphabetically or it gets to be a mess
 OBJS = \
 	acl.o \

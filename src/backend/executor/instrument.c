@@ -49,7 +49,7 @@ static InstrumentationResownerSet *slotsOccupied = NULL;
 
 /* Allocate new instrumentation structure(s) */
 Instrumentation *
-InstrAlloc(int n, int instrument_options)
+InstrAlloc(int n, int instrument_options, bool async_mode)
 {
 	Instrumentation *instr;
 
@@ -69,6 +69,7 @@ InstrAlloc(int n, int instrument_options)
 			instr[i].need_walusage = need_wal;
 			instr[i].need_timer = need_timer;
 			instr[i].need_cdb = need_cdb;
+			instr[i].async_mode = async_mode;
 		}
 	}
 
@@ -105,6 +106,7 @@ InstrStartNode(Instrumentation *instr)
 void
 InstrStopNode(Instrumentation *instr, uint64 nTuples)
 {
+	double		save_tuplecount = instr->tuplecount;
 	instr_time	endtime;
 	instr_time	starttime;
 
@@ -142,6 +144,23 @@ InstrStopNode(Instrumentation *instr, uint64 nTuples)
 		/* CDB: save this start time as the first start */
 		instr->firststart = starttime;
 	}
+	else
+	{
+		/*
+		 * In async mode, if the plan node hadn't emitted any tuples before,
+		 * this might be the first tuple
+		 */
+		if (instr->async_mode && save_tuplecount < 1.0)
+			instr->firsttuple = INSTR_TIME_GET_DOUBLE(instr->counter);
+	}
+}
+
+/* Update tuple count */
+void
+InstrUpdateTupleCount(Instrumentation *instr, double nTuples)
+{
+	/* count the returned tuples */
+	instr->tuplecount += nTuples;
 }
 
 /* Finish a run cycle for a plan node */
@@ -367,7 +386,7 @@ InstrShmemInit(void)
  * Otherwise use local memory.
  */
 Instrumentation *
-GpInstrAlloc(const Plan *node, int instrument_options)
+GpInstrAlloc(const Plan *node, int instrument_options, bool async_capable)
 {
 	Instrumentation *instr = NULL;
 
@@ -375,7 +394,7 @@ GpInstrAlloc(const Plan *node, int instrument_options)
 		instr = pickInstrFromShmem(node, instrument_options);
 
 	if (instr == NULL)
-		instr = InstrAlloc(1, instrument_options);
+		instr = InstrAlloc(1, instrument_options, async_capable);
 
 	return instr;
 }

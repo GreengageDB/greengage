@@ -1,9 +1,13 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
 use Cwd;
 use Config;
 use File::Basename qw(basename dirname);
 use File::Path qw(rmtree);
+use Fcntl qw(:seek);
 use PostgresNode;
 use TestLib;
 use Test::More tests => 110 + 15;
@@ -566,12 +570,12 @@ my $file_corrupt2 = $node->safe_psql('postgres',
 
 # set page header and block sizes
 my $pageheader_size = 24;
-my $block_size      = $node->safe_psql('postgres', 'SHOW block_size;');
+my $block_size = $node->safe_psql('postgres', 'SHOW block_size;');
 
 # induce corruption
 system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
 open $file, '+<', "$pgdata/$file_corrupt1";
-seek($file, $pageheader_size, 0);
+seek($file, $pageheader_size, SEEK_SET);
 syswrite($file, "\0\0\0\0\0\0\0\0\0");
 close $file;
 system_or_bail 'pg_ctl', '-o', '-c gp_role=utility --gp_dbid=1 --gp_contentid=-1', '-D', $pgdata, 'start';
@@ -590,7 +594,7 @@ open $file, '+<', "$pgdata/$file_corrupt1";
 for my $i (1 .. 5)
 {
 	my $offset = $pageheader_size + $i * $block_size;
-	seek($file, $offset, 0);
+	seek($file, $offset, SEEK_SET);
 	syswrite($file, "\0\0\0\0\0\0\0\0\0");
 }
 close $file;
@@ -607,7 +611,7 @@ rmtree("$tempdir/backup_corrupt2");
 # induce corruption in a second file
 system_or_bail 'pg_ctl', '-D', $pgdata, 'stop';
 open $file, '+<', "$pgdata/$file_corrupt2";
-seek($file, $pageheader_size, 0);
+seek($file, $pageheader_size, SEEK_SET);
 syswrite($file, "\0\0\0\0\0\0\0\0\0");
 close $file;
 system_or_bail 'pg_ctl', '-o', '-c gp_role=utility --gp_dbid=1 --gp_contentid=-1', '-D', $pgdata, 'start';

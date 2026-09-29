@@ -2762,6 +2762,12 @@ SELECT * from part_rp;
 DROP TABLE part_rp;
 
 -- concurrent detach
+-- GGDB: as of the dispatch-mode rejection below, every DETACH ...
+-- CONCURRENTLY in this block errors out before reaching any
+-- partition-specific logic, so this only exercises that blanket
+-- rejection now, not the upstream-specific behaviors (txn-block,
+-- default-partition, redundant-constraint-avoidance) the comments
+-- below originally described.
 CREATE TABLE range_parted2 (
 	a int
 ) PARTITION BY RANGE(a);
@@ -2779,6 +2785,12 @@ DROP TABLE part_rpd;
 -- GGDB: rejected in dispatch mode
 ALTER TABLE range_parted2 DETACH PARTITION part_rp CONCURRENTLY;
 \d+ range_parted2
+-- GGDB: rejected above, so part_rp stays attached (no constraint created)
+\d part_rp
+CREATE TABLE part_rp100 PARTITION OF range_parted2 (CHECK (a>=123 AND a<133 AND a IS NOT NULL)) FOR VALUES FROM (100) to (200);
+ALTER TABLE range_parted2 DETACH PARTITION part_rp100 CONCURRENTLY;
+-- GGDB: rejected above, so part_rp100 stays attached
+\d part_rp100
 DROP TABLE range_parted2;
 
 -- Check ALTER TABLE commands for partitioned tables and partitions

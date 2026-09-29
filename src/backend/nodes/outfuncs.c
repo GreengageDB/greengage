@@ -584,6 +584,7 @@ _outModifyTable(StringInfo str, const ModifyTable *node)
 	WRITE_ENUM_FIELD(onConflictAction, OnConflictAction);
 	WRITE_NODE_FIELD(arbiterIndexes);
 	WRITE_NODE_FIELD(onConflictSet);
+	WRITE_NODE_FIELD(onConflictCols);
 	WRITE_NODE_FIELD(onConflictWhere);
 	WRITE_UINT_FIELD(exclRelRTI);
 	WRITE_NODE_FIELD(exclRelTlist);
@@ -956,6 +957,7 @@ _outForeignScan(StringInfo str, const ForeignScan *node)
 	_outScanInfo(str, (const Scan *) node);
 
 	WRITE_ENUM_FIELD(operation, CmdType);
+	WRITE_UINT_FIELD(resultRelation);
 	WRITE_OID_FIELD(fs_server);
 	WRITE_NODE_FIELD(fdw_exprs);
 	WRITE_NODE_FIELD(fdw_private);
@@ -963,7 +965,6 @@ _outForeignScan(StringInfo str, const ForeignScan *node)
 	WRITE_NODE_FIELD(fdw_recheck_quals);
 	WRITE_BITMAPSET_FIELD(fs_relids);
 	WRITE_BOOL_FIELD(fsSystemCol);
-	WRITE_INT_FIELD(resultRelation);
 }
 
 #ifndef COMPILING_BINARY_FUNCS
@@ -2343,6 +2344,16 @@ _outTidPath(StringInfo str, const TidPath *node)
 	_outPathInfo(str, (const Path *) node);
 
 	WRITE_NODE_FIELD(tidquals);
+}
+
+static void
+_outTidRangePath(StringInfo str, const TidRangePath *node)
+{
+	WRITE_NODE_TYPE("TIDRANGEPATH");
+
+	_outPathInfo(str, (const Path *) node);
+
+	WRITE_NODE_FIELD(tidrangequals);
 }
 
 static void
@@ -6075,6 +6086,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_TidPath:
 				_outTidPath(str, obj);
+				break;
+			case T_TidRangePath:
+				_outTidRangePath(str, obj);
 				break;
 			case T_SubqueryScanPath:
 				_outSubqueryScanPath(str, obj);

@@ -234,6 +234,7 @@ static int	PerformRadiusTransaction(const char *server, const char *secret, cons
 
 /*
  * Maximum accepted size of GSS and SSPI authentication tokens.
+ * We also use this as a limit on ordinary password packet lengths.
  *
  * Kerberos tickets are usually quite small, but the TGTs issued by Windows
  * domain controllers include an authorization field known as the Privilege
@@ -1041,21 +1042,20 @@ recv_password_packet(Port *port)
 	if (mtype != 'p')
 	{
 		/*
-		 * If the client just disconnects without offering a password,
-		 * don't make a log entry.  This is legal per protocol spec and in
-		 * fact commonly done by psql, so complaining just clutters the
-		 * log.
+		 * If the client just disconnects without offering a password, don't
+		 * make a log entry.  This is legal per protocol spec and in fact
+		 * commonly done by psql, so complaining just clutters the log.
 		 */
 		if (mtype != EOF)
 			ereport(ERROR,
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
 					 errmsg("expected password response, got message type %d",
 							mtype)));
-		return NULL;		/* EOF or bad message type */
+		return NULL;			/* EOF or bad message type */
 	}
 
 	initStringInfo(&buf);
-	if (pq_getmessage(&buf, 0)) /* receive password */
+	if (pq_getmessage(&buf, PG_MAX_AUTH_TOKEN_LENGTH))	/* receive password */
 	{
 		/* EOF - pq_getmessage already logged a suitable message */
 		pfree(buf.data);
@@ -1585,6 +1585,7 @@ pg_GSS_checkauth(Port *port)
 				min_stat,
 				lmin_s;
 	gss_buffer_desc gbuf;
+	char	   *princ;
 
 	/*
 	 * Get the name of the user that authenticated, and compare it to the pg
@@ -1599,6 +1600,15 @@ pg_GSS_checkauth(Port *port)
 	}
 
 	/*
+	 * gbuf.value might not be null-terminated, so turn it into a regular
+	 * null-terminated string.
+	 */
+	princ = palloc(gbuf.length + 1);
+	memcpy(princ, gbuf.value, gbuf.length);
+	princ[gbuf.length] = '\0';
+	gss_release_buffer(&lmin_s, &gbuf);
+
+	/*
 	 * Copy the original name of the authenticated principal into our backend
 	 * memory for display later.
 	 *
@@ -1606,15 +1616,15 @@ pg_GSS_checkauth(Port *port)
 	 * waiting for the usermap check below, because authentication has already
 	 * succeeded and we want the log file to reflect that.
 	 */
-	port->gss->princ = MemoryContextStrdup(TopMemoryContext, gbuf.value);
-	set_authn_id(port, gbuf.value);
+	port->gss->princ = MemoryContextStrdup(TopMemoryContext, princ);
+	set_authn_id(port, princ);
 
 	/*
 	 * Split the username at the realm separator
 	 */
-	if (strchr(gbuf.value, '@'))
+	if (strchr(princ, '@'))
 	{
-		char	   *cp = strchr(gbuf.value, '@');
+		char	   *cp = strchr(princ, '@');
 
 		/*
 		 * If we are not going to include the realm in the username that is
@@ -1641,7 +1651,7 @@ pg_GSS_checkauth(Port *port)
 				elog(DEBUG2,
 					 "GSSAPI realm (%s) and configured realm (%s) don't match",
 					 cp, port->hba->krb_realm);
-				gss_release_buffer(&lmin_s, &gbuf);
+				pfree(princ);
 				return STATUS_ERROR;
 			}
 		}
@@ -1650,15 +1660,14 @@ pg_GSS_checkauth(Port *port)
 	{
 		elog(DEBUG2,
 			 "GSSAPI did not return realm but realm matching was requested");
-
-		gss_release_buffer(&lmin_s, &gbuf);
+		pfree(princ);
 		return STATUS_ERROR;
 	}
 
-	ret = check_usermap(port->hba->usermap, port->user_name, gbuf.value,
+	ret = check_usermap(port->hba->usermap, port->user_name, princ,
 						pg_krb_caseins_users);
 
-	gss_release_buffer(&lmin_s, &gbuf);
+	pfree(princ);
 
 	return ret;
 }

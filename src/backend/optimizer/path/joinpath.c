@@ -550,6 +550,38 @@ get_resultcache_path(PlannerInfo *root, RelOptInfo *innerrel,
 		return NULL;
 
 	/*
+	 * Result Cache normally marks cache entries as complete when it runs out
+	 * of tuples to read from its subplan.  However, with unique joins, Nested
+	 * Loop will skip to the next outer tuple after finding the first matching
+	 * inner tuple.  This means that we may not read the inner side of the
+	 * join to completion which leaves no opportunity to mark the cache entry
+	 * as complete.  To work around that, when the join is unique we
+	 * automatically mark cache entries as complete after fetching the first
+	 * tuple.  This works when the entire join condition is parameterized.
+	 * Otherwise, when the parameterization is only a subset of the join
+	 * condition, we can't be sure which part of it causes the join to be
+	 * unique.  This means there are no guarantees that only 1 tuple will be
+	 * read.  We cannot mark the cache entry as complete after reading the
+	 * first tuple without that guarantee.  This means the scope of Result
+	 * Cache's usefulness is limited to only outer rows that have no join
+	 * partner as this is the only case where Nested Loop would exhaust the
+	 * inner scan of a unique join.  Since the scope is limited to that, we
+	 * just don't bother making a result cache path in this case.
+	 *
+	 * Lateral vars needn't be considered here as they're not considered when
+	 * determining if the join is unique.
+	 *
+	 * XXX this could be enabled if the remaining join quals were made part of
+	 * the inner scan's filter instead of the join filter.  Maybe it's worth
+	 * considering doing that?
+	 */
+	if (extra->inner_unique &&
+		(inner_path->param_info == NULL ||
+		 list_length(inner_path->param_info->ppi_clauses) <
+		 list_length(extra->restrictlist)))
+		return NULL;
+
+	/*
 	 * We can't use a result cache if there are volatile functions in the
 	 * inner rel's target list or restrict list.  A cache hit could reduce the
 	 * number of calls to these functions.
@@ -720,8 +752,8 @@ try_partial_nestloop_path(PlannerInfo *root,
 	/*
 	 * If the inner path is parameterized, the parameterization must be fully
 	 * satisfied by the proposed outer path.  Parameterized partial paths are
-	 * not supported.  The caller should already have verified that no
-	 * extra_lateral_rels are required here.
+	 * not supported.  The caller should already have verified that no lateral
+	 * rels are required here.
 	 */
 	Assert(bms_is_empty(joinrel->lateral_relids));
 	if (inner_path->param_info != NULL)
@@ -1047,8 +1079,8 @@ try_partial_hashjoin_path(PlannerInfo *root,
 	/*
 	 * If the inner path is parameterized, the parameterization must be fully
 	 * satisfied by the proposed outer path.  Parameterized partial paths are
-	 * not supported.  The caller should already have verified that no
-	 * extra_lateral_rels are required here.
+	 * not supported.  The caller should already have verified that no lateral
+	 * rels are required here.
 	 */
 	Assert(bms_is_empty(joinrel->lateral_relids));
 	if (inner_path->param_info != NULL)
@@ -1802,7 +1834,7 @@ match_unsorted_outer(PlannerInfo *root,
 	 * partial path and the joinrel is parallel-safe.  However, we can't
 	 * handle JOIN_UNIQUE_OUTER, because the outer path will be partial, and
 	 * therefore we won't be able to properly guarantee uniqueness.  Nor can
-	 * we handle extra_lateral_rels, since partial paths must not be
+	 * we handle joins needing lateral rels, since partial paths must not be
 	 * parameterized. Similarly, we can't handle JOIN_FULL and JOIN_RIGHT,
 	 * because they can produce false null extended rows.
 	 */

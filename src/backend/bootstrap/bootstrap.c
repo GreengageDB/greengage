@@ -162,7 +162,7 @@ struct typmap
 	FormData_pg_type am_typ;
 };
 
-static List *Typ = NIL; /* List of struct typmap* */
+static List *Typ = NIL;			/* List of struct typmap* */
 static struct typmap *Ap = NULL;
 
 static Datum values[MAXATTR];	/* current row's attribute values */
@@ -707,8 +707,9 @@ DefineAttr(char *name, char *type, int attnum, int nullness)
 		attrtypes[attnum]->atttypid = Ap->am_oid;
 		attrtypes[attnum]->attlen = Ap->am_typ.typlen;
 		attrtypes[attnum]->attbyval = Ap->am_typ.typbyval;
-		attrtypes[attnum]->attstorage = Ap->am_typ.typstorage;
 		attrtypes[attnum]->attalign = Ap->am_typ.typalign;
+		attrtypes[attnum]->attstorage = Ap->am_typ.typstorage;
+		attrtypes[attnum]->attcompression = InvalidCompressionMethod;
 		attrtypes[attnum]->attcollation = Ap->am_typ.typcollation;
 		/* if an array type, assume 1-dimensional attribute */
 		if (Ap->am_typ.typelem != InvalidOid && Ap->am_typ.typlen < 0)
@@ -721,8 +722,9 @@ DefineAttr(char *name, char *type, int attnum, int nullness)
 		attrtypes[attnum]->atttypid = TypInfo[typeoid].oid;
 		attrtypes[attnum]->attlen = TypInfo[typeoid].len;
 		attrtypes[attnum]->attbyval = TypInfo[typeoid].byval;
-		attrtypes[attnum]->attstorage = TypInfo[typeoid].storage;
 		attrtypes[attnum]->attalign = TypInfo[typeoid].align;
+		attrtypes[attnum]->attstorage = TypInfo[typeoid].storage;
+		attrtypes[attnum]->attcompression = InvalidCompressionMethod;
 		attrtypes[attnum]->attcollation = TypInfo[typeoid].collation;
 		/* if an array type, assume 1-dimensional attribute */
 		if (TypInfo[typeoid].elem != InvalidOid &&
@@ -745,10 +747,6 @@ DefineAttr(char *name, char *type, int attnum, int nullness)
 	attrtypes[attnum]->attcacheoff = -1;
 	attrtypes[attnum]->atttypmod = -1;
 	attrtypes[attnum]->attislocal = true;
-	if (IsStorageCompressible(attrtypes[attnum]->attstorage))
-		attrtypes[attnum]->attcompression = GetDefaultToastCompression();
-	else
-		attrtypes[attnum]->attcompression = InvalidCompressionMethod;
 
 	if (nullness == BOOTCOL_NULL_FORCE_NOT_NULL)
 	{
@@ -934,11 +932,12 @@ gettype(char *type)
 {
 	if (Typ != NIL)
 	{
-		ListCell *lc;
+		ListCell   *lc;
 
-		foreach (lc, Typ)
+		foreach(lc, Typ)
 		{
 			struct typmap *app = lfirst(lc);
+
 			if (strncmp(NameStr(app->am_typ.typname), type, NAMEDATALEN) == 0)
 			{
 				Ap = app;
@@ -956,12 +955,13 @@ gettype(char *type)
 		populate_typ_list();
 
 		/*
-		 * Calling gettype would result in infinite recursion for types missing
-		 * in pg_type, so just repeat the lookup.
+		 * Calling gettype would result in infinite recursion for types
+		 * missing in pg_type, so just repeat the lookup.
 		 */
-		foreach (lc, Typ)
+		foreach(lc, Typ)
 		{
 			struct typmap *app = lfirst(lc);
+
 			if (strncmp(NameStr(app->am_typ.typname), type, NAMEDATALEN) == 0)
 			{
 				Ap = app;
@@ -1012,9 +1012,9 @@ boot_get_type_io_data(Oid typid,
 	{
 		/* We have the boot-time contents of pg_type, so use it */
 		struct typmap *ap = NULL;
-		ListCell *lc;
+		ListCell   *lc;
 
-		foreach (lc, Typ)
+		foreach(lc, Typ)
 		{
 			ap = lfirst(lc);
 			if (ap->am_oid == typid)

@@ -453,9 +453,6 @@ extractPageInfo(XLogReaderState *record)
 		}
 
 		/*
-		 * TODO_REVERT_C2DC19342E0: this block and the one below are
-		 * GGDB-specific, keep ours when the revert lands.
-		 *
 		 * GPDB_95_MERGE_FIXME: should we just return here? there seems be no buffer
 		 * registered when xlog is inserted.
 		 */

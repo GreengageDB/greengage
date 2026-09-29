@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 package Install;
 
 #
@@ -381,8 +384,7 @@ sub GenerateTimezoneFiles
 
 	print "Generating timezone files...";
 
-	my @args = (
-		"$conf/zic/zic", '-d', "$target/share/timezone");
+	my @args = ("$conf/zic/zic", '-d', "$target/share/timezone");
 	foreach (@tzfiles)
 	{
 		my $tzfile = $_;

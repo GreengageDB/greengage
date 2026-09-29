@@ -2665,6 +2665,7 @@ _readModifyTable(void)
 	READ_ENUM_FIELD(onConflictAction, OnConflictAction);
 	READ_NODE_FIELD(arbiterIndexes);
 	READ_NODE_FIELD(onConflictSet);
+	READ_NODE_FIELD(onConflictCols);
 	READ_NODE_FIELD(onConflictWhere);
 	READ_UINT_FIELD(exclRelRTI);
 	READ_NODE_FIELD(exclRelTlist);
@@ -3127,6 +3128,7 @@ _readForeignScan(void)
 	ReadCommonScan(&local_node->scan);
 
 	READ_ENUM_FIELD(operation, CmdType);
+	READ_UINT_FIELD(resultRelation);
 	READ_OID_FIELD(fs_server);
 	READ_NODE_FIELD(fdw_exprs);
 	READ_NODE_FIELD(fdw_private);
@@ -3134,7 +3136,6 @@ _readForeignScan(void)
 	READ_NODE_FIELD(fdw_recheck_quals);
 	READ_BITMAPSET_FIELD(fs_relids);
 	READ_BOOL_FIELD(fsSystemCol);
-	READ_INT_FIELD(resultRelation);
 
 	READ_DONE();
 }

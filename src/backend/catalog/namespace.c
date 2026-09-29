@@ -221,6 +221,7 @@ static void RemoveSchemaById(Oid schemaOid);
 static void RemoveTempRelationsCallback(int code, Datum arg);
 static void NamespaceCallback(Datum arg, int cacheid, uint32 hashvalue);
 static bool MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
+						   bool include_out_arguments, int pronargs,
 						   int **argnumbers);
 static bool TempNamespaceValid(bool error_if_removed);
 
@@ -927,6 +928,12 @@ TypeIsVisible(Oid typid)
  * of additional args (which can be retrieved from the function's
  * proargdefaults entry).
  *
+ * If include_out_arguments is true, then OUT-mode arguments are considered to
+ * be included in the argument list.  Their types are included in the returned
+ * arrays, and argnumbers are indexes in proallargtypes not proargtypes.
+ * We also set nominalnargs to be the length of proallargtypes not proargtypes.
+ * Otherwise OUT-mode arguments are ignored.
+ *
  * It is not possible for nvargs and ndargs to both be nonzero in the same
  * list entry, since default insertion allows matches to functions with more
  * than nargs arguments while the variadic transformation requires the same
@@ -937,7 +944,8 @@ TypeIsVisible(Oid typid)
  * first any positional arguments, then the named arguments, then defaulted
  * arguments (if needed and allowed by expand_defaults).  The argnumbers[]
  * array can be used to map this back to the catalog information.
- * argnumbers[k] is set to the proargtypes index of the k'th call argument.
+ * argnumbers[k] is set to the proargtypes or proallargtypes index of the
+ * k'th call argument.
  *
  * We search a single namespace if the function name is qualified, else
  * all namespaces in the search path.  In the multiple-namespace case,
@@ -961,13 +969,13 @@ TypeIsVisible(Oid typid)
  * such an entry it should react as though the call were ambiguous.
  *
  * If missing_ok is true, an empty list (NULL) is returned if the name was
- * schema- qualified with a schema that does not exist.  Likewise if no
+ * schema-qualified with a schema that does not exist.  Likewise if no
  * candidate is found for other reasons.
  */
 FuncCandidateList
 FuncnameGetCandidates(List *names, int nargs, List *argnames,
 					  bool expand_variadic, bool expand_defaults,
-					  bool missing_ok)
+					  bool include_out_arguments, bool missing_ok)
 {
 	FuncCandidateList resultList = NULL;
 	bool		any_special = false;
@@ -1004,6 +1012,7 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
 	{
 		HeapTuple	proctup = &catlist->members[i]->tuple;
 		Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
+		Oid		   *proargtypes = procform->proargtypes.values;
 		int			pronargs = procform->pronargs;
 		int			effective_nargs;
 		int			pathpos = 0;
@@ -1036,6 +1045,35 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
 			}
 			if (nsp == NULL)
 				continue;		/* proc is not in search path */
+		}
+
+		/*
+		 * If we are asked to match to OUT arguments, then use the
+		 * proallargtypes array (which includes those); otherwise use
+		 * proargtypes (which doesn't).  Of course, if proallargtypes is null,
+		 * we always use proargtypes.
+		 */
+		if (include_out_arguments)
+		{
+			Datum		proallargtypes;
+			bool		isNull;
+
+			proallargtypes = SysCacheGetAttr(PROCNAMEARGSNSP, proctup,
+											 Anum_pg_proc_proallargtypes,
+											 &isNull);
+			if (!isNull)
+			{
+				ArrayType  *arr = DatumGetArrayTypeP(proallargtypes);
+
+				pronargs = ARR_DIMS(arr)[0];
+				if (ARR_NDIM(arr) != 1 ||
+					pronargs < 0 ||
+					ARR_HASNULL(arr) ||
+					ARR_ELEMTYPE(arr) != OIDOID)
+					elog(ERROR, "proallargtypes is not a 1-D Oid array or it contains nulls");
+				Assert(pronargs >= procform->pronargs);
+				proargtypes = (Oid *) ARR_DATA_PTR(arr);
+			}
 		}
 
 		if (argnames != NIL)
@@ -1073,6 +1111,7 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
 
 			/* Check for argument name match, generate positional mapping */
 			if (!MatchNamedCall(proctup, nargs, argnames,
+								include_out_arguments, pronargs,
 								&argnumbers))
 				continue;
 
@@ -1131,12 +1170,12 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
 				   effective_nargs * sizeof(Oid));
 		newResult->pathpos = pathpos;
 		newResult->oid = procform->oid;
+		newResult->nominalnargs = pronargs;
 		newResult->nargs = effective_nargs;
 		newResult->argnumbers = argnumbers;
 		if (argnumbers)
 		{
 			/* Re-order the argument types into call's logical order */
-			Oid		   *proargtypes = procform->proargtypes.values;
 			int			i;
 
 			for (i = 0; i < pronargs; i++)
@@ -1145,8 +1184,7 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
 		else
 		{
 			/* Simple positional case, just copy proargtypes as-is */
-			memcpy(newResult->args, procform->proargtypes.values,
-				   pronargs * sizeof(Oid));
+			memcpy(newResult->args, proargtypes, pronargs * sizeof(Oid));
 		}
 		if (variadic)
 		{
@@ -1319,6 +1357,10 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
  * the function, in positions after the last positional argument, and there
  * are defaults for all unsupplied arguments.
  *
+ * If include_out_arguments is true, we are treating OUT arguments as
+ * included in the argument list.  pronargs is the number of arguments
+ * we're considering (the length of either proargtypes or proallargtypes).
+ *
  * The number of positional arguments is nargs - list_length(argnames).
  * Note caller has already done basic checks on argument count.
  *
@@ -1329,10 +1371,10 @@ FuncnameGetCandidates(List *names, int nargs, List *argnames,
  */
 static bool
 MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
+			   bool include_out_arguments, int pronargs,
 			   int **argnumbers)
 {
 	Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
-	int			pronargs = procform->pronargs;
 	int			numposargs = nargs - list_length(argnames);
 	int			pronallargs;
 	Oid		   *p_argtypes;
@@ -1359,6 +1401,8 @@ MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
 									&p_argtypes, &p_argnames, &p_argmodes);
 	Assert(p_argnames != NULL);
 
+	Assert(include_out_arguments ? (pronargs == pronallargs) : (pronargs <= pronallargs));
+
 	/* initialize state for matching */
 	*argnumbers = (int *) palloc(pronargs * sizeof(int));
 	memset(arggiven, false, pronargs * sizeof(bool));
@@ -1381,8 +1425,9 @@ MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
 		found = false;
 		for (i = 0; i < pronallargs; i++)
 		{
-			/* consider only input parameters */
-			if (p_argmodes &&
+			/* consider only input params, except with include_out_arguments */
+			if (!include_out_arguments &&
+				p_argmodes &&
 				(p_argmodes[i] != FUNC_PARAM_IN &&
 				 p_argmodes[i] != FUNC_PARAM_INOUT &&
 				 p_argmodes[i] != FUNC_PARAM_VARIADIC))
@@ -1397,7 +1442,7 @@ MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
 				found = true;
 				break;
 			}
-			/* increase pp only for input parameters */
+			/* increase pp only for considered parameters */
 			pp++;
 		}
 		/* if name isn't in proargnames, fail */
@@ -1474,7 +1519,7 @@ FunctionIsVisible(Oid funcid)
 		visible = false;
 
 		clist = FuncnameGetCandidates(list_make1(makeString(proname)),
-									  nargs, NIL, false, false, false);
+									  nargs, NIL, false, false, false, false);
 
 		for (; clist; clist = clist->next)
 		{
@@ -1747,6 +1792,7 @@ OpernameGetCandidates(List *names, char oprkind, bool missing_schema_ok)
 
 		newResult->pathpos = pathpos;
 		newResult->oid = operform->oid;
+		newResult->nominalnargs = 2;
 		newResult->nargs = 2;
 		newResult->nvargs = 0;
 		newResult->ndargs = 0;

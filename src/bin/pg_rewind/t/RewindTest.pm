@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 package RewindTest;
 
 # Test driver for pg_rewind. Each test consists of a cycle where a new cluster
@@ -318,8 +321,8 @@ sub run_pg_rewind
 		# recovery configuration automatically.
 		command_ok(
 			[
-				'pg_rewind',                      "--debug",
-				"--source-server",                $standby_connstr,
+				'pg_rewind',                       "--debug",
+				"--source-server",                 $standby_connstr,
 				"--target-pgdata=$primary_pgdata", "--no-sync",
 				"--write-recovery-conf"
 			],

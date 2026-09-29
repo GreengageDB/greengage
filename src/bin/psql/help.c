@@ -230,7 +230,7 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\dAc[+] [AMPTRN [TYPEPTRN]]  list operator classes\n"));
 	fprintf(output, _("  \\dAf[+] [AMPTRN [TYPEPTRN]]  list operator families\n"));
 	fprintf(output, _("  \\dAo[+] [AMPTRN [OPFPTRN]]   list operators of operator families\n"));
-	fprintf(output, _("  \\dAp    [AMPTRN [OPFPTRN]]   list support functions of operator families\n"));
+	fprintf(output, _("  \\dAp[+] [AMPTRN [OPFPTRN]]   list support functions of operator families\n"));
 	fprintf(output, _("  \\db[+]  [PATTERN]      list tablespaces\n"));
 	fprintf(output, _("  \\dc[S+] [PATTERN]      list conversions\n"));
 	fprintf(output, _("  \\dC[+]  [PATTERN]      list casts\n"));
@@ -242,8 +242,8 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\des[+] [PATTERN]      list foreign servers\n"));
 	fprintf(output, _("  \\deu[+] [PATTERN]      list user mappings\n"));
 	fprintf(output, _("  \\dew[+] [PATTERN]      list foreign-data wrappers\n"));
-	fprintf(output, _("  \\df[anptw][S+] [FUNCPTRN [TYPEPTRN ...]]\n"));
-	fprintf(output, _("                         list [only agg/normal/procedure/trigger/window] functions\n"));
+	fprintf(output, _("  \\df[anptw][S+] [FUNCPTRN [TYPEPTRN ...]]\n"
+					  "                         list [only agg/normal/procedure/trigger/window] functions\n"));
 	fprintf(output, _("  \\dF[+]  [PATTERN]      list text search configurations\n"));
 	fprintf(output, _("  \\dFd[+] [PATTERN]      list text search dictionaries\n"));
 	fprintf(output, _("  \\dFp[+] [PATTERN]      list text search parsers\n"));
@@ -254,7 +254,8 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\dL[S+] [PATTERN]      list procedural languages\n"));
 	fprintf(output, _("  \\dm[S+] [PATTERN]      list materialized views\n"));
 	fprintf(output, _("  \\dn[S+] [PATTERN]      list schemas\n"));
-	fprintf(output, _("  \\do[S]  [OPPTRN [TYPEPTRN [TYPEPTRN]]]  list operators\n"));
+	fprintf(output, _("  \\do[S+] [OPPTRN [TYPEPTRN [TYPEPTRN]]]\n"
+					  "                         list operators\n"));
 	fprintf(output, _("  \\dO[S+] [PATTERN]      list collations\n"));
 	fprintf(output, _("  \\dp     [PATTERN]      list table, view, and sequence access privileges\n"));
 	fprintf(output, _("  \\dP[itn+] [PATTERN]    list [only index/table] partitioned relations [n=nested]\n"));
@@ -270,7 +271,7 @@ slashUsage(unsigned short int pager)
 	fprintf(output, _("  \\dE[S+] [PATTERN]      list foreign and external tables\n"));
 	fprintf(output, _("  \\dx[+]  [PATTERN]      list extensions\n"));
 	fprintf(output, _("  \\dX     [PATTERN]      list extended statistics\n"));
-	fprintf(output, _("  \\dy     [PATTERN]      list event triggers\n"));
+	fprintf(output, _("  \\dy[+]  [PATTERN]      list event triggers\n"));
 	fprintf(output, _("  \\l[+]   [PATTERN]      list databases\n"));
 	fprintf(output, _("  \\sf[+]  FUNCNAME       show a function's definition\n"));
 	fprintf(output, _("  \\sv[+]  VIEWNAME       show a view's definition\n"));
@@ -377,10 +378,10 @@ helpVariables(unsigned short int pager)
 					  "    true if last query failed, else false\n"));
 	fprintf(output, _("  FETCH_COUNT\n"
 					  "    the number of result rows to fetch and display at a time (0 = unlimited)\n"));
-	fprintf(output, _("  HIDE_TOAST_COMPRESSION\n"
-					  "    if set, compression methods are not displayed\n"));
 	fprintf(output, _("  HIDE_TABLEAM\n"
 					  "    if set, table access methods are not displayed\n"));
+	fprintf(output, _("  HIDE_TOAST_COMPRESSION\n"
+					  "    if set, compression methods are not displayed\n"));
 	fprintf(output, _("  HISTCONTROL\n"
 					  "    controls command history [ignorespace, ignoredups, ignoreboth]\n"));
 	fprintf(output, _("  HISTFILE\n"
@@ -415,8 +416,6 @@ helpVariables(unsigned short int pager)
 	fprintf(output, _("  SERVER_VERSION_NAME\n"
 					  "  SERVER_VERSION_NUM\n"
 					  "    server's version (in short string or numeric format)\n"));
-	fprintf(output, _("  SHOW_ALL_RESULTS\n"
-					  "    show all results of a combined query (\\;) instead of only the last\n"));
 	fprintf(output, _("  SHOW_CONTEXT\n"
 					  "    controls display of message context fields [never, errors, always]\n"));
 	fprintf(output, _("  SINGLELINE\n"
@@ -494,10 +493,10 @@ helpVariables(unsigned short int pager)
 					  "    same as the dbname connection parameter\n"));
 	fprintf(output, _("  PGHOST\n"
 					  "    same as the host connection parameter\n"));
-	fprintf(output, _("  PGPASSWORD\n"
-					  "    connection password (not recommended)\n"));
 	fprintf(output, _("  PGPASSFILE\n"
 					  "    password file name\n"));
+	fprintf(output, _("  PGPASSWORD\n"
+					  "    connection password (not recommended)\n"));
 	fprintf(output, _("  PGPORT\n"
 					  "    same as the port connection parameter\n"));
 	fprintf(output, _("  PGUSER\n"

@@ -1184,7 +1184,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (partition_recurse)
 	{
-		PartitionDesc partdesc = RelationGetPartitionDesc(rel, false);
+		PartitionDesc partdesc = RelationGetPartitionDesc(rel, true);
 		List	   *idxs = NIL;
 		List	   *childTbls = NIL;
 		ListCell   *l;
@@ -1206,8 +1206,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 			ListCell   *l;
 			List	   *idxs = NIL;
 
-			idxs = find_inheritance_children(indexOid, false,
-											 ShareRowExclusiveLock);
+			idxs = find_inheritance_children(indexOid, ShareRowExclusiveLock);
 			foreach(l, idxs)
 				childTbls = lappend_oid(childTbls,
 										IndexGetRelation(lfirst_oid(l),
@@ -4322,6 +4321,8 @@ afterTriggerInvokeEvents(AfterTriggerEventList *events,
 				{
 					rInfo = ExecGetTriggerResultRel(estate, evtshared->ats_relid);
 					rel = rInfo->ri_RelationDesc;
+					/* Catch calls with insufficient relcache refcounting */
+					Assert(!RelationHasReferenceCountZero(rel));
 					trigdesc = rInfo->ri_TrigDesc;
 					finfo = rInfo->ri_TrigFunctions;
 					instr = rInfo->ri_TrigInstrument;
@@ -4456,7 +4457,7 @@ GetAfterTriggersStoreSlot(AfterTriggersTableData *table,
 	/* Create it if not already done. */
 	if (!table->storeslot)
 	{
-		MemoryContext	oldcxt;
+		MemoryContext oldcxt;
 
 		/*
 		 * We only need this slot only until AfterTriggerEndQuery, but making

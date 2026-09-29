@@ -92,9 +92,9 @@ typedef struct AnlExprData
 } AnlExprData;
 
 static void compute_expr_stats(Relation onerel, double totalrows,
-							   AnlExprData * exprdata, int nexprs,
+							   AnlExprData *exprdata, int nexprs,
 							   HeapTuple *rows, int numrows);
-static Datum serialize_expr_stats(AnlExprData * exprdata, int nexprs);
+static Datum serialize_expr_stats(AnlExprData *exprdata, int nexprs);
 static Datum expr_fetch_func(VacAttrStatsP stats, int rownum, bool *isNull);
 static AnlExprData *build_expr_data(List *exprs, int stattarget);
 
@@ -255,7 +255,7 @@ BuildRelationExtStatistics(Relation onerel, double totalrows,
  * that would require additional columns.
  *
  * See statext_compute_stattarget for details about how we compute statistics
- * target for a statistics objects (from the object target, attribute targets
+ * target for a statistics object (from the object target, attribute targets
  * and default statistics target).
  */
 int
@@ -359,7 +359,7 @@ statext_compute_stattarget(int stattarget, int nattrs, VacAttrStats **stats)
 	 */
 	for (i = 0; i < nattrs; i++)
 	{
-		/* keep the maximmum statistics target */
+		/* keep the maximum statistics target */
 		if (stats[i]->attr->attstattarget > stattarget)
 			stattarget = stats[i]->attr->attstattarget;
 	}
@@ -540,9 +540,9 @@ examine_attribute(Node *expr)
 
 	/*
 	 * When analyzing an expression, believe the expression tree's type not
-	 * the column datatype --- the latter might be the opckeytype storage
-	 * type of the opclass, which is not interesting for our purposes.  (Note:
-	 * if we did anything with non-expression statistics columns, we'd need to
+	 * the column datatype --- the latter might be the opckeytype storage type
+	 * of the opclass, which is not interesting for our purposes.  (Note: if
+	 * we did anything with non-expression statistics columns, we'd need to
 	 * figure out where to get the correct type info from, but for now that's
 	 * not a problem.)	It's not clear whether anyone will care about the
 	 * typmod, but we store that too just in case.
@@ -1610,7 +1610,7 @@ statext_is_compatible_clause(PlannerInfo *root, Node *clause, Index relid,
 
 	if (pg_class_aclcheck(rte->relid, userid, ACL_SELECT) != ACLCHECK_OK)
 	{
-		Bitmapset  *clause_attnums;
+		Bitmapset  *clause_attnums = NULL;
 
 		/* Don't have table privilege, must check individual columns */
 		if (*exprs != NIL)
@@ -1800,16 +1800,16 @@ statext_mcv_clauselist_selectivity(PlannerInfo *root, List *clauses, int varReli
 			 * attnums of expressions from it. Ignore it if it's not fully
 			 * covered by the chosen statistics.
 			 *
-			 * We need to check both attributes and expressions, and reject
-			 * if either is not covered.
+			 * We need to check both attributes and expressions, and reject if
+			 * either is not covered.
 			 */
 			if (!bms_is_subset(list_attnums[listidx], stat->keys) ||
 				!stat_covers_expressions(stat, list_exprs[listidx], NULL))
 				continue;
 
 			/*
-			 * Now we know the clause is compatible (we have either atttnums
-			 * or expressions extracted from it), and was not estimated yet.
+			 * Now we know the clause is compatible (we have either attnums or
+			 * expressions extracted from it), and was not estimated yet.
 			 */
 
 			/* record simple clauses (single column or expression) */
@@ -2287,7 +2287,8 @@ serialize_expr_stats(AnlExprData *exprdata, int nexprs)
 	if (!OidIsValid(typOid))
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("relation \"pg_statistic\" does not have a composite type")));
+				 errmsg("relation \"%s\" does not have a composite type",
+						"pg_statistic")));
 
 	for (exprno = 0; exprno < nexprs; exprno++)
 	{
@@ -2433,6 +2434,8 @@ statext_expressions_load(Oid stxoid, int idx)
 
 	/* Build a temporary HeapTuple control structure */
 	tmptup.t_len = HeapTupleHeaderGetDatumLength(td);
+	ItemPointerSetInvalid(&(tmptup.t_self));
+	tmptup.t_tableOid = InvalidOid;
 	tmptup.t_data = td;
 
 	tup = heap_copytuple(&tmptup);

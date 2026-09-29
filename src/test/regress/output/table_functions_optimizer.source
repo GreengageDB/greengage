@@ -75,7 +75,7 @@ CREATE FUNCTION multiset_6(a anytable) RETURNS SETOF record
 /* ERROR: TABLE output not allowed with OUT parameters */
 CREATE FUNCTION error(OUT a int) RETURNS TABLE(a int, b text)
     AS $$ SELECT * from example $$ LANGUAGE SQL READS SQL DATA;
-ERROR:  OUT arguments aren't allowed in TABLE functions
+ERROR:  OUT and INOUT arguments aren't allowed in TABLE functions
 /* ERROR: Multiple multiset inputs not supported */
 CREATE FUNCTION error(a anytable, b anytable) RETURNS TABLE(a int, b text)
     AS $$ SELECT * FROM example $$ LANGUAGE SQL READS SQL DATA;

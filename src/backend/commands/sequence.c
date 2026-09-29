@@ -2189,7 +2189,7 @@ cdb_sequence_nextval_qe(Relation	seqrel,
 						errmsg("nextval: unexpected message type='%c'", qtype)));
 
 	initStringInfo(&buf);
-	if (pq_getmessage(&buf, 0) != 0)
+	if (pq_getmessage(&buf, PQ_SMALL_MESSAGE_LIMIT) != 0)
 		elog(ERROR, "nextval: unable to parse nextval response from QD");
 
 	current = buf.data;

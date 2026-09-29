@@ -143,6 +143,7 @@
 #include "utils/memutils.h"
 #include "utils/pidfile.h"
 #include "utils/ps_status.h"
+#include "utils/queryjumble.h"
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
@@ -620,6 +621,7 @@ typedef struct
 	bool		redirection_done;
 	bool		IsBinaryUpgrade;
 	bool		ConvertMasterDataDirToSegment;
+	bool		query_id_enabled;
 	int			max_safe_fds;
 	int			MaxBackends;
 #ifdef WIN32
@@ -775,6 +777,12 @@ PostmasterMain(int argc, char *argv[])
 	pqsignal_pm(SIGCHLD, reaper);	/* handle child termination */
 
 #ifdef SIGURG
+
+	/*
+	 * Ignore SIGURG for now.  Child processes may change this (see
+	 * InitializeLatchSupport), but they will not receive any such signals
+	 * until they wait on a latch.
+	 */
 	pqsignal_pm(SIGURG, SIG_IGN);	/* ignored */
 #endif
 
@@ -4509,7 +4517,11 @@ PostmasterStateMachine(void)
 			if (ReachedNormalRunning)
 				CancelBackup();
 
-			/* Normal exit from the postmaster is here */
+			/*
+			 * Normal exit from the postmaster is here.  We don't need to log
+			 * anything here, since the UnlinkLockFiles proc_exit callback
+			 * will do so, and that should be the last user-visible action.
+			 */
 			ExitPostmaster(0);
 		}
 	}
@@ -4521,9 +4533,21 @@ PostmasterStateMachine(void)
 	 * startup process fails, because more than likely it will just fail again
 	 * and we will keep trying forever.
 	 */
-	if (pmState == PM_NO_CHILDREN &&
-		(StartupStatus == STARTUP_CRASHED || !restart_after_crash))
-		ExitPostmaster(1);
+	if (pmState == PM_NO_CHILDREN)
+	{
+		if (StartupStatus == STARTUP_CRASHED)
+		{
+			ereport(LOG,
+					(errmsg("shutting down due to startup process failure")));
+			ExitPostmaster(1);
+		}
+		if (!restart_after_crash)
+		{
+			ereport(LOG,
+					(errmsg("shutting down because restart_after_crash is off")));
+			ExitPostmaster(1);
+		}
+	}
 
 	/*
 	 * If we need to recover from a crash, wait for all non-syslogger children
@@ -6036,8 +6060,7 @@ StartChildProcess(AuxProcType type)
 		MemoryContextDelete(PostmasterContext);
 		PostmasterContext = NULL;
 
-		AuxiliaryProcessMain(ac, av);
-		ExitPostmaster(0);
+		AuxiliaryProcessMain(ac, av);	/* does not return */
 	}
 #endif							/* EXEC_BACKEND */
 
@@ -6385,7 +6408,7 @@ do_start_bgworker(RegisteredBgWorker *rw)
 
 	ereport(DEBUG1,
 			(errmsg_internal("starting background worker process \"%s\"",
-					rw->rw_worker.bgw_name)));
+							 rw->rw_worker.bgw_name)));
 
 #ifdef EXEC_BACKEND
 	switch ((worker_pid = bgworker_forkexec(rw->rw_shmem_slot)))
@@ -6804,6 +6827,7 @@ save_backend_variables(BackendParameters *param, Port *port,
 	param->redirection_done = redirection_done;
 	param->IsBinaryUpgrade = IsBinaryUpgrade;
 	param->ConvertMasterDataDirToSegment = ConvertMasterDataDirToSegment;
+	param->query_id_enabled = query_id_enabled;
 	param->max_safe_fds = max_safe_fds;
 
 	param->MaxBackends = MaxBackends;
@@ -7038,6 +7062,7 @@ restore_backend_variables(BackendParameters *param, Port *port)
 	redirection_done = param->redirection_done;
 	IsBinaryUpgrade = param->IsBinaryUpgrade;
 	ConvertMasterDataDirToSegment = param->ConvertMasterDataDirToSegment;
+	query_id_enabled = param->query_id_enabled;
 	max_safe_fds = param->max_safe_fds;
 
 	MaxBackends = param->MaxBackends;

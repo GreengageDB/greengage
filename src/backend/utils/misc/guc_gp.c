@@ -1738,7 +1738,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_create_table_random_default_distribution", PGC_USERSET, COMPAT_OPTIONS,
+		{"gp_create_table_random_default_distribution", PGC_USERSET, COMPAT_OPTIONS_PREVIOUS,
 			gettext_noop("Set the default distribution of a table to RANDOM."),
 			NULL,
 			GUC_NOT_IN_SAMPLE
@@ -1749,7 +1749,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_allow_non_uniform_partitioning_ddl", PGC_USERSET, COMPAT_OPTIONS,
+		{"gp_allow_non_uniform_partitioning_ddl", PGC_USERSET, COMPAT_OPTIONS_PREVIOUS,
 			gettext_noop("Allow DDL that will create multi-level partition table with non-uniform hierarchy."),
 			NULL,
 			GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -2761,7 +2761,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_resource_group_bypass", PGC_USERSET, RESOURCES,
+		{"gp_resource_group_bypass", PGC_USERSET, RESOURCES_MGM,
 			gettext_noop("If the value is true, the query in this session will not be limited by resource group."),
 			NULL
 		},
@@ -2771,7 +2771,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_resource_group_cpu_ceiling_enforcement", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_group_cpu_ceiling_enforcement", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("If the value is true, ceiling enforcement of CPU usage will be enabled"),
 			NULL
 		},
@@ -2780,7 +2780,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_resource_group_enable_recalculate_query_mem", PGC_USERSET, RESOURCES,
+		{"gp_resource_group_enable_recalculate_query_mem", PGC_USERSET, RESOURCES_MGM,
 		 	gettext_noop("Enable resource group re-calculate the query_mem on QE"),
 		 	NULL
 		},
@@ -2790,7 +2790,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_resource_group_enable_cgroup_version_two", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_group_enable_cgroup_version_two", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Enable linux cgroup version 2"),
 			NULL
 		},
@@ -3024,7 +3024,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_safefswritesize", PGC_BACKEND, RESOURCES,
+		{"gp_safefswritesize", PGC_BACKEND, RESOURCES_KERNEL,
 			gettext_noop("Minimum FS safe write size."),
 			NULL
 		},
@@ -3074,7 +3074,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_resource_group_cpu_priority", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_group_cpu_priority", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Sets the cpu priority for postgres processes when resource group is enabled."),
 			NULL
 		},
@@ -3128,7 +3128,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_workfile_max_entries", PGC_POSTMASTER, RESOURCES,
+		{"gp_workfile_max_entries", PGC_POSTMASTER, RESOURCES_DISK,
 			gettext_noop("Sets the maximum number of entries that can be stored in the workfile directory"),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
@@ -3139,7 +3139,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_workfile_limit_files_per_query", PGC_USERSET, RESOURCES,
+		{"gp_workfile_limit_files_per_query", PGC_USERSET, RESOURCES_DISK,
 			gettext_noop("Maximum number of workfiles allowed per query per segment."),
 			gettext_noop("0 for no limit. Current query is terminated when limit is exceeded.")
 		},
@@ -3149,7 +3149,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_workfile_limit_per_segment", PGC_POSTMASTER, RESOURCES,
+		{"gp_workfile_limit_per_segment", PGC_POSTMASTER, RESOURCES_DISK,
 			gettext_noop("Maximum disk space (in KB) used for workfiles per segment."),
 			gettext_noop("0 for no limit. Current query is terminated when limit is exceeded."),
 			GUC_UNIT_KB
@@ -3160,7 +3160,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_workfile_limit_per_query", PGC_USERSET, RESOURCES,
+		{"gp_workfile_limit_per_query", PGC_USERSET, RESOURCES_DISK,
 			gettext_noop("Maximum disk space (in KB) used for workfiles per query per segment."),
 			gettext_noop("0 for no limit. Current query is terminated when limit is exceeded."),
 			GUC_UNIT_KB
@@ -3187,7 +3187,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"xid_stop_limit", PGC_POSTMASTER, WAL,
+		{"xid_stop_limit", PGC_POSTMASTER, GP_ARRAY_TUNING,
 			gettext_noop("Sets the number of XIDs before XID wraparound at which we will no longer allow the system to be started."),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
@@ -3197,7 +3197,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"xid_warn_limit", PGC_POSTMASTER, WAL,
+		{"xid_warn_limit", PGC_POSTMASTER, GP_ARRAY_TUNING,
 			gettext_noop("Sets the number of XIDs before xid_stop_limit at which we will begin emitting warnings regarding XID wraparound."),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
@@ -3207,7 +3207,7 @@ struct config_int ConfigureNamesInt_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"gp_gxid_prefetch_num", PGC_POSTMASTER, WAL,
+		{"gp_gxid_prefetch_num", PGC_POSTMASTER, GP_ARRAY_TUNING,
 			gettext_noop("how many gxid is prefetched in each bumping batch."),
 			NULL,
 			GUC_NOT_IN_SAMPLE | GUC_NO_SHOW_ALL
@@ -3476,7 +3476,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_subtrans_warn_limit", PGC_POSTMASTER, RESOURCES,
+		{"gp_subtrans_warn_limit", PGC_POSTMASTER, RESOURCES_MEM,
 			gettext_noop("Sets the warning limit on number of subtransactions in a transaction."),
 			NULL,
 			GUC_NOT_IN_SAMPLE
@@ -4187,7 +4187,7 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
-		{"gp_max_parallel_cursors", PGC_SUSET, RESOURCES,
+		{"gp_max_parallel_cursors", PGC_SUSET, RESOURCES_MGM,
 			gettext_noop("Parallel cursor concurrency control from the source cluster side, -1 means no limit, which is the default"),
 			NULL, GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
@@ -4249,7 +4249,7 @@ struct config_real ConfigureNamesReal_gp[] =
 	},
 
 	{
-		{"gp_resource_group_cpu_limit", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_group_cpu_limit", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Maximum percentage of CPU resources assigned to a cluster."),
 			NULL
 		},
@@ -4259,7 +4259,7 @@ struct config_real ConfigureNamesReal_gp[] =
 	},
 
 	{
-		{"gp_resource_group_memory_limit", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_group_memory_limit", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Maximum percentage of memory resources assigned to a cluster."),
 			NULL
 		},
@@ -4449,7 +4449,7 @@ struct config_string ConfigureNamesString_gp[] =
 	},
 
 	{
-		{"gp_resource_manager", PGC_POSTMASTER, RESOURCES,
+		{"gp_resource_manager", PGC_POSTMASTER, RESOURCES_MGM,
 			gettext_noop("Sets the type of resource manager."),
 			gettext_noop("Only support \"queue\" and \"group\" for now.")
 		},

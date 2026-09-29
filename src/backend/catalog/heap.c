@@ -172,7 +172,8 @@ static Node *cookConstraint(ParseState *pstate,
 /*
  * The initializers below do not include trailing variable length fields,
  * but that's OK - we're never going to reference anything beyond the
- * fixed-size portion of the structure anyway.
+ * fixed-size portion of the structure anyway.  Fields that can default
+ * to zeroes are also not mentioned.
  */
 
 static const FormData_pg_attribute a1 = {
@@ -183,8 +184,8 @@ static const FormData_pg_attribute a1 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = false,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_SHORT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -197,8 +198,8 @@ static const FormData_pg_attribute a2 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = true,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_INT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -211,8 +212,8 @@ static const FormData_pg_attribute a3 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = true,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_INT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -225,8 +226,8 @@ static const FormData_pg_attribute a4 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = true,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_INT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -239,8 +240,8 @@ static const FormData_pg_attribute a5 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = true,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_INT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -259,8 +260,8 @@ static const FormData_pg_attribute a6 = {
 	.attcacheoff = -1,
 	.atttypmod = -1,
 	.attbyval = true,
-	.attstorage = TYPSTORAGE_PLAIN,
 	.attalign = TYPALIGN_INT,
+	.attstorage = TYPSTORAGE_PLAIN,
 	.attnotnull = true,
 	.attislocal = true,
 };
@@ -1116,8 +1117,9 @@ InsertPgAttributeTuples(Relation pg_attribute_rel,
 		slot[slotCount]->tts_values[Anum_pg_attribute_attcacheoff - 1] = Int32GetDatum(-1);
 		slot[slotCount]->tts_values[Anum_pg_attribute_atttypmod - 1] = Int32GetDatum(attrs->atttypmod);
 		slot[slotCount]->tts_values[Anum_pg_attribute_attbyval - 1] = BoolGetDatum(attrs->attbyval);
-		slot[slotCount]->tts_values[Anum_pg_attribute_attstorage - 1] = CharGetDatum(attrs->attstorage);
 		slot[slotCount]->tts_values[Anum_pg_attribute_attalign - 1] = CharGetDatum(attrs->attalign);
+		slot[slotCount]->tts_values[Anum_pg_attribute_attstorage - 1] = CharGetDatum(attrs->attstorage);
+		slot[slotCount]->tts_values[Anum_pg_attribute_attcompression - 1] = CharGetDatum(attrs->attcompression);
 		slot[slotCount]->tts_values[Anum_pg_attribute_attnotnull - 1] = BoolGetDatum(attrs->attnotnull);
 		slot[slotCount]->tts_values[Anum_pg_attribute_atthasdef - 1] = BoolGetDatum(attrs->atthasdef);
 		slot[slotCount]->tts_values[Anum_pg_attribute_atthasmissing - 1] = BoolGetDatum(attrs->atthasmissing);
@@ -1127,7 +1129,6 @@ InsertPgAttributeTuples(Relation pg_attribute_rel,
 		slot[slotCount]->tts_values[Anum_pg_attribute_attislocal - 1] = BoolGetDatum(attrs->attislocal);
 		slot[slotCount]->tts_values[Anum_pg_attribute_attinhcount - 1] = Int32GetDatum(attrs->attinhcount);
 		slot[slotCount]->tts_values[Anum_pg_attribute_attcollation - 1] = ObjectIdGetDatum(attrs->attcollation);
-		slot[slotCount]->tts_values[Anum_pg_attribute_attcompression - 1] = CharGetDatum(attrs->attcompression);
 		if (attoptions && attoptions[natts] != (Datum) 0)
 			slot[slotCount]->tts_values[Anum_pg_attribute_attoptions - 1] = attoptions[natts];
 		else
@@ -1461,6 +1462,7 @@ AddNewRelationType(const char *typeName,
  *	reltypeid: OID to assign to rel's rowtype, or InvalidOid to select one
  *	reloftypeid: if a typed table, OID of underlying type; else InvalidOid
  *	ownerid: OID of new rel's owner
+ *	accessmtd: OID of new rel's access method
  *	tupdesc: tuple descriptor (source of column definitions)
  *	cooked_constraints: list of precooked check constraints and defaults
  *	relkind: relkind for new rel
@@ -2170,8 +2172,6 @@ RemoveAttributeById(Oid relid, AttrNumber attnum)
 		/* Unset this so no one tries to look up the generation expression */
 		attStruct->attgenerated = '\0';
 
-		attStruct->attcompression = InvalidCompressionMethod;
-
 		/*
 		 * Change the column name to something that isn't likely to conflict
 		 */
@@ -2659,6 +2659,13 @@ SetAttrMissing(Oid relid, char *attname, char *value)
 	/* lock the table the attribute belongs to */
 	tablerel = table_open(relid, AccessExclusiveLock);
 
+	/* Don't do anything unless it's a plain table */
+	if (tablerel->rd_rel->relkind != RELKIND_RELATION)
+	{
+		table_close(tablerel, AccessExclusiveLock);
+		return;
+	}
+
 	/* Lock the attribute row and get the data */
 	attrrel = table_open(AttributeRelationId, RowExclusiveLock);
 	atttup = SearchSysCacheAttName(relid, attname);
@@ -2797,7 +2804,11 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		valuesAtt[Anum_pg_attribute_atthasdef - 1] = true;
 		replacesAtt[Anum_pg_attribute_atthasdef - 1] = true;
 
-		if (add_column_mode && !attgenerated && cookedMissingVal && *cookedMissingVal)
+		if (rel->rd_rel->relkind != RELKIND_RELATION)
+		{
+			/* Do nothing for non-plain table (see 0a4efdc) */
+		}
+		else if (add_column_mode && !attgenerated && cookedMissingVal && *cookedMissingVal)
 		{
 			missingval = *missingval_p;
 			missingIsNull = *missingIsNull_p;
@@ -2832,7 +2843,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 															 defAttStruct->attalign));
 			}
 		}
-		if (add_column_mode && !attgenerated)
+		if (rel->rd_rel->relkind == RELKIND_RELATION && add_column_mode && !attgenerated)
 		{
 			valuesAtt[Anum_pg_attribute_atthasmissing - 1] = !missingIsNull;
 			replacesAtt[Anum_pg_attribute_atthasmissing - 1] = true;
@@ -2878,7 +2889,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		 */
 		recordDependencyOnSingleRelExpr(&colobject, expr, RelationGetRelid(rel),
 										DEPENDENCY_AUTO,
-										DEPENDENCY_AUTO, false, false);
+										DEPENDENCY_AUTO, false);
 	}
 	else
 	{
@@ -2888,7 +2899,7 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 		 */
 		recordDependencyOnSingleRelExpr(&defobject, expr, RelationGetRelid(rel),
 										DEPENDENCY_NORMAL,
-										DEPENDENCY_NORMAL, false, false);
+										DEPENDENCY_NORMAL, false);
 	}
 
 	/*
@@ -3549,15 +3560,26 @@ check_nested_generated_walker(Node *node, void *context)
 		AttrNumber	attnum;
 
 		relid = rt_fetch(var->varno, pstate->p_rtable)->relid;
+		if (!OidIsValid(relid))
+			return false;		/* XXX shouldn't we raise an error? */
+
 		attnum = var->varattno;
 
-		if (OidIsValid(relid) && AttributeNumberIsValid(attnum) && get_attgenerated(relid, attnum))
+		if (attnum > 0 && get_attgenerated(relid, attnum))
 			ereport(ERROR,
-					(errcode(ERRCODE_SYNTAX_ERROR),
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("cannot use generated column \"%s\" in column generation expression",
 							get_attname(relid, attnum, false)),
 					 errdetail("A generated column cannot reference another generated column."),
 					 parser_errposition(pstate, var->location)));
+		/* A whole-row Var is necessarily self-referential, so forbid it */
+		if (attnum == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("cannot use whole-row variable in column generation expression"),
+					 errdetail("This would cause the generated column to depend on its own value."),
+					 parser_errposition(pstate, var->location)));
+		/* System columns were already checked in the parser */
 
 		return false;
 	}
@@ -4263,8 +4285,7 @@ StorePartitionKey(Relation rel,
 										RelationGetRelid(rel),
 										DEPENDENCY_NORMAL,
 										DEPENDENCY_INTERNAL,
-										true /* reverse the self-deps */ ,
-										false /* don't track versions */ );
+										true /* reverse the self-deps */ );
 
 	/*
 	 * We must invalidate the relcache so that the next
@@ -4374,7 +4395,7 @@ StorePartitionBound(Relation rel, Relation parent, PartitionBoundSpec *bound)
 	 * removed.
 	 */
 	defaultPartOid =
-		get_default_oid_from_partdesc(RelationGetPartitionDesc(parent, false));
+		get_default_oid_from_partdesc(RelationGetPartitionDesc(parent, true));
 	if (OidIsValid(defaultPartOid))
 		CacheInvalidateRelcacheByRelid(defaultPartOid);
 

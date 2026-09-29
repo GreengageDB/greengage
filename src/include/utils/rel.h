@@ -68,7 +68,6 @@ typedef struct RelationData
 	bool		rd_indexvalid;	/* is rd_indexlist valid? (also rd_pkindex and
 								 * rd_replidindex) */
 	bool		rd_statvalid;	/* is rd_statlist valid? */
-	bool		rd_version_checked; /* has version check been done yet? */
 
 	/*----------
 	 * rd_createSubid is the ID of the highest subtransaction the rel has
@@ -135,6 +134,19 @@ typedef struct RelationData
 	/* data managed by RelationGetPartitionDesc: */
 	PartitionDesc rd_partdesc;	/* partition descriptor, or NULL */
 	MemoryContext rd_pdcxt;		/* private context for rd_partdesc, if any */
+
+	/* Same as above, for partdescs that omit detached partitions */
+	PartitionDesc rd_partdesc_nodetached;	/* partdesc w/o detached parts */
+	MemoryContext rd_pddcxt;	/* for rd_partdesc_nodetached, if any */
+
+	/*
+	 * pg_inherits.xmin of the partition that was excluded in
+	 * rd_partdesc_nodetached.  This informs a future user of that partdesc:
+	 * if this value is not in progress for the active snapshot, then the
+	 * partdesc can be used, otherwise they have to build a new one.  (This
+	 * matches what find_inheritance_children_extended would do).
+	 */
+	TransactionId rd_partdesc_nodetached_xmin;
 
 	/* data managed by RelationGetPartitionQual: */
 	List	   *rd_partcheck;	/* partition CHECK quals */
@@ -302,6 +314,14 @@ typedef struct AutoVacOpts
 	float8		analyze_scale_factor;
 } AutoVacOpts;
 
+/* StdRdOptions->vacuum_index_cleanup values */
+typedef enum StdRdOptIndexCleanup
+{
+	STDRD_OPTION_VACUUM_INDEX_CLEANUP_AUTO = 0,
+	STDRD_OPTION_VACUUM_INDEX_CLEANUP_OFF,
+	STDRD_OPTION_VACUUM_INDEX_CLEANUP_ON
+} StdRdOptIndexCleanup;
+
 typedef struct StdRdOptions
 {
 	int32		vl_len_;		/* varlena header (do not touch directly!) */
@@ -311,7 +331,7 @@ typedef struct StdRdOptions
 	AutoVacOpts autovacuum;		/* autovacuum-related options */
 	bool		user_catalog_table; /* use as an additional catalog relation */
 	int			parallel_workers;	/* max number of parallel workers */
-	bool		vacuum_index_cleanup;	/* enables index vacuuming and cleanup */
+	StdRdOptIndexCleanup vacuum_index_cleanup;	/* controls index vacuuming */
 	bool		vacuum_truncate;	/* enables vacuum to truncate a relation */
 	bool		analyze_hll_non_part_table; 		/* force hll statistics collection on relation */
 

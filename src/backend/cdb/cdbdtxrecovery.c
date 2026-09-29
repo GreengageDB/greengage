@@ -233,6 +233,7 @@ TerminateMppBackends()
 {
 	CdbPgResults term_cdb_pgresults = {NULL, 0};
 	const char *term_buf = "select * from gp_terminate_mpp_backends()";
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	PG_TRY();
 	{
@@ -240,6 +241,13 @@ TerminateMppBackends()
 	}
 	PG_CATCH();
 	{
+		/*
+		 * errfinish() leaves CurrentMemoryContext set to ErrorContext for an
+		 * ERROR; restore it before doing any further work, since
+		 * FlushErrorState() does not switch it back and subsequent dispatch
+		 * error handling asserts we are not in ErrorContext.
+		 */
+		MemoryContextSwitchTo(oldcontext);
 		FlushErrorState();
 		DisconnectAndDestroyAllGangs(true);
 	}
@@ -274,6 +282,7 @@ gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 				j,
 				rows;
 	bool		found;
+	MemoryContext oldcontext = CurrentMemoryContext;
 
 	snprintf(cmdbuf, sizeof(cmdbuf), "select gid from pg_prepared_xacts where "
 			 "prepared < now() - interval'%d seconds'",
@@ -285,6 +294,14 @@ gatherRMInDoubtTransactions(int prepared_seconds, bool raiseError)
 	}
 	PG_CATCH();
 	{
+		/*
+		 * errfinish() leaves CurrentMemoryContext set to ErrorContext for an
+		 * ERROR; restore it before doing any further work, since neither
+		 * PG_RE_THROW() nor FlushErrorState() switch it back, and subsequent
+		 * dispatch error handling asserts we are not in ErrorContext.
+		 */
+		MemoryContextSwitchTo(oldcontext);
+
 		cdbdisp_clearCdbPgResults(&cdb_pgresults);
 
 		if (raiseError)

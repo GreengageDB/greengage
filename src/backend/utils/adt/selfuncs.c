@@ -3484,10 +3484,10 @@ estimate_num_groups(PlannerInfo *root, List *groupExprs, double input_rows,
 		 * XXX This has the consequence that if there's a statistics on the
 		 * expression, we don't split it into individual Vars. This affects
 		 * our selection of statistics in estimate_multivariate_ndistinct,
-		 * because it's probably better to use more accurate estimate for
-		 * each expression and treat them as independent, than to combine
-		 * estimates for the extracted variables when we don't know how that
-		 * relates to the expressions.
+		 * because it's probably better to use more accurate estimate for each
+		 * expression and treat them as independent, than to combine estimates
+		 * for the extracted variables when we don't know how that relates to
+		 * the expressions.
 		 */
 		examine_variable(root, groupexpr, 0, &vardata);
 		if (HeapTupleIsValid(getStatsTuple(&vardata)) || vardata.isunique)
@@ -4089,16 +4089,16 @@ estimate_multivariate_ndistinct(PlannerInfo *root, RelOptInfo *rel,
 
 			/*
 			 * Process a simple Var expression, by matching it to keys
-			 * directly. If there's a matchine expression, we'll try
-			 * matching it later.
+			 * directly. If there's a matching expression, we'll try matching
+			 * it later.
 			 */
 			if (IsA(varinfo->var, Var))
 			{
 				AttrNumber	attnum = ((Var *) varinfo->var)->varattno;
 
 				/*
-				 * Ignore expressions on system attributes. Can't rely on
-				 * the bms check for negative values.
+				 * Ignore expressions on system attributes. Can't rely on the
+				 * bms check for negative values.
 				 */
 				if (!AttrNumberIsForUserDefinedAttr(attnum))
 					continue;
@@ -5718,7 +5718,8 @@ examine_simple_variable(PlannerInfo *root, Var *var,
 		 * of learning something even with it.
 		 */
 		if (subquery->setOperations ||
-			subquery->groupClause)
+			subquery->groupClause ||
+			subquery->groupingSets)
 			return;
 
 		/*

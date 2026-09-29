@@ -150,8 +150,8 @@ typedef struct HeapCheckContext
 static void sanity_check_relation(Relation rel);
 static void check_tuple(HeapCheckContext *ctx);
 static void check_toast_tuple(HeapTuple toasttup, HeapCheckContext *ctx,
-							  ToastedAttribute *ta, int32 chunkno,
-							  int32 endchunk);
+							  ToastedAttribute *ta, int32 *expected_chunk_seq,
+							  uint32 extsize);
 
 static bool check_tuple_attribute(HeapCheckContext *ctx);
 static void check_toasted_attribute(HeapCheckContext *ctx,
@@ -298,7 +298,7 @@ verify_heapam(PG_FUNCTION_ARGS)
 	rsinfo->setDesc = ctx.tupdesc;
 	MemoryContextSwitchTo(old_context);
 
-	/* Open relation, check relkind and access method, and check privileges */
+	/* Open relation, check relkind and access method */
 	ctx.rel = relation_open(relid, AccessShareLock);
 	sanity_check_relation(ctx.rel);
 
@@ -524,8 +524,7 @@ verify_heapam(PG_FUNCTION_ARGS)
 }
 
 /*
- * Check that a relation's relkind and access method are both supported,
- * and that the caller has select privilege on the relation.
+ * Check that a relation's relkind and access method are both supported.
  */
 static void
 sanity_check_relation(Relation rel)
@@ -839,13 +838,16 @@ check_tuple_visibility(HeapCheckContext *ctx)
 					return false;
 
 				case XID_COMMITTED:
+
 					/*
 					 * The tuple is dead, because the xvac transaction moved
-					 * it off and committed. It's checkable, but also prunable.
+					 * it off and committed. It's checkable, but also
+					 * prunable.
 					 */
 					return true;
 
 				case XID_ABORTED:
+
 					/*
 					 * The original xmin must have committed, because the xvac
 					 * transaction tried to move it later. Since xvac is
@@ -905,6 +907,7 @@ check_tuple_visibility(HeapCheckContext *ctx)
 					return false;
 
 				case XID_COMMITTED:
+
 					/*
 					 * The original xmin must have committed, because the xvac
 					 * transaction moved it later. Whether it's still alive
@@ -913,9 +916,11 @@ check_tuple_visibility(HeapCheckContext *ctx)
 					break;
 
 				case XID_ABORTED:
+
 					/*
 					 * The tuple is dead, because the xvac transaction moved
-					 * it off and committed. It's checkable, but also prunable.
+					 * it off and committed. It's checkable, but also
+					 * prunable.
 					 */
 					return true;
 			}
@@ -924,13 +929,13 @@ check_tuple_visibility(HeapCheckContext *ctx)
 		{
 			/*
 			 * Inserting transaction is not in progress, and not committed, so
-			 * it might have changed the TupleDesc in ways we don't know about.
-			 * Thus, don't try to check the tuple structure.
+			 * it might have changed the TupleDesc in ways we don't know
+			 * about. Thus, don't try to check the tuple structure.
 			 *
 			 * If xmin_status happens to be XID_IS_CURRENT_XID, then in theory
-			 * any such DDL changes ought to be visible to us, so perhaps
-			 * we could check anyway in that case. But, for now, let's be
-			 * conservate and treat this like any other uncommitted insert.
+			 * any such DDL changes ought to be visible to us, so perhaps we
+			 * could check anyway in that case. But, for now, let's be
+			 * conservative and treat this like any other uncommitted insert.
 			 */
 			return false;
 		}
@@ -945,18 +950,19 @@ check_tuple_visibility(HeapCheckContext *ctx)
 	{
 		/*
 		 * xmax is a multixact, so sanity-check the MXID. Note that we do this
-		 * prior to checking for HEAP_XMAX_INVALID or HEAP_XMAX_IS_LOCKED_ONLY.
-		 * This might therefore complain about things that wouldn't actually
-		 * be a problem during a normal scan, but eventually we're going to
-		 * have to freeze, and that process will ignore hint bits.
+		 * prior to checking for HEAP_XMAX_INVALID or
+		 * HEAP_XMAX_IS_LOCKED_ONLY. This might therefore complain about
+		 * things that wouldn't actually be a problem during a normal scan,
+		 * but eventually we're going to have to freeze, and that process will
+		 * ignore hint bits.
 		 *
 		 * Even if the MXID is out of range, we still know that the original
 		 * insert committed, so we can check the tuple itself. However, we
 		 * can't rule out the possibility that this tuple is dead, so don't
 		 * clear ctx->tuple_could_be_pruned. Possibly we should go ahead and
 		 * clear that flag anyway if HEAP_XMAX_INVALID is set or if
-		 * HEAP_XMAX_IS_LOCKED_ONLY is true, but for now we err on the side
-		 * of avoiding possibly-bogus complaints about missing TOAST entries.
+		 * HEAP_XMAX_IS_LOCKED_ONLY is true, but for now we err on the side of
+		 * avoiding possibly-bogus complaints about missing TOAST entries.
 		 */
 		xmax = HeapTupleHeaderGetRawXmax(tuphdr);
 		switch (check_mxid_valid_in_rel(xmax, ctx))
@@ -1066,9 +1072,10 @@ check_tuple_visibility(HeapCheckContext *ctx)
 				 * away depends on how old the deleting transaction is.
 				 */
 				ctx->tuple_could_be_pruned = TransactionIdPrecedes(xmax,
-																 ctx->safe_xmin);
+																   ctx->safe_xmin);
 				break;
 			case XID_ABORTED:
+
 				/*
 				 * The delete aborted or crashed.  The tuple is still live.
 				 */
@@ -1127,15 +1134,17 @@ check_tuple_visibility(HeapCheckContext *ctx)
 			break;
 
 		case XID_COMMITTED:
+
 			/*
 			 * The delete committed.  Whether the toast can be vacuumed away
 			 * depends on how old the deleting transaction is.
 			 */
 			ctx->tuple_could_be_pruned = TransactionIdPrecedes(xmax,
-															 ctx->safe_xmin);
+															   ctx->safe_xmin);
 			break;
 
 		case XID_ABORTED:
+
 			/*
 			 * The delete aborted or crashed.  The tuple is still live.
 			 */
@@ -1159,35 +1168,51 @@ check_tuple_visibility(HeapCheckContext *ctx)
  * each toast tuple being checked against where we are in the sequence, as well
  * as each toast tuple having its varlena structure sanity checked.
  *
- * Returns whether the toast tuple passed the corruption checks.
+ * On entry, *expected_chunk_seq should be the chunk_seq value that we expect
+ * to find in toasttup. On exit, it will be updated to the value the next call
+ * to this function should expect to see.
  */
 static void
 check_toast_tuple(HeapTuple toasttup, HeapCheckContext *ctx,
-				  ToastedAttribute *ta, int32 chunkno, int32 endchunk)
+				  ToastedAttribute *ta, int32 *expected_chunk_seq,
+				  uint32 extsize)
 {
-	int32		curchunk;
+	int32		chunk_seq;
+	int32		last_chunk_seq = (extsize - 1) / TOAST_MAX_CHUNK_SIZE;
 	Pointer		chunk;
 	bool		isnull;
 	int32		chunksize;
 	int32		expected_size;
 
-	/*
-	 * Have a chunk, extract the sequence number and the data
-	 */
-	curchunk = DatumGetInt32(fastgetattr(toasttup, 2,
-										 ctx->toast_rel->rd_att, &isnull));
+	/* Sanity-check the sequence number. */
+	chunk_seq = DatumGetInt32(fastgetattr(toasttup, 2,
+										  ctx->toast_rel->rd_att, &isnull));
 	if (isnull)
 	{
 		report_toast_corruption(ctx, ta,
-						  pstrdup("toast chunk sequence number is null"));
+								psprintf("toast value %u has toast chunk with null sequence number",
+										 ta->toast_pointer.va_valueid));
 		return;
 	}
+	if (chunk_seq != *expected_chunk_seq)
+	{
+		/* Either the TOAST index is corrupt, or we don't have all chunks. */
+		report_toast_corruption(ctx, ta,
+								psprintf("toast value %u index scan returned chunk %d when expecting chunk %d",
+										 ta->toast_pointer.va_valueid,
+										 chunk_seq, *expected_chunk_seq));
+	}
+	*expected_chunk_seq = chunk_seq + 1;
+
+	/* Sanity-check the chunk data. */
 	chunk = DatumGetPointer(fastgetattr(toasttup, 3,
 										ctx->toast_rel->rd_att, &isnull));
 	if (isnull)
 	{
 		report_toast_corruption(ctx, ta,
-						  pstrdup("toast chunk data is null"));
+								psprintf("toast value %u chunk %d has null data",
+										 ta->toast_pointer.va_valueid,
+										 chunk_seq));
 		return;
 	}
 	if (!VARATT_IS_EXTENDED(chunk))
@@ -1205,36 +1230,32 @@ check_toast_tuple(HeapTuple toasttup, HeapCheckContext *ctx,
 		uint32		header = ((varattrib_4b *) chunk)->va_4byte.va_header;
 
 		report_toast_corruption(ctx, ta,
-						  psprintf("corrupt extended toast chunk has invalid varlena header: %0x (sequence number %d)",
-								   header, curchunk));
+								psprintf("toast value %u chunk %d has invalid varlena header %0x",
+										 ta->toast_pointer.va_valueid,
+										 chunk_seq, header));
 		return;
 	}
 
 	/*
 	 * Some checks on the data we've found
 	 */
-	if (curchunk != chunkno)
+	if (chunk_seq > last_chunk_seq)
 	{
 		report_toast_corruption(ctx, ta,
-						  psprintf("toast chunk sequence number %u does not match the expected sequence number %u",
-								   curchunk, chunkno));
-		return;
-	}
-	if (curchunk > endchunk)
-	{
-		report_toast_corruption(ctx, ta,
-						  psprintf("toast chunk sequence number %u exceeds the end chunk sequence number %u",
-								   curchunk, endchunk));
+								psprintf("toast value %u chunk %d follows last expected chunk %d",
+										 ta->toast_pointer.va_valueid,
+										 chunk_seq, last_chunk_seq));
 		return;
 	}
 
-	expected_size = curchunk < endchunk ? TOAST_MAX_CHUNK_SIZE
-		: VARATT_EXTERNAL_GET_EXTSIZE(ta->toast_pointer) - (endchunk * TOAST_MAX_CHUNK_SIZE);
+	expected_size = chunk_seq < last_chunk_seq ? TOAST_MAX_CHUNK_SIZE
+		: extsize - (last_chunk_seq * TOAST_MAX_CHUNK_SIZE);
 
 	if (chunksize != expected_size)
 		report_toast_corruption(ctx, ta,
-						  psprintf("toast chunk size %u differs from the expected size %u",
-								   chunksize, expected_size));
+								psprintf("toast value %u chunk %d has size %u, but expected size %u",
+										 ta->toast_pointer.va_valueid,
+										 chunk_seq, chunksize, expected_size));
 }
 
 /*
@@ -1265,6 +1286,7 @@ check_tuple_attribute(HeapCheckContext *ctx)
 	char	   *tp;				/* pointer to the tuple data */
 	uint16		infomask;
 	Form_pg_attribute thisatt;
+	struct varatt_external toast_pointer;
 
 	infomask = ctx->tuphdr->t_infomask;
 	thisatt = TupleDescAttr(RelationGetDescr(ctx->rel), ctx->attnum);
@@ -1274,8 +1296,7 @@ check_tuple_attribute(HeapCheckContext *ctx)
 	if (ctx->tuphdr->t_hoff + ctx->offset > ctx->lp_len)
 	{
 		report_corruption(ctx,
-						  psprintf("attribute %u with length %u starts at offset %u beyond total tuple length %u",
-								   ctx->attnum,
+						  psprintf("attribute with length %u starts at offset %u beyond total tuple length %u",
 								   thisatt->attlen,
 								   ctx->tuphdr->t_hoff + ctx->offset,
 								   ctx->lp_len));
@@ -1295,8 +1316,7 @@ check_tuple_attribute(HeapCheckContext *ctx)
 		if (ctx->tuphdr->t_hoff + ctx->offset > ctx->lp_len)
 		{
 			report_corruption(ctx,
-							  psprintf("attribute %u with length %u ends at offset %u beyond total tuple length %u",
-									   ctx->attnum,
+							  psprintf("attribute with length %u ends at offset %u beyond total tuple length %u",
 									   thisatt->attlen,
 									   ctx->tuphdr->t_hoff + ctx->offset,
 									   ctx->lp_len));
@@ -1328,8 +1348,7 @@ check_tuple_attribute(HeapCheckContext *ctx)
 		if (va_tag != VARTAG_ONDISK)
 		{
 			report_corruption(ctx,
-							  psprintf("toasted attribute %u has unexpected TOAST tag %u",
-									   ctx->attnum,
+							  psprintf("toasted attribute has unexpected TOAST tag %u",
 									   va_tag));
 			/* We can't know where the next attribute begins */
 			return false;
@@ -1343,8 +1362,7 @@ check_tuple_attribute(HeapCheckContext *ctx)
 	if (ctx->tuphdr->t_hoff + ctx->offset > ctx->lp_len)
 	{
 		report_corruption(ctx,
-						  psprintf("attribute %u with length %u ends at offset %u beyond total tuple length %u",
-								   ctx->attnum,
+						  psprintf("attribute with length %u ends at offset %u beyond total tuple length %u",
 								   thisatt->attlen,
 								   ctx->tuphdr->t_hoff + ctx->offset,
 								   ctx->lp_len));
@@ -1371,12 +1389,17 @@ check_tuple_attribute(HeapCheckContext *ctx)
 
 	/* It is external, and we're looking at a page on disk */
 
+	/*
+	 * Must copy attr into toast_pointer for alignment considerations
+	 */
+	VARATT_EXTERNAL_GET_POINTER(toast_pointer, attr);
+
 	/* The tuple header better claim to contain toasted values */
 	if (!(infomask & HEAP_HASEXTERNAL))
 	{
 		report_corruption(ctx,
-						  psprintf("attribute %u is external but tuple header flag HEAP_HASEXTERNAL not set",
-								   ctx->attnum));
+						  psprintf("toast value %u is external but tuple header flag HEAP_HASEXTERNAL not set",
+								   toast_pointer.va_valueid));
 		return true;
 	}
 
@@ -1384,8 +1407,8 @@ check_tuple_attribute(HeapCheckContext *ctx)
 	if (!ctx->rel->rd_rel->reltoastrelid)
 	{
 		report_corruption(ctx,
-						  psprintf("attribute %u is external but relation has no toast relation",
-								   ctx->attnum));
+						  psprintf("toast value %u is external but relation has no toast relation",
+								   toast_pointer.va_valueid));
 		return true;
 	}
 
@@ -1428,10 +1451,12 @@ check_toasted_attribute(HeapCheckContext *ctx, ToastedAttribute *ta)
 	SysScanDesc toastscan;
 	bool		found_toasttup;
 	HeapTuple	toasttup;
-	int32		chunkno;
-	int32		endchunk;
+	uint32		extsize;
+	int32		expected_chunk_seq = 0;
+	int32		last_chunk_seq;
 
-	endchunk = (VARATT_EXTERNAL_GET_EXTSIZE(ta->toast_pointer) - 1) / TOAST_MAX_CHUNK_SIZE;
+	extsize = VARATT_EXTERNAL_GET_EXTSIZE(ta->toast_pointer);
+	last_chunk_seq = (extsize - 1) / TOAST_MAX_CHUNK_SIZE;
 
 	/*
 	 * Setup a scan key to find chunks in toast table with matching va_valueid
@@ -1450,26 +1475,25 @@ check_toasted_attribute(HeapCheckContext *ctx, ToastedAttribute *ta)
 										   ctx->valid_toast_index,
 										   &SnapshotToast, 1,
 										   &toastkey);
-	chunkno = 0;
 	found_toasttup = false;
 	while ((toasttup =
 			systable_getnext_ordered(toastscan,
 									 ForwardScanDirection)) != NULL)
 	{
 		found_toasttup = true;
-		check_toast_tuple(toasttup, ctx, ta, chunkno, endchunk);
-		chunkno++;
+		check_toast_tuple(toasttup, ctx, ta, &expected_chunk_seq, extsize);
 	}
 	systable_endscan_ordered(toastscan);
 
 	if (!found_toasttup)
 		report_toast_corruption(ctx, ta,
-								psprintf("toasted value for attribute %u missing from toast table",
-										 ta->attnum));
-	else if (chunkno != (endchunk + 1))
+								psprintf("toast value %u not found in toast table",
+										 ta->toast_pointer.va_valueid));
+	else if (expected_chunk_seq <= last_chunk_seq)
 		report_toast_corruption(ctx, ta,
-								psprintf("final toast chunk number %u differs from expected value %u",
-										 chunkno, (endchunk + 1)));
+								psprintf("toast value %u was expected to end at chunk %d, but ended while expecting chunk %d",
+										 ta->toast_pointer.va_valueid,
+										 last_chunk_seq, expected_chunk_seq));
 }
 
 /*

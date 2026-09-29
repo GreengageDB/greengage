@@ -2,7 +2,7 @@
  * brin_bloom.c
  *		Implementation of Bloom opclass for BRIN
  *
- * Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -258,7 +258,7 @@ typedef struct BloomFilter
 	/* data of the bloom filter */
 	char		data[FLEXIBLE_ARRAY_MEMBER];
 
-}			BloomFilter;
+} BloomFilter;
 
 
 /*
@@ -341,7 +341,7 @@ bloom_init(int ndistinct, double false_positive_rate)
  * 		Add value to the bloom filter.
  */
 static BloomFilter *
-bloom_add_value(BloomFilter * filter, uint32 value, bool *updated)
+bloom_add_value(BloomFilter *filter, uint32 value, bool *updated)
 {
 	int			i;
 	uint64		h1,
@@ -378,7 +378,7 @@ bloom_add_value(BloomFilter * filter, uint32 value, bool *updated)
  * 		Check if the bloom filter contains a particular value.
  */
 static bool
-bloom_contains_value(BloomFilter * filter, uint32 value)
+bloom_contains_value(BloomFilter *filter, uint32 value)
 {
 	int			i;
 	uint64		h1,
@@ -409,12 +409,12 @@ typedef struct BloomOpaque
 {
 	/*
 	 * XXX At this point we only need a single proc (to compute the hash), but
-	 * let's keep the array just like inclusion and minman opclasses, for
+	 * let's keep the array just like inclusion and minmax opclasses, for
 	 * consistency. We may need additional procs in the future.
 	 */
 	FmgrInfo	extra_procinfos[BLOOM_MAX_PROCNUMS];
 	bool		extra_proc_missing[BLOOM_MAX_PROCNUMS];
-}			BloomOpaque;
+} BloomOpaque;
 
 static FmgrInfo *bloom_get_procinfo(BrinDesc *bdesc, uint16 attno,
 									uint16 procnum);

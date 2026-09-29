@@ -1454,7 +1454,7 @@ reportErrorPosition(PQExpBuffer msg, const char *query, int loc, int encoding)
 			if (w <= 0)
 				w = 1;
 			scroffset += w;
-			qoffset += pg_encoding_mblen(encoding, &wquery[qoffset]);
+			qoffset += PQmblenBounded(&wquery[qoffset], encoding);
 		}
 		else
 		{
@@ -1522,7 +1522,7 @@ reportErrorPosition(PQExpBuffer msg, const char *query, int loc, int encoding)
 		 * width.
 		 */
 		scroffset = 0;
-		for (; i < msg->len; i += pg_encoding_mblen(encoding, &msg->data[i]))
+		for (; i < msg->len; i += PQmblenBounded(&msg->data[i], encoding))
 		{
 			int			w = pg_encoding_dsplen(encoding, &msg->data[i]);
 

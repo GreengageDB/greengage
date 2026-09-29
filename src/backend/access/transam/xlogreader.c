@@ -283,7 +283,6 @@ XLogReadRecord(XLogReaderState *state, char **errormsg)
 				total_len;
 	uint32		targetRecOff;
 	uint32		pageHeaderSize;
-	/* TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert lands */
 	bool		assembled;
 	bool		gotheader;
 	int			readOff;
@@ -300,7 +299,6 @@ XLogReadRecord(XLogReaderState *state, char **errormsg)
 	state->errormsg_buf[0] = '\0';
 
 	ResetDecoder(state);
-	/* TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert lands */
 	state->abortedRecPtr = InvalidXLogRecPtr;
 	state->missingContrecPtr = InvalidXLogRecPtr;
 
@@ -329,7 +327,6 @@ XLogReadRecord(XLogReaderState *state, char **errormsg)
 		randAccess = true;
 	}
 
-	/* TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert lands */
 restart:
 	state->currRecPtr = RecPtr;
 	assembled = false;
@@ -428,7 +425,6 @@ restart:
 		char	   *buffer;
 		uint32		gotlen;
 
-		/* TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert lands */
 		assembled = true;
 
 		/*
@@ -467,9 +463,6 @@ restart:
 			pageHeader = (XLogPageHeader) state->readBuf;
 
 			/*
-			 * TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the
-			 * revert lands.
-			 *
 			 * If we were expecting a continuation record and got an
 			 * "overwrite contrecord" flag, that means the continuation record
 			 * was overwritten with a different record.  Restart the read by
@@ -497,9 +490,6 @@ restart:
 			/*
 			 * Cross-check that xlp_rem_len agrees with how much of the record
 			 * we expect there to be left.
-			 *
-			 * TODO_REVERT_C2DC19342E0: the "(expected %lld)" detail below is
-			 * GGDB-specific, keep ours when the revert lands.
 			 */
 			if (pageHeader->xlp_rem_len == 0 ||
 				total_len != (pageHeader->xlp_rem_len + gotlen))
@@ -593,9 +583,6 @@ err:
 	if (assembled)
 	{
 		/*
-		 * TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert
-		 * lands.
-		 *
 		 * We get here when a record that spans multiple pages needs to be
 		 * assembled, but something went wrong -- perhaps a contrecord piece
 		 * was lost.  If caller is WAL replay, it will know where the aborted

@@ -149,10 +149,9 @@ extern void DoCopy(ParseState *state, const CopyStmt *stmt,
 
 extern void ProcessCopyOptions(ParseState *pstate, CopyFormatOptions *ops_out, bool is_from, List *options, bool is_external_table);
 extern CopyFromState BeginCopyFrom(ParseState *pstate, Relation rel, Node *whereClause,
-							   const char *filename,
-							   bool is_program, copy_data_source_cb data_source_cb,
-							   void *data_source_cb_extra,
-							   List *attnamelist, List *options);
+								   const char *filename,
+								   bool is_program, copy_data_source_cb data_source_cb,
+								   void *data_source_cb_extra, List *attnamelist, List *options);
 extern void EndCopyFrom(CopyFromState cstate);
 extern bool NextCopyFrom(CopyFromState cstate, ExprContext *econtext,
 						 Datum *values, bool *nulls);

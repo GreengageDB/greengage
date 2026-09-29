@@ -547,7 +547,8 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 
 	/* Set up instrumentation for this node if requested */
 	if (estate->es_instrument && result != NULL)
-		result->instrument = GpInstrAlloc(node, estate->es_instrument);
+		result->instrument = GpInstrAlloc(node, estate->es_instrument,
+										   result->async_capable);
 
 	return result;
 }

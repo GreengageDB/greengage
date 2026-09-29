@@ -1,9 +1,12 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 # Basic logical replication test
 use strict;
 use warnings;
 use PostgresNode;
 use TestLib;
-use Test::More tests => 28;
+use Test::More tests => 32;
 
 # Initialize publisher node
 my $node_publisher = get_new_node('publisher');
@@ -47,6 +50,13 @@ $node_publisher->safe_psql('postgres', "CREATE TABLE tab_nothing (a int)");
 $node_publisher->safe_psql('postgres',
 	"ALTER TABLE tab_nothing REPLICA IDENTITY NOTHING");
 
+# Replicate the changes without replica identity index
+$node_publisher->safe_psql('postgres',
+	"CREATE TABLE tab_no_replidentity_index(c1 int)");
+$node_publisher->safe_psql('postgres',
+	"CREATE INDEX idx_no_replidentity_index ON tab_no_replidentity_index(c1)"
+);
+
 # Setup structure on subscriber
 $node_subscriber->safe_psql('postgres', "CREATE TABLE tab_notrep (a int)");
 $node_subscriber->safe_psql('postgres', "CREATE TABLE tab_ins (a int)");
@@ -70,13 +80,20 @@ $node_subscriber->safe_psql('postgres',
 	"CREATE TABLE tab_include (a int, b text, CONSTRAINT covering PRIMARY KEY(a) INCLUDE(b))"
 );
 
+# replication of the table without replica identity index
+$node_subscriber->safe_psql('postgres',
+	"CREATE TABLE tab_no_replidentity_index(c1 int)");
+$node_subscriber->safe_psql('postgres',
+	"CREATE INDEX idx_no_replidentity_index ON tab_no_replidentity_index(c1)"
+);
+
 # Setup logical replication
 my $publisher_connstr = $node_publisher->connstr . ' dbname=postgres';
 $node_publisher->safe_psql('postgres', "CREATE PUBLICATION tap_pub");
 $node_publisher->safe_psql('postgres',
 	"CREATE PUBLICATION tap_pub_ins_only WITH (publish = insert)");
 $node_publisher->safe_psql('postgres',
-	"ALTER PUBLICATION tap_pub ADD TABLE tab_rep, tab_full, tab_full2, tab_mixed, tab_include, tab_nothing, tab_full_pk"
+	"ALTER PUBLICATION tap_pub ADD TABLE tab_rep, tab_full, tab_full2, tab_mixed, tab_include, tab_nothing, tab_full_pk, tab_no_replidentity_index"
 );
 $node_publisher->safe_psql('postgres',
 	"ALTER PUBLICATION tap_pub_ins_only ADD TABLE tab_ins");
@@ -115,7 +132,7 @@ $node_publisher->safe_psql('postgres',
 	"INSERT INTO tab_mixed VALUES (2, 'bar', 2.2)");
 
 $node_publisher->safe_psql('postgres',
-	"INSERT INTO tab_full_pk VALUES (1, 'foo')");
+	"INSERT INTO tab_full_pk VALUES (1, 'foo'), (2, 'baz')");
 
 $node_publisher->safe_psql('postgres',
 	"INSERT INTO tab_nothing VALUES (generate_series(1,20))");
@@ -125,6 +142,9 @@ $node_publisher->safe_psql('postgres',
 $node_publisher->safe_psql('postgres',
 	"DELETE FROM tab_include WHERE a > 20");
 $node_publisher->safe_psql('postgres', "UPDATE tab_include SET a = -a");
+
+$node_publisher->safe_psql('postgres',
+	"INSERT INTO tab_no_replidentity_index VALUES(1)");
 
 $node_publisher->wait_for_catchup('tap_sub');
 
@@ -149,6 +169,11 @@ $result = $node_subscriber->safe_psql('postgres',
 is($result, qq(20|-20|-1),
 	'check replicated changes with primary key index with included columns');
 
+is( $node_subscriber->safe_psql(
+		'postgres', q(SELECT c1 FROM tab_no_replidentity_index)),
+	1,
+	"value replicated to subscriber without replica identity index");
+
 # insert some duplicate rows
 $node_publisher->safe_psql('postgres',
 	"INSERT INTO tab_full SELECT generate_series(1,10)");
@@ -161,7 +186,8 @@ $node_publisher->safe_psql('postgres',
 # from the publication.
 $result = $node_subscriber->safe_psql('postgres',
 	"SELECT count(*), min(a), max(a) FROM tab_ins");
-is($result, qq(1052|1|1002), 'check rows on subscriber before table drop from publication');
+is($result, qq(1052|1|1002),
+	'check rows on subscriber before table drop from publication');
 
 # Drop the table from publication
 $node_publisher->safe_psql('postgres',
@@ -176,7 +202,8 @@ $node_publisher->wait_for_catchup('tap_sub');
 # publication, so row count should remain the same.
 $result = $node_subscriber->safe_psql('postgres',
 	"SELECT count(*), min(a), max(a) FROM tab_ins");
-is($result, qq(1052|1|1002), 'check rows on subscriber after table drop from publication');
+is($result, qq(1052|1|1002),
+	'check rows on subscriber after table drop from publication');
 
 # Delete the inserted row in publisher
 $node_publisher->safe_psql('postgres', "DELETE FROM tab_ins WHERE a = 8888");
@@ -202,7 +229,8 @@ $node_subscriber->safe_psql('postgres', "CREATE TABLE temp2 (a int)");
 
 # Setup logical replication that will only be used for this test
 $node_publisher->safe_psql('postgres',
-	"CREATE PUBLICATION tap_pub_temp1 FOR TABLE temp1 WITH (publish = insert)");
+	"CREATE PUBLICATION tap_pub_temp1 FOR TABLE temp1 WITH (publish = insert)"
+);
 $node_publisher->safe_psql('postgres',
 	"CREATE PUBLICATION tap_pub_temp2 FOR TABLE temp2");
 $node_subscriber->safe_psql('postgres',
@@ -218,9 +246,10 @@ $node_subscriber->poll_query_until('postgres', $synced_query)
   or die "Timed out while waiting for subscriber to synchronize data";
 
 # Subscriber table will have no rows initially
-$result = $node_subscriber->safe_psql('postgres',
-	"SELECT count(*) FROM temp1");
-is($result, qq(0), 'check initial rows on subscriber with multiple publications');
+$result =
+  $node_subscriber->safe_psql('postgres', "SELECT count(*) FROM temp1");
+is($result, qq(0),
+	'check initial rows on subscriber with multiple publications');
 
 # Insert a row into the table that's part of first publication in subscriber
 # list of publications.
@@ -229,8 +258,8 @@ $node_publisher->safe_psql('postgres', "INSERT INTO temp1 VALUES (1)");
 $node_publisher->wait_for_catchup('tap_sub_temp1');
 
 # Subscriber should receive the inserted row
-$result = $node_subscriber->safe_psql('postgres',
-	"SELECT count(*) FROM temp1");
+$result =
+  $node_subscriber->safe_psql('postgres', "SELECT count(*) FROM temp1");
 is($result, qq(1), 'check rows on subscriber with multiple publications');
 
 # Drop subscription as we don't need it anymore
@@ -289,6 +318,43 @@ $result = $node_subscriber->safe_psql('postgres',
 is( $result, qq(local|1.1|baz|1
 local|2.2|bar|2),
 	'update works with different column order and subscriber local values');
+
+$result = $node_subscriber->safe_psql('postgres',
+	"SELECT * FROM tab_full_pk ORDER BY a");
+is( $result, qq(1|bar
+2|baz),
+	'update works with REPLICA IDENTITY FULL and a primary key');
+
+# Check that subscriber handles cases where update/delete target tuple
+# is missing.  We have to look for the DEBUG1 log messages about that,
+# so temporarily bump up the log verbosity.
+$node_subscriber->append_conf('postgresql.conf', "log_min_messages = debug1");
+$node_subscriber->reload;
+
+$node_subscriber->safe_psql('postgres', "DELETE FROM tab_full_pk");
+
+# Note that the current location of the log file is not grabbed immediately
+# after reloading the configuration, but after sending one SQL command to
+# the node so as we are sure that the reloading has taken effect.
+my $log_location = -s $node_subscriber->logfile;
+
+$node_publisher->safe_psql('postgres',
+	"UPDATE tab_full_pk SET b = 'quux' WHERE a = 1");
+$node_publisher->safe_psql('postgres', "DELETE FROM tab_full_pk WHERE a = 2");
+
+$node_publisher->wait_for_catchup('tap_sub');
+
+my $logfile = slurp_file($node_subscriber->logfile, $log_location);
+ok( $logfile =~
+	  qr/logical replication did not find row to be updated in replication target relation "tab_full_pk"/,
+	'update target row is missing');
+ok( $logfile =~
+	  qr/logical replication did not find row to be deleted in replication target relation "tab_full_pk"/,
+	'delete target row is missing');
+
+$node_subscriber->append_conf('postgresql.conf',
+	"log_min_messages = warning");
+$node_subscriber->reload;
 
 # check behavior with toasted values
 

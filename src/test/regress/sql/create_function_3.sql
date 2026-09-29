@@ -165,7 +165,7 @@ CREATE FUNCTION functest_S_3() RETURNS boolean
     RETURN false;
 CREATE FUNCTION functest_S_3a() RETURNS boolean
     BEGIN ATOMIC
-        RETURN false;
+        ;;RETURN false;;
     END;
 
 CREATE FUNCTION functest_S_10(a text, b date) RETURNS boolean
@@ -190,6 +190,11 @@ CREATE FUNCTION functest_S_xxx(x int) RETURNS int
 CREATE FUNCTION functest_S_xx(x anyarray) RETURNS anyelement
     LANGUAGE SQL
     RETURN x[1];
+
+-- check reporting of parse-analysis errors
+CREATE FUNCTION functest_S_xx(x date) RETURNS boolean
+    LANGUAGE SQL
+    RETURN x > 1;
 
 -- tricky parsing
 CREATE FUNCTION functest_S_15(x int) RETURNS boolean
@@ -277,10 +282,18 @@ SELECT r0.routine_name, r1.routine_name
   FROM information_schema.routine_routine_usage rru
        JOIN information_schema.routines r0 ON r0.specific_name = rru.specific_name
        JOIN information_schema.routines r1 ON r1.specific_name = rru.routine_name
+  WHERE r0.routine_schema = 'temp_func_test' AND
+        r1.routine_schema = 'temp_func_test'
   ORDER BY 1, 2;
-SELECT routine_name, sequence_name FROM information_schema.routine_sequence_usage ORDER BY 1, 2;
-SELECT routine_name, table_name, column_name FROM information_schema.routine_column_usage ORDER BY 1, 2;
-SELECT routine_name, table_name FROM information_schema.routine_table_usage ORDER BY 1, 2;
+SELECT routine_name, sequence_name FROM information_schema.routine_sequence_usage
+  WHERE routine_schema = 'temp_func_test'
+  ORDER BY 1, 2;
+SELECT routine_name, table_name, column_name FROM information_schema.routine_column_usage
+  WHERE routine_schema = 'temp_func_test'
+  ORDER BY 1, 2;
+SELECT routine_name, table_name FROM information_schema.routine_table_usage
+  WHERE routine_schema = 'temp_func_test'
+  ORDER BY 1, 2;
 
 DROP FUNCTION functest_IS_4a CASCADE;
 DROP SEQUENCE functest1 CASCADE;

@@ -1470,6 +1470,18 @@ BEGIN;
 CREATE INDEX CONCURRENTLY concur_index7 ON concur_heap(f1);
 ERROR:  CREATE INDEX CONCURRENTLY is not supported
 COMMIT;
+-- test where predicate is able to do a transactional update during
+-- a concurrent build before switching pg_index state flags.
+CREATE FUNCTION predicate_stable() RETURNS bool IMMUTABLE
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE 'SELECT txid_current()';
+  RETURN true;
+END; $$;
+CREATE INDEX CONCURRENTLY concur_index8 ON concur_heap (f1)
+  WHERE predicate_stable();
+DROP INDEX concur_index8;
+DROP FUNCTION predicate_stable();
 -- But you can do a regular index build in a transaction
 BEGIN;
 CREATE INDEX std_index on concur_heap(f2);
@@ -2240,16 +2252,14 @@ WHERE classid = 'pg_class'::regclass AND
                    obj                    |                           objref                           | deptype 
 ------------------------------------------+------------------------------------------------------------+---------
  index concur_reindex_ind1                | constraint concur_reindex_ind1 on table concur_reindex_tab | i
- index concur_reindex_ind2                | collation "default"                                        | n
  index concur_reindex_ind2                | column c2 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
- index concur_reindex_ind4                | collation "default"                                        | n
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
  materialized view concur_reindex_matview | schema public                                              | n
  table concur_reindex_tab                 | schema public                                              | n
-(10 rows)
+(8 rows)
 
 REINDEX INDEX CONCURRENTLY concur_reindex_ind1;
 ERROR:  REINDEX CONCURRENTLY is not supported
@@ -2272,16 +2282,14 @@ WHERE classid = 'pg_class'::regclass AND
                    obj                    |                           objref                           | deptype 
 ------------------------------------------+------------------------------------------------------------+---------
  index concur_reindex_ind1                | constraint concur_reindex_ind1 on table concur_reindex_tab | i
- index concur_reindex_ind2                | collation "default"                                        | n
  index concur_reindex_ind2                | column c2 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind3                | column c1 of table concur_reindex_tab                      | a
- index concur_reindex_ind4                | collation "default"                                        | n
  index concur_reindex_ind4                | column c1 of table concur_reindex_tab                      | a
  index concur_reindex_ind4                | column c2 of table concur_reindex_tab                      | a
  materialized view concur_reindex_matview | schema public                                              | n
  table concur_reindex_tab                 | schema public                                              | n
-(10 rows)
+(8 rows)
 
 -- Check that comments are preserved
 CREATE TABLE testcomment (i int);

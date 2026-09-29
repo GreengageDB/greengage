@@ -793,6 +793,7 @@ convert_sourcefiles_in(const char *source_subdir, const char *dest_dir, const ch
 	if (!directory_exists(outdir_sub))
 		make_directory(outdir_sub);
 
+	/* We might need to replace @testtablespace@ */
 	snprintf(testtablespace, MAXPGPATH, "%s/testtablespace", tablespacedir);
 
 	/*
@@ -959,6 +960,32 @@ convert_sourcefiles(void)
 	convert_sourcefiles_in("output", outputdir, "expected", "out");
 
 	convert_sourcefiles_in("yml_in", inputdir, "yml", "yml");
+}
+
+/*
+ * Clean out the test tablespace dir, or create it if it doesn't exist.
+ *
+ * On Windows, doing this cleanup here makes it possible to run the
+ * regression tests under a Windows administrative user account with the
+ * restricted token obtained when starting pg_regress.
+ */
+static void
+prepare_testtablespace_dir(void)
+{
+	char		testtablespace[MAXPGPATH];
+
+	snprintf(testtablespace, MAXPGPATH, "%s/testtablespace", tablespacedir);
+
+	if (directory_exists(testtablespace))
+	{
+		if (!rmtree(testtablespace, true))
+		{
+			fprintf(stderr, _("\n%s: could not remove test tablespace \"%s\"\n"),
+					progname, testtablespace);
+			exit(2);
+		}
+	}
+	make_directory(testtablespace);
 }
 
 /*
@@ -1219,14 +1246,38 @@ initialize_environment(void)
 		 * we also use psql's -X switch consistently, so that ~/.psqlrc files
 		 * won't mess things up.)  Also, set PGPORT to the temp port, and set
 		 * PGHOST depending on whether we are using TCP or Unix sockets.
+		 *
+		 * This list should be kept in sync with TestLib.pm.
 		 */
-		unsetenv("PGDATABASE");
-		unsetenv("PGUSER");
-		unsetenv("PGSERVICE");
-		unsetenv("PGSSLMODE");
-		unsetenv("PGREQUIRESSL");
+		unsetenv("PGCHANNELBINDING");
+		/* PGCLIENTENCODING, see above */
 		unsetenv("PGCONNECT_TIMEOUT");
 		unsetenv("PGDATA");
+		unsetenv("PGDATABASE");
+		unsetenv("PGGSSENCMODE");
+		unsetenv("PGGSSLIB");
+		/* PGHOSTADDR, see below */
+		unsetenv("PGKRBSRVNAME");
+		unsetenv("PGPASSFILE");
+		unsetenv("PGPASSWORD");
+		unsetenv("PGREQUIREPEER");
+		unsetenv("PGREQUIRESSL");
+		unsetenv("PGSERVICE");
+		unsetenv("PGSERVICEFILE");
+		unsetenv("PGSSLCERT");
+		unsetenv("PGSSLCRL");
+		unsetenv("PGSSLCRLDIR");
+		unsetenv("PGSSLKEY");
+		unsetenv("PGSSLMAXPROTOCOLVERSION");
+		unsetenv("PGSSLMINPROTOCOLVERSION");
+		unsetenv("PGSSLMODE");
+		unsetenv("PGSSLROOTCERT");
+		unsetenv("PGSSLSNI");
+		unsetenv("PGTARGETSESSIONATTRS");
+		unsetenv("PGUSER");
+		/* PGPORT, see below */
+		/* PGHOST, see below */
+
 #ifdef HAVE_UNIX_SOCKETS
 		if (hostname != NULL)
 			setenv("PGHOST", hostname, 1);
@@ -2725,6 +2776,7 @@ help(void)
 	printf(_("      --launcher=CMD            use CMD as launcher of psql\n"));
 	printf(_("      --load-extension=EXT      load the named extension before running the\n"));
 	printf(_("                                tests; can appear multiple times\n"));
+	printf(_("      --make-testtablespace-dir create testtablespace directory\n"));
 	printf(_("      --max-connections=N       maximum number of concurrent connections\n"));
 	printf(_("                                (default is 0, meaning unlimited)\n"));
 	printf(_("      --max-concurrent-tests=N  maximum number of concurrent tests in schedule\n"));
@@ -2793,6 +2845,7 @@ regression_main(int argc, char *argv[],
 		{"load-extension", required_argument, NULL, 22},
 		{"config-auth", required_argument, NULL, 24},
 		{"max-concurrent-tests", required_argument, NULL, 25},
+		{"make-testtablespace-dir", no_argument, NULL, 26},
 		{"init-file", required_argument, NULL, 80},
 		{"exclude-tests", required_argument, NULL, 81},
 		{"ignore-plans", no_argument, NULL, 82},
@@ -2805,6 +2858,7 @@ regression_main(int argc, char *argv[],
 	};
 
 	bool		use_unix_sockets;
+	bool		make_testtablespace_dir = false;
 	_stringlist *sl;
 	int			c;
 	int			i;
@@ -2930,6 +2984,9 @@ regression_main(int argc, char *argv[],
 			case 25:
 				max_concurrent_tests = atoi(optarg);
 				break;
+			case 26:
+				make_testtablespace_dir = true;
+				break;
 
 			/* GPDB-added options */
             case 80:
@@ -3028,6 +3085,9 @@ regression_main(int argc, char *argv[],
 #if defined(HAVE_GETRLIMIT) && defined(RLIMIT_CORE)
 	unlimit_core_size();
 #endif
+
+	if (make_testtablespace_dir)
+		prepare_testtablespace_dir();
 
 	if (temp_instance)
 	{

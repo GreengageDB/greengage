@@ -1059,22 +1059,22 @@ _bt_lockbuf(Relation rel, Buffer buf, int access)
 	LockBuffer(buf, access);
 
 	/*
-	 * It doesn't matter that _bt_unlockbuf() won't get called in the
-	 * event of an nbtree error (e.g. a unique violation error).  That
-	 * won't cause Valgrind false positives.
+	 * It doesn't matter that _bt_unlockbuf() won't get called in the event of
+	 * an nbtree error (e.g. a unique violation error).  That won't cause
+	 * Valgrind false positives.
 	 *
-	 * The nbtree client requests are superimposed on top of the
-	 * bufmgr.c buffer pin client requests.  In the event of an nbtree
-	 * error the buffer will certainly get marked as defined when the
-	 * backend once again acquires its first pin on the buffer. (Of
-	 * course, if the backend never touches the buffer again then it
-	 * doesn't matter that it remains non-accessible to Valgrind.)
+	 * The nbtree client requests are superimposed on top of the bufmgr.c
+	 * buffer pin client requests.  In the event of an nbtree error the buffer
+	 * will certainly get marked as defined when the backend once again
+	 * acquires its first pin on the buffer. (Of course, if the backend never
+	 * touches the buffer again then it doesn't matter that it remains
+	 * non-accessible to Valgrind.)
 	 *
-	 * Note: When an IndexTuple C pointer gets computed using an
-	 * ItemId read from a page while a lock was held, the C pointer
-	 * becomes unsafe to dereference forever as soon as the lock is
-	 * released.  Valgrind can only detect cases where the pointer
-	 * gets dereferenced with no _current_ lock/pin held, though.
+	 * Note: When an IndexTuple C pointer gets computed using an ItemId read
+	 * from a page while a lock was held, the C pointer becomes unsafe to
+	 * dereference forever as soon as the lock is released.  Valgrind can only
+	 * detect cases where the pointer gets dereferenced with no _current_
+	 * lock/pin held, though.
 	 */
 	if (!RelationUsesLocalBuffers(rel))
 		VALGRIND_MAKE_MEM_DEFINED(BufferGetPage(buf), BLCKSZ);
@@ -1403,7 +1403,7 @@ _bt_delitems_delete(Relation rel, Buffer buf, TransactionId latestRemovedXid,
  * _bt_delitems_delete.  These steps must take place before each function's
  * critical section begins.
  *
- * updatabable and nupdatable are inputs, though note that we will use
+ * updatable and nupdatable are inputs, though note that we will use
  * _bt_update_posting() to replace the original itup with a pointer to a final
  * version in palloc()'d memory.  Caller should free the tuples when its done.
  *
@@ -1509,7 +1509,7 @@ _bt_delitems_cmp(const void *a, const void *b)
  * some extra index tuples that were practically free for tableam to check in
  * passing (when they actually turn out to be safe to delete).  It probably
  * only makes sense for the tableam to go ahead with these extra checks when
- * it is block-orientated (otherwise the checks probably won't be practically
+ * it is block-oriented (otherwise the checks probably won't be practically
  * free, which we rely on).  The tableam interface requires the tableam side
  * to handle the problem, though, so this is okay (we as an index AM are free
  * to make the simplifying assumption that all tableams must be block-based).
@@ -2400,7 +2400,7 @@ _bt_unlink_halfdead_page(Relation rel, Buffer leafbuf, BlockNumber scanblkno,
 		opaque = (BTPageOpaque) PageGetSpecialPointer(page);
 		while (P_ISDELETED(opaque) || opaque->btpo_next != target)
 		{
-			bool	leftsibvalid = true;
+			bool		leftsibvalid = true;
 
 			/*
 			 * Before we follow the link from the page that was the left

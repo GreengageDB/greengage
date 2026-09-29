@@ -442,6 +442,7 @@ static int
 SocketBackend(StringInfo inBuf)
 {
 	int			qtype;
+	int			maxmsglen;
 
 	/*
 	 * Get message type code from the frontend.
@@ -474,7 +475,9 @@ SocketBackend(StringInfo inBuf)
 	/*
 	 * Validate message type code before trying to read body; if we have lost
 	 * sync, better to say "command unknown" than to run out of memory because
-	 * we used garbage as a length word.
+	 * we used garbage as a length word.  We can also select a type-dependent
+	 * limit on what a sane length word could be.  (The limit could be chosen
+	 * more granularly, but it's not clear it's worth fussing over.)
 	 *
 	 * This also gives us a place to set the doing_extended_query_message flag
 	 * as soon as possible.
@@ -482,11 +485,13 @@ SocketBackend(StringInfo inBuf)
 	switch (qtype)
 	{
 		case 'Q':				/* simple query */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 			break;
 
 		case 'M':				/* Greenplum Database dispatched statement from QD */
 
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 
 			/* don't support old protocols with this. */
@@ -500,6 +505,7 @@ SocketBackend(StringInfo inBuf)
 
 		case 'T':				/* Greenplum Database dispatched transaction protocol from QD */
 
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 
 			/* don't support old protocols with this. */
@@ -512,24 +518,32 @@ SocketBackend(StringInfo inBuf)
 			break;
 
 		case 'F':				/* fastpath function call */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 			break;
 
 		case 'X':				/* terminate */
+			maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 			ignore_till_sync = false;
 			break;
 
 		case 'B':				/* bind */
+		case 'P':				/* parse */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+			doing_extended_query_message = true;
+			break;
+
 		case 'C':				/* close */
 		case 'D':				/* describe */
 		case 'E':				/* execute */
 		case 'H':				/* flush */
-		case 'P':				/* parse */
+			maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
 			doing_extended_query_message = true;
 			break;
 
 		case 'S':				/* sync */
+			maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
 			/* stop any active skip-till-Sync */
 			ignore_till_sync = false;
 			/* mark not-extended, so that a new error doesn't begin skip */
@@ -537,9 +551,14 @@ SocketBackend(StringInfo inBuf)
 			break;
 
 		case 'd':				/* copy data */
+			maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+			doing_extended_query_message = false;
+			break;
+
 		case 'c':				/* copy done */
 		case 'f':				/* copy fail */
 		case '?':				/* Greenplum sequence response */
+			maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
 			doing_extended_query_message = false;
 			break;
 
@@ -553,6 +572,7 @@ SocketBackend(StringInfo inBuf)
 			ereport(FATAL,
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
 					 errmsg("invalid frontend message type %d", qtype)));
+			maxmsglen = 0;		/* keep compiler quiet */
 			break;
 	}
 
@@ -561,8 +581,8 @@ SocketBackend(StringInfo inBuf)
 	 * after the type code; we can read the message contents independently of
 	 * the type.
 	 */
-	if (pq_getmessage(inBuf, 0))
-		return EOF;			/* suitable message already logged */
+	if (pq_getmessage(inBuf, maxmsglen))
+		return EOF;				/* suitable message already logged */
 	RESUME_CANCEL_INTERRUPTS();
 
 	return qtype;
@@ -673,7 +693,7 @@ ProcessClientWriteInterrupt(bool blocked)
 		{
 			/*
 			 * Don't mess with whereToSendOutput if ProcessInterrupts wouldn't
-			 * do anything.
+			 * service ProcDiePending.
 			 */
 			if (InterruptHoldoffCount == 0 && CritSectionCount == 0)
 			{
@@ -823,7 +843,7 @@ pg_analyze_and_rewrite_params(RawStmt *parsetree,
 
 	query = transformTopLevelStmt(pstate, parsetree);
 
-	if (compute_query_id)
+	if (IsQueryIdEnabled())
 		jstate = JumbleQuery(query, query_string);
 
 	if (post_parse_analyze_hook)
@@ -831,7 +851,7 @@ pg_analyze_and_rewrite_params(RawStmt *parsetree,
 
 	free_parsestate(pstate);
 
-	pgstat_report_queryid(query->queryId, false);
+	pgstat_report_query_id(query->queryId, false);
 
 	if (log_parser_stats)
 		ShowUsage("PARSE ANALYSIS STATISTICS");
@@ -1715,7 +1735,7 @@ exec_simple_query(const char *query_string)
 		DestReceiver *receiver;
 		int16		format;
 
-		pgstat_report_queryid(0, true);
+		pgstat_report_query_id(0, true);
 
 		/*
 		 * Get the command name for use in status display (it also becomes the
@@ -2048,8 +2068,8 @@ exec_parse_message(const char *query_string,	/* string to execute */
 
 	ereport(DEBUG2,
 			(errmsg_internal("parse %s: %s",
-					*stmt_name ? stmt_name : "<unnamed>",
-					query_string)));
+							 *stmt_name ? stmt_name : "<unnamed>",
+							 query_string)));
 
 	/*
 	 * Start up a transaction command so we can run parse analysis etc. (Note
@@ -2328,8 +2348,8 @@ exec_bind_message(StringInfo input_message)
 
 	ereport(DEBUG2,
 			(errmsg_internal("bind %s to %s",
-					*portal_name ? portal_name : "<unnamed>",
-					*stmt_name ? stmt_name : "<unnamed>")));
+							 *portal_name ? portal_name : "<unnamed>",
+							 *stmt_name ? stmt_name : "<unnamed>")));
 
 	/* Find prepared statement */
 	if (stmt_name[0] != '\0')
@@ -3936,6 +3956,12 @@ RecoveryConflictInterrupt(ProcSignalReason reason)
  *
  * Parameters filename and lineno contain the file name and the line number where
  * ProcessInterrupts was invoked, respectively.
+ *
+ * Note: if INTERRUPTS_CAN_BE_PROCESSED() is true, then ProcessInterrupts
+ * is guaranteed to clear the InterruptPending flag before returning.
+ * (This is not the same as guaranteeing that it's still clear when we
+ * return; another interrupt could have arrived.  But we promise that
+ * any pre-existing one will have been serviced.)
  */
 void
 ProcessInterrupts(const char* filename, int lineno)
@@ -4079,7 +4105,11 @@ ProcessInterrupts(const char* filename, int lineno)
 	{
 		/*
 		 * Re-arm InterruptPending so that we process the cancel request as
-		 * soon as we're done reading the message.
+		 * soon as we're done reading the message.  (XXX this is seriously
+		 * ugly: it complicates INTERRUPTS_CAN_BE_PROCESSED(), and it means we
+		 * can't use that macro directly as the initial test in this function,
+		 * meaning that this code also creates opportunities for other bugs to
+		 * appear.)
 		 */
 		InterruptPending = true;
 	}

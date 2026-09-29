@@ -1829,19 +1829,20 @@ cmp_list_len_asc(const ListCell *a, const ListCell *b)
 static int
 cmp_list_len_contents_asc(const ListCell *a, const ListCell *b)
 {
-	int		res = cmp_list_len_asc(a, b);
+	int			res = cmp_list_len_asc(a, b);
 
 	if (res == 0)
 	{
-		List		   *la = (List *) lfirst(a);
-		List		   *lb = (List *) lfirst(b);
-		ListCell	   *lca;
-		ListCell	   *lcb;
+		List	   *la = (List *) lfirst(a);
+		List	   *lb = (List *) lfirst(b);
+		ListCell   *lca;
+		ListCell   *lcb;
 
 		forboth(lca, la, lcb, lb)
 		{
-			int		va = lfirst_int(lca);
-			int		vb = lfirst_int(lcb);
+			int			va = lfirst_int(lca);
+			int			vb = lfirst_int(lcb);
+
 			if (va > vb)
 				return 1;
 			if (va < vb)
@@ -1934,7 +1935,7 @@ expand_grouping_sets(List *groupingSets, bool groupDistinct, int limit)
 		list_sort(result, cmp_list_len_contents_asc);
 
 		/* Finally, remove duplicates */
-		prev = linitial_node(List, result);
+		prev = linitial(result);
 		for_each_from(cell, result, 1)
 		{
 			if (equal(lfirst(cell), prev))

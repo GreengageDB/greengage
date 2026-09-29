@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 use strict;
 use warnings;
 
@@ -5,14 +8,13 @@ use Config;
 use PostgresNode;
 use TestLib;
 use Test::More;
-use Cwd;
 
 my $node = get_new_node('main');
 $node->init;
 $node->start;
 
 my $numrows = 700;
-$ENV{PATH} = "$ENV{PATH}:" . getcwd();
+$ENV{PATH} = "$ENV{TESTDIR}:$ENV{PATH}";
 
 my ($out, $err) = run_command([ 'libpq_pipeline', 'tests' ]);
 die "oops: $err" unless $err eq '';
@@ -23,7 +25,7 @@ mkdir "$TestLib::tmp_check/traces";
 for my $testname (@tests)
 {
 	my @extraargs = ('-r', $numrows);
-	my $cmptrace  = grep(/^$testname$/,
+	my $cmptrace = grep(/^$testname$/,
 		qw(simple_pipeline multi_pipelines prepared singlerow
 		  pipeline_abort transaction disallowed_in_pipeline)) > 0;
 

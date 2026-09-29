@@ -18,65 +18,6 @@
 -- that test creates some bogus operators...
 
 
--- Helper functions to deal with cases where binary-coercible matches are
--- allowed.
-
--- This should match IsBinaryCoercible() in parse_coerce.c.
--- It doesn't currently know about some cases, notably domains, anyelement,
--- anynonarray, anyenum, or record, but it doesn't need to (yet).
-create function binary_coercible(oid, oid) returns bool as $$
-begin
-  if $1 = $2 then return true; end if;
-  if EXISTS(select 1 from pg_catalog.pg_cast where
-            castsource = $1 and casttarget = $2 and
-            castmethod = 'b' and castcontext = 'i')
-  then return true; end if;
-  if $2 = 'pg_catalog.any'::pg_catalog.regtype then return true; end if;
-  if $2 = 'pg_catalog.anyarray'::pg_catalog.regtype then
-    if EXISTS(select 1 from pg_catalog.pg_type where
-              oid = $1 and typelem != 0 and
-              typsubscript = 'pg_catalog.array_subscript_handler'::pg_catalog.regproc)
-    then return true; end if;
-  end if;
-  if $2 = 'pg_catalog.anyrange'::pg_catalog.regtype then
-    if (select typtype from pg_catalog.pg_type where oid = $1) = 'r'
-    then return true; end if;
-  end if;
-  if $2 = 'pg_catalog.anymultirange'::pg_catalog.regtype then
-    if (select typtype from pg_catalog.pg_type where oid = $1) = 'm'
-    then return true; end if;
-  end if;
-  return false;
-end
-$$ language plpgsql strict stable;
-
--- This one ignores castcontext, so it will allow cases where an explicit
--- (but still binary) cast would be required to convert the input type.
--- We don't currently use this for any tests in this file, but it is a
--- reasonable alternative definition for some scenarios.
-create function explicitly_binary_coercible(oid, oid) returns bool as $$
-begin
-  if $1 = $2 then return true; end if;
-  if EXISTS(select 1 from pg_catalog.pg_cast where
-            castsource = $1 and casttarget = $2 and
-            castmethod = 'b')
-  then return true; end if;
-  if $2 = 'pg_catalog.any'::pg_catalog.regtype then return true; end if;
-  if $2 = 'pg_catalog.anyarray'::pg_catalog.regtype then
-    if EXISTS(select 1 from pg_catalog.pg_type where
-              oid = $1 and typelem != 0 and
-              typsubscript = 'pg_catalog.array_subscript_handler'::pg_catalog.regproc)
-    then return true; end if;
-  end if;
-  if $2 = 'pg_catalog.anyrange'::pg_catalog.regtype then
-    if (select typtype from pg_catalog.pg_type where oid = $1) = 'r'
-    then return true; end if;
-  end if;
-  return false;
-end
-$$ language plpgsql strict stable;
-
-
 -- **************** pg_proc ****************
 
 -- Look for illegal values in pg_proc fields.
@@ -96,10 +37,13 @@ WHERE p1.prolang = 0 OR p1.prorettype = 0 OR
        provolatile NOT IN ('i', 's', 'v') OR
        proparallel NOT IN ('s', 'r', 'u');
 
--- prosrc should never be null or empty
+-- prosrc should never be null; it can be empty only if prosqlbody isn't null
 SELECT p1.oid, p1.proname
 FROM pg_proc as p1
-WHERE prosrc IS NULL OR prosrc = '' OR prosrc = '-';
+WHERE prosrc IS NULL;
+SELECT p1.oid, p1.proname
+FROM pg_proc as p1
+WHERE (prosrc = '' OR prosrc = '-') AND prosqlbody IS NULL;
 
 -- proretset should only be set for normal functions
 SELECT p1.oid, p1.proname

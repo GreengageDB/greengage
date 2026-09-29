@@ -755,7 +755,6 @@ transformRangeFunction(ParseState *pstate, RangeFunction *r)
 				!fc->agg_star &&
 				!fc->agg_distinct &&
 				!fc->func_variadic &&
-				fc->funcformat == COERCE_EXPLICIT_CALL &&
 				coldeflist == NIL)
 			{
 				ListCell   *lc;
@@ -3530,17 +3529,6 @@ transformOnConflictArbiter(ParseState *pstate,
 	/* ON CONFLICT DO NOTHING does not require an inference clause */
 	if (infer)
 	{
-		List	   *save_namespace;
-
-		/*
-		 * While we process the arbiter expressions, accept only non-qualified
-		 * references to the target table. Hide any other relations.
-		 */
-		save_namespace = pstate->p_namespace;
-		pstate->p_namespace = NIL;
-		addNSItemToQuery(pstate, pstate->p_target_nsitem,
-						 false, false, true);
-
 		if (infer->indexElems)
 			*arbiterExpr = resolve_unique_index_expr(pstate, infer,
 													 pstate->p_target_relation);
@@ -3552,8 +3540,6 @@ transformOnConflictArbiter(ParseState *pstate,
 		if (infer->whereClause)
 			*arbiterWhere = transformExpr(pstate, infer->whereClause,
 										  EXPR_KIND_INDEX_PREDICATE);
-
-		pstate->p_namespace = save_namespace;
 
 		/*
 		 * If the arbiter is specified by constraint name, get the constraint

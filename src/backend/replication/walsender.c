@@ -631,7 +631,7 @@ StartReplication(StartReplicationCmd *cmd)
 
 	if (cmd->slotname)
 	{
-		(void) ReplicationSlotAcquire(cmd->slotname, SAB_Error);
+		ReplicationSlotAcquire(cmd->slotname, true);
 		if (SlotIsLogical(MyReplicationSlot))
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -890,7 +890,6 @@ logical_read_xlog_page(XLogReaderState *state, XLogRecPtr targetPagePtr, int req
 	XLByteToSeg(targetPagePtr, segno, state->segcxt.ws_segsize);
 	CheckXLogRemoved(segno, state->seg.ws_tli);
 
-	/* TODO_REVERT_C2DC19342E0: GGDB-specific, keep ours when the revert lands */
 	WalSndCtl->error = WALSNDERROR_NONE;
 
 	return count;
@@ -993,7 +992,7 @@ CreateReplicationSlot(CreateReplicationSlotCmd *cmd)
 		 */
 		ReplicationSlotCreate(cmd->slotname, true,
 							  cmd->temporary ? RS_TEMPORARY : RS_EPHEMERAL,
-							  cmd->two_phase);
+							  false);
 	}
 
 	if (cmd->kind == REPLICATION_KIND_LOGICAL)
@@ -1176,7 +1175,7 @@ StartLogicalReplication(StartReplicationCmd *cmd)
 
 	Assert(!MyReplicationSlot);
 
-	(void) ReplicationSlotAcquire(cmd->slotname, SAB_Error);
+	ReplicationSlotAcquire(cmd->slotname, true);
 
 	if (XLogRecPtrIsInvalid(MyReplicationSlot->data.restart_lsn))
 		ereport(ERROR,
@@ -1742,6 +1741,7 @@ static void
 ProcessRepliesIfAny(void)
 {
 	unsigned char firstchar;
+	int			maxmsglen;
 	int			r;
 	bool		received = false;
 
@@ -1771,9 +1771,28 @@ ProcessRepliesIfAny(void)
 			break;
 		}
 
+		/* Validate message type and set packet size limit */
+		switch (firstchar)
+		{
+			case 'd':
+				maxmsglen = PQ_LARGE_MESSAGE_LIMIT;
+				break;
+			case 'c':
+			case 'X':
+				maxmsglen = PQ_SMALL_MESSAGE_LIMIT;
+				break;
+			default:
+				ereport(FATAL,
+						(errcode(ERRCODE_PROTOCOL_VIOLATION),
+						 errmsg("invalid standby message type \"%c\"",
+								firstchar)));
+				maxmsglen = 0;	/* keep compiler quiet */
+				break;
+		}
+
 		/* Read the message contents */
 		resetStringInfo(&reply_message);
-		if (pq_getmessage(&reply_message, 0))
+		if (pq_getmessage(&reply_message, maxmsglen))
 		{
 			ereport(COMMERROR,
 					(errcode(ERRCODE_PROTOCOL_VIOLATION),
@@ -1781,7 +1800,7 @@ ProcessRepliesIfAny(void)
 			proc_exit(0);
 		}
 
-		/* Handle the very limited subset of commands expected in this phase */
+		/* ... and process it */
 		switch (firstchar)
 		{
 				/*
@@ -1818,10 +1837,7 @@ ProcessRepliesIfAny(void)
 				proc_exit(0);
 
 			default:
-				ereport(FATAL,
-						(errcode(ERRCODE_PROTOCOL_VIOLATION),
-						 errmsg("invalid standby message type \"%c\"",
-								firstchar)));
+				Assert(false);	/* NOT REACHED */
 		}
 	}
 
@@ -2373,7 +2389,7 @@ WalSndLoop(WalSndSendDataCallback send_data)
 			{
 				ereport(DEBUG1,
 						(errmsg_internal("\"%s\" has now caught up with upstream server",
-								application_name)));
+										 application_name)));
 				WalSndSetState(WALSNDSTATE_STREAMING);
 			}
 
@@ -3286,7 +3302,7 @@ WalSndWakeup(void)
 static void
 WalSndWait(uint32 socket_events, long timeout, uint32 wait_event)
 {
-	WaitEvent event;
+	WaitEvent	event;
 
 	ModifyWaitEvent(FeBeWaitSet, FeBeWaitSetSocketPos, socket_events, NULL);
 	if (WaitEventSetWait(FeBeWaitSet, timeout, &event, 1, wait_event) == 1 &&

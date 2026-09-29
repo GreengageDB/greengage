@@ -1062,9 +1062,8 @@ WaitEventAdjustEpoll(WaitEventSet *set, WaitEvent *event, int action)
 	if (rc < 0)
 		ereport(ERROR,
 				(errcode_for_socket_access(),
-		/* translator: %s is a syscall name, such as "poll()" */
-				 errmsg("%s failed: %m",
-						"epoll_ctl()")));
+				 errmsg("%s() failed: %m",
+						"epoll_ctl")));
 }
 #endif
 
@@ -1232,9 +1231,8 @@ WaitEventAdjustKqueue(WaitEventSet *set, WaitEvent *event, int old_events)
 		else
 			ereport(ERROR,
 					(errcode_for_socket_access(),
-			/* translator: %s is a syscall name, such as "poll()" */
-					 errmsg("%s failed: %m",
-							"kevent()")));
+					 errmsg("%s() failed: %m",
+							"kevent")));
 	}
 	else if (event->events == WL_POSTMASTER_DEATH &&
 			 PostmasterPid != getppid() &&
@@ -1281,11 +1279,11 @@ WaitEventAdjustWin32(WaitEventSet *set, WaitEvent *event)
 		{
 			*handle = WSACreateEvent();
 			if (*handle == WSA_INVALID_EVENT)
-				elog(ERROR, "failed to create event for socket: error code %u",
+				elog(ERROR, "failed to create event for socket: error code %d",
 					 WSAGetLastError());
 		}
 		if (WSAEventSelect(event->fd, *handle, flags) != 0)
-			elog(ERROR, "failed to set up event for socket: error code %u",
+			elog(ERROR, "failed to set up event for socket: error code %d",
 				 WSAGetLastError());
 
 		Assert(event->fd != PGINVALID_SOCKET);
@@ -1462,9 +1460,8 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			waiting = false;
 			ereport(ERROR,
 					(errcode_for_socket_access(),
-			/* translator: %s is a syscall name, such as "poll()" */
-					 errmsg("%s failed: %m",
-							"epoll_wait()")));
+					 errmsg("%s() failed: %m",
+							"epoll_wait")));
 		}
 		return 0;
 	}
@@ -1615,9 +1612,8 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			waiting = false;
 			ereport(ERROR,
 					(errcode_for_socket_access(),
-			/* translator: %s is a syscall name, such as "poll()" */
-					 errmsg("%s failed: %m",
-							"kevent()")));
+					 errmsg("%s() failed: %m",
+							"kevent")));
 		}
 		return 0;
 	}
@@ -1660,9 +1656,9 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 				 (cur_kqueue_event->fflags & NOTE_EXIT) != 0)
 		{
 			/*
-			 * The kernel will tell this kqueue object only once about the exit
-			 * of the postmaster, so let's remember that for next time so that
-			 * we provide level-triggered semantics.
+			 * The kernel will tell this kqueue object only once about the
+			 * exit of the postmaster, so let's remember that for next time so
+			 * that we provide level-triggered semantics.
 			 */
 			set->report_postmaster_not_running = true;
 
@@ -1732,9 +1728,8 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 			waiting = false;
 			ereport(ERROR,
 					(errcode_for_socket_access(),
-			/* translator: %s is a syscall name, such as "poll()" */
-					 errmsg("%s failed: %m",
-							"poll()")));
+					 errmsg("%s() failed: %m",
+							"poll")));
 		}
 		return 0;
 	}
@@ -1972,7 +1967,7 @@ WaitEventSetWaitBlock(WaitEventSet *set, int cur_timeout,
 
 		ZeroMemory(&resEvents, sizeof(resEvents));
 		if (WSAEnumNetworkEvents(cur_event->fd, handle, &resEvents) != 0)
-			elog(ERROR, "failed to enumerate network events: error code %u",
+			elog(ERROR, "failed to enumerate network events: error code %d",
 				 WSAGetLastError());
 		if ((cur_event->events & WL_SOCKET_READABLE) &&
 			(resEvents.lNetworkEvents & FD_READ))

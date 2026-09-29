@@ -77,7 +77,6 @@ SET
 SET
 SET
 SET
-SET
 CREATE TABLE
 CREATE TABLE
 ALTER TABLE
@@ -155,7 +154,6 @@ SET
  
 (1 row)
 
-SET
 SET
 SET
 SET
@@ -247,7 +245,6 @@ SET
 SET
 SET
 SET
-SET
 CREATE TABLE
 SET
 UPDATE 1
@@ -290,11 +287,10 @@ SET
 SET
 SET
 SET
-SET
-psql:data/minirepro.sql:47: ERROR:  only shared relations can be placed in pg_global tablespace
-psql:data/minirepro.sql:49: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:57: ERROR:  permission denied: "pg_tablespace" is a system catalog
-psql:data/minirepro.sql:65: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:46: ERROR:  only shared relations can be placed in pg_global tablespace
+psql:data/minirepro.sql:48: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:56: ERROR:  permission denied: "pg_tablespace" is a system catalog
+psql:data/minirepro.sql:64: ERROR:  permission denied: "pg_tablespace" is a system catalog
 SET
 UPDATE 1
 DELETE 1

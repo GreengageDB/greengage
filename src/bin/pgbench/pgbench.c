@@ -63,6 +63,7 @@
 #include "common/username.h"
 #include "fe_utils/cancel.h"
 #include "fe_utils/conditional.h"
+#include "fe_utils/string_utils.h"
 #include "getopt_long.h"
 #include "libpq-fe.h"
 #include "pgbench.h"
@@ -5174,7 +5175,7 @@ ParseScript(const char *script, const char *desc, int weight)
 
 					if (index == 0)
 						syntax_error(desc, lineno, NULL, NULL,
-									 "\\gset must follow a SQL command",
+									 "\\gset must follow an SQL command",
 									 NULL, -1);
 
 					cmd = ps.commands[index - 1];
@@ -5182,7 +5183,7 @@ ParseScript(const char *script, const char *desc, int weight)
 					if (cmd->type != SQL_COMMAND ||
 						cmd->varprefix != NULL)
 						syntax_error(desc, lineno, NULL, NULL,
-									 "\\gset must follow a SQL command",
+									 "\\gset must follow an SQL command",
 									 cmd->first_line, -1);
 
 					/* get variable prefix */
@@ -5384,8 +5385,8 @@ parseScriptWeight(const char *option, char **script)
 		}
 		if (wtmp > INT_MAX || wtmp < 0)
 		{
-			pg_log_fatal("weight specification out of range (0 .. %u): " INT64_FORMAT,
-						 INT_MAX, (int64) wtmp);
+			pg_log_fatal("weight specification out of range (0 .. %u): %lld",
+						 INT_MAX, (long long) wtmp);
 			exit(1);
 		}
 		weight = wtmp;
@@ -5518,6 +5519,37 @@ printSimpleStats(const char *prefix, SimpleStats *ss)
 	}
 }
 
+/* print version banner */
+static void
+printVersion(PGconn *con)
+{
+	int			server_ver = PQserverVersion(con);
+	int			client_ver = PG_VERSION_NUM;
+
+	if (server_ver != client_ver)
+	{
+		const char *server_version;
+		char		sverbuf[32];
+
+		/* Try to get full text form, might include "devel" etc */
+		server_version = PQparameterStatus(con, "server_version");
+		/* Otherwise fall back on server_ver */
+		if (!server_version)
+		{
+			formatPGVersionNumber(server_ver, true,
+								  sverbuf, sizeof(sverbuf));
+			server_version = sverbuf;
+		}
+
+		printf(_("%s (%s, server %s)\n"),
+			   "pgbench", PG_VERSION, server_version);
+	}
+	/* For version match, only print pgbench version */
+	else
+		printf("%s (%s)\n", "pgbench", PG_VERSION);
+	fflush(stdout);
+}
+
 /* print out results */
 static void
 printResults(StatsData *total,
@@ -5531,7 +5563,6 @@ printResults(StatsData *total,
 	double		bench_duration = PG_TIME_GET_DOUBLE(total_duration);
 	double		tps = ntx / bench_duration;
 
-	printf("pgbench (Greenplum Database) %d.%d\n", PG_VERSION_NUM / 10000, PG_VERSION_NUM % 100);
 	/* Report test parameters. */
 	printf("transaction type: %s\n",
 		   num_scripts == 1 ? sql_script[0].desc : "multiple scripts");
@@ -5705,7 +5736,7 @@ set_random_seed(const char *seed)
 	}
 
 	if (seed != NULL)
-		pg_log_info("setting random seed to " UINT64_FORMAT, iseed);
+		pg_log_info("setting random seed to %llu", (unsigned long long) iseed);
 	random_seed = iseed;
 
 	/* Fill base_random_sequence with low-order bits of seed */
@@ -6363,6 +6394,9 @@ main(int argc, char **argv)
 	if (con == NULL)
 		exit(1);
 
+	/* report pgbench and server versions */
+	printVersion(con);
+
 	pg_log_debug("pghost: %s pgport: %s nclients: %d %s: %d dbName: %s",
 				 PQhost(con), PQport(con), nclients,
 				 duration <= 0 ? "nxacts" : "duration",
@@ -6606,8 +6640,8 @@ threadRun(void *arg)
 				 * GO before proceeding to the "done" path which will cleanup,
 				 * so as to avoid locking the process.
 				 *
-				 * It is unclear whether it is worth doing anything rather than
-				 * coldly exiting with an error message.
+				 * It is unclear whether it is worth doing anything rather
+				 * than coldly exiting with an error message.
 				 */
 				THREAD_BARRIER_WAIT(&barrier);
 				goto done;

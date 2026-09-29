@@ -453,14 +453,8 @@ BeginCopyToCommon(ParseState *pstate,
 		/*
 		 * Run parse analysis and rewrite.  Note this also acquires sufficient
 		 * locks on the source table(s).
-		 *
-		 * Because the parser and planner tend to scribble on their input, we
-		 * make a preliminary copy of the source querytree.  This prevents
-		 * problems in the case that the COPY is in a portal or plpgsql
-		 * function and is executed repeatedly.  (See also the same hack in
-		 * DECLARE CURSOR and PREPARE.)  XXX FIXME someday.
 		 */
-		rewritten = pg_analyze_and_rewrite(copyObject(raw_query),
+		rewritten = pg_analyze_and_rewrite(raw_query,
 										   pstate->p_sourcetext, NULL, 0,
 										   NULL);
 
@@ -537,7 +531,7 @@ BeginCopyToCommon(ParseState *pstate,
 		plan = pg_plan_query(query, pstate->p_sourcetext, cursorOptions, NULL);
 
 		/*
-		 * With row level security and a user using "COPY relation TO", we
+		 * With row-level security and a user using "COPY relation TO", we
 		 * have to convert the "COPY relation TO" to a query-based COPY (eg:
 		 * "COPY (SELECT * FROM relation) TO"), to allow the rewriter to add
 		 * in any RLS clauses.
@@ -1409,7 +1403,7 @@ CopyTo(CopyToState cstate)
 	else
 		tupDesc = cstate->queryDesc->tupDesc;
 	num_phys_attrs = tupDesc->natts;
-	cstate->opts.null_print_client = cstate->opts.null_print; /* default */
+	cstate->opts.null_print_client = cstate->opts.null_print;	/* default */
 
 	/* We use fe_msgbuf as a per-row buffer regardless of copy_dest */
 	cstate->fe_msgbuf = makeStringInfo();
@@ -1989,7 +1983,7 @@ static bool
 copy_dest_receive(TupleTableSlot *slot, DestReceiver *self)
 {
 	DR_copy    *myState = (DR_copy *) self;
-	CopyToState	cstate = myState->cstate;
+	CopyToState cstate = myState->cstate;
 
 	/* Send the data */
 	CopyOneRowTo(cstate, slot);

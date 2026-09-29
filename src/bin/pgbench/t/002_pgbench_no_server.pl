@@ -1,3 +1,6 @@
+
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 #
 # pgbench tests which do not need a server
 #
@@ -23,7 +26,6 @@ sub pgbench
 	local $Test::Builder::Level = $Test::Builder::Level + 1;
 
 	my ($opts, $stat, $out, $err, $name) = @_;
-	print STDERR "opts=$opts, stat=$stat, out=$out, err=$err, name=$name";
 	command_checks_all([ 'pgbench', split(/\s+/, $opts) ],
 		$stat, $out, $err, $name);
 	return;

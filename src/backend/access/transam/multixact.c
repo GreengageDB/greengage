@@ -1240,7 +1240,10 @@ GetMultiXactIdMembers(MultiXactId multi, MultiXactMember **members,
 	debug_elog3(DEBUG2, "GetMembers: asked for %u", multi);
 
 	if (!MultiXactIdIsValid(multi) || from_pgupgrade)
+	{
+		*members = NULL;
 		return -1;
+	}
 
 	/* See if the MultiXactId is in the local cache */
 	length = mXactCacheGetById(multi, members);
@@ -1291,13 +1294,10 @@ GetMultiXactIdMembers(MultiXactId multi, MultiXactMember **members,
 	LWLockRelease(MultiXactGenLock);
 
 	if (MultiXactIdPrecedes(multi, oldestMXact))
-	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
 				 errmsg("MultiXactId %u does no longer exist -- apparent wraparound",
 						multi)));
-		return -1;
-	}
 
 	if (!MultiXactIdPrecedes(multi, nextMXact))
 		ereport(ERROR,
@@ -1397,7 +1397,6 @@ retry:
 	LWLockRelease(MultiXactOffsetSLRULock);
 
 	ptr = (MultiXactMember *) palloc(length * sizeof(MultiXactMember));
-	*members = ptr;
 
 	/* Now get the members themselves. */
 	LWLockAcquire(MultiXactMemberSLRULock, LW_EXCLUSIVE);
@@ -1442,6 +1441,9 @@ retry:
 
 	LWLockRelease(MultiXactMemberSLRULock);
 
+	/* A multixid with zero members should not happen */
+	Assert(truelength > 0);
+
 	/*
 	 * Copy the result into the local cache.
 	 */
@@ -1449,6 +1451,7 @@ retry:
 
 	debug_elog3(DEBUG2, "GetMembers: no cache for %s",
 				mxid_to_string(multi, truelength, ptr));
+	*members = ptr;
 	return truelength;
 }
 
@@ -1549,7 +1552,6 @@ mXactCacheGetById(MultiXactId multi, MultiXactMember **members)
 
 			size = sizeof(MultiXactMember) * entry->nmembers;
 			ptr = (MultiXactMember *) palloc(size);
-			*members = ptr;
 
 			memcpy(ptr, entry->members, size);
 
@@ -1565,6 +1567,7 @@ mXactCacheGetById(MultiXactId multi, MultiXactMember **members)
 			 */
 			dlist_move_head(&MXactCache, iter.cur);
 
+			*members = ptr;
 			return entry->nmembers;
 		}
 	}
@@ -2277,7 +2280,7 @@ SetMultiXactIdLimit(MultiXactId oldest_datminmxid, Oid oldest_datoid,
 	/* Log the info */
 	ereport(DEBUG1,
 			(errmsg_internal("MultiXactId wrap limit is %u, limited by database with OID %u",
-					multiWrapLimit, oldest_datoid)));
+							 multiWrapLimit, oldest_datoid)));
 
 	/*
 	 * Computing the actual limits is only possible once the data directory is
@@ -2611,7 +2614,7 @@ SetOffsetVacuumLimit(bool is_startup)
 		if (oldestOffsetKnown)
 			ereport(DEBUG1,
 					(errmsg_internal("oldest MultiXactId member is at offset %u",
-							oldestOffset)));
+									 oldestOffset)));
 		else
 			ereport(LOG,
 					(errmsg("MultiXact member wraparound protections are disabled because oldest checkpointed MultiXact %u does not exist on disk",
@@ -2640,7 +2643,7 @@ SetOffsetVacuumLimit(bool is_startup)
 
 		ereport(DEBUG1,
 				(errmsg_internal("MultiXact member stop limit is now %u based on MultiXact %u",
-						offsetStopLimit, oldestMultiXactId)));
+								 offsetStopLimit, oldestMultiXactId)));
 	}
 	else if (prevOldestOffsetKnown)
 	{
@@ -3282,9 +3285,9 @@ multixact_redo(XLogReaderState *record)
 								  xlrec->moff + xlrec->nmembers);
 
 		/*
-		 * Make sure nextXid is beyond any XID mentioned in the record.
-		 * This should be unnecessary, since any XID found here ought to have
-		 * other evidence in the XLOG, but let's be safe.
+		 * Make sure nextXid is beyond any XID mentioned in the record. This
+		 * should be unnecessary, since any XID found here ought to have other
+		 * evidence in the XLOG, but let's be safe.
 		 */
 		max_xid = XLogRecGetXid(record);
 		for (i = 0; i < xlrec->nmembers; i++)

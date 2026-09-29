@@ -2547,9 +2547,9 @@ column_privilege_check(Oid tableoid, AttrNumber attnum,
 		return -1;
 
 	/*
-	 * Check for column-level privileges first. This serves in
-	 * part as a check on whether the column even exists, so we
-	 * need to do it before checking table-level privilege.
+	 * Check for column-level privileges first. This serves in part as a check
+	 * on whether the column even exists, so we need to do it before checking
+	 * table-level privilege.
 	 */
 	aclresult = pg_attribute_aclcheck_ext(tableoid, attnum, roleid,
 										  mode, &is_missing);
@@ -4889,8 +4889,8 @@ roles_is_member_of(Oid roleid, enum RoleRecurseType type,
 
 	/*
 	 * Role expansion happens in a non-database backend when guc.c checks
-	 * ROLE_READ_ALL_SETTINGS for a physical walsender SHOW command.
-	 * In that case, no role gets pg_database_owner.
+	 * ROLE_PG_READ_ALL_SETTINGS for a physical walsender SHOW command.  In
+	 * that case, no role gets pg_database_owner.
 	 */
 	if (!OidIsValid(MyDatabaseId))
 		dba = InvalidOid;
@@ -4956,7 +4956,7 @@ roles_is_member_of(Oid roleid, enum RoleRecurseType type,
 		/* implement pg_database_owner implicit membership */
 		if (memberid == dba && OidIsValid(dba))
 			roles_list = list_append_unique_oid(roles_list,
-												ROLE_DATABASE_OWNER);
+												ROLE_PG_DATABASE_OWNER);
 	}
 
 	/*

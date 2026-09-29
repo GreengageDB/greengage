@@ -1184,7 +1184,8 @@ pqSocketCheck(PGconn *conn, int forRead, int forWrite, time_t end_time)
 		char		sebuf[PG_STRERROR_R_BUFLEN];
 
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("select() failed: %s\n"),
+						  libpq_gettext("%s() failed: %s\n"),
+						  "select",
 						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 	}
 
@@ -1283,8 +1284,13 @@ pqSocketPoll(int sock, int forRead, int forWrite, time_t end_time)
  */
 
 /*
- * returns the byte length of the character beginning at s, using the
+ * Returns the byte length of the character beginning at s, using the
  * specified encoding.
+ *
+ * Caution: when dealing with text that is not certainly valid in the
+ * specified encoding, the result may exceed the actual remaining
+ * string length.  Callers that are not prepared to deal with that
+ * should use PQmblenBounded() instead.
  */
 int
 PQmblen(const char *s, int encoding)
@@ -1293,7 +1299,17 @@ PQmblen(const char *s, int encoding)
 }
 
 /*
- * returns the display length of the character beginning at s, using the
+ * Returns the byte length of the character beginning at s, using the
+ * specified encoding; but not more than the distance to end of string.
+ */
+int
+PQmblenBounded(const char *s, int encoding)
+{
+	return strnlen(s, pg_encoding_mblen(encoding, s));
+}
+
+/*
+ * Returns the display length of the character beginning at s, using the
  * specified encoding.
  */
 int

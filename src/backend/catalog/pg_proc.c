@@ -132,7 +132,7 @@ ProcedureCreate(const char *procedureName,
 	/*
 	 * sanity checks
 	 */
-	Assert(PointerIsValid(prosrc) || PointerIsValid(prosqlbody));
+	Assert(PointerIsValid(prosrc));
 
 	parameterCount = parameterTypes->dim1;
 	if (parameterCount < 0 || parameterCount > FUNC_MAX_ARGS)
@@ -347,10 +347,7 @@ ProcedureCreate(const char *procedureName,
 		values[Anum_pg_proc_protrftypes - 1] = trftypes;
 	else
 		nulls[Anum_pg_proc_protrftypes - 1] = true;
-	if (prosrc)
-		values[Anum_pg_proc_prosrc - 1] = CStringGetTextDatum(prosrc);
-	else
-		nulls[Anum_pg_proc_prosrc - 1] = true;
+	values[Anum_pg_proc_prosrc - 1] = CStringGetTextDatum(prosrc);
 	if (probin)
 		values[Anum_pg_proc_probin - 1] = CStringGetTextDatum(probin);
 	else
@@ -488,12 +485,10 @@ ProcedureCreate(const char *procedureName,
 			if (isnull)
 				proargmodes = PointerGetDatum(NULL);	/* just to be sure */
 
-			n_old_arg_names = get_func_input_arg_names(prokind,
-													   proargnames,
+			n_old_arg_names = get_func_input_arg_names(proargnames,
 													   proargmodes,
 													   &old_arg_names);
-			n_new_arg_names = get_func_input_arg_names(prokind,
-													   parameterNames,
+			n_new_arg_names = get_func_input_arg_names(parameterNames,
 													   parameterModes,
 													   &new_arg_names);
 			for (j = 0; j < n_old_arg_names; j++)
@@ -949,25 +944,28 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 	/* Postpone body checks if !check_function_bodies */
 	if (check_function_bodies)
 	{
+		tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosrc, &isnull);
+		if (isnull)
+			elog(ERROR, "null prosrc");
+
+		prosrc = TextDatumGetCString(tmp);
+
 		/*
 		 * Setup error traceback support for ereport().
 		 */
 		callback_arg.proname = NameStr(proc->proname);
-		callback_arg.prosrc = NULL;
+		callback_arg.prosrc = prosrc;
 
 		sqlerrcontext.callback = sql_function_parse_error_callback;
 		sqlerrcontext.arg = (void *) &callback_arg;
 		sqlerrcontext.previous = error_context_stack;
 		error_context_stack = &sqlerrcontext;
 
-		tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosrc, &isnull);
-		if (isnull)
+		/* If we have prosqlbody, pay attention to that not prosrc */
+		tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosqlbody, &isnull);
+		if (!isnull)
 		{
 			Node	   *n;
-
-			tmp = SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_prosqlbody, &isnull);
-			if (isnull)
-				elog(ERROR, "null prosrc and prosqlbody");
 
 			n = stringToNode(TextDatumGetCString(tmp));
 			if (IsA(n, List))
@@ -977,33 +975,29 @@ fmgr_sql_validator(PG_FUNCTION_ARGS)
 		}
 		else
 		{
-			prosrc = TextDatumGetCString(tmp);
-
-			callback_arg.prosrc = prosrc;
-
 			/*
-			 * We can't do full prechecking of the function definition if there
-			 * are any polymorphic input types, because actual datatypes of
-			 * expression results will be unresolvable.  The check will be done at
-			 * runtime instead.
+			 * We can't do full prechecking of the function definition if
+			 * there are any polymorphic input types, because actual datatypes
+			 * of expression results will be unresolvable.  The check will be
+			 * done at runtime instead.
 			 *
 			 * We can run the text through the raw parser though; this will at
 			 * least catch silly syntactic errors.
 			 */
 			raw_parsetree_list = pg_parse_query(prosrc);
+			querytree_list = NIL;
 
 			if (!haspolyarg)
 			{
 				/*
-				 * OK to do full precheck: analyze and rewrite the queries, then
-				 * verify the result type.
+				 * OK to do full precheck: analyze and rewrite the queries,
+				 * then verify the result type.
 				 */
 				SQLFunctionParseInfoPtr pinfo;
 
 				/* But first, set up parameter information */
 				pinfo = prepare_sql_fn_parse_info(tuple, NULL, InvalidOid);
 
-				querytree_list = NIL;
 				foreach(lc, raw_parsetree_list)
 				{
 					RawStmt    *parsetree = lfirst_node(RawStmt, lc);
@@ -1075,9 +1069,6 @@ function_parse_error_transpose(const char *prosrc)
 	int			origerrposition;
 	int			newerrposition;
 	const char *queryText;
-
-	if (!prosrc)
-		return false;
 
 	/*
 	 * Nothing to do unless we are dealing with a syntax error that has a

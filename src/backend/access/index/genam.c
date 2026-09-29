@@ -612,8 +612,8 @@ systable_endscan(SysScanDesc sysscan)
 		UnregisterSnapshot(sysscan->snapshot);
 
 	/*
-	 * Reset the bsysscan flag at the end of the systable scan.  See
-	 * detailed comments in xact.c where these variables are declared.
+	 * Reset the bsysscan flag at the end of the systable scan.  See detailed
+	 * comments in xact.c where these variables are declared.
 	 */
 	if (TransactionIdIsValid(CheckXidAlive))
 		bsysscan = false;
@@ -633,7 +633,7 @@ systable_endscan(SysScanDesc sysscan)
  * Currently we do not support non-index-based scans here.  (In principle
  * we could do a heapscan and sort, but the uses are in places that
  * probably don't need to still work with corrupted catalog indexes.)
- * For the moment, therefore, these functions are merely the thinnest of
+ * For the moment, therefore, these functions are merely the thinest of
  * wrappers around index_beginscan/index_getnext_slot.  The main reason for
  * their existence is to centralize possible future support of lossy operators
  * in catalog scans.

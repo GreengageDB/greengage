@@ -1765,9 +1765,9 @@ pg_get_statisticsobjdef_expressions(PG_FUNCTION_ARGS)
 	statexttup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statextid));
 
 	if (!HeapTupleIsValid(statexttup))
-		elog(ERROR, "cache lookup failed for statistics object %u", statextid);
+		PG_RETURN_NULL();
 
-	/* has the statistics expressions? */
+	/* Does the stats object have expressions? */
 	has_exprs = !heap_attisnull(statexttup, Anum_pg_statistic_ext_stxexprs, NULL);
 
 	/* no expressions? we're done */
@@ -2993,37 +2993,38 @@ pg_get_functiondef(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-	appendStringInfoString(&buf, "AS ");
+		appendStringInfoString(&buf, "AS ");
 
-	tmp = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_probin, &isnull);
-	if (!isnull)
-	{
-		simple_quote_literal(&buf, TextDatumGetCString(tmp));
-		appendStringInfoString(&buf, ", "); /* assume prosrc isn't null */
-	}
+		tmp = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_probin, &isnull);
+		if (!isnull)
+		{
+			simple_quote_literal(&buf, TextDatumGetCString(tmp));
+			appendStringInfoString(&buf, ", "); /* assume prosrc isn't null */
+		}
 
-	tmp = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_prosrc, &isnull);
-	if (isnull)
-		elog(ERROR, "null prosrc");
-	prosrc = TextDatumGetCString(tmp);
+		tmp = SysCacheGetAttr(PROCOID, proctup, Anum_pg_proc_prosrc, &isnull);
+		if (isnull)
+			elog(ERROR, "null prosrc");
+		prosrc = TextDatumGetCString(tmp);
 
-	/*
-	 * We always use dollar quoting.  Figure out a suitable delimiter.
-	 *
-	 * Since the user is likely to be editing the function body string, we
-	 * shouldn't use a short delimiter that he might easily create a conflict
-	 * with.  Hence prefer "$function$"/"$procedure$", but extend if needed.
-	 */
-	initStringInfo(&dq);
-	appendStringInfoChar(&dq, '$');
-	appendStringInfoString(&dq, (isfunction ? "function" : "procedure"));
-	while (strstr(prosrc, dq.data) != NULL)
-		appendStringInfoChar(&dq, 'x');
-	appendStringInfoChar(&dq, '$');
+		/*
+		 * We always use dollar quoting.  Figure out a suitable delimiter.
+		 *
+		 * Since the user is likely to be editing the function body string, we
+		 * shouldn't use a short delimiter that he might easily create a
+		 * conflict with.  Hence prefer "$function$"/"$procedure$", but extend
+		 * if needed.
+		 */
+		initStringInfo(&dq);
+		appendStringInfoChar(&dq, '$');
+		appendStringInfoString(&dq, (isfunction ? "function" : "procedure"));
+		while (strstr(prosrc, dq.data) != NULL)
+			appendStringInfoChar(&dq, 'x');
+		appendStringInfoChar(&dq, '$');
 
-	appendBinaryStringInfo(&buf, dq.data, dq.len);
-	appendStringInfoString(&buf, prosrc);
-	appendBinaryStringInfo(&buf, dq.data, dq.len);
+		appendBinaryStringInfo(&buf, dq.data, dq.len);
+		appendStringInfoString(&buf, prosrc);
+		appendBinaryStringInfo(&buf, dq.data, dq.len);
 	}
 
 	appendStringInfoChar(&buf, '\n');
@@ -3229,7 +3230,15 @@ print_function_arguments(StringInfo buf, HeapTuple proctup,
 		switch (argmode)
 		{
 			case PROARGMODE_IN:
-				modename = "";
+
+				/*
+				 * For procedures, explicitly mark all argument modes, so as
+				 * to avoid ambiguity with the SQL syntax for DROP PROCEDURE.
+				 */
+				if (proc->prokind == PROKIND_PROCEDURE)
+					modename = "IN ";
+				else
+					modename = "";
 				isinput = true;
 				break;
 			case PROARGMODE_INOUT:
@@ -12069,7 +12078,7 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	if (!force_qualify)
 		p_result = func_get_detail(list_make1(makeString(proname)),
 								   NIL, argnames, nargs, argtypes,
-								   !use_variadic, true,
+								   !use_variadic, true, false,
 								   &p_funcid, &p_rettype,
 								   &p_retset, &p_nvargs, &p_vatype,
 								   &p_true_typeids, NULL);

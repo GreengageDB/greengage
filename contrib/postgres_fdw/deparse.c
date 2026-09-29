@@ -1779,7 +1779,8 @@ rebuildInsertSql(StringInfo buf, char *orig_query,
 				 int values_end_len, int num_cols,
 				 int num_rows)
 {
-	int			i, j;
+	int			i,
+				j;
 	int			pindex;
 	bool		first;
 
@@ -1790,8 +1791,8 @@ rebuildInsertSql(StringInfo buf, char *orig_query,
 	appendBinaryStringInfo(buf, orig_query, values_end_len);
 
 	/*
-	 * Add records to VALUES clause (we already have parameters for the
-	 * first row, so start at the right offset).
+	 * Add records to VALUES clause (we already have parameters for the first
+	 * row, so start at the right offset).
 	 */
 	pindex = num_cols + 1;
 	for (i = 0; i < num_rows; i++)
@@ -2179,24 +2180,19 @@ deparseAnalyzeSql(StringInfo buf, Relation rel, List **retrieved_attrs)
 void
 deparseTruncateSql(StringInfo buf,
 				   List *rels,
-				   List *rels_extra,
 				   DropBehavior behavior,
 				   bool restart_seqs)
 {
-	ListCell   *lc1,
-			   *lc2;
+	ListCell   *cell;
 
 	appendStringInfoString(buf, "TRUNCATE ");
 
-	forboth(lc1, rels, lc2, rels_extra)
+	foreach(cell, rels)
 	{
-		Relation	rel = lfirst(lc1);
-		int			extra = lfirst_int(lc2);
+		Relation	rel = lfirst(cell);
 
-		if (lc1 != list_head(rels))
+		if (cell != list_head(rels))
 			appendStringInfoString(buf, ", ");
-		if (extra & TRUNCATE_REL_CONTEXT_ONLY)
-			appendStringInfoString(buf, "ONLY ");
 
 		deparseRelation(buf, rel);
 	}

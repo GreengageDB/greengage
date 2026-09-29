@@ -1945,7 +1945,7 @@ autovac_balance_cost(void)
 		}
 
 		if (worker->wi_proc != NULL)
-			elog(DEBUG2, "autovac_balance_cost(pid=%u db=%u, rel=%u, dobalance=%s cost_limit=%d, cost_limit_base=%d, cost_delay=%g)",
+			elog(DEBUG2, "autovac_balance_cost(pid=%d db=%u, rel=%u, dobalance=%s cost_limit=%d, cost_limit_base=%d, cost_delay=%g)",
 				 worker->wi_proc->pid, worker->wi_dboid, worker->wi_tableoid,
 				 worker->wi_dobalance ? "yes" : "no",
 				 worker->wi_cost_limit, worker->wi_cost_limit_base,
@@ -2885,6 +2885,11 @@ deleted2:
  *
  * Given a relation's pg_class tuple, return the AutoVacOpts portion of
  * reloptions, if set; otherwise, return NULL.
+ *
+ * Note: callers do not have a relation lock on the table at this point,
+ * so the table could have been dropped, and its catalog rows gone, after
+ * we acquired the pg_class row.  If pg_class had a TOAST table, this would
+ * be a risk; fortunately, it doesn't.
  */
 static AutoVacOpts *
 extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
@@ -3077,8 +3082,14 @@ table_recheck_autovac(Oid relid, HTAB *table_toast_map,
 		tab->at_params.options = (dovacuum ? VACOPT_VACUUM : 0) |
 			(doanalyze ? VACOPT_ANALYZE : 0) |
 			(!wraparound ? VACOPT_SKIP_LOCKED : 0);
-		tab->at_params.index_cleanup = VACOPT_TERNARY_DEFAULT;
-		tab->at_params.truncate = VACOPT_TERNARY_DEFAULT;
+
+		/*
+		 * index_cleanup and truncate are unspecified at first in autovacuum.
+		 * They will be filled in with usable values using their reloptions
+		 * (or reloption defaults) later.
+		 */
+		tab->at_params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
+		tab->at_params.truncate = VACOPTVALUE_UNSPECIFIED;
 		/* As of now, we don't support parallel vacuum for autovacuum */
 		tab->at_params.nworkers = -1;
 		tab->at_params.freeze_min_age = freeze_min_age;
@@ -3322,44 +3333,7 @@ relation_needs_vacanalyze(Oid relid,
 	 */
 	if (PointerIsValid(tabentry) && AutoVacuumingActive())
 	{
-		if (classForm->relkind != RELKIND_PARTITIONED_TABLE)
-		{
-			reltuples = classForm->reltuples;
-		}
-		else
-		{
-			/*
-			 * If the relation is a partitioned table, we must add up
-			 * children's reltuples.
-			 */
-			List	   *children;
-			ListCell   *lc;
-
-			reltuples = 0;
-
-			/* Find all members of inheritance set taking AccessShareLock */
-			children = find_all_inheritors(relid, AccessShareLock, NULL);
-
-			foreach(lc, children)
-			{
-				Oid			childOID = lfirst_oid(lc);
-				HeapTuple	childtuple;
-				Form_pg_class childclass;
-
-				childtuple = SearchSysCache1(RELOID, ObjectIdGetDatum(childOID));
-				childclass = (Form_pg_class) GETSTRUCT(childtuple);
-
-				/* Skip a partitioned table and foreign partitions */
-				if (RELKIND_HAS_STORAGE(childclass->relkind))
-				{
-					/* Sum up the child's reltuples for its parent table */
-					reltuples += childclass->reltuples;
-				}
-				ReleaseSysCache(childtuple);
-			}
-
-			list_free(children);
-		}
+		reltuples = classForm->reltuples;
 		vactuples = tabentry->n_dead_tuples;
 		instuples = tabentry->inserts_since_vacuum;
 		anltuples = tabentry->changes_since_analyze;

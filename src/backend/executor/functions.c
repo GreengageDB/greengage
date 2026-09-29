@@ -338,8 +338,7 @@ prepare_sql_fn_parse_info(HeapTuple procedureTuple,
 		if (isNull)
 			proargmodes = PointerGetDatum(NULL);	/* just to be sure */
 
-		n_arg_names = get_func_input_arg_names(procedureStruct->prokind,
-											   proargnames, proargmodes,
+		n_arg_names = get_func_input_arg_names(proargnames, proargmodes,
 											   &pinfo->argnames);
 
 		/* Paranoia: ignore the result if too few array entries */
@@ -608,13 +607,13 @@ init_execution_state(List *queryTree_list,
 					((CopyStmt *) stmt->utilityStmt)->filename == NULL)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							 errmsg("cannot COPY to/from client in a SQL function")));
+							 errmsg("cannot COPY to/from client in an SQL function")));
 
 				if (IsA(stmt->utilityStmt, TransactionStmt))
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					/* translator: %s is a SQL statement name */
-							 errmsg("%s is not allowed in a SQL function",
+							 errmsg("%s is not allowed in an SQL function",
 									CreateCommandName(stmt->utilityStmt))));
 			}
 
@@ -763,6 +762,15 @@ init_sql_fcache(FunctionCallInfo fcinfo, Oid collation, bool lazyEvalOK)
 						  procedureTuple,
 						  Anum_pg_proc_prosrc,
 						  &isNull);
+	if (isNull)
+		elog(ERROR, "null prosrc for function %u", foid);
+	fcache->src = TextDatumGetCString(tmp);
+
+	/* If we have prosqlbody, pay attention to that not prosrc. */
+	tmp = SysCacheGetAttr(PROCOID,
+						  procedureTuple,
+						  Anum_pg_proc_prosqlbody,
+						  &isNull);
 
 	/*
 	 * Parse and rewrite the queries in the function text.  Use sublists to
@@ -774,17 +782,10 @@ init_sql_fcache(FunctionCallInfo fcinfo, Oid collation, bool lazyEvalOK)
 	 * plancache.c.
 	 */
 	queryTree_list = NIL;
-	if (isNull)
+	if (!isNull)
 	{
 		Node	   *n;
 		List	   *stored_query_list;
-
-		tmp = SysCacheGetAttr(PROCOID,
-							  procedureTuple,
-							  Anum_pg_proc_prosqlbody,
-							  &isNull);
-		if (isNull)
-			elog(ERROR, "null prosrc and prosqlbody for function %u", foid);
 
 		n = stringToNode(TextDatumGetCString(tmp));
 		if (IsA(n, List))
@@ -805,8 +806,6 @@ init_sql_fcache(FunctionCallInfo fcinfo, Oid collation, bool lazyEvalOK)
 	else
 	{
 		List	   *raw_parsetree_list;
-
-		fcache->src = TextDatumGetCString(tmp);
 
 		raw_parsetree_list = pg_parse_query(fcache->src);
 
@@ -1013,6 +1012,7 @@ postquel_getnext(execution_state *es, SQLFunctionCachePtr fcache)
 	{
 		ProcessUtility(es->qd->plannedstmt,
 					   fcache->src,
+					   false,
 					   PROCESS_UTILITY_QUERY,
 					   es->qd->params,
 					   es->qd->queryEnv,
@@ -1680,7 +1680,7 @@ check_sql_fn_statements(List *queryTreeLists)
 			Query	   *query = lfirst_node(Query, lc2);
 
 			/*
-			 * Disallow procedures with output arguments.  The current
+			 * Disallow calling procedures with output arguments.  The current
 			 * implementation would just throw the output values away, unless
 			 * the statement is the last one.  Per SQL standard, we should
 			 * assign the output values by name.  By disallowing this here, we
@@ -1689,31 +1689,12 @@ check_sql_fn_statements(List *queryTreeLists)
 			if (query->commandType == CMD_UTILITY &&
 				IsA(query->utilityStmt, CallStmt))
 			{
-				CallStmt   *stmt = castNode(CallStmt, query->utilityStmt);
-				HeapTuple	tuple;
-				int			numargs;
-				Oid		   *argtypes;
-				char	  **argnames;
-				char	   *argmodes;
-				int			i;
+				CallStmt   *stmt = (CallStmt *) query->utilityStmt;
 
-				tuple = SearchSysCache1(PROCOID,
-										ObjectIdGetDatum(stmt->funcexpr->funcid));
-				if (!HeapTupleIsValid(tuple))
-					elog(ERROR, "cache lookup failed for function %u",
-						 stmt->funcexpr->funcid);
-				numargs = get_func_arg_info(tuple,
-											&argtypes, &argnames, &argmodes);
-				ReleaseSysCache(tuple);
-
-				for (i = 0; i < numargs; i++)
-				{
-					if (argmodes && (argmodes[i] == PROARGMODE_INOUT ||
-									 argmodes[i] == PROARGMODE_OUT))
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("calling procedures with output arguments is not supported in SQL functions")));
-				}
+				if (stmt->outargs != NIL)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("calling procedures with output arguments is not supported in SQL functions")));
 			}
 		}
 	}

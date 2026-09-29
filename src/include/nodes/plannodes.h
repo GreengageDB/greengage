@@ -281,7 +281,7 @@ typedef struct Plan
 	/*
 	 * information needed for asynchronous execution
 	 */
-	bool		async_capable; 	/* engage asynchronous-capable logic? */
+	bool		async_capable;	/* engage asynchronous-capable logic? */
 
 	/*
 	 * Common structural data for all Plan types.
@@ -403,7 +403,8 @@ typedef struct ModifyTable
 	int			epqParam;		/* ID of Param for EvalPlanQual re-eval */
 	OnConflictAction onConflictAction;	/* ON CONFLICT action */
 	List	   *arbiterIndexes; /* List of ON CONFLICT arbiter index OIDs  */
-	List	   *onConflictSet;	/* SET for INSERT ON CONFLICT DO UPDATE */
+	List	   *onConflictSet;	/* INSERT ON CONFLICT DO UPDATE targetlist */
+	List	   *onConflictCols; /* target column numbers for onConflictSet */
 	Node	   *onConflictWhere;	/* WHERE for ON CONFLICT UPDATE */
 	Index		exclRelRTI;		/* RTI of the EXCLUDED pseudo relation */
 	List	   *exclRelTlist;	/* tlist of the EXCLUDED pseudo relation */
@@ -1642,9 +1643,9 @@ typedef enum RowMarkType
  * When the planner discovers that a relation is the root of an inheritance
  * tree, it sets isParent true, and adds an additional PlanRowMark to the
  * list for each child relation (including the target rel itself in its role
- * as a child).  isParent is also set to true for the partitioned child
- * relations, which are not scanned just like the root parent.  The child
- * entries have rti == child rel's RT index and prti == parent's RT index,
+ * as a child, if it is not a partitioned table).  Any non-leaf partitioned
+ * child relations will also have entries with isParent = true.  The child
+ * entries have rti == child rel's RT index and prti == top parent's RT index,
  * and can therefore be recognized as children by the fact that prti != rti.
  * The parent's allMarkTypes field gets the OR of (1<<markType) across all
  * its children (this definition allows children to use different markTypes).
@@ -1665,8 +1666,7 @@ typedef enum RowMarkType
  * means we needn't renumber rowmarkIds when flattening subqueries, which
  * would require finding and renaming the resjunk columns as well.)
  * Note this means that all tables in an inheritance hierarchy share the
- * same resjunk column names.  However, in an inherited UPDATE/DELETE the
- * columns could have different physical column numbers in each subplan.
+ * same resjunk column names.
  */
 typedef struct PlanRowMark
 {

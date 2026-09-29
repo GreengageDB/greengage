@@ -22,8 +22,7 @@
 
 /*
  * conns[0] is the global setup, teardown, and watchdog connection.  Additional
- * connections represent spec-defined sessions.  We also track the backend
- * PID, in numeric and string formats, for each connection.
+ * connections represent spec-defined sessions.
  */
 typedef struct IsoConnInfo
 {
@@ -53,8 +52,8 @@ static int64 max_step_wait = 300 * USECS_PER_SEC;
 static void check_testspec(TestSpec *testspec);
 static void run_testspec(TestSpec *testspec);
 static void run_all_permutations(TestSpec *testspec);
-static void run_all_permutations_recurse(TestSpec *testspec, int nsteps,
-										 PermutationStep **steps);
+static void run_all_permutations_recurse(TestSpec *testspec, int *piles,
+										 int nsteps, PermutationStep **steps);
 static void run_named_permutations(TestSpec *testspec);
 static void run_permutation(TestSpec *testspec, int nsteps,
 							PermutationStep **steps);
@@ -361,9 +360,9 @@ check_testspec(TestSpec *testspec)
 				fprintf(stderr, "unused step name: %s\n", allsteps[i]->name);
 		}
 	}
-}
 
-static int *piles;
+	free(allsteps);
+}
 
 /*
  * Run the permutations specified in the spec, or all if none were
@@ -388,6 +387,7 @@ run_all_permutations(TestSpec *testspec)
 	int			i;
 	PermutationStep *steps;
 	PermutationStep **stepptrs;
+	int		   *piles;
 
 	/* Count the total number of steps in all sessions */
 	nsteps = 0;
@@ -413,11 +413,16 @@ run_all_permutations(TestSpec *testspec)
 	for (i = 0; i < testspec->nsessions; i++)
 		piles[i] = 0;
 
-	run_all_permutations_recurse(testspec, 0, stepptrs);
+	run_all_permutations_recurse(testspec, piles, 0, stepptrs);
+
+	free(steps);
+	free(stepptrs);
+	free(piles);
 }
 
 static void
-run_all_permutations_recurse(TestSpec *testspec, int nsteps, PermutationStep **steps)
+run_all_permutations_recurse(TestSpec *testspec, int *piles,
+							 int nsteps, PermutationStep **steps)
 {
 	int			i;
 	bool		found = false;
@@ -439,7 +444,7 @@ run_all_permutations_recurse(TestSpec *testspec, int nsteps, PermutationStep **s
 
 			piles[i]++;
 
-			run_all_permutations_recurse(testspec, nsteps + 1, steps);
+			run_all_permutations_recurse(testspec, piles, nsteps + 1, steps);
 
 			piles[i]--;
 
@@ -1090,23 +1095,13 @@ step_has_blocker(PermutationStep *pstep)
 static void
 printResultSet(PGresult *res)
 {
-	int			nFields;
-	int			i,
-				j;
+	PQprintOpt	popt;
 
-	/* first, print out the attribute names */
-	nFields = PQnfields(res);
-	for (i = 0; i < nFields; i++)
-		printf("%-15s", PQfname(res, i));
-	printf("\n\n");
-
-	/* next, print out the rows */
-	for (i = 0; i < PQntuples(res); i++)
-	{
-		for (j = 0; j < nFields; j++)
-			printf("%-15s", PQgetvalue(res, i, j));
-		printf("\n");
-	}
+	memset(&popt, 0, sizeof(popt));
+	popt.header = true;
+	popt.align = true;
+	popt.fieldSep = "|";
+	PQprint(stdout, res, &popt);
 }
 
 /* notice processor for regular user sessions */

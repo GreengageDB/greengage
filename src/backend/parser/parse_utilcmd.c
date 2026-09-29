@@ -11,10 +11,6 @@
  * Hence these functions are now called at the start of execution of their
  * respective utility commands.
  *
- * NOTE: in general we must avoid scribbling on the passed-in raw parse
- * tree, since it might be in a plan cache.  The simplest solution is
- * a quick copyObject() call before manipulating the query tree.
- *
  *
  * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
@@ -198,7 +194,6 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString)
 	Oid			namespaceid;
 	Oid			existing_relid;
 	ParseCallbackState pcbstate;
-	bool		is_foreign_table = IsA(stmt, CreateForeignTableStmt);
 
 	DistributedBy *likeDistributedBy = NULL;
 	bool		bQuiet = false;		/* shut up transformDistributedBy messages */
@@ -422,8 +417,11 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString)
 
 	/*
 	 * Postprocess check constraints.
+	 *
+	 * For regular tables all constraints can be marked valid immediately,
+	 * because the table is new therefore empty. Not so for foreign tables.
 	 */
-	transformCheckConstraints(&cxt, !is_foreign_table ? true : false);
+	transformCheckConstraints(&cxt, !cxt.isforeign);
 
 	/*
 	 * Postprocess extended statistics.
@@ -541,8 +539,8 @@ generateSerialExtraStmts(CreateStmtContext *cxt, ColumnDef *column,
 
 	ereport(DEBUG1,
 			(errmsg_internal("%s will create implicit sequence \"%s\" for serial column \"%s.%s\"",
-					cxt->stmtType, sname,
-					cxt->relation->relname, column->colname)));
+							 cxt->stmtType, sname,
+							 cxt->relation->relname, column->colname)));
 
 	/*
 	 * Build a CREATE SEQUENCE command to create the sequence object, and add
@@ -2154,7 +2152,7 @@ generateClonedExtStatsStmt(RangeVar *heapRel, Oid heapRelid,
 	 * simply append them after simple column references.
 	 *
 	 * XXX Some places during build/estimation treat expressions as if they
-	 * are before atttibutes, but for the CREATE command that's entirely
+	 * are before attributes, but for the CREATE command that's entirely
 	 * irrelevant.
 	 */
 	datum = SysCacheGetAttr(STATEXTOID, ht_stats,
@@ -2189,8 +2187,8 @@ generateClonedExtStatsStmt(RangeVar *heapRel, Oid heapRelid,
 	stats->exprs = def_names;
 	stats->relations = list_make1(heapRel);
 	stats->stxcomment = NULL;
-	stats->if_not_exists = false;
 	stats->transformed = true;	/* don't need transformStatsStmt again */
+	stats->if_not_exists = false;
 
 	/* Clean up */
 	ReleaseSysCache(ht_stats);
@@ -3974,12 +3972,6 @@ transformIndexStmt(Oid relid, IndexStmt *stmt, const char *queryString)
 	if (stmt->transformed)
 		return stmt;
 
-	/*
-	 * We must not scribble on the passed-in IndexStmt, so copy it.  (This is
-	 * overkill, but easy.)
-	 */
-	stmt = copyObject(stmt);
-
 	/* Set up pstate */
 	pstate = make_parsestate(NULL);
 	pstate->p_sourcetext = queryString;
@@ -4075,12 +4067,6 @@ transformStatsStmt(Oid relid, CreateStatsStmt *stmt, const char *queryString)
 	if (stmt->transformed)
 		return stmt;
 
-	/*
-	 * We must not scribble on the passed-in CreateStatsStmt, so copy it.
-	 * (This is overkill, but easy.)
-	 */
-	stmt = copyObject(stmt);
-
 	/* Set up pstate */
 	pstate = make_parsestate(NULL);
 	pstate->p_sourcetext = queryString;
@@ -4143,9 +4129,6 @@ transformStatsStmt(Oid relid, CreateStatsStmt *stmt, const char *queryString)
  *
  * actions and whereClause are output parameters that receive the
  * transformed results.
- *
- * Note that we must not scribble on the passed-in RuleStmt, so we do
- * copyObject() on the actions and WHERE clause.
  */
 void
 transformRuleStmt(RuleStmt *stmt, const char *queryString,
@@ -4220,7 +4203,7 @@ transformRuleStmt(RuleStmt *stmt, const char *queryString,
 
 	/* take care of the where clause */
 	*whereClause = transformWhereClause(pstate,
-										(Node *) copyObject(stmt->whereClause),
+										stmt->whereClause,
 										EXPR_KIND_WHERE,
 										"WHERE");
 	/* we have to fix its collations too */
@@ -4292,8 +4275,7 @@ transformRuleStmt(RuleStmt *stmt, const char *queryString,
 			addNSItemToQuery(sub_pstate, newnsitem, false, true, false);
 
 			/* Transform the rule action statement */
-			top_subqry = transformStmt(sub_pstate,
-									   (Node *) copyObject(action));
+			top_subqry = transformStmt(sub_pstate, action);
 
 			/*
 			 * We cannot support utility-statement actions (eg NOTIFY) with
@@ -4473,12 +4455,6 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 	bool		skipValidation = true;
 	AlterTableCmd *newcmd;
 	ParseNamespaceItem *nsitem;
-
-	/*
-	 * We must not scribble on the passed-in AlterTableStmt, so copy it. (This
-	 * is overkill, but easy.)
-	 */
-	stmt = copyObject(stmt);
 
 	/* Caller is responsible for locking the relation */
 	rel = relation_open(relid, NoLock);

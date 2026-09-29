@@ -41,7 +41,6 @@
 #include "fe-auth.h"
 #include "libpq-fe.h"
 #include "libpq-int.h"
-#include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "pg_config_paths.h"
 #include "port/pg_bswap.h"
@@ -1921,7 +1920,8 @@ setKeepalivesIdle(PGconn *conn)
 		char		sebuf[PG_STRERROR_R_BUFLEN];
 
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("setsockopt(%s) failed: %s\n"),
+						  libpq_gettext("%s(%s) failed: %s\n"),
+						  "setsockopt",
 						  PG_TCP_KEEPALIVE_IDLE_STR,
 						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 		return 0;
@@ -1955,7 +1955,8 @@ setKeepalivesInterval(PGconn *conn)
 		char		sebuf[PG_STRERROR_R_BUFLEN];
 
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("setsockopt(%s) failed: %s\n"),
+						  libpq_gettext("%s(%s) failed: %s\n"),
+						  "setsockopt",
 						  "TCP_KEEPINTVL",
 						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 		return 0;
@@ -1990,7 +1991,8 @@ setKeepalivesCount(PGconn *conn)
 		char		sebuf[PG_STRERROR_R_BUFLEN];
 
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("setsockopt(%s) failed: %s\n"),
+						  libpq_gettext("%s(%s) failed: %s\n"),
+						  "setsockopt",
 						  "TCP_KEEPCNT",
 						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 		return 0;
@@ -2043,7 +2045,8 @@ setKeepalivesWin32(PGconn *conn)
 		!= 0)
 	{
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("WSAIoctl(SIO_KEEPALIVE_VALS) failed: %ui\n"),
+						  libpq_gettext("%s(%s) failed: error code %d\n"),
+						  "WSAIoctl", "SIO_KEEPALIVE_VALS",
 						  WSAGetLastError());
 		return 0;
 	}
@@ -2077,7 +2080,8 @@ setTCPUserTimeout(PGconn *conn)
 		char		sebuf[256];
 
 		appendPQExpBuffer(&conn->errorMessage,
-						  libpq_gettext("setsockopt(%s) failed: %s\n"),
+						  libpq_gettext("%s(%s) failed: %s\n"),
+						  "setsockopt",
 						  "TCP_USER_TIMEOUT",
 						  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 		return 0;
@@ -2713,7 +2717,8 @@ keep_going:						/* We will come back to here until there is
 											(char *) &on, sizeof(on)) < 0)
 						{
 							appendPQExpBuffer(&conn->errorMessage,
-											  libpq_gettext("setsockopt(%s) failed: %s\n"),
+											  libpq_gettext("%s(%s) failed: %s\n"),
+											  "setsockopt",
 											  "SO_KEEPALIVE",
 											  SOCK_STRERROR(SOCK_ERRNO, sebuf, sizeof(sebuf)));
 							err = 1;
@@ -3826,8 +3831,9 @@ keep_going:						/* We will come back to here until there is
 					PQclear(res);
 
 				/* Append error report to conn->errorMessage. */
-				appendPQExpBufferStr(&conn->errorMessage,
-									 libpq_gettext("\"SHOW transaction_read_only\" failed\n"));
+				appendPQExpBuffer(&conn->errorMessage,
+								  libpq_gettext("\"%s\" failed\n"),
+								  "SHOW transaction_read_only");
 
 				/* Close connection politely. */
 				conn->status = CONNECTION_OK;
@@ -3877,8 +3883,9 @@ keep_going:						/* We will come back to here until there is
 					PQclear(res);
 
 				/* Append error report to conn->errorMessage. */
-				appendPQExpBufferStr(&conn->errorMessage,
-									 libpq_gettext("\"SELECT pg_is_in_recovery()\" failed\n"));
+				appendPQExpBuffer(&conn->errorMessage,
+								  libpq_gettext("\"%s\" failed\n"),
+								  "SELECT pg_is_in_recovery()");
 
 				/* Close connection politely. */
 				conn->status = CONNECTION_OK;
@@ -5314,7 +5321,7 @@ parseServiceFile(const char *serviceFile,
 				i;
 	FILE	   *f;
 	char	   *line;
-	StringInfoData linebuf;
+	char		buf[1024];
 
 	*group_found = false;
 
@@ -5326,18 +5333,26 @@ parseServiceFile(const char *serviceFile,
 		return 1;
 	}
 
-	initStringInfo(&linebuf);
-
-	while (pg_get_line_buf(f, &linebuf))
+	while ((line = fgets(buf, sizeof(buf), f)) != NULL)
 	{
+		int			len;
+
 		linenr++;
 
-		/* ignore whitespace at end of line, especially the newline */
-		while (linebuf.len > 0 &&
-			   isspace((unsigned char) linebuf.data[linebuf.len - 1]))
-			linebuf.data[--linebuf.len] = '\0';
+		if (strlen(line) >= sizeof(buf) - 1)
+		{
+			appendPQExpBuffer(errorMessage,
+							  libpq_gettext("line %d too long in service file \"%s\"\n"),
+							  linenr,
+							  serviceFile);
+			result = 2;
+			goto exit;
+		}
 
-		line = linebuf.data;
+		/* ignore whitespace at end of line, especially the newline */
+		len = strlen(line);
+		while (len > 0 && isspace((unsigned char) line[len - 1]))
+			line[--len] = '\0';
 
 		/* ignore leading whitespace too */
 		while (*line && isspace((unsigned char) line[0]))
@@ -5454,7 +5469,6 @@ parseServiceFile(const char *serviceFile,
 
 exit:
 	fclose(f);
-	pfree(linebuf.data);
 
 	return result;
 }

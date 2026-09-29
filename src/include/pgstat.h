@@ -13,12 +13,12 @@
 
 #include "datatype/timestamp.h"
 #include "portability/instr_time.h"
-#include "postmaster/pgarch.h" /* for MAX_XFN_CHARS */
+#include "postmaster/pgarch.h"	/* for MAX_XFN_CHARS */
 #include "utils/backend_progress.h" /* for backward compatibility */
-#include "utils/backend_status.h" /* for backward compatibility */
+#include "utils/backend_status.h"	/* for backward compatibility */
 #include "utils/hsearch.h"
 #include "utils/relcache.h"
-#include "utils/wait_event.h" /* for backward compatibility */
+#include "utils/wait_event.h"	/* for backward compatibility */
 
 #include "postmaster/autostats.h"
 
@@ -382,7 +382,7 @@ typedef struct PgStat_MsgResetslrucounter
 typedef struct PgStat_MsgResetreplslotcounter
 {
 	PgStat_MsgHdr m_hdr;
-	char		m_slotname[NAMEDATALEN];
+	NameData	m_slotname;
 	bool		clearall;
 } PgStat_MsgResetreplslotcounter;
 
@@ -544,7 +544,8 @@ typedef struct PgStat_MsgSLRU
 typedef struct PgStat_MsgReplSlot
 {
 	PgStat_MsgHdr m_hdr;
-	char		m_slotname[NAMEDATALEN];
+	NameData	m_slotname;
+	bool		m_create;
 	bool		m_drop;
 	PgStat_Counter m_spill_txns;
 	PgStat_Counter m_spill_count;
@@ -552,6 +553,8 @@ typedef struct PgStat_MsgReplSlot
 	PgStat_Counter m_stream_txns;
 	PgStat_Counter m_stream_count;
 	PgStat_Counter m_stream_bytes;
+	PgStat_Counter m_total_txns;
+	PgStat_Counter m_total_bytes;
 } PgStat_MsgReplSlot;
 
 
@@ -737,7 +740,7 @@ typedef union PgStat_Msg
  * ------------------------------------------------------------
  */
 
-#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA1
+#define PGSTAT_FILE_FORMAT_ID	0x01A5BCA2
 
 /* ----------
  * PgStat_StatDBEntry			The collector's data per database
@@ -952,17 +955,19 @@ typedef struct PgStat_SLRUStats
 /*
  * Replication slot statistics kept in the stats collector
  */
-typedef struct PgStat_ReplSlotStats
+typedef struct PgStat_StatReplSlotEntry
 {
-	char		slotname[NAMEDATALEN];
+	NameData	slotname;
 	PgStat_Counter spill_txns;
 	PgStat_Counter spill_count;
 	PgStat_Counter spill_bytes;
 	PgStat_Counter stream_txns;
 	PgStat_Counter stream_count;
 	PgStat_Counter stream_bytes;
+	PgStat_Counter total_txns;
+	PgStat_Counter total_bytes;
 	TimestampTz stat_reset_timestamp;
-} PgStat_ReplSlotStats;
+} PgStat_StatReplSlotEntry;
 
 
 /*
@@ -1069,10 +1074,8 @@ extern void pgstat_report_recovery_conflict(int reason);
 extern void pgstat_report_deadlock(void);
 extern void pgstat_report_checksum_failures_in_db(Oid dboid, int failurecount);
 extern void pgstat_report_checksum_failure(void);
-extern void pgstat_report_replslot(const char *slotname, PgStat_Counter spilltxns,
-								   PgStat_Counter spillcount, PgStat_Counter spillbytes,
-								   PgStat_Counter streamtxns, PgStat_Counter streamcount,
-								   PgStat_Counter streambytes);
+extern void pgstat_report_replslot(const PgStat_StatReplSlotEntry *repSlotStat);
+extern void pgstat_report_replslot_create(const char *slotname);
 extern void pgstat_report_replslot_drop(const char *slotname);
 
 extern void pgstat_initialize(void);
@@ -1242,8 +1245,7 @@ extern void pgstat_twophase_postabort(TransactionId xid, uint16 info,
 
 extern void pgstat_send_archiver(const char *xlog, bool failed);
 extern void pgstat_send_bgwriter(void);
-extern void pgstat_report_wal(void);
-extern bool pgstat_send_wal(bool force);
+extern void pgstat_send_wal(bool force);
 
 struct CdbDispatchResults;
 struct pg_result;
@@ -1268,7 +1270,7 @@ extern PgStat_ArchiverStats *pgstat_fetch_stat_archiver(void);
 extern PgStat_GlobalStats *pgstat_fetch_global(void);
 extern PgStat_WalStats *pgstat_fetch_stat_wal(void);
 extern PgStat_SLRUStats *pgstat_fetch_slru(void);
-extern PgStat_ReplSlotStats *pgstat_fetch_replslot(int *nslots_p);
+extern PgStat_StatReplSlotEntry *pgstat_fetch_replslot(NameData slotname);
 
 extern void pgstat_count_slru_page_zeroed(int slru_idx);
 extern void pgstat_count_slru_page_hit(int slru_idx);

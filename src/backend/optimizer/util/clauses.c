@@ -133,10 +133,13 @@ static Expr *simplify_function(Oid funcid,
 							   bool funcvariadic, bool process_args, bool allow_non_const,
 							   eval_const_expressions_context *context);
 static bool large_const(Expr *expr, Size max_size);
-static List *reorder_function_arguments(List *args, HeapTuple func_tuple);
-static List *add_function_defaults(List *args, HeapTuple func_tuple);
+static List *reorder_function_arguments(List *args, int pronargs,
+										HeapTuple func_tuple);
+static List *add_function_defaults(List *args, int pronargs,
+								   HeapTuple func_tuple);
 static List *fetch_function_defaults(HeapTuple func_tuple);
 static void recheck_cast_function_args(List *args, Oid result_type,
+									   Oid *proargtypes, int pronargs,
 									   HeapTuple func_tuple);
 static Expr *evaluate_function(Oid funcid, Oid result_type, int32 result_typmod,
 							   Oid result_collid, Oid input_collid, List *args,
@@ -2535,7 +2538,8 @@ eval_const_expressions_mutator(Node *node,
 				if (!HeapTupleIsValid(func_tuple))
 					elog(ERROR, "cache lookup failed for function %u", funcid);
 
-				args = expand_function_arguments(expr->args, expr->wintype,
+				args = expand_function_arguments(expr->args,
+												 false, expr->wintype,
 												 func_tuple);
 
 				ReleaseSysCache(func_tuple);
@@ -2773,9 +2777,9 @@ eval_const_expressions_mutator(Node *node,
 			}
 		case T_NullIfExpr:
 			{
-				NullIfExpr	   *expr;
-				ListCell	   *arg;
-				bool			has_nonconst_input = false;
+				NullIfExpr *expr;
+				ListCell   *arg;
+				bool		has_nonconst_input = false;
 
 				/* Copy the node and const-simplify its arguments */
 				expr = (NullIfExpr *) ece_generic_processing(node);
@@ -4105,7 +4109,7 @@ simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
 	 */
 	if (process_args)
 	{
-		args = expand_function_arguments(args, result_type, func_tuple);
+		args = expand_function_arguments(args, false, result_type, func_tuple);
 		args = (List *) expression_tree_mutator((Node *) args,
 												eval_const_expressions_mutator,
 												(void *) context);
@@ -4175,6 +4179,15 @@ simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
  * expand_function_arguments: convert named-notation args to positional args
  * and/or insert default args, as needed
  *
+ * Returns a possibly-transformed version of the args list.
+ *
+ * If include_out_arguments is true, then the args list and the result
+ * include OUT arguments.
+ *
+ * The expected result type of the call must be given, for sanity-checking
+ * purposes.  Also, we ask the caller to provide the function's actual
+ * pg_proc tuple, not just its OID.
+ *
  * If we need to change anything, the input argument list is copied, not
  * modified.
  *
@@ -4183,11 +4196,45 @@ simplify_function(Oid funcid, Oid result_type, int32 result_typmod,
  * will fall through very quickly if there's nothing to do.
  */
 List *
-expand_function_arguments(List *args, Oid result_type, HeapTuple func_tuple)
+expand_function_arguments(List *args, bool include_out_arguments,
+						  Oid result_type, HeapTuple func_tuple)
 {
 	Form_pg_proc funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
+	Oid		   *proargtypes = funcform->proargtypes.values;
+	int			pronargs = funcform->pronargs;
 	bool		has_named_args = false;
 	ListCell   *lc;
+
+	/*
+	 * If we are asked to match to OUT arguments, then use the proallargtypes
+	 * array (which includes those); otherwise use proargtypes (which
+	 * doesn't).  Of course, if proallargtypes is null, we always use
+	 * proargtypes.  (Fetching proallargtypes is annoyingly expensive
+	 * considering that we may have nothing to do here, but fortunately the
+	 * common case is include_out_arguments == false.)
+	 */
+	if (include_out_arguments)
+	{
+		Datum		proallargtypes;
+		bool		isNull;
+
+		proallargtypes = SysCacheGetAttr(PROCOID, func_tuple,
+										 Anum_pg_proc_proallargtypes,
+										 &isNull);
+		if (!isNull)
+		{
+			ArrayType  *arr = DatumGetArrayTypeP(proallargtypes);
+
+			pronargs = ARR_DIMS(arr)[0];
+			if (ARR_NDIM(arr) != 1 ||
+				pronargs < 0 ||
+				ARR_HASNULL(arr) ||
+				ARR_ELEMTYPE(arr) != OIDOID)
+				elog(ERROR, "proallargtypes is not a 1-D Oid array or it contains nulls");
+			Assert(pronargs >= funcform->pronargs);
+			proargtypes = (Oid *) ARR_DATA_PTR(arr);
+		}
+	}
 
 	/* Do we have any named arguments? */
 	foreach(lc, args)
@@ -4204,16 +4251,20 @@ expand_function_arguments(List *args, Oid result_type, HeapTuple func_tuple)
 	/* If so, we must apply reorder_function_arguments */
 	if (has_named_args)
 	{
-		args = reorder_function_arguments(args, func_tuple);
+		args = reorder_function_arguments(args, pronargs, func_tuple);
 		/* Recheck argument types and add casts if needed */
-		recheck_cast_function_args(args, result_type, func_tuple);
+		recheck_cast_function_args(args, result_type,
+								   proargtypes, pronargs,
+								   func_tuple);
 	}
-	else if (list_length(args) < funcform->pronargs)
+	else if (list_length(args) < pronargs)
 	{
 		/* No named args, but we seem to be short some defaults */
-		args = add_function_defaults(args, func_tuple);
+		args = add_function_defaults(args, pronargs, func_tuple);
 		/* Recheck argument types and add casts if needed */
-		recheck_cast_function_args(args, result_type, func_tuple);
+		recheck_cast_function_args(args, result_type,
+								   proargtypes, pronargs,
+								   func_tuple);
 	}
 
 	return args;
@@ -4226,10 +4277,9 @@ expand_function_arguments(List *args, Oid result_type, HeapTuple func_tuple)
  * impossible to form a truly valid positional call without that.
  */
 static List *
-reorder_function_arguments(List *args, HeapTuple func_tuple)
+reorder_function_arguments(List *args, int pronargs, HeapTuple func_tuple)
 {
 	Form_pg_proc funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
-	int			pronargs = funcform->pronargs;
 	int			nargsprovided = list_length(args);
 	Node	   *argarray[FUNC_MAX_ARGS];
 	ListCell   *lc;
@@ -4256,6 +4306,7 @@ reorder_function_arguments(List *args, HeapTuple func_tuple)
 		{
 			NamedArgExpr *na = (NamedArgExpr *) arg;
 
+			Assert(na->argnumber >= 0 && na->argnumber < pronargs);
 			Assert(argarray[na->argnumber] == NULL);
 			argarray[na->argnumber] = (Node *) na->arg;
 		}
@@ -4296,9 +4347,8 @@ reorder_function_arguments(List *args, HeapTuple func_tuple)
  * and so we know we just need to add defaults at the end.
  */
 static List *
-add_function_defaults(List *args, HeapTuple func_tuple)
+add_function_defaults(List *args, int pronargs, HeapTuple func_tuple)
 {
-	Form_pg_proc funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
 	int			nargsprovided = list_length(args);
 	List	   *defaults;
 	int			ndelete;
@@ -4307,7 +4357,7 @@ add_function_defaults(List *args, HeapTuple func_tuple)
 	defaults = fetch_function_defaults(func_tuple);
 
 	/* Delete any unused defaults from the list */
-	ndelete = nargsprovided + list_length(defaults) - funcform->pronargs;
+	ndelete = nargsprovided + list_length(defaults) - pronargs;
 	if (ndelete < 0)
 		elog(ERROR, "not enough default arguments");
 	if (ndelete > 0)
@@ -4356,7 +4406,9 @@ fetch_function_defaults(HeapTuple func_tuple)
  * caller should have already copied the list structure.
  */
 static void
-recheck_cast_function_args(List *args, Oid result_type, HeapTuple func_tuple)
+recheck_cast_function_args(List *args, Oid result_type,
+						   Oid *proargtypes, int pronargs,
+						   HeapTuple func_tuple)
 {
 	Form_pg_proc funcform = (Form_pg_proc) GETSTRUCT(func_tuple);
 	int			nargs;
@@ -4372,9 +4424,8 @@ recheck_cast_function_args(List *args, Oid result_type, HeapTuple func_tuple)
 	{
 		actual_arg_types[nargs++] = exprType((Node *) lfirst(lc));
 	}
-	Assert(nargs == funcform->pronargs);
-	memcpy(declared_arg_types, funcform->proargtypes.values,
-		   funcform->pronargs * sizeof(Oid));
+	Assert(nargs == pronargs);
+	memcpy(declared_arg_types, proargtypes, pronargs * sizeof(Oid));
 	rettype = enforce_generic_type_consistency(actual_arg_types,
 											   declared_arg_types,
 											   nargs,
@@ -4665,51 +4716,9 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 	oldcxt = MemoryContextSwitchTo(mycxt);
 
 	/*
-	 * Setup error traceback support for ereport().  This is so that we can
-	 * finger the function that bad information came from.
-	 */
-	callback_arg.proname = NameStr(funcform->proname);
-	callback_arg.prosrc = NULL;
-
-	sqlerrcontext.callback = sql_inline_error_callback;
-	sqlerrcontext.arg = (void *) &callback_arg;
-	sqlerrcontext.previous = error_context_stack;
-	error_context_stack = &sqlerrcontext;
-
-	/* Fetch the function body */
-	tmp = SysCacheGetAttr(PROCOID,
-						  func_tuple,
-						  Anum_pg_proc_prosrc,
-						  &isNull);
-	if (isNull)
-	{
-		Node	   *n;
-		List	   *querytree_list;
-
-		tmp = SysCacheGetAttr(PROCOID, func_tuple, Anum_pg_proc_prosqlbody, &isNull);
-		if (isNull)
-			elog(ERROR, "null prosrc and prosqlbody for function %u", funcid);
-
-		n = stringToNode(TextDatumGetCString(tmp));
-		if (IsA(n, List))
-			querytree_list = linitial_node(List, castNode(List, n));
-		else
-			querytree_list = list_make1(n);
-		if (list_length(querytree_list) != 1)
-			goto fail;
-		querytree = linitial(querytree_list);
-	}
-	else
-	{
-	src = TextDatumGetCString(tmp);
-
-	callback_arg.prosrc = src;
-
-	/*
-	 * Set up to handle parameters while parsing the function body.  We need a
-	 * dummy FuncExpr node containing the already-simplified arguments to pass
-	 * to prepare_sql_fn_parse_info.  (In some cases we don't really need
-	 * that, but for simplicity we always build it.)
+	 * We need a dummy FuncExpr node containing the already-simplified
+	 * arguments.  (In some cases we don't really need it, but building it is
+	 * cheap enough that it's not worth contortions to avoid.)
 	 */
 	fexpr = makeNode(FuncExpr);
 	fexpr->funcid = funcid;
@@ -4722,32 +4731,70 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 	fexpr->args = args;
 	fexpr->location = -1;
 
-	pinfo = prepare_sql_fn_parse_info(func_tuple,
-									  (Node *) fexpr,
-									  input_collid);
-
-	/* fexpr also provides a convenient way to resolve a composite result */
-	(void) get_expr_result_type((Node *) fexpr,
-								NULL,
-								&rettupdesc);
+	/* Fetch the function body */
+	tmp = SysCacheGetAttr(PROCOID,
+						  func_tuple,
+						  Anum_pg_proc_prosrc,
+						  &isNull);
+	if (isNull)
+		elog(ERROR, "null prosrc for function %u", funcid);
+	src = TextDatumGetCString(tmp);
 
 	/*
-	 * We just do parsing and parse analysis, not rewriting, because rewriting
-	 * will not affect table-free-SELECT-only queries, which is all that we
-	 * care about.  Also, we can punt as soon as we detect more than one
-	 * command in the function body.
+	 * Setup error traceback support for ereport().  This is so that we can
+	 * finger the function that bad information came from.
 	 */
-	raw_parsetree_list = pg_parse_query(src);
-	if (list_length(raw_parsetree_list) != 1)
-		goto fail;
+	callback_arg.proname = NameStr(funcform->proname);
+	callback_arg.prosrc = src;
 
-	pstate = make_parsestate(NULL);
-	pstate->p_sourcetext = src;
-	sql_fn_parser_setup(pstate, pinfo);
+	sqlerrcontext.callback = sql_inline_error_callback;
+	sqlerrcontext.arg = (void *) &callback_arg;
+	sqlerrcontext.previous = error_context_stack;
+	error_context_stack = &sqlerrcontext;
 
-	querytree = transformTopLevelStmt(pstate, linitial(raw_parsetree_list));
+	/* If we have prosqlbody, pay attention to that not prosrc */
+	tmp = SysCacheGetAttr(PROCOID,
+						  func_tuple,
+						  Anum_pg_proc_prosqlbody,
+						  &isNull);
+	if (!isNull)
+	{
+		Node	   *n;
+		List	   *querytree_list;
 
-	free_parsestate(pstate);
+		n = stringToNode(TextDatumGetCString(tmp));
+		if (IsA(n, List))
+			querytree_list = linitial_node(List, castNode(List, n));
+		else
+			querytree_list = list_make1(n);
+		if (list_length(querytree_list) != 1)
+			goto fail;
+		querytree = linitial(querytree_list);
+	}
+	else
+	{
+		/* Set up to handle parameters while parsing the function body. */
+		pinfo = prepare_sql_fn_parse_info(func_tuple,
+										  (Node *) fexpr,
+										  input_collid);
+
+		/*
+		 * We just do parsing and parse analysis, not rewriting, because
+		 * rewriting will not affect table-free-SELECT-only queries, which is
+		 * all that we care about.  Also, we can punt as soon as we detect
+		 * more than one command in the function body.
+		 */
+		raw_parsetree_list = pg_parse_query(src);
+		if (list_length(raw_parsetree_list) != 1)
+			goto fail;
+
+		pstate = make_parsestate(NULL);
+		pstate->p_sourcetext = src;
+		sql_fn_parser_setup(pstate, pinfo);
+
+		querytree = transformTopLevelStmt(pstate, linitial(raw_parsetree_list));
+
+		free_parsestate(pstate);
 	}
 
 	/*
@@ -4779,6 +4826,11 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 		querytree->setOperations ||
 		list_length(querytree->targetList) != 1)
 		goto fail;
+
+	/* If the function result is composite, resolve it */
+	(void) get_expr_result_type((Node *) fexpr,
+								NULL,
+								&rettupdesc);
 
 	/*
 	 * Make sure the function (still) returns what it's declared to.  This
@@ -5005,15 +5057,12 @@ sql_inline_error_callback(void *arg)
 	int			syntaxerrposition;
 
 	/* If it's a syntax error, convert to internal syntax error report */
-	if (callback_arg->prosrc)
+	syntaxerrposition = geterrposition();
+	if (syntaxerrposition > 0)
 	{
-		syntaxerrposition = geterrposition();
-		if (syntaxerrposition > 0)
-		{
-			errposition(0);
-			internalerrposition(syntaxerrposition);
-			internalerrquery(callback_arg->prosrc);
-		}
+		errposition(0);
+		internalerrposition(syntaxerrposition);
+		internalerrquery(callback_arg->prosrc);
 	}
 
 	errcontext("SQL function \"%s\" during inlining", callback_arg->proname);
@@ -5125,6 +5174,7 @@ inline_set_returning_function(PlannerInfo *root, RangeTblEntry *rte)
 	Oid			func_oid;
 	HeapTuple	func_tuple;
 	Form_pg_proc funcform;
+	char	   *src;
 	Datum		tmp;
 	bool		isNull;
 	MemoryContext oldcxt;
@@ -5233,30 +5283,35 @@ inline_set_returning_function(PlannerInfo *root, RangeTblEntry *rte)
 								  ALLOCSET_DEFAULT_SIZES);
 	oldcxt = MemoryContextSwitchTo(mycxt);
 
-	/*
-	 * Setup error traceback support for ereport().  This is so that we can
-	 * finger the function that bad information came from.
-	 */
-	callback_arg.proname = NameStr(funcform->proname);
-	callback_arg.prosrc = NULL;
-
-	sqlerrcontext.callback = sql_inline_error_callback;
-	sqlerrcontext.arg = (void *) &callback_arg;
-	sqlerrcontext.previous = error_context_stack;
-	error_context_stack = &sqlerrcontext;
-
 	/* Fetch the function body */
 	tmp = SysCacheGetAttr(PROCOID,
 						  func_tuple,
 						  Anum_pg_proc_prosrc,
 						  &isNull);
 	if (isNull)
+		elog(ERROR, "null prosrc for function %u", func_oid);
+	src = TextDatumGetCString(tmp);
+
+	/*
+	 * Setup error traceback support for ereport().  This is so that we can
+	 * finger the function that bad information came from.
+	 */
+	callback_arg.proname = NameStr(funcform->proname);
+	callback_arg.prosrc = src;
+
+	sqlerrcontext.callback = sql_inline_error_callback;
+	sqlerrcontext.arg = (void *) &callback_arg;
+	sqlerrcontext.previous = error_context_stack;
+	error_context_stack = &sqlerrcontext;
+
+	/* If we have prosqlbody, pay attention to that not prosrc */
+	tmp = SysCacheGetAttr(PROCOID,
+						  func_tuple,
+						  Anum_pg_proc_prosqlbody,
+						  &isNull);
+	if (!isNull)
 	{
 		Node	   *n;
-
-		tmp = SysCacheGetAttr(PROCOID, func_tuple, Anum_pg_proc_prosqlbody, &isNull);
-		if (isNull)
-			elog(ERROR, "null prosrc and prosqlbody for function %u", func_oid);
 
 		n = stringToNode(TextDatumGetCString(tmp));
 		if (IsA(n, List))
@@ -5274,37 +5329,31 @@ inline_set_returning_function(PlannerInfo *root, RangeTblEntry *rte)
 	}
 	else
 	{
-	char	   *src;
+		/*
+		 * Set up to handle parameters while parsing the function body.  We
+		 * can use the FuncExpr just created as the input for
+		 * prepare_sql_fn_parse_info.
+		 */
+		pinfo = prepare_sql_fn_parse_info(func_tuple,
+										  (Node *) fexpr,
+										  fexpr->inputcollid);
 
-	src = TextDatumGetCString(tmp);
+		/*
+		 * Parse, analyze, and rewrite (unlike inline_function(), we can't
+		 * skip rewriting here).  We can fail as soon as we find more than one
+		 * query, though.
+		 */
+		raw_parsetree_list = pg_parse_query(src);
+		if (list_length(raw_parsetree_list) != 1)
+			goto fail;
 
-	callback_arg.prosrc = src;
-
-	/*
-	 * Set up to handle parameters while parsing the function body.  We can
-	 * use the FuncExpr just created as the input for
-	 * prepare_sql_fn_parse_info.
-	 */
-	pinfo = prepare_sql_fn_parse_info(func_tuple,
-									  (Node *) fexpr,
-									  fexpr->inputcollid);
-
-	/*
-	 * Parse, analyze, and rewrite (unlike inline_function(), we can't skip
-	 * rewriting here).  We can fail as soon as we find more than one query,
-	 * though.
-	 */
-	raw_parsetree_list = pg_parse_query(src);
-	if (list_length(raw_parsetree_list) != 1)
-		goto fail;
-
-	querytree_list = pg_analyze_and_rewrite_params(linitial(raw_parsetree_list),
-												   src,
-												   (ParserSetupHook) sql_fn_parser_setup,
-												   pinfo, NULL);
-	if (list_length(querytree_list) != 1)
-		goto fail;
-	querytree = linitial(querytree_list);
+		querytree_list = pg_analyze_and_rewrite_params(linitial(raw_parsetree_list),
+													   src,
+													   (ParserSetupHook) sql_fn_parser_setup,
+													   pinfo, NULL);
+		if (list_length(querytree_list) != 1)
+			goto fail;
+		querytree = linitial(querytree_list);
 	}
 
 	/*

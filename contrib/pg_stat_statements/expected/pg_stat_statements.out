@@ -50,28 +50,8 @@ BEGIN \;
 SELECT 2.0 AS "float" \;
 SELECT 'world' AS "text" \;
 COMMIT;
- float 
--------
-   2.0
-(1 row)
-
- text  
--------
- world
-(1 row)
-
 -- compound with empty statements and spurious leading spacing
 \;\;   SELECT 3 + 3 \;\;\;   SELECT ' ' || ' !' \;\;   SELECT 1 + 4 \;;
- ?column? 
-----------
-        6
-(1 row)
-
- ?column? 
-----------
-   !
-(1 row)
-
  ?column? 
 ----------
         5
@@ -81,11 +61,6 @@ COMMIT;
 SELECT 1 + 1 + 1 AS "add" \gset
 SELECT :add + 1 + 1 AS "add" \;
 SELECT :add + 1 + 1 AS "add" \gset
- add 
------
-   5
-(1 row)
-
 -- set operator
 SELECT 1 AS i UNION SELECT 2 ORDER BY i;
  i 
@@ -940,5 +915,156 @@ SELECT query, toplevel, plans, calls FROM pg_stat_statements WHERE query LIKE '%
  END;                 +|          |       | 
  $$ LANGUAGE plpgsql   |          |       | 
 (3 rows)
+
+-- FROM [ONLY]
+CREATE TABLE tbl_inh(id integer);
+CREATE TABLE tbl_inh_1() INHERITS (tbl_inh);
+INSERT INTO tbl_inh_1 SELECT 1;
+SELECT * FROM tbl_inh;
+ id 
+----
+  1
+(1 row)
+
+SELECT * FROM ONLY tbl_inh;
+ id 
+----
+(0 rows)
+
+SELECT COUNT(*) FROM pg_stat_statements WHERE query LIKE '%FROM%tbl_inh%';
+ count 
+-------
+     2
+(1 row)
+
+-- WITH TIES
+CREATE TABLE limitoption AS SELECT 0 AS val FROM generate_series(1, 10);
+SELECT *
+FROM limitoption
+WHERE val < 2
+ORDER BY val
+FETCH FIRST 2 ROWS WITH TIES;
+ val 
+-----
+   0
+   0
+   0
+   0
+   0
+   0
+   0
+   0
+   0
+   0
+(10 rows)
+
+SELECT *
+FROM limitoption
+WHERE val < 2
+ORDER BY val
+FETCH FIRST 2 ROW ONLY;
+ val 
+-----
+   0
+   0
+(2 rows)
+
+SELECT COUNT(*) FROM pg_stat_statements WHERE query LIKE '%FETCH FIRST%';
+ count 
+-------
+     2
+(1 row)
+
+-- GROUP BY [DISTINCT]
+SELECT a, b, c
+FROM (VALUES (1, 2, 3), (4, NULL, 6), (7, 8, 9)) AS t (a, b, c)
+GROUP BY ROLLUP(a, b), rollup(a, c)
+ORDER BY a, b, c;
+ a | b | c 
+---+---+---
+ 1 | 2 | 3
+ 1 | 2 |  
+ 1 | 2 |  
+ 1 |   | 3
+ 1 |   | 3
+ 1 |   |  
+ 1 |   |  
+ 1 |   |  
+ 4 |   | 6
+ 4 |   | 6
+ 4 |   | 6
+ 4 |   |  
+ 4 |   |  
+ 4 |   |  
+ 4 |   |  
+ 4 |   |  
+ 7 | 8 | 9
+ 7 | 8 |  
+ 7 | 8 |  
+ 7 |   | 9
+ 7 |   | 9
+ 7 |   |  
+ 7 |   |  
+ 7 |   |  
+   |   |  
+(25 rows)
+
+SELECT a, b, c
+FROM (VALUES (1, 2, 3), (4, NULL, 6), (7, 8, 9)) AS t (a, b, c)
+GROUP BY DISTINCT ROLLUP(a, b), rollup(a, c)
+ORDER BY a, b, c;
+ a | b | c 
+---+---+---
+ 1 | 2 | 3
+ 1 | 2 |  
+ 1 |   | 3
+ 1 |   |  
+ 4 |   | 6
+ 4 |   | 6
+ 4 |   |  
+ 4 |   |  
+ 7 | 8 | 9
+ 7 | 8 |  
+ 7 |   | 9
+ 7 |   |  
+   |   |  
+(13 rows)
+
+SELECT COUNT(*) FROM pg_stat_statements WHERE query LIKE '%GROUP BY%ROLLUP%';
+ count 
+-------
+     2
+(1 row)
+
+-- GROUPING SET agglevelsup
+SELECT (
+  SELECT (
+    SELECT GROUPING(a,b) FROM (VALUES (1)) v2(c)
+  ) FROM (VALUES (1,2)) v1(a,b) GROUP BY (a,b)
+) FROM (VALUES(6,7)) v3(e,f) GROUP BY ROLLUP(e,f);
+ grouping 
+----------
+        0
+        0
+        0
+(3 rows)
+
+SELECT (
+  SELECT (
+    SELECT GROUPING(e,f) FROM (VALUES (1)) v2(c)
+  ) FROM (VALUES (1,2)) v1(a,b) GROUP BY (a,b)
+) FROM (VALUES(6,7)) v3(e,f) GROUP BY ROLLUP(e,f);
+ grouping 
+----------
+        3
+        0
+        1
+(3 rows)
+
+SELECT COUNT(*) FROM pg_stat_statements WHERE query LIKE '%SELECT GROUPING%';
+ count 
+-------
+     2
+(1 row)
 
 DROP EXTENSION pg_stat_statements;

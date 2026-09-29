@@ -1,4 +1,6 @@
 
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 =pod
 
 =head1 NAME
@@ -29,9 +31,9 @@ PostgresNode - class representing PostgreSQL server instance
   # as well as the psql exit code. Pass some extra psql
   # options. If there's an error from psql raise an exception.
   my ($stdout, $stderr, $timed_out);
-  my $cmdret = $node->psql('postgres', 'SELECT pg_sleep(60)',
+  my $cmdret = $node->psql('postgres', 'SELECT pg_sleep(600)',
 	  stdout => \$stdout, stderr => \$stderr,
-	  timeout => 30, timed_out => \$timed_out,
+	  timeout => 180, timed_out => \$timed_out,
 	  extra_params => ['--single-transaction'],
 	  on_error_die => 1)
   print "Sleep timed out" if $timed_out;
@@ -96,6 +98,7 @@ use File::Spec;
 use File::stat qw(stat);
 use File::Temp ();
 use IPC::Run;
+use PostgresVersion;
 use RecursiveCopy;
 use Socket;
 use Test::More;
@@ -382,6 +385,8 @@ sub info
 	my $_info = '';
 	open my $fh, '>', \$_info or die;
 	print $fh "Name: " . $self->name . "\n";
+	print $fh "Version: " . $self->{_pg_version} . "\n"
+	  if $self->{_pg_version};
 	print $fh "Data directory: " . $self->data_dir . "\n";
 	print $fh "Backup directory: " . $self->backup_dir . "\n";
 	print $fh "Archive directory: " . $self->archive_dir . "\n";
@@ -621,9 +626,12 @@ sub backup
 
 	print "# Taking pg_basebackup $backup_name from node \"$name\"\n";
 	TestLib::system_or_bail(
-		'pg_basebackup', '-D', $backup_path, '-h',
-		$self->host,     '-p', $self->port,  '--checkpoint',
-		'fast',          '--no-sync', '--target-gp-dbid', 99,
+		'pg_basebackup',    '-D',
+		$backup_path,       '-h',
+		$self->host,        '-p',
+		$self->port,        '--checkpoint',
+		'fast',             '--no-sync',
+		'--target-gp-dbid', 99,
 		@{ $params{backup_options} });
 	print "# Backup finished\n";
 	return;
@@ -766,9 +774,10 @@ sub init_from_backup
 		TestLib::system_or_bail($params{tar_program}, 'xf',
 			$backup_path . '/base.tar',
 			'-C', $data_path);
-		TestLib::system_or_bail($params{tar_program}, 'xf',
-			$backup_path . '/pg_wal.tar',
-			'-C', $data_path . '/pg_wal');
+		TestLib::system_or_bail(
+			$params{tar_program},         'xf',
+			$backup_path . '/pg_wal.tar', '-C',
+			$data_path . '/pg_wal');
 	}
 	else
 	{
@@ -1259,7 +1268,57 @@ sub get_new_node
 	# Add node to list of nodes
 	push(@all_nodes, $node);
 
+	$node->_set_pg_version;
+
+	my $v = $node->{_pg_version};
+
+	carp("PostgresNode isn't fully compatible with version " . $v)
+	  if $v < 12;
+
 	return $node;
+}
+
+# Private routine to run the pg_config binary found in our environment (or in
+# our install_path, if we have one), and set the version from it
+#
+sub _set_pg_version
+{
+	my ($self)    = @_;
+	my $inst      = $self->{_install_path};
+	my $pg_config = "pg_config";
+
+	if (defined $inst)
+	{
+		# If the _install_path is invalid, our PATH variables might find an
+		# unrelated pg_config executable elsewhere.  Sanity check the
+		# directory.
+		BAIL_OUT("directory not found: $inst")
+		  unless -d $inst;
+
+		# If the directory exists but is not the root of a postgresql
+		# installation, or if the user configured using
+		# --bindir=$SOMEWHERE_ELSE, we're not going to find pg_config, so
+		# complain about that, too.
+		$pg_config = "$inst/bin/pg_config";
+		BAIL_OUT("pg_config not found: $pg_config")
+		  unless -e $pg_config;
+		BAIL_OUT("pg_config not executable: $pg_config")
+		  unless -x $pg_config;
+
+		# Leave $pg_config install_path qualified, to be sure we get the right
+		# version information, below, or die trying
+	}
+
+	local %ENV = $self->_get_env();
+
+	# We only want the version field
+	my $version_line = qx{$pg_config --version};
+	BAIL_OUT("$pg_config failed: $!") if $?;
+
+	$self->{_pg_version} = PostgresVersion->new($version_line);
+
+	BAIL_OUT("could not parse pg_config --version output: $version_line")
+	  unless defined $self->{_pg_version};
 }
 
 # Private routine to return a copy of the environment with the PATH and
@@ -1282,7 +1341,7 @@ sub get_new_node
 # a common parent directory.
 sub _get_env
 {
-	my $self     = shift;
+	my $self = shift;
 	my %inst_env = (%ENV, PGHOST => $self->{_host}, PGPORT => $self->{_port});
 	# the remaining arguments are modifications to make to the environment
 	my %mods = (@_);
@@ -1334,6 +1393,28 @@ sub _get_env
 	return (%inst_env);
 }
 
+# Private routine to get an installation path qualified command.
+#
+# IPC::Run maintains a cache, %cmd_cache, mapping commands to paths.  Tests
+# which use nodes spanning more than one postgres installation path need to
+# avoid confusing which installation's binaries get run.  Setting $ENV{PATH} is
+# insufficient, as IPC::Run does not check to see if the path has changed since
+# caching a command.
+sub installed_command
+{
+	my ($self, $cmd) = @_;
+
+	# Nodes using alternate installation locations use their installation's
+	# bin/ directory explicitly
+	return join('/', $self->{_install_path}, 'bin', $cmd)
+	  if defined $self->{_install_path};
+
+	# Nodes implicitly using the default installation location rely on IPC::Run
+	# to find the right binary, which should not cause %cmd_cache confusion,
+	# because no nodes with other installation paths do it that way.
+	return $cmd;
+}
+
 =pod
 
 =item get_free_port()
@@ -1373,19 +1454,21 @@ sub get_free_port
 		# Check to see if anything else is listening on this TCP port.
 		# Seek a port available for all possible listen_addresses values,
 		# so callers can harness this port for the widest range of purposes.
-		# The 0.0.0.0 test achieves that for post-2006 Cygwin, which
-		# automatically sets SO_EXCLUSIVEADDRUSE.  The same holds for MSYS (a
-		# Cygwin fork).  Testing 0.0.0.0 is insufficient for Windows native
-		# Perl (https://stackoverflow.com/a/14388707), so we also test
-		# individual addresses.
+		# The 0.0.0.0 test achieves that for MSYS, which automatically sets
+		# SO_EXCLUSIVEADDRUSE.  Testing 0.0.0.0 is insufficient for Windows
+		# native Perl (https://stackoverflow.com/a/14388707), so we also
+		# have to test individual addresses.  Doing that for 127.0.0/24
+		# addresses other than 127.0.0.1 might fail with EADDRNOTAVAIL on
+		# non-Linux, non-Windows kernels.
 		#
-		# On non-Linux, non-Windows kernels, binding to 127.0.0/24 addresses
-		# other than 127.0.0.1 might fail with EADDRNOTAVAIL.  Binding to
-		# 0.0.0.0 is unnecessary on non-Windows systems.
+		# Thus, 0.0.0.0 and individual 127.0.0/24 addresses are tested
+		# only on Windows and only when TCP usage is requested.
 		if ($found == 1)
 		{
 			foreach my $addr (qw(127.0.0.1),
-				$use_tcp ? qw(127.0.0.2 127.0.0.3 0.0.0.0) : ())
+				($use_tcp && $TestLib::windows_os)
+				  ? qw(127.0.0.2 127.0.0.3 0.0.0.0)
+				  : ())
 			{
 				if (!can_bind($addr, $port))
 				{
@@ -1594,9 +1677,9 @@ If given, it must be an array reference containing additional parameters to B<ps
 e.g.
 
 	my ($stdout, $stderr, $timed_out);
-	my $cmdret = $node->psql('postgres', 'SELECT pg_sleep(60)',
+	my $cmdret = $node->psql('postgres', 'SELECT pg_sleep(600)',
 		stdout => \$stdout, stderr => \$stderr,
-		timeout => 30, timed_out => \$timed_out,
+		timeout => 180, timed_out => \$timed_out,
 		extra_params => ['--single-transaction'])
 
 will set $cmdret to undef and $timed_out to a true value.
@@ -1633,7 +1716,9 @@ sub psql
 	}
 	$psql_connstr .= defined $replication ? " replication=$replication" : "";
 
-	my @psql_params = ('psql', '-XAtq', '-d', $psql_connstr, '-f', '-');
+	my @psql_params = (
+		$self->installed_command('psql'),
+		'-XAtq', '-d', $psql_connstr, '-f', '-');
 
 	# If the caller wants an array and hasn't passed stdout/stderr
 	# references, allocate temporary ones to capture them so we
@@ -1819,7 +1904,7 @@ sub background_psql
 	my $replication = $params{replication};
 
 	my @psql_params = (
-		'psql',
+		$self->installed_command('psql'),
 		'-XAtq',
 		'-d',
 		$self->connstr($dbname)
@@ -1896,7 +1981,9 @@ sub interactive_psql
 
 	local %ENV = $self->_get_env();
 
-	my @psql_params = ('psql', '-XAt', '-d', $self->connstr($dbname));
+	my @psql_params = (
+		$self->installed_command('psql'),
+		'-XAt', '-d', $self->connstr($dbname));
 
 	push @psql_params, @{ $params{extra_params} }
 	  if defined $params{extra_params};
@@ -1982,21 +2069,7 @@ sub connect_ok
 		@log_unlike = @{ $params{log_unlike} };
 	}
 
-	if (@log_like or @log_unlike)
-	{
-		# Don't let previous log entries match for this connection.
-		# On Windows, the truncation would not work, so rotate the log
-		# file before restarting the server afresh.
-		if ($TestLib::windows_os)
-		{
-			$self->rotate_logfile;
-			$self->restart;
-		}
-		else
-		{
-			truncate $self->logfile, 0;
-		}
-	}
+	my $log_location = -s $self->logfile;
 
 	# Never prompt for a password, any callers of this routine should
 	# have set up things properly, and this should not block.
@@ -2015,7 +2088,7 @@ sub connect_ok
 	}
 	if (@log_like or @log_unlike)
 	{
-		my $log_contents = TestLib::slurp_file($self->logfile);
+		my $log_contents = TestLib::slurp_file($self->logfile, $log_location);
 
 		while (my $regex = shift @log_like)
 		{
@@ -2066,21 +2139,7 @@ sub connect_fails
 		@log_unlike = @{ $params{log_unlike} };
 	}
 
-	if (@log_like or @log_unlike)
-	{
-		# Don't let previous log entries match for this connection.
-		# On Windows, the truncation would not work, so rotate the log
-		# file before restarting the server afresh.
-		if ($TestLib::windows_os)
-		{
-			$self->rotate_logfile;
-			$self->restart;
-		}
-		else
-		{
-			truncate $self->logfile, 0;
-		}
-	}
+	my $log_location = -s $self->logfile;
 
 	# Never prompt for a password, any callers of this routine should
 	# have set up things properly, and this should not block.
@@ -2099,7 +2158,7 @@ sub connect_fails
 
 	if (@log_like or @log_unlike)
 	{
-		my $log_contents = TestLib::slurp_file($self->logfile);
+		my $log_contents = TestLib::slurp_file($self->logfile, $log_location);
 
 		while (my $regex = shift @log_like)
 		{
@@ -2132,19 +2191,25 @@ sub poll_query_until
 
 	$expected = 't' unless defined($expected);    # default value
 
-	my $cmd = [ 'psql', '-XAt', '-c', $query, '-d', $self->connstr($dbname) ];
+	my $cmd = [
+		$self->installed_command('psql'), '-XAt',
+		'-d',                             $self->connstr($dbname)
+	];
 	my ($stdout, $stderr);
 	my $max_attempts = 180 * 10;
 	my $attempts     = 0;
 
 	while ($attempts < $max_attempts)
 	{
-		my $result = IPC::Run::run $cmd, '>', \$stdout, '2>', \$stderr;
+		my $result = IPC::Run::run $cmd, '<', \$query,
+		  '>', \$stdout, '2>', \$stderr;
 
 		$stdout =~ s/\r\n/\n/g if $Config{osname} eq 'msys';
 		chomp($stdout);
+		$stderr =~ s/\r\n/\n/g if $Config{osname} eq 'msys';
+		chomp($stderr);
 
-		if ($stdout eq $expected)
+		if ($stdout eq $expected && $stderr eq '')
 		{
 			return 1;
 		}
@@ -2157,8 +2222,6 @@ sub poll_query_until
 
 	# The query result didn't change in 180 seconds. Give up. Print the
 	# output from the last attempt, hopefully that's useful for debugging.
-	$stderr =~ s/\r\n/\n/g if $Config{osname} eq 'msys';
-	chomp($stderr);
 	diag qq(poll_query_until timed out executing this query:
 $query
 expecting this output:
@@ -2259,9 +2322,6 @@ sub command_checks_all
 Run a command on the node, then verify that $expected_sql appears in the
 server log file.
 
-Reads the whole log file so be careful when working with large log outputs.
-The log file is truncated prior to running the command, however.
-
 =cut
 
 sub issues_sql_like
@@ -2272,10 +2332,11 @@ sub issues_sql_like
 
 	local %ENV = $self->_get_env();
 
-	truncate $self->logfile, 0;
+	my $log_location = -s $self->logfile;
+
 	my $result = TestLib::run_log($cmd);
 	ok($result, "@$cmd exit code 0");
-	my $log = TestLib::slurp_file($self->logfile);
+	my $log = TestLib::slurp_file($self->logfile, $log_location);
 	like($log, $expected_sql, "$test_name: SQL found in server log");
 	return;
 }
@@ -2554,8 +2615,8 @@ sub pg_recvlogical_upto
 	croak 'endpos must be specified'    unless defined($endpos);
 
 	my @cmd = (
-		'pg_recvlogical', '-S', $slot_name, '--dbname',
-		$self->connstr($dbname));
+		$self->installed_command('pg_recvlogical'),
+		'-S', $slot_name, '--dbname', $self->connstr($dbname));
 	push @cmd, '--endpos', $endpos;
 	push @cmd, '-f', '-', '--no-loop', '--start';
 

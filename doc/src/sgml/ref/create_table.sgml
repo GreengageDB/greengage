@@ -22,7 +22,7 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 CREATE [ [ GLOBAL | LOCAL ] { TEMPORARY | TEMP } | UNLOGGED ] TABLE [ IF NOT EXISTS ] <replaceable class="parameter">table_name</replaceable> ( [
-  { <replaceable class="parameter">column_name</replaceable> <replaceable class="parameter">data_type</replaceable> [ COLLATE <replaceable>collation</replaceable> ] [ COMPRESSION <replaceable>compression_method</replaceable> ] [ <replaceable class="parameter">column_constraint</replaceable> [ ... ] ]
+  { <replaceable class="parameter">column_name</replaceable> <replaceable class="parameter">data_type</replaceable> [ COMPRESSION <replaceable>compression_method</replaceable> ] [ COLLATE <replaceable>collation</replaceable> ] [ <replaceable class="parameter">column_constraint</replaceable> [ ... ] ]
     | <replaceable>table_constraint</replaceable>
     | LIKE <replaceable>source_table</replaceable> [ <replaceable>like_option</replaceable> ... ] }
     | [<replaceable>column_reference_storage_directive</replaceable> [, ... ]
@@ -117,7 +117,7 @@ class="parameter">referential_action</replaceable> ] [ ON UPDATE <replaceable cl
 
 <phrase>and <replaceable class="parameter">like_option</replaceable> is:</phrase>
 
-{ INCLUDING | EXCLUDING } { COMMENTS | CONSTRAINTS | DEFAULTS | GENERATED | IDENTITY | INDEXES | STATISTICS | STORAGE | ALL }
+{ INCLUDING | EXCLUDING } { COMMENTS | COMPRESSION | CONSTRAINTS | DEFAULTS | GENERATED | IDENTITY | INDEXES | STATISTICS | STORAGE | ALL }
 
 <phrase>and <replaceable class="parameter">partition_bound_spec</replaceable> is:</phrase>
 
@@ -377,17 +377,22 @@ Where column_reference_storage_directive is:
     <listitem>
      <para>
       The <literal>COMPRESSION</literal> clause sets the compression method
-      for a column.  Compression is supported only for variable-width data
-      types, and is used only for columns whose storage type is main or
-      extended. (See <xref linkend="sql-altertable"/> for information on
-      column storage types.) Setting this property for a partitioned table
+      for the column.  Compression is supported only for variable-width data
+      types, and is used only when the column's storage mode
+      is <literal>main</literal> or <literal>extended</literal>.
+      (See <xref linkend="sql-altertable"/> for information on
+      column storage modes.) Setting this property for a partitioned table
       has no direct effect, because such tables have no storage of their own,
-      but the configured value is inherited by newly-created partitions.
+      but the configured value will be inherited by newly-created partitions.
       The supported compression methods are <literal>pglz</literal> and
-      <literal>lz4</literal>.  <literal>lz4</literal> is available only if
-      <literal>--with-lz4</literal> was used when building
-      <productname>PostgreSQL</productname>. The default
-      is <literal>pglz</literal>.
+      <literal>lz4</literal>.  (<literal>lz4</literal> is available only if
+      <option>--with-lz4</option> was used when building
+      <productname>PostgreSQL</productname>.)  In addition,
+      <replaceable class="parameter">compression_method</replaceable>
+      can be <literal>default</literal> to explicitly specify the default
+      behavior, which is to consult the
+      <xref linkend="guc-default-toast-compression"/> setting at the time of
+      data insertion to determine the method to use.
      </para>
     </listitem>
    </varlistentry>
@@ -1462,8 +1467,8 @@ Where column_reference_storage_directive is:
     If a table parameter value is set and the
     equivalent <literal>toast.</literal> parameter is not, the TOAST table
     will use the table's parameter value.
-    Specifying these parameters for partitioned tables is not supported,
-    but you may specify them for individual leaf partitions.
+    Except where noted, these parameters are not supported on partitioned
+    tables; however, you can specify them on individual leaf partitions.
    </para>
 
    <variablelist>
@@ -1545,6 +1550,8 @@ Where column_reference_storage_directive is:
      If true, the autovacuum daemon will perform automatic <command>VACUUM</command>
      and/or <command>ANALYZE</command> operations on this table following the rules
      discussed in <xref linkend="autovacuum"/>.
+     This parameter can be set for partitioned tables to prevent autovacuum
+     from running <command>ANALYZE</command> on them.
      If false, this table will not be autovacuumed, except to prevent
      transaction ID wraparound. See <xref linkend="vacuum-for-wraparound"/> for
      more about wraparound prevention.
@@ -1559,20 +1566,27 @@ Where column_reference_storage_directive is:
    </varlistentry>
 
    <varlistentry id="reloption-vacuum-index-cleanup" xreflabel="vacuum_index_cleanup">
-    <term><literal>vacuum_index_cleanup</literal>, <literal>toast.vacuum_index_cleanup</literal> (<type>boolean</type>)
+    <term><literal>vacuum_index_cleanup</literal>, <literal>toast.vacuum_index_cleanup</literal> (<type>enum</type>)
     <indexterm>
      <primary><varname>vacuum_index_cleanup</varname> storage parameter</primary>
     </indexterm>
     </term>
     <listitem>
      <para>
-      Enables or disables index cleanup when <command>VACUUM</command> is
-      run on this table.  The default value is <literal>true</literal>.
-      Disabling index cleanup can speed up <command>VACUUM</command> very
-      significantly, but may also lead to severely bloated indexes if table
-      modifications are frequent.  The <literal>INDEX_CLEANUP</literal>
-      parameter of <link linkend="sql-vacuum"><command>VACUUM</command></link>, if specified, overrides
-      the value of this option.
+      Forces or disables index cleanup when <command>VACUUM</command>
+      is run on this table.  The default value is
+      <literal>AUTO</literal>.  With <literal>OFF</literal>, index
+      cleanup is disabled, with <literal>ON</literal> it is enabled,
+      and with <literal>AUTO</literal> a decision is made dynamically,
+      each time <command>VACUUM</command> runs.  The dynamic behavior
+      allows <command>VACUUM</command> to avoid needlessly scanning
+      indexes to remove very few dead tuples.  Forcibly disabling all
+      index cleanup can speed up <command>VACUUM</command> very
+      significantly, but may also lead to severely bloated indexes if
+      table modifications are frequent.  The
+      <literal>INDEX_CLEANUP</literal> parameter of <link
+       linkend="sql-vacuum"><command>VACUUM</command></link>, if
+      specified, overrides the value of this option.
      </para>
     </listitem>
    </varlistentry>
@@ -1613,7 +1627,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry id="reloption-autovacuum-vauum-scale-factor" xreflabel="autovacuum_vacuum_scale_factor">
+   <varlistentry id="reloption-autovacuum-vacuum-scale-factor" xreflabel="autovacuum_vacuum_scale_factor">
     <term><literal>autovacuum_vacuum_scale_factor</literal>, <literal>toast.autovacuum_vacuum_scale_factor</literal> (<type>floating point</type>)
     <indexterm>
      <primary><varname>autovacuum_vacuum_scale_factor</varname> </primary>
@@ -1644,7 +1658,7 @@ Where column_reference_storage_directive is:
    </varlistentry>
 
    <varlistentry id="reloption-autovacuum-vacuum-insert-scale-factor" xreflabel="autovacuum_vacuum_insert_scale_factor">
-    <term><literal>autovacuum_vacuum_insert_scale_factor</literal>, <literal>toast.autovacuum_vacuum_insert_scale_factor</literal> (<type>float4</type>)
+    <term><literal>autovacuum_vacuum_insert_scale_factor</literal>, <literal>toast.autovacuum_vacuum_insert_scale_factor</literal> (<type>floating point</type>)
     <indexterm>
      <primary><varname>autovacuum_vacuum_insert_scale_factor</varname> </primary>
      <secondary>storage parameter</secondary>
@@ -1669,6 +1683,7 @@ Where column_reference_storage_directive is:
      <para>
       Per-table value for <xref linkend="guc-autovacuum-analyze-threshold"/>
       parameter.
+      This parameter can be set for partitioned tables.
      </para>
     </listitem>
    </varlistentry>
@@ -1684,6 +1699,7 @@ Where column_reference_storage_directive is:
      <para>
       Per-table value for <xref linkend="guc-autovacuum-analyze-scale-factor"/>
       parameter.
+      This parameter can be set for partitioned tables.
      </para>
     </listitem>
    </varlistentry>
@@ -1703,7 +1719,7 @@ Where column_reference_storage_directive is:
     </listitem>
    </varlistentry>
 
-   <varlistentry id="reloption-autovacuum-vauum-cost-limit" xreflabel="autovacuum_vacuum_cost_limit">
+   <varlistentry id="reloption-autovacuum-vacuum-cost-limit" xreflabel="autovacuum_vacuum_cost_limit">
     <term><literal>autovacuum_vacuum_cost_limit</literal>, <literal>toast.autovacuum_vacuum_cost_limit</literal> (<type>integer</type>)
     <indexterm>
      <primary><varname>autovacuum_vacuum_cost_limit</varname></primary>

@@ -37,14 +37,6 @@ typedef enum ReplicationSlotPersistency
 	RS_TEMPORARY
 } ReplicationSlotPersistency;
 
-/* For ReplicationSlotAcquire, q.v. */
-typedef enum SlotAcquireBehavior
-{
-	SAB_Error,
-	SAB_Block,
-	SAB_Inquire
-} SlotAcquireBehavior;
-
 /*
  * On-Disk data of a replication slot, preserved across restarts.
  */
@@ -210,7 +202,7 @@ extern void ReplicationSlotCreate(const char *name, bool db_specific,
 extern void ReplicationSlotPersist(void);
 extern void ReplicationSlotDrop(const char *name, bool nowait);
 
-extern int	ReplicationSlotAcquire(const char *name, SlotAcquireBehavior behavior);
+extern void ReplicationSlotAcquire(const char *name, bool nowait);
 extern void ReplicationSlotRelease(void);
 extern void ReplicationSlotCleanup(void);
 extern void ReplicationSlotSave(void);
@@ -225,7 +217,7 @@ extern XLogRecPtr ReplicationSlotsComputeLogicalRestartLSN(void);
 extern bool ReplicationSlotsCountDBSlots(Oid dboid, int *nslots, int *nactive);
 extern void ReplicationSlotsDropDBSlots(Oid dboid);
 extern void InvalidateObsoleteReplicationSlots(XLogSegNo oldestSegno);
-extern ReplicationSlot *SearchNamedReplicationSlot(const char *name);
+extern ReplicationSlot *SearchNamedReplicationSlot(const char *name, bool need_lock);
 extern void ReplicationSlotNameForTablesync(Oid suboid, Oid relid, char *syncslotname, int szslot);
 extern void ReplicationSlotDropAtPubNode(WalReceiverConn *wrconn, char *slotname, bool missing_ok);
 

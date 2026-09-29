@@ -242,8 +242,8 @@ dependency_degree(StatsBuildData *data, int k, AttrNumber *dependency)
 	mss = multi_sort_init(k);
 
 	/*
-	 * Translate the array of indexes to regular attnums for the dependency (we
-	 * will need this to identify the columns in StatsBuildData).
+	 * Translate the array of indexes to regular attnums for the dependency
+	 * (we will need this to identify the columns in StatsBuildData).
 	 */
 	attnums_dep = (AttrNumber *) palloc(k * sizeof(AttrNumber));
 	for (i = 0; i < k; i++)
@@ -973,7 +973,7 @@ find_strongest_dependency(MVDependencies **dependencies, int ndependencies,
 /*
  * clauselist_apply_dependencies
  *		Apply the specified functional dependencies to a list of clauses and
- *		return the estimated selecvitity of the clauses that are compatible
+ *		return the estimated selectivity of the clauses that are compatible
  *		with any of the given dependencies.
  *
  * This will estimate all not-already-estimated clauses that are compatible
@@ -1462,7 +1462,7 @@ dependencies_clauselist_selectivity(PlannerInfo *root,
 		if (!bms_is_member(listidx, *estimatedclauses))
 		{
 			/*
-			 * If it's a simple column refrence, just extract the attnum. If
+			 * If it's a simple column reference, just extract the attnum. If
 			 * it's an expression, assign a negative attnum as if it was a
 			 * system attribute.
 			 */

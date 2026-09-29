@@ -1394,8 +1394,8 @@ SnapBuildWaitSnapshot(xl_running_xacts *running, TransactionId cutoff)
 	/*
 	 * All transactions we needed to finish finished - try to ensure there is
 	 * another xl_running_xacts record in a timely manner, without having to
-	 * wait for bgwriter or checkpointer to log one.  During recovery we
-	 * can't enforce that, so we'll have to wait.
+	 * wait for bgwriter or checkpointer to log one.  During recovery we can't
+	 * enforce that, so we'll have to wait.
 	 */
 	if (!RecoveryInProgress())
 	{
@@ -1540,7 +1540,7 @@ SnapBuildSerialize(SnapBuild *builder, XLogRecPtr lsn)
 	elog(DEBUG1, "serializing snapshot to %s", path);
 
 	/* to make sure only we will write to this tempfile, include pid */
-	sprintf(tmppath, "pg_logical/snapshots/%X-%X.snap.%u.tmp",
+	sprintf(tmppath, "pg_logical/snapshots/%X-%X.snap.%d.tmp",
 			LSN_FORMAT_ARGS(lsn), MyProcPid);
 
 	/*

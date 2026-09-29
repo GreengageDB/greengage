@@ -34,8 +34,8 @@
  */
 static void
 PutMemoryContextsStatsTupleStore(Tuplestorestate *tupstore,
-								TupleDesc tupdesc, MemoryContext context,
-								const char *parent, int level)
+								 TupleDesc tupdesc, MemoryContext context,
+								 const char *parent, int level)
 {
 #define PG_GET_BACKEND_MEMORY_CONTEXTS_COLS	9
 
@@ -52,8 +52,8 @@ PutMemoryContextsStatsTupleStore(Tuplestorestate *tupstore,
 	ident = context->ident;
 
 	/*
-	 * To be consistent with logging output, we label dynahash contexts
-	 * with just the hash table name as with MemoryContextStatsPrint().
+	 * To be consistent with logging output, we label dynahash contexts with
+	 * just the hash table name as with MemoryContextStatsPrint().
 	 */
 	if (ident && strcmp(name, "dynahash") == 0)
 	{
@@ -75,7 +75,7 @@ PutMemoryContextsStatsTupleStore(Tuplestorestate *tupstore,
 
 	if (ident)
 	{
-		int		idlen = strlen(ident);
+		int			idlen = strlen(ident);
 		char		clipped_ident[MEMORY_CONTEXT_IDENT_DISPLAY_SIZE];
 
 		/*
@@ -108,7 +108,7 @@ PutMemoryContextsStatsTupleStore(Tuplestorestate *tupstore,
 	for (child = context->firstchild; child != NULL; child = child->nextchild)
 	{
 		PutMemoryContextsStatsTupleStore(tupstore, tupdesc,
-								  child, name, level + 1);
+										 child, name, level + 1);
 	}
 }
 
@@ -150,7 +150,7 @@ pg_get_backend_memory_contexts(PG_FUNCTION_ARGS)
 	MemoryContextSwitchTo(oldcontext);
 
 	PutMemoryContextsStatsTupleStore(tupstore, tupdesc,
-								TopMemoryContext, NULL, 0);
+									 TopMemoryContext, NULL, 0);
 
 	/* clean up and return the tuplestore */
 	tuplestore_donestoring(tupstore);
@@ -175,7 +175,15 @@ Datum
 pg_log_backend_memory_contexts(PG_FUNCTION_ARGS)
 {
 	int			pid = PG_GETARG_INT32(0);
-	PGPROC	   *proc = BackendPidGetProc(pid);
+	PGPROC	   *proc;
+
+	/* Only allow superusers to log memory contexts. */
+	if (!superuser())
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("must be a superuser to log memory contexts")));
+
+	proc = BackendPidGetProc(pid);
 
 	/*
 	 * BackendPidGetProc returns NULL if the pid isn't valid; but by the time
@@ -196,12 +204,6 @@ pg_log_backend_memory_contexts(PG_FUNCTION_ARGS)
 				(errmsg("PID %d is not a PostgreSQL server process", pid)));
 		PG_RETURN_BOOL(false);
 	}
-
-	/* Only allow superusers to log memory contexts. */
-	if (!superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("must be a superuser to log memory contexts")));
 
 	if (SendProcSignal(pid, PROCSIG_LOG_MEMORY_CONTEXT, proc->backendId) < 0)
 	{

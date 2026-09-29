@@ -175,7 +175,7 @@ ExecSerializePlan(Plan *plan, EState *estate)
 	 */
 	pstmt = makeNode(PlannedStmt);
 	pstmt->commandType = CMD_SELECT;
-	pstmt->queryId = pgstat_get_my_queryid();
+	pstmt->queryId = pgstat_get_my_query_id();
 	pstmt->hasReturning = false;
 	pstmt->hasModifyingCTE = false;
 	pstmt->canSetTag = true;
@@ -650,7 +650,7 @@ ExecInitParallelPlan(PlanState *planstate, EState *estate,
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
 	/* Estimate space for query text. */
-	query_len = estate->es_sourceText ? strlen(estate->es_sourceText) : 0;
+	query_len = strlen(estate->es_sourceText);
 	shm_toc_estimate_chunk(&pcxt->estimator, query_len + 1);
 	shm_toc_estimate_keys(&pcxt->estimator, 1);
 
@@ -745,10 +745,7 @@ ExecInitParallelPlan(PlanState *planstate, EState *estate,
 
 	/* Store query string */
 	query_string = shm_toc_allocate(pcxt->toc, query_len + 1);
-	if (query_len == 0)
-		query_string[0] = 0;
-	else
-		memcpy(query_string, estate->es_sourceText, query_len + 1);
+	memcpy(query_string, estate->es_sourceText, query_len + 1);
 	shm_toc_insert(pcxt->toc, PARALLEL_KEY_QUERY_TEXT, query_string);
 
 	/* Store serialized PlannedStmt. */
@@ -1429,7 +1426,6 @@ ParallelQueryMain(dsm_segment *seg, shm_toc *toc)
 
 	/* Report workers' query and queryId for monitoring purposes */
 	pgstat_report_activity(STATE_RUNNING, debug_query_string);
-	pgstat_report_queryid(queryDesc->plannedstmt->queryId, false);
 
 	/* Attach to the dynamic shared memory area. */
 	area_space = shm_toc_lookup(toc, PARALLEL_KEY_DSA, false);

@@ -167,12 +167,11 @@ SyncRepWaitForLSN(XLogRecPtr lsn, bool commit)
 	 * Since this routine gets called every commit time, it's important to
 	 * exit quickly if sync replication is not requested. So we check
 	 * WalSndCtl->sync_standbys_defined flag without the lock and exit
-	 * immediately if it's false. If it's true, we need to check it again later
-	 * while holding the lock, to check the flag and operate the sync rep
-	 * queue atomically. This is necessary to avoid the race condition
-	 * described in SyncRepUpdateSyncStandbysDefined(). On the other
-	 * hand, if it's false, the lock is not necessary because we don't touch
-	 * the queue.
+	 * immediately if it's false. If it's true, we need to check it again
+	 * later while holding the lock, to check the flag and operate the sync
+	 * rep queue atomically. This is necessary to avoid the race condition
+	 * described in SyncRepUpdateSyncStandbysDefined(). On the other hand, if
+	 * it's false, the lock is not necessary because we don't touch the queue.
 	 *
 	 * GGDB: the coordinator should be able to commit even if standby is not
 	 * available. Therefore, at the coordinator, we make a separate check below
@@ -531,7 +530,7 @@ SyncRepInitConfig(void)
 
 		ereport(DEBUG1,
 				(errmsg_internal("standby \"%s\" now has synchronous standby priority %u",
-						application_name, priority)));
+								 application_name, priority)));
 	}
 }
 

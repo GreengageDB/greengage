@@ -24,18 +24,20 @@
  *		development purposes (such as in-progress patches and forks);
  *		they should not appear in released versions.
  *
- *		OIDs 10000-12999 are reserved for assignment by genbki.pl, for use
+ *		OIDs 10000-11999 are reserved for assignment by genbki.pl, for use
  *		when the .dat files in src/include/catalog/ do not specify an OID
- *		for a catalog entry that requires one.
+ *		for a catalog entry that requires one.  Note that genbki.pl assigns
+ *		these OIDs independently in each catalog, so they're not guaranteed
+ *		to be globally unique.
  *
- *		OIDS 13000-16383 are reserved for assignment during initdb
- *		using the OID generator.  (We start the generator at 13000.)
+ *		OIDS 12000-16383 are reserved for assignment during initdb
+ *		using the OID generator.  (We start the generator at 12000.)
  *
  *		OIDs beginning at 16384 are assigned from the OID generator
  *		during normal multiuser operation.  (We force the generator up to
  *		16384 as soon as we are in normal operation.)
  *
- * The choices of 8000, 10000 and 13000 are completely arbitrary, and can be
+ * The choices of 8000, 10000 and 12000 are completely arbitrary, and can be
  * moved if we run low on OIDs in any category.  Changing the macros below,
  * and updating relevant documentation (see bki.sgml and RELEASE_CHANGES),
  * should be sufficient to do this.  Moving the 16384 boundary between
@@ -44,7 +46,7 @@
  * on-disk data; such a change would probably break pg_upgrade.
  *
  * GPDB: we have some more built-in entries, so bumped FirstBoostrapObjectId
- * from 1200 to 12500.
+ * from 12000 to 12500.
  *
  * NOTE: if the OID generator wraps around, we skip over OIDs 0-16383
  * and resume with 16384.  This minimizes the odds of OID conflict, by not
@@ -52,7 +54,7 @@
  * ----------
  */
 #define FirstGenbkiObjectId		10000
-#define FirstBootstrapObjectId	13000
+#define FirstBootstrapObjectId	12500
 #define FirstNormalObjectId		16384
 
 /*

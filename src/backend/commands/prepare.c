@@ -79,12 +79,9 @@ PrepareQuery(ParseState *pstate, PrepareStmt *stmt,
 	/*
 	 * Need to wrap the contained statement in a RawStmt node to pass it to
 	 * parse analysis.
-	 *
-	 * Because parse analysis scribbles on the raw querytree, we must make a
-	 * copy to ensure we don't modify the passed-in tree.  FIXME someday.
 	 */
 	rawstmt = makeNode(RawStmt);
-	rawstmt->stmt = (Node *) copyObject(stmt->query);
+	rawstmt->stmt = stmt->query;
 	rawstmt->stmt_location = stmt_location;
 	rawstmt->stmt_len = stmt_len;
 
@@ -261,6 +258,27 @@ ExecuteQuery(ParseState *pstate,
 	 * case all the output rows will be fetched into the master. Because of
 	 * that, we also have to pass the into-clause to
 	 * RevalidateCachedPlanWithParams. (MPP-8135)
+	 *
+	 * DO NOT add any logic that could possibly throw an error between
+	 * GetCachedPlan and PortalDefineQuery, or you'll leak the plan refcount.
+	 */
+	PortalDefineQuery(portal,
+					  NULL,
+					  query_string,
+					  entry->plansource->sourceTag,
+					  entry->plansource->commandTag,
+					  plan_list,
+					  cplan);
+
+	/*
+	 * For CREATE TABLE ... AS EXECUTE, we must verify that the prepared
+	 * statement is one that produces tuples.  Currently we insist that it be
+	 * a plain old SELECT.  In future we might consider supporting other
+	 * things such as INSERT ... RETURNING, but there are a couple of issues
+	 * to be settled first, notably how WITH NO DATA should be handled in such
+	 * a case (do we really want to suppress execution?) and how to pass down
+	 * the OID-determining eflags (PortalStart won't handle them in such a
+	 * case, and for that matter it's not clear the executor will either).
 	 */
 	if (intoClause)
 	{
@@ -294,14 +312,6 @@ ExecuteQuery(ParseState *pstate,
 		eflags = 0;
 		count = FETCH_ALL;
 	}
-
-	PortalDefineQuery(portal,
-					  NULL,
-					  query_string,
-					  entry->plansource->sourceTag,
-					  entry->plansource->commandTag,
-					  plan_list,
-					  cplan);
 
 	/*
 	 * Run the portal as appropriate.

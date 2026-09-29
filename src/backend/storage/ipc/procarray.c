@@ -460,6 +460,7 @@ ProcArrayAdd(PGPROC *proc)
 {
 	ProcArrayStruct *arrayP = procArray;
 	int			index;
+	int			movecount;
 
 	/* See ProcGlobal comment explaining why both locks are held */
 	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
@@ -490,33 +491,48 @@ ProcArrayAdd(PGPROC *proc)
 	 */
 	for (index = 0; index < arrayP->numProcs; index++)
 	{
-		/*
-		 * If we are the first PGPROC or if we have found our right position
-		 * in the array, break
-		 */
-		if ((arrayP->pgprocnos[index] == -1) || (arrayP->pgprocnos[index] > proc->pgprocno))
+		int			procno PG_USED_FOR_ASSERTS_ONLY = arrayP->pgprocnos[index];
+
+		Assert(procno >= 0 && procno < (arrayP->maxProcs + NUM_AUXILIARY_PROCS));
+		Assert(allProcs[procno].pgxactoff == index);
+
+		/* If we have found our right position in the array, break */
+		if (arrayP->pgprocnos[index] > proc->pgprocno)
 			break;
 	}
 
-	memmove(&arrayP->pgprocnos[index + 1], &arrayP->pgprocnos[index],
-			(arrayP->numProcs - index) * sizeof(*arrayP->pgprocnos));
-	memmove(&ProcGlobal->xids[index + 1], &ProcGlobal->xids[index],
-			(arrayP->numProcs - index) * sizeof(*ProcGlobal->xids));
-	memmove(&ProcGlobal->subxidStates[index + 1], &ProcGlobal->subxidStates[index],
-			(arrayP->numProcs - index) * sizeof(*ProcGlobal->subxidStates));
-	memmove(&ProcGlobal->statusFlags[index + 1], &ProcGlobal->statusFlags[index],
-			(arrayP->numProcs - index) * sizeof(*ProcGlobal->statusFlags));
+	movecount = arrayP->numProcs - index;
+	memmove(&arrayP->pgprocnos[index + 1],
+			&arrayP->pgprocnos[index],
+			movecount * sizeof(*arrayP->pgprocnos));
+	memmove(&ProcGlobal->xids[index + 1],
+			&ProcGlobal->xids[index],
+			movecount * sizeof(*ProcGlobal->xids));
+	memmove(&ProcGlobal->subxidStates[index + 1],
+			&ProcGlobal->subxidStates[index],
+			movecount * sizeof(*ProcGlobal->subxidStates));
+	memmove(&ProcGlobal->statusFlags[index + 1],
+			&ProcGlobal->statusFlags[index],
+			movecount * sizeof(*ProcGlobal->statusFlags));
 
 	arrayP->pgprocnos[index] = proc->pgprocno;
+	proc->pgxactoff = index;
 	ProcGlobal->xids[index] = proc->xid;
 	ProcGlobal->subxidStates[index] = proc->subxidStatus;
 	ProcGlobal->statusFlags[index] = proc->statusFlags;
 
 	arrayP->numProcs++;
 
+	/* adjust pgxactoff for all following PGPROCs */
+	index++;
 	for (; index < arrayP->numProcs; index++)
 	{
-		allProcs[arrayP->pgprocnos[index]].pgxactoff = index;
+		int			procno = arrayP->pgprocnos[index];
+
+		Assert(procno >= 0 && procno < (arrayP->maxProcs + NUM_AUXILIARY_PROCS));
+		Assert(allProcs[procno].pgxactoff == index - 1);
+
+		allProcs[procno].pgxactoff = index;
 	}
 
 	/*
@@ -541,7 +557,8 @@ void
 ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 {
 	ProcArrayStruct *arrayP = procArray;
-	int			index;
+	int			myoff;
+	int			movecount;
 
 #ifdef XIDCACHE_DEBUG
 	/* dump stats at backend shutdown, but not prepared-xact end */
@@ -553,11 +570,14 @@ ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 	LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
 
-	Assert(ProcGlobal->allProcs[arrayP->pgprocnos[proc->pgxactoff]].pgxactoff == proc->pgxactoff);
+	myoff = proc->pgxactoff;
+
+	Assert(myoff >= 0 && myoff < arrayP->numProcs);
+	Assert(ProcGlobal->allProcs[arrayP->pgprocnos[myoff]].pgxactoff == myoff);
 
 	if (TransactionIdIsValid(latestXid))
 	{
-		Assert(TransactionIdIsValid(ProcGlobal->xids[proc->pgxactoff]));
+		Assert(TransactionIdIsValid(ProcGlobal->xids[myoff]));
 
 		/* Advance global latestCompletedXid while holding the lock */
 		MaintainLatestCompletedXid(latestXid);
@@ -565,14 +585,14 @@ ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 		/* Same with xactCompletionCount  */
 		ShmemVariableCache->xactCompletionCount++;
 
-		ProcGlobal->xids[proc->pgxactoff] = 0;
-		ProcGlobal->subxidStates[proc->pgxactoff].overflowed = false;
-		ProcGlobal->subxidStates[proc->pgxactoff].count = 0;
+		ProcGlobal->xids[myoff] = InvalidTransactionId;
+		ProcGlobal->subxidStates[myoff].overflowed = false;
+		ProcGlobal->subxidStates[myoff].count = 0;
 	}
 	else
 	{
 		/* Shouldn't be trying to remove a live transaction here */
-		Assert(!TransactionIdIsValid(ProcGlobal->xids[proc->pgxactoff]));
+		Assert(!TransactionIdIsValid(ProcGlobal->xids[myoff]));
 	}
 
 	if (Gp_role == GP_ROLE_DISPATCH)
@@ -588,47 +608,50 @@ ProcArrayRemove(PGPROC *proc, TransactionId latestXid)
 			ShmemVariableCache->latestCompletedGxid = gxid;
 	}
 
-	Assert(TransactionIdIsValid(ProcGlobal->xids[proc->pgxactoff] == 0));
-	Assert(TransactionIdIsValid(ProcGlobal->subxidStates[proc->pgxactoff].count == 0));
-	Assert(TransactionIdIsValid(ProcGlobal->subxidStates[proc->pgxactoff].overflowed == false));
-	ProcGlobal->statusFlags[proc->pgxactoff] = 0;
+	Assert(!TransactionIdIsValid(ProcGlobal->xids[myoff]));
+	Assert(ProcGlobal->subxidStates[myoff].count == 0);
+	Assert(ProcGlobal->subxidStates[myoff].overflowed == false);
 
-	for (index = 0; index < arrayP->numProcs; index++)
+	ProcGlobal->statusFlags[myoff] = 0;
+
+	/* Keep the PGPROC array sorted. See notes above */
+	movecount = arrayP->numProcs - myoff - 1;
+	memmove(&arrayP->pgprocnos[myoff],
+			&arrayP->pgprocnos[myoff + 1],
+			movecount * sizeof(*arrayP->pgprocnos));
+	memmove(&ProcGlobal->xids[myoff],
+			&ProcGlobal->xids[myoff + 1],
+			movecount * sizeof(*ProcGlobal->xids));
+	memmove(&ProcGlobal->subxidStates[myoff],
+			&ProcGlobal->subxidStates[myoff + 1],
+			movecount * sizeof(*ProcGlobal->subxidStates));
+	memmove(&ProcGlobal->statusFlags[myoff],
+			&ProcGlobal->statusFlags[myoff + 1],
+			movecount * sizeof(*ProcGlobal->statusFlags));
+
+	arrayP->pgprocnos[arrayP->numProcs - 1] = -1;	/* for debugging */
+	arrayP->numProcs--;
+
+	/*
+	 * Adjust pgxactoff of following procs for removed PGPROC (note that
+	 * numProcs already has been decremented).
+	 */
+	for (int index = myoff; index < arrayP->numProcs; index++)
 	{
-		if (arrayP->pgprocnos[index] == proc->pgprocno)
-		{
-			/* Keep the PGPROC array sorted. See notes above */
-			memmove(&arrayP->pgprocnos[index], &arrayP->pgprocnos[index + 1],
-					(arrayP->numProcs - index - 1) * sizeof(*arrayP->pgprocnos));
-			memmove(&ProcGlobal->xids[index], &ProcGlobal->xids[index + 1],
-					(arrayP->numProcs - index - 1) * sizeof(*ProcGlobal->xids));
-			memmove(&ProcGlobal->subxidStates[index], &ProcGlobal->subxidStates[index + 1],
-					(arrayP->numProcs - index - 1) * sizeof(*ProcGlobal->subxidStates));
-			memmove(&ProcGlobal->statusFlags[index], &ProcGlobal->statusFlags[index + 1],
-					(arrayP->numProcs - index - 1) * sizeof(*ProcGlobal->statusFlags));
+		int			procno = arrayP->pgprocnos[index];
 
-			arrayP->pgprocnos[arrayP->numProcs - 1] = -1;	/* for debugging */
-			arrayP->numProcs--;
+		Assert(procno >= 0 && procno < (arrayP->maxProcs + NUM_AUXILIARY_PROCS));
+		Assert(allProcs[procno].pgxactoff - 1 == index);
 
-			/* adjust for removed PGPROC */
-			for (; index < arrayP->numProcs; index++)
-				allProcs[arrayP->pgprocnos[index]].pgxactoff--;
-
-			/*
-			 * Release in reversed acquisition order, to reduce frequency of
-			 * having to wait for XidGenLock while holding ProcArrayLock.
-			 */
-			LWLockRelease(XidGenLock);
-			LWLockRelease(ProcArrayLock);
-			return;
-		}
+		allProcs[procno].pgxactoff = index;
 	}
 
-	/* Oops */
+	/*
+	 * Release in reversed acquisition order, to reduce frequency of having to
+	 * wait for XidGenLock while holding ProcArrayLock.
+	 */
 	LWLockRelease(XidGenLock);
 	LWLockRelease(ProcArrayLock);
-
-	elog(LOG, "failed to find proc %p in ProcArray", proc);
 }
 
 
@@ -2057,9 +2080,10 @@ GetLocalOldestNonRemovableTransactionId(Relation rel)
 	ComputeXidHorizons(&horizons);
 
 	/* select horizon appropriate for relation */
-	if (rel == NULL || rel->rd_rel->relisshared)
+	if (rel == NULL || rel->rd_rel->relisshared || RecoveryInProgress())
 		return horizons.shared_oldest_nonremovable;
-	else if (RelationIsAccessibleInLogicalDecoding(rel))
+	else if (IsCatalogRelation(rel) ||
+			 RelationIsAccessibleInLogicalDecoding(rel))
 		return horizons.catalog_oldest_nonremovable;
 	else if (RELATION_IS_LOCAL(rel))
 		return horizons.temp_oldest_nonremovable;
@@ -2711,7 +2735,7 @@ GetSnapshotDataInitOldSnapshot(Snapshot snapshot)
 static bool
 GetSnapshotDataReuse(Snapshot snapshot)
 {
-	uint64 curXactCompletionCount;
+	uint64		curXactCompletionCount;
 
 	Assert(LWLockHeldByMe(ProcArrayLock));
 
@@ -2735,8 +2759,8 @@ GetSnapshotDataReuse(Snapshot snapshot)
 	 * holding ProcArrayLock) exclusively). Thus the xactCompletionCount check
 	 * ensures we would detect if the snapshot would have changed.
 	 *
-	 * As the snapshot contents are the same as it was before, it is safe
-	 * to re-enter the snapshot's xmin into the PGPROC array. None of the rows
+	 * As the snapshot contents are the same as it was before, it is safe to
+	 * re-enter the snapshot's xmin into the PGPROC array. None of the rows
 	 * visible under the snapshot could already have been removed (that'd
 	 * require the set of running transactions to change) and it fulfills the
 	 * requirement that concurrent GetSnapshotData() calls yield the same
@@ -2784,7 +2808,7 @@ GetSnapshotDataReuse(Snapshot snapshot)
  *			older than this are known not running any more.
  *
  * And try to advance the bounds of GlobalVis{Shared,Catalog,Data,Temp}Rels
- * for the benefit of theGlobalVisTest* family of functions.
+ * for the benefit of the GlobalVisTest* family of functions.
  *
  * Note: this function should probably not be called with an argument that's
  * not statically allocated (see xip allocation below).
@@ -3076,10 +3100,10 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 				continue;
 
 			/*
-			 * The only way we are able to get here with a non-normal xid
-			 * is during bootstrap - with this backend using
-			 * BootstrapTransactionId. But the above test should filter
-			 * that out.
+			 * The only way we are able to get here with a non-normal xid is
+			 * during bootstrap - with this backend using
+			 * BootstrapTransactionId. But the above test should filter that
+			 * out.
 			 */
 			Assert(TransactionIdIsNormal(xid));
 

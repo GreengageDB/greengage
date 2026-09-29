@@ -2798,7 +2798,7 @@ check_new_partition_bound(char *relname, Relation parent,
 						  PartitionBoundSpec *spec, ParseState *pstate)
 {
 	PartitionKey key = RelationGetPartitionKey(parent);
-	PartitionDesc partdesc = RelationGetPartitionDesc(parent, true);
+	PartitionDesc partdesc = RelationGetPartitionDesc(parent, false);
 	PartitionBoundInfo boundinfo = partdesc->boundinfo;
 	int			with = -1;
 	bool		overlap = false;
@@ -2876,7 +2876,10 @@ check_new_partition_bound(char *relname, Relation parent,
 					{
 						int			prev_modulus;
 
-						/* We found the largest modulus less than or equal to ours. */
+						/*
+						 * We found the largest modulus less than or equal to
+						 * ours.
+						 */
 						prev_modulus = DatumGetInt32(boundinfo->datums[offset][0]);
 
 						if (spec->modulus % prev_modulus != 0)
@@ -2899,7 +2902,7 @@ check_new_partition_bound(char *relname, Relation parent,
 								ereport(ERROR,
 										(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 										 errmsg("every hash partition modulus must be a factor of the next larger modulus"),
-										 errdetail("The new modulus %d is not factor of %d, the modulus of existing partition \"%s\".",
+										 errdetail("The new modulus %d is not a factor of %d, the modulus of existing partition \"%s\".",
 												   spec->modulus, next_modulus,
 												   get_rel_name(partdesc->oids[boundinfo->indexes[offset + 1]]))));
 						}
@@ -3172,7 +3175,7 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 	{
 		ereport(DEBUG1,
 				(errmsg_internal("updated partition constraint for default partition \"%s\" is implied by existing constraints",
-						RelationGetRelationName(default_rel))));
+								 RelationGetRelationName(default_rel))));
 		return;
 	}
 
@@ -3223,7 +3226,7 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 			{
 				ereport(DEBUG1,
 						(errmsg_internal("updated partition constraint for default partition \"%s\" is implied by existing constraints",
-								RelationGetRelationName(part_rel))));
+										 RelationGetRelationName(part_rel))));
 
 				table_close(part_rel, NoLock);
 				continue;
@@ -3992,7 +3995,7 @@ get_qual_for_list(Relation parent, PartitionBoundSpec *spec)
 	{
 		int			i;
 		int			ndatums = 0;
-		PartitionDesc pdesc = RelationGetPartitionDesc(parent, true);	/* XXX correct? */
+		PartitionDesc pdesc = RelationGetPartitionDesc(parent, false);
 		PartitionBoundInfo boundinfo = pdesc->boundinfo;
 
 		if (boundinfo)
@@ -4192,7 +4195,7 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 	if (spec->is_default)
 	{
 		List	   *or_expr_args = NIL;
-		PartitionDesc pdesc = RelationGetPartitionDesc(parent, true);	/* XXX correct? */
+		PartitionDesc pdesc = RelationGetPartitionDesc(parent, false);
 		Oid		   *inhoids = pdesc->oids;
 		int			nparts = pdesc->nparts,
 					i;

@@ -224,26 +224,14 @@ CreateStatistics(CreateStatsStmt *stmt)
 	 */
 	foreach(cell, stmt->exprs)
 	{
-		Node	   *expr = (Node *) lfirst(cell);
-		StatsElem  *selem;
-		HeapTuple	atttuple;
-		Form_pg_attribute attForm;
-		TypeCacheEntry *type;
-
-		/*
-		 * We should not get anything else than StatsElem, given the grammar.
-		 * But let's keep it as a safety.
-		 */
-		if (!IsA(expr, StatsElem))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("only simple column references and expressions are allowed in CREATE STATISTICS")));
-
-		selem = (StatsElem *) expr;
+		StatsElem  *selem = lfirst_node(StatsElem, cell);
 
 		if (selem->name)		/* column reference */
 		{
 			char	   *attname;
+			HeapTuple	atttuple;
+			Form_pg_attribute attForm;
+			TypeCacheEntry *type;
 
 			attname = selem->name;
 
@@ -277,6 +265,7 @@ CreateStatistics(CreateStatsStmt *stmt)
 		{
 			Node	   *expr = selem->expr;
 			Oid			atttype;
+			TypeCacheEntry *type;
 
 			Assert(expr != NULL);
 
@@ -559,7 +548,7 @@ CreateStatistics(CreateStatsStmt *stmt)
 										(Node *) stxexprs,
 										relid,
 										DEPENDENCY_NORMAL,
-										DEPENDENCY_AUTO, false, true);
+										DEPENDENCY_AUTO, false);
 
 	/*
 	 * Also add dependencies on namespace and owner.  These are required

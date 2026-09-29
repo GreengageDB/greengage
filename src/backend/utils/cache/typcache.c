@@ -697,7 +697,7 @@ lookup_type_cache(Oid type_id, int flags)
 				 !record_fields_have_hashing(typentry))
 			hash_proc = InvalidOid;
 		else if (hash_proc == F_HASH_RANGE &&
-			!range_element_has_hashing(typentry))
+				 !range_element_has_hashing(typentry))
 			hash_proc = InvalidOid;
 
 		/*
@@ -743,10 +743,10 @@ lookup_type_cache(Oid type_id, int flags)
 			!array_element_has_extended_hashing(typentry))
 			hash_extended_proc = InvalidOid;
 		else if (hash_extended_proc == F_HASH_RECORD_EXTENDED &&
-			!record_fields_have_extended_hashing(typentry))
+				 !record_fields_have_extended_hashing(typentry))
 			hash_extended_proc = InvalidOid;
 		else if (hash_extended_proc == F_HASH_RANGE_EXTENDED &&
-			!range_element_has_extended_hashing(typentry))
+				 !range_element_has_extended_hashing(typentry))
 			hash_extended_proc = InvalidOid;
 
 		/*
@@ -2857,7 +2857,7 @@ find_or_make_matching_shared_tupledesc(TupleDesc tupdesc)
 		Assert(record_table_entry->key.shared);
 		result = (TupleDesc)
 			dsa_get_address(CurrentSession->area,
-							record_table_entry->key.shared);
+							record_table_entry->key.u.shared_tupdesc);
 		Assert(result->tdrefcount == -1);
 
 		return result;

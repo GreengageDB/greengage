@@ -1119,7 +1119,7 @@ pg_relation_filenode(PG_FUNCTION_ARGS)
 	{
 		if (relform->relfilenode)
 			result = relform->relfilenode;
-		else				/* Consult the relation mapper */
+		else					/* Consult the relation mapper */
 			result = RelationMapOidToFilenode(relid,
 											  relform->relisshared);
 	}
@@ -1155,7 +1155,11 @@ pg_filenode_relation(PG_FUNCTION_ARGS)
 {
 	Oid			reltablespace = PG_GETARG_OID(0);
 	Oid			relfilenode = PG_GETARG_OID(1);
-	Oid			heaprel = InvalidOid;
+	Oid			heaprel;
+
+	/* test needed so RelidByRelfilenode doesn't misbehave */
+	if (!OidIsValid(relfilenode))
+		PG_RETURN_NULL();
 
 	heaprel = RelidByRelfilenode(reltablespace, relfilenode);
 
@@ -1198,17 +1202,17 @@ pg_relation_filepath(PG_FUNCTION_ARGS)
 			rnode.dbNode = MyDatabaseId;
 		if (relform->relfilenode)
 			rnode.relNode = relform->relfilenode;
-		else				/* Consult the relation mapper */
+		else					/* Consult the relation mapper */
 			rnode.relNode = RelationMapOidToFilenode(relid,
 													 relform->relisshared);
 	}
 	else
 	{
-			/* no storage, return NULL */
-			rnode.relNode = InvalidOid;
-			/* some compilers generate warnings without these next two lines */
-			rnode.dbNode = InvalidOid;
-			rnode.spcNode = InvalidOid;
+		/* no storage, return NULL */
+		rnode.relNode = InvalidOid;
+		/* some compilers generate warnings without these next two lines */
+		rnode.dbNode = InvalidOid;
+		rnode.spcNode = InvalidOid;
 	}
 
 	if (!OidIsValid(rnode.relNode))

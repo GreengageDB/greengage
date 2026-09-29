@@ -1,4 +1,6 @@
 
+# Copyright (c) 2021, PostgreSQL Global Development Group
+
 =pod
 
 =head1 NAME
@@ -47,7 +49,7 @@ use Carp;
 use Config;
 use Cwd;
 use Exporter 'import';
-use Fcntl qw(:mode);
+use Fcntl qw(:mode :seek);
 use File::Basename;
 use File::Find;
 use File::Spec;
@@ -102,17 +104,39 @@ BEGIN
 	delete $ENV{LC_ALL};
 	$ENV{LC_MESSAGES} = 'C';
 
-	delete $ENV{PGCONNECT_TIMEOUT};
-	delete $ENV{PGDATA};
-	delete $ENV{PGDATABASE};
-	delete $ENV{PGHOSTADDR};
-	delete $ENV{PGREQUIRESSL};
-	delete $ENV{PGSERVICE};
-	delete $ENV{PGSSLMODE};
-	delete $ENV{PGUSER};
-	delete $ENV{PGPORT};
-	delete $ENV{PGHOST};
-	delete $ENV{PG_COLOR};
+	# This list should be kept in sync with pg_regress.c.
+	my @envkeys = qw (
+	  PGCHANNELBINDING
+	  PGCLIENTENCODING
+	  PGCONNECT_TIMEOUT
+	  PGDATA
+	  PGDATABASE
+	  PGGSSENCMODE
+	  PGGSSLIB
+	  PGHOSTADDR
+	  PGKRBSRVNAME
+	  PGPASSFILE
+	  PGPASSWORD
+	  PGREQUIREPEER
+	  PGREQUIRESSL
+	  PGSERVICE
+	  PGSERVICEFILE
+	  PGSSLCERT
+	  PGSSLCRL
+	  PGSSLCRLDIR
+	  PGSSLKEY
+	  PGSSLMAXPROTOCOLVERSION
+	  PGSSLMINPROTOCOLVERSION
+	  PGSSLMODE
+	  PGSSLROOTCERT
+	  PGSSLSNI
+	  PGTARGETSESSIONATTRS
+	  PGUSER
+	  PGPORT
+	  PGHOST
+	  PG_COLOR
+	);
+	delete @ENV{@envkeys};
 
 	$ENV{PGAPPNAME} = basename($0);
 
@@ -124,7 +148,8 @@ BEGIN
 	if ($windows_os)
 	{
 		require Win32API::File;
-		Win32API::File->import(qw(createFile OsFHandleOpen CloseHandle));
+		Win32API::File->import(
+			qw(createFile OsFHandleOpen CloseHandle setFilePointer));
 	}
 
 	# Specifies whether to use Unix sockets for test setups.  On
@@ -163,7 +188,7 @@ INIT
 	# TESTDIR environment variable, which is normally set by the invoking
 	# Makefile.
 	$tmp_check = $ENV{TESTDIR} ? "$ENV{TESTDIR}/tmp_check" : "tmp_check";
-	$log_path  = "$tmp_check/log";
+	$log_path = "$tmp_check/log";
 
 	mkdir $tmp_check;
 	mkdir $log_path;
@@ -430,21 +455,27 @@ sub slurp_dir
 
 =pod
 
-=item slurp_file(filename)
+=item slurp_file(filename [, $offset])
 
-Return the full contents of the specified file.
+Return the full contents of the specified file, beginning from an
+offset position if specified.
 
 =cut
 
 sub slurp_file
 {
-	my ($filename) = @_;
+	my ($filename, $offset) = @_;
 	local $/;
 	my $contents;
 	if ($Config{osname} ne 'MSWin32')
 	{
 		open(my $in, '<', $filename)
 		  or croak "could not read \"$filename\": $!";
+		if (defined($offset))
+		{
+			seek($in, $offset, SEEK_SET)
+			  or croak "could not seek \"$filename\": $!";
+		}
 		$contents = <$in>;
 		close $in;
 	}
@@ -454,6 +485,11 @@ sub slurp_file
 		  or croak "could not open \"$filename\": $^E";
 		OsFHandleOpen(my $fh = IO::Handle->new(), $fHandle, 'r')
 		  or croak "could not read \"$filename\": $^E\n";
+		if (defined($offset))
+		{
+			setFilePointer($fh, $offset, qw(FILE_BEGIN))
+			  or croak "could not seek \"$filename\": $^E\n";
+		}
 		$contents = <$fh>;
 		CloseHandle($fHandle)
 		  or croak "could not close \"$filename\": $^E\n";
@@ -726,7 +762,7 @@ sub command_exit_is
 	# long as the process was not terminated by an exception. To work around
 	# that, use $h->full_results on Windows instead.
 	my $result =
-		($Config{osname} eq "MSWin32")
+	    ($Config{osname} eq "MSWin32")
 	  ? ($h->full_results)[0]
 	  : $h->result(0);
 	is($result, $expected, $test_name);

@@ -53,13 +53,37 @@ typedef struct SeenRelsEntry
  * then no locks are acquired, but caller must beware of race conditions
  * against possible DROPs of child relations.
  *
- * include_detached says to include all partitions, even if they're marked
- * detached.  Passing it as false means they might or might not be included,
- * depending on the visibility of the pg_inherits row for the active snapshot.
+ * Partitions marked as being detached are omitted; see
+ * find_inheritance_children_extended for details.
  */
 List *
-find_inheritance_children(Oid parentrelId, bool include_detached,
-						  LOCKMODE lockmode)
+find_inheritance_children(Oid parentrelId, LOCKMODE lockmode)
+{
+	return find_inheritance_children_extended(parentrelId, true, lockmode,
+											  NULL, NULL);
+}
+
+/*
+ * find_inheritance_children_extended
+ *
+ * As find_inheritance_children, with more options regarding detached
+ * partitions.
+ *
+ * If a partition's pg_inherits row is marked "detach pending",
+ * *detached_exist (if not null) is set true.
+ *
+ * If omit_detached is true and there is an active snapshot (not the same as
+ * the catalog snapshot used to scan pg_inherits!) and a pg_inherits tuple
+ * marked "detach pending" is visible to that snapshot, then that partition is
+ * omitted from the output list.  This makes partitions invisible depending on
+ * whether the transaction that marked those partitions as detached appears
+ * committed to the active snapshot.  In addition, *detached_xmin (if not null)
+ * is set to the xmin of the row of the detached partition.
+ */
+List *
+find_inheritance_children_extended(Oid parentrelId, bool omit_detached,
+								   LOCKMODE lockmode, bool *detached_exist,
+								   TransactionId *detached_xmin)
 {
 	List	   *list = NIL;
 	Relation	relation;
@@ -100,30 +124,62 @@ find_inheritance_children(Oid parentrelId, bool include_detached,
 	{
 		/*
 		 * Cope with partitions concurrently being detached.  When we see a
-		 * partition marked "detach pending", we only include it in the set of
-		 * visible partitions if caller requested all detached partitions, or
-		 * if its pg_inherits tuple's xmin is still visible to the active
-		 * snapshot.
+		 * partition marked "detach pending", we omit it from the returned set
+		 * of visible partitions if caller requested that and the tuple's xmin
+		 * does not appear in progress to the active snapshot.  (If there's no
+		 * active snapshot set, that means we're not running a user query, so
+		 * it's OK to always include detached partitions in that case; if the
+		 * xmin is still running to the active snapshot, then the partition
+		 * has not been detached yet and so we include it.)
 		 *
-		 * The reason for this check is that we want to avoid seeing the
+		 * The reason for this hack is that we want to avoid seeing the
 		 * partition as alive in RI queries during REPEATABLE READ or
-		 * SERIALIZABLE transactions.  (If there's no active snapshot set,
-		 * that means we're not running a user query, so it's OK to always
-		 * include detached partitions in that case.)
+		 * SERIALIZABLE transactions: such queries use a different snapshot
+		 * than the one used by regular (user) queries.
 		 */
-		if (((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhdetachpending &&
-			!include_detached &&
-			ActiveSnapshotSet())
+		if (((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhdetachpending)
 		{
-			TransactionId xmin;
-			Snapshot snap;
 			bool		setDistributedSnapshotIgnore;
 
-			xmin = HeapTupleHeaderGetXmin(inheritsTuple->t_data);
-			snap = GetActiveSnapshot();
+			if (detached_exist)
+				*detached_exist = true;
 
-			if (XidInMVCCSnapshot(xmin, snap, true, &setDistributedSnapshotIgnore) != XID_IN_SNAPSHOT)
-				continue;
+			if (omit_detached && ActiveSnapshotSet())
+			{
+				TransactionId xmin;
+				Snapshot	snap;
+
+				xmin = HeapTupleHeaderGetXmin(inheritsTuple->t_data);
+				snap = GetActiveSnapshot();
+
+				if (XidInMVCCSnapshot(xmin, snap, true, &setDistributedSnapshotIgnore) != XID_IN_SNAPSHOT)
+				{
+					if (detached_xmin)
+					{
+						/*
+						 * Two detached partitions should not occur (see
+						 * checks in MarkInheritDetached), but if they do,
+						 * track the newer of the two.  Make sure to warn the
+						 * user, so that they can clean up.  Since this is
+						 * just a cross-check against potentially corrupt
+						 * catalogs, we don't make it a full-fledged error
+						 * message.
+						 */
+						if (*detached_xmin != InvalidTransactionId)
+						{
+							elog(WARNING, "more than one partition pending detach found for table with OID %u",
+								 parentrelId);
+							if (TransactionIdFollows(xmin, *detached_xmin))
+								*detached_xmin = xmin;
+						}
+						else
+							*detached_xmin = xmin;
+					}
+
+					/* Don't add the partition to the output list */
+					continue;
+				}
+			}
 		}
 
 		inhrelid = ((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhrelid;
@@ -265,8 +321,7 @@ find_all_inheritors(Oid parentrelId, LOCKMODE lockmode, List **numparents)
 		ListCell   *lc;
 
 		/* Get the direct children of this rel */
-		currentchildren = find_inheritance_children(currentrel, false,
-													lockmode);
+		currentchildren = find_inheritance_children(currentrel, lockmode);
 
 		/*
 		 * Add to the queue only those children not already seen. This avoids
@@ -554,7 +609,7 @@ DeleteInheritsTuple(Oid inhrelid, Oid inhparent, bool expect_detach_pending,
 		parent = ((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhparent;
 		if (!OidIsValid(inhparent) || parent == inhparent)
 		{
-			bool	detach_pending;
+			bool		detach_pending;
 
 			detach_pending =
 				((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhdetachpending;
@@ -569,7 +624,7 @@ DeleteInheritsTuple(Oid inhrelid, Oid inhparent, bool expect_detach_pending,
 						 errmsg("cannot detach partition \"%s\"",
 								childname ? childname : "unknown relation"),
 						 errdetail("The partition is being detached concurrently or has an unfinished detach."),
-						 errhint("Use ALTER TABLE ... DETACH PARTITION ... FINALIZE to complete the pending detach operation")));
+						 errhint("Use ALTER TABLE ... DETACH PARTITION ... FINALIZE to complete the pending detach operation.")));
 			if (!detach_pending && expect_detach_pending)
 				ereport(ERROR,
 						(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -616,7 +671,7 @@ PartitionHasPendingDetach(Oid partoid)
 
 	while (HeapTupleIsValid(inheritsTuple = systable_getnext(scan)))
 	{
-		bool	detached;
+		bool		detached;
 
 		detached =
 			((Form_pg_inherits) GETSTRUCT(inheritsTuple))->inhdetachpending;

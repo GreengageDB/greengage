@@ -29,7 +29,6 @@
 #include "access/xlog.h"
 #include "catalog/catalog.h"
 #include "catalog/heap.h"
-#include "catalog/index.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic_ext.h"
@@ -221,14 +220,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			 */
 			indexRelation = index_open(indexoid, lmode);
 			index = indexRelation->rd_index;
-
-			/* Warn if any dependent collations' versions have moved. */
-			if (!IsSystemRelation(relation) &&
-				!indexRelation->rd_version_checked)
-			{
-				index_check_collation_versions(indexoid);
-				indexRelation->rd_version_checked = true;
-			}
 
 			/*
 			 * Ignore invalid indexes, since they can't safely be used for
@@ -2468,7 +2459,7 @@ set_relation_partition_info(PlannerInfo *root, RelOptInfo *rel,
 	if (root->glob->partition_directory == NULL)
 	{
 		root->glob->partition_directory =
-			CreatePartitionDirectory(CurrentMemoryContext, false);
+			CreatePartitionDirectory(CurrentMemoryContext, true);
 	}
 
 	partdesc = PartitionDirectoryLookup(root->glob->partition_directory,

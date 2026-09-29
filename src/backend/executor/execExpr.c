@@ -495,14 +495,21 @@ ExecBuildProjectionInfo(List *targetList,
  * be stored into the given tuple slot.  (Caller must have ensured that tuple
  * slot has a descriptor matching the target rel!)
  *
- * subTargetList is the tlist of the subplan node feeding ModifyTable.
- * We use this mainly to cross-check that the expressions being assigned
- * are of the correct types.  The values from this tlist are assumed to be
- * available from the "outer" tuple slot.  They are assigned to target columns
- * listed in the corresponding targetColnos elements.  (Only non-resjunk tlist
- * entries are assigned.)  Columns not listed in targetColnos are filled from
- * the UPDATE's old tuple, which is assumed to be available in the "scan"
- * tuple slot.
+ * When evalTargetList is false, targetList contains the UPDATE ... SET
+ * expressions that have already been computed by a subplan node; the values
+ * from this tlist are assumed to be available in the "outer" tuple slot.
+ * When evalTargetList is true, targetList contains the UPDATE ... SET
+ * expressions that must be computed (which could contain references to
+ * the outer, inner, or scan tuple slots).
+ *
+ * In either case, targetColnos contains a list of the target column numbers
+ * corresponding to the non-resjunk entries of targetList.  The tlist values
+ * are assigned into these columns of the result tuple slot.  Target columns
+ * not listed in targetColnos are filled from the UPDATE's old tuple, which
+ * is assumed to be available in the "scan" tuple slot.
+ *
+ * targetList can also contain resjunk columns.  These must be evaluated
+ * if evalTargetList is true, but their values are discarded.
  *
  * relDesc must describe the relation we intend to update.
  *
@@ -519,7 +526,8 @@ ExecBuildProjectionInfo(List *targetList,
  * ExecCheckPlanOutput, so we must do our safety checks here.
  */
 ProjectionInfo *
-ExecBuildUpdateProjection(List *subTargetList,
+ExecBuildUpdateProjection(List *targetList,
+						  bool evalTargetList,
 						  List *targetColnos,
 						  TupleDesc relDesc,
 						  ExprContext *econtext,
@@ -542,19 +550,22 @@ ExecBuildUpdateProjection(List *subTargetList,
 	/* We embed ExprState into ProjectionInfo instead of doing extra palloc */
 	projInfo->pi_state.tag = T_ExprState;
 	state = &projInfo->pi_state;
-	state->expr = NULL;			/* not used */
+	if (evalTargetList)
+		state->expr = (Expr *) targetList;
+	else
+		state->expr = NULL;		/* not used */
 	state->parent = parent;
 	state->ext_params = NULL;
 
 	state->resultslot = slot;
 
 	/*
-	 * Examine the subplan tlist to see how many non-junk columns there are,
-	 * and to verify that the non-junk columns come before the junk ones.
+	 * Examine the targetList to see how many non-junk columns there are, and
+	 * to verify that the non-junk columns come before the junk ones.
 	 */
 	nAssignableCols = 0;
 	sawJunk = false;
-	foreach(lc, subTargetList)
+	foreach(lc, targetList)
 	{
 		TargetEntry *tle = lfirst_node(TargetEntry, lc);
 
@@ -586,12 +597,10 @@ ExecBuildUpdateProjection(List *subTargetList,
 	}
 
 	/*
-	 * We want to insert EEOP_*_FETCHSOME steps to ensure the outer and scan
-	 * tuples are sufficiently deconstructed.  Outer tuple is easy, but for
-	 * scan tuple we must find out the last old column we need.
+	 * We need to insert EEOP_*_FETCHSOME steps to ensure the input tuples are
+	 * sufficiently deconstructed.  The scan tuple must be deconstructed at
+	 * least as far as the last old column we need.
 	 */
-	deform.last_outer = nAssignableCols;
-
 	for (int attnum = relDesc->natts; attnum > 0; attnum--)
 	{
 		Form_pg_attribute attr = TupleDescAttr(relDesc, attnum - 1);
@@ -604,6 +613,16 @@ ExecBuildUpdateProjection(List *subTargetList,
 		break;
 	}
 
+	/*
+	 * If we're actually evaluating the tlist, incorporate its input
+	 * requirements too; otherwise, we'll just need to fetch the appropriate
+	 * number of columns of the "outer" tuple.
+	 */
+	if (evalTargetList)
+		get_last_attnums_walker((Node *) targetList, &deform);
+	else
+		deform.last_outer = nAssignableCols;
+
 	/* GGDB: a zero here means no column comes from the old tuple. */
 	if (needsOldTuple)
 		*needsOldTuple = (deform.last_scan != 0);
@@ -611,12 +630,13 @@ ExecBuildUpdateProjection(List *subTargetList,
 	ExecPushExprSlots(state, &deform);
 
 	/*
-	 * Now generate code to fetch data from the outer tuple, incidentally
-	 * validating that it'll be of the right type.  The checks above ensure
-	 * that the forboth() will iterate over exactly the non-junk columns.
+	 * Now generate code to evaluate the tlist's assignable expressions or
+	 * fetch them from the outer tuple, incidentally validating that they'll
+	 * be of the right data type.  The checks above ensure that the forboth()
+	 * will iterate over exactly the non-junk columns.
 	 */
 	outerattnum = 0;
-	forboth(lc, subTargetList, lc2, targetColnos)
+	forboth(lc, targetList, lc2, targetColnos)
 	{
 		TargetEntry *tle = lfirst_node(TargetEntry, lc);
 		AttrNumber	targetattnum = lfirst_int(lc2);
@@ -649,13 +669,47 @@ ExecBuildUpdateProjection(List *subTargetList,
 							   targetattnum,
 							   format_type_be(exprType((Node *) tle->expr)))));
 
-		/*
-		 * OK, build an outer-tuple reference.
-		 */
-		scratch.opcode = EEOP_ASSIGN_OUTER_VAR;
-		scratch.d.assign_var.attnum = outerattnum++;
-		scratch.d.assign_var.resultnum = targetattnum - 1;
-		ExprEvalPushStep(state, &scratch);
+		/* OK, generate code to perform the assignment. */
+		if (evalTargetList)
+		{
+			/*
+			 * We must evaluate the TLE's expression and assign it.  We do not
+			 * bother jumping through hoops for "safe" Vars like
+			 * ExecBuildProjectionInfo does; this is a relatively less-used
+			 * path and it doesn't seem worth expending code for that.
+			 */
+			ExecInitExprRec(tle->expr, state,
+							&state->resvalue, &state->resnull);
+			/* Needn't worry about read-only-ness here, either. */
+			scratch.opcode = EEOP_ASSIGN_TMP;
+			scratch.d.assign_tmp.resultnum = targetattnum - 1;
+			ExprEvalPushStep(state, &scratch);
+		}
+		else
+		{
+			/* Just assign from the outer tuple. */
+			scratch.opcode = EEOP_ASSIGN_OUTER_VAR;
+			scratch.d.assign_var.attnum = outerattnum;
+			scratch.d.assign_var.resultnum = targetattnum - 1;
+			ExprEvalPushStep(state, &scratch);
+		}
+		outerattnum++;
+	}
+
+	/*
+	 * If we're evaluating the tlist, must evaluate any resjunk columns too.
+	 * (This matters for things like MULTIEXPR_SUBLINK SubPlans.)
+	 */
+	if (evalTargetList)
+	{
+		for_each_cell(lc, targetList, lc)
+		{
+			TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+			Assert(tle->resjunk);
+			ExecInitExprRec(tle->expr, state,
+							&state->resvalue, &state->resnull);
+		}
 	}
 
 	/*
@@ -1459,7 +1513,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				scratch.opcode = EEOP_FIELDSELECT;
 				scratch.d.fieldselect.fieldnum = fselect->fieldnum;
 				scratch.d.fieldselect.resulttype = fselect->resulttype;
-				scratch.d.fieldselect.argdesc = NULL;
+				scratch.d.fieldselect.rowcache.cacheptr = NULL;
 
 				ExprEvalPushStep(state, &scratch);
 				break;
@@ -1469,7 +1523,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 			{
 				FieldStore *fstore = (FieldStore *) node;
 				TupleDesc	tupDesc;
-				TupleDesc  *descp;
+				ExprEvalRowtypeCache *rowcachep;
 				Datum	   *values;
 				bool	   *nulls;
 				int			ncolumns;
@@ -1485,9 +1539,9 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				values = (Datum *) palloc(sizeof(Datum) * ncolumns);
 				nulls = (bool *) palloc(sizeof(bool) * ncolumns);
 
-				/* create workspace for runtime tupdesc cache */
-				descp = (TupleDesc *) palloc(sizeof(TupleDesc));
-				*descp = NULL;
+				/* create shared composite-type-lookup cache struct */
+				rowcachep = palloc(sizeof(ExprEvalRowtypeCache));
+				rowcachep->cacheptr = NULL;
 
 				/* emit code to evaluate the composite input value */
 				ExecInitExprRec(fstore->arg, state, resv, resnull);
@@ -1495,7 +1549,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				/* next, deform the input tuple into our workspace */
 				scratch.opcode = EEOP_FIELDSTORE_DEFORM;
 				scratch.d.fieldstore.fstore = fstore;
-				scratch.d.fieldstore.argdesc = descp;
+				scratch.d.fieldstore.rowcache = rowcachep;
 				scratch.d.fieldstore.values = values;
 				scratch.d.fieldstore.nulls = nulls;
 				scratch.d.fieldstore.ncolumns = ncolumns;
@@ -1553,7 +1607,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 				/* finally, form result tuple */
 				scratch.opcode = EEOP_FIELDSTORE_FORM;
 				scratch.d.fieldstore.fstore = fstore;
-				scratch.d.fieldstore.argdesc = descp;
+				scratch.d.fieldstore.rowcache = rowcachep;
 				scratch.d.fieldstore.values = values;
 				scratch.d.fieldstore.nulls = nulls;
 				scratch.d.fieldstore.ncolumns = ncolumns;
@@ -1699,17 +1753,24 @@ ExecInitExprRec(Expr *node, ExprState *state,
 		case T_ConvertRowtypeExpr:
 			{
 				ConvertRowtypeExpr *convert = (ConvertRowtypeExpr *) node;
+				ExprEvalRowtypeCache *rowcachep;
+
+				/* cache structs must be out-of-line for space reasons */
+				rowcachep = palloc(2 * sizeof(ExprEvalRowtypeCache));
+				rowcachep[0].cacheptr = NULL;
+				rowcachep[1].cacheptr = NULL;
 
 				/* evaluate argument into step's result area */
 				ExecInitExprRec(convert->arg, state, resv, resnull);
 
 				/* and push conversion step */
 				scratch.opcode = EEOP_CONVERT_ROWTYPE;
-				scratch.d.convert_rowtype.convert = convert;
-				scratch.d.convert_rowtype.indesc = NULL;
-				scratch.d.convert_rowtype.outdesc = NULL;
+				scratch.d.convert_rowtype.inputtype =
+					exprType((Node *) convert->arg);
+				scratch.d.convert_rowtype.outputtype = convert->resulttype;
+				scratch.d.convert_rowtype.incache = &rowcachep[0];
+				scratch.d.convert_rowtype.outcache = &rowcachep[1];
 				scratch.d.convert_rowtype.map = NULL;
-				scratch.d.convert_rowtype.initialized = false;
 
 				ExprEvalPushStep(state, &scratch);
 				break;
@@ -2334,7 +2395,7 @@ ExecInitExprRec(Expr *node, ExprState *state,
 						 (int) ntest->nulltesttype);
 				}
 				/* initialize cache in case it's a row test */
-				scratch.d.nulltest_row.argdesc = NULL;
+				scratch.d.nulltest_row.rowcache.cacheptr = NULL;
 
 				/* first evaluate argument into result variable */
 				ExecInitExprRec(ntest->arg, state,
@@ -3490,7 +3551,6 @@ ExecBuildAggTrans(AggState *aggstate, AggStatePerPhase phase,
 	ExprState  *state = makeNode(ExprState);
 	PlanState  *parent = &aggstate->ss.ps;
 	ExprEvalStep scratch = {0};
-	bool		isCombine = DO_AGGSPLIT_COMBINE(aggstate->aggsplit);
 	LastAttnumInfo deform = {0, 0, 0};
 
 	state->expr = (Expr *) aggstate;

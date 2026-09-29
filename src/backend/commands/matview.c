@@ -335,7 +335,7 @@ ExecRefreshMatView(RefreshMatViewStmt *stmt, const char *queryString,
 	 * will be gone).
 	 */
 	OIDNewHeap = make_new_heap_with_colname(matviewOid, tableSpace, matviewRel->rd_rel->relam, NULL, relpersistence,
-							   ExclusiveLock, false, true, "_$");
+							   ExclusiveLock, false, true, "__$");
 	LockRelationOid(OIDNewHeap, AccessExclusiveLock);
 	dest = CreateTransientRelDestReceiver(OIDNewHeap, matviewOid, concurrent, relpersistence,
 										  stmt->skipData);
@@ -807,13 +807,13 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "SELECT newdata FROM %s newdata "
-					 "WHERE newdata IS NOT NULL AND EXISTS "
-					 "(SELECT 1 FROM %s newdata2 WHERE newdata2 IS NOT NULL "
-					 "AND newdata2 OPERATOR(pg_catalog.*=) newdata "
-					 "AND newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "newdata.ctid and newdata2.gp_segment_id = "
-					 "newdata.gp_segment_id)",
+					 "SELECT _$newdata FROM %s _$newdata "
+					 "WHERE _$newdata IS NOT NULL AND EXISTS "
+					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
+					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
+					 "AND _$newdata2.ctid OPERATOR(pg_catalog.<>) "
+					 "_$newdata.ctid and _$newdata2.gp_segment_id = "
+					 "_$newdata.gp_segment_id)",
 					 tempname, tempname);
 	if (SPI_execute(querybuf.data, false, 1) != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -846,8 +846,8 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 	appendStringInfo(&querybuf,
 					 "CREATE TEMP TABLE %s AS "
-					 "SELECT mv.ctid AS tid, mv.gp_segment_id as sid, newdata.* "
-					 "FROM %s mv FULL JOIN %s newdata ON (",
+					 "SELECT _$mv.ctid AS tid, _$mv.gp_segment_id as sid, _$newdata.* "
+					 "FROM %s _$mv FULL JOIN %s _$newdata ON (",
 					 diffname, matviewname, tempname);
 
 	/*
@@ -942,9 +942,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 				if (foundUniqueIndex)
 					appendStringInfoString(&querybuf, " AND ");
 
-				leftop = quote_qualified_identifier("newdata",
+				leftop = quote_qualified_identifier("_$newdata",
 													NameStr(newattr->attname));
-				rightop = quote_qualified_identifier("mv",
+				rightop = quote_qualified_identifier("_$mv",
 													 NameStr(attr->attname));
 
 				generate_operator_clause(&querybuf,
@@ -974,8 +974,8 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 
 	appendStringInfoString(&querybuf,
-						   " AND newdata.* OPERATOR(pg_catalog.*=) mv.*) "
-						   "WHERE newdata.* IS NULL OR mv.* IS NULL "
+						   " AND _$newdata.* OPERATOR(pg_catalog.*=) _$mv.*) "
+						   "WHERE _$newdata.* IS NULL OR _$mv.* IS NULL "
 						   "ORDER BY tid ");
 	appendStringInfoString(&querybuf, distributed);
 
@@ -1002,10 +1002,10 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Deletes must come before inserts; do them first. */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-					 "DELETE FROM %s mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
-					 "(SELECT diff.tid FROM %s diff "
-					 "WHERE diff.tid = mv.ctid and diff.sid = mv.gp_segment_id and"
-	 				 " diff.tid IS NOT NULL)",
+					 "DELETE FROM %s _$mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
+					 "(SELECT _$diff.tid FROM %s _$diff "
+					 "WHERE _$diff.tid = _$mv.ctid and _$diff.sid = _$mv.gp_segment_id and"
+	 				 " _$diff.tid IS NOT NULL)",
 					 matviewname, diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_DELETE)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -1022,7 +1022,7 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 			appendStringInfo(&querybuf, " %s,", NameStr(attr->attname));
 	}
 	appendStringInfo(&querybuf,
-					 " FROM %s diff WHERE tid IS NULL",
+					 " FROM %s _$diff WHERE tid IS NULL",
 					 diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);

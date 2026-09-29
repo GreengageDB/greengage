@@ -1322,9 +1322,9 @@ DefineIndex(Oid relationId,
 
 		ereport(DEBUG1,
 				(errmsg_internal("%s %s will create implicit index \"%s\" for table \"%s\"",
-						is_alter_table ? "ALTER TABLE / ADD" : "CREATE TABLE /",
-						constraint_type,
-						indexRelationName, RelationGetRelationName(rel))));
+								 is_alter_table ? "ALTER TABLE / ADD" : "CREATE TABLE /",
+								 constraint_type,
+								 indexRelationName, RelationGetRelationName(rel))));
 	}
 
 	if (shouldDispatch)
@@ -1378,7 +1378,7 @@ DefineIndex(Oid relationId,
 	 */
 	if (partitioned && stmt->relation && !stmt->relation->inh)
 	{
-		PartitionDesc pd = RelationGetPartitionDesc(rel, false);
+		PartitionDesc pd = RelationGetPartitionDesc(rel, true);
 
 		if (pd->nparts != 0)
 			flags |= INDEX_CREATE_INVALID;
@@ -1446,7 +1446,7 @@ DefineIndex(Oid relationId,
 		 *
 		 * If we're called internally (no stmt->relation), recurse always.
 		 */
-		partdesc = RelationGetPartitionDesc(rel, false);
+		partdesc = RelationGetPartitionDesc(rel, true);
 		if ((!stmt->relation || stmt->relation->inh) && partdesc->nparts > 0)
 		{
 			int			nparts = partdesc->nparts;

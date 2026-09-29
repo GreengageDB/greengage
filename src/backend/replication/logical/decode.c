@@ -758,9 +758,10 @@ DecodeCommit(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 	}
 
 	/*
-	 * Update the decoding stats at transaction prepare/commit/abort. It is
-	 * not clear that sending more or less frequently than this would be
-	 * better.
+	 * Update the decoding stats at transaction prepare/commit/abort.
+	 * Additionally we send the stats when we spill or stream the changes to
+	 * avoid losing them in case the decoding is interrupted. It is not clear
+	 * that sending more or less frequently than this would be better.
 	 */
 	UpdateDecodingStats(ctx);
 }
@@ -840,9 +841,10 @@ DecodePrepare(LogicalDecodingContext *ctx, XLogRecordBuffer *buf,
 	ReorderBufferPrepare(ctx->reorder, xid, parsed->twophase_gid);
 
 	/*
-	 * Update the decoding stats at transaction prepare/commit/abort. It is
-	 * not clear that sending more or less frequently than this would be
-	 * better.
+	 * Update the decoding stats at transaction prepare/commit/abort.
+	 * Additionally we send the stats when we spill or stream the changes to
+	 * avoid losing them in case the decoding is interrupted. It is not clear
+	 * that sending more or less frequently than this would be better.
 	 */
 	UpdateDecodingStats(ctx);
 }
@@ -1050,19 +1052,17 @@ DecodeDelete(LogicalDecodingContext *ctx, XLogRecordBuffer *buf)
 	if (target_node.dbNode != ctx->slot->data.database)
 		return;
 
-	/*
-	 * Super deletions are irrelevant for logical decoding, it's driven by the
-	 * confirmation records.
-	 */
-	if (xlrec->flags & XLH_DELETE_IS_SUPER)
-		return;
-
 	/* output plugin doesn't look for this origin, no need to queue */
 	if (FilterByOrigin(ctx, XLogRecGetOrigin(r)))
 		return;
 
 	change = ReorderBufferGetChange(ctx->reorder);
-	change->action = REORDER_BUFFER_CHANGE_DELETE;
+
+	if (xlrec->flags & XLH_DELETE_IS_SUPER)
+		change->action = REORDER_BUFFER_CHANGE_INTERNAL_SPEC_ABORT;
+	else
+		change->action = REORDER_BUFFER_CHANGE_DELETE;
+
 	change->origin_id = XLogRecGetOrigin(r);
 
 	memcpy(&change->data.tp.relnode, &target_node, sizeof(RelFileNode));

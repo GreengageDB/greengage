@@ -792,6 +792,7 @@ execute_sql_string(const char *sql)
 
 				ProcessUtility(stmt,
 							   sql,
+							   false,
 							   PROCESS_UTILITY_QUERY,
 							   NULL,
 							   NULL,
@@ -3491,8 +3492,8 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 		case OBJECT_SUBSCRIPTION:
 		case OBJECT_TABLESPACE:
 			ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("cannot add an object of this type to an extension")));
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("cannot add an object of this type to an extension")));
 			break;
 		default:
 			/* OK */

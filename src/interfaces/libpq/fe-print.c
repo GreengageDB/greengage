@@ -303,7 +303,7 @@ PQprint(FILE *fout, const PGresult *res, const PQprintOpt *po)
 		}
 		if (po->header && !po->html3)
 			fprintf(fout, "(%d row%s)\n\n", PQntuples(res),
-					(abs(PQntuples(res)) == 1) ? "" : "s");
+					(PQntuples(res) == 1) ? "" : "s");
 		if (po->html3 && !po->expanded)
 			fputs("</table>\n", fout);
 		free(fieldMax);
@@ -365,7 +365,7 @@ do_field(const PQprintOpt *po, const PGresult *res,
 			/* Detect whether field contains non-numeric data */
 			char		ch = '0';
 
-			for (p = pval; *p; p += PQmblen(p, res->client_encoding))
+			for (p = pval; *p; p += PQmblenBounded(p, res->client_encoding))
 			{
 				ch = *p;
 				if (!((ch >= '0' && ch <= '9') ||
@@ -662,7 +662,7 @@ PQdisplayTuples(const PGresult *res,
 
 	if (!quiet)
 		fprintf(fp, "\nQuery returned %d row%s.\n", PQntuples(res),
-				(abs(PQntuples(res)) == 1) ? "" : "s");
+				(PQntuples(res) == 1) ? "" : "s");
 
 	fflush(fp);
 

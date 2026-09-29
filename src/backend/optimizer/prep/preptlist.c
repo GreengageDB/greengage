@@ -56,7 +56,6 @@
 
 static Bitmapset *find_update_changed_cols(List *tlist, Index result_relation);
 static List *drop_dropped_col_entries(List *tlist, Relation rel);
-static List *extract_update_colnos(List *tlist);
 static List *expand_targetlist(List *tlist, int command_type,
 							   Index result_relation, Relation rel);
 static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
@@ -72,9 +71,6 @@ static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
  * Also, if this is an UPDATE, we return a list of target column numbers
  * in root->update_colnos.  (Resnos in processed_tlist will be consecutive,
  * so do not look at that to find out which columns are targets!)
- *
- * As a side effect, if there's an ON CONFLICT UPDATE clause, its targetlist
- * is also preprocessed (and updated in-place).
  */
 void
 preprocess_targetlist(PlannerInfo *root)
@@ -154,7 +150,7 @@ preprocess_targetlist(PlannerInfo *root)
 		 */
 		tlist = drop_dropped_col_entries(tlist, target_relation);
 
-		root->update_colnos = extract_update_colnos(tlist);
+		root->update_colnos = extract_update_targetlist_colnos(tlist);
 	}
 
 	/*
@@ -294,23 +290,12 @@ preprocess_targetlist(PlannerInfo *root)
 
 	root->processed_tlist = tlist;
 
-	/*
-	 * If there's an ON CONFLICT UPDATE clause, preprocess its targetlist too
-	 * while we have the relation open.
-	 */
-	if (parse->onConflict)
-		parse->onConflict->onConflictSet =
-			expand_targetlist(parse->onConflict->onConflictSet,
-							  CMD_UPDATE,
-							  result_relation,
-							  target_relation);
-
 	if (target_relation)
 		table_close(target_relation, NoLock);
 }
 
 /*
- * extract_update_colnos
+ * extract_update_targetlist_colnos
  * 		Extract a list of the target-table column numbers that
  * 		an UPDATE's targetlist wants to assign to, then renumber.
  *
@@ -319,9 +304,12 @@ preprocess_targetlist(PlannerInfo *root)
  * to assign to.  Here, we extract that info into a separate list, and
  * then convert the tlist to the sequential-numbering convention that's
  * used by all other query types.
+ *
+ * This is also applied to the tlist associated with INSERT ... ON CONFLICT
+ * ... UPDATE, although not till much later in planning.
  */
-static List *
-extract_update_colnos(List *tlist)
+List *
+extract_update_targetlist_colnos(List *tlist)
 {
 	List	   *update_colnos = NIL;
 	AttrNumber	nextresno = 1;
@@ -386,10 +374,10 @@ find_update_changed_cols(List *tlist, Index result_relation)
  *
  * expand_targetlist() emits a NULL constant for every dropped column so that
  * the result is positionally identical to the table's physical layout.  For an
- * UPDATE we then hand the list to extract_update_colnos(), and
+ * UPDATE we then hand the list to extract_update_targetlist_colnos(), and
  * ExecBuildUpdateProjection() refuses an assignment to a dropped column, so
- * those entries have to go.  Resnos are left alone; extract_update_colnos()
- * renumbers afterwards.
+ * those entries have to go.  Resnos are left alone;
+ * extract_update_targetlist_colnos() renumbers afterwards.
  */
 static List *
 drop_dropped_col_entries(List *tlist, Relation rel)
@@ -426,9 +414,14 @@ drop_dropped_col_entries(List *tlist, Relation rel)
  *	  add targetlist entries for any missing attributes, and ensure the
  *	  non-junk attributes appear in proper field order.
  *
- * command_type is a bit of an archaism now: it's CMD_INSERT when we're
- * processing an INSERT, all right, but the only other use of this function
- * is for ON CONFLICT UPDATE tlists, for which command_type is CMD_UPDATE.
+ * command_type is CMD_INSERT for a plain INSERT's targetlist, and
+ * CMD_UPDATE for a plain UPDATE's.  (Unlike upstream, ON CONFLICT UPDATE's
+ * tlist is not expanded here; createplan.c extracts its column numbers
+ * directly from the un-expanded tlist instead.)  GPDB still needs the full
+ * row built for UPDATE, unlike upstream, because append-optimized tables
+ * cannot be re-fetched by TID and a distribution-key change is executed as
+ * a delete+insert (SplitUpdate) that needs the complete row to hash a
+ * target segment; see preprocess_targetlist().
  */
 static List *
 expand_targetlist(List *tlist, int command_type,
@@ -438,6 +431,8 @@ expand_targetlist(List *tlist, int command_type,
 	ListCell   *tlist_item;
 	int			attrno,
 				numattrs;
+
+	Assert(command_type == CMD_INSERT || command_type == CMD_UPDATE);
 
 	tlist_item = list_head(tlist);
 
@@ -491,15 +486,14 @@ expand_targetlist(List *tlist, int command_type,
 			 * relation, however.
 			 */
 			Oid			atttype = att_tup->atttypid;
-			int32		atttypmod = att_tup->atttypmod;
 			Oid			attcollation = att_tup->attcollation;
 			Node	   *new_expr;
 
-			switch (command_type)
+			if (!att_tup->attisdropped)
 			{
-				case CMD_INSERT:
-					if (!att_tup->attisdropped)
-					{
+				switch (command_type)
+				{
+					case CMD_INSERT:
 						new_expr = (Node *) makeConst(atttype,
 													  -1,
 													  attcollation,
@@ -514,46 +508,32 @@ expand_targetlist(List *tlist, int command_type,
 													COERCE_IMPLICIT_CAST,
 													-1,
 													false);
-					}
-					else
-					{
-						/* Insert NULL for dropped column */
-						new_expr = (Node *) makeConst(INT4OID,
-													  -1,
-													  InvalidOid,
-													  sizeof(int32),
-													  (Datum) 0,
-													  true, /* isnull */
-													  true /* byval */ );
-					}
-					break;
-				case CMD_UPDATE:
-					if (!att_tup->attisdropped)
-					{
+						break;
+					case CMD_UPDATE:
 						new_expr = (Node *) makeVar(result_relation,
 													attrno,
 													atttype,
-													atttypmod,
+													att_tup->atttypmod,
 													attcollation,
 													0);
-					}
-					else
-					{
-						/* Insert NULL for dropped column */
-						new_expr = (Node *) makeConst(INT4OID,
-													  -1,
-													  InvalidOid,
-													  sizeof(int32),
-													  (Datum) 0,
-													  true, /* isnull */
-													  true /* byval */ );
-					}
-					break;
-				default:
-					elog(ERROR, "unrecognized command_type: %d",
-						 (int) command_type);
-					new_expr = NULL;	/* keep compiler quiet */
-					break;
+						break;
+					default:
+						elog(ERROR, "unrecognized command_type: %d",
+							 (int) command_type);
+						new_expr = NULL;	/* keep compiler quiet */
+						break;
+				}
+			}
+			else
+			{
+				/* Insert NULL for dropped column */
+				new_expr = (Node *) makeConst(INT4OID,
+											  -1,
+											  InvalidOid,
+											  sizeof(int32),
+											  (Datum) 0,
+											  true, /* isnull */
+											  true /* byval */ );
 			}
 
 			new_tle = makeTargetEntry((Expr *) new_expr,
@@ -680,7 +660,7 @@ supplement_simply_updatable_targetlist(PlannerInfo *root, List *range_table, Lis
 	 * our ability to uniquely identify a tuple. Without inheritance, we omit tableoid
 	 * to avoid the overhead of carrying tableoid for each tuple in the result set.
 	 */
-	if (find_inheritance_children(reloid, false, NoLock) != NIL)
+	if (find_inheritance_children(reloid, NoLock) != NIL)
 	{
 		Var         *varTableoid = makeVar(varno,
 										   TableOidAttributeNumber,

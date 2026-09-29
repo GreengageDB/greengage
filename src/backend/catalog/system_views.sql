@@ -171,7 +171,7 @@ CREATE VIEW pg_indexes AS
          LEFT JOIN pg_tablespace T ON (T.oid = I.reltablespace)
     WHERE C.relkind IN ('r', 'm', 'p') AND I.relkind IN ('i', 'I');
 
-CREATE OR REPLACE VIEW pg_sequences AS
+CREATE VIEW pg_sequences AS
     SELECT
         N.nspname AS schemaname,
         C.relname AS sequencename,
@@ -947,7 +947,7 @@ CREATE VIEW pg_stat_activity AS
             S.state,
             S.backend_xid,
             s.backend_xmin,
-            S.queryid,
+            S.query_id,
             S.query,
             S.backend_type,
 
@@ -1040,18 +1040,6 @@ CREATE VIEW gp_stat_replication AS
          ON G.gp_segment_id = R.gp_segment_id
     );
 
-CREATE VIEW pg_stat_replication_slots AS
-    SELECT
-            s.slot_name,
-            s.spill_txns,
-            s.spill_count,
-            s.spill_bytes,
-            s.stream_txns,
-            s.stream_count,
-            s.stream_bytes,
-            s.stats_reset
-    FROM pg_stat_get_replication_slots() AS s;
-
 CREATE VIEW pg_stat_slru AS
     SELECT
             s.name,
@@ -1141,6 +1129,22 @@ CREATE VIEW pg_replication_slots AS
             L.two_phase
     FROM pg_get_replication_slots() AS L
             LEFT JOIN pg_database D ON (L.datoid = D.oid);
+
+CREATE VIEW pg_stat_replication_slots AS
+    SELECT
+            s.slot_name,
+            s.spill_txns,
+            s.spill_count,
+            s.spill_bytes,
+            s.stream_txns,
+            s.stream_count,
+            s.stream_bytes,
+            s.total_txns,
+            s.total_bytes,
+            s.stats_reset
+    FROM pg_replication_slots as r,
+        LATERAL pg_stat_get_replication_slot(slot_name) as s
+    WHERE r.datoid IS NOT NULL; -- excluding physical slots
 
 CREATE VIEW pg_stat_database AS
     SELECT
@@ -1635,9 +1639,10 @@ CREATE VIEW pg_replication_origin_status AS
 
 REVOKE ALL ON pg_replication_origin_status FROM public;
 
--- All columns of pg_subscription except subconninfo are readable.
+-- All columns of pg_subscription except subconninfo are publicly readable.
 REVOKE ALL ON pg_subscription FROM public;
-GRANT SELECT (subdbid, subname, subowner, subenabled, subbinary, substream, subslotname, subpublications)
+GRANT SELECT (oid, subdbid, subname, subowner, subenabled, subbinary,
+              substream, subslotname, subsynccommit, subpublications)
     ON pg_subscription TO public;
 
 
@@ -1646,68 +1651,6 @@ GRANT SELECT (subdbid, subname, subowner, subenabled, subbinary, substream, subs
 -- At some point there might be enough to justify breaking them out into
 -- a separate "system_functions.sql" file.
 --
-
--- Tsearch debug function.  Defined here because it'd be pretty unwieldy
--- to put it into pg_proc.h
-
-CREATE FUNCTION ts_debug(IN config regconfig, IN document text,
-    OUT alias text,
-    OUT description text,
-    OUT token text,
-    OUT dictionaries regdictionary[],
-    OUT dictionary regdictionary,
-    OUT lexemes text[])
-RETURNS SETOF record AS
-$$
-SELECT
-    tt.alias AS alias,
-    tt.description AS description,
-    parse.token AS token,
-    ARRAY ( SELECT m.mapdict::pg_catalog.regdictionary
-            FROM pg_catalog.pg_ts_config_map AS m
-            WHERE m.mapcfg = $1 AND m.maptokentype = parse.tokid
-            ORDER BY m.mapseqno )
-    AS dictionaries,
-    ( SELECT mapdict::pg_catalog.regdictionary
-      FROM pg_catalog.pg_ts_config_map AS m
-      WHERE m.mapcfg = $1 AND m.maptokentype = parse.tokid
-      ORDER BY pg_catalog.ts_lexize(mapdict, parse.token) IS NULL, m.mapseqno
-      LIMIT 1
-    ) AS dictionary,
-    ( SELECT pg_catalog.ts_lexize(mapdict, parse.token)
-      FROM pg_catalog.pg_ts_config_map AS m
-      WHERE m.mapcfg = $1 AND m.maptokentype = parse.tokid
-      ORDER BY pg_catalog.ts_lexize(mapdict, parse.token) IS NULL, m.mapseqno
-      LIMIT 1
-    ) AS lexemes
-FROM pg_catalog.ts_parse(
-        (SELECT cfgparser FROM pg_catalog.pg_ts_config WHERE oid = $1 ), $2
-    ) AS parse,
-     pg_catalog.ts_token_type(
-        (SELECT cfgparser FROM pg_catalog.pg_ts_config WHERE oid = $1 )
-    ) AS tt
-WHERE tt.tokid = parse.tokid
-$$
-LANGUAGE SQL STRICT STABLE PARALLEL SAFE;
-
-COMMENT ON FUNCTION ts_debug(regconfig,text) IS
-    'debug function for text search configuration';
-
-CREATE FUNCTION ts_debug(IN document text,
-    OUT alias text,
-    OUT description text,
-    OUT token text,
-    OUT dictionaries regdictionary[],
-    OUT dictionary regdictionary,
-    OUT lexemes text[])
-RETURNS SETOF record AS
-$$
-    SELECT * FROM pg_catalog.ts_debug( pg_catalog.get_current_ts_config(), $1);
-$$
-LANGUAGE SQL STRICT STABLE PARALLEL SAFE;
-
-COMMENT ON FUNCTION ts_debug(text) IS
-    'debug function for current text search configuration';
 
 --
 -- Redeclare built-in functions that need default values attached to their
@@ -1737,11 +1680,6 @@ CREATE OR REPLACE FUNCTION
 CREATE OR REPLACE FUNCTION
   pg_terminate_backend(pid integer, timeout int8 DEFAULT 0)
   RETURNS boolean STRICT VOLATILE LANGUAGE INTERNAL AS 'pg_terminate_backend'
-  PARALLEL SAFE;
-
-CREATE OR REPLACE FUNCTION
-  pg_wait_for_backend_termination(pid integer, timeout int8 DEFAULT 5000)
-  RETURNS boolean STRICT VOLATILE LANGUAGE INTERNAL AS 'pg_wait_for_backend_termination'
   PARALLEL SAFE;
 
 -- legacy definition for compatibility with 9.3

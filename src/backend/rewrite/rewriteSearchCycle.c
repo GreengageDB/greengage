@@ -3,7 +3,7 @@
  * rewriteSearchCycle.c
  *		Support for rewriting SEARCH and CYCLE clauses.
  *
- * Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -59,7 +59,7 @@
  * SQL standard actually does it in that more complicated way), but the
  * internal representation allows us to construct it this way.)
  *
- * With a search caluse
+ * With a search clause
  *
  * SEARCH DEPTH FIRST BY col1, col2 SET sqc
  *

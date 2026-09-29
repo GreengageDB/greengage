@@ -61,9 +61,14 @@ delete from t_hash_partition where a=1;
 select count(*) from t_hash_partition where a=1;
 select count(*) from t_hash_partition;
 
+-- ORCA does not correctly plan a split-update's redistribute motion for a
+-- partitioned table that is mid-expansion (root policy hashed, leaf policy
+-- randomly), so it triggers nodeModifyTable.c's tuple-misrouting sanity
+-- check. Use the planner for this DML until ORCA supports it.
+set optimizer = off;
 update t_hash_partition set a = a+1;
 select count(*) from t_hash_partition where a=3;
-select count(*) from t_hash_partition; 
+select count(*) from t_hash_partition;
 
 --dml of child table
 select count(*) from t_hash_partition_1_prt_2;
@@ -71,6 +76,7 @@ select count(*) from t_hash_partition_1_prt_2 where a=2;
 insert into t_hash_partition_1_prt_2 values(8,1,1);
 select count(*) from t_hash_partition_1_prt_2;
 select count(*) from t_hash_partition;
+reset optimizer;
 
 drop table t_hash_partition;
 

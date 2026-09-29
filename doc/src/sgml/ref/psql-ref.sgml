@@ -127,11 +127,18 @@ echo '\x \\ SELECT * FROM foo;' | psql
        commands included in the string to divide it into multiple
        transactions.  (See <xref linkend="protocol-flow-multi-statement"/>
        for more details about how the server handles multi-query strings.)
+       Also, <application>psql</application> only prints the
+       result of the last <acronym>SQL</acronym> command in the string.
+       This is different from the behavior when the same string is read from
+       a file or fed to <application>psql</application>'s standard input,
+       because then <application>psql</application> sends
+       each <acronym>SQL</acronym> command separately.
       </para>
       <para>
-       If having several commands executed in one transaction is not desired, 
-       use repeated <option>-c</option> commands or feed multiple commands to
-       <application>psql</application>'s standard input,
+       Because of this behavior, putting more than one SQL command in a
+       single <option>-c</option> string often has unexpected results.
+       It's better to use repeated <option>-c</option> commands or feed
+       multiple commands to <application>psql</application>'s standard input,
        either using <application>echo</application> as illustrated above, or
        via a shell here-document, for example:
 <programlisting>
@@ -1051,7 +1058,7 @@ testdb=&gt;
         For <literal>\copy ... from stdin</literal>, data rows are read from the same
         source that issued the command, continuing until <literal>\.</literal>
         is read or the stream reaches <acronym>EOF</acronym>. This option is useful
-        for populating tables in-line within a SQL script file.
+        for populating tables in-line within an SQL script file.
         For <literal>\copy ... to stdout</literal>, output is sent to the same place
         as <application>psql</application> command output, and
         the <literal>COPY <replaceable>count</replaceable></literal> command status is
@@ -1942,9 +1949,10 @@ testdb=&gt;
         </para>
 
         <para>
-        The column of the kind of extended stats (e.g. Ndistinct) shows its status.
-        NULL means that it doesn't exists. "defined" means that it was requested
-        when creating the statistics.
+        The status of each kind of extended statistics is shown in a column
+        named after its statistic kind (e.g. Ndistinct).
+        "defined" means that it was requested when creating the statistics,
+        and NULL means it wasn't requested.
         You can use pg_stats_ext if you'd like to know whether <link linkend="sql-analyze">
         <command>ANALYZE</command></link> was run and statistics are available to the
         planner.
@@ -2250,7 +2258,7 @@ Tue Oct 26 21:40:57 CEST 1999
         <listitem>
         <para>
          Sends the current query buffer to the server, then treats
-         each column of each row of the query's output (if any) as a SQL
+         each column of each row of the query's output (if any) as an SQL
          statement to be executed.  For example, to create an index on each
          column of <structname>my_table</structname>:
 <programlisting>
@@ -3517,7 +3525,7 @@ testdb=&gt; <userinput>\setenv LESS -imx4F</userinput>
         </para>
 
         <para>
-        Normally, <application>psql</application> will dispatch a SQL command to the
+        Normally, <application>psql</application> will dispatch an SQL command to the
         server as soon as it reaches the command-ending semicolon, even if
         more input remains on the current line.  Thus for example entering
 <programlisting>
@@ -3539,6 +3547,10 @@ select 1\; select 2\; select 3;
         commands included in the string to divide it into multiple
         transactions.  (See <xref linkend="protocol-flow-multi-statement"/>
         for more details about how the server handles multi-query strings.)
+        <application>psql</application> prints only the last query result
+        it receives for each request; in this example, although all
+        three <command>SELECT</command>s are indeed executed, <application>psql</application>
+        only prints the <literal>3</literal>.
         </para>
         </listitem>
       </varlistentry>
@@ -3876,23 +3888,23 @@ bar
       </varlistentry>
 
       <varlistentry>
-        <term><varname>HIDE_TOAST_COMPRESSION</varname></term>
-        <listitem>
-        <para>
-         If this variable is set to <literal>true</literal>, column
-         compression method details are not displayed. This is mainly
-         useful for regression tests.
-        </para>
-        </listitem>
-      </varlistentry>
-
-      <varlistentry>
         <term><varname>HIDE_TABLEAM</varname></term>
         <listitem>
         <para>
          If this variable is set to <literal>true</literal>, a table's access
          method details are not displayed. This is mainly useful for
          regression tests.
+        </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>HIDE_TOAST_COMPRESSION</varname></term>
+        <listitem>
+        <para>
+         If this variable is set to <literal>true</literal>, column
+         compression method details are not displayed. This is mainly
+         useful for regression tests.
         </para>
         </listitem>
       </varlistentry>
@@ -3929,7 +3941,7 @@ bar
         or <filename>%APPDATA%\postgresql\psql_history</filename> on Windows.
         For example, putting:
 <programlisting>
-\set HISTFILE ~/.psql_history- :DBNAME
+\set HISTFILE ~/.psql_history-:DBNAME
 </programlisting>
         in <filename>~/.psqlrc</filename> will cause
         <application>psql</application> to maintain a separate history for
@@ -4125,18 +4137,6 @@ bar
       </varlistentry>
 
       <varlistentry>
-        <term><varname>SHOW_ALL_RESULTS</varname></term>
-        <listitem>
-        <para>
-        When this variable is set to <literal>off</literal>, only the last
-        result of a combined query (<literal>\;</literal>) is shown instead of
-        all of them.  The default is <literal>on</literal>.  The off behavior
-        is for compatibility with older versions of psql.
-        </para>
-        </listitem>
-      </varlistentry>
-
-       <varlistentry>
         <term><varname>SHOW_CONTEXT</varname></term>
         <listitem>
         <para>

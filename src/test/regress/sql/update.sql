@@ -102,17 +102,18 @@ UPDATE update_test t
 SELECT a, b, char_length(c) FROM update_test;
 
 -- Test ON CONFLICT DO UPDATE
-INSERT INTO upsert_test VALUES(1, 'Boo');
+
+INSERT INTO upsert_test VALUES(1, 'Boo'), (3, 'Zoo');
 -- uncorrelated  sub-select:
 WITH aaa AS (SELECT 1 AS a, 'Foo' AS b) INSERT INTO upsert_test
   VALUES (1, 'Bar') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b, a FROM aaa) RETURNING a, b;
 -- correlated sub-select:
-INSERT INTO upsert_test VALUES (1, 'Baz') ON CONFLICT(id, a)
+INSERT INTO upsert_test VALUES (1, 'Baz'), (3, 'Zaz') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Correlated', a from upsert_test i WHERE i.a = upsert_test.a)
   RETURNING a, b;
 -- correlated sub-select (EXCLUDED.* alias):
-INSERT INTO upsert_test VALUES (1, 'Bat') ON CONFLICT(id, a)
+INSERT INTO upsert_test VALUES (1, 'Bat'), (3, 'Zot') ON CONFLICT(id, a)
   DO UPDATE SET (b, a) = (SELECT b || ', Excluded', a from upsert_test i WHERE i.a = excluded.a)
   RETURNING a, b;
 
@@ -132,6 +133,32 @@ INSERT INTO upsert_test VALUES (2, 'Brox') ON CONFLICT(id, a)
 DROP FUNCTION xid_current();
 DROP TABLE update_test;
 DROP TABLE upsert_test;
+
+-- Test ON CONFLICT DO UPDATE with partitioned table and non-identical children
+
+CREATE TABLE upsert_test (
+    id  INT DEFAULT 0,
+    a   INT,
+    b   TEXT,
+    PRIMARY KEY (id, a)
+) PARTITION BY LIST (a) DISTRIBUTED BY (id);
+
+CREATE TABLE upsert_test_1 PARTITION OF upsert_test FOR VALUES IN (1);
+CREATE TABLE upsert_test_2 (b TEXT, a INT, id INT DEFAULT 0, PRIMARY KEY (id, a)) DISTRIBUTED BY (id);
+ALTER TABLE upsert_test ATTACH PARTITION upsert_test_2 FOR VALUES IN (2);
+
+INSERT INTO upsert_test (a, b) VALUES(1, 'Boo'), (2, 'Zoo');
+-- uncorrelated sub-select:
+WITH aaa AS (SELECT 1 AS a, 'Foo' AS b) INSERT INTO upsert_test (a, b)
+  VALUES (1, 'Bar') ON CONFLICT(id, a)
+  DO UPDATE SET (b, a) = (SELECT b, a FROM aaa) RETURNING a, b;
+-- correlated sub-select:
+WITH aaa AS (SELECT 1 AS ctea, ' Foo' AS cteb) INSERT INTO upsert_test (a, b)
+  VALUES (1, 'Bar'), (2, 'Baz') ON CONFLICT(id, a)
+  DO UPDATE SET (b, a) = (SELECT upsert_test.b||cteb, upsert_test.a FROM aaa) RETURNING a, b;
+
+DROP TABLE upsert_test;
+
 
 ---------------------------
 -- UPDATE with row movement
@@ -513,6 +540,50 @@ UPDATE list_default set a = 'a' WHERE a = 'd';
 UPDATE list_default set a = 'x' WHERE a = 'd';
 
 DROP TABLE list_parted;
+
+-- Test retrieval of system columns with non-consistent partition row types.
+-- GPDB: unlike upstream, every case below succeeds -- an INSERT/UPDATE
+-- targeting a partitioned table always ends up with a physically-backed
+-- tuple slot here, regardless of whether the partition's row type matches
+-- the root's, so the "cannot retrieve a system column" restriction never
+-- applies. As elsewhere in this file, pg_current_xact_id() needs the
+-- xid_current() wrapper to force it to run on the segment.
+
+CREATE FUNCTION xid_current() RETURNS xid LANGUAGE SQL AS $$SELECT pg_current_xact_id()::xid;$$ SECURITY DEFINER;
+
+create table utrtest (a int, b text) partition by list (a);
+create table utr1 (a int check (a in (1)), q text, b text);
+create table utr2 (a int check (a in (2)), b text);
+alter table utr1 drop column q;
+alter table utrtest attach partition utr1 for values in (1);
+alter table utrtest attach partition utr2 for values in (2);
+
+insert into utrtest values (1, 'foo')
+  returning *, tableoid::regclass, xmin = xid_current() as xmin_ok;
+-- upstream expects this one to fail (utr2's row type matches the root's,
+-- so upstream reuses a virtual slot here); GPDB doesn't, see comment above.
+insert into utrtest values (2, 'bar')
+  returning *, tableoid::regclass, xmin = xid_current() as xmin_ok;
+insert into utrtest values (2, 'bar')
+  returning *, tableoid::regclass;
+
+update utrtest set b = b || b from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass, xmin = xid_current() as xmin_ok;
+
+-- upstream expects this one to fail too, for the same reason as the insert
+-- into utr2 above; GPDB doesn't.
+update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass, xmin = xid_current() as xmin_ok;
+
+update utrtest set a = 3 - a from (values (1), (2)) s(x) where a = s.x
+  returning *, tableoid::regclass;
+
+delete from utrtest
+  returning *, tableoid::regclass, xmax = xid_current() as xmax_ok;
+
+DROP FUNCTION xid_current();
+drop table utrtest;
+
 
 --------------
 -- Some more update-partition-key test scenarios below. This time use list

@@ -506,7 +506,7 @@ CheckpointerMain(void)
 		pgstat_send_bgwriter();
 
 		/* Send WAL statistics to the stats collector. */
-		pgstat_report_wal();
+		pgstat_send_wal(true);
 
 		/*
 		 * If any checkpoint flags have been set, redo the loop to handle the
@@ -584,7 +584,7 @@ HandleCheckpointerInterrupts(void)
 		BgWriterStats.m_requested_checkpoints++;
 		ShutdownXLOG(0, 0);
 		pgstat_send_bgwriter();
-		pgstat_report_wal();
+		pgstat_send_wal(true);
 
 		/* Normal exit from the checkpointer is here */
 		proc_exit(0);			/* done */
@@ -1239,7 +1239,7 @@ CompactCheckpointerRequestQueue(void)
 	}
 	ereport(DEBUG1,
 			(errmsg_internal("compacted fsync request queue from %d entries to %d entries",
-					CheckpointerShmem->num_requests, preserve_count)));
+							 CheckpointerShmem->num_requests, preserve_count)));
 	CheckpointerShmem->num_requests = preserve_count;
 
 	/* Cleanup. */

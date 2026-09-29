@@ -48,7 +48,6 @@
 #include "catalog/pg_attribute_d.h"
 #include "catalog/pg_cast_d.h"
 #include "catalog/pg_class_d.h"
-#include "catalog/pg_collation_d.h"
 #include "catalog/pg_default_acl_d.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_server_d.h"
@@ -310,7 +309,6 @@ static void binary_upgrade_set_namespace_oid(Archive *fout,
 								PQExpBuffer upgrade_buffer,
 								Oid pg_namespace_oid);
 static void dumpSearchPath(Archive *AH);
-static void dumpToastCompression(Archive *AH);
 static void binary_upgrade_set_type_oids_by_type_oid(Archive *fout,
 													 PQExpBuffer upgrade_buffer,
 													 const TypeInfo *tyinfo,
@@ -339,9 +337,6 @@ static void binary_upgrade_extension_member(PQExpBuffer upgrade_buffer,
 static const char *getAttrName(int attrnum, const TableInfo *tblInfo);
 static const char *fmtCopyColumnList(const TableInfo *ti, PQExpBuffer buffer);
 static bool nonemptyReloptions(const char *reloptions);
-static void appendIndexCollationVersion(PQExpBuffer buffer, const IndxInfo *indxinfo,
-										int enc, bool coll_unknown,
-										Archive *fout);
 static void appendReloptionsArrayAH(PQExpBuffer buffer, const char *reloptions,
 									const char *prefix, Archive *fout);
 static char *get_synchronized_snapshot(Archive *fout);
@@ -475,7 +470,6 @@ main(int argc, char **argv)
 		{"on-conflict-do-nothing", no_argument, &dopt.do_nothing, 1},
 		{"rows-per-insert", required_argument, NULL, 10},
 		{"include-foreign-data", required_argument, NULL, 11},
-		{"index-collation-versions-unknown", no_argument, &dopt.coll_unknown, 1},
 
 		/* START MPP ADDITION */
 
@@ -847,10 +841,6 @@ main(int argc, char **argv)
 	if (archiveFormat != archDirectory && numWorkers > 1)
 		fatal("parallel backup only supported by the directory format");
 
-	/* Unknown collation versions only relevant in binary upgrade mode */
-	if (dopt.coll_unknown && !dopt.binary_upgrade)
-		fatal("option --index-collation-versions-unknown only works in binary upgrade mode");
-
 	/* Open the output file */
 	fout = CreateArchive(filename, archiveFormat, compressLevel, dosync,
 						 archiveMode, setupDumpWorker);
@@ -1078,13 +1068,11 @@ main(int argc, char **argv)
 	 */
 
 	/*
-	 * First the special entries for ENCODING, STDSTRINGS, SEARCHPATH and
-	 * TOASTCOMPRESSION.
+	 * First the special entries for ENCODING, STDSTRINGS, and SEARCHPATH.
 	 */
 	dumpEncoding(fout);
 	dumpStdStrings(fout);
 	dumpSearchPath(fout);
-	dumpToastCompression(fout);
 
 	/* The database items are always next, unless we don't want them at all */
 	if (dopt.outputCreateDB)
@@ -1232,7 +1220,7 @@ help(const char *progname)
 	printf(_("  --no-subscriptions           do not dump subscriptions\n"));
 	printf(_("  --no-synchronized-snapshots  do not use synchronized snapshots in parallel jobs\n"));
 	printf(_("  --no-tablespaces             do not dump tablespace assignments\n"));
-	printf(_("  --no-toast-compression       do not dump toast compression methods\n"));
+	printf(_("  --no-toast-compression       do not dump TOAST compression methods\n"));
 	printf(_("  --no-unlogged-table-data     do not dump unlogged table data\n"));
 	printf(_("  --on-conflict-do-nothing     add ON CONFLICT DO NOTHING to INSERT commands\n"));
 	printf(_("  --quote-all-identifiers      quote all identifiers, even if not key words\n"));
@@ -3666,58 +3654,6 @@ dumpSearchPath(Archive *AH)
 	PQclear(res);
 	destroyPQExpBuffer(qry);
 	destroyPQExpBuffer(path);
-}
-
-/*
- * dumpToastCompression: save the dump-time default TOAST compression in the
- * archive
- */
-static void
-dumpToastCompression(Archive *AH)
-{
-	char	   *toast_compression;
-	PQExpBuffer qry;
-
-	if (AH->dopt->no_toast_compression)
-	{
-		/* we don't intend to dump the info, so no need to fetch it either */
-		return;
-	}
-
-	if (AH->remoteVersion < 140000)
-	{
-		/* pre-v14, the only method was pglz */
-		toast_compression = pg_strdup("pglz");
-	}
-	else
-	{
-		PGresult   *res;
-
-		res = ExecuteSqlQueryForSingleRow(AH, "SHOW default_toast_compression");
-		toast_compression = pg_strdup(PQgetvalue(res, 0, 0));
-		PQclear(res);
-	}
-
-	qry = createPQExpBuffer();
-	appendPQExpBufferStr(qry, "SET default_toast_compression = ");
-	appendStringLiteralAH(qry, toast_compression, AH);
-	appendPQExpBufferStr(qry, ";\n");
-
-	pg_log_info("saving default_toast_compression = %s", toast_compression);
-
-	ArchiveEntry(AH, nilCatalogId, createDumpId(),
-				 ARCHIVE_OPTS(.tag = "TOASTCOMPRESSION",
-							  .description = "TOASTCOMPRESSION",
-							  .section = SECTION_PRE_DATA,
-							  .createStmt = qry->data));
-
-	/*
-	 * Also save it in AH->default_toast_compression, in case we're doing
-	 * plain text dump.
-	 */
-	AH->default_toast_compression = toast_compression;
-
-	destroyPQExpBuffer(qry);
 }
 
 
@@ -7467,9 +7403,7 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 				i_tablespace,
 				i_indreloptions,
 				i_indstatcols,
-				i_indstatvals,
-				i_inddependcollnames,
-				i_inddependcollversions;
+				i_indstatvals;
 
 	/*
 	 * We want to perform just one query against pg_index.  However, we
@@ -7535,37 +7469,14 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 						  "(SELECT pg_catalog.array_agg(attstattarget ORDER BY attnum) "
 						  "  FROM pg_catalog.pg_attribute "
 						  "  WHERE attrelid = i.indexrelid AND "
-						  "    attstattarget >= 0) AS indstatvals, ");
+						  "    attstattarget >= 0) AS indstatvals ");
 	else
 		appendPQExpBuffer(query,
 						  "0 AS parentidx, "
 						  "i.indnatts AS indnkeyatts, "
 						  "i.indnatts AS indnatts, "
 						  "'' AS indstatcols, "
-						  "'' AS indstatvals, ");
-
-	if (fout->remoteVersion >= 140000)
-		appendPQExpBuffer(query,
-						  "(SELECT pg_catalog.array_agg(quote_ident(ns.nspname) || '.' || quote_ident(c.collname) ORDER BY refobjid) "
-						  "  FROM pg_catalog.pg_depend d "
-						  "  JOIN pg_catalog.pg_collation c ON (c.oid = d.refobjid) "
-						  "  JOIN pg_catalog.pg_namespace ns ON (c.collnamespace = ns.oid) "
-						  "  WHERE d.classid = 'pg_catalog.pg_class'::regclass AND "
-						  "    d.objid = i.indexrelid AND "
-						  "    d.objsubid = 0 AND "
-						  "    d.refclassid = 'pg_catalog.pg_collation'::regclass AND "
-						  "    d.refobjversion IS NOT NULL) AS inddependcollnames, "
-						  "(SELECT pg_catalog.array_agg(quote_literal(refobjversion) ORDER BY refobjid) "
-						  "  FROM pg_catalog.pg_depend "
-						  "  WHERE classid = 'pg_catalog.pg_class'::regclass AND "
-						  "    objid = i.indexrelid AND "
-						  "    objsubid = 0 AND "
-						  "    refclassid = 'pg_catalog.pg_collation'::regclass AND "
-						  "    refobjversion IS NOT NULL) AS inddependcollversions ");
-	else
-		appendPQExpBuffer(query,
-						  "'{}' AS inddependcollnames, "
-						  "'{}' AS inddependcollversions ");
+						  "'' AS indstatvals ");
 
 	appendPQExpBuffer(query,
 							"FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
@@ -7650,8 +7561,6 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 	i_indreloptions = PQfnumber(res, "indreloptions");
 	i_indstatcols = PQfnumber(res, "indstatcols");
 	i_indstatvals = PQfnumber(res, "indstatvals");
-	i_inddependcollnames = PQfnumber(res, "inddependcollnames");
-	i_inddependcollversions = PQfnumber(res, "inddependcollversions");
 
 	indxinfo = (IndxInfo *) pg_malloc(ntups * sizeof(IndxInfo));
 
@@ -7712,8 +7621,6 @@ getIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			indxinfo[j].indreloptions = pg_strdup(PQgetvalue(res, j, i_indreloptions));
 			indxinfo[j].indstatcols = pg_strdup(PQgetvalue(res, j, i_indstatcols));
 			indxinfo[j].indstatvals = pg_strdup(PQgetvalue(res, j, i_indstatvals));
-			indxinfo[j].inddependcollnames = pg_strdup(PQgetvalue(res, j, i_inddependcollnames));
-			indxinfo[j].inddependcollversions = pg_strdup(PQgetvalue(res, j, i_inddependcollversions));
 			indxinfo[j].indkeys = (Oid *) pg_malloc(indxinfo[j].indnattrs * sizeof(Oid));
 			parseOidArray(PQgetvalue(res, j, i_indkey),
 						  indxinfo[j].indkeys, indxinfo[j].indnattrs);
@@ -14374,10 +14281,12 @@ dumpCollation(Archive *fout, const CollInfo *collinfo)
 
 	if (fout->remoteVersion >= 100000)
 		appendPQExpBufferStr(query,
-							 "collprovider, ");
+							 "collprovider, "
+							 "collversion, ");
 	else
 		appendPQExpBufferStr(query,
-							 "'c' AS collprovider, ");
+							 "'c' AS collprovider, "
+							 "NULL AS collversion, ");
 
 	if (fout->remoteVersion >= 120000)
 		appendPQExpBufferStr(query,
@@ -14436,6 +14345,24 @@ dumpCollation(Archive *fout, const CollInfo *collinfo)
 		appendStringLiteralAH(q, collcollate, fout);
 		appendPQExpBufferStr(q, ", lc_ctype = ");
 		appendStringLiteralAH(q, collctype, fout);
+	}
+
+	/*
+	 * For binary upgrade, carry over the collation version.  For normal
+	 * dump/restore, omit the version, so that it is computed upon restore.
+	 */
+	if (dopt->binary_upgrade)
+	{
+		int			i_collversion;
+
+		i_collversion = PQfnumber(res, "collversion");
+		if (!PQgetisnull(res, 0, i_collversion))
+		{
+			appendPQExpBufferStr(q, ", version = ");
+			appendStringLiteralAH(q,
+								  PQgetvalue(res, 0, i_collversion),
+								  fout);
+		}
 	}
 
 	appendPQExpBufferStr(q, ");\n");
@@ -17749,6 +17676,33 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 			}
 
 			/*
+			 * Dump per-column compression, if it's been set.
+			 */
+			if (!dopt->no_toast_compression)
+			{
+				const char *cmname;
+
+				switch (tbinfo->attcompression[j])
+				{
+					case 'p':
+						cmname = "pglz";
+						break;
+					case 'l':
+						cmname = "lz4";
+						break;
+					default:
+						cmname = NULL;
+						break;
+				}
+
+				if (cmname != NULL)
+					appendPQExpBuffer(q, "ALTER %sTABLE ONLY %s ALTER COLUMN %s SET COMPRESSION %s;\n",
+									  foreign, qualrelname,
+									  fmtId(tbinfo->attnames[j]),
+									  cmname);
+			}
+
+			/*
 			 * Dump per-column attributes.
 			 */
 			if (tbinfo->attoptions[j][0] != '\0')
@@ -17769,35 +17723,6 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
 								  qualrelname,
 								  fmtId(tbinfo->attnames[j]),
 								  tbinfo->attfdwoptions[j]);
-
-			/*
-			 * Dump per-column compression, if different from default.
-			 */
-			if (!dopt->no_toast_compression)
-			{
-				const char *cmname;
-
-				switch (tbinfo->attcompression[j])
-				{
-					case 'p':
-						cmname = "pglz";
-						break;
-					case 'l':
-						cmname = "lz4";
-						break;
-					default:
-						cmname = NULL;
-						break;
-				}
-
-				if (cmname != NULL &&
-					(fout->default_toast_compression == NULL ||
-					 strcmp(cmname, fout->default_toast_compression) != 0))
-					appendPQExpBuffer(q, "ALTER %sTABLE ONLY %s ALTER COLUMN %s SET COMPRESSION %s;\n",
-									  foreign, qualrelname,
-									  fmtId(tbinfo->attnames[j]),
-									  cmname);
-			}
 		}						/* end loop over columns */
 
 		if (ftoptions)
@@ -18069,8 +17994,7 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 
 	/*
 	 * If there's an associated constraint, don't dump the index per se, but
-	 * do dump any comment, or in binary upgrade mode dependency on a
-	 * collation version for it.  (This is safe because dependency ordering
+	 * do dump any comment for it.  (This is safe because dependency ordering
 	 * will have ensured the constraint is emitted first.)	Note that the
 	 * emitted comment has to be shown as depending on the constraint, not the
 	 * index, in such cases.
@@ -18119,7 +18043,7 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 			if (!parsePGArray(indstatvals, &indstatvalsarray, &nstatvals))
 				fatal("could not parse index statistic values");
 			if (nstatcols != nstatvals)
-				fatal("mismatched number of columns and values for index stats");
+				fatal("mismatched number of columns and values for index statistics");
 
 			for (j = 0; j < nstatcols; j++)
 			{
@@ -18140,10 +18064,6 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 		append_depends_on_extension(fout, q, &indxinfo->dobj,
 									"pg_catalog.pg_class",
 									"INDEX", qqindxname);
-
-		if (dopt->binary_upgrade)
-			appendIndexCollationVersion(q, indxinfo, fout->encoding,
-										dopt->coll_unknown, fout);
 
 		/* If the index defines identity, we need to record that. */
 		if (indxinfo->indisreplident)
@@ -18172,21 +18092,6 @@ dumpIndex(Archive *fout, const IndxInfo *indxinfo)
 			free(indstatcolsarray);
 		if (indstatvalsarray)
 			free(indstatvalsarray);
-	}
-	else if (dopt->binary_upgrade)
-	{
-		appendIndexCollationVersion(q, indxinfo, fout->encoding,
-									dopt->coll_unknown, fout);
-
-		if (indxinfo->dobj.dump & DUMP_COMPONENT_DEFINITION)
-			ArchiveEntry(fout, indxinfo->dobj.catId, indxinfo->dobj.dumpId,
-						 ARCHIVE_OPTS(.tag = indxinfo->dobj.name,
-									  .namespace = tbinfo->dobj.namespace->dobj.name,
-									  .tablespace = indxinfo->tablespace,
-									  .owner = tbinfo->rolname,
-									  .description = "INDEX",
-									  .section = SECTION_POST_DATA,
-									  .createStmt = q->data));
 	}
 
 	/* Dump Index Comments */
@@ -19531,7 +19436,8 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 	 * Note that we create TableDataInfo objects even in schemaOnly mode, ie,
 	 * user data in a configuration table is treated like schema data. This
 	 * seems appropriate since system data in a config table would get
-	 * reloaded by CREATE EXTENSION.
+	 * reloaded by CREATE EXTENSION.  If the extension is not listed in the
+	 * list of extensions to be included, none of its data is dumped.
 	 */
 	for (i = 0; i < numExtensions; i++)
 	{
@@ -19542,6 +19448,15 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 		char	  **extconditionarray = NULL;
 		int			nconfigitems = 0;
 		int			nconditionitems = 0;
+
+		/*
+		 * Check if this extension is listed as to include in the dump.  If
+		 * not, any table data associated with it is discarded.
+		 */
+		if (extension_include_oids.head != NULL &&
+			!simple_oid_list_member(&extension_include_oids,
+									curext->dobj.catId.oid))
+			continue;
 
 		if (strlen(extconfig) != 0 || strlen(extcondition) != 0)
 		{
@@ -20293,88 +20208,6 @@ nonemptyReloptions(const char *reloptions)
 {
 	/* Don't want to print it if it's just "{}" */
 	return (reloptions != NULL && strlen(reloptions) > 2);
-}
-
-/*
- * Generate UPDATE statements to import the collation versions into the new
- * cluster, during a binary upgrade.
- */
-static void
-appendIndexCollationVersion(PQExpBuffer buffer, const IndxInfo *indxinfo, int enc,
-							bool coll_unknown, Archive *fout)
-{
-	char	   *inddependcollnames = indxinfo->inddependcollnames;
-	char	   *inddependcollversions = indxinfo->inddependcollversions;
-	char	  **inddependcollnamesarray;
-	char	  **inddependcollversionsarray;
-	int			ninddependcollnames;
-	int			ninddependcollversions;
-
-	/*
-	 * By default, the new cluster's index will have pg_depends rows with
-	 * current collation versions, meaning that we assume the index isn't
-	 * corrupted if importing from a release that didn't record versions.
-	 * However, if --index-collation-versions-unknown was passed in, then we
-	 * assume such indexes might be corrupted, and clobber versions with
-	 * 'unknown' to trigger version warnings.
-	 */
-	if (coll_unknown)
-	{
-		appendPQExpBuffer(buffer,
-						  "\n-- For binary upgrade, clobber new index's collation versions\n"
-						  "SET allow_system_table_mods = true;\n");
-		appendPQExpBuffer(buffer,
-						  "UPDATE pg_catalog.pg_depend SET refobjversion = 'unknown' WHERE objid = '%u'::pg_catalog.oid AND refclassid = 'pg_catalog.pg_collation'::regclass AND refobjversion IS NOT NULL;\n",
-						  indxinfo->dobj.catId.oid);
-		appendPQExpBuffer(buffer, "RESET allow_system_table_mods;\n");
-	}
-
-	/* Restore the versions that were recorded by the old cluster (if any). */
-	if (strlen(inddependcollnames) == 0 && strlen(inddependcollversions) == 0)
-	{
-		ninddependcollnames = ninddependcollversions = 0;
-		inddependcollnamesarray = inddependcollversionsarray = NULL;
-	}
-	else
-	{
-		if (!parsePGArray(inddependcollnames,
-						  &inddependcollnamesarray,
-						  &ninddependcollnames))
-			fatal("could not parse index collation name array");
-		if (!parsePGArray(inddependcollversions,
-						  &inddependcollversionsarray,
-						  &ninddependcollversions))
-			fatal("could not parse index collation version array");
-	}
-
-	if (ninddependcollnames != ninddependcollversions)
-		fatal("mismatched number of collation names and versions for index");
-
-	if (ninddependcollnames > 0)
-		appendPQExpBufferStr(buffer,
-							 "\n-- For binary upgrade, restore old index's collation versions\n"
-							 "SET allow_system_table_mods = true;\n");
-	for (int i = 0; i < ninddependcollnames; i++)
-	{
-		/*
-		 * Import refobjversion from the old cluster, being careful to resolve
-		 * the collation OID by name in the new cluster.
-		 */
-		appendPQExpBuffer(buffer,
-						  "UPDATE pg_catalog.pg_depend SET refobjversion = %s WHERE objid = '%u'::pg_catalog.oid AND refclassid = 'pg_catalog.pg_collation'::regclass AND refobjversion IS NOT NULL AND refobjid = ",
-						  inddependcollversionsarray[i],
-						  indxinfo->dobj.catId.oid);
-		appendStringLiteralAH(buffer, inddependcollnamesarray[i], fout);
-		appendPQExpBuffer(buffer, "::regcollation;\n");
-	}
-
-	if (ninddependcollnames > 0)
-		appendPQExpBufferStr(buffer, "RESET allow_system_table_mods;\n");
-
-	if (inddependcollnamesarray)
-		free(inddependcollnamesarray);
-	if (inddependcollversionsarray)
-		free(inddependcollversionsarray);
 }
 
 /*

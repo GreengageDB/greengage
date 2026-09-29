@@ -950,8 +950,8 @@ initialize_SSL(PGconn *conn)
 
 		if ((cvstore = SSL_CTX_get_cert_store(SSL_context)) != NULL)
 		{
-			char   *fname = NULL;
-			char   *dname = NULL;
+			char	   *fname = NULL;
+			char	   *dname = NULL;
 
 			if (conn->sslcrl && strlen(conn->sslcrl) > 0)
 				fname = conn->sslcrl;
@@ -1094,20 +1094,24 @@ initialize_SSL(PGconn *conn)
 	 * Per RFC 6066, do not set it if the host is a literal IP address (IPv4
 	 * or IPv6).
 	 */
-	if (conn->sslsni && conn->sslsni[0] &&
-		!(strspn(conn->pghost, "0123456789.") == strlen(conn->pghost) ||
-		  strchr(conn->pghost, ':')))
+	if (conn->sslsni && conn->sslsni[0])
 	{
-		if (SSL_set_tlsext_host_name(conn->ssl, conn->pghost) != 1)
-		{
-			char	   *err = SSLerrmessage(ERR_get_error());
+		const char *host = conn->connhost[conn->whichhost].host;
 
-			appendPQExpBuffer(&conn->errorMessage,
-							  libpq_gettext("could not set SSL Server Name Indication (SNI): %s\n"),
-							  err);
-			SSLerrfree(err);
-			SSL_CTX_free(SSL_context);
-			return -1;
+		if (host && host[0] &&
+			!(strspn(host, "0123456789.") == strlen(host) ||
+			  strchr(host, ':')))
+		{
+			if (SSL_set_tlsext_host_name(conn->ssl, host) != 1)
+			{
+				char	   *err = SSLerrmessage(ERR_get_error());
+
+				appendPQExpBuffer(&conn->errorMessage,
+								  libpq_gettext("could not set SSL Server Name Indication (SNI): %s\n"),
+								  err);
+				SSLerrfree(err);
+				return -1;
+			}
 		}
 	}
 
@@ -1474,8 +1478,8 @@ pgtls_close(PGconn *conn)
 	{
 		/*
 		 * In the non-SSL case, just remove the crypto callbacks if the
-		 * connection has then loaded.  This code path has no dependency
-		 * on any pending SSL calls.
+		 * connection has then loaded.  This code path has no dependency on
+		 * any pending SSL calls.
 		 */
 		if (conn->crypto_loaded)
 			destroy_needed = true;

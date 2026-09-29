@@ -127,7 +127,7 @@ ProcGlobalShmemSize(void)
 {
 	Size		size = 0;
 	Size		TotalProcs =
-		add_size(MaxBackends, add_size(NUM_AUXILIARY_PROCS, max_prepared_xacts));
+	add_size(MaxBackends, add_size(NUM_AUXILIARY_PROCS, max_prepared_xacts));
 
 	/* ProcGlobal */
 	size = add_size(size, sizeof(PROC_HDR));
@@ -1460,8 +1460,8 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 	/*
 	 * Set timer so we can wake up after awhile and check for a deadlock. If a
 	 * deadlock is detected, the handler sets MyProc->waitStatus =
-	 * PROC_WAIT_STATUS_ERROR, allowing us to know that we must report failure rather
-	 * than success.
+	 * PROC_WAIT_STATUS_ERROR, allowing us to know that we must report failure
+	 * rather than success.
 	 *
 	 * By delaying the check until we've waited for a bit, we can avoid
 	 * running the rather expensive deadlock-check code in most cases.
@@ -1586,9 +1586,9 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 		}
 
 		/*
-		 * waitStatus could change from PROC_WAIT_STATUS_WAITING to something else
-		 * asynchronously.  Read it just once per loop to prevent surprising
-		 * behavior (such as missing log messages).
+		 * waitStatus could change from PROC_WAIT_STATUS_WAITING to something
+		 * else asynchronously.  Read it just once per loop to prevent
+		 * surprising behavior (such as missing log messages).
 		 */
 		myWaitStatus = *((volatile ProcWaitStatus *) &MyProc->waitStatus);
 
@@ -1644,7 +1644,7 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 
 					ereport(DEBUG1,
 							(errmsg_internal("sending cancel to blocking autovacuum PID %d",
-									pid),
+											 pid),
 							 errdetail_log("%s", logbuf.data)));
 
 					pfree(locktagbuf.data);
@@ -1802,11 +1802,12 @@ ProcSleep(LOCALLOCK *locallock, LockMethod lockMethodTable)
 
 				/*
 				 * Currently, the deadlock checker always kicks its own
-				 * process, which means that we'll only see PROC_WAIT_STATUS_ERROR when
-				 * deadlock_state == DS_HARD_DEADLOCK, and there's no need to
-				 * print redundant messages.  But for completeness and
-				 * future-proofing, print a message if it looks like someone
-				 * else kicked us off the lock.
+				 * process, which means that we'll only see
+				 * PROC_WAIT_STATUS_ERROR when deadlock_state ==
+				 * DS_HARD_DEADLOCK, and there's no need to print redundant
+				 * messages.  But for completeness and future-proofing, print
+				 * a message if it looks like someone else kicked us off the
+				 * lock.
 				 */
 				if (deadlock_state != DS_HARD_DEADLOCK)
 					ereport(LOG,
@@ -2062,9 +2063,9 @@ CheckDeadLock(void)
 		 * preserve the flexibility to kill some other transaction than the
 		 * one detecting the deadlock.)
 		 *
-		 * RemoveFromWaitQueue sets MyProc->waitStatus to PROC_WAIT_STATUS_ERROR, so
-		 * ProcSleep will report an error after we return from the signal
-		 * handler.
+		 * RemoveFromWaitQueue sets MyProc->waitStatus to
+		 * PROC_WAIT_STATUS_ERROR, so ProcSleep will report an error after we
+		 * return from the signal handler.
 		 */
 		Assert(MyProc->waitLock != NULL);
 		if (Gp_role == GP_ROLE_DISPATCH && IsResQueueEnabled() &&

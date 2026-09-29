@@ -28,6 +28,7 @@
 
 #include "access/sysattr.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -55,6 +56,7 @@
 #include "utils/guc.h"
 #include "utils/queryjumble.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "cdb/cdbhash.h"
 #include "cdb/cdbvars.h"
@@ -166,7 +168,7 @@ parse_analyze(RawStmt *parseTree, const char *sourceText,
 
 	query = transformTopLevelStmt(pstate, parseTree);
 
-	if (compute_query_id)
+	if (IsQueryIdEnabled())
 		jstate = JumbleQuery(query, sourceText);
 
 	if (post_parse_analyze_hook)
@@ -174,7 +176,7 @@ parse_analyze(RawStmt *parseTree, const char *sourceText,
 
 	free_parsestate(pstate);
 
-	pgstat_report_queryid(query->queryId, false);
+	pgstat_report_query_id(query->queryId, false);
 
 	return query;
 }
@@ -205,7 +207,7 @@ parse_analyze_varparams(RawStmt *parseTree, const char *sourceText,
 	/* make sure all is well with parameter types */
 	check_variable_parameters(pstate, query);
 
-	if (compute_query_id)
+	if (IsQueryIdEnabled())
 		jstate = JumbleQuery(query, sourceText);
 
 	if (post_parse_analyze_hook)
@@ -213,7 +215,7 @@ parse_analyze_varparams(RawStmt *parseTree, const char *sourceText,
 
 	free_parsestate(pstate);
 
-	pgstat_report_queryid(query->queryId, false);
+	pgstat_report_query_id(query->queryId, false);
 
 	return query;
 }
@@ -983,6 +985,18 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 										   attr_num - FirstLowInvalidHeapAttributeNumber);
 	}
 
+	/*
+	 * If we have any clauses yet to process, set the query namespace to
+	 * contain only the target relation, removing any entries added in a
+	 * sub-SELECT or VALUES list.
+	 */
+	if (stmt->onConflictClause || stmt->returningList)
+	{
+		pstate->p_namespace = NIL;
+		addNSItemToQuery(pstate, pstate->p_target_nsitem,
+						 false, true, true);
+	}
+
 	/* Process ON CONFLICT, if any. */
 	if (stmt->onConflictClause)
 		qry->onConflict = transformOnConflictClause(pstate,
@@ -1000,20 +1014,10 @@ transformInsertStmt(ParseState *pstate, InsertStmt *stmt)
 													qry->onConflict->onConflictSet,
 													qry->onConflict->onConflictWhere);
 
-	/*
-	 * If we have a RETURNING clause, we need to add the target relation to
-	 * the query namespace before processing it, so that Var references in
-	 * RETURNING will work.  Also, remove any namespace entries added in a
-	 * sub-SELECT or VALUES list.
-	 */
+	/* Process RETURNING, if any. */
 	if (stmt->returningList)
-	{
-		pstate->p_namespace = NIL;
-		addNSItemToQuery(pstate, pstate->p_target_nsitem,
-						 false, true, true);
 		qry->returningList = transformReturningList(pstate,
 													stmt->returningList);
-	}
 
 	/* done building the range table and jointree */
 	qry->rtable = pstate->p_rtable;
@@ -1141,6 +1145,7 @@ static OnConflictExpr *
 transformOnConflictClause(ParseState *pstate,
 						  OnConflictClause *onConflictClause)
 {
+	ParseNamespaceItem *exclNSItem = NULL;
 	List	   *arbiterElems;
 	Node	   *arbiterWhere;
 	Oid			arbiterConstraint;
@@ -1150,30 +1155,18 @@ transformOnConflictClause(ParseState *pstate,
 	List	   *exclRelTlist = NIL;
 	OnConflictExpr *result;
 
-	/* Process the arbiter clause, ON CONFLICT ON (...) */
-	transformOnConflictArbiter(pstate, onConflictClause, &arbiterElems,
-							   &arbiterWhere, &arbiterConstraint);
-
-	/* Process DO UPDATE */
+	/*
+	 * If this is ON CONFLICT ... UPDATE, first create the range table entry
+	 * for the EXCLUDED pseudo relation, so that that will be present while
+	 * processing arbiter expressions.  (You can't actually reference it from
+	 * there, but this provides a useful error message if you try.)
+	 */
 	if (onConflictClause->action == ONCONFLICT_UPDATE)
 	{
 		Relation	targetrel = pstate->p_target_relation;
 		RangeTblEntry    *rte = pstate->p_target_nsitem->p_rte; /* GPDB */
-		ParseNamespaceItem *exclNSItem;
 		RangeTblEntry *exclRte;
 
-		/*
-		 * All INSERT expressions have been parsed, get ready for potentially
-		 * existing SET statements that need to be processed like an UPDATE.
-		 */
-		pstate->p_is_insert = false;
-
-		/*
-		 * Add range table entry for the EXCLUDED pseudo relation.  relkind is
-		 * set to composite to signal that we're not dealing with an actual
-		 * relation, and no permission checks are required on it.  (We'll
-		 * check the actual target relation, instead.)
-		 */
 		/*
 		 * GPDB spec. The lockmode of actual target relation might be upgraded.
 		 * The pseudo one should follow it to avoid involving another lockmode
@@ -1187,6 +1180,11 @@ transformOnConflictClause(ParseState *pstate,
 		exclRte = exclNSItem->p_rte;
 		exclRelIndex = exclNSItem->p_rtindex;
 
+		/*
+		 * relkind is set to composite to signal that we're not dealing with
+		 * an actual relation, and no permission checks are required on it.
+		 * (We'll check the actual target relation, instead.)
+		 */
 		exclRte->relkind = RELKIND_COMPOSITE_TYPE;
 		exclRte->requiredPerms = 0;
 		/* other permissions fields in exclRte are already empty */
@@ -1194,14 +1192,27 @@ transformOnConflictClause(ParseState *pstate,
 		/* Create EXCLUDED rel's targetlist for use by EXPLAIN */
 		exclRelTlist = BuildOnConflictExcludedTargetlist(targetrel,
 														 exclRelIndex);
+	}
+
+	/* Process the arbiter clause, ON CONFLICT ON (...) */
+	transformOnConflictArbiter(pstate, onConflictClause, &arbiterElems,
+							   &arbiterWhere, &arbiterConstraint);
+
+	/* Process DO UPDATE */
+	if (onConflictClause->action == ONCONFLICT_UPDATE)
+	{
+		/*
+		 * Expressions in the UPDATE targetlist need to be handled like UPDATE
+		 * not INSERT.  We don't need to save/restore this because all INSERT
+		 * expressions have been parsed already.
+		 */
+		pstate->p_is_insert = false;
 
 		/*
-		 * Add EXCLUDED and the target RTE to the namespace, so that they can
-		 * be used in the UPDATE subexpressions.
+		 * Add the EXCLUDED pseudo relation to the query namespace, making it
+		 * available in the UPDATE subexpressions.
 		 */
 		addNSItemToQuery(pstate, exclNSItem, false, true, true);
-		addNSItemToQuery(pstate, pstate->p_target_nsitem,
-						 false, true, true);
 
 		/*
 		 * Now transform the UPDATE subexpressions.
@@ -1212,6 +1223,14 @@ transformOnConflictClause(ParseState *pstate,
 		onConflictWhere = transformWhereClause(pstate,
 											   onConflictClause->whereClause,
 											   EXPR_KIND_WHERE, "WHERE");
+
+		/*
+		 * Remove the EXCLUDED pseudo relation from the query namespace, since
+		 * it's not supposed to be available in RETURNING.  (Maybe someday we
+		 * could allow that, and drop this step.)
+		 */
+		Assert((ParseNamespaceItem *) llast(pstate->p_namespace) == exclNSItem);
+		pstate->p_namespace = list_delete_last(pstate->p_namespace);
 	}
 
 	/* Finally, build ON CONFLICT DO [NOTHING | UPDATE] expression */
@@ -3206,7 +3225,7 @@ transformDeclareCursorStmt(ParseState *pstate, DeclareCursorStmt *stmt)
 		(stmt->options & CURSOR_OPT_NO_SCROLL))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_CURSOR_DEFINITION),
-				 /* translator: %s is a SQL keyword */
+		/* translator: %s is a SQL keyword */
 				 errmsg("cannot specify both %s and %s",
 						"SCROLL", "NO SCROLL")));
 
@@ -3214,7 +3233,7 @@ transformDeclareCursorStmt(ParseState *pstate, DeclareCursorStmt *stmt)
 		(stmt->options & CURSOR_OPT_INSENSITIVE))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_CURSOR_DEFINITION),
-				 /* translator: %s is a SQL keyword */
+		/* translator: %s is a SQL keyword */
 				 errmsg("cannot specify both %s and %s",
 						"ASENSITIVE", "INSENSITIVE")));
 
@@ -3410,8 +3429,6 @@ transformCreateTableAsStmt(ParseState *pstate, CreateTableAsStmt *stmt)
 
 /*
  * transform a CallStmt
- *
- * We need to do parse analysis on the procedure call and its arguments.
  */
 static Query *
 transformCallStmt(ParseState *pstate, CallStmt *stmt)
@@ -3419,8 +3436,17 @@ transformCallStmt(ParseState *pstate, CallStmt *stmt)
 	List	   *targs;
 	ListCell   *lc;
 	Node	   *node;
+	FuncExpr   *fexpr;
+	HeapTuple	proctup;
+	Datum		proargmodes;
+	bool		isNull;
+	List	   *outargs = NIL;
 	Query	   *result;
 
+	/*
+	 * First, do standard parse analysis on the procedure call and its
+	 * arguments, allowing us to identify the called procedure.
+	 */
 	targs = NIL;
 	foreach(lc, stmt->funccall->args)
 	{
@@ -3439,8 +3465,85 @@ transformCallStmt(ParseState *pstate, CallStmt *stmt)
 
 	assign_expr_collations(pstate, node);
 
-	stmt->funcexpr = castNode(FuncExpr, node);
+	fexpr = castNode(FuncExpr, node);
 
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(fexpr->funcid));
+	if (!HeapTupleIsValid(proctup))
+		elog(ERROR, "cache lookup failed for function %u", fexpr->funcid);
+
+	/*
+	 * Expand the argument list to deal with named-argument notation and
+	 * default arguments.  For ordinary FuncExprs this'd be done during
+	 * planning, but a CallStmt doesn't go through planning, and there seems
+	 * no good reason not to do it here.
+	 */
+	fexpr->args = expand_function_arguments(fexpr->args,
+											true,
+											fexpr->funcresulttype,
+											proctup);
+
+	/* Fetch proargmodes; if it's null, there are no output args */
+	proargmodes = SysCacheGetAttr(PROCOID, proctup,
+								  Anum_pg_proc_proargmodes,
+								  &isNull);
+	if (!isNull)
+	{
+		/*
+		 * Split the list into input arguments in fexpr->args and output
+		 * arguments in stmt->outargs.  INOUT arguments appear in both lists.
+		 */
+		ArrayType  *arr;
+		int			numargs;
+		char	   *argmodes;
+		List	   *inargs;
+		int			i;
+
+		arr = DatumGetArrayTypeP(proargmodes);	/* ensure not toasted */
+		numargs = list_length(fexpr->args);
+		if (ARR_NDIM(arr) != 1 ||
+			ARR_DIMS(arr)[0] != numargs ||
+			ARR_HASNULL(arr) ||
+			ARR_ELEMTYPE(arr) != CHAROID)
+			elog(ERROR, "proargmodes is not a 1-D char array of length %d or it contains nulls",
+				 numargs);
+		argmodes = (char *) ARR_DATA_PTR(arr);
+
+		inargs = NIL;
+		i = 0;
+		foreach(lc, fexpr->args)
+		{
+			Node	   *n = lfirst(lc);
+
+			switch (argmodes[i])
+			{
+				case PROARGMODE_IN:
+				case PROARGMODE_VARIADIC:
+					inargs = lappend(inargs, n);
+					break;
+				case PROARGMODE_OUT:
+					outargs = lappend(outargs, n);
+					break;
+				case PROARGMODE_INOUT:
+					inargs = lappend(inargs, n);
+					outargs = lappend(outargs, copyObject(n));
+					break;
+				default:
+					/* note we don't support PROARGMODE_TABLE */
+					elog(ERROR, "invalid argmode %c for procedure",
+						 argmodes[i]);
+					break;
+			}
+			i++;
+		}
+		fexpr->args = inargs;
+	}
+
+	stmt->funcexpr = fexpr;
+	stmt->outargs = outargs;
+
+	ReleaseSysCache(proctup);
+
+	/* represent the command as a utility Query */
 	result = makeNode(Query);
 	result->commandType = CMD_UTILITY;
 	result->utilityStmt = (Node *) stmt;
@@ -3496,7 +3599,7 @@ CheckSelectLocking(Query *qry, LockClauseStrength strength)
 		  translator: %s is a SQL row locking clause such as FOR UPDATE */
 				 errmsg("%s is not allowed with DISTINCT clause",
 						LCS_asString(strength))));
-	if (qry->groupClause != NIL)
+	if (qry->groupClause != NIL || qry->groupingSets != NIL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		/*------
