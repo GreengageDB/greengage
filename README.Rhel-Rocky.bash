@@ -64,6 +64,9 @@ dnf -y install \
     python3 \
     python3-devel \
     python3-pip \
+    python3-psutil \
+    python3-pyyaml \
+    python3-psycopg2 \
     python3-setuptools \
     readline-devel \
     rpm-build \
@@ -78,9 +81,6 @@ dnf -y install \
     wget \
     xerces-c-devel \
     zlib-devel
-
-python3 -m pip install --no-cache-dir --upgrade pip
-python3 -m pip install --no-cache-dir future==1.0.0
 
 # Build zstd with static library (not available as a package on Rocky)
 curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
@@ -109,7 +109,7 @@ if [[ ! -f /.dockerenv && -z "${IS_DOCKER_BUILD:-}" ]]; then
     systemctl disable --now firewalld.service || true
 
     # Configure kernel parameters
-    cat >> /etc/sysctl.d/10-gpdb.conf << EOF
+    cat > /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536
 kernel.msgmni = 2048
@@ -169,7 +169,7 @@ EOF
     sysctl -p /etc/sysctl.d/10-gpdb.conf
 
     # Configure system limits
-    cat >> /etc/security/limits.d/10-nproc.conf << EOF
+    cat > /etc/security/limits.d/10-nproc.conf << EOF
 * soft nofile 524288
 * hard nofile 524288
 * soft nproc 131072

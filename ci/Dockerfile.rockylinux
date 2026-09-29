@@ -8,9 +8,6 @@ FROM rockylinux:${OS_VERSION} AS base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 WORKDIR /home/gpadmin
 
-ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
-    SKIP_UNITTESTS=
-
 COPY README.Rhel-Rocky.bash ./
 RUN set -eux; \
     IS_DOCKER_BUILD=true ./README.Rhel-Rocky.bash; \
@@ -24,6 +21,8 @@ RUN set -eux; \
     mkdir -p /run/sshd; \
 # Alter precedence in favor of IPv4 during resolving
     echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf; \
+# Upgrade pip to support current package versions
+    python3 -m pip install --no-cache-dir --upgrade pip; \
 # Install Python packages
     python3 -m pip install --no-cache-dir \
         allure-behave==2.4.0 \
@@ -32,12 +31,12 @@ RUN set -eux; \
         gsutil==5.37 \
         mock==5.0.0 \
         protobuf==3.20.0 \
-        psutil==7.2.2 \
-        pyyaml==6.0.3 \
-        psycopg2-binary==2.9.12 \
         pytest==8.4.2; \
 # Cleanup to reduce image size
     rm -rf /tmp/* /var/tmp/* /var/cache/man/
+
+ARG CONFIGURE_FLAGS="--enable-debug-extensions --with-gssapi --enable-cassert --enable-debug --enable-depend" \
+    SKIP_UNITTESTS=
 
 ENV LANG=en_US.UTF-8 \
     TARGET_OS=rockylinux \
