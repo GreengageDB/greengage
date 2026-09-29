@@ -36,6 +36,7 @@
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 
+
 /*
  * Convert a "text" filename argument to C string, and check it's allowable.
  *
@@ -94,6 +95,7 @@ convert_and_check_filename(text *arg)
 
 	return filename;
 }
+
 
 /*
  * Read a section of a file, returning it as bytea

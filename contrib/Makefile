@@ -4,12 +4,13 @@ subdir = contrib
 top_builddir = ..
 include $(top_builddir)/src/Makefile.global
 
-# Greenplum specific changes to the targetlist:
-# tsearch2 and postgres_fdw are currently disabled due to test failures.
+# Greengage specific changes to the targetlist:
+# tsearch2 is currently disabled due to test failures.
 # cube and the related earthdistance are disabled since GPDB define CUBE
 # as a keyword. lo is disabled since large objects aren't supported.
-# adminpack is disabled since the functionality has been imported into
-# GPDB.
+# adminpack is disabled because it was only used to support pgAdmin III,
+# which in turn was declared EOL. Support for adminpack is removed 
+# in Postgres and will be removed from Greenage.
 
 SUBDIRS = \
 		amcheck		\
