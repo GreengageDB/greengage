@@ -10,7 +10,7 @@ include $(top_builddir)/src/Makefile.global
 # as a keyword. lo is disabled since large objects aren't supported.
 # adminpack is disabled because it was only used to support pgAdmin III,
 # which in turn was declared EOL. Support for adminpack is removed 
-# in Postgres and will be removed from Greenage.
+# in Postgres and will be removed from Greengage.
 
 SUBDIRS = \
 		amcheck		\
