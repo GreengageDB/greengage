@@ -398,8 +398,12 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 	}
 }
 
+/*
+ * hasExtensionAncestorIndex -
+ *	 Is idx or one of its ancestors an undumped extension table's index?
+ */
 static bool
-hasExtensionAncestorIndex(IndxInfo *idx)
+hasExtensionAncestorIndex(const IndxInfo *idx)
 {
 	while (idx != NULL)
 	{
@@ -448,6 +452,9 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			 * If an ancestor index belongs to an extension, ATTACH PARTITION
 			 * will auto-create/attach a matching child index, so skip
 			 * dumping this one and its constraint to avoid a duplicate.
+			 * This loses CLUSTER ON, SET STATISTICS, REPLICA IDENTITY, and a
+			 * custom name, tablespace or reloptions.  Comments are kept under
+			 * the old name, so they fail to restore if the index was renamed.
 			 */
 			if (hasExtensionAncestorIndex(parentidx))
 			{
