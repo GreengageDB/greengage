@@ -1648,22 +1648,6 @@ ReadNext:
 
 		slotAocs->current_scan = (void*)scan;
 
-		/*
-		 * Process all missing attrs here, as they do not require actual
-		 * reading of relation files.
-		 */
-		for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
-		{
-			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
-			if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
-						attno,
-						curseginfo->segno,
-						scan->columnScanInfo.attnum_to_rownum)))
-			{
-				d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-				slotAocs->tts_is_valid[attno] = true;
-			}
-		}
 		return true;
 	}
 
