@@ -462,7 +462,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
     <dxl:Plan Id="0" SpaceSize="48">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1231.893474" Rows="5.000000" Width="40"/>
+          <dxl:Cost StartupCost="0" TotalCost="1225.591933" Rows="1.000000" Width="40"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -500,7 +500,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1231.892728" Rows="5.000000" Width="40"/>
+            <dxl:Cost StartupCost="0" TotalCost="1225.591784" Rows="1.000000" Width="40"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -540,7 +540,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
           </dxl:JoinFilter>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="840.416884" Rows="4.000000" Width="32"/>
+              <dxl:Cost StartupCost="0" TotalCost="834.296174" Rows="1.000000" Width="32"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -561,11 +561,11 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
               <dxl:ProjElem ColId="19" Alias="b">
                 <dxl:Ident ColId="19" ColName="b" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="32" Alias="a">
-                <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
+              <dxl:ProjElem ColId="27" Alias="a">
+                <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="33" Alias="b">
-                <dxl:Ident ColId="33" ColName="b" TypeMdid="0.23.1.0"/>
+              <dxl:ProjElem ColId="28" Alias="b">
+                <dxl:Ident ColId="28" ColName="b" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
             </dxl:ProjList>
             <dxl:Filter/>
@@ -574,7 +574,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
             </dxl:JoinFilter>
             <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="449.000848" Rows="3.000000" Width="24"/>
+                <dxl:Cost StartupCost="0" TotalCost="443.000514" Rows="1.000000" Width="24"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -602,7 +602,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
               </dxl:JoinFilter>
               <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="437.000259" Rows="2.000000" Width="16"/>
+                  <dxl:Cost StartupCost="0" TotalCost="437.000203" Rows="1.000000" Width="16"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="0" Alias="a">
@@ -687,7 +687,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
               </dxl:NestedLoopJoin>
               <dxl:IndexScan IndexScanDirection="Forward">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="12.000317" Rows="0.500000" Width="8"/>
+                  <dxl:Cost StartupCost="0" TotalCost="6.000217" Rows="1.000000" Width="8"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="18" Alias="a">
@@ -728,83 +728,83 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
             </dxl:NestedLoopJoin>
             <dxl:BitmapTableScan>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="391.415544" Rows="0.333333" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="391.295528" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
-                <dxl:ProjElem ColId="32" Alias="a">
-                  <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
+                <dxl:ProjElem ColId="27" Alias="a">
+                  <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
                 </dxl:ProjElem>
-                <dxl:ProjElem ColId="33" Alias="b">
-                  <dxl:Ident ColId="33" ColName="b" TypeMdid="0.23.1.0"/>
+                <dxl:ProjElem ColId="28" Alias="b">
+                  <dxl:Ident ColId="28" ColName="b" TypeMdid="0.23.1.0"/>
                 </dxl:ProjElem>
               </dxl:ProjList>
-              <dxl:Filter>
-                <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.97.1.0">
-                  <dxl:Ident ColId="33" ColName="b" TypeMdid="0.23.1.0"/>
-                  <dxl:ConstValue TypeMdid="0.23.1.0" Value="3"/>
-                </dxl:Comparison>
-              </dxl:Filter>
+              <dxl:Filter/>
               <dxl:RecheckCond>
                 <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.96.1.0">
-                  <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
+                  <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
                   <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
                 </dxl:Comparison>
               </dxl:RecheckCond>
               <dxl:BitmapIndexProbe>
                 <dxl:IndexCondList>
                   <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.96.1.0">
-                    <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
+                    <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
                     <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
                   </dxl:Comparison>
                 </dxl:IndexCondList>
-                <dxl:IndexDescriptor Mdid="0.195652.1.0" IndexName="idx_t4_a"/>
+                <dxl:IndexDescriptor Mdid="0.195690.1.0" IndexName="idx_t3_a"/>
               </dxl:BitmapIndexProbe>
-              <dxl:TableDescriptor Mdid="6.195615.1.0" TableName="t4">
+              <dxl:TableDescriptor Mdid="6.195670.1.0" TableName="t3">
                 <dxl:Columns>
-                  <dxl:Column ColId="32" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
-                  <dxl:Column ColId="33" Attno="2" ColName="b" TypeMdid="0.23.1.0" ColWidth="4"/>
-                  <dxl:Column ColId="34" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-                  <dxl:Column ColId="35" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-                  <dxl:Column ColId="36" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+                  <dxl:Column ColId="27" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
+                  <dxl:Column ColId="28" Attno="2" ColName="b" TypeMdid="0.23.1.0" ColWidth="4"/>
+                  <dxl:Column ColId="29" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+                  <dxl:Column ColId="30" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+                  <dxl:Column ColId="31" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
                 </dxl:Columns>
               </dxl:TableDescriptor>
             </dxl:BitmapTableScan>
           </dxl:NestedLoopJoin>
           <dxl:BitmapTableScan>
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="391.475528" Rows="0.250000" Width="8"/>
+              <dxl:Cost StartupCost="0" TotalCost="391.295544" Rows="1.000000" Width="8"/>
             </dxl:Properties>
             <dxl:ProjList>
-              <dxl:ProjElem ColId="27" Alias="a">
-                <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
+              <dxl:ProjElem ColId="32" Alias="a">
+                <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
-              <dxl:ProjElem ColId="28" Alias="b">
-                <dxl:Ident ColId="28" ColName="b" TypeMdid="0.23.1.0"/>
+              <dxl:ProjElem ColId="33" Alias="b">
+                <dxl:Ident ColId="33" ColName="b" TypeMdid="0.23.1.0"/>
               </dxl:ProjElem>
             </dxl:ProjList>
-            <dxl:Filter/>
+            <dxl:Filter>
+              <dxl:Comparison ComparisonOperator="&lt;" OperatorMdid="0.97.1.0">
+                <dxl:Ident ColId="33" ColName="b" TypeMdid="0.23.1.0"/>
+                <dxl:ConstValue TypeMdid="0.23.1.0" Value="3"/>
+              </dxl:Comparison>
+            </dxl:Filter>
             <dxl:RecheckCond>
               <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.96.1.0">
-                <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
+                <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
                 <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
               </dxl:Comparison>
             </dxl:RecheckCond>
             <dxl:BitmapIndexProbe>
               <dxl:IndexCondList>
                 <dxl:Comparison ComparisonOperator="=" OperatorMdid="0.96.1.0">
-                  <dxl:Ident ColId="27" ColName="a" TypeMdid="0.23.1.0"/>
+                  <dxl:Ident ColId="32" ColName="a" TypeMdid="0.23.1.0"/>
                   <dxl:Ident ColId="0" ColName="a" TypeMdid="0.23.1.0"/>
                 </dxl:Comparison>
               </dxl:IndexCondList>
-              <dxl:IndexDescriptor Mdid="0.195690.1.0" IndexName="idx_t3_a"/>
+              <dxl:IndexDescriptor Mdid="0.195652.1.0" IndexName="idx_t4_a"/>
             </dxl:BitmapIndexProbe>
-            <dxl:TableDescriptor Mdid="6.195670.1.0" TableName="t3">
+            <dxl:TableDescriptor Mdid="6.195615.1.0" TableName="t4">
               <dxl:Columns>
-                <dxl:Column ColId="27" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
-                <dxl:Column ColId="28" Attno="2" ColName="b" TypeMdid="0.23.1.0" ColWidth="4"/>
-                <dxl:Column ColId="29" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
-                <dxl:Column ColId="30" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
-                <dxl:Column ColId="31" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
+                <dxl:Column ColId="32" Attno="1" ColName="a" TypeMdid="0.23.1.0" ColWidth="4"/>
+                <dxl:Column ColId="33" Attno="2" ColName="b" TypeMdid="0.23.1.0" ColWidth="4"/>
+                <dxl:Column ColId="34" Attno="-1" ColName="ctid" TypeMdid="0.27.1.0" ColWidth="6"/>
+                <dxl:Column ColId="35" Attno="-7" ColName="tableoid" TypeMdid="0.26.1.0" ColWidth="4"/>
+                <dxl:Column ColId="36" Attno="-8" ColName="gp_segment_id" TypeMdid="0.23.1.0" ColWidth="4"/>
               </dxl:Columns>
             </dxl:TableDescriptor>
           </dxl:BitmapTableScan>

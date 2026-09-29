@@ -95,9 +95,7 @@ CXformDifferenceAll2LeftAntiSemiJoin::Transform(CXformContext *pxfctxt,
 
 	// assemble the new left anti-semi join logical operator
 	CExpression *pexprLASJ = GPOS_NEW(mp)
-		CExpression(mp,
-					GPOS_NEW(mp) CLogicalLeftAntiSemiJoin(
-						mp, CXform::ExfDifferenceAll2LeftAntiSemiJoin),
+		CExpression(mp, GPOS_NEW(mp) CLogicalLeftAntiSemiJoin(mp),
 					pexprLeftWindow, pexprRightWindow, pexprScCond);
 
 	// clean up

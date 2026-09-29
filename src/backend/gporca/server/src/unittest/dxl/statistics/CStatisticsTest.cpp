@@ -517,6 +517,13 @@ CStatisticsTest::EresUnittest_CStatisticsBasic()
 	GPOS_TRACE(GPOS_WSZ_LIT("pstats5 = stats LASJ pstats2 on (col2 = col10)"));
 	CCardinalityTestUtils::PrintStats(mp, pstats5);
 
+	CStatistics *empty_outer_stats = GPOS_NEW(mp)
+		CStatistics(mp, stats->CopyHistograms(mp), stats->CopyWidths(mp),
+					CStatistics::MinRows, true);
+	IStatistics *empty_lasj_stats = empty_outer_stats->CalcLASJoinStats(
+		mp, pstats2, join_preds_stats, true);
+	GPOS_UNITTEST_ASSERT(empty_lasj_stats->IsEmpty());
+
 	// union all
 	ULongPtrArray *colids = GPOS_NEW(mp) ULongPtrArray(mp);
 	colids->Append(GPOS_NEW(mp) ULONG(1));
@@ -543,6 +550,8 @@ CStatisticsTest::EresUnittest_CStatisticsBasic()
 	pstats3->Release();
 	pstats4->Release();
 	pstats5->Release();
+	empty_outer_stats->Release();
+	empty_lasj_stats->Release();
 	pstats6->Release();
 	pstats7->Release();
 	pred_stats->Release();
