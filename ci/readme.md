@@ -7,6 +7,13 @@ for Ubuntu:
 ```bash
 docker build -t gpdb7_u22:latest -f ci/Dockerfile.ubuntu .
 ```
+
+To build an image based on Ubuntu 24.04, specify the version in build args:
+
+```bash
+docker build -t gpdb7_u24:latest --build-arg OS_VERSION=24.04 -f ci/Dockerfile.ubuntu .
+```
+
 for Rocky Linux:
 ```bash
 docker build -t gpdb7_regress:latest -f ci/Dockerfile .
