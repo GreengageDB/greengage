@@ -6854,8 +6854,7 @@ PARTITION BY RANGE (year)
 ( START (2006) END (2010) EVERY (1),
 DEFAULT PARTITION extra);
 -- create partition with changed attribute number
-CREATE TABLE rank4_1_prt_6 (like rank4);
-NOTICE:  table doesn't have 'DISTRIBUTED BY' clause, defaulting to distribution columns from LIKE table
+CREATE TABLE rank4_1_prt_6 (rank INT, year INT, gender CHAR(1), count INT, id INT) DISTRIBUTED BY (id);
 ALTER TABLE rank4_1_prt_6 DROP year, ADD year INT;
 ALTER TABLE rank4 EXCHANGE PARTITION FOR (INT '2009') WITH TABLE rank4_1_prt_6;
 INSERT INTO rank4 VALUES (543,1,2006,'m',1);
@@ -6869,9 +6868,9 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 (1 row)
 
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
- gp_segment_id | id  | rank | gender | count | year 
----------------+-----+------+--------+-------+------
-             0 | 543 |    1 | f      |     1 | 2009
+ gp_segment_id | rank | gender | count | id  | year 
+---------------+------+--------+-------+-----+------
+             0 |    1 | f      |     1 | 543 | 2009
 (1 row)
 
 -- see if update is done with splitting and explicit redistribution
@@ -6914,8 +6913,68 @@ SELECT gp_segment_id, * FROM rank4_1_prt_2;
 (2 rows)
 
 SELECT gp_segment_id, * FROM rank4_1_prt_5;
- gp_segment_id | id | rank | gender | count | year 
----------------+----+------+--------+-------+------
+ gp_segment_id | rank | gender | count | id | year 
+---------------+------+--------+-------+----+------
+(0 rows)
+
+--
+-- Test that segment is chosen correctly in case of update on distribution
+-- and partitioning columns simultaneously.
+--
+CREATE TABLE rank5 (id INT, rank INT, year INT, gender CHAR(1), count INT)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (year)
+( START (2006) INCLUSIVE END (2008) EXCLUSIVE EVERY (1),
+DEFAULT PARTITION extra);
+INSERT INTO rank5 VALUES (543,1,2006,'m',1);
+INSERT INTO rank5 VALUES (543,1,2007,'f',1);
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+ALTER TABLE rank5_1_prt_2 SET WITH (REORGANIZE=true) DISTRIBUTED BY (id);
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             2 | 543 |    1 | 2006 | m      |     1
+(1 row)
+
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             0 | 543 |    1 | 2007 | f      |     1
+(1 row)
+
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Update on rank5
+   Update on rank5_1_prt_2
+   Update on rank5_1_prt_3
+   Update on rank5_1_prt_extra
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_2
+                     Filter: (gender = 'f'::bpchar)
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_3
+                     Filter: (gender = 'f'::bpchar)
+   ->  Explicit Redistribute Motion 3:3  (slice3; segments: 3)
+         ->  Split
+               ->  Seq Scan on rank5_1_prt_extra
+                     Filter: (gender = 'f'::bpchar)
+ Optimizer: Postgres-based planner
+(17 rows)
+
+UPDATE rank5 SET year=2006, id=id+1 WHERE gender='f';
+SELECT gp_segment_id, * FROM rank5_1_prt_2;
+ gp_segment_id | id  | rank | year | gender | count 
+---------------+-----+------+------+--------+-------
+             1 | 544 |    1 | 2006 | f      |     1
+             2 | 543 |    1 | 2006 | m      |     1
+(2 rows)
+
+SELECT gp_segment_id, * FROM rank5_1_prt_3;
+ gp_segment_id | id | rank | year | gender | count 
+---------------+----+------+------+--------+-------
 (0 rows)
 
 --
@@ -7092,12 +7151,6 @@ EXPLAIN (COSTS OFF) UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
  Optimizer: Postgres-based planner
 (4 rows)
 
-SELECT gp_debug_reset_create_table_default_numsegments();
- gp_debug_reset_create_table_default_numsegments 
--------------------------------------------------
- 
-(1 row)
-
 -- A BEFORE UPDATE trigger must not prevent such an UPDATE.
 CREATE FUNCTION rank6_trg() RETURNS trigger LANGUAGE plpgsql AS
 $$ BEGIN RETURN NEW; END $$;
@@ -7106,6 +7159,12 @@ FOR EACH ROW EXECUTE FUNCTION rank6_trg();
 UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
 DROP TRIGGER rank6_tr ON rank6_1_prt_2;
 DROP FUNCTION rank6_trg();
+SELECT gp_debug_reset_create_table_default_numsegments();
+ gp_debug_reset_create_table_default_numsegments 
+-------------------------------------------------
+ 
+(1 row)
+
 DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;

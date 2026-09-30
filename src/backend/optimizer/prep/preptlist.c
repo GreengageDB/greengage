@@ -522,7 +522,7 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 			classForm->relispartition &&
 			!GpPolicyIsHashPartitioned(targetPolicy))
 		{
-			Oid 		rootoid = get_top_level_partition_root(RelationGetRelid(rel));
+			Oid			rootoid = get_top_level_partition_root(RelationGetRelid(rel));
 			GpPolicy   *rootRelPolicy = GpPolicyFetch(rootoid);
 
 			if (GpPolicyIsHashPartitioned(rootRelPolicy))
@@ -547,6 +547,8 @@ expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 					 * tuples from already hash distributed leaf-partition, as
 					 * they could possible be transferred only to randomly
 					 * distributed tables, where final segment doesn't matter.
+					 * Or to other hash-distributed leaf-partitions, where hash
+					 * distribution will be matched.
 					 */
 					if (has_partition_attrs(ancestorRel, changed_cols_for_partition_check, NULL))
 					{

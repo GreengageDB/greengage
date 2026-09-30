@@ -18,7 +18,7 @@
     set optimizer_enumerate_plans = on;
 
     explain update pt2 set i = (select c from r where pt2.i = r.b);
-      
+
                                                               QUERY PLAN                                                          
     -----------------------------------------------------------------------------------------------------------------------------
     Update on pt2  (cost=0.00..1324066.25 rows=1 width=1)

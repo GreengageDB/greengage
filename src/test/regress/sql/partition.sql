@@ -4378,7 +4378,7 @@ PARTITION BY RANGE (year)
 DEFAULT PARTITION extra);
 
 -- create partition with changed attribute number
-CREATE TABLE rank4_1_prt_6 (like rank4);
+CREATE TABLE rank4_1_prt_6 (rank INT, year INT, gender CHAR(1), count INT, id INT) DISTRIBUTED BY (id);
 ALTER TABLE rank4_1_prt_6 DROP year, ADD year INT;
 ALTER TABLE rank4 EXCHANGE PARTITION FOR (INT '2009') WITH TABLE rank4_1_prt_6;
 
@@ -4489,10 +4489,8 @@ SELECT count(*), count(DISTINCT id) FROM rank6;
 
 -- Updates on leaf partitions shouldn't be planned with split update as update
 -- on leaf partition suppose to not move rows away from this partition thus,
--- keeping distribution the same. 
+-- keeping distribution the same.
 EXPLAIN (COSTS OFF) UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
-
-SELECT gp_debug_reset_create_table_default_numsegments();
 
 -- A BEFORE UPDATE trigger must not prevent such an UPDATE.
 CREATE FUNCTION rank6_trg() RETURNS trigger LANGUAGE plpgsql AS
@@ -4502,6 +4500,8 @@ FOR EACH ROW EXECUTE FUNCTION rank6_trg();
 UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
 DROP TRIGGER rank6_tr ON rank6_1_prt_2;
 DROP FUNCTION rank6_trg();
+
+SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
 DROP TABLE rank2;
