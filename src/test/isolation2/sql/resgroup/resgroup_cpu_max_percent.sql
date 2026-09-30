@@ -106,7 +106,7 @@ CREATE RESOURCE GROUP rg2_cpu_test WITH (concurrency=5, cpu_max_percent=-1, cpu_
 select check_cgroup_configuration();
 
 -- lower admin_group's cpu_max_percent to minimize its side effect
-ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 5;
 
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;

@@ -98,7 +98,7 @@ select check_cgroup_configuration();
 (1 row)
 
 -- lower admin_group's cpu_max_percent to minimize its side effect
-ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 5;
 ALTER RESOURCE GROUP
 
 -- create two roles and assign them to above groups
