@@ -580,6 +580,14 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot,
 							projKind,
 							flags);
 
+	/*
+	 * No qual on this scan means every projected column is needed for
+	 * every visible row -- nothing for per-Var lazy fetch to ever skip.
+	 * Take the eager (pre-lazy-fetch) path in aocs_getnext() instead.
+	 * See columnScanInfo.eagerFetch in cdbaocsam.h.
+	 */
+	aoscan->columnScanInfo.eagerFetch = (qual == NIL);
+
 	if (needFree)
 		pfree(proj);
 	return (TableScanDesc)aoscan;
