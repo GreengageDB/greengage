@@ -449,12 +449,11 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 				continue;
 
 			/*
-			 * If an ancestor index belongs to an extension, ATTACH PARTITION
-			 * will auto-create/attach a matching child index, so skip
-			 * dumping this one and its constraint to avoid a duplicate.
-			 * This loses CLUSTER ON, SET STATISTICS, REPLICA IDENTITY, and a
-			 * custom name, tablespace or reloptions.  Comments are kept under
-			 * the old name, so they fail to restore if the index was renamed.
+			 * If an ancestor index belongs to an extension ATTACH PARTITION
+			 * recreates this index so don't dump it or its constraint.  This
+			 * loses its custom properties and name (comments on a renamed
+			 * index fail to restore) and loses the index entirely if CREATE
+			 * EXTENSION does not recreate the ancestor
 			 */
 			if (hasExtensionAncestorIndex(parentidx))
 			{
