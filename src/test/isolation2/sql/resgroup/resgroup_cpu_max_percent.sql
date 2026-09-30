@@ -4,7 +4,8 @@ DROP ROLE IF EXISTS role1_cpu_test;
 DROP ROLE IF EXISTS role2_cpu_test;
 DROP RESOURCE GROUP rg1_cpu_test;
 DROP RESOURCE GROUP rg2_cpu_test;
-DROP VIEW IF EXISTS busy;
+DROP VIEW IF EXISTS busy5;
+DROP VIEW IF EXISTS busy10;
 DROP TABLE IF EXISTS bigtable;
 
 CREATE LANGUAGE plpython3u;
@@ -450,3 +451,5 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
 2:DROP FUNCTION create_busy_view(int);
+2:DROP VIEW IF EXISTS busy5;
+2:DROP VIEW IF EXISTS busy10;

@@ -9,7 +9,9 @@ DROP RESOURCE GROUP rg1_cpu_test;
 ERROR:  resource group "rg1_cpu_test" does not exist
 DROP RESOURCE GROUP rg2_cpu_test;
 ERROR:  resource group "rg2_cpu_test" does not exist
-DROP VIEW IF EXISTS busy;
+DROP VIEW IF EXISTS busy5;
+DROP VIEW
+DROP VIEW IF EXISTS busy10;
 DROP VIEW
 DROP TABLE IF EXISTS bigtable;
 DROP TABLE
@@ -914,3 +916,7 @@ DROP RESOURCE GROUP
 DROP RESOURCE GROUP
 2:DROP FUNCTION create_busy_view(int);
 DROP FUNCTION
+2:DROP VIEW IF EXISTS busy5;
+DROP VIEW
+2:DROP VIEW IF EXISTS busy10;
+DROP VIEW
