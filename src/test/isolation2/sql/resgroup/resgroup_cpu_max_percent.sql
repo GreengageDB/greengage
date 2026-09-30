@@ -75,7 +75,7 @@ CREATE OR REPLACE FUNCTION create_busy_view(qcount int) RETURNS void AS $$
 
     import math
     procs_per_branch = qcount * nsegs
-    k = min(16, math.ceil(ncores / procs_per_branch) + 1)
+    k = min(16, math.ceil(ncores / procs_per_branch))
     
     plpy.execute('CREATE VIEW busy{1} AS SELECT sum(s) FROM ({0}) x'.format(
         ' UNION ALL '.join(['(' + branch + ')'] * k), qcount))
