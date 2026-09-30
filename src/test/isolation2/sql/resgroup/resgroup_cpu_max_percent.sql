@@ -57,15 +57,25 @@ CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
     FROM generate_series(1, 50000) i distributed randomly;
 
+-- Creates view busy with k identical branches, trying to fill all cpu cores.
+-- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
+-- branch.
 CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
-    branch = "SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'"
+    branch = """
+        SELECT count(*) AS s
+            FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
+        WHERE md5(c1::text || g::text) < '8'"""
+
     nsegs = plpy.execute("""
         SELECT count(*) AS n FROM gp_segment_configuration
          WHERE content >= 0 AND role = 'p'
     """)[0]['n']
     ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n']
-    k = min(16, ((ncores + 5 * nsegs - 1) // (5 * nsegs)) + 1)
-    plpy.execute('DROP VIEW IF EXISTS busy')
+
+    import math
+    procs_per_branch = 5 * nsegs
+    k = min(16, math.ceil(ncores / procs_per_branch) + 1)
+    
     plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format(
         ' UNION ALL '.join(['(' + branch + ')'] * k)))
 $$ LANGUAGE plpython3u;
@@ -125,13 +135,6 @@ GRANT ALL ON busy TO role2_cpu_test;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
--- start_ignore
-! vmstat 1 5;
-! ps -eo stat=,comm= | awk '$2 ~ /postgres/ {s[substr($1,1,1)]++} END {for (k in s) print k, s[k]}';
-! cat /sys/fs/cgroup/gpdb/cpu.stat;
-! cat /sys/fs/cgroup/cpu.max;
-! free -m;
--- end_ignore
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -193,17 +196,17 @@ SELECT * FROM cancel_all;
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
 
-20&: SELECT * FROM busy;
-21&: SELECT * FROM busy;
-22&: SELECT * FROM busy;
-23&: SELECT * FROM busy;
-24&: SELECT * FROM busy;
-
 10&: SELECT * FROM busy;
 11&: SELECT * FROM busy;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+
+20&: SELECT * FROM busy;
+21&: SELECT * FROM busy;
+22&: SELECT * FROM busy;
+23&: SELECT * FROM busy;
+24&: SELECT * FROM busy;
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -359,17 +362,17 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- - rg2_cpu_test gets 0.9 * 20%;
 --
 
-20&: SELECT * FROM busy;
-21&: SELECT * FROM busy;
-22&: SELECT * FROM busy;
-23&: SELECT * FROM busy;
-24&: SELECT * FROM busy;
-
 10&: SELECT * FROM busy;
 11&: SELECT * FROM busy;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+
+20&: SELECT * FROM busy;
+21&: SELECT * FROM busy;
+22&: SELECT * FROM busy;
+23&: SELECT * FROM busy;
+24&: SELECT * FROM busy;
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;

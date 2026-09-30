@@ -47,7 +47,12 @@ CREATE FUNCTION
 CREATE TABLE bigtable AS SELECT i AS c1, 'abc' AS c2 FROM generate_series(1, 50000) i distributed randomly;
 SELECT 50000
 
-CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$ branch = "SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'" nsegs = plpy.execute(""" SELECT count(*) AS n FROM gp_segment_configuration WHERE content >= 0 AND role = 'p' """)[0]['n'] ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n'] k = min(16, ((ncores + 5 * nsegs - 1) // (5 * nsegs)) + 1) plpy.execute('DROP VIEW IF EXISTS busy') plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k))) $$ LANGUAGE plpython3u;
+-- Creates view busy with k identical branches, trying to fill all cpu cores.
+-- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
+-- branch.
+CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$ branch = """ SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'""" 
+nsegs = plpy.execute(""" SELECT count(*) AS n FROM gp_segment_configuration WHERE content >= 0 AND role = 'p' """)[0]['n'] ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n'] 
+import math procs_per_branch = 5 * nsegs k = min(16, math.ceil(ncores / procs_per_branch) + 1)  plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k))) $$ LANGUAGE plpython3u;
 CREATE FUNCTION
 
 SELECT create_busy_view();
@@ -297,17 +302,17 @@ SET
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
 
-20&: SELECT * FROM busy;  <waiting ...>
-21&: SELECT * FROM busy;  <waiting ...>
-22&: SELECT * FROM busy;  <waiting ...>
-23&: SELECT * FROM busy;  <waiting ...>
-24&: SELECT * FROM busy;  <waiting ...>
-
 10&: SELECT * FROM busy;  <waiting ...>
 11&: SELECT * FROM busy;  <waiting ...>
 12&: SELECT * FROM busy;  <waiting ...>
 13&: SELECT * FROM busy;  <waiting ...>
 14&: SELECT * FROM busy;  <waiting ...>
+
+20&: SELECT * FROM busy;  <waiting ...>
+21&: SELECT * FROM busy;  <waiting ...>
+22&: SELECT * FROM busy;  <waiting ...>
+23&: SELECT * FROM busy;  <waiting ...>
+24&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -692,17 +697,17 @@ SET
 -- - rg2_cpu_test gets 0.9 * 20%;
 --
 
-20&: SELECT * FROM busy;  <waiting ...>
-21&: SELECT * FROM busy;  <waiting ...>
-22&: SELECT * FROM busy;  <waiting ...>
-23&: SELECT * FROM busy;  <waiting ...>
-24&: SELECT * FROM busy;  <waiting ...>
-
 10&: SELECT * FROM busy;  <waiting ...>
 11&: SELECT * FROM busy;  <waiting ...>
 12&: SELECT * FROM busy;  <waiting ...>
 13&: SELECT * FROM busy;  <waiting ...>
 14&: SELECT * FROM busy;  <waiting ...>
+
+20&: SELECT * FROM busy;  <waiting ...>
+21&: SELECT * FROM busy;  <waiting ...>
+22&: SELECT * FROM busy;  <waiting ...>
+23&: SELECT * FROM busy;  <waiting ...>
+24&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
