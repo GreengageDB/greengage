@@ -629,6 +629,28 @@ CStatisticsUtils::ExtractUsedColIds(CMemoryPool *mp, CBitSet *colids_bitset,
 
 	if (CStatsPred::EsptUnsupported == pred_stats->GetPredStatsType())
 	{
+		// no single associated column, but the predicate may still touch
+		// specific columns (tracked via GetUsedColIds()) - record those
+		// rather than reporting this predicate as touching nothing, so
+		// disjunction handling doesn't wrongly treat those columns as
+		// untouched by this branch
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+		const ULongPtrArray *used_colids =
+			unsupported_pred_stats->GetUsedColIds();
+		if (nullptr != used_colids)
+		{
+			for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+			{
+				ULONG used_colid = *(*used_colids)[uli];
+				if (!colids_bitset->Get(used_colid))
+				{
+					(void) colids_bitset->ExchangeSet(used_colid);
+					colids->Append(GPOS_NEW(mp) ULONG(used_colid));
+				}
+			}
+		}
+
 		return;
 	}
 
@@ -662,12 +684,13 @@ CStatisticsUtils::ExtractUsedColIds(CMemoryPool *mp, CBitSet *colids_bitset,
 				colids->Append(GPOS_NEW(mp) ULONG(colid));
 			}
 		}
-		else if (CStatsPred::EsptUnsupported !=
-				 curr_stats_pred->GetPredStatsType())
+		else
 		{
 			GPOS_ASSERT(
 				CStatsPred::EsptConj == curr_stats_pred->GetPredStatsType() ||
-				CStatsPred::EsptDisj == curr_stats_pred->GetPredStatsType());
+				CStatsPred::EsptDisj == curr_stats_pred->GetPredStatsType() ||
+				CStatsPred::EsptUnsupported ==
+					curr_stats_pred->GetPredStatsType());
 			ExtractUsedColIds(mp, colids_bitset, curr_stats_pred, colids);
 		}
 	}
@@ -1001,15 +1024,21 @@ CStatisticsUtils::GetColId(const CStatsPredPtrArry *pred_stats_array)
 
 	ULONG result_colid = gpos::ulong_max;
 	BOOL is_same_col = true;
+	BOOL is_first = true;
 
 	const ULONG length = pred_stats_array->Size();
 	for (ULONG i = 0; i < length && is_same_col; i++)
 	{
 		CStatsPred *pred_stats = (*pred_stats_array)[i];
 		ULONG colid = pred_stats->GetColId();
-		if (gpos::ulong_max == result_colid)
+		if (is_first)
 		{
+			// track "not yet assigned" separately from "assigned to
+			// ulong_max" (a genuinely multi-column/unsupported child), so
+			// such a child doesn't get silently skipped over in favor of a
+			// later child's own, real colid
 			result_colid = colid;
+			is_first = false;
 		}
 		is_same_col = (result_colid == colid);
 	}
