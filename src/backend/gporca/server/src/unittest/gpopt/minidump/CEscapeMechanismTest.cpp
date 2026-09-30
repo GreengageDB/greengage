@@ -40,6 +40,7 @@ const CHAR *rgszEscapeMechanismFileNames[] = {
 	"../data/dxl/minidump/JoinArityAssociativityCommutativityAboveLimit.mdp",
 	"../data/dxl/minidump/JoinArityAssociativityCommutativityBelowLimit.mdp",
 	"../data/dxl/minidump/JoinArityAssociativityAboveLimit.mdp",
+	"../data/dxl/minidump/JoinArityAssociativityTotalAboveLimit.mdp",
 };
 
 

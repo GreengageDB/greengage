@@ -4688,7 +4688,7 @@ struct config_int ConfigureNamesInt_gp[] =
 
 	{
 		{"optimizer_join_arity_for_associativity", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Maximum number of children n-ary-join have to use associativity transform when optimizer_enable_associativity is off"),
+			gettext_noop("Maximum total number of children of n-ary-joins in a query to use associativity transform when optimizer_enable_associativity is off"),
 			NULL,
 			GUC_NOT_IN_SAMPLE
 		},

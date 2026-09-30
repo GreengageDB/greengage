@@ -146,8 +146,9 @@ public:
 		return m_ulSkewFactor;
 	}
 
-	// Maximum number of relations in an n-ary join operator where ORCA will
-	// explore the JoinAssociativity transformation. The limit returned by
+	// Maximum total number of relations in the n-ary join operators of a
+	// query with at least three relations each where ORCA will explore the
+	// JoinAssociativity transformation. The limit returned by
 	// UlJoinArityForAssociativityCommutativity() applies as well.
 	ULONG
 	UlJoinArityForAssociativity() const

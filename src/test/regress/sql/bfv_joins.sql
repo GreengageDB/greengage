@@ -811,6 +811,28 @@ explain (costs off) select count(*) from jas_a join jas_b using (y)
 
 reset optimizer_enable_associativity;
 reset optimizer_join_arity_for_associativity;
+
+-- the limit applies to the total number of children of the n-ary joins of
+-- the query with at least three children each: a join of two relations in
+-- another branch does not count
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y);
+
+-- with a join of three relations in another branch the total is 7, above the
+-- limit
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y) join jas_c using (z);
+set optimizer_join_arity_for_associativity = 7;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y) join jas_c using (z);
+
+reset optimizer_join_arity_for_associativity;
 drop table jas_a, jas_b, jas_c, jas_big;
 
 -- Clean up. None of the objects we create are very interesting to keep around.

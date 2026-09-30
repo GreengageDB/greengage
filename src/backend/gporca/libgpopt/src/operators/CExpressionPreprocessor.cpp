@@ -1000,7 +1000,13 @@ CExpressionPreprocessor::PexprCollapseJoins(CMemoryPool *mp, CExpression *pexpr)
 			GPOPT_DISABLE_XFORM(CXform::ExfJoinCommutativity);
 			GPOPT_DISABLE_XFORM(CXform::ExfJoinAssociativity);
 		}
-		else if (pexprNAryJoin->Arity() - 1 > ulJoinArityLimitForAssociativity)
+		// JoinAssociativity needs at least three relations. Its limit applies
+		// to the total number of relations in such n-ary joins of the query,
+		// since each of them adds to the optimization time.
+		else if (2 < pexprNAryJoin->Arity() - 1 &&
+				 COptCtxt::PoctxtFromTLS()->AddJoinArityForAssociativity(
+					 pexprNAryJoin->Arity() - 1) >
+					 ulJoinArityLimitForAssociativity)
 		{
 			GPOPT_DISABLE_XFORM(CXform::ExfJoinAssociativity);
 		}

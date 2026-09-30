@@ -4692,6 +4692,146 @@ explain (costs off) select count(*) from jas_a join jas_b using (y)
 
 reset optimizer_enable_associativity;
 reset optimizer_join_arity_for_associativity;
+-- the limit applies to the total number of children of the n-ary joins of
+-- the query with at least three children each: a join of two relations in
+-- another branch does not count
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y);
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Append
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_a.z = jas_c.z)
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: jas_a.z
+                                 ->  Hash Join
+                                       Hash Cond: (jas_a.y = jas_b.y)
+                                       ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                             Hash Key: jas_a.y
+                                             ->  Nested Loop
+                                                   Join Filter: true
+                                                   ->  Index Scan using jas_a_x_idx on jas_a
+                                                         Index Cond: (x > 900)
+                                                   ->  Index Scan using jas_big_x_idx on jas_big
+                                                         Index Cond: ((x = jas_a.x) AND (x > 900))
+                                       ->  Hash
+                                             ->  Seq Scan on jas_b
+                           ->  Hash
+                                 ->  Seq Scan on jas_c
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice5; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_a_1.y = jas_b_1.y)
+                           ->  Seq Scan on jas_a jas_a_1
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                       ->  Seq Scan on jas_b jas_b_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(32 rows)
+
+-- with a join of three relations in another branch the total is 7, above the
+-- limit
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y) join jas_c using (z);
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Append
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice4; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_big.x = jas_a.x)
+                           ->  Seq Scan on jas_big
+                                 Filter: (x > 900)
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice3; segments: 3)
+                                       Hash Key: jas_a.x
+                                       ->  Hash Join
+                                             Hash Cond: (jas_a.z = jas_c.z)
+                                             ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                                   Hash Key: jas_a.z
+                                                   ->  Hash Join
+                                                         Hash Cond: (jas_a.y = jas_b.y)
+                                                         ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                                               Hash Key: jas_a.y
+                                                               ->  Index Scan using jas_a_x_idx on jas_a
+                                                                     Index Cond: (x > 900)
+                                                         ->  Hash
+                                                               ->  Seq Scan on jas_b
+                                             ->  Hash
+                                                   ->  Seq Scan on jas_c
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice7; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_a_1.z = jas_c_1.z)
+                           ->  Hash Join
+                                 Hash Cond: (jas_a_1.y = jas_b_1.y)
+                                 ->  Seq Scan on jas_a jas_a_1
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                             ->  Seq Scan on jas_b jas_b_1
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice6; segments: 3)
+                                       ->  Seq Scan on jas_c jas_c_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(40 rows)
+
+set optimizer_join_arity_for_associativity = 7;
+explain (costs off) select count(*) from jas_a join jas_b using (y)
+	join jas_c using (z) join jas_big using (x) where jas_a.x > 900
+union all
+select count(*) from jas_a join jas_b using (y) join jas_c using (z);
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Append
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice3; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_a.z = jas_c.z)
+                           ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                                 Hash Key: jas_a.z
+                                 ->  Hash Join
+                                       Hash Cond: (jas_a.y = jas_b.y)
+                                       ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                             Hash Key: jas_a.y
+                                             ->  Nested Loop
+                                                   Join Filter: true
+                                                   ->  Index Scan using jas_a_x_idx on jas_a
+                                                         Index Cond: (x > 900)
+                                                   ->  Index Scan using jas_big_x_idx on jas_big
+                                                         Index Cond: ((x = jas_a.x) AND (x > 900))
+                                       ->  Hash
+                                             ->  Seq Scan on jas_b
+                           ->  Hash
+                                 ->  Seq Scan on jas_c
+   ->  Aggregate
+         ->  Gather Motion 3:1  (slice6; segments: 3)
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (jas_a_1.y = jas_b_1.y)
+                           ->  Hash Join
+                                 Hash Cond: (jas_a_1.z = jas_c_1.z)
+                                 ->  Seq Scan on jas_a jas_a_1
+                                 ->  Hash
+                                       ->  Broadcast Motion 3:3  (slice4; segments: 3)
+                                             ->  Seq Scan on jas_c jas_c_1
+                           ->  Hash
+                                 ->  Broadcast Motion 3:3  (slice5; segments: 3)
+                                       ->  Seq Scan on jas_b jas_b_1
+ Optimizer: Pivotal Optimizer (GPORCA)
+(37 rows)
+
+reset optimizer_join_arity_for_associativity;
 drop table jas_a, jas_b, jas_c, jas_big;
 -- Clean up. None of the objects we create are very interesting to keep around.
 reset search_path;
