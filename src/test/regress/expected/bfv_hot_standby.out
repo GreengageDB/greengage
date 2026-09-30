@@ -1,0 +1,33 @@
+-- start_ignore
+\! gpconfig -c hot_standby -v on
+\! gpstop -raf
+-- end_ignore
+\c
+CREATE TABLE temp_gp_segment_configuration AS
+	SELECT * FROM gp_segment_configuration;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column(s) named 'dbid' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SET allow_system_table_mods to ON;
+UPDATE gp_segment_configuration
+SET address = 'foo', hostname = 'foo'
+WHERE content = -1 AND role = 'm';
+SET allow_system_table_mods to OFF;
+-- Should fail becase address and hostname are incorrect
+\! psql -p $((PGPORT+1)) -d postgres -c "select dbid from gp_segment_configuration where content = -1 AND role = 'm';"
+WARNING:  could not translate host name "foo", port "7001" to address: Name or service not known
+WARNING:  could not translate host name "foo", port "7001" to address: Name or service not known
+psql: error: FATAL:  content values not valid in hostPrimaryCountHash table for hostname 'foo'
+SET allow_system_table_mods to ON;
+UPDATE gp_segment_configuration
+SET (address, hostname) =
+	(SELECT address, hostname FROM temp_gp_segment_configuration
+	 WHERE content = -1 AND role = 'm')
+WHERE content = -1 AND role = 'm';
+SET allow_system_table_mods to OFF;
+DROP TABLE temp_gp_segment_configuration;
+\! psql -p $((PGPORT+1)) -d postgres -c "select dbid from gp_segment_configuration where content = -1 AND role = 'm';"
+ dbid 
+------
+    8
+(1 row)
+
