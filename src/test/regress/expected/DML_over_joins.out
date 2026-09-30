@@ -69,9 +69,8 @@ explain update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
                            ->  Hash  (cost=8.00..8.00 rows=100 width=18)
                                  ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..8.00 rows=100 width=18)
                                        ->  Seq Scan on s  (cost=0.00..4.00 rows=34 width=18)
- Planning time: 1.342 ms
  Optimizer: Postgres query optimizer
-(14 rows)
+(13 rows)
 
 update s set b = b + 1 where exists (select 1 from r where s.a = r.b);
 explain delete from s where exists (select 1 from r where s.a = r.b);
@@ -89,9 +88,8 @@ explain delete from s where exists (select 1 from r where s.a = r.b);
                            ->  Hash  (cost=8.00..8.00 rows=100 width=14)
                                  ->  Broadcast Motion 3:3  (slice1; segments: 3)  (cost=0.00..8.00 rows=100 width=14)
                                        ->  Seq Scan on s  (cost=0.00..4.00 rows=34 width=14)
- Planning time: 1.130 ms
  Optimizer: Postgres query optimizer
-(14 rows)
+(13 rows)
 
 delete from s where exists (select 1 from r where s.a = r.b);
 -- ----------------------------------------------------------------------
@@ -386,9 +384,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 rhel62-vm1:25433 pid=19028)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 172.17.0.2:6002 pid=47367)
 update p set c = c + 1 where b in (select b from s) and c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 rhel62-vm1:25434 pid=19030)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 172.17.0.2:6002 pid=47367)
 -- ----------------------------------------------------------------------
 -- Test: unsupported_cases1.sql
 -- ----------------------------------------------------------------------
@@ -425,9 +423,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 rhel62-vm1:25432 pid=19026)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 172.17.0.2:6002 pid=47367)
 update p set c = c + 1 where b in (select b from s) and c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 rhel62-vm1:25434 pid=19030)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 172.17.0.2:6003 pid=47355)
 -- ----------------------------------------------------------------------
 -- Test: unsupported_cases2.sql
 -- ----------------------------------------------------------------------
@@ -464,9 +462,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 rhel62-vm1:25434 pid=19030)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 172.17.0.2:6002 pid=47367)
 update p set c = c + 1 where b in (select b from s where b = 36);
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 rhel62-vm1:25434 pid=19030)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 172.17.0.2:6003 pid=47355)
 -- ----------------------------------------------------------------------
 -- Test: unsupported_cases3.sql
 -- ----------------------------------------------------------------------
@@ -503,9 +501,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 rhel62-vm1:25432 pid=19026)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 172.17.0.2:6004 pid=47358)
 update p set c = c + 1 where b in (select b from s) and c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 rhel62-vm1:25433 pid=19028)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 172.17.0.2:6003 pid=47355)
 -- ----------------------------------------------------------------------
 -- Test: unsupported_cases4.sql
 -- ----------------------------------------------------------------------
@@ -542,9 +540,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 rhel62-vm1:25432 pid=19026)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 172.17.0.2:6002 pid=47367)
 update p set c = c + 1 where b in (select b from s) and c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg0 rhel62-vm1:25432 pid=19026)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 172.17.0.2:6003 pid=47355)
 -- ----------------------------------------------------------------------
 -- Test: unsupported_cases5.sql
 -- ----------------------------------------------------------------------
@@ -581,9 +579,9 @@ delete from s where b = (select min(a) from r where b = s.b);
 --	Update partition key (requires moving tuples from one partition to another)
 ------------------------------------------------------------
 update p set c = c + 1 where c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 rhel62-vm1:25433 pid=19028)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 172.17.0.2:6004 pid=47358)
 update p set c = c + 1 where b in (select b from s) and c = 0;
-ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg1 rhel62-vm1:25433 pid=19028)
+ERROR:  moving tuple from partition "p_1_prt_extra" to partition "p_1_prt_2" not supported  (seg2 172.17.0.2:6004 pid=47358)
 -- ----------------------------------------------------------------------
 -- Test: partition_motion0.sql
 -- ----------------------------------------------------------------------
@@ -1062,6 +1060,7 @@ create table r (a int, b int) distributed by (a);
 create table s (a int, b int) distributed by (a);
 create table m ();
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause, and no column type is suitable for a distribution key. Creating a NULL policy entry.
+WARNING:  creating a table with no columns.
 	alter table m add column a int;
 	alter table m add column b int;
 create table t (region text, id int) distributed by (region);
@@ -1392,7 +1391,7 @@ select sales_par.* from sales_par where id in (select s.b from s, r where s.a = 
 
 -- start_ignore
 update sales_par set region = 'new_region' where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
-ERROR:  moving tuple from partition "sales_par_1_prt_usa" to partition "sales_par_1_prt_other_regions" not supported  (seg1 rhel62-vm1:25433 pid=19028)
+ERROR:  moving tuple from partition "sales_par_1_prt_usa" to partition "sales_par_1_prt_other_regions" not supported  (seg0 172.17.0.2:6002 pid=47367)
 -- end_ignore
 select sales_par.* from sales_par where id in (select s.b from s, r where s.a = r.b) and day in (select a from r);
  id | year | month | day | region 

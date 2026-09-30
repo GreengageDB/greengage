@@ -1,10 +1,7 @@
 -- start_ignore
 DROP ROLE IF EXISTS role1_memory_test;
-DROP
 DROP RESOURCE GROUP rg1_memory_test;
-ERROR:  resource group "rg1_memory_test" does not exist
 DROP RESOURCE GROUP rg2_memory_test;
-ERROR:  resource group "rg2_memory_test" does not exist
 -- end_ignore
 
 CREATE OR REPLACE FUNCTION resGroupPalloc(float) RETURNS int AS '@abs_builddir@/../../regress/regress@DLSUFFIX@', 'resGroupPalloc' LANGUAGE C READS SQL DATA;
@@ -21,40 +18,8 @@ CREATE
 
 -- start_ignore
 ! gpconfig -c runaway_detector_activation_percent -v 50;
-20191213:05:03:47:014263 gpconfig:hubert-gp-centos:huanzhang-[INFO]:-completed successfully with parameters '-c runaway_detector_activation_percent -v 50'
 
 ! gpstop -ari;
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Starting gpstop with args: -ari
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Gathering information and validating the environment...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Greengage Master catalog information
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Obtaining Segment details from master...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Greengage Version: 'postgres (Greengage Database) 7.0.0-alpha.0+dev.5211.gf5c0dd1 build dev'
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing Master instance shutdown with mode='immediate'
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Master segment instance directory=/home/huanzhang/workspace/gpdb7/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Attempting forceful termination of any leftover master process
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Terminating processes for segment /home/huanzhang/workspace/gpdb7/gpAux/gpdemo/datadirs/qddir/demoDataDir-1
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Stopping master standby host hubert-gp-centos mode=immediate
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Successfully shutdown standby process on hubert-gp-centos
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Targeting dbid [2, 5, 3, 6, 4, 7] for shutdown
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing parallel primary segment instance shutdown, please wait...
-20191213:05:03:48:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-0.00% of jobs completed
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-100.00% of jobs completed
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Commencing parallel mirror segment instance shutdown, please wait...
-20191213:05:03:49:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-0.00% of jobs completed
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-100.00% of jobs completed
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-----------------------------------------------------
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-   Segments stopped successfully      = 6
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-   Segments with errors during stop   = 0
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-----------------------------------------------------
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Successfully shutdown 6 of 6 segment instances 
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Database successfully shutdown with no errors reported
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover gpmmon process
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-No leftover gpmmon process found
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover gpsmon processes
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-No leftover gpsmon processes on some hosts. not attempting forceful termination on these hosts
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Cleaning up leftover shared memory
-20191213:05:03:50:014419 gpstop:hubert-gp-centos:huanzhang-[INFO]:-Restarting System...
-
 -- end_ignore
 
 -- after the restart we need a new connection to run the queries
@@ -89,7 +54,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.3);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806868, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57748, group memory usage 655 MB, group shared memory quota is 1 MB, slot memory quota is 204 MB, global freechunks memory is 370 MB, global safe memory threshold is 410 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -112,7 +77,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.3)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806868, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10883) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57748, group memory usage 218 MB, group shared memory quota is 0 MB, slot memory quota is 68 MB, global freechunks memory is 124 MB, global safe memory threshold is 137 MB  (seg0 slice1 172.18.0.3:6002 pid=9321)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -153,7 +118,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.3);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806877, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57757, group memory usage 778 MB, group shared memory quota is 205 MB, slot memory quota is 102 MB, global freechunks memory is 349 MB, global safe memory threshold is 410 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -181,7 +146,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.3)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806877, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10918) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57757, group memory usage 259 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 117 MB, global safe memory threshold is 137 MB  (seg0 slice1 172.18.0.3:6002 pid=9342)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -221,7 +186,7 @@ SET
  0                      
 (1 row)
 1: SELECT hold_memory_by_percent(0.15);
-ERROR:  Canceling query because of high VMEM usage. current group id is 806886, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57766, group memory usage 533 MB, group shared memory quota is 205 MB, slot memory quota is 102 MB, global freechunks memory is 185 MB, global safe memory threshold is 205 MB
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 1q: ... <quitting>
 
@@ -244,7 +209,7 @@ SET
  0     
 (1 row)
 2: SELECT count(null) FROM gp_dist_random('gp_id') t1 WHERE hold_memory_by_percent(0.15)=0;
-ERROR:  Canceling query because of high VMEM usage. current group id is 806886, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB (runaway_cleaner.c:197)  (seg0 slice1 10.146.0.4:7002 pid=10952) (runaway_cleaner.c:197)
+ERROR:  Canceling query because of high VMEM usage. current group id is 57766, group memory usage 178 MB, group shared memory quota is 68 MB, slot memory quota is 34 MB, global freechunks memory is 62 MB, global safe memory threshold is 69 MB  (seg0 slice1 172.18.0.3:6002 pid=9363)
 CONTEXT:  SQL function "hold_memory_by_percent" statement 1
 2q: ... <quitting>
 
@@ -305,3 +270,7 @@ DROP
 DROP
 0q: ... <quitting>
 
+-- start_ignore
+! gpconfig -c runaway_detector_activation_percent -v 100;
+! gpstop -ari;
+-- end_ignore

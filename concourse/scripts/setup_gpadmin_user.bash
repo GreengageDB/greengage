@@ -95,18 +95,12 @@ setup_sshd() {
   echo "MaxStartups 100:30:200" >> /etc/ssh/sshd_config
 
   case "$TEST_OS" in
-    centos6 | sles*)
+    sles*)
       test -e /etc/ssh/ssh_host_key || ssh-keygen -f /etc/ssh/ssh_host_key -N '' -t rsa1
       ;;
     photon*)
       test -e /etc/ssh/ssh_host_ecdsa_key || ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -N '' -t ecdsa
       test -e /etc/ssh/ssh_host_ed25519_key || ssh-keygen -f /etc/ssh/ssh_host_ed25519_key -N '' -t ed25519
-      ;;
-    centos7)
-      test -e /etc/ssh/ssh_host_key || ssh-keygen -f /etc/ssh/ssh_host_key -N '' -t rsa1
-      # For Centos 7, disable looking for host key types that older Centos versions don't support.
-      sed -ri 's@^HostKey /etc/ssh/ssh_host_ecdsa_key$@#&@' /etc/ssh/sshd_config
-      sed -ri 's@^HostKey /etc/ssh/ssh_host_ed25519_key$@#&@' /etc/ssh/sshd_config
       ;;
   esac
 
@@ -145,18 +139,10 @@ determine_os() {
   echo "${name}${version}"
 }
 
-# Set the "Set-User-ID" bit of ping, or else gpinitsystem will error by following message:
-# [FATAL]:-Unknown host d6f9f630-65a3-4c98-4c03-401fbe5dd60b: ping: socket: Operation not permitted
-# This is needed in centos7, sles12sp5, but not for centos6, ubuntu18.04
-workaround_before_concourse_stops_stripping_suid_bits() {
-  chmod u+s $(which ping)
-}
-
 _main() {
   TEST_OS=$(determine_os)
   setup_gpadmin_user
   setup_sshd
-  workaround_before_concourse_stops_stripping_suid_bits
 }
 
 [ "${BASH_SOURCE[0]}" = "$0" ] && _main "$@"

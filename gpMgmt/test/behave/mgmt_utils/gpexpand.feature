@@ -831,6 +831,8 @@ Feature: expand the cluster by adding more segments
         And the user creates an event trigger test_trigger
         And verify that event trigger test_trigger exists
         Then verify that the query "SELECT count(*) FROM gp_dist_random('pg_event_trigger');" in database "gptest" returns "0"
+        And the user runs psql with "-c "create external web table ext_owned_ext(i int) execute 'echo 1' on master format 'text'"" against database "gptest"
+        And the user runs psql with "-c "alter extension plpgsql add table ext_owned_ext"" against database "gptest"
         When the user runs gpexpand interview to add 1 new segment and 0 new host "ignored.host"
         Then the number of segments have been saved
         When the user runs gpexpand with the latest gpexpand_inputfile without ret code check
