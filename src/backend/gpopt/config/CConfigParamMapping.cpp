@@ -502,8 +502,11 @@ CConfigParamMapping::PackConfigParamInBitset(
 	join_heuristic_bitset->Release();
 
 	// disable join associativity transform if the corresponding GUC
-	// is turned off independent of the join order algorithm chosen
-	if (!optimizer_enable_associativity)
+	// is turned off independent of the join order algorithm chosen,
+	// unless it is allowed for small n-ary joins (see
+	// CExpressionPreprocessor::PexprCollapseJoins)
+	if (!optimizer_enable_associativity &&
+		0 == optimizer_join_arity_for_associativity)
 	{
 		traceflag_bitset->ExchangeSet(
 			GPOPT_DISABLE_XFORM_TF(CXform::ExfJoinAssociativity));

@@ -13,11 +13,16 @@
 
 #include "gpos/base.h"
 
+#include "gpopt/base/CColRefSetIter.h"
+#include "gpopt/base/COptCtxt.h"
+#include "gpopt/base/CUtils.h"
+#include "gpopt/mdcache/CMDAccessorUtils.h"
 #include "gpopt/metadata/CTableDescriptor.h"
 #include "gpopt/operators/CLogicalInnerJoin.h"
 #include "gpopt/operators/CPatternLeaf.h"
 #include "gpopt/operators/CPatternTree.h"
 #include "gpopt/operators/CPredicateUtils.h"
+#include "gpopt/operators/CScalarIdent.h"
 
 using namespace gpopt;
 using namespace gpmd;
@@ -54,6 +59,132 @@ CXformJoinAssociativity::CXformJoinAssociativity(CMemoryPool *mp)
 				  mp, GPOS_NEW(mp) CPatternTree(mp))  // join predicate
 			  ))
 {
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		PdrgpcrsPlainEqualities
+//
+//	@doc:
+//		Equivalence classes of the equalities over scalar identifiers among
+//		the given conjuncts
+//
+//---------------------------------------------------------------------------
+static CColRefSetArray *
+PdrgpcrsPlainEqualities(CMemoryPool *mp, CExpressionArray *pdrgpexpr)
+{
+	CColRefSetArray *pdrgpcrs = GPOS_NEW(mp) CColRefSetArray(mp);
+
+	const ULONG length = pdrgpexpr->Size();
+	for (ULONG ul = 0; ul < length; ul++)
+	{
+		CExpression *pexpr = (*pdrgpexpr)[ul];
+		if (!CPredicateUtils::FPlainEquality(pexpr))
+		{
+			continue;
+		}
+
+		CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+		pcrs->Include(CScalarIdent::PopConvert((*pexpr)[0]->Pop())->Pcr());
+		pcrs->Include(CScalarIdent::PopConvert((*pexpr)[1]->Pop())->Pcr());
+
+		CColRefSetArray *pdrgpcrsNew =
+			CUtils::AddEquivClassToArray(mp, pcrs, pdrgpcrs);
+		pcrs->Release();
+		pdrgpcrs->Release();
+		pdrgpcrs = pdrgpcrsNew;
+	}
+
+	return pdrgpcrs;
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		AddImpliedEqualities
+//
+//	@doc:
+//		For each equivalence class of the plain equalities of both input joins
+//		that has columns in both children of the new lower join but is not
+//		joined by its predicates, add an equality between the children to
+//		these predicates. A join tree keeps no implied predicates, so for
+//
+//			(t1 JOIN t2 ON t1.a = t2.a) JOIN t3 ON t1.b = t3.b AND t2.a = t3.a
+//
+//		the new lower join of t1 and t3 would otherwise get only
+//		t1.b = t3.b and lose t1.a = t3.a, which, for example, makes the join
+//		co-located when both tables are distributed by a.
+//
+//---------------------------------------------------------------------------
+static void
+AddImpliedEqualities(CMemoryPool *mp, CExpressionArray *pdrgpexprOrig,
+					 CColRefSet *pcrsLeft, CColRefSet *pcrsRight,
+					 CExpressionArray *pdrgpexprLower)
+{
+	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	CColRefSetArray *pdrgpcrs = PdrgpcrsPlainEqualities(mp, pdrgpexprOrig);
+	CColRefSetArray *pdrgpcrsLower =
+		PdrgpcrsPlainEqualities(mp, pdrgpexprLower);
+
+	const ULONG ulClasses = pdrgpcrs->Size();
+	for (ULONG ul = 0; ul < ulClasses; ul++)
+	{
+		CColRefSet *pcrsClass = (*pdrgpcrs)[ul];
+
+		// skip the class if the new lower join already joins it
+		BOOL fJoined = false;
+		const ULONG ulLowerClasses = pdrgpcrsLower->Size();
+		for (ULONG ulLower = 0; ulLower < ulLowerClasses && !fJoined; ulLower++)
+		{
+			CColRefSet *pcrsLowerClass = (*pdrgpcrsLower)[ulLower];
+			fJoined = pcrsClass->ContainsAll(pcrsLowerClass) &&
+					  !pcrsLowerClass->IsDisjoint(pcrsLeft) &&
+					  !pcrsLowerClass->IsDisjoint(pcrsRight);
+		}
+		if (fJoined)
+		{
+			continue;
+		}
+
+		// find columns of the same type in both children, so that the
+		// equality uses the equality operator of that type
+		CColRef *pcrLeft = NULL;
+		CColRef *pcrRight = NULL;
+		CColRefSetIter crsiLeft(*pcrsClass);
+		while (NULL == pcrLeft && crsiLeft.Advance())
+		{
+			CColRef *colref = crsiLeft.Pcr();
+			IMDId *mdid_type = colref->RetrieveType()->MDId();
+			if (!pcrsLeft->FMember(colref) ||
+				!CMDAccessorUtils::FCmpExists(md_accessor, mdid_type, mdid_type,
+											  IMDType::EcmptEq))
+			{
+				continue;
+			}
+
+			CColRefSetIter crsiRight(*pcrsClass);
+			while (crsiRight.Advance())
+			{
+				if (pcrsRight->FMember(crsiRight.Pcr()) &&
+					mdid_type->Equals(crsiRight.Pcr()->RetrieveType()->MDId()))
+				{
+					pcrLeft = colref;
+					pcrRight = crsiRight.Pcr();
+					break;
+				}
+			}
+		}
+
+		if (NULL != pcrLeft)
+		{
+			pdrgpexprLower->Append(
+				CUtils::PexprScalarEqCmp(mp, pcrLeft, pcrRight));
+		}
+	}
+
+	pdrgpcrsLower->Release();
+	pdrgpcrs->Release();
 }
 
 
@@ -125,6 +256,10 @@ CXformJoinAssociativity::CreatePredicates(
 			pdrgpexprUpper->Append(pexprPred);
 		}
 	}
+
+	AddImpliedEqualities(mp, pdrgpexprOrig,
+						 pexprLeftLeft->DeriveOutputColumns(),
+						 pexprRight->DeriveOutputColumns(), pdrgpexprLower);
 
 	// No predicates indicate a cross join. And for that, ORCA expects
 	// predicate to be a scalar const "true".

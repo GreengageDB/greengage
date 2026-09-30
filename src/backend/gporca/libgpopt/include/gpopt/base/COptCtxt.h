@@ -101,6 +101,10 @@ private:
 	// does this plan have a direct dispatchable filter
 	CExpressionArray *m_direct_dispatchable_filters;
 
+	// total number of relations in the n-ary joins of the query that can
+	// use the JoinAssociativity xform
+	ULONG m_ulJoinArityForAssociativity;
+
 public:
 	// ctor
 	COptCtxt(CMemoryPool *mp, CColumnFactory *col_factory,
@@ -185,6 +189,15 @@ public:
 	GetDirectDispatchableFilters() const
 	{
 		return m_direct_dispatchable_filters;
+	}
+
+	// add the number of relations of an n-ary join to the total for the
+	// query and return the new total
+	ULONG
+	AddJoinArityForAssociativity(ULONG ulJoinArity)
+	{
+		m_ulJoinArityForAssociativity += ulJoinArity;
+		return m_ulJoinArityForAssociativity;
 	}
 
 	BOOL
