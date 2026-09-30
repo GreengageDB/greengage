@@ -214,6 +214,14 @@ probe_waits(History *observations, HTAB *profile_hash,
 			if (!profile_pid)
 				item.pid = 0;
 
+			/*
+			 * With profile_queries = none the hash key must not carry the
+			 * session identity either: the hash may have been built with a
+			 * key that includes these fields, before the GUC was reloaded.
+			 */
+			if (!pgws_profileQueries)
+				item.ssid = item.ccnt = item.tmid = 0;
+
 			profileItem = (ProfileItem *) hash_search(profile_hash, &item, HASH_ENTER, &found);
 			if (found)
 				profileItem->count++;

@@ -177,13 +177,14 @@ Properties of `command_id` that follow from how the server numbers commands:
    dispatched to the segments and printed as `cmd` in the log prefix. Waits
    after the statement has finished running, for example during the two-phase
    commit dispatch, are again reported under the parsing value.
- * Only a simple-protocol statement and the Execute of a utility statement
-   advance the counter persistently; a plannable statement takes its number
-   in `CreateQueryDesc` and the previous value is restored when it finishes.
-   With the extended query protocol a backend that blocks during Parse or
-   Bind of a plannable statement therefore reports the `command_id` of its
-   last simple-protocol or utility statement, or 0 if there was none, which
-   is also the value an idle backend reports.
+ * Only a simple-protocol statement advances the counter persistently. A
+   plannable statement takes its number in `CreateQueryDesc` and a utility
+   statement in `ProcessUtility`, and the previous value is restored when
+   they finish, whatever protocol they came through. With the extended query
+   protocol a backend that blocks during Parse or Bind, or while committing
+   on Sync, therefore reports the `command_id` of its last simple-protocol
+   statement, or 0 if there was none, which is also the value an idle backend
+   reports.
  * The coordinator keeps the last value after a statement ends. A backend
    waiting for its client (`ClientRead`) outside a statement, that is idle,
    idle in transaction, or between the messages of an extended-protocol
