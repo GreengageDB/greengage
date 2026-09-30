@@ -7004,7 +7004,7 @@ SELECT count(*), count(DISTINCT id) FROM rank6;
 
 -- Updates on leaf partitions shouldn't be planned with split update as update
 -- on leaf partition suppose to not move rows away from this partition thus,
--- keeping distribution the same. 
+-- keeping distribution the same.
 EXPLAIN (COSTS OFF) UPDATE rank6_1_prt_2 SET year = 2007 WHERE id = 50;
            QUERY PLAN            
 ---------------------------------
