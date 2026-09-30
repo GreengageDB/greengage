@@ -769,7 +769,7 @@ select * from (cst_int2 join int8_cte as cte_1 using(a))
                      ->  Seq Scan on public.cst_int2
                            Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on, optimizer_nestloop_factor=102400
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=102400
 (35 rows)
 
 with int8_cte as (select * from cst_int8)
@@ -820,7 +820,7 @@ select * from (cst_int2 join int8_cte as cte_1 using(a))
                                  ->  Seq Scan on public.cst_int2
                                        Output: cst_int2.a
  Optimizer: Pivotal Optimizer (GPORCA)
- Settings: enable_mergejoin=off, enable_nestloop=off, optimizer=on, optimizer_nestloop_factor=102400
+ Settings: enable_mergejoin=off, enable_nestloop=off, optimizer_nestloop_factor=102400
 (35 rows)
 
 with int8_cte as (select * from cst_int8)
