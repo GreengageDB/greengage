@@ -1433,6 +1433,177 @@ aocs_get_target_tuple(AOCSScanDesc aoscan, int64 targrow, TupleTableSlot *slot)
 	return aocs_gettuple(aoscan, targrow, slot);
 }
 
+/*
+ * Eager per-row column fetch: used when this scan has no qual at all
+ * (columnScanInfo.eagerFetch, set in aoco_beginscan_extractcolumns() from
+ * (qual == NIL)). Fetches every column in proj_atts directly, for every
+ * row -- this is (deliberately) the pre-lazy-fetch aocs_getnext()
+ * implementation, unchanged, ported back in as an alternate path.
+ *
+ * With no qual, every projected column is needed for every row that
+ * survives visibility anyway, so there's nothing for the lazy per-Var
+ * fetch mechanism (tts_virtual_aocs_fetchattr()/getsomeattrs(), driven by
+ * EEOP_SCAN_VAR/EEOP_SCAN_FETCHSOME) to ever skip -- only its
+ * tts_is_valid bookkeeping overhead to pay on every attribute touch. This
+ * function sidesteps that machinery entirely: it never touches
+ * tts_is_valid, and instead sets tts_nvalid to the full tuple descriptor
+ * width, so slot_is_attr_valid()/slot_getsomeattrs() (see tuptable.h) see
+ * every attribute as already valid and never call into
+ * tts_virtual_aocs_fetchattr()/getsomeattrs() for this tuple at all.
+ */
+static bool
+aocs_getnext_eager(AOCSScanDesc scan, TupleTableSlot *slot)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
+
+	AOTupleId	aoTupleId;
+	int64		rowNum = InvalidAORowNum;
+	int64		nthInBlock;
+	int			err = 0;
+	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
+	AttrNumber	natts = slot->tts_tupleDescriptor->natts;
+
+	Assert(natts <= scan->columnScanInfo.relationTupleDesc->natts);
+
+	while (1)
+	{
+		AOCSFileSegInfo *curseginfo;
+
+ReadNextEager:
+		/* If necessary, open next seg */
+		if (unlikely(scan->cur_seg < 0 || err < 0))
+		{
+			/*
+			 * Bail out early if we do not have any column in the projection.
+			 * Placing here in order to have less impact on the hot path.
+			 */
+			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
+			{
+				slotAocs->current_scan = NULL;
+				return false;
+			}
+
+			err = open_next_scan_seg(scan);
+			if (err < 0)
+			{
+				/* No more seg, we are at the end */
+				ExecClearTuple(slot);
+				scan->cur_seg = -1;
+				slotAocs->current_scan = NULL;
+				return false;
+			}
+			scan->segrowsprocessed = 0;
+		}
+
+		/* We shouldn't have a 0-column projection as we should've bailed out above */
+		Assert(scan->columnScanInfo.num_proj_atts > 0);
+
+		Assert(scan->cur_seg >= 0);
+		curseginfo = scan->seginfo[scan->cur_seg];
+
+		/* Read from cur_seg */
+		for (AttrNumber i = 0; i < scan->columnScanInfo.num_proj_atts; i++)
+		{
+			AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
+
+			/*
+			 * Check missing value before reading from data files.
+			 *
+			 * We don't need to check the missing value for the anchor column.
+			 * In fact, we cannot do that either because we don't have the
+			 * row number until we've scanned the anchor column.
+			 */
+			if (attno != scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ])
+			{
+				Assert(rowNum > 0);
+				if (AO_ATTR_VAL_IS_MISSING(rowNum,
+											attno,
+											curseginfo->segno,
+											scan->columnScanInfo.attnum_to_rownum))
+				{
+					d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
+					continue;
+				}
+			}
+
+			/* otherwise, read from data file */
+			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+			Assert(err >= 0);
+			if (unlikely(err == 0))
+			{
+				err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+				if (err < 0)
+				{
+					/*
+					 * Ha, cannot read next block, we need to go to next seg
+					 */
+					close_cur_scan_seg(scan);
+					goto ReadNextEager;
+				}
+
+				AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+				pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
+											RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
+
+				err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+				Assert(err > 0);
+			}
+
+			/*
+			 * Get the column's datum right here since the data structures
+			 * should still be hot in CPU data cache memory.
+			 */
+			datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
+
+			nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
+			if (rowNum == InvalidAORowNum &&
+				scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+			{
+				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+				rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
+			}
+#ifdef USE_ASSERT_CHECKING
+			/*
+			 * the row number from every column should match
+			 */
+			else if (scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+			{
+				Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+				Assert(rowNum == scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock);
+			}
+#endif
+		}
+
+		scan->segrowsprocessed++;
+		if (rowNum == InvalidAORowNum)
+		{
+			AOTupleIdInit(&aoTupleId, curseginfo->segno, scan->segrowsprocessed);
+		}
+		else
+		{
+			AOTupleIdInit(&aoTupleId, curseginfo->segno, rowNum);
+		}
+
+		if (unlikely(!isSnapshotAny && !AppendOnlyVisimap_IsVisible(&scan->visibilityMap, &aoTupleId)))
+		{
+			/* The tuple is invisible */
+			rowNum = InvalidAORowNum;
+			goto ReadNextEager;
+		}
+
+		slot->tts_nvalid = natts;
+		slot->tts_tid = *((ItemPointer) &aoTupleId);
+		slotAocs->current_scan = (void *) scan;
+
+		return true;
+	}
+
+	Assert(!"Never here");
+	return false;
+}
+
 bool
 aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
@@ -1539,6 +1710,10 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 				}
 			}
 		}
+	}
+	else if (scan->columnScanInfo.eagerFetch)
+	{
+		return aocs_getnext_eager(scan, slot);
 	}
 	else
 	{
