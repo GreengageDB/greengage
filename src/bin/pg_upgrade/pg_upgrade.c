@@ -273,12 +273,6 @@ main(int argc, char **argv)
 		restore_aosegment_tables();
 	}
 
-	if (is_greengage_dispatcher_mode())
-	{
-		/* freeze master data *right before* stopping */
-		freeze_master_data();
-	}
-
 	stop_postmaster(false);
 
 	/*
@@ -292,6 +286,31 @@ main(int argc, char **argv)
 
 	transfer_all_new_tablespaces(&old_cluster.dbarr, &new_cluster.dbarr,
 								 old_cluster.pgdata, new_cluster.pgdata);
+
+	if (is_greengage_dispatcher_mode())
+	{
+		/*
+		 * Freeze master data *right before* stopping, after
+		 * transfer_all_new_tablespaces() has physically put the old
+		 * cluster's user relation files in place.
+		 *
+		 * Freezing before the relation files exist sets relfrozenxid from
+		 * tables that are still empty at that point. Ordinary distributed
+		 * tables are unaffected, because their coordinator-side relation
+		 * file is always empty anyway. But a table that legitimately holds
+		 * real data on the coordinator itself - e.g. a "gg_local" extension
+		 * table - ends up with a relfrozenxid that is newer than the xmin
+		 * of the tuples transfer_all_new_tablespaces() copies in afterward.
+		 * A later VACUUM against that data then correctly rejects it as
+		 * corruption: "found xmin ... from before relfrozenxid ...".
+		 * Freezing after transfer lets VACUUM FREEZE see the real tuples
+		 * and compute a relfrozenxid that is actually consistent with
+		 * them.
+		 */
+		start_postmaster(&new_cluster, true);
+		freeze_master_data();
+		stop_postmaster(false);
+	}
 
 	/* For non-master segments, uniquify the system identifier. */
 	if (!is_greengage_dispatcher_mode())
