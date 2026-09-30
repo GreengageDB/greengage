@@ -16,7 +16,7 @@ SET allow_system_table_mods to OFF;
 \! psql -p $((PGPORT+1)) -d postgres -c "select dbid from gp_segment_configuration where content = -1 AND role = 'm';"
 WARNING:  could not translate host name "foo", port "7001" to address: Name or service not known
 WARNING:  could not translate host name "foo", port "7001" to address: Name or service not known
-psql: error: FATAL:  content values not valid in hostPrimaryCountHash table for hostname 'foo'
+psql: error: FATAL:  Hostname 'foo' was not found in hostPrimaryCountHash
 SET allow_system_table_mods to ON;
 UPDATE gp_segment_configuration
 SET (address, hostname) =
