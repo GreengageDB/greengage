@@ -60,7 +60,7 @@ CREATE TABLE bigtable AS
 -- Creates view busy with k identical branches, trying to fill all cpu cores.
 -- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
 -- branch.
-CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
+CREATE OR REPLACE FUNCTION create_busy_view(qcount int) RETURNS void AS $$
     branch = """
         SELECT count(*) AS s
             FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
@@ -73,14 +73,16 @@ CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
     ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n']
 
     import math
-    procs_per_branch = 5 * nsegs
+    procs_per_branch = qcount * nsegs
     k = min(16, math.ceil(ncores / procs_per_branch) + 1)
     
-    plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format(
-        ' UNION ALL '.join(['(' + branch + ')'] * k)))
+    plpy.execute('CREATE VIEW busy{1} AS SELECT sum(s) FROM ({0}) x'.format(
+        ' UNION ALL '.join(['(' + branch + ')'] * k), qcount))
 $$ LANGUAGE plpython3u;
 
-SELECT create_busy_view();
+SELECT create_busy_view(5);
+
+SELECT create_busy_view(10);
 
 
 CREATE VIEW cancel_all AS
@@ -108,8 +110,10 @@ ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
-GRANT ALL ON busy TO role1_cpu_test;
-GRANT ALL ON busy TO role2_cpu_test;
+GRANT ALL ON busy5 TO role1_cpu_test;
+GRANT ALL ON busy5 TO role2_cpu_test;
+GRANT ALL ON busy10 TO role1_cpu_test;
+GRANT ALL ON busy10 TO role2_cpu_test;
 
 -- prepare parallel queries in the two groups
 10: SET ROLE TO role1_cpu_test;
@@ -130,11 +134,11 @@ GRANT ALL ON busy TO role2_cpu_test;
 -- on empty load the cpu usage shall be 0%
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
+10&: SELECT * FROM busy5;
+11&: SELECT * FROM busy5;
+12&: SELECT * FROM busy5;
+13&: SELECT * FROM busy5;
+14&: SELECT * FROM busy5;
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -196,17 +200,17 @@ SELECT * FROM cancel_all;
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
+10&: SELECT * FROM busy10;
+11&: SELECT * FROM busy10;
+12&: SELECT * FROM busy10;
+13&: SELECT * FROM busy10;
+14&: SELECT * FROM busy10;
 
-20&: SELECT * FROM busy;
-21&: SELECT * FROM busy;
-22&: SELECT * FROM busy;
-23&: SELECT * FROM busy;
-24&: SELECT * FROM busy;
+20&: SELECT * FROM busy10;
+21&: SELECT * FROM busy10;
+22&: SELECT * FROM busy10;
+23&: SELECT * FROM busy10;
+24&: SELECT * FROM busy10;
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -296,11 +300,11 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- so the cpu usage shall be 0.9 * 10%
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
+10&: SELECT * FROM busy5;
+11&: SELECT * FROM busy5;
+12&: SELECT * FROM busy5;
+13&: SELECT * FROM busy5;
+14&: SELECT * FROM busy5;
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -362,17 +366,17 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- - rg2_cpu_test gets 0.9 * 20%;
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
+10&: SELECT * FROM busy10;
+11&: SELECT * FROM busy10;
+12&: SELECT * FROM busy10;
+13&: SELECT * FROM busy10;
+14&: SELECT * FROM busy10;
 
-20&: SELECT * FROM busy;
-21&: SELECT * FROM busy;
-22&: SELECT * FROM busy;
-23&: SELECT * FROM busy;
-24&: SELECT * FROM busy;
+20&: SELECT * FROM busy10;
+21&: SELECT * FROM busy10;
+22&: SELECT * FROM busy10;
+23&: SELECT * FROM busy10;
+24&: SELECT * FROM busy10;
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -437,10 +441,12 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:ALTER RESOURCE GROUP admin_group SET cpu_max_percent 10;
 
 -- cleanup
-2:REVOKE ALL ON busy FROM role1_cpu_test;
-2:REVOKE ALL ON busy FROM role2_cpu_test;
+2:REVOKE ALL ON busy5 FROM role1_cpu_test;
+2:REVOKE ALL ON busy5 FROM role2_cpu_test;
+2:REVOKE ALL ON busy10 FROM role1_cpu_test;
+2:REVOKE ALL ON busy10 FROM role2_cpu_test;
 2:DROP ROLE role1_cpu_test;
 2:DROP ROLE role2_cpu_test;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
-2:DROP FUNCTION create_busy_view();
+2:DROP FUNCTION create_busy_view(int);
