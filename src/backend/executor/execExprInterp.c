@@ -534,8 +534,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * lazily right here instead, the first (and only) time this
 			 * specific step actually executes for this row.
 			 */
-			if (unlikely(!slot_is_attr_valid(scanslot, attnum)))
-				slot_fetchattr(scanslot, attnum);
+			slot_fetchattr(scanslot, attnum);
+
+			Assert(slot_is_attr_valid(scanslot, attnum));
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
 
@@ -616,8 +617,7 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * skipped for a slot type that supports on-demand fetch.
 			 */
 			Assert(attnum >= 0);
-			if (unlikely(!slot_is_attr_valid(scanslot, attnum)))
-				slot_fetchattr(scanslot, attnum);
+			slot_fetchattr(scanslot, attnum);
 			Assert(slot_is_attr_valid(scanslot, attnum));
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = scanslot->tts_values[attnum];

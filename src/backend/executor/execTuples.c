@@ -327,13 +327,15 @@ tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 static void
 tts_virtual_aocs_fetchattr(TupleTableSlot *slot, int attnum)
 {
+	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
+	if (slotAocs->tts_is_valid == NULL || slotAocs->tts_is_valid[attnum])
+		return;
+
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
-
-	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
 	AOCSScanDesc scan = (AOCSScanDesc) slotAocs->current_scan;
 
-	if (unlikely(scan == NULL) || slotAocs->tts_is_valid[attnum])
+	if (unlikely(scan == NULL))
 		return;
 
 	AOCSFileSegInfo *curseginfo = scan->seginfo[scan->cur_seg];
