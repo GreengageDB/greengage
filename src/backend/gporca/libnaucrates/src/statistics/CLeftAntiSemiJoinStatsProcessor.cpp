@@ -62,8 +62,8 @@ CLeftAntiSemiJoinStatsProcessor::JoinHistogramsLASJ(
 		// this computation, never its row-count/frequency, so its own mark
 		// doesn't undermine the computation's validity and is deliberately
 		// not checked here.
-		BOOL ignore_hist_computation =
-			DoIgnoreLASJHistComputation || histogram2->IsUnsupportedPredDerived();
+		BOOL ignore_hist_computation = DoIgnoreLASJHistComputation ||
+									   histogram2->IsUnsupportedPredDerived();
 
 		*result_hist1 = histogram1->MakeLASJHistogramNormalize(
 			stats_cmp_type, num_rows1, histogram2, scale_factor,
