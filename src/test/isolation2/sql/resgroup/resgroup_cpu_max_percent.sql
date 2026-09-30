@@ -13,6 +13,10 @@ CREATE LANGUAGE plpython3u;
 --
 -- helper functions, tables and views
 --
+CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$
+    import os
+    return os.cpu_count()
+$$ LANGUAGE plpython3u IMMUTABLE;
 
 DROP TABLE IF EXISTS cpu_usage_samples;
 CREATE TABLE cpu_usage_samples (sample text);
@@ -53,23 +57,20 @@ CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
     FROM generate_series(1, 50000) i distributed randomly;
 
-CREATE OR REPLACE FUNCTION complex_compute(i int)
-RETURNS int AS $$
-    results = 1
-    for j in range(1, 50000 + i):
-        results = (results * j) % 35969
-    return results
+CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
+    branch = "SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'"
+    nsegs = plpy.execute("""
+        SELECT count(*) AS n FROM gp_segment_configuration
+         WHERE content >= 0 AND role = 'p'
+    """)[0]['n']
+    ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n']
+    k = min(16, ((ncores + 5 * nsegs - 1) // (5 * nsegs)) + 1)
+    plpy.execute('DROP VIEW IF EXISTS busy')
+    plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format(
+        ' UNION ALL '.join(['(' + branch + ')'] * k)))
 $$ LANGUAGE plpython3u;
 
-CREATE VIEW busy AS
-    WITH t1 as (select random(), complex_compute(c1) from bigtable),
-    t2 as (select random(), complex_compute(c1) from bigtable),
-    t3 as (select random(), complex_compute(c1) from bigtable),
-    t4 as (select random(), complex_compute(c1) from bigtable),
-    t5 as (select random(), complex_compute(c1) from bigtable)
-    SELECT count(*)
-    FROM
-    t1, t2, t3, t4, t5;
+SELECT create_busy_view();
 
 
 CREATE VIEW cancel_all AS
@@ -97,8 +98,6 @@ ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int) TO role1_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int) TO role2_cpu_test;
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT ALL ON busy TO role2_cpu_test;
 
@@ -126,6 +125,13 @@ GRANT ALL ON busy TO role2_cpu_test;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+-- start_ignore
+! vmstat 1 5;
+! ps -eo stat=,comm= | awk '$2 ~ /postgres/ {s[substr($1,1,1)]++} END {for (k in s) print k, s[k]}';
+! cat /sys/fs/cgroup/gpdb/cpu.stat;
+! cat /sys/fs/cgroup/cpu.max;
+! free -m;
+-- end_ignore
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -187,17 +193,17 @@ SELECT * FROM cancel_all;
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
-
 20&: SELECT * FROM busy;
 21&: SELECT * FROM busy;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+10&: SELECT * FROM busy;
+11&: SELECT * FROM busy;
+12&: SELECT * FROM busy;
+13&: SELECT * FROM busy;
+14&: SELECT * FROM busy;
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -353,17 +359,17 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 -- - rg2_cpu_test gets 0.9 * 20%;
 --
 
-10&: SELECT * FROM busy;
-11&: SELECT * FROM busy;
-12&: SELECT * FROM busy;
-13&: SELECT * FROM busy;
-14&: SELECT * FROM busy;
-
 20&: SELECT * FROM busy;
 21&: SELECT * FROM busy;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+10&: SELECT * FROM busy;
+11&: SELECT * FROM busy;
+12&: SELECT * FROM busy;
+13&: SELECT * FROM busy;
+14&: SELECT * FROM busy;
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -428,11 +434,10 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:ALTER RESOURCE GROUP admin_group SET cpu_max_percent 10;
 
 -- cleanup
-2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role1_cpu_test;
-2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role2_cpu_test;
 2:REVOKE ALL ON busy FROM role1_cpu_test;
 2:REVOKE ALL ON busy FROM role2_cpu_test;
 2:DROP ROLE role1_cpu_test;
 2:DROP ROLE role2_cpu_test;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
+2:DROP FUNCTION create_busy_view();
