@@ -287,7 +287,7 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * matters since this is consulted and updated on every attribute access
 	 * of every tuple in an AOCS scan.
 	 *
-	 * Normally allocated once per slot (sized to tts_tupleDescriptor->natts)
+	 * Normally allocated once per slot (sized to 'tts_tupleDescriptor->natts')
 	 * and reused for the slot's lifetime -- but the descriptor is NOT
 	 * guaranteed to stay the same size for that lifetime: ExecSetSlotDescriptor()
 	 * can re-describe an existing slot (e.g. ExecInitJunkFilterInsertion()
