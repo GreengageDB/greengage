@@ -1758,6 +1758,13 @@ CStatisticsUtils::AddGrpColStats(CMemoryPool *mp,
 			{
 				result_histogram->SetNDVScaled();
 			}
+			// grouping removes duplicates but can't undo an earlier
+			// unsupported predicate's unreliable row-count guess on this
+			// column
+			if (histogram->IsUnsupportedPredDerived())
+			{
+				result_histogram->SetUnsupportedPredDerived();
+			}
 			AddHistogram(mp, grp_colid, result_histogram, output_histograms);
 			GPOS_DELETE(result_histogram);
 		}

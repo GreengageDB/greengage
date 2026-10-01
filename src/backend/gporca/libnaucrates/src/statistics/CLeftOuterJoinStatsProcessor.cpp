@@ -135,6 +135,15 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 					LASJ_histogram->MakeUnionAllHistogramNormalize(
 						num_rows_LASJ, inner_join_histogram,
 						num_rows_inner_join);
+				// this union can't undo either side's unsupported-predicate
+				// imprecision on this column - carry it forward so a deeper
+				// LASJ consuming this LOJ's output still knows not to trust
+				// this histogram's bucket content
+				if (LASJ_histogram->IsUnsupportedPredDerived() ||
+					inner_join_histogram->IsUnsupportedPredDerived())
+				{
+					LOJ_histogram->SetUnsupportedPredDerived();
+				}
 				CStatisticsUtils::AddHistogram(mp, colid, LOJ_histogram,
 											   LOJ_histograms);
 				GPOS_DELETE(LOJ_histogram);
@@ -203,6 +212,14 @@ CLeftOuterJoinStatsProcessor::AddHistogramsLOJInner(
 		CHistogram *LOJ_histogram =
 			inner_join_histogram->MakeUnionAllHistogramNormalize(
 				num_rows_inner_join, null_histogram, num_rows_LASJ);
+		// this union can't undo an earlier unsupported predicate's
+		// unreliable row-count guess on this column; the synthetic
+		// null_histogram standing in for unmatched outer rows is never
+		// itself marked
+		if (inner_join_histogram->IsUnsupportedPredDerived())
+		{
+			LOJ_histogram->SetUnsupportedPredDerived();
+		}
 		CStatisticsUtils::AddHistogram(mp, colid, LOJ_histogram,
 									   LOJ_histograms);
 
