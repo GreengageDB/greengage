@@ -84,6 +84,10 @@ $$ LANGUAGE plpython3u;
 SELECT create_busy_view(5);
 
 SELECT create_busy_view(10);
+-- start_ignore
+EXPLAIN VERBOSE select * from busy5;
+EXPLAIN VERBOSE select * from busy10;
+-- end_ignore
 
 
 CREATE VIEW cancel_all AS
