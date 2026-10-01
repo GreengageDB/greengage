@@ -9,9 +9,7 @@ DROP RESOURCE GROUP rg1_cpu_test;
 ERROR:  resource group "rg1_cpu_test" does not exist
 DROP RESOURCE GROUP rg2_cpu_test;
 ERROR:  resource group "rg2_cpu_test" does not exist
-DROP VIEW IF EXISTS busy5;
-DROP VIEW
-DROP VIEW IF EXISTS busy10;
+DROP VIEW IF EXISTS busy;
 DROP VIEW
 DROP TABLE IF EXISTS bigtable;
 DROP TABLE
@@ -55,18 +53,12 @@ ANALYZE
 -- Creates view busy with k identical branches, trying to fill all cpu cores.
 -- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
 -- branch.
-CREATE OR REPLACE FUNCTION create_busy_view(qcount int) RETURNS void AS $$ branch = """ SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'""" 
+CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$ branch = """ SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'""" 
 nsegs = plpy.execute(""" SELECT count(*) AS n FROM gp_segment_configuration WHERE content >= 0 AND role = 'p' """)[0]['n'] ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n'] 
-import math procs_per_branch = qcount * nsegs k = min(16, math.ceil(ncores / procs_per_branch) + 1)  plpy.execute('CREATE VIEW busy{1} AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k), qcount)) $$ LANGUAGE plpython3u;
+import math procs_per_branch = 5 * nsegs k = min(16, math.ceil(ncores / procs_per_branch) + 1)  plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k))) $$ LANGUAGE plpython3u;
 CREATE FUNCTION
 
-SELECT create_busy_view(5);
- create_busy_view 
-------------------
-                  
-(1 row)
-
-SELECT create_busy_view(10);
+SELECT create_busy_view();
  create_busy_view 
 ------------------
                   
@@ -109,13 +101,9 @@ CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
 CREATE ROLE
-GRANT ALL ON busy5 TO role1_cpu_test;
+GRANT ALL ON busy TO role1_cpu_test;
 GRANT
-GRANT ALL ON busy5 TO role2_cpu_test;
-GRANT
-GRANT ALL ON busy10 TO role1_cpu_test;
-GRANT
-GRANT ALL ON busy10 TO role2_cpu_test;
+GRANT ALL ON busy TO role2_cpu_test;
 GRANT
 
 -- prepare parallel queries in the two groups
@@ -147,11 +135,11 @@ SET
 -- on empty load the cpu usage shall be 0%
 --
 
-10&: SELECT * FROM busy5;  <waiting ...>
-11&: SELECT * FROM busy5;  <waiting ...>
-12&: SELECT * FROM busy5;  <waiting ...>
-13&: SELECT * FROM busy5;  <waiting ...>
-14&: SELECT * FROM busy5;  <waiting ...>
+10&: SELECT * FROM busy;  <waiting ...>
+11&: SELECT * FROM busy;  <waiting ...>
+12&: SELECT * FROM busy;  <waiting ...>
+13&: SELECT * FROM busy;  <waiting ...>
+14&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -317,17 +305,17 @@ SET
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
 
-10&: SELECT * FROM busy10;  <waiting ...>
-11&: SELECT * FROM busy10;  <waiting ...>
-12&: SELECT * FROM busy10;  <waiting ...>
-13&: SELECT * FROM busy10;  <waiting ...>
-14&: SELECT * FROM busy10;  <waiting ...>
+10&: SELECT * FROM busy;  <waiting ...>
+11&: SELECT * FROM busy;  <waiting ...>
+12&: SELECT * FROM busy;  <waiting ...>
+13&: SELECT * FROM busy;  <waiting ...>
+14&: SELECT * FROM busy;  <waiting ...>
 
-20&: SELECT * FROM busy10;  <waiting ...>
-21&: SELECT * FROM busy10;  <waiting ...>
-22&: SELECT * FROM busy10;  <waiting ...>
-23&: SELECT * FROM busy10;  <waiting ...>
-24&: SELECT * FROM busy10;  <waiting ...>
+20&: SELECT * FROM busy;  <waiting ...>
+21&: SELECT * FROM busy;  <waiting ...>
+22&: SELECT * FROM busy;  <waiting ...>
+23&: SELECT * FROM busy;  <waiting ...>
+24&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -542,11 +530,11 @@ SET
 -- so the cpu usage shall be 0.9 * 10%
 --
 
-10&: SELECT * FROM busy5;  <waiting ...>
-11&: SELECT * FROM busy5;  <waiting ...>
-12&: SELECT * FROM busy5;  <waiting ...>
-13&: SELECT * FROM busy5;  <waiting ...>
-14&: SELECT * FROM busy5;  <waiting ...>
+10&: SELECT * FROM busy;  <waiting ...>
+11&: SELECT * FROM busy;  <waiting ...>
+12&: SELECT * FROM busy;  <waiting ...>
+13&: SELECT * FROM busy;  <waiting ...>
+14&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -712,17 +700,17 @@ SET
 -- - rg2_cpu_test gets 0.9 * 20%;
 --
 
-10&: SELECT * FROM busy10;  <waiting ...>
-11&: SELECT * FROM busy10;  <waiting ...>
-12&: SELECT * FROM busy10;  <waiting ...>
-13&: SELECT * FROM busy10;  <waiting ...>
-14&: SELECT * FROM busy10;  <waiting ...>
+10&: SELECT * FROM busy;  <waiting ...>
+11&: SELECT * FROM busy;  <waiting ...>
+12&: SELECT * FROM busy;  <waiting ...>
+13&: SELECT * FROM busy;  <waiting ...>
+14&: SELECT * FROM busy;  <waiting ...>
 
-20&: SELECT * FROM busy10;  <waiting ...>
-21&: SELECT * FROM busy10;  <waiting ...>
-22&: SELECT * FROM busy10;  <waiting ...>
-23&: SELECT * FROM busy10;  <waiting ...>
-24&: SELECT * FROM busy10;  <waiting ...>
+20&: SELECT * FROM busy;  <waiting ...>
+21&: SELECT * FROM busy;  <waiting ...>
+22&: SELECT * FROM busy;  <waiting ...>
+23&: SELECT * FROM busy;  <waiting ...>
+24&: SELECT * FROM busy;  <waiting ...>
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -901,13 +889,9 @@ ERROR:  canceling statement due to user request
 ALTER RESOURCE GROUP
 
 -- cleanup
-2:REVOKE ALL ON busy5 FROM role1_cpu_test;
+2:REVOKE ALL ON busy FROM role1_cpu_test;
 REVOKE
-2:REVOKE ALL ON busy5 FROM role2_cpu_test;
-REVOKE
-2:REVOKE ALL ON busy10 FROM role1_cpu_test;
-REVOKE
-2:REVOKE ALL ON busy10 FROM role2_cpu_test;
+2:REVOKE ALL ON busy FROM role2_cpu_test;
 REVOKE
 2:DROP ROLE role1_cpu_test;
 DROP ROLE
@@ -917,9 +901,7 @@ DROP ROLE
 DROP RESOURCE GROUP
 2:DROP RESOURCE GROUP rg2_cpu_test;
 DROP RESOURCE GROUP
-2:DROP FUNCTION create_busy_view(int);
+2:DROP FUNCTION create_busy_view();
 DROP FUNCTION
-2:DROP VIEW IF EXISTS busy5;
-DROP VIEW
-2:DROP VIEW IF EXISTS busy10;
+2:DROP VIEW IF EXISTS busy;
 DROP VIEW
