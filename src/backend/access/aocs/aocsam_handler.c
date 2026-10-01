@@ -743,9 +743,15 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 		 * So reset it to 0 here to force every later attribute access
 		 * through the AOCS-specific lazy-fetch path. This is skipped for
 		 * AOCS_PROJ_ANY (e.g. count(*)) since that projection never reads
-		 * column values, only row identity.
+		 * column values, only row identity, and for eagerFetch scans, since
+		 * aocs_getnext_eager() already populated every projected column and
+		 * deliberately relies on tts_nvalid staying at natts (see the
+		 * comment above aocs_getnext_eager()) -- resetting it here would
+		 * force a redundant, desyncing re-fetch of every column on every
+		 * row via fetchattr()/getsomeattrs().
 		 */
-		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY)
+		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY &&
+			!aoscan->columnScanInfo.eagerFetch)
 			slot->tts_nvalid = 0;
 
 		pgstat_count_heap_getnext(aoscan->rs_base.rs_rd);
