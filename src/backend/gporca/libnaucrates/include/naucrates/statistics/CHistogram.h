@@ -253,6 +253,16 @@ public:
 		m_is_unsupported_pred_derived = true;
 	}
 
+	// clear a mark inherited from a source histogram that doesn't actually
+	// apply here (e.g. a LOJ's preserved outer column, whose own value range
+	// is exact regardless of what was marked on the matched-rows histogram
+	// it was copied or derived from)
+	void
+	ResetUnsupportedPredDerived()
+	{
+		m_is_unsupported_pred_derived = false;
+	}
+
 	// set information about the scaling of NDVs
 	void
 	SetNDVScaled()

@@ -124,6 +124,16 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 
 		if (outer_side_join_cols->Get(colid))
 		{
+			// the outer side's own column is preserved in full by a LOJ, so
+			// its value range is exact regardless of any imprecision on the
+			// inner side - the only mark that can legitimately apply here is
+			// one this column already carried coming in
+			const CHistogram *outer_own_histogram =
+				outer_side_stats->GetHistogram(colid);
+			GPOS_ASSERT(nullptr != outer_own_histogram);
+			BOOL outer_is_marked =
+				outer_own_histogram->IsUnsupportedPredDerived();
+
 			// add buckets from the outer histogram that do not contribute to the inner join
 			const CHistogram *LASJ_histogram = LASJ_stats->GetHistogram(colid);
 			GPOS_ASSERT(nullptr != LASJ_histogram);
@@ -135,12 +145,7 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 					LASJ_histogram->MakeUnionAllHistogramNormalize(
 						num_rows_LASJ, inner_join_histogram,
 						num_rows_inner_join);
-				// this union can't undo either side's unsupported-predicate
-				// imprecision on this column - carry it forward so a deeper
-				// LASJ consuming this LOJ's output still knows not to trust
-				// this histogram's bucket content
-				if (LASJ_histogram->IsUnsupportedPredDerived() ||
-					inner_join_histogram->IsUnsupportedPredDerived())
+				if (outer_is_marked)
 				{
 					LOJ_histogram->SetUnsupportedPredDerived();
 				}
@@ -150,8 +155,22 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			}
 			else
 			{
-				CStatisticsUtils::AddHistogram(mp, colid, inner_join_histogram,
+				CHistogram *result_histogram =
+					inner_join_histogram->CopyHistogram();
+				if (outer_is_marked)
+				{
+					result_histogram->SetUnsupportedPredDerived();
+				}
+				else
+				{
+					// inner_join_histogram may have picked up a mark from
+					// the inner side alone, which says nothing about this
+					// (preserved) outer column's own value range
+					result_histogram->ResetUnsupportedPredDerived();
+				}
+				CStatisticsUtils::AddHistogram(mp, colid, result_histogram,
 											   LOJ_histograms);
+				GPOS_DELETE(result_histogram);
 			}
 		}
 		else
