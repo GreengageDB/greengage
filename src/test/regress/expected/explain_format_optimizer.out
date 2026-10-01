@@ -71,22 +71,22 @@ WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in G
 WARNING:  referential integrity (FOREIGN KEY) constraints are not supported in Greengage Database, will not be enforced
 --- Check Explain Text format output
 select explain_filter('EXPLAIN SELECT * from boxes LEFT JOIN apples ON apples.id = boxes.apple_id LEFT JOIN box_locations ON box_locations.id = boxes.location_id;');
-                                                explain_filter                                                
---------------------------------------------------------------------------------------------------------------
+                                             explain_filter                                             
+--------------------------------------------------------------------------------------------------------
  Gather Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N)
    ->  Nested Loop Left Join  (cost=N.N..N.N rows=N width=N)
          Join Filter: true
          ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N)
-               Hash Key: boxes.apple_id
+               Hash Key: boxes.location_id
                ->  Nested Loop Left Join  (cost=N.N..N.N rows=N width=N)
                      Join Filter: true
                      ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N)
-                           Hash Key: boxes.location_id
+                           Hash Key: boxes.apple_id
                            ->  Seq Scan on boxes  (cost=N.N..N.N rows=N width=N)
-                     ->  Index Scan using box_locations_pkey on box_locations  (cost=N.N..N.N rows=N width=N)
-                           Index Cond: (id = boxes.location_id)
-         ->  Index Scan using apples_pkey on apples  (cost=N.N..N.N rows=N width=N)
-               Index Cond: (id = boxes.apple_id)
+                     ->  Index Scan using apples_pkey on apples  (cost=N.N..N.N rows=N width=N)
+                           Index Cond: (id = boxes.apple_id)
+         ->  Index Scan using box_locations_pkey on box_locations  (cost=N.N..N.N rows=N width=N)
+               Index Cond: (id = boxes.location_id)
  Optimizer: GPORCA
 (15 rows)
 
@@ -98,16 +98,16 @@ select explain_filter('EXPLAIN (ANALYZE) SELECT * from boxes LEFT JOIN apples ON
    ->  Nested Loop Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
          Join Filter: true
          ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-               Hash Key: boxes.apple_id
+               Hash Key: boxes.location_id
                ->  Nested Loop Left Join  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
                      Join Filter: true
                      ->  Redistribute Motion N:N  (sliceN; segments: N)  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-                           Hash Key: boxes.location_id
+                           Hash Key: boxes.apple_id
                            ->  Seq Scan on boxes  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-                     ->  Index Scan using box_locations_pkey on box_locations  (cost=N.N..N.N rows=N width=N) (never executed)
-                           Index Cond: (id = boxes.location_id)
-         ->  Index Scan using apples_pkey on apples  (cost=N.N..N.N rows=N width=N) (never executed)
-               Index Cond: (id = boxes.apple_id)
+                     ->  Index Scan using apples_pkey on apples  (cost=N.N..N.N rows=N width=N) (never executed)
+                           Index Cond: (id = boxes.apple_id)
+         ->  Index Scan using box_locations_pkey on box_locations  (cost=N.N..N.N rows=N width=N) (never executed)
+               Index Cond: (id = boxes.location_id)
  Optimizer: GPORCA
  Planning Time: N.N ms
    (sliceN)    Executor memory: NK bytes.
@@ -166,7 +166,7 @@ explain_filter
             Total Cost: N.N
             Plan Rows: N
             Plan Width: N
-            Hash Key: "boxes.apple_id"
+            Hash Key: "boxes.location_id"
             Plans: 
               - Node Type: "Nested Loop"
                 Parent Relationship: "Outer"
@@ -194,7 +194,7 @@ explain_filter
                     Total Cost: N.N
                     Plan Rows: N
                     Plan Width: N
-                    Hash Key: "boxes.location_id"
+                    Hash Key: "boxes.apple_id"
                     Plans: 
                       - Node Type: "Seq Scan"
                         Parent Relationship: "Outer"
@@ -215,14 +215,14 @@ explain_filter
                     Gang Type: "primary reader"
                     Parallel Aware: false
                     Scan Direction: "Forward"
-                    Index Name: "box_locations_pkey"
-                    Relation Name: "box_locations"
-                    Alias: "box_locations"
+                    Index Name: "apples_pkey"
+                    Relation Name: "apples"
+                    Alias: "apples"
                     Startup Cost: N.N
                     Total Cost: N.N
                     Plan Rows: N
                     Plan Width: N
-                    Index Cond: "(id = boxes.location_id)"
+                    Index Cond: "(id = boxes.apple_id)"
           - Node Type: "Index Scan"
             Parent Relationship: "Inner"
             Slice: N
@@ -230,14 +230,14 @@ explain_filter
             Gang Type: "primary reader"
             Parallel Aware: false
             Scan Direction: "Forward"
-            Index Name: "apples_pkey"
-            Relation Name: "apples"
-            Alias: "apples"
+            Index Name: "box_locations_pkey"
+            Relation Name: "box_locations"
+            Alias: "box_locations"
             Startup Cost: N.N
             Total Cost: N.N
             Plan Rows: N
             Plan Width: N
-            Index Cond: "(id = boxes.apple_id)"
+            Index Cond: "(id = boxes.location_id)"
   Optimizer: "GPORCA"
 (1 row)
 SET random_page_cost = 1;
@@ -379,7 +379,7 @@ explain_filter
             Actual Total Time: N.N
             Actual Rows: N
             Actual Loops: N
-            Hash Key: "boxes.apple_id"
+            Hash Key: "boxes.location_id"
             Plans: 
               - Node Type: "Nested Loop"
                 Parent Relationship: "Outer"
@@ -416,7 +416,7 @@ explain_filter
                     Actual Total Time: N.N
                     Actual Rows: N
                     Actual Loops: N
-                    Hash Key: "boxes.location_id"
+                    Hash Key: "boxes.apple_id"
                     Plans: 
                       - Node Type: "Seq Scan"
                         Parent Relationship: "Outer"
@@ -441,9 +441,9 @@ explain_filter
                     Gang Type: "primary reader"
                     Parallel Aware: false
                     Scan Direction: "Forward"
-                    Index Name: "box_locations_pkey"
-                    Relation Name: "box_locations"
-                    Alias: "box_locations"
+                    Index Name: "apples_pkey"
+                    Relation Name: "apples"
+                    Alias: "apples"
                     Startup Cost: N.N
                     Total Cost: N.N
                     Plan Rows: N
@@ -452,7 +452,7 @@ explain_filter
                     Actual Total Time: N.N
                     Actual Rows: N
                     Actual Loops: N
-                    Index Cond: "(id = boxes.location_id)"
+                    Index Cond: "(id = boxes.apple_id)"
                     Rows Removed by Index Recheck: N
           - Node Type: "Index Scan"
             Parent Relationship: "Inner"
@@ -461,9 +461,9 @@ explain_filter
             Gang Type: "primary reader"
             Parallel Aware: false
             Scan Direction: "Forward"
-            Index Name: "apples_pkey"
-            Relation Name: "apples"
-            Alias: "apples"
+            Index Name: "box_locations_pkey"
+            Relation Name: "box_locations"
+            Alias: "box_locations"
             Startup Cost: N.N
             Total Cost: N.N
             Plan Rows: N
@@ -472,7 +472,7 @@ explain_filter
             Actual Total Time: N.N
             Actual Rows: N
             Actual Loops: N
-            Index Cond: "(id = boxes.apple_id)"
+            Index Cond: "(id = boxes.location_id)"
             Rows Removed by Index Recheck: N
   Optimizer: "GPORCA"
   Planning Time: N.N
