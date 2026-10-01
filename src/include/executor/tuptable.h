@@ -298,6 +298,21 @@ typedef struct VirtualTupleTableSlotAOCS
 	 */
 	bool	   *tts_is_valid;
 	int			tts_is_valid_natts;
+
+	/*
+	 * True when the slot is currently being driven by an eagerFetch scan
+	 * (aocs_getnext_eager(), see cdbaocsam.h), which fetches every
+	 * projected column upfront and sets tts_nvalid to the full attribute
+	 * count instead of tracking per-attribute validity. Such a scan never
+	 * reads or writes tts_is_valid (every access is short-circuited by
+	 * slot_is_attr_valid()'s "tts_nvalid > attnum" check before it would
+	 * ever consult is_attr_valid()), so tts_virtual_aocs_clear() uses this
+	 * flag to skip the per-row allocate/memset of tts_is_valid entirely.
+	 * Set by aoco_getnextslot() from the scan's columnScanInfo.eagerFetch
+	 * before every call, so it's always current for whichever scan is
+	 * actually driving this slot right now.
+	 */
+	bool		eagerFetch;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot

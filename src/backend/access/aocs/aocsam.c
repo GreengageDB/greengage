@@ -1456,7 +1456,6 @@ aocs_getnext_eager(AOCSScanDesc scan, TupleTableSlot *slot)
 {
 	Datum	   *d = slot->tts_values;
 	bool	   *null = slot->tts_isnull;
-	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
 
 	AOTupleId	aoTupleId;
 	int64		rowNum = InvalidAORowNum;
@@ -1478,20 +1477,26 @@ ReadNextEager:
 			/*
 			 * Bail out early if we do not have any column in the projection.
 			 * Placing here in order to have less impact on the hot path.
+			 *
+			 * Callers of aocs_getnext_eager() are required to have already
+			 * called ExecClearTuple(slot) before this call, which already
+			 * reset slotAocs->current_scan to NULL -- no need to repeat
+			 * that here.
 			 */
 			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
-				slotAocs->current_scan = NULL;
 				return false;
 			}
 
 			err = open_next_scan_seg(scan);
 			if (err < 0)
 			{
-				/* No more seg, we are at the end */
+				/*
+				 * No more seg, we are at the end. ExecClearTuple() already
+				 * reset slotAocs->current_scan to NULL.
+				 */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
-				slotAocs->current_scan = NULL;
 				return false;
 			}
 			scan->segrowsprocessed = 0;
@@ -1593,9 +1598,15 @@ ReadNextEager:
 			goto ReadNextEager;
 		}
 
+		/*
+		 * current_scan is deliberately left untouched (not reset to scan):
+		 * it's only read by fetchattr()/getsomeattrs(), both of which are
+		 * unreachable once tts_nvalid covers the full attribute range (see
+		 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path), which it
+		 * does here. Same invariant tts_virtual_aocs_copyslot() relies on.
+		 */
 		slot->tts_nvalid = natts;
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
-		slotAocs->current_scan = (void *) scan;
 
 		return true;
 	}
@@ -1638,6 +1649,16 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		/* Pin it! ... and of course release it upon destruction / rescan */
 		PinTupleDesc(scan->columnScanInfo.relationTupleDesc);
 		initscan_with_colinfo(scan);
+
+		/*
+		 * eagerFetch is fixed for this scan's whole lifetime (set once in
+		 * aoco_beginscan_extractcolumns(), never changes afterwards), so
+		 * record it on the slot exactly once here rather than on every
+		 * aoco_getnextslot() call. tts_virtual_aocs_clear() consults this to
+		 * skip its per-row tts_is_valid allocate/memset for an eagerFetch
+		 * scan (see the comment there).
+		 */
+		slotAocs->eagerFetch = scan->columnScanInfo.eagerFetch;
 	}
 
 	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
@@ -1688,10 +1709,12 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 
 				if (!HeapTupleIsValid(systable_getnext(scan->soleRowIdScan.scan_blkdir)))
 				{
-					/* No more seg, we are at the end */
+					/*
+					 * No more seg, we are at the end. ExecClearTuple()
+					 * already reset slotAocs->current_scan to NULL.
+					 */
 					ExecClearTuple(slot);
 					scan->cur_seg = -1;
-					slotAocs->current_scan = NULL;
 					return false;
 				}
 
@@ -1724,21 +1747,27 @@ ReadNext:
 		{
 			/*
 			 * Bail out early if we do not have any column in the projection.
-			 * Placing here in order to have less impact on the hot path. 
+			 * Placing here in order to have less impact on the hot path.
+			 *
+			 * Callers of aocs_getnext() are required to have already called
+			 * ExecClearTuple(slot) before this call, which already reset
+			 * slotAocs->current_scan to NULL -- no need to repeat that
+			 * here.
 			 */
 			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
-				slotAocs->current_scan = NULL;
 				return false;
 			}
 
 			err = open_next_scan_seg(scan);
 			if (err < 0)
 			{
-				/* No more seg, we are at the end */
+				/*
+				 * No more seg, we are at the end. ExecClearTuple() already
+				 * reset slotAocs->current_scan to NULL.
+				 */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
-				slotAocs->current_scan = NULL;
 				return false;
 			}
 			scan->segrowsprocessed = 0;

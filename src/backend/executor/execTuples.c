@@ -162,6 +162,19 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	 * So: no descriptor yet -> just drop any existing array and defer
 	 * allocation to whenever a real descriptor is actually attached; sizes
 	 * mismatched -> reallocate; otherwise reuse the existing buffer.
+	 *
+	 * One more case short-circuits all of this: an eagerFetch scan (see
+	 * aocs_getnext_eager()) never reads or writes tts_is_valid -- it sets
+	 * tts_nvalid to the full attribute count instead, which makes every
+	 * tts_is_valid consumer unreachable via slot_is_attr_valid()'s
+	 * "tts_nvalid > attnum" fast path (same invariant
+	 * tts_virtual_aocs_copyslot() relies on). So once a real descriptor is
+	 * attached, skip the allocate/memset entirely for an eagerFetch slot --
+	 * it would otherwise run on every single row for no benefit. Whatever
+	 * buffer/size happens to already be sitting on the slot is left
+	 * untouched; if this slot is later driven by a lazy scan instead, the
+	 * size check below still handles reusing or reallocating it correctly
+	 * at that point.
 	 */
 	if (slot->tts_tupleDescriptor == NULL)
 	{
@@ -169,6 +182,10 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 			pfree(vslot_aocs->tts_is_valid);
 		vslot_aocs->tts_is_valid = NULL;
 		vslot_aocs->tts_is_valid_natts = 0;
+	}
+	else if (vslot_aocs->eagerFetch)
+	{
+		/* intentionally no-op, see comment above */
 	}
 	else if (likely(vslot_aocs->tts_is_valid != NULL &&
 					vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
