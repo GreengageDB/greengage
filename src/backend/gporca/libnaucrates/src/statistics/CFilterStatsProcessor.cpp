@@ -520,12 +520,15 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	UlongToHistogramMap *disjunctive_result_histograms =
 		GPOS_NEW(mp) UlongToHistogramMap(mp);
 
-	// columns touched by an unsupported multi-column predicate anywhere in
-	// this disjunction. disjunctive_result_histograms is only filled in
-	// incrementally as the loop below runs, so these columns are not
-	// guaranteed to have an entry yet; the actual marking happens once
-	// AddHistograms() has backfilled every column further down.
+	// columns touched by an unsupported predicate anywhere in this
+	// disjunction, direct child or nested arbitrarily deep inside a further
+	// conjunction or disjunction below it. disjunctive_result_histograms is
+	// only filled in incrementally as the loop below runs, so these columns
+	// are not guaranteed to have an entry yet; the actual marking happens
+	// once AddHistograms() has backfilled every column further down.
 	CBitSet *unsupported_pred_used_colids = GPOS_NEW(mp) CBitSet(mp);
+	CStatisticsUtils::CollectUnsupportedPredUsedColIds(
+		unsupported_pred_used_colids, disjunctive_pred_stats);
 
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
@@ -550,22 +553,6 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
 			scale_factors->Append(
 				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
-
-			// remember every column this predicate actually touches: their
-			// row count was just reduced by the scale factor above without
-			// their histogram's value range being narrowed, so downstream
-			// value-range reasoning (e.g. LASJ coverage checks) shouldn't
-			// over-trust them.
-			const ULongPtrArray *used_colids =
-				unsupported_pred_stats->GetUsedColIds();
-			if (nullptr != used_colids)
-			{
-				for (ULONG uli = 0; uli < used_colids->Size(); uli++)
-				{
-					(void) unsupported_pred_used_colids->ExchangeSet(
-						*(*used_colids)[uli]);
-				}
-			}
 
 			continue;
 		}

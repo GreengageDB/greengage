@@ -699,6 +699,72 @@ CStatisticsUtils::ExtractUsedColIds(CMemoryPool *mp, CBitSet *colids_bitset,
 
 //---------------------------------------------------------------------------
 //	@function:
+//		CStatisticsUtils::CollectUnsupportedPredUsedColIds
+//
+//	@doc:
+//		Recursively collect every column touched by an unsupported-predicate
+//		filter anywhere in a predicate (sub)tree
+//
+//---------------------------------------------------------------------------
+void
+CStatisticsUtils::CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
+												   CStatsPred *pred_stats)
+{
+	GPOS_ASSERT(nullptr != colids_bitset);
+	GPOS_ASSERT(nullptr != pred_stats);
+
+	// recursive function - check stack
+	GPOS_CHECK_STACK_SIZE;
+
+	if (CStatsPred::EsptUnsupported == pred_stats->GetPredStatsType())
+	{
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+		const ULongPtrArray *used_colids =
+			unsupported_pred_stats->GetUsedColIds();
+		if (nullptr != used_colids)
+		{
+			for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+			{
+				(void) colids_bitset->ExchangeSet(*(*used_colids)[uli]);
+			}
+		}
+
+		return;
+	}
+
+	if (CStatsPred::EsptConj != pred_stats->GetPredStatsType() &&
+		CStatsPred::EsptDisj != pred_stats->GetPredStatsType())
+	{
+		// a simple, non-conj/disj, non-unsupported predicate - nothing an
+		// unsupported predicate could be nested inside of here
+		return;
+	}
+
+	CStatsPredPtrArry *stats_pred_array = nullptr;
+	if (CStatsPred::EsptConj == pred_stats->GetPredStatsType())
+	{
+		stats_pred_array =
+			CStatsPredConj::ConvertPredStats(pred_stats)->GetConjPredStatsArray();
+	}
+	else
+	{
+		stats_pred_array =
+			CStatsPredDisj::ConvertPredStats(pred_stats)->GetDisjPredStatsArray();
+	}
+
+	GPOS_ASSERT(nullptr != stats_pred_array);
+	const ULONG arity = stats_pred_array->Size();
+	for (ULONG i = 0; i < arity; i++)
+	{
+		CollectUnsupportedPredUsedColIds(colids_bitset,
+										 (*stats_pred_array)[i]);
+	}
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
 //		CStatisticsUtils::UpdateDisjStatistics
 //
 //	@doc:
