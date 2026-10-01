@@ -30,7 +30,7 @@ namespace gpnaucrates
 class CJoinCardinalityTest
 {
 	// shorthand for functions for generating the join predicates
-	typedef CStatsPredJoinArray *(FnPdrgpstatjoin) (CMemoryPool *mp);
+	typedef CStatsPredJoinArray *(FnPdrgpstatjoin)(CMemoryPool *mp);
 
 private:
 	// test case for join evaluation
