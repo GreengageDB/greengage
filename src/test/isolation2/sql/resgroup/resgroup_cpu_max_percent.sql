@@ -57,6 +57,8 @@ $$ LANGUAGE plpython3u;
 CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
     FROM generate_series(1, 50000) i distributed randomly;
+    
+ANALYZE bigtable;
 
 -- Creates view busy with k identical branches, trying to fill all cpu cores.
 -- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
