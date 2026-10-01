@@ -5161,4 +5161,20 @@ CUtils::RemoveDuplicateMdids(CMemoryPool *mp, CTableDescriptorHashSet *tabdescs)
 	mdids->Release();
 	return result;
 }
+
+BOOL
+CUtils::FMatchSelectedParts(const CBitSet *set1, const CBitSet *set2)
+{
+	if (nullptr == set1 && nullptr == set2)
+	{
+		return true;
+	}
+
+	if (nullptr != set1 && nullptr != set2 && set1->Equals(set2))
+	{
+		return true;
+	}
+
+	return false;
+}
 // EOF

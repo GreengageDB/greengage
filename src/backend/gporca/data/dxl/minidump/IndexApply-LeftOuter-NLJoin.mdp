@@ -462,7 +462,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
     <dxl:Plan Id="0" SpaceSize="48">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1231.893489" Rows="5.000000" Width="40"/>
+          <dxl:Cost StartupCost="0" TotalCost="1231.893474" Rows="5.000000" Width="40"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -500,7 +500,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
         <dxl:SortingColumnList/>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1231.892743" Rows="5.000000" Width="40"/>
+            <dxl:Cost StartupCost="0" TotalCost="1231.892728" Rows="5.000000" Width="40"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="a">
@@ -540,7 +540,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
           </dxl:JoinFilter>
           <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="840.416899" Rows="4.000000" Width="32"/>
+              <dxl:Cost StartupCost="0" TotalCost="840.416884" Rows="4.000000" Width="32"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="a">
@@ -574,7 +574,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
             </dxl:JoinFilter>
             <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="449.000853" Rows="3.000000" Width="24"/>
+                <dxl:Cost StartupCost="0" TotalCost="449.000848" Rows="3.000000" Width="24"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="0" Alias="a">
@@ -687,7 +687,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
               </dxl:NestedLoopJoin>
               <dxl:IndexScan IndexScanDirection="Forward">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="12.000322" Rows="1.000000" Width="8"/>
+                  <dxl:Cost StartupCost="0" TotalCost="12.000317" Rows="0.500000" Width="8"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="18" Alias="a">
@@ -728,7 +728,7 @@ explain select * from t0 left join t1 on t0.a=t1.a left join t2 on (t2.a=t0.a an
             </dxl:NestedLoopJoin>
             <dxl:BitmapTableScan>
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="391.415554" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="391.415544" Rows="0.333333" Width="8"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="32" Alias="a">

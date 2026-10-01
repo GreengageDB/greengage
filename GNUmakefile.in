@@ -23,6 +23,7 @@ all:
 	$(MAKE) -C contrib/dblink all
 	$(MAKE) -C contrib/indexscan all
 	$(MAKE) -C contrib/pageinspect all  # needed by src/test/isolation
+	$(MAKE) -C contrib/gp_local_test all  # needed by src/test/regress
 	$(MAKE) -C contrib/hstore all
 	$(MAKE) -C contrib/ltree all
 	$(MAKE) -C contrib/pgcrypto all
@@ -75,6 +76,7 @@ install:
 	$(MAKE) -C contrib/dblink $@
 	$(MAKE) -C contrib/indexscan $@
 	$(MAKE) -C contrib/pageinspect $@  # needed by src/test/isolation
+	$(MAKE) -C contrib/gp_local_test $@  # needed by src/test/regress
 	$(MAKE) -C contrib/hstore $@
 	$(MAKE) -C contrib/ltree $@
 	$(MAKE) -C contrib/pgcrypto $@

@@ -196,6 +196,7 @@ private:
 	static void SetParamIds(Plan *);
 
 	static List *TranslatePartOids(IMdIdArray *parts, INT lockmode);
+	static Bitmapset *TranslateCBitSet(CBitSet *selected_parts);
 
 	static List *TranslateJoinPruneParamids(
 		const ULongPtrArray *selector_ids, OID oid_type,
@@ -394,6 +395,11 @@ private:
 		CDXLTranslationContextArray *
 			ctxt_translation_prev_siblings	// translation contexts of previous siblings
 	);
+
+	// Check and set hash info for splitupdate node
+	void SetSplitUpdateHashInfo(SplitUpdate *split,
+								const CDXLTranslateContext *output_context,
+								ULongPtrArray *delete_colids);
 
 	// translate a Split operator
 	Plan *TranslateDXLSplit(
