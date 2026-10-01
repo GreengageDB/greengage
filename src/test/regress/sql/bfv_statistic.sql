@@ -456,6 +456,14 @@ analyze empty_except_p1;
 analyze empty_except_p2;
 analyze empty_except_t3;
 
+-- start_matchsubs
+-- m/Buckets: \d+/
+-- s/Buckets: \d+/Buckets: ###/
+-- m/Memory Usage: \d+\w?B/
+-- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
+-- end_matchsubs
 explain (analyze, timing off, summary off)
 select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub
 join empty_except_t3 on sub.a = empty_except_t3.a;
+
+drop table empty_except_p1, empty_except_p2, empty_except_t3;
