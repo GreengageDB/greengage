@@ -64,8 +64,8 @@ CREATE TABLE bigtable AS
 CREATE OR REPLACE FUNCTION create_busy_view(qcount int) RETURNS void AS $$
     branch = """
         SELECT count(*) AS s
-            FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
-        WHERE md5(c1::text || g::text) < '8'"""
+            FROM (SELECT random() as r, c1, generate_series(1, 1000000) AS g FROM bigtable) t
+        WHERE md5(r::text || c1::text || g::text) < '8'"""
 
     nsegs = plpy.execute("""
         SELECT count(*) AS n FROM gp_segment_configuration
