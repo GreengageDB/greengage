@@ -36,7 +36,6 @@ try:
 except:
     import subprocess
 import threading
-import shlex
 import os
 from collections import defaultdict
 import psycopg2
