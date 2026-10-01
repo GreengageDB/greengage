@@ -184,6 +184,12 @@ SELECT * FROM cancel_all;
 12q:
 13q:
 14q:
+-- start_ignore
+SELECT groupname, num_running, num_queueing FROM gp_toolkit.gp_resgroup_status
+ WHERE groupname IN ('rg1_cpu_test', 'rg2_cpu_test');
+SELECT pid, rsgname, state, wait_event_type, wait_event, backend_start, now() - query_start AS age, query
+  FROM pg_stat_activity WHERE rsgname IN ('rg1_cpu_test', 'rg2_cpu_test') ORDER BY rsgname, backend_start;
+-- end_ignore
 
 10: SET ROLE TO role1_cpu_test;
 11: SET ROLE TO role1_cpu_test;
@@ -200,6 +206,12 @@ SELECT * FROM cancel_all;
 -- - rg1_cpu_test gets 90% * 1/3 => 30%;
 -- - rg2_cpu_test gets 90% * 2/3 => 60%;
 --
+-- start_ignore
+SELECT groupname, num_running, num_queueing FROM gp_toolkit.gp_resgroup_status
+ WHERE groupname IN ('rg1_cpu_test', 'rg2_cpu_test');
+SELECT pid, rsgname, state, wait_event_type, wait_event, backend_start, now() - query_start AS age, query
+  FROM pg_stat_activity WHERE rsgname IN ('rg1_cpu_test', 'rg2_cpu_test') ORDER BY rsgname, backend_start;
+-- end_ignore
 
 10&: SELECT * FROM busy10;
 11&: SELECT * FROM busy10;

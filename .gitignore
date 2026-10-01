@@ -78,3 +78,6 @@ lib*.pc
 /tmp_install/
 /portlock/
 /Package/
+
+gpdemo-datadirs/
+isol2/
