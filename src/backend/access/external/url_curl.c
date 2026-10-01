@@ -141,7 +141,7 @@ typedef struct
  *  extssl_libcurldebug 1 	
  */
 
-const static int extssl_protocol  = CURL_SSLVERSION_TLSv1;
+const static long extssl_protocol  = CURL_SSLVERSION_TLSv1;
 const static int extssl_verifycert = 1;
 const static int extssl_verifyhost = 2;
 const static int extssl_no_verifycert = 0;
@@ -1187,7 +1187,7 @@ URL_FILE *
 url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 {
 	URL_CURL_FILE *file;
-	int         ip_mode;
+	long        ip_mode;
 	int 		e;
 	bool		is_ipv6 = url_has_ipv6_format(url);
 	char	   *tmp;
@@ -1459,7 +1459,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSLVERSION, extssl_protocol);
 
 		/* disable session ID cache */
-		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSL_SESSIONID_CACHE, 0);
+		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_SSL_SESSIONID_CACHE, 0L);
 
 		/* set debug */
 		if (CURLE_OK != (e = curl_easy_setopt(file->curl->handle, CURLOPT_VERBOSE, (long)extssl_libcurldebug)))
@@ -1499,7 +1499,7 @@ url_curl_fopen(char *url, bool forwrite, extvar_t *ev, CopyState pstate)
 	{
 		/* use empty message */
 		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+		CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 		/* post away and check response, retry if failed (timeout or * connect error) */
 		gp_perform_backoff_and_check_response(file, easy_perform_work);
@@ -1954,7 +1954,7 @@ gp_proto0_write(URL_CURL_FILE *file, CopyState pstate)
 	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, buf);
 
 	/* set the size of the postfields data */
-	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, nbytes);
+	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, (long)nbytes);
 
 	/* set sequence number */
 	char seq[128] = {0};
@@ -1977,7 +1977,7 @@ gp_proto0_write_done(URL_CURL_FILE *file)
 
 	/* use empty message */
 	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDS, "");
-	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0);
+	CURL_EASY_SETOPT(file->curl->handle, CURLOPT_POSTFIELDSIZE, 0L);
 
 	/* post away! */
 	gp_perform_backoff_and_check_response(file, easy_perform_work);
