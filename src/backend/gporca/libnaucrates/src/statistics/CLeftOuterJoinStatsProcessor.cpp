@@ -98,6 +98,18 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 //   num_rows_LASJ: outer rows without a match under the supported predicates,
 //   num_rows_inner_join_unfiltered: matched pairs under the supported predicates,
 //   num_rows_inner_join: matched pairs that also survive the unsupported predicates.
+//
+// With k matches per matched outer row and a fraction s of the matched pairs
+// surviving the unsupported predicates, an outer row keeps at least one
+// match with probability 1 - (1 - s)^k. This assumes attribute value
+// independence, as the rest of the cardinality model does: the unsupported
+// predicates do not favor the rows the supported ones matched, and they act
+// independently on the k matches of a row. Under positive correlation
+// between the predicates (e.g. an unsupported predicate that depends on the
+// outer row only, so it succeeds or fails for all k matches at once) the
+// true number of unmatched rows lies between the value computed here and
+// num_rows_matched * (1 - s), the perfectly correlated case; for k = 1 the
+// two coincide.
 CDouble
 CLeftOuterJoinStatsProcessor::NumRowsUnmatchedByUnsupportedPreds(
 	CDouble num_rows_outer, CDouble num_rows_LASJ,
@@ -110,9 +122,10 @@ CLeftOuterJoinStatsProcessor::NumRowsUnmatchedByUnsupportedPreds(
 		return CDouble(0.0);
 	}
 
-	// outer rows that have at least one match under the supported predicates
-	CDouble num_rows_matched =
-		std::max(CDouble(0.0), CDouble(num_rows_outer - num_rows_LASJ));
+	// outer rows that have at least one match under the supported predicates;
+	// this can come out negative when the LASJ estimate was clamped to
+	// CStatistics::MinRows on a tiny input, which the check below covers
+	CDouble num_rows_matched = num_rows_outer - num_rows_LASJ;
 	if (num_rows_matched < CStatistics::Epsilon)
 	{
 		return CDouble(0.0);
