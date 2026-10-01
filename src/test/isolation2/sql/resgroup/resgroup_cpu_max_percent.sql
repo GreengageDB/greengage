@@ -64,8 +64,8 @@ CREATE TABLE bigtable AS
 CREATE OR REPLACE FUNCTION create_busy_view(qcount int) RETURNS void AS $$
     branch = """
         SELECT count(*) AS s
-            FROM (SELECT random() as r, c1, generate_series(1, 1000000) AS g FROM bigtable) t
-        WHERE md5(r::text || c1::text || g::text) < '8'"""
+            FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
+        WHERE md5(c1::text || g::text) < '8'"""
 
     nsegs = plpy.execute("""
         SELECT count(*) AS n FROM gp_segment_configuration
@@ -143,6 +143,7 @@ GRANT ALL ON busy10 TO role2_cpu_test;
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 TRUNCATE TABLE cpu_usage_samples;
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
@@ -154,6 +155,7 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 TRUNCATE TABLE cpu_usage_samples;
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
@@ -165,6 +167,7 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 -- end_ignore
 
 SELECT verify_cpu_usage('rg1_cpu_test', 90, 10);
@@ -226,6 +229,7 @@ SELECT pid, rsgname, state, wait_event_type, wait_event, backend_start, now() - 
 24&: SELECT * FROM busy10;
 
 -- start_ignore
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 TRUNCATE TABLE cpu_usage_samples;
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
@@ -237,6 +241,7 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 TRUNCATE TABLE cpu_usage_samples;
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
@@ -248,6 +253,7 @@ SELECT fetch_sample();
 SELECT pg_sleep(1.7);
 SELECT fetch_sample();
 SELECT pg_sleep(1.7);
+SELECT gp_segment_id, pid, state, wait_event_type, wait_event FROM gp_stat_activity WHERE sess_id = (SELECT sess_id FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' LIMIT 1) ORDER BY gp_segment_id, pid;
 -- end_ignore
 
 SELECT verify_cpu_usage('rg1_cpu_test', 30, 10);

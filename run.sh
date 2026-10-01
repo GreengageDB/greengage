@@ -14,7 +14,7 @@ for i in $(seq 1 "$N"); do
   mkdir -p gpdemo-datadirs testtablespace logs "runs/$i"
   chmod -R 777 gpdemo-datadirs testtablespace logs
 
-  docker run --name gpdb7_resgroup_v2 -e TEST_OS=ubuntu -e OPTIMIZER=off \
+  docker run --name gpdb7_resgroup_v2 -e TEST_OS=ubuntu -e OPTIMIZER=on \
     --sysctl "kernel.sem=500 1024000 200 4096" \
     --privileged \
     --cgroupns=host \
