@@ -7,6 +7,9 @@
 
 1: create table workfile_test(id serial, s text) distributed by (id);
 1: insert into workfile_test(s) select v::text from generate_series(1, 2000) v;
+-- Analyze so the plan reliably spills, regardless of which plan a
+-- no-stats table might otherwise get.
+1: analyze workfile_test;
 
 1: select gp_inject_fault('after_workfile_mgr_create_set', 'suspend', '', '', '', 2, 2, 0, dbid) from gp_segment_configuration where content > -1 and role = 'p';
 

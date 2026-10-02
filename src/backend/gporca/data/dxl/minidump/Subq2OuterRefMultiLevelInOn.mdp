@@ -463,10 +463,10 @@
         </dxl:LogicalGet>
       </dxl:LogicalSelect>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="12">
+    <dxl:Plan Id="0" SpaceSize="10">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1896948689260387.750000" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="1896948545999173.750000" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -489,7 +489,7 @@
             </dxl:ParamList>
             <dxl:Aggregate AggregationStrategy="Plain" StreamSafe="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="1852488953493.846924" Rows="1.000000" Width="8"/>
+                <dxl:Cost StartupCost="0" TotalCost="1852488813590.317627" Rows="1.000000" Width="8"/>
               </dxl:Properties>
               <dxl:GroupingColumns/>
               <dxl:ProjList>
@@ -510,7 +510,7 @@
               <dxl:Filter/>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="1852488953493.846924" Rows="1.000000" Width="4"/>
+                  <dxl:Cost StartupCost="0" TotalCost="1852488813590.317627" Rows="1.000000" Width="4"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="9" Alias="a">
@@ -534,7 +534,7 @@
                     </dxl:ParamList>
                     <dxl:Result>
                       <dxl:Properties>
-                        <dxl:Cost StartupCost="0" TotalCost="1809070381.645525" Rows="7.000000" Width="4"/>
+                        <dxl:Cost StartupCost="0" TotalCost="1809070245.021359" Rows="1.500000" Width="4"/>
                       </dxl:Properties>
                       <dxl:ProjList>
                         <dxl:ProjElem ColId="45" Alias="coalesce">
@@ -548,7 +548,7 @@
                       <dxl:OneTimeFilter/>
                       <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
                         <dxl:Properties>
-                          <dxl:Cost StartupCost="0" TotalCost="1809070381.645498" Rows="7.000000" Width="4"/>
+                          <dxl:Cost StartupCost="0" TotalCost="1809070245.021353" Rows="1.500000" Width="4"/>
                         </dxl:Properties>
                         <dxl:ProjList>
                           <dxl:ProjElem ColId="28" Alias="b">
@@ -570,7 +570,7 @@
                         </dxl:JoinFilter>
                         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="false" OuterRefAsParam="false">
                           <dxl:Properties>
-                            <dxl:Cost StartupCost="0" TotalCost="1765377.291330" Rows="3.000000" Width="8"/>
+                            <dxl:Cost StartupCost="0" TotalCost="1765377.159602" Rows="1.500000" Width="8"/>
                           </dxl:Properties>
                           <dxl:ProjList>
                             <dxl:ProjElem ColId="19" Alias="b">

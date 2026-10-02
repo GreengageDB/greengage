@@ -125,7 +125,7 @@ test: rangefuncs_cdb gp_dqa subselect_gp subselect_gp2 gp_transactions olap_grou
 
 # 'partition' runs for a long time, so try to keep it together with other
 # long-running tests.
-test: partition partition1 partition_indexing partition_storage partition_ddl partition_with_user_defined_function partition_unlogged partition_subquery partition_with_user_defined_function_that_truncates gp_partition_template
+test: partition partition1 partition_indexing partition_storage partition_ddl partition_with_user_defined_function partition_unlogged partition_subquery partition_with_user_defined_function_that_truncates gp_partition_template partition_expand
 
 test: index_constraint_naming index_constraint_naming_partition index_constraint_naming_upgrade
 
@@ -203,6 +203,7 @@ test: rpt rpt_joins rpt_tpch rpt_returning bfv_dml_rpt
 # temp tables
 test: bfv_cte
 test: bfv_joins bfv_subquery bfv_planner bfv_legacy bfv_temp bfv_dml
+test: bfv_genfile_privileges
 
 test: qp_olap_mdqa qp_misc gp_recursive_cte qp_dml_joins qp_skew qp_select partition_prune_opfamily gp_tsrf qp_join_union_all qp_join_universal qp_rowsecurity qp_query_params qp_full_join gp_cast
 
@@ -375,4 +376,6 @@ test: libpq
 test: alter_rebalance
 
 test: gp_local_extension
+
+test: bfv_hot_standby
 # end of tests
