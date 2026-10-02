@@ -1101,15 +1101,13 @@ pq_waitForDataUsingSelect(void)
 			FD_SET(sock, &toRead);
 			FD_SET(sock, &haveError);
 
-			errno = 0;
 			numSockets = select(sock+1, &toRead, NULL /* toWrite */, &haveError, NULL );
 
-			if ( errno == EINTR)
+			if (numSockets < 0)
 			{
-				return false;
-			}
-			else if (errno != 0 )
-			{
+				if (errno == EINTR)
+					return false;
+
 				elog(FATAL, "select failed: %m");
 			}
 			else if ( numSockets > 0 )

@@ -1401,6 +1401,10 @@ static int local_send(request_t *r, const char* buf, int buflen)
 				gdebug(r, "gpfdist_send failed - due to (%d: %s), should try again", e, strerror(e));
 			}
 		}
+#ifndef WIN32
+		/* gwarning() and session_end() may clobber errno, callers check it */
+		errno = e;
+#endif
 		return ok ? 0 : -1;
 	}
 
@@ -2153,10 +2157,7 @@ static int send_proto_head(request_t *r)
 			n = local_send(r, datablock->hdr.hbyte + datablock->hdr.hbot, n);
 			if (n < 0)
 			{
-				/*
-				 * TODO: It is not safe to check errno here, should check and
-				 * return special value in local_send()
-				 */
+				/* local_send() preserves errno of the failed send */
 				if (errno == EPIPE || errno == ECONNRESET)
 					r->outblock.bot = r->outblock.top;
 				if (!r->is_running)
@@ -2410,7 +2411,7 @@ static void do_read_request(int fd, short event, void* arg)
 	else if (n == 0)
 	{
 		/* socket close by peer will return 0 */
-		gwarning(r, "do_read_request receive failed. socket closed by peer. errno: %d, msg: %s", errno, strerror(errno));
+		gwarning(r, "do_read_request receive failed. socket closed by peer");
 		request_end(r, ERROR_CODE_GENERIC, 0);
 		return;
 	}
@@ -4730,11 +4731,19 @@ static int gpfdist_socket_send(const request_t *r, const void *buf, const size_t
  */
 static int gpfdist_SSL_send(const request_t *r, const void *buf, const size_t buflen)
 {
+	int			n;
+	int			save_errno;
+
+	/*
+	 * BIO_write() may fail without setting errno, so reset it to have a
+	 * defined value. Check the result before BIO_flush(), which may change
+	 * both errno and the BIO retry flags.
+	 */
+	errno = 0;
 
 	/* Write the data to socket */
-	int n = BIO_write(r->io, buf, buflen);
-	/* Try to flush */
-	(void)BIO_flush(r->io);
+	n = BIO_write(r->io, buf, buflen);
+	save_errno = errno;
 
 	/* If we could not write to BIO */
 	if ( n < 0)
@@ -4745,28 +4754,25 @@ static int gpfdist_SSL_send(const request_t *r, const void *buf, const size_t bu
 			/* Do not indicate error */
 			n = 0;
 		}
-		else
+		/*
+		 * If errno == EPIPE, it means that the client has closed the connection
+		 * This error will be handled in the calling function, do not print it here.
+		 * errno == 0 (e.g. on an SSL protocol error) is still an error, otherwise
+		 * we would retry the send forever.
+		 */
+		else if (save_errno != EPIPE)
 		{
-			/* If errno == 0 => this is not a real error */
-			if ( errno == 0 )
-			{
-				/* Do not indicate error */
-				n = 0;
-			}
-			else
-			{
-				/* 
-				 * If errno == EPIPE, it means that the client has closed the connection
-				 * This error will be handled in the calling function, do not print it here
-				 */
-				if (errno != EPIPE)
-				{
-					gwarning(r, "Error during SSL gpfdist_send (Error = %d. errno = %d)", SSL_get_error(r->ssl,n), (int)errno);
-					ERR_print_errors(gcb.bio_err);
-				}
-			}
+			gwarning(r, "Error during SSL gpfdist_send (Error = %d. errno = %d)", SSL_get_error(r->ssl,n), save_errno);
+			ERR_print_errors(gcb.bio_err);
+			/* the caller reports errno, don't let it say "Success" */
+			if (save_errno == 0)
+				save_errno = EIO;
 		}
 	}
+
+	/* Try to flush */
+	(void)BIO_flush(r->io);
+	errno = save_errno;
 
 	return n;
 }
@@ -4809,8 +4815,24 @@ static void request_shutdown_sock(const request_t* r)
  */
 static int gpfdist_SSL_receive(const request_t *r, void *buf, const size_t buflen)
 {
-	return ( BIO_read(r->io, buf, buflen) );
-	/* todo: add error checks here */
+	int			n;
+
+	/*
+	 * BIO_read() may fail without setting errno, but the callers check it to
+	 * tell a retry from an error.
+	 */
+	errno = 0;
+	n = BIO_read(r->io, buf, buflen);
+
+	if (n < 0)
+	{
+		if (BIO_should_retry(r->io))
+			errno = EAGAIN;
+		else if (errno == 0)
+			errno = EIO;
+	}
+
+	return n;
 }
 
 /*

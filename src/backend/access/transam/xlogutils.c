@@ -759,7 +759,7 @@ XLogRead(char *buf, int segsize, TimeLineID tli, XLogRecPtr startptr,
 		pgstat_report_wait_start(WAIT_EVENT_WAL_READ);
 		readbytes = read(sendFile, p, segbytes);
 		pgstat_report_wait_end();
-		if (readbytes <= 0)
+		if (readbytes < 0)
 		{
 			char		path[MAXPGPATH];
 			int			save_errno = errno;
@@ -770,6 +770,16 @@ XLogRead(char *buf, int segsize, TimeLineID tli, XLogRecPtr startptr,
 					(errcode_for_file_access(),
 					 errmsg("could not read from log segment %s, offset %u, length %lu: %m",
 							path, sendOff, (unsigned long) segbytes)));
+		}
+		else if (readbytes == 0)
+		{
+			char		path[MAXPGPATH];
+
+			XLogFilePath(path, tli, sendSegNo, segsize);
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read from log segment %s, offset %u: read %d of %zu",
+							path, sendOff, readbytes, (Size) segbytes)));
 		}
 
 		/* Update state for read */
