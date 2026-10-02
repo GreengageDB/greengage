@@ -148,14 +148,15 @@ in-memory hash table on coordinator and all segments.
 
 #### Query identity
 
-`queryid` is the query fingerprint computed at the end of parse analysis, the
-same 64-bit hash `pg_stat_statements` uses. On the coordinator it is computed
-by `gg_wait_sampling` itself when no other extension has set it, so it is
-available without `pg_stat_statements`; when both are loaded the values are
-identical. Segments receive it inside the dispatched plan. Utility statements
-have `queryid` 0. It is recorded from the planner and executor hooks, so a
-backend that waits before planning starts, for example on a relation lock
-taken during parse analysis, is sampled with `queryid` 0.
+`queryid` has the upstream meaning: it is the value another extension, in
+practice `pg_stat_statements`, stored in the query at the end of parse
+analysis, so it can be joined to `pg_stat_statements.queryid`; without such an
+extension it is 0. `gg_wait_sampling` does not compute it itself. It copies the
+value into the plan, because GPORCA does not, and segments receive it inside
+the dispatched plan, so the same `queryid` is reported on every node. Utility
+statements have `queryid` 0. It is recorded from the planner and executor
+hooks, so a backend that waits before planning starts, for example on a
+relation lock taken during parse analysis, is sampled with `queryid` 0.
 
 `mppsessionid` and `command_id` are read from the backend's `PGPROC` entry at
 sampling time and do not depend on any hook. They are therefore present for

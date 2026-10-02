@@ -44,8 +44,6 @@
 /* GGDB adaptation headers */
 #include "cdb/cdbvars.h"
 #include "executor/instrument.h"
-#include "parser/analyze.h"
-#include "utils/queryjumble.h"
 
 PG_MODULE_MAGIC;
 
@@ -60,7 +58,6 @@ static ExecutorFinish_hook_type prev_ExecutorFinish = NULL;
 static ExecutorEnd_hook_type prev_ExecutorEnd = NULL;
 static planner_hook_type planner_hook_next = NULL;
 static ProcessUtility_hook_type prev_ProcessUtility = NULL;
-static post_parse_analyze_hook_type prev_post_parse_analyze = NULL;
 
 /* Current nesting depth of planner/Executor calls */
 static int	nesting_level = 0;
@@ -156,7 +153,6 @@ bool		pgws_sampleCpu = true;
 	 (pgws_profileQueries == PGWS_PROFILE_QUERIES_TOP && (level) == 0))
 
 /*---- GGDB funcs ----*/
-static void ggws_post_parse_analyze(ParseState *pstate, Query *query);
 static void ggws_backend_init(void);
 
 /*
@@ -394,8 +390,6 @@ _PG_init(void)
 	ExecutorEnd_hook = pgws_ExecutorEnd;
 	prev_ProcessUtility = ProcessUtility_hook;
 	ProcessUtility_hook = pgws_ProcessUtility;
-	prev_post_parse_analyze = post_parse_analyze_hook;
-	post_parse_analyze_hook = ggws_post_parse_analyze;
 
 	/* Define GUC variables */
 	DefineCustomIntVariable("gg_wait_sampling.history_size",
@@ -1278,36 +1272,6 @@ pgws_ProcessUtility(PlannedStmt *pstmt,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
-}
-
-static void
-ggws_post_parse_analyze(ParseState *pstate, Query *query)
-{
-	ggws_backend_init();
-
-	if (prev_post_parse_analyze)
-		prev_post_parse_analyze(pstate, query);
-
-	/* If it's already calculated */
-	if (query->queryId != UINT64CONST(0))
-		return;
-
-	/*
-	 * The same algorithm as in pg_stat_statements extension.
-	 * For utility statements queryId is usually not derivable.
-	 * For Gp_role values different from dispatch the queryId
-	 * is also not assigned to make queryId consistent across
-	 * coordinator and segments.
-	 */
-	if (Gp_role != GP_ROLE_DISPATCH || query->utilityStmt)
-	{
-		query->queryId = UINT64CONST(0);
-		return;
-	}
-
-	JumbleState *jstate = JumbleQuery(query);
-
-	freeJumbleState(jstate);
 }
 
 /*
