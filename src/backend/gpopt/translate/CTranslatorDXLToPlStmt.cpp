@@ -4421,62 +4421,60 @@ CTranslatorDXLToPlStmt::SetSplitUpdateHashInfo(
 	SplitUpdate *split, const CDXLTranslateContext *output_context,
 	ULongPtrArray *delete_colids)
 {
-	// If we're updating hash-distributed table we need to fill hash-related
-	// fields.
-	if (m_result_rel_list != nullptr)
+	// List of result relations shouldn't be null, as we could get here only
+	// with DML query.
+	GPOS_ASSERT(m_result_rel_list != nullptr);
+	RangeTblEntry *rte =
+		rt_fetch(llast_int(m_result_rel_list),
+					m_dxl_to_plstmt_context->GetRTableEntriesList());
+	Oid target_relid = rte->relid;
+
+	if (target_relid == InvalidOid)
 	{
-		RangeTblEntry *rte =
-			rt_fetch(llast_int(m_result_rel_list),
-					 m_dxl_to_plstmt_context->GetRTableEntriesList());
-		Oid target_relid = rte->relid;
-
-		if (target_relid == InvalidOid)
-		{
-			char err_msg[256];
-			snprintf(err_msg, 256, "Couldn't fetch target relid for \"%u\" id.",
-					 llast_int(m_result_rel_list));
-			GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg, nullptr);
-		}
-
-		Relation target_rel = gpdb::GetRelation(target_relid);
-
-		GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
-
-		// Check if it's hash distributed
-		GPOS_ASSERT(policy != nullptr && GpPolicyIsHashPartitioned(policy));
-
-		int policy_nattrs = policy->nattrs;
-		TupleDesc resultDesc = RelationGetDescr(target_rel);
-
-		split->numHashAttrs = policy_nattrs;
-		split->numHashSegments = policy->numsegments;
-		split->hashAttnos =
-			(AttrNumber *) gpdb::GPDBAlloc(policy_nattrs * sizeof(AttrNumber));
-		split->hashFuncs = (Oid *) gpdb::GPDBAlloc(policy_nattrs * sizeof(Oid));
-
-		for (int i = 0; i < policy_nattrs; i++)
-		{
-			ULONG pos = 0;
-			for (AttrNumber a = 1; a < policy->attrs[i]; a++)
-			{
-				if (!(resultDesc->attrs[(a - 1)]->attisdropped))
-					pos++;
-			}
-			ULONG colid = *(*delete_colids)[pos];
-
-			const TargetEntry *te = output_context->GetTargetEntry(colid);
-			const Form_pg_attribute att =
-				resultDesc->attrs[(policy->attrs[i] - 1)];
-
-			Oid typeoid = att->atttypid;
-			Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
-
-			split->hashAttnos[i] = te->resno;
-			split->hashFuncs[i] =
-				gpdb::GetHashProcInOpfamily(opfamily, typeoid);
-		}
-		gpdb::CloseRelation(target_rel);
+		char err_msg[256];
+		snprintf(err_msg, 256, "Couldn't fetch target relid for \"%u\" id.",
+					llast_int(m_result_rel_list));
+		GpdbEreport(ERRCODE_INTERNAL_ERROR, ERROR, err_msg, nullptr);
 	}
+
+	Relation target_rel = gpdb::GetRelation(target_relid);
+
+	GpPolicy *policy = target_rel ? target_rel->rd_cdbpolicy : nullptr;
+
+	// Check if it's hash distributed
+	GPOS_ASSERT(policy != nullptr && GpPolicyIsHashPartitioned(policy));
+
+	int policy_nattrs = policy->nattrs;
+	TupleDesc resultDesc = RelationGetDescr(target_rel);
+
+	split->numHashAttrs = policy_nattrs;
+	split->numHashSegments = policy->numsegments;
+	split->hashAttnos =
+		(AttrNumber *) gpdb::GPDBAlloc(policy_nattrs * sizeof(AttrNumber));
+	split->hashFuncs = (Oid *) gpdb::GPDBAlloc(policy_nattrs * sizeof(Oid));
+
+	for (int i = 0; i < policy_nattrs; i++)
+	{
+		ULONG pos = 0;
+		for (AttrNumber a = 1; a < policy->attrs[i]; a++)
+		{
+			if (!(resultDesc->attrs[(a - 1)]->attisdropped))
+				pos++;
+		}
+		ULONG colid = *(*delete_colids)[pos];
+
+		const TargetEntry *te = output_context->GetTargetEntry(colid);
+		const Form_pg_attribute att =
+			resultDesc->attrs[(policy->attrs[i] - 1)];
+
+		Oid typeoid = att->atttypid;
+		Oid opfamily = gpdb::GetOpclassFamily(policy->opclasses[i]);
+
+		split->hashAttnos[i] = te->resno;
+		split->hashFuncs[i] =
+			gpdb::GetHashProcInOpfamily(opfamily, typeoid);
+	}
+	gpdb::CloseRelation(target_rel);
 }
 
 //---------------------------------------------------------------------------

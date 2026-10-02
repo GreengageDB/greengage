@@ -4646,12 +4646,55 @@ WHERE t.id = o.id AND t.id IN (:ids);
 -- Check duplicates
 SELECT count(*), count(DISTINCT id) FROM t;
 
+--
+-- Test that segment is chosen correctly when ORCA's column ids of the target
+-- table don't match its attribute numbers: the root has a dropped column
+-- before the distribution key, and the UPDATE has a CTE.
+--
+CREATE TABLE rank5 (junk INT, id INT, year INT) DISTRIBUTED BY (id)
+PARTITION BY RANGE (year) (START (2006) END (2008) EVERY (1));
+ALTER TABLE rank5 DROP COLUMN junk;
+INSERT INTO rank5 SELECT i, 2007 FROM generate_series(1, 60) i;
+
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+ALTER TABLE rank5_1_prt_1 SET WITH (REORGANIZE = TRUE) DISTRIBUTED BY (id);
+
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year = 2006 WHERE id <= 20;
+UPDATE rank5 SET year = 2006 WHERE id <= 20;
+
+EXPLAIN (COSTS OFF) WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank5 SET year = 2006 FROM w WHERE rank5.id = w.id;
+WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank5 SET year = 2006 FROM w WHERE rank5.id = w.id;
+
+-- All moved rows must be on the segment given by their hash (o is hash
+-- distributed by id on the full cluster), and there must be no duplicates.
+SELECT count(*) AS moved,
+       count(*) FILTER (WHERE r.gp_segment_id <> o.gp_segment_id) AS misplaced
+FROM rank5_1_prt_1 r JOIN o USING (id);
+SELECT count(*), count(DISTINCT id) FROM rank5;
+
+-- Updates on leaf partitions shouldn't be planned with split update as update
+-- on leaf partition suppose to not move rows away from this partition thus,
+-- keeping distribution the same.
+EXPLAIN (COSTS OFF) UPDATE rank5_1_prt_2 SET year = 2007 WHERE id = 50;
+
+-- A BEFORE UPDATE trigger must not prevent such an UPDATE.
+CREATE FUNCTION rank5_trg() RETURNS trigger LANGUAGE plpgsql AS
+$$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER rank5_tr BEFORE UPDATE ON rank5_1_prt_2
+FOR EACH ROW EXECUTE PROCEDURE rank5_trg();
+UPDATE rank5_1_prt_2 SET year = 2007 WHERE id = 50;
+DROP TRIGGER rank5_tr ON rank5_1_prt_2;
+DROP FUNCTION rank5_trg();
+
 SELECT gp_debug_reset_create_table_default_numsegments();
 
 DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
+DROP TABLE rank5;
 DROP TABLE sales;
 DROP TABLE t;
 DROP TABLE o;

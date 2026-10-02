@@ -9633,6 +9633,98 @@ SELECT count(*), count(DISTINCT id) FROM t;
    600 |   600
 (1 row)
 
+--
+-- Test that segment is chosen correctly when ORCA's column ids of the target
+-- table don't match its attribute numbers: the root has a dropped column
+-- before the distribution key, and the UPDATE has a CTE.
+--
+CREATE TABLE rank5 (junk INT, id INT, year INT) DISTRIBUTED BY (id)
+PARTITION BY RANGE (year) (START (2006) END (2008) EVERY (1));
+NOTICE:  CREATE TABLE will create partition "rank5_1_prt_1" for table "rank5"
+NOTICE:  CREATE TABLE will create partition "rank5_1_prt_2" for table "rank5"
+ALTER TABLE rank5 DROP COLUMN junk;
+INSERT INTO rank5 SELECT i, 2007 FROM generate_series(1, 60) i;
+ALTER TABLE rank5 EXPAND PARTITION PREPARE;
+ALTER TABLE rank5_1_prt_1 SET WITH (REORGANIZE = TRUE) DISTRIBUTED BY (id);
+EXPLAIN (COSTS OFF) UPDATE rank5 SET year = 2006 WHERE id <= 20;
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Sequence
+                           ->  Partition Selector for rank5 (dynamic scan id: 1)
+                                 Partitions selected: 2 (out of 2)
+                           ->  Dynamic Seq Scan on rank5 (dynamic scan id: 1)
+                                 Filter: (id <= 20)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(10 rows)
+
+UPDATE rank5 SET year = 2006 WHERE id <= 20;
+EXPLAIN (COSTS OFF) WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank5 SET year = 2006 FROM w WHERE rank5.id = w.id;
+                                            QUERY PLAN                                             
+---------------------------------------------------------------------------------------------------
+ Update
+   ->  Explicit Redistribute Motion 3:3  (slice2; segments: 3)
+         ->  Split
+               ->  Result
+                     ->  Hash Join
+                           Hash Cond: (o.id = rank5.id)
+                           ->  Seq Scan on o
+                                 Filter: ((id >= 21) AND (id <= 40) AND (id >= 21) AND (id <= 40))
+                           ->  Hash
+                                 ->  Redistribute Motion 3:3  (slice1; segments: 3)
+                                       Hash Key: rank5.id
+                                       ->  Sequence
+                                             ->  Partition Selector for rank5 (dynamic scan id: 1)
+                                                   Partitions selected: 2 (out of 2)
+                                             ->  Dynamic Seq Scan on rank5 (dynamic scan id: 1)
+                                                   Filter: ((id >= 21) AND (id <= 40))
+ Optimizer: Pivotal Optimizer (GPORCA)
+(17 rows)
+
+WITH w AS (SELECT id FROM o WHERE id BETWEEN 21 AND 40)
+UPDATE rank5 SET year = 2006 FROM w WHERE rank5.id = w.id;
+-- All moved rows must be on the segment given by their hash (o is hash
+-- distributed by id on the full cluster), and there must be no duplicates.
+SELECT count(*) AS moved,
+       count(*) FILTER (WHERE r.gp_segment_id <> o.gp_segment_id) AS misplaced
+FROM rank5_1_prt_1 r JOIN o USING (id);
+ moved | misplaced 
+-------+-----------
+    40 |         0
+(1 row)
+
+SELECT count(*), count(DISTINCT id) FROM rank5;
+ count | count 
+-------+-------
+    60 |    60
+(1 row)
+
+-- Updates on leaf partitions shouldn't be planned with split update as update
+-- on leaf partition suppose to not move rows away from this partition thus,
+-- keeping distribution the same.
+EXPLAIN (COSTS OFF) UPDATE rank5_1_prt_2 SET year = 2007 WHERE id = 50;
+                 QUERY PLAN                  
+---------------------------------------------
+ Update
+   ->  Split
+         ->  Result
+               ->  Seq Scan on rank5_1_prt_2
+                     Filter: (id = 50)
+ Optimizer: Pivotal Optimizer (GPORCA)
+(6 rows)
+
+-- A BEFORE UPDATE trigger must not prevent such an UPDATE.
+CREATE FUNCTION rank5_trg() RETURNS trigger LANGUAGE plpgsql AS
+$$ BEGIN RETURN NEW; END $$;
+CREATE TRIGGER rank5_tr BEFORE UPDATE ON rank5_1_prt_2
+FOR EACH ROW EXECUTE PROCEDURE rank5_trg();
+UPDATE rank5_1_prt_2 SET year = 2007 WHERE id = 50;
+DROP TRIGGER rank5_tr ON rank5_1_prt_2;
+DROP FUNCTION rank5_trg();
 SELECT gp_debug_reset_create_table_default_numsegments();
  gp_debug_reset_create_table_default_numsegments 
 -------------------------------------------------
@@ -9643,6 +9735,7 @@ DROP TABLE rank;
 DROP TABLE rank2;
 DROP TABLE rank3;
 DROP TABLE rank4;
+DROP TABLE rank5;
 DROP TABLE sales;
 DROP TABLE t;
 DROP TABLE o;
