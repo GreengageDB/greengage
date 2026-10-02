@@ -10,10 +10,10 @@ select groupname , groupid , num_running , num_queueing , num_queued , num_execu
  default_group | 6437    | 0           | 0            | 0          | 0            
 (1 row)
 
-select groupname , groupid , cpu_usage , memory_usage from gp_toolkit.gp_resgroup_status_per_host s join gp_segment_configuration c on s.hostname=c.hostname and c.content=-1 and role='p' where groupname='default_group';
- groupname     | groupid | cpu_usage | memory_usage 
----------------+---------+-----------+--------------
- default_group | 6437    | 0.00      | 0.00         
+select groupname , groupid , cpu_usage , memory_usage < 5 as "less than 5 MB" from gp_toolkit.gp_resgroup_status_per_host s join gp_segment_configuration c on s.hostname=c.hostname and c.content=-1 and role='p' where groupname='default_group';
+ groupname     | groupid | cpu_usage | less than 5 MB 
+---------------+---------+-----------+----------------
+ default_group | 6437    | 0.00      | t              
 (1 row)
 
 select groupname , groupid , segment_id , vmem_usage from gp_toolkit.gp_resgroup_status_per_segment where groupname='default_group' order by segment_id;

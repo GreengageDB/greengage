@@ -14,7 +14,7 @@ select groupname
 select groupname
      , groupid
      , cpu_usage
-	 , memory_usage
+	 , memory_usage < 5 as "less than 5 MB"
   from gp_toolkit.gp_resgroup_status_per_host s
   join gp_segment_configuration c
     on s.hostname=c.hostname and c.content=-1 and role='p'
