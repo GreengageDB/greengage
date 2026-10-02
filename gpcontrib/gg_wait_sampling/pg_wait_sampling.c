@@ -1293,9 +1293,11 @@ ggws_reset_proc_slot(int code, Datum arg)
  * Publish the coordinator's postmaster start time (tmid) for this node. A QE
  * receives it in its startup packet, so it is final before any hook runs and
  * never changes for the life of a backend. After a failover the first QE of
- * the new coordinator overwrites the old value. Utility-mode connections to a
- * segment have no session and their own postmaster's time, so they publish
- * nothing.
+ * the new coordinator overwrites the old value. Only a QE carries the
+ * coordinator's start time on a segment: any other process there, such as a
+ * utility-mode or a parallel retrieve connection, has its own postmaster's
+ * time, even if it has a session id, so only QEs and coordinator processes
+ * publish.
  */
 static void
 ggws_backend_init(void)
@@ -1306,7 +1308,7 @@ ggws_backend_init(void)
 		return;
 	done = true;
 
-	if (gp_session_id > 0)
+	if (Gp_role == GP_ROLE_EXECUTE || IS_QUERY_DISPATCHER())
 		gp_gettmid(&pgws_collector_hdr->cluster_tmid);
 	on_shmem_exit(ggws_reset_proc_slot, 0);
 }

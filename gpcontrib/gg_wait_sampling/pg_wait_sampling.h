@@ -116,10 +116,12 @@ extern bool pgws_should_sample_proc(PGPROC *proc, int *pid_p, uint32 *wait_event
  * backends that are inside a utility statement.
  *
  * tmid is the coordinator's postmaster start time. A QE receives it in its
- * startup packet, so every backend of a session on any node knows it; each
- * backend publishes it once, from the first hook it runs, into the collector
- * header, and the collector seeds it on the coordinator node from its own
- * postmaster. Processes without a session report 0.
+ * startup packet, so every QE knows it; a QE publishes it once, from the
+ * first hook it runs, into the collector header, and the collector seeds it
+ * on the coordinator node from its own postmaster. Other processes on a
+ * segment, even ones with a session id such as a parallel retrieve
+ * connection, carry their own postmaster's time and never publish.
+ * Processes without a session report 0.
  */
 static inline void
 pgws_proc_identity(PGPROC *proc, HistoryItem *item)
