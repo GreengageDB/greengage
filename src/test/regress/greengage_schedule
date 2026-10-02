@@ -376,4 +376,6 @@ test: libpq
 test: alter_rebalance
 
 test: gp_local_extension
+
+test: bfv_hot_standby
 # end of tests
