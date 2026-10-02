@@ -40,7 +40,7 @@ operating systems:
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
 - **Package**: Builds Debian packages and optionally tests deployment.
-  Currently supported for version 6.x only.
+  Supported for versions 6.x and 7.x.
 
 ## Greengage CI (No Tests)
 
@@ -193,7 +193,7 @@ The workflow is parameterized to support flexibility:
 - **Target OS**: Supports multiple operating systems, defined in the matrix
   strategy. Ubuntu 22.04 uses no version suffix for backward compatibility with
   existing artifact naming; Ubuntu 24.04 support is currently available for
-  version 6.x and for the `build` job of version 7.x.
+  version 6.x and for the `build` and `package` jobs of version 7.x.
 
 ## Usage
 
