@@ -1655,8 +1655,8 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		 * aoco_beginscan_extractcolumns(), never changes afterwards), so
 		 * record it on the slot exactly once here rather than on every
 		 * aoco_getnextslot() call. tts_virtual_aocs_clear() consults this to
-		 * skip its per-row tts_is_valid allocate/memset for an eagerFetch
-		 * scan (see the comment there).
+		 * skip its per-row tts_is_valid bookkeeping for an eagerFetch scan
+		 * (see the comment there).
 		 */
 		slotAocs->eagerFetch = scan->columnScanInfo.eagerFetch;
 	}
@@ -1833,7 +1833,7 @@ ReadNext:
 			goto ReadNext;
 		}
 
-		slotAocs->tts_is_valid[attno] = true;
+		slotAocs->tts_is_valid[attno] = slotAocs->tts_valid_generation;
 
 		/*
 		 * Only the anchor column (attno above, not necessarily attribute 0)

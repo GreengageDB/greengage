@@ -280,12 +280,29 @@ typedef struct VirtualTupleTableSlotAOCS
 	void * current_scan;			 /* scan for this tuple */
 
 	/*
-	 * Per-attribute valid flag, indexed directly by attnum (0..natts-1).
-	 * A dense bool array rather than a Bitmapset: reads/writes are a single
-	 * inlined array access instead of an out-of-line
-	 * bms_is_member()/bms_add_member() call plus word/bit arithmetic, which
-	 * matters since this is consulted and updated on every attribute access
-	 * of every tuple in an AOCS scan.
+	 * Per-attribute validity, indexed directly by attnum (0..natts-1) and
+	 * tracked via a generation stamp rather than a plain bool:
+	 * tts_is_valid[attnum] holds whatever tts_valid_generation was at the
+	 * moment that attribute was last fetched, and the attribute is valid
+	 * iff tts_is_valid[attnum] == tts_valid_generation. This lets
+	 * tts_virtual_aocs_clear() invalidate every attribute in O(1) (just
+	 * bump tts_valid_generation) instead of memset-ing the whole array on
+	 * every single row -- a dense array rather than a Bitmapset for the
+	 * same reason as before: reads/writes are a single inlined array
+	 * access instead of an out-of-line bms_is_member()/bms_add_member()
+	 * call.
+	 *
+	 * tts_valid_generation is deliberately a uint8: incrementing and
+	 * comparing it is exactly as cheap as a plain bool on any
+	 * architecture that matters here, and a 1-byte array element keeps
+	 * tts_is_valid's footprint identical to the plain-bool array this
+	 * replaced. Its narrowness means it wraps back to 0 every 256 rows --
+	 * handled explicitly in tts_virtual_aocs_clear() by resyncing the
+	 * array with a one-time memset right when that happens, which
+	 * amortizes to a negligible fraction of a byte per row (a 256x-or-more
+	 * reduction versus memset-ing every row). 0 doubles as the "never set"
+	 * sentinel a freshly-palloc0'd array already reads as, so
+	 * tts_valid_generation is kept nonzero at all other times.
 	 *
 	 * Normally allocated once per slot (sized to tts_tupleDescriptor->natts)
 	 * and reused for the slot's lifetime -- but the descriptor is NOT
@@ -294,9 +311,10 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * widening an UPDATE/DELETE junk-filter slot to the full relation width).
 	 * tts_is_valid_natts records the size this array was actually allocated
 	 * for, so tts_virtual_aocs_clear() can tell when it must reallocate
-	 * instead of reusing/memset-ing a now too-small buffer.
+	 * instead of reusing/resyncing a now too-small buffer.
 	 */
-	bool	   *tts_is_valid;
+	uint8	   *tts_is_valid;
+	uint8		tts_valid_generation;
 	int			tts_is_valid_natts;
 
 	/*
@@ -307,10 +325,10 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * reads or writes tts_is_valid (every access is short-circuited by
 	 * slot_is_attr_valid()'s "tts_nvalid > attnum" check before it would
 	 * ever consult is_attr_valid()), so tts_virtual_aocs_clear() uses this
-	 * flag to skip the per-row allocate/memset of tts_is_valid entirely.
-	 * Set by aoco_getnextslot() from the scan's columnScanInfo.eagerFetch
-	 * before every call, so it's always current for whichever scan is
-	 * actually driving this slot right now.
+	 * flag to skip the per-row tts_is_valid bookkeeping entirely. Set once
+	 * in aocs_getnext()'s scan-init block (next to initscan_with_colinfo())
+	 * from the scan's columnScanInfo.eagerFetch, since it's fixed for the
+	 * scan's whole lifetime.
 	 */
 	bool		eagerFetch;
 } VirtualTupleTableSlotAOCS;
