@@ -17,9 +17,9 @@ The module must be loaded by adding `gg_wait_sampling` to
 shared memory and launches background worker.  This means that a server restart
 is needed to add or remove the module.
 
-When used with `pg_stat_statements` it is recommended to put `pg_stat_statements`
-before `gg_wait_sampling` in `shared_preload_libraries` so queryIds of
-utility statements are not rewritten by the former.
+The `queryid` columns are filled only when `pg_stat_statements` is loaded as
+well; `gg_wait_sampling` does not compute a query id of its own. The order of
+the two libraries in `shared_preload_libraries` does not matter.
 
 When `gg_wait_sampling` is enabled, it collects two kinds of statistics.
 
@@ -82,8 +82,8 @@ This adaptation differs from upstream pg_wait_sampling in several ways:
  - Main functions are renamed with 'gg_' prefix.
  Some of them are declared as EXECUTE ON SEGMENTS (COORDINATOR).
  - Cluster-wide wait events information is available through the same views as in original extension.
- - Query identity includes Greengage-specific fields:
-    - queryid
+ - Query identity includes Greengage-specific fields next to the upstream
+   `queryid`:
     - mppsessionid
     - command_id
     - tmid
