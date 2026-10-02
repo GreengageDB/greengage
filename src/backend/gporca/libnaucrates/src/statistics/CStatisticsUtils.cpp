@@ -744,21 +744,20 @@ CStatisticsUtils::CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
 	CStatsPredPtrArry *stats_pred_array = nullptr;
 	if (CStatsPred::EsptConj == pred_stats->GetPredStatsType())
 	{
-		stats_pred_array =
-			CStatsPredConj::ConvertPredStats(pred_stats)->GetConjPredStatsArray();
+		stats_pred_array = CStatsPredConj::ConvertPredStats(pred_stats)
+							   ->GetConjPredStatsArray();
 	}
 	else
 	{
-		stats_pred_array =
-			CStatsPredDisj::ConvertPredStats(pred_stats)->GetDisjPredStatsArray();
+		stats_pred_array = CStatsPredDisj::ConvertPredStats(pred_stats)
+							   ->GetDisjPredStatsArray();
 	}
 
 	GPOS_ASSERT(nullptr != stats_pred_array);
 	const ULONG arity = stats_pred_array->Size();
 	for (ULONG i = 0; i < arity; i++)
 	{
-		CollectUnsupportedPredUsedColIds(colids_bitset,
-										 (*stats_pred_array)[i]);
+		CollectUnsupportedPredUsedColIds(colids_bitset, (*stats_pred_array)[i]);
 	}
 }
 
