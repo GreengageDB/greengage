@@ -4118,22 +4118,10 @@ CopyFrom(CopyState cstate)
 			char		relstorage;
 
 			relstorage = RelinfoGetStorage(resultRelInfo);
-			if (relstorage == RELSTORAGE_AOROWS &&
-				resultRelInfo->ri_aoInsertDesc == NULL)
-			{
-				ResultRelInfoSetSegno(resultRelInfo, cstate->ao_segnos);
-				resultRelInfo->ri_aoInsertDesc =
-					appendonly_insert_init(resultRelInfo->ri_RelationDesc,
-										   resultRelInfo->ri_aosegno, false);
-			}
-			else if (relstorage == RELSTORAGE_AOCOLS &&
-					 resultRelInfo->ri_aocsInsertDesc == NULL)
-			{
-				ResultRelInfoSetSegno(resultRelInfo, cstate->ao_segnos);
-				resultRelInfo->ri_aocsInsertDesc =
-					aocs_insert_init(resultRelInfo->ri_RelationDesc,
-									 resultRelInfo->ri_aosegno, false);
-			}
+			if (relstorage == RELSTORAGE_AOROWS)
+				PartInsertDescEnsureAO(estate, resultRelInfo, cstate->ao_segnos);
+			else if (relstorage == RELSTORAGE_AOCOLS)
+				PartInsertDescEnsureAOCS(estate, resultRelInfo, cstate->ao_segnos);
 			else if (relstorage == RELSTORAGE_EXTERNAL &&
 					 resultRelInfo->ri_extInsertDesc == NULL)
 			{

@@ -282,6 +282,7 @@ extern bool enable_implicit_timeformat_YYYYMMDDHH24MISS;
  * 10% of the tuples are hidden.
  */
 extern int  gp_appendonly_compaction_threshold;
+extern int  gp_max_partition_open_insert_descs;
 extern bool gp_heap_require_relhasoids_match;
 extern bool	debug_xlog_record_read;
 extern bool Debug_cancel_print;
