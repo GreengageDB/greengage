@@ -552,7 +552,13 @@ getCdbComponentInfo(void)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
+		if (!found)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_EXCEPTION),
+					 errmsg("Hostname '%s' was not found in hostPrimaryCountHash",
+						cdbInfo->config->hostname)));
+		}
 		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
 	}
 
@@ -564,7 +570,13 @@ getCdbComponentInfo(void)
 			continue;
 
 		hsEntry = (HostPrimaryCountEntry *) hash_search(hostPrimaryCountHash, cdbInfo->config->hostname, HASH_FIND, &found);
-		Assert(found);
+		if (!found)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_EXCEPTION),
+					 errmsg("Hostname '%s' was not found in hostPrimaryCountHash",
+						cdbInfo->config->hostname)));
+		}
 		cdbInfo->hostPrimaryCount = hsEntry->segmentCount;
 	}
 
