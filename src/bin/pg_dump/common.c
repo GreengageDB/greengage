@@ -399,6 +399,25 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 }
 
 /*
+ * hasExtensionAncestorIndex -
+ *	 Is idx or one of its ancestors an undumped extension table's index?
+ */
+static bool
+hasExtensionAncestorIndex(const IndxInfo *idx)
+{
+	while (idx != NULL)
+	{
+		if (idx->indextable->dobj.ext_member &&
+			!(idx->dobj.dump & DUMP_COMPONENT_DEFINITION))
+			return true;
+		if (idx->parentidx == 0)
+			break;
+		idx = findIndexByOid(idx->parentidx);
+	}
+	return false;
+}
+
+/*
  * flagInhIndexes -
  *	 Create IndexAttachInfo objects for partitioned indexes, and add
  *	 appropriate dependency links.
@@ -428,6 +447,26 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			parentidx = findIndexByOid(index->parentidx);
 			if (parentidx == NULL)
 				continue;
+
+			/*
+			 * If an ancestor index belongs to an extension ATTACH PARTITION
+			 * recreates this index so don't dump it or its constraint.  This
+			 * loses its custom properties and name (comments on a renamed
+			 * index fail to restore) and loses the index entirely if CREATE
+			 * EXTENSION does not recreate the ancestor
+			 */
+			if (hasExtensionAncestorIndex(parentidx))
+			{
+				index->dobj.dump &= ~DUMP_COMPONENT_DEFINITION;
+				if (index->indexconstraint != 0)
+				{
+					DumpableObject *constraint;
+
+					constraint = findObjectByDumpId(index->indexconstraint);
+					if (constraint != NULL)
+						constraint->dump &= ~DUMP_COMPONENT_DEFINITION;
+				}
+			}
 
 			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
 
