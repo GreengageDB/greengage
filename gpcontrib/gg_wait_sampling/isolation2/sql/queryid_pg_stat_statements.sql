@@ -1,7 +1,7 @@
 -- queryid has the upstream pg_wait_sampling meaning: it is the value
 -- pg_stat_statements stored in the query, on every node, and 0 without it.
 -- Each half runs in its own session, since the cluster restarts in between.
-!\retcode gpconfig -c shared_preload_libraries -v 'pg_stat_statements,gg_wait_sampling';
+!\retcode gpconfig -c shared_preload_libraries -v "$(psql -At -c "SELECT array_to_string(array_prepend('pg_stat_statements', string_to_array(current_setting('shared_preload_libraries'), ',')), ',')" postgres)";
 !\retcode gpstop -raq -M fast;
 
 1: CREATE EXTENSION pg_stat_statements;
@@ -21,7 +21,7 @@
 1q:
 
 -- Without pg_stat_statements nothing sets the query id.
-!\retcode gpconfig -c shared_preload_libraries -v 'gg_wait_sampling';
+!\retcode gpconfig -c shared_preload_libraries -v "$(psql -At -c "SELECT array_to_string(array_remove(string_to_array(current_setting('shared_preload_libraries'), ','), 'pg_stat_statements'), ',')" postgres)";
 !\retcode gpstop -raq -M fast;
 
 2: CREATE EXTENSION gg_wait_sampling;
