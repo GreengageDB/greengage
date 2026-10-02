@@ -1068,11 +1068,11 @@ class GpSystemStateProgram(object):
                     if rows:
                         # wal connection is active.
                         if rows[0][2] != 'sync':
-                            # walsender is in 'catchup' sta te
+                            # walsender is in 'catchup' state
                             wal_sync_bytes_out = rows[0][0]
                             unsync_segs.append(s)
                             data.addValue(VALUE__REPL_SYNC_REMAINING_BYTES, wal_sync_bytes_out)
-                        if rows[0][1] != 0:
+                        if rows[0][1] is not None and rows[0][1] != 0:
                             # wals are being replayed
                             wal_repl_bytes_out = rows[0][1]
                             replaying_segs.append(s)

@@ -101,6 +101,7 @@ Feature: gpstate tests
         And the user runs "gpstate -e"
         Then gpstate should print "Segment Mirroring Status Report" to stdout
         And gpstate should print "All segments are running normally" to stdout
+        And gpstate should not print "All segments are running normally, but some of them" to stdout
 
     Scenario: gpstate -e logs errors when mirrors have failed over
         Given a standard local demo cluster is running
@@ -139,6 +140,7 @@ Feature: gpstate tests
             | \S+             | [0-9]+ | [0-9]+                     | \S+    | [0-9]+ |
             | \S+             | [0-9]+ | [0-9]+                     | \S+    | [0-9]+ |
             | \S+             | [0-9]+ | [0-9]+                     | \S+    | [0-9]+ |
+        And gpstate should return a return code of 0
         And gpstate should print "All segments are running normally, but some of them" to stdout
         And sql "select gp_inject_fault('replay_record_read', 'reset', dbid) from gp_segment_configuration where content in (0,1,2) and role='m';" is executed in "postgres" db
 

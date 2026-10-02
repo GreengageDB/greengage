@@ -7568,9 +7568,7 @@ StartupXLOG(void)
 
 				/* Else, try to fetch the next WAL record */
 				record = ReadRecord(xlogreader, InvalidXLogRecPtr, LOG, false);
-#ifdef FAULT_INJECTOR
 				SIMPLE_FAULT_INJECTOR("replay_record_read");
-#endif
 			} while (record != NULL);
 
 			/*
