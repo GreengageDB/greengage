@@ -21,6 +21,7 @@
 #include <sys/unistd.h>
 
 #include "access/reloptions.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/url.h"
 #include "access/xlog_internal.h"
@@ -631,6 +632,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_enable_blkdir_sampling,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_enable_temp_memory_catalog", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Use in-memory virtual catalog for temporary tables."),
+			gettext_noop("When enabled, temporary table metadata is stored in "
+						 "backend-private memory instead of pg_catalog, "
+						 "preventing catalog bloating from frequent temp table "
+						 "creation and deletion."),
+			GUC_NOT_IN_SAMPLE
+		},
+		&enable_temp_memory_catalog,
+		false,
 		NULL, NULL, NULL
 	},
 	{

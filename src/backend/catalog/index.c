@@ -31,6 +31,7 @@
 #include "access/relscan.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/visibilitymap.h"
 #include "access/xact.h"
@@ -930,6 +931,11 @@ index_create(Relation heapRelation,
 	}
 
 	/*
+	 * Route catalog writes to the in-memory virtual catalog for temp tables.
+	 */
+	BEGIN_TEMP_TABLE_SCOPE(heapRelation->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
+	/*
 	 * construct tuple descriptor for index tuples
 	 */
 	indexTupDesc = ConstructTupleDescriptor(heapRelation,
@@ -1306,6 +1312,9 @@ index_create(Relation heapRelation,
 	 * of transaction.  Closing the heap is caller's responsibility.
 	 */
 	index_close(indexRelation, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
+
 	return indexRelationId;
 }
 
@@ -3776,6 +3785,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 	 */
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
 
+	BEGIN_TEMP_TABLE_SCOPE(iRel->rd_islocaltemp);
+
 	/*
 	 * All predicate locks on the index are about to be made invalid. Promote
 	 * them to relation locks on the heap.
@@ -3939,6 +3950,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, char persistence,
 
 	/* Restore userid and security context */
 	SetUserIdAndSecContext(save_userid, save_sec_context);
+
+	END_TEMP_TABLE_SCOPE();
 
 	/* Close rels, but keep locks */
 	index_close(iRel, NoLock);
