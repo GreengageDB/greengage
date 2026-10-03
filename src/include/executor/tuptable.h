@@ -318,6 +318,24 @@ typedef struct VirtualTupleTableSlotAOCS
 	int			tts_is_valid_natts;
 
 	/*
+	 * RESTORED (legacy/experimental): gettargetattr() is called once per
+	 * tuple with a Bitmapset of the attnos an expression step needs, but
+	 * that Bitmapset is built once per compiled ExprEvalStep
+	 * (op->d.fetch.all_vars) and its pointer stays stable across every
+	 * tuple of the scan -- only its members differ between distinct
+	 * expression steps. Re-walking it via bms_next_member() on every single
+	 * tuple is therefore redundant work. Cache the flattened, plain-array
+	 * form of the last-seen Bitmapset (keyed by pointer identity, not
+	 * value) so repeat calls with the same attrs just do a tight sequential
+	 * array scan instead. Grows but never shrinks; freed only when the
+	 * slot itself is.
+	 */
+	Bitmapset  *tts_cached_attrs;
+	AttrNumber *tts_cached_attrs_arr;
+	int			tts_cached_attrs_count;
+	int			tts_cached_attrs_capacity;
+
+	/*
 	 * True when the slot is currently being driven by an eagerFetch scan
 	 * (aocs_getnext_eager(), see cdbaocsam.h), which fetches every
 	 * projected column upfront and sets tts_nvalid to the full attribute

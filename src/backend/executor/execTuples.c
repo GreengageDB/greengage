@@ -339,6 +339,87 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 
 static void tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts);
 
+/*
+ * RESTORED (legacy/experimental, see commit da634590d7a and the discussion
+ * that led to bringing this back): fetch exactly the Bitmapset of attnos
+ * an expression step actually needs (op->d.fetch.all_vars), not every
+ * column in proj_atts. This is what every EEOP_SCAN_FETCHSOME step called
+ * before da634590d7a replaced it with a qual-vs-target-list skip plus
+ * per-Var lazy fetch; restoring it (see the call site in
+ * ExecInterpExpr()/execExprInterp.c) means a qual's FETCHSOME fetches only
+ * the qual's own Vars, and a target list's FETCHSOME fetches only the
+ * target list's own Vars -- each scoped per step, unlike
+ * tts_virtual_aocs_getsomeattrs() below (which deliberately ignores its
+ * natts argument and always fetches everything in proj_atts).
+ */
+static bool
+tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+
+	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
+	AOCSScanDesc scan = (AOCSScanDesc)slotAocs->current_scan;
+	if (unlikely(scan == NULL))
+		return false;
+
+	/*
+	 * Already fully materialized for this tuple (either by a prior
+	 * gettargetattr call below, or by getsomeattrs()/aocs_getnext_eager())
+	 * -- nothing left for any ancestor join level to fetch. Mirrors the
+	 * fast path ordinary (non-AOCS) slots get for free via
+	 * slot_getsomeattrs()'s natts <= tts_nvalid check. This is also why no
+	 * separate eagerFetch check is needed here (unlike the pre-da634590d7a
+	 * version of this function): aocs_getnext_eager() already sets
+	 * tts_nvalid to the full attribute count and aoco_getnextslot() leaves
+	 * it there for an eagerFetch scan, so this check alone is sufficient to
+	 * make this a no-op for every eager-fetched row.
+	 */
+	if (unlikely(slot->tts_nvalid >= slot->tts_tupleDescriptor->natts))
+		return true;
+
+	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+	Assert(rowNum != InvalidAORowNum);
+
+	if (unlikely(slotAocs->tts_cached_attrs != attrs))
+	{
+		int			count = bms_num_members(attrs);
+		AttrNumber	attno = -1;
+		int			i = 0;
+
+		if (count > slotAocs->tts_cached_attrs_capacity)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+			if (slotAocs->tts_cached_attrs_arr != NULL)
+				pfree(slotAocs->tts_cached_attrs_arr);
+			slotAocs->tts_cached_attrs_arr = palloc(count * sizeof(AttrNumber));
+			slotAocs->tts_cached_attrs_capacity = count;
+			MemoryContextSwitchTo(oldContext);
+		}
+
+		while ((attno = bms_next_member(attrs, attno)) >= 0)
+			slotAocs->tts_cached_attrs_arr[i++] = attno;
+
+		slotAocs->tts_cached_attrs_count = count;
+		slotAocs->tts_cached_attrs = attrs;
+	}
+
+	for (int i = 0; i < slotAocs->tts_cached_attrs_count; i++)
+	{
+		AttrNumber	attno = slotAocs->tts_cached_attrs_arr[i];
+
+		if (unlikely(slotAocs->tts_is_valid[attno] == slotAocs->tts_valid_generation))
+			continue;
+
+		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
+									 attno, d, null);
+	}
+	return true;
+}
+
 static bool
 tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 {
@@ -599,11 +680,12 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	 * match the freshly bumped/reset tts_valid_generation), not copied from
 	 * srcslot: every reader of tts_is_valid[] either lives behind
 	 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path (which
-	 * tts_nvalid below already satisfies for the whole copied range) or
+	 * tts_nvalid below already satisfies for the whole copied range), or
 	 * behind fetchattr()/getsomeattrs()'s "current_scan == NULL" guard
-	 * (which is true for dstslot, since tts_virtual_aocs_clear() just
-	 * nulled it) -- so nothing can ever observe tts_is_valid on a slot that
-	 * just went through copyslot.
+	 * (true for dstslot, since tts_virtual_aocs_clear() just nulled it), or
+	 * behind gettargetattr()'s own "current_scan == NULL" / "already fully
+	 * materialized" guards (both also true here) -- so nothing can ever
+	 * observe tts_is_valid on a slot that just went through copyslot.
 	 */
 	dstslot->tts_nvalid = srcdesc->natts;
 	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
@@ -1437,7 +1519,7 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.copy_heap_tuple = tts_virtual_aocs_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
+	.gettargetattr = tts_virtual_aocs_gettargetattr,
 	.is_attr_valid = tts_virtual_aocs_is_attr_valid,
 	.fetchattr = tts_virtual_aocs_fetchattr
 };
