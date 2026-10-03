@@ -292,19 +292,17 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * access instead of an out-of-line bms_is_member()/bms_add_member()
 	 * call.
 	 *
-	 * tts_valid_generation is a uint32: incrementing and comparing it costs
-	 * the same as a narrower type on any architecture that matters here
-	 * (x86-64's native word size needs no operand-size-override prefix,
-	 * unlike uint16), at the cost of a 4-byte-per-attribute array versus
-	 * the 1-byte-per-attribute footprint a uint8 generation (or the
-	 * original plain-bool array) would give. Wrapping back to 0 takes
-	 * ~4.29 billion rows -- handled explicitly in tts_virtual_aocs_clear()
-	 * by resyncing the array with a one-time memset right when that
-	 * happens, in practice never for any realistic single scan, though the
-	 * handling also makes it safe across however many rows a long-lived
-	 * slot cumulatively sees across repeated rescans/statements. 0 doubles
-	 * as the "never set" sentinel a freshly-palloc0'd array already reads
-	 * as, so tts_valid_generation is kept nonzero at all other times.
+	 * tts_valid_generation is deliberately a uint8: incrementing and
+	 * comparing it is exactly as cheap as a plain bool on any
+	 * architecture that matters here, and a 1-byte array element keeps
+	 * tts_is_valid's footprint identical to the plain-bool array this
+	 * replaced. Its narrowness means it wraps back to 0 every 256 rows --
+	 * handled explicitly in tts_virtual_aocs_clear() by resyncing the
+	 * array with a one-time memset right when that happens, which
+	 * amortizes to a negligible fraction of a byte per row (a 256x-or-more
+	 * reduction versus memset-ing every row). 0 doubles as the "never set"
+	 * sentinel a freshly-palloc0'd array already reads as, so
+	 * tts_valid_generation is kept nonzero at all other times.
 	 *
 	 * Normally allocated once per slot (sized to 'tts_tupleDescriptor->natts')
 	 * and reused for the slot's lifetime -- but the descriptor is NOT
@@ -315,8 +313,8 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * for, so tts_virtual_aocs_clear() can tell when it must reallocate
 	 * instead of reusing/resyncing a now too-small buffer.
 	 */
-	uint32	   *tts_is_valid;
-	uint32		tts_valid_generation;
+	uint8	   *tts_is_valid;
+	uint8		tts_valid_generation;
 	int			tts_is_valid_natts;
 
 	/*

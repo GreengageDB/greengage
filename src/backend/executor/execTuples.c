@@ -195,12 +195,13 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 			/*
 			 * tts_valid_generation wrapped back to 0, which doubles as the
 			 * "never set" sentinel a zeroed array reads as -- resync the
-			 * array for real so a stale entry from ~4.29 billion rows ago
-			 * can't spuriously compare equal to the new generation. See
-			 * the comment on tts_is_valid in tuptable.h.
+			 * array for real so a stale entry from ~256 rows ago can't
+			 * spuriously compare equal to the new generation. This fires
+			 * once every 256 rows; see the comment on tts_is_valid in
+			 * tuptable.h.
 			 */
 			memset(vslot_aocs->tts_is_valid, 0,
-				   vslot_aocs->tts_is_valid_natts * sizeof(uint32));
+				   vslot_aocs->tts_is_valid_natts * sizeof(uint8));
 			vslot_aocs->tts_valid_generation = 1;
 		}
 	}
@@ -212,7 +213,7 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 			pfree(vslot_aocs->tts_is_valid);
 
 		vslot_aocs->tts_is_valid_natts = slot->tts_tupleDescriptor->natts;
-		vslot_aocs->tts_is_valid = palloc0(vslot_aocs->tts_is_valid_natts * sizeof(uint32));
+		vslot_aocs->tts_is_valid = palloc0(vslot_aocs->tts_is_valid_natts * sizeof(uint8));
 		/* fresh array reads as all-0 ("never set"); generation must be nonzero */
 		vslot_aocs->tts_valid_generation = 1;
 		MemoryContextSwitchTo(oldContext);
