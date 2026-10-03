@@ -715,7 +715,7 @@ union all
     <dxl:Plan Id="0" SpaceSize="4">
       <dxl:Append IsTarget="false" IsZapped="false">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="874.004145" Rows="1.000000" Width="20"/>
+          <dxl:Cost StartupCost="0" TotalCost="874.004215" Rows="1.000000" Width="20"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="a">
@@ -827,7 +827,7 @@ union all
         </dxl:NestedLoopJoin>
         <dxl:NestedLoopJoin JoinType="Left" IndexNestedLoopJoin="true" OuterRefAsParam="false">
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="437.002863" Rows="1.000000" Width="20"/>
+            <dxl:Cost StartupCost="0" TotalCost="437.002933" Rows="2.000000" Width="20"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="43" Alias="a">
