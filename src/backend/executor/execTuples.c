@@ -135,8 +135,89 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 
 	vslot_aocs->current_scan = NULL;
 
-	bms_free(vslot_aocs->tts_is_valid);
-	vslot_aocs->tts_is_valid = NULL;
+	/*
+	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
+	 * path of every AOCS scan, so the common case (buffer already allocated
+	 * for the slot's current attribute count) just bumps tts_valid_generation
+	 * -- an O(1) invalidation of every attribute, no array touch at all
+	 * (see the comment on tts_is_valid in tuptable.h for why this is safe).
+	 *
+	 * Two things make tts_tupleDescriptor unsafe to dereference unconditionally
+	 * here:
+	 *
+	 * 1) A slot can be cleared before it has ever had a descriptor at all --
+	 *    ExecSetSlotDescriptor() itself calls ExecClearTuple() *before*
+	 *    installing the (possibly first-ever) descriptor, e.g. for a
+	 *    freshly-made junk-filter slot in ExecInitJunkFilterInsertion(). At
+	 *    that point tts_tupleDescriptor is still NULL.
+	 *
+	 * 2) Even once a slot has a descriptor, it isn't guaranteed to keep the
+	 *    same size for its whole lifetime: ExecSetSlotDescriptor() can
+	 *    re-describe an *existing* slot to a different (typically wider)
+	 *    tupdesc -- e.g. ExecInitJunkFilterInsertion() widening an
+	 *    UPDATE/DELETE junk-filter slot from the subplan's target list to the
+	 *    full relation width. Because that call clears before swapping in the
+	 *    new descriptor, tts_tupleDescriptor->natts can differ from what
+	 *    tts_is_valid was last allocated for by the time we get back here.
+	 *
+	 * So: no descriptor yet -> just drop any existing array and defer
+	 * allocation to whenever a real descriptor is actually attached; sizes
+	 * mismatched -> reallocate; otherwise reuse the existing buffer.
+	 *
+	 * One more case short-circuits all of this: an eagerFetch scan (see
+	 * aocs_getnext_eager()) never reads or writes tts_is_valid -- it sets
+	 * tts_nvalid to the full attribute count instead, which makes every
+	 * tts_is_valid consumer unreachable via slot_is_attr_valid()'s
+	 * "tts_nvalid > attnum" fast path (same invariant
+	 * tts_virtual_aocs_copyslot() relies on). So once a real descriptor is
+	 * attached, skip the generation bump entirely for an eagerFetch slot --
+	 * there's nothing for it to invalidate. Whatever buffer/size/generation
+	 * happens to already be sitting on the slot is left untouched; if this
+	 * slot is later driven by a lazy scan instead, the size check below
+	 * still handles reusing or reallocating it correctly at that point.
+	 */
+	if (slot->tts_tupleDescriptor == NULL)
+	{
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+		vslot_aocs->tts_is_valid = NULL;
+		vslot_aocs->tts_is_valid_natts = 0;
+	}
+	else if (vslot_aocs->eagerFetch)
+	{
+		/* intentionally no-op, see comment above */
+	}
+	else if (likely(vslot_aocs->tts_is_valid != NULL &&
+					vslot_aocs->tts_is_valid_natts == slot->tts_tupleDescriptor->natts))
+	{
+		if (unlikely(++vslot_aocs->tts_valid_generation == 0))
+		{
+			/*
+			 * tts_valid_generation wrapped back to 0, which doubles as the
+			 * "never set" sentinel a zeroed array reads as -- resync the
+			 * array for real so a stale entry from ~256 rows ago can't
+			 * spuriously compare equal to the new generation. This fires
+			 * once every 256 rows; see the comment on tts_is_valid in
+			 * tuptable.h.
+			 */
+			memset(vslot_aocs->tts_is_valid, 0,
+				   vslot_aocs->tts_is_valid_natts * sizeof(uint8));
+			vslot_aocs->tts_valid_generation = 1;
+		}
+	}
+	else
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+		if (vslot_aocs->tts_is_valid != NULL)
+			pfree(vslot_aocs->tts_is_valid);
+
+		vslot_aocs->tts_is_valid_natts = slot->tts_tupleDescriptor->natts;
+		vslot_aocs->tts_is_valid = palloc0(vslot_aocs->tts_is_valid_natts * sizeof(uint8));
+		/* fresh array reads as all-0 ("never set"); generation must be nonzero */
+		vslot_aocs->tts_valid_generation = 1;
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 /*
@@ -167,7 +248,6 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 {
 	TupleTableSlot *slot = (TupleTableSlot *) slotAocs;
 	int			err PG_USED_FOR_ASSERTS_ONLY;
-	MemoryContext oldContext;
 
 	if (unlikely(AO_ATTR_VAL_IS_MISSING(rowNum,
 							attno,
@@ -175,10 +255,7 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 							scan->columnScanInfo.attnum_to_rownum)))
 	{
 		d[attno] = getmissingattr(slot->tts_tupleDescriptor, attno + 1, &null[attno]);
-
-		oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-		slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-		MemoryContextSwitchTo(oldContext);
+		slotAocs->tts_is_valid[attno] = slotAocs->tts_valid_generation;
 
 		return;
 	}
@@ -257,11 +334,24 @@ tts_virtual_aocs_fetch_attr(VirtualTupleTableSlotAOCS *slotAocs,
 
 	datumstreamread_get(ds, &d[attno], &null[attno]);
 
-	oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
-	slotAocs->tts_is_valid = bms_add_member(slotAocs->tts_is_valid, attno);
-	MemoryContextSwitchTo(oldContext);
+	slotAocs->tts_is_valid[attno] = slotAocs->tts_valid_generation;
 }
 
+static void tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts);
+
+/*
+ * RESTORED (legacy/experimental, see commit da634590d7a and the discussion
+ * that led to bringing this back): fetch exactly the Bitmapset of attnos
+ * an expression step actually needs (op->d.fetch.all_vars), not every
+ * column in proj_atts. This is what every EEOP_SCAN_FETCHSOME step called
+ * before da634590d7a replaced it with a qual-vs-target-list skip plus
+ * per-Var lazy fetch; restoring it (see the call site in
+ * ExecInterpExpr()/execExprInterp.c) means a qual's FETCHSOME fetches only
+ * the qual's own Vars, and a target list's FETCHSOME fetches only the
+ * target list's own Vars -- each scoped per step, unlike
+ * tts_virtual_aocs_getsomeattrs() below (which deliberately ignores its
+ * natts argument and always fetches everything in proj_atts).
+ */
 static bool
 tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 {
@@ -273,15 +363,55 @@ tts_virtual_aocs_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
 	if (unlikely(scan == NULL))
 		return false;
 
+	/*
+	 * Already fully materialized for this tuple (either by a prior
+	 * gettargetattr call below, or by getsomeattrs()/aocs_getnext_eager())
+	 * -- nothing left for any ancestor join level to fetch. Mirrors the
+	 * fast path ordinary (non-AOCS) slots get for free via
+	 * slot_getsomeattrs()'s natts <= tts_nvalid check. This is also why no
+	 * separate eagerFetch check is needed here (unlike the pre-da634590d7a
+	 * version of this function): aocs_getnext_eager() already sets
+	 * tts_nvalid to the full attribute count and aoco_getnextslot() leaves
+	 * it there for an eagerFetch scan, so this check alone is sufficient to
+	 * make this a no-op for every eager-fetched row.
+	 */
+	if (unlikely(slot->tts_nvalid >= slot->tts_tupleDescriptor->natts))
+		return true;
+
 	AOCSFileSegInfo * curseginfo = scan->seginfo[scan->cur_seg];
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
 
- 	AttrNumber	attno = -1;
-	while ((attno = bms_next_member(attrs, attno)) >= 0)
+	if (unlikely(slotAocs->tts_cached_attrs != attrs))
 	{
-		if (unlikely(bms_is_member(attno, slotAocs->tts_is_valid)))
+		int			count = bms_num_members(attrs);
+		AttrNumber	attno = -1;
+		int			i = 0;
+
+		if (count > slotAocs->tts_cached_attrs_capacity)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(slot->tts_mcxt);
+
+			if (slotAocs->tts_cached_attrs_arr != NULL)
+				pfree(slotAocs->tts_cached_attrs_arr);
+			slotAocs->tts_cached_attrs_arr = palloc(count * sizeof(AttrNumber));
+			slotAocs->tts_cached_attrs_capacity = count;
+			MemoryContextSwitchTo(oldContext);
+		}
+
+		while ((attno = bms_next_member(attrs, attno)) >= 0)
+			slotAocs->tts_cached_attrs_arr[i++] = attno;
+
+		slotAocs->tts_cached_attrs_count = count;
+		slotAocs->tts_cached_attrs = attrs;
+	}
+
+	for (int i = 0; i < slotAocs->tts_cached_attrs_count; i++)
+	{
+		AttrNumber	attno = slotAocs->tts_cached_attrs_arr[i];
+
+		if (unlikely(slotAocs->tts_is_valid[attno] == slotAocs->tts_valid_generation))
 			continue;
 
 		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
@@ -294,7 +424,39 @@ static bool
 tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 {
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
-	return bms_is_member(attnum, slotAocs->tts_is_valid);
+	return slotAocs->tts_is_valid != NULL &&
+		slotAocs->tts_is_valid[attnum] == slotAocs->tts_valid_generation;
+}
+
+/*
+ * PROTOTYPE: fetch exactly one attribute (see TupleTableSlotOps.fetchattr).
+ * Used by EEOP_SCAN_VAR's lazy path when the qual's upfront
+ * EEOP_SCAN_FETCHSOME step has been skipped for this scan (see
+ * ExecPushExprSetupSteps in execExpr.c) so that a Var reference inside a
+ * short-circuited branch doesn't force every other qual-referenced column
+ * -- including ones in a sibling branch that's never reached -- to be
+ * fetched too.
+ */
+static void
+tts_virtual_aocs_fetchattr(TupleTableSlot *slot, int attnum)
+{
+	Datum	   *d = slot->tts_values;
+	bool	   *null = slot->tts_isnull;
+
+	VirtualTupleTableSlotAOCS *slotAocs = (VirtualTupleTableSlotAOCS *) slot;
+	AOCSScanDesc scan = (AOCSScanDesc) slotAocs->current_scan;
+
+	if (unlikely(scan == NULL) || slotAocs->tts_is_valid[attnum] == slotAocs->tts_valid_generation)
+		return;
+
+	AOCSFileSegInfo *curseginfo = scan->seginfo[scan->cur_seg];
+	AOTupleId  *tid = (AOTupleId *) &slot->tts_tid;
+	int64		rowNum = AOTupleIdGet_rowNum(tid);
+
+	Assert(rowNum != InvalidAORowNum);
+
+	tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
+								 attnum, d, null);
 }
 
 static void
@@ -312,28 +474,34 @@ tts_virtual_aocs_getsomeattrs(TupleTableSlot *slot, int natts)
 	AOTupleId	*tid = (AOTupleId *)&slot->tts_tid;
 	int64		rowNum = AOTupleIdGet_rowNum(tid);
 	Assert(rowNum != InvalidAORowNum);
-	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 
+	/*
+	 * There's no benefit in stopping partway through proj_atts just because
+	 * this particular caller only asked for `natts`: proj_atts already IS
+	 * the complete, fixed set of columns this query will ever need from
+	 * this scan (computed once at scan setup from the whole plan, not just
+	 * this call site), and a qual's own Vars are fetched lazily via
+	 * EEOP_SCAN_VAR before getsomeattrs is ever reached for them. If natts
+	 * grows across repeated calls for the same tuple (e.g. different
+	 * callers wanting progressively more columns), each call would
+	 * otherwise redo this loop. So fetch everything in proj_atts in one
+	 * pass instead, and record that the full descriptor width is now valid
+	 * so any later getsomeattrs call on this tuple hits the
+	 * already-fully-fetched fast path.
+	 */
 	for (AttrNumber i = 1; i < scan->columnScanInfo.num_proj_atts; i++)
 	{
 		AttrNumber	attno = scan->columnScanInfo.proj_atts[i];
 
 		if (unlikely((attno < slot->tts_nvalid) ||
-					bms_is_member(attno, slotAocs->tts_is_valid)))
+					slotAocs->tts_is_valid[attno] == slotAocs->tts_valid_generation))
 			continue;
-
-		if (unlikely(attno >= natts))
-		{
-			if (attno < anchor_attr)
-				continue;
-			break;
-		}
 
 		tts_virtual_aocs_fetch_attr(slotAocs, scan, curseginfo, tid, rowNum,
 									 attno, d, null);
 	}
 
-	slot->tts_nvalid = natts;
+	slot->tts_nvalid = Max(natts, slot->tts_tupleDescriptor->natts);
 }
 
 /*
@@ -506,17 +674,19 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
 	}
 
-	if (TTS_IS_VIRTUAL_AOCS(srcslot))
-	{
-		VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
-		VirtualTupleTableSlotAOCS *srcslot_aocs = (VirtualTupleTableSlotAOCS *) srcslot;
-		MemoryContext oldContext;
-
-		oldContext = MemoryContextSwitchTo(dstslot->tts_mcxt);
-		dstslot_aocs->tts_is_valid = bms_copy(srcslot_aocs->tts_is_valid);
-		MemoryContextSwitchTo(oldContext);
-	}
-
+	/*
+	 * dstslot_aocs->tts_is_valid is intentionally left exactly as
+	 * tts_virtual_aocs_clear() above set it (every entry guaranteed to not
+	 * match the freshly bumped/reset tts_valid_generation), not copied from
+	 * srcslot: every reader of tts_is_valid[] either lives behind
+	 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path (which
+	 * tts_nvalid below already satisfies for the whole copied range), or
+	 * behind fetchattr()/getsomeattrs()'s "current_scan == NULL" guard
+	 * (true for dstslot, since tts_virtual_aocs_clear() just nulled it), or
+	 * behind gettargetattr()'s own "current_scan == NULL" / "already fully
+	 * materialized" guards (both also true here) -- so nothing can ever
+	 * observe tts_is_valid on a slot that just went through copyslot.
+	 */
 	dstslot->tts_nvalid = srcdesc->natts;
 	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
 
@@ -1326,7 +1496,8 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsVirtualAOCS = {
@@ -1349,7 +1520,8 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
 
 	.gettargetattr = tts_virtual_aocs_gettargetattr,
-	.is_attr_valid = tts_virtual_aocs_is_attr_valid
+	.is_attr_valid = tts_virtual_aocs_is_attr_valid,
+	.fetchattr = tts_virtual_aocs_fetchattr
 };
 
 const TupleTableSlotOps TTSOpsHeapTuple = {
@@ -1369,7 +1541,8 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsMinimalTuple = {
@@ -1389,7 +1562,8 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 const TupleTableSlotOps TTSOpsBufferHeapTuple = {
@@ -1409,7 +1583,8 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
 
 	.gettargetattr = NULL,
-	.is_attr_valid = NULL
+	.is_attr_valid = NULL,
+	.fetchattr = NULL
 };
 
 
@@ -2246,7 +2421,10 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
  * attributes, for slot types that support it (see TupleTableSlotOps).
  *
  * Returns false, doing nothing, if the slot type has no gettargetattr
- * callback, so the caller can fall back to slot_getsomeattrs().
+ * callback, so the caller can fall back to slot_getsomeattrs(). No slot type
+ * currently implements the callback (see the comment on
+ * TupleTableSlotOps.gettargetattr) -- only the LLVM JIT expression compiler
+ * still calls this, always getting false back.
  */
 bool
 slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)

@@ -456,6 +456,36 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, scanslot);
 
+			/*
+			 * RESTORED (legacy/experimental, see commit da634590d7a and the
+			 * discussion that led to bringing this back): try
+			 * slot_gettargetattr() first, which for a slot type that
+			 * implements it (AOCS) fetches exactly the Bitmapset of attnos
+			 * this step needs (op->d.fetch.all_vars) -- the qual's own Vars
+			 * for a qual's FETCHSOME, the target list's own Vars for a
+			 * target list's -- not every column in proj_atts. Only fall
+			 * back to the unconditional slot_getsomeattrs() bulk fetch for
+			 * slot types with no gettargetattr callback (everything except
+			 * AOCS today).
+			 *
+			 * da634590d7a replaced this with a qual-only skip (checked via
+			 * op->d.fetch.is_qual, still computed in execExpr.c but no
+			 * longer read here) plus per-Var lazy fetch in EEOP_SCAN_VAR,
+			 * specifically to stop every Var referenced anywhere in a
+			 * qual -- including inside an AND/OR branch that short-circuit
+			 * evaluation would otherwise never reach -- from being fetched
+			 * unconditionally before the AND/OR jump logic even runs. That
+			 * fix is real (see git history, a measured q28 win). Trying the
+			 * previous behavior again now that there's a cheaper eagerFetch
+			 * path + O(1) clear() for the no-qual case, to see whether
+			 * avoiding slot_is_attr_valid()'s per-Var indirect dispatch in
+			 * EEOP_SCAN_VAR/EEOP_ASSIGN_SCAN_VAR (effectively dead code
+			 * again once gettargetattr fetches everything this step needs
+			 * up front) wins often enough on q09-shaped simple-qual queries
+			 * to be worth reintroducing the OR-branch over-fetch risk on
+			 * q28-shaped compound ones. Needs measuring before deciding
+			 * whether to keep this.
+			 */
 			if (!slot_gettargetattr(scanslot, op->d.fetch.all_vars))
 				slot_getsomeattrs(scanslot, op->d.fetch.last_var);
 
@@ -498,6 +528,15 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 			/* See EEOP_INNER_VAR comments */
 
+			/*
+			 * RESTORED (legacy/experimental): with EEOP_SCAN_FETCHSOME
+			 * back to always trying slot_gettargetattr() first (see
+			 * above), this attribute is always already valid by the time
+			 * any EEOP_SCAN_VAR step for it runs -- slot_is_attr_valid()
+			 * is only needed as a correctness check here, same as the
+			 * other *_VAR cases, not as a runtime call that might trigger
+			 * a lazy per-attribute fetch.
+			 */
 			Assert(attnum >= 0 && slot_is_attr_valid(scanslot, attnum));
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
@@ -573,6 +612,10 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			/*
 			 * We do not need CheckVarSlotCompatibility here; that was taken
 			 * care of at compilation time.  But see EEOP_INNER_VAR comments.
+			 *
+			 * Also see the matching comment on EEOP_SCAN_VAR: restored to
+			 * an Assert-only check now that EEOP_SCAN_FETCHSOME always
+			 * tries slot_gettargetattr() first.
 			 */
 			Assert(attnum >= 0 && slot_is_attr_valid(scanslot, attnum));
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);

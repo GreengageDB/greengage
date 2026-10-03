@@ -1241,7 +1241,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 		 * DEBUG builds...
 		 */
 #ifdef USE_ASSERT_CHECKING
-		if (Debug_appendonly_print_scan_tuple)
+		if (unlikely(Debug_appendonly_print_scan_tuple))
 		{
 			ereport(LOG,
 					(errmsg("Datum stream block %s read is returning NULL "
@@ -1313,14 +1313,14 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 					 errcontext_datumstreamblockread(dsr)));
 		}
 
-		if (Debug_datumstream_read_print_varlena_info)
+		if (unlikely(Debug_datumstream_read_print_varlena_info))
 		{
 			DatumStreamBlockRead_PrintVarlenaInfo(
 												  dsr,
 												  dsr->datump);
 		}
 
-		if (Debug_appendonly_print_scan_tuple)
+		if (unlikely(Debug_appendonly_print_scan_tuple))
 		{
 			ereport(LOG,
 					(errmsg("Datum stream block %s read is returning variable-length item #%d "
@@ -1346,7 +1346,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 		 * DEBUG builds...
 		 */
 #ifdef USE_ASSERT_CHECKING
-		if (Debug_appendonly_print_scan_tuple)
+		if (unlikely(Debug_appendonly_print_scan_tuple))
 		{
 			ereport(LOG,
 					(errmsg("Datum stream block %s read is returning fixed-length item #%d "
@@ -1400,7 +1400,7 @@ DatumStreamBlockRead_Get(DatumStreamBlockRead * dsr, Datum *datum, bool *null)
 			 * for DEBUG builds...
 			 */
 #ifdef USE_ASSERT_CHECKING
-			if (Debug_appendonly_print_scan_tuple)
+			if (unlikely(Debug_appendonly_print_scan_tuple))
 			{
 				ereport(LOG,
 						(errmsg("Datum stream block %s read is returning fixed-length item #%d "
@@ -1460,7 +1460,7 @@ DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 			 * for DEBUG builds...
 			 */
 #ifdef USE_ASSERT_CHECKING
-			if (Debug_appendonly_print_scan_tuple)
+			if (unlikely(Debug_appendonly_print_scan_tuple))
 			{
 				ereport(LOG,
 					 (errmsg("Datum stream block read is positioned to NULL "
@@ -1490,7 +1490,7 @@ DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 		 * DEBUG builds...
 		 */
 #ifdef USE_ASSERT_CHECKING
-		if (Debug_appendonly_print_scan_tuple)
+		if (unlikely(Debug_appendonly_print_scan_tuple))
 		{
 			ereport(LOG,
 					(errmsg("Datum stream block read advance is positioned to first item "
@@ -1557,7 +1557,7 @@ DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 						 errcontext_datumstreamblockread(dsr)));
 			}
 
-			if (Debug_appendonly_print_scan_tuple)
+			if (unlikely(Debug_appendonly_print_scan_tuple))
 			{
 				ereport(LOG,
 						(errmsg("Datum stream block read advanced to variable-length item index %d "
@@ -1587,7 +1587,7 @@ DatumStreamBlockRead_AdvanceOrig(DatumStreamBlockRead * dsr)
 			 * for DEBUG builds...
 			 */
 #ifdef USE_ASSERT_CHECKING
-			if (Debug_appendonly_print_scan_tuple)
+			if (unlikely(Debug_appendonly_print_scan_tuple))
 			{
 				ereport(LOG,
 						(errmsg("Datum stream block read advanced to fixed-item item index %d "
@@ -1702,7 +1702,7 @@ DatumStreamBlockRead_AdvanceDenseDelta(DatumStreamBlockRead * dsr)
 	}
 
 #ifdef USE_ASSERT_CHECKING
-	if (Debug_appendonly_print_scan_tuple)
+	if (unlikely(Debug_appendonly_print_scan_tuple))
 	{
 		ereport(LOG,
 				(errmsg("Datum stream block read Delta value "
@@ -1934,7 +1934,7 @@ DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 		 * DEBUG builds...
 		 */
 #ifdef USE_ASSERT_CHECKING
-		if (Debug_appendonly_print_scan_tuple)
+		if (unlikely(Debug_appendonly_print_scan_tuple))
 		{
 			ereport(LOG,
 					(errmsg("Datum stream block read advance is positioned to first item "
@@ -2003,7 +2003,7 @@ DatumStreamBlockRead_AdvanceDense(DatumStreamBlockRead * dsr)
 						 errcontext_datumstreamblockread(dsr)));
 			}
 
-			if (Debug_appendonly_print_scan_tuple)
+			if (unlikely(Debug_appendonly_print_scan_tuple))
 			{
 				ereport(LOG,
 						(errmsg("Datum stream block read advanced to variable-length item index %d "
