@@ -1,2 +1,3 @@
 test: resgroup_wait_events
+test: retrieve_tmid
 test: teardown
