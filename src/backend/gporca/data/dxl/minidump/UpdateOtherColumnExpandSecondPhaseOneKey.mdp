@@ -3,7 +3,7 @@
   <dxl:Comment><![CDATA[
     Objective: Orca should plan updates on non-partitioning and
     non-distribution columns with and explicit redistribute motion, but without
-    split-update. 
+    split-update.
 
     CREATE extension IF NOT EXISTS gp_debug_numsegments;
     SELECT gp_debug_set_create_table_default_numsegments(2);

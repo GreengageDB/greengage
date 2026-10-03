@@ -1344,8 +1344,13 @@ typedef struct SplitUpdate
 	AttrNumber	tupleoidColIdx;		/* index of tuple oid column into the target list */
 	List		*insertColIdx;		/* list of columns to INSERT into the target list */
 	List		*deleteColIdx;		/* list of columns to DELETE into the target list */
-	
-	
+
+	/*
+	 * Fields for calculating the target segment id.
+	 *
+	 * If the targetlist contains a 'gp_segment_id' field, these fields are
+	 * used to compute the target segment id, for INSERT-action rows.
+	 */
 	int			numHashAttrs;
 	AttrNumber *hashAttnos;
 	Oid		   *hashFuncs;			/* corresponding hash functions */

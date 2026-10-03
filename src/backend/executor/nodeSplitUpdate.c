@@ -290,7 +290,7 @@ ExecInitSplitUpdate(SplitUpdate *node, EState *estate, int eflags)
 												node->numHashAttrs,
 												node->hashFuncs);
 	}
-	else 
+	else
 	{
 		splitupdatestate->input_segid_attno = InvalidAttrNumber;
 		splitupdatestate->output_segid_attno = InvalidAttrNumber;

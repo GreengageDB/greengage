@@ -4565,7 +4565,7 @@ UPDATE rank4 SET year=2006, id=id+1 WHERE gender='f';
 SELECT gp_segment_id, * FROM rank4_1_prt_2;
 SELECT gp_segment_id, * FROM rank4_1_prt_3;
 
---  
+--
 -- Test that segment is chosen correctly in case of tuple routing
 -- with differently distributed partitions (2nd phase of gpexpand)
 --
@@ -4633,11 +4633,11 @@ ALTER TABLE t_1_prt_1 SET WITH (REORGANIZE = TRUE) DISTRIBUTED BY (id);
 SELECT string_agg(id::text, ',') AS ids
 FROM (SELECT id FROM t_1_prt_2 WHERE gp_segment_id = 1 ORDER BY ctid LIMIT 5) s \gset
 
--- If gp_segment_id column were treated incorrectly: 
+-- If gp_segment_id column were treated incorrectly:
 -- delete part will go to segment 0 ("id % 1 AS gp_segment_id" will always give
 -- 0), so it will delete nothing (as real query shows that delete's tuple id
--- resides on segment 1 - by definition of ids); 
--- but insert will go to 0 too and successfully insert something. 
+-- resides on segment 1 - by definition of ids);
+-- but insert will go to 0 too and successfully insert something.
 -- That way we will get duplicates, which we will check on next query.
 UPDATE t SET year = 2006, r = o.gp_segment_id
 FROM (SELECT id, id % 1 AS gp_segment_id FROM o) o

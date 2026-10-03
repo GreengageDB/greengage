@@ -1697,7 +1697,6 @@ make_splitupdate(PlannerInfo *root, ModifyTable *mt, Plan *subplan, RangeTblEntr
 	splitupdate->hashFuncs = NULL;
 	splitupdate->numHashSegments = 0;
 
-
 	/*
 	 * Now the plan tree has been determined, we have no choice, so use the
 	 * cost of lower plan node directly, plus the cpu_tuple_cost of each row.
