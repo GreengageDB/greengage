@@ -629,6 +629,28 @@ CStatisticsUtils::ExtractUsedColIds(CMemoryPool *mp, CBitSet *colids_bitset,
 
 	if (CStatsPred::EsptUnsupported == pred_stats->GetPredStatsType())
 	{
+		// no single associated column, but the predicate may still touch
+		// specific columns (tracked via GetUsedColIds()) - record those
+		// rather than reporting this predicate as touching nothing, so
+		// disjunction handling doesn't wrongly treat those columns as
+		// untouched by this branch
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+		const ULongPtrArray *used_colids =
+			unsupported_pred_stats->GetUsedColIds();
+		if (nullptr != used_colids)
+		{
+			for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+			{
+				ULONG used_colid = *(*used_colids)[uli];
+				if (!colids_bitset->Get(used_colid))
+				{
+					(void) colids_bitset->ExchangeSet(used_colid);
+					colids->Append(GPOS_NEW(mp) ULONG(used_colid));
+				}
+			}
+		}
+
 		return;
 	}
 
@@ -662,14 +684,80 @@ CStatisticsUtils::ExtractUsedColIds(CMemoryPool *mp, CBitSet *colids_bitset,
 				colids->Append(GPOS_NEW(mp) ULONG(colid));
 			}
 		}
-		else if (CStatsPred::EsptUnsupported !=
-				 curr_stats_pred->GetPredStatsType())
+		else
 		{
 			GPOS_ASSERT(
 				CStatsPred::EsptConj == curr_stats_pred->GetPredStatsType() ||
-				CStatsPred::EsptDisj == curr_stats_pred->GetPredStatsType());
+				CStatsPred::EsptDisj == curr_stats_pred->GetPredStatsType() ||
+				CStatsPred::EsptUnsupported ==
+					curr_stats_pred->GetPredStatsType());
 			ExtractUsedColIds(mp, colids_bitset, curr_stats_pred, colids);
 		}
+	}
+}
+
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CStatisticsUtils::CollectUnsupportedPredUsedColIds
+//
+//	@doc:
+//		Recursively collect every column touched by an unsupported-predicate
+//		filter anywhere in a predicate (sub)tree
+//
+//---------------------------------------------------------------------------
+void
+CStatisticsUtils::CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
+												   CStatsPred *pred_stats)
+{
+	GPOS_ASSERT(nullptr != colids_bitset);
+	GPOS_ASSERT(nullptr != pred_stats);
+
+	// recursive function - check stack
+	GPOS_CHECK_STACK_SIZE;
+
+	if (CStatsPred::EsptUnsupported == pred_stats->GetPredStatsType())
+	{
+		CStatsPredUnsupported *unsupported_pred_stats =
+			CStatsPredUnsupported::ConvertPredStats(pred_stats);
+		const ULongPtrArray *used_colids =
+			unsupported_pred_stats->GetUsedColIds();
+		if (nullptr != used_colids)
+		{
+			for (ULONG uli = 0; uli < used_colids->Size(); uli++)
+			{
+				(void) colids_bitset->ExchangeSet(*(*used_colids)[uli]);
+			}
+		}
+
+		return;
+	}
+
+	if (CStatsPred::EsptConj != pred_stats->GetPredStatsType() &&
+		CStatsPred::EsptDisj != pred_stats->GetPredStatsType())
+	{
+		// a simple, non-conj/disj, non-unsupported predicate - nothing an
+		// unsupported predicate could be nested inside of here
+		return;
+	}
+
+	CStatsPredPtrArry *stats_pred_array = nullptr;
+	if (CStatsPred::EsptConj == pred_stats->GetPredStatsType())
+	{
+		stats_pred_array = CStatsPredConj::ConvertPredStats(pred_stats)
+							   ->GetConjPredStatsArray();
+	}
+	else
+	{
+		stats_pred_array = CStatsPredDisj::ConvertPredStats(pred_stats)
+							   ->GetDisjPredStatsArray();
+	}
+
+	GPOS_ASSERT(nullptr != stats_pred_array);
+	const ULONG arity = stats_pred_array->Size();
+	for (ULONG i = 0; i < arity; i++)
+	{
+		CollectUnsupportedPredUsedColIds(colids_bitset, (*stats_pred_array)[i]);
 	}
 }
 
@@ -710,6 +798,14 @@ CStatisticsUtils::UpdateDisjStatistics(
 				previous_histogram->MakeUnionHistogramNormalize(
 					input_disjunct_rows, result_histogram, local_rows,
 					&output_rows);
+
+			// a union can't undo either side's unsupported-predicate
+			// imprecision on this column
+			if (previous_histogram->IsUnsupportedPredDerived() ||
+				result_histogram->IsUnsupportedPredDerived())
+			{
+				new_histogram->SetUnsupportedPredDerived();
+			}
 
 			GPOS_DELETE(previous_histogram);
 			previous_histogram = new_histogram;
@@ -921,6 +1017,14 @@ CStatisticsUtils::MergeHistogramMapsForDisjPreds(CMemoryPool *mp,
 						histogram1->MakeUnionHistogramNormalize(
 							rows1, histogram2, rows2, &output_rows);
 
+					// a union can't undo either side's unsupported-predicate
+					// imprecision on this column
+					if (histogram1->IsUnsupportedPredDerived() ||
+						histogram2->IsUnsupportedPredDerived())
+					{
+						normalized_union_histogram->SetUnsupportedPredDerived();
+					}
+
 					AddHistogram(mp, colid, normalized_union_histogram,
 								 merged_hmap, true /* fReplaceOld */);
 
@@ -985,15 +1089,21 @@ CStatisticsUtils::GetColId(const CStatsPredPtrArry *pred_stats_array)
 
 	ULONG result_colid = gpos::ulong_max;
 	BOOL is_same_col = true;
+	BOOL is_first = true;
 
 	const ULONG length = pred_stats_array->Size();
 	for (ULONG i = 0; i < length && is_same_col; i++)
 	{
 		CStatsPred *pred_stats = (*pred_stats_array)[i];
 		ULONG colid = pred_stats->GetColId();
-		if (gpos::ulong_max == result_colid)
+		if (is_first)
 		{
+			// track "not yet assigned" separately from "assigned to
+			// ulong_max" (a genuinely multi-column/unsupported child), so
+			// such a child doesn't get silently skipped over in favor of a
+			// later child's own, real colid
 			result_colid = colid;
+			is_first = false;
 		}
 		is_same_col = (result_colid == colid);
 	}
@@ -1712,6 +1822,13 @@ CStatisticsUtils::AddGrpColStats(CMemoryPool *mp,
 			if (histogram->WereNDVsScaled())
 			{
 				result_histogram->SetNDVScaled();
+			}
+			// grouping removes duplicates but can't undo an earlier
+			// unsupported predicate's unreliable row-count guess on this
+			// column
+			if (histogram->IsUnsupportedPredDerived())
+			{
+				result_histogram->SetUnsupportedPredDerived();
 			}
 			AddHistogram(mp, grp_colid, result_histogram, output_histograms);
 			GPOS_DELETE(result_histogram);

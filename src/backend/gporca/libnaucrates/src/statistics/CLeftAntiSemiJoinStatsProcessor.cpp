@@ -53,9 +53,21 @@ CLeftAntiSemiJoinStatsProcessor::JoinHistogramsLASJ(
 	if (!empty_histograms &&
 		CHistogram::JoinPredCmpTypeIsSupported(stats_cmp_type))
 	{
+		// If the inner (histogram2) side's histogram was derived from an
+		// unsupported-predicate filter, its bucket content doesn't reflect
+		// true post-filter value coverage. Treat it the same as an explicit
+		// request to skip precise histogram computation, so we fall back
+		// to the same conservative default selectivity. The outer
+		// (histogram1, preserved) side only contributes its value range to
+		// this computation, never its row-count/frequency, so its own mark
+		// doesn't undermine the computation's validity and is deliberately
+		// not checked here.
+		BOOL ignore_hist_computation = DoIgnoreLASJHistComputation ||
+									   histogram2->IsUnsupportedPredDerived();
+
 		*result_hist1 = histogram1->MakeLASJHistogramNormalize(
 			stats_cmp_type, num_rows1, histogram2, scale_factor,
-			DoIgnoreLASJHistComputation);
+			ignore_hist_computation);
 		*result_hist2 = nullptr;
 
 		if ((*result_hist1)->IsEmpty())

@@ -164,6 +164,13 @@ public:
 								  CStatsPred *pred_stats,
 								  ULongPtrArray *colids);
 
+	// recursively collect every column touched by an unsupported-predicate
+	// filter anywhere in a predicate (sub)tree - not only predicates that
+	// are themselves a direct child of a conjunction or disjunction, but
+	// also ones nested inside a further conjunction or disjunction below it
+	static void CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
+												 CStatsPred *pred_stats);
+
 	// given the previously generated histogram, update the intermediate
 	// result of the disjunction
 	static void UpdateDisjStatistics(
