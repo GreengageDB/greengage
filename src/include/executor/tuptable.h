@@ -430,6 +430,9 @@ extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
 static inline void
 slot_fetchattr(TupleTableSlot *slot, int attnum)
 {
+	if (slot->tts_nvalid > attnum)
+		return;
+
 	if (slot->tts_ops->fetchattr)
 		slot->tts_ops->fetchattr(slot, attnum);
 }

@@ -523,19 +523,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 			Assert(attnum >= 0);
 
-			/*
-			 * PROTOTYPE: normally the qual's upfront EEOP_SCAN_FETCHSOME
-			 * step (or the target list's own FETCHSOME) has already made
-			 * this valid. But for a qual against a slot type that supports
-			 * per-attribute on-demand fetch, that upfront step skips this
-			 * attribute (see EEOP_SCAN_FETCHSOME above) precisely so that a
-			 * Var inside a short-circuited AND/OR branch never gets
-			 * fetched at all when that branch isn't reached -- fetch it
-			 * lazily right here instead, the first (and only) time this
-			 * specific step actually executes for this row.
-			 */
-			if (unlikely(!slot_is_attr_valid(scanslot, attnum)))
-				slot_fetchattr(scanslot, attnum);
+			slot_fetchattr(scanslot, attnum);
+
+			Assert(slot_is_attr_valid(scanslot, attnum));
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
 
@@ -616,8 +606,9 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			 * skipped for a slot type that supports on-demand fetch.
 			 */
 			Assert(attnum >= 0);
-			if (unlikely(!slot_is_attr_valid(scanslot, attnum)))
-				slot_fetchattr(scanslot, attnum);
+
+			slot_fetchattr(scanslot, attnum);
+
 			Assert(slot_is_attr_valid(scanslot, attnum));
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = scanslot->tts_values[attnum];
