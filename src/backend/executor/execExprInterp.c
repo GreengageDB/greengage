@@ -456,7 +456,30 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 		{
 			CheckOpSlotCompatibility(op, scanslot);
 
-			if (!slot_gettargetattr(scanslot, op->d.fetch.all_vars))
+			/*
+			 * For a qual's FETCHSOME, against a slot type that supports
+			 * on-demand per-attribute fetch (fetchattr != NULL), skip this
+			 * bulk fetch entirely -- every Var referenced anywhere in the
+			 * qual, including inside an AND/OR branch that short-circuit
+			 * evaluation would otherwise never reach, would otherwise get
+			 * fetched unconditionally before the AND/OR jump logic even
+			 * runs. Each EEOP_SCAN_VAR step fetches its own attribute
+			 * lazily instead (see below) -- only the Vars actually reached
+			 * still get touched.
+			 *
+			 * Deliberately NOT extended to target-list FETCHSOME: measured
+			 * (see git history), and skipping there was a net regression on
+			 * this session's TPC-DS set (~5% slower overall) -- most rows
+			 * that reach projection need most of their columns anyway, so
+			 * per-Var lazy fetch there just pays the same cost one
+			 * attribute at a time instead of in one batch.
+			 *
+			 * Checked here, per row, against the slot actually in play (not
+			 * decided once at compile time) so a dynamic/partitioned scan
+			 * whose partitions mix storage types still gets the right
+			 * behavior for each one.
+			 */
+			if (!(op->d.fetch.is_qual && scanslot->tts_ops->fetchattr != NULL))
 				slot_getsomeattrs(scanslot, op->d.fetch.last_var);
 
 			EEO_NEXT();
@@ -498,7 +521,11 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 
 			/* See EEOP_INNER_VAR comments */
 
-			Assert(attnum >= 0 && slot_is_attr_valid(scanslot, attnum));
+			Assert(attnum >= 0);
+
+			slot_fetchattr(scanslot, attnum);
+
+			Assert(slot_is_attr_valid(scanslot, attnum));
 			*op->resvalue = scanslot->tts_values[attnum];
 			*op->resnull = scanslot->tts_isnull[attnum];
 
@@ -573,8 +600,16 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			/*
 			 * We do not need CheckVarSlotCompatibility here; that was taken
 			 * care of at compilation time.  But see EEOP_INNER_VAR comments.
+			 *
+			 * Also see the matching comment on EEOP_SCAN_VAR: this attribute
+			 * may not have been fetched by FETCHSOME if that step was
+			 * skipped for a slot type that supports on-demand fetch.
 			 */
-			Assert(attnum >= 0 && slot_is_attr_valid(scanslot, attnum));
+			Assert(attnum >= 0);
+
+			slot_fetchattr(scanslot, attnum);
+
+			Assert(slot_is_attr_valid(scanslot, attnum));
 			Assert(resultnum >= 0 && resultnum < resultslot->tts_tupleDescriptor->natts);
 			resultslot->tts_values[resultnum] = scanslot->tts_values[attnum];
 			resultslot->tts_isnull[resultnum] = scanslot->tts_isnull[attnum];

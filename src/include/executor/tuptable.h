@@ -218,6 +218,15 @@ struct TupleTableSlotOps
 	/*
 	 * Fill up target entries of tts_values and tts_isnull arrays with
 	 * values from the tuple contained in the slot.
+	 *
+	 * No slot type currently implements this (superseded by fetchattr()
+	 * below); kept only because the LLVM JIT expression compiler still
+	 * generates a call to slot_gettargetattr() as a first attempt ahead of
+	 * its own EEOP_SCAN_FETCHSOME deform logic, mirroring
+	 * ExecInterpExpr()'s interpreted EEOP_SCAN_FETCHSOME handling. Since it
+	 * always returns false now, that JIT path is a harmless no-op that
+	 * simply falls through -- not updated to match the interpreter's
+	 * fetchattr()-based skip logic to avoid touching LLVM IR generation.
 	 */
 	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
 
@@ -225,6 +234,16 @@ struct TupleTableSlotOps
 	 * Check if value for attnum in tts_values and tts_isnull arrays is valid.
 	 */
 	bool		(*is_attr_valid) (TupleTableSlot *slot, int attnum);
+
+	/*
+	 * Fetch exactly one attribute on demand. Unlike getsomeattrs() (a whole
+	 * 0..N-1 range), this exists so a single EEOP_SCAN_VAR reference -- e.g.
+	 * one Var inside a short-circuited qual branch whose EEOP_SCAN_FETCHSOME
+	 * step skipped the bulk fetch precisely because this callback is
+	 * non-NULL (see EEOP_SCAN_FETCHSOME in execExprInterp.c) -- can fetch
+	 * just the one column it actually needs, with no per-call allocation.
+	 */
+	void		(*fetchattr) (TupleTableSlot *slot, int attnum);
 };
 
 /*
@@ -259,7 +278,59 @@ typedef struct VirtualTupleTableSlotAOCS
 	VirtualTupleTableSlot base;
 
 	void * current_scan;			 /* scan for this tuple */
-	Bitmapset *tts_is_valid;		 /* per-attribute valid flag */
+
+	/*
+	 * Per-attribute validity, indexed directly by attnum (0..natts-1) and
+	 * tracked via a generation stamp rather than a plain bool:
+	 * tts_is_valid[attnum] holds whatever tts_valid_generation was at the
+	 * moment that attribute was last fetched, and the attribute is valid
+	 * iff tts_is_valid[attnum] == tts_valid_generation. This lets
+	 * tts_virtual_aocs_clear() invalidate every attribute in O(1) (just
+	 * bump tts_valid_generation) instead of memset-ing the whole array on
+	 * every single row -- a dense array rather than a Bitmapset for the
+	 * same reason as before: reads/writes are a single inlined array
+	 * access instead of an out-of-line bms_is_member()/bms_add_member()
+	 * call.
+	 *
+	 * tts_valid_generation is deliberately a uint8: incrementing and
+	 * comparing it is exactly as cheap as a plain bool on any
+	 * architecture that matters here, and a 1-byte array element keeps
+	 * tts_is_valid's footprint identical to the plain-bool array this
+	 * replaced. Its narrowness means it wraps back to 0 every 256 rows --
+	 * handled explicitly in tts_virtual_aocs_clear() by resyncing the
+	 * array with a one-time memset right when that happens, which
+	 * amortizes to a negligible fraction of a byte per row (a 256x-or-more
+	 * reduction versus memset-ing every row). 0 doubles as the "never set"
+	 * sentinel a freshly-palloc0'd array already reads as, so
+	 * tts_valid_generation is kept nonzero at all other times.
+	 *
+	 * Normally allocated once per slot (sized to tts_tupleDescriptor->natts)
+	 * and reused for the slot's lifetime -- but the descriptor is NOT
+	 * guaranteed to stay the same size for that lifetime: ExecSetSlotDescriptor()
+	 * can re-describe an existing slot (e.g. ExecInitJunkFilterInsertion()
+	 * widening an UPDATE/DELETE junk-filter slot to the full relation width).
+	 * tts_is_valid_natts records the size this array was actually allocated
+	 * for, so tts_virtual_aocs_clear() can tell when it must reallocate
+	 * instead of reusing/resyncing a now too-small buffer.
+	 */
+	uint8	   *tts_is_valid;
+	uint8		tts_valid_generation;
+	int			tts_is_valid_natts;
+
+	/*
+	 * True when the slot is currently being driven by an eagerFetch scan
+	 * (aocs_getnext_eager(), see cdbaocsam.h), which fetches every
+	 * projected column upfront and sets tts_nvalid to the full attribute
+	 * count instead of tracking per-attribute validity. Such a scan never
+	 * reads or writes tts_is_valid (every access is short-circuited by
+	 * slot_is_attr_valid()'s "tts_nvalid > attnum" check before it would
+	 * ever consult is_attr_valid()), so tts_virtual_aocs_clear() uses this
+	 * flag to skip the per-row tts_is_valid bookkeeping entirely. Set once
+	 * in aocs_getnext()'s scan-init block (next to initscan_with_colinfo())
+	 * from the scan's columnScanInfo.eagerFetch, since it's fixed for the
+	 * scan's whole lifetime.
+	 */
+	bool		eagerFetch;
 } VirtualTupleTableSlotAOCS;
 
 typedef struct HeapTupleTableSlot
@@ -350,6 +421,21 @@ extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
 extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
+
+/*
+ * PROTOTYPE: fetch exactly one attribute, for slot types that support it
+ * (see TupleTableSlotOps.fetchattr). Does nothing if the slot type has no
+ * fetchattr callback -- always safe to call speculatively.
+ */
+static inline void
+slot_fetchattr(TupleTableSlot *slot, int attnum)
+{
+	if (slot->tts_nvalid > attnum)
+		return;
+
+	if (slot->tts_ops->fetchattr)
+		slot->tts_ops->fetchattr(slot, attnum);
+}
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
 extern void appendonly_free_memtuple(MemTuple tuple);

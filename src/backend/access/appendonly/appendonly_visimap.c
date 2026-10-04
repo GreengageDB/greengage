@@ -166,10 +166,18 @@ AppendOnlyVisimap_Find(
 	Assert(visiMap);
 	Assert(aoTupleId);
 
+	/*
+	 * PERFORMANCE EXPERIMENT: Only do trace checking for DEBUG builds --
+	 * this runs on every visimap-entry transition during a scan, so even
+	 * the disabled-by-default GUC check itself isn't free at that
+	 * frequency.
+	 */
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map: Find entry for "
 		   "(tupleId) = %s",
 		   AOTupleIdToString(aoTupleId));
+#endif
 
 	if (!AppendOnlyVisimapStore_Find(&visiMap->visimapStore,
 									 AOTupleIdGet_segmentFileNum(aoTupleId),
@@ -198,10 +206,17 @@ AppendOnlyVisimap_IsVisible(
 {
 	Assert(visiMap);
 
+	/*
+	 * PERFORMANCE EXPERIMENT: Only do trace checking for DEBUG builds --
+	 * this runs on every row of every AOCS/AO scan, so even the
+	 * disabled-by-default GUC check itself isn't free at that frequency.
+	 */
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map: Visibility check: "
 		   "(tupleId) = %s",
 		   AOTupleIdToString(aoTupleId));
+#endif
 
 	if (!AppendOnlyVisimapEntry_CoversTuple(&visiMap->visimapEntry,
 											aoTupleId))
