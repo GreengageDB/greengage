@@ -133,7 +133,16 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 
 	tts_virtual_clear(slot);
 
-	vslot_aocs->current_scan = NULL;
+	/*
+	 * current_scan is deliberately NOT reset to NULL here, unlike before:
+	 * it never changes across a scan's lifetime (it's the AOCSScanDesc
+	 * driving this slot, set once in aocs_getnext()'s scan-init block next
+	 * to eagerFetch), so resetting and re-setting it to the same value on
+	 * every single row was pure waste. See tts_virtual_aocs_copyslot() for
+	 * the one place that still needs it explicitly NULLed (a slot that was
+	 * never driven by aocs_getnext() at all, e.g. a freshly palloc0'd one,
+	 * already reads current_scan as NULL for free).
+	 */
 
 	/*
 	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
@@ -580,10 +589,22 @@ static void
 tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 {
 	TupleDesc	srcdesc = srcslot->tts_tupleDescriptor;
+	VirtualTupleTableSlotAOCS *dstslot_aocs = (VirtualTupleTableSlotAOCS *) dstslot;
 
 	Assert(srcdesc->natts <= dstslot->tts_tupleDescriptor->natts);
 
 	tts_virtual_aocs_clear(dstslot);
+
+	/*
+	 * tts_virtual_aocs_clear() no longer NULLs current_scan itself (see the
+	 * comment there) -- it's set once per scan and left alone precisely so
+	 * a live scan doesn't pay to reset-then-reset-back on every row. But
+	 * dstslot here isn't necessarily driven by any scan at all, and if it
+	 * previously was, that scan could since have been closed or freed.
+	 * copyslot is the one place that actually needs current_scan to read
+	 * as NULL (see the comment below), so it has to make that true itself.
+	 */
+	dstslot_aocs->current_scan = NULL;
 
 	slot_getallattrs(srcslot);
 
@@ -601,9 +622,12 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 	 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path (which
 	 * tts_nvalid below already satisfies for the whole copied range) or
 	 * behind fetchattr()/getsomeattrs()'s "current_scan == NULL" guard
-	 * (which is true for dstslot, since tts_virtual_aocs_clear() just
-	 * nulled it) -- so nothing can ever observe tts_is_valid on a slot that
-	 * just went through copyslot.
+	 * (which is true for dstslot, since we just explicitly nulled it above)
+	 * -- so nothing can ever observe tts_is_valid on a slot that just went
+	 * through copyslot. The explicit null above specifically matters for
+	 * the case this Assert allows -- srcdesc->natts < dstslot's own natts
+	 * -- where tts_nvalid's fast path doesn't cover the extra attributes
+	 * only dstslot's wider descriptor has.
 	 */
 	dstslot->tts_nvalid = srcdesc->natts;
 	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
