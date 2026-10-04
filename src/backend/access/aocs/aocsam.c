@@ -1478,10 +1478,12 @@ ReadNextEager:
 			 * Bail out early if we do not have any column in the projection.
 			 * Placing here in order to have less impact on the hot path.
 			 *
-			 * Callers of aocs_getnext_eager() are required to have already
-			 * called ExecClearTuple(slot) before this call, which already
-			 * reset slotAocs->current_scan to NULL -- no need to repeat
-			 * that here.
+			 * No need to touch slotAocs->current_scan on this or the
+			 * no-more-seg bail-out just below: it's never read on the
+			 * eager path regardless of what it holds (see the comment near
+			 * this function's success return), and it's otherwise only set
+			 * once, in aocs_getnext()'s scan-init block, not reset per-row
+			 * here or by ExecClearTuple() anymore.
 			 */
 			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
@@ -1491,10 +1493,7 @@ ReadNextEager:
 			err = open_next_scan_seg(scan);
 			if (err < 0)
 			{
-				/*
-				 * No more seg, we are at the end. ExecClearTuple() already
-				 * reset slotAocs->current_scan to NULL.
-				 */
+				/* No more seg, we are at the end. */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
 				return false;
@@ -1657,8 +1656,16 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		 * aoco_getnextslot() call. tts_virtual_aocs_clear() consults this to
 		 * skip its per-row tts_is_valid bookkeeping for an eagerFetch scan
 		 * (see the comment there).
+		 *
+		 * Likewise for current_scan: scan is the same AOCSScanDesc for this
+		 * slot's entire lifetime (this init block itself only runs once,
+		 * guarded by relationTupleDesc), so set it here instead of on every
+		 * row in the lazy path's return below. Harmless to also set for an
+		 * eagerFetch scan even though nothing reads it there (see the
+		 * eagerFetch-path comment near aocs_getnext_eager()'s return).
 		 */
 		slotAocs->eagerFetch = scan->columnScanInfo.eagerFetch;
+		slotAocs->current_scan = (void *) scan;
 	}
 
 	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
@@ -1710,8 +1717,12 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 				if (!HeapTupleIsValid(systable_getnext(scan->soleRowIdScan.scan_blkdir)))
 				{
 					/*
-					 * No more seg, we are at the end. ExecClearTuple()
-					 * already reset slotAocs->current_scan to NULL.
+					 * No more seg, we are at the end. slotAocs->current_scan
+					 * is left pointing at this (now exhausted) scan --
+					 * harmless, since ExecClearTuple() below marks the slot
+					 * empty and nothing reads attributes off an empty slot.
+					 * See the scan-init block's comment for why it's not
+					 * reset here or anywhere per-row anymore.
 					 */
 					ExecClearTuple(slot);
 					scan->cur_seg = -1;
@@ -1749,10 +1760,11 @@ ReadNext:
 			 * Bail out early if we do not have any column in the projection.
 			 * Placing here in order to have less impact on the hot path.
 			 *
-			 * Callers of aocs_getnext() are required to have already called
-			 * ExecClearTuple(slot) before this call, which already reset
-			 * slotAocs->current_scan to NULL -- no need to repeat that
-			 * here.
+			 * current_scan is set once, in aocs_getnext()'s scan-init
+			 * block, and is not touched on this or the no-more-seg bail-out
+			 * just below -- left pointing at the (about to be exhausted)
+			 * scan is harmless, since ExecClearTuple() marks the slot empty
+			 * and nothing reads attributes off an empty slot.
 			 */
 			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
@@ -1762,10 +1774,7 @@ ReadNext:
 			err = open_next_scan_seg(scan);
 			if (err < 0)
 			{
-				/*
-				 * No more seg, we are at the end. ExecClearTuple() already
-				 * reset slotAocs->current_scan to NULL.
-				 */
+				/* No more seg, we are at the end. */
 				ExecClearTuple(slot);
 				scan->cur_seg = -1;
 				return false;
@@ -1850,7 +1859,11 @@ ReadNext:
 
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
-		slotAocs->current_scan = (void*)scan;
+		/*
+		 * current_scan is already set to scan -- done once, in the
+		 * scan-init block above, not here on every row (see the comment
+		 * there).
+		 */
 
 		return true;
 	}
