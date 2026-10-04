@@ -1690,7 +1690,13 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 					/* The tuple is invisible */
 					continue;
 				}
-				slot->tts_nvalid = 0;
+
+				/*
+				 * tts_nvalid is already 0 here -- callers are required to
+				 * have called ExecClearTuple(slot) before this call (see
+				 * the comment above this function), which already set it,
+				 * and nothing above touches it. No need to set it again.
+				 */
 				slot->tts_tid = *((ItemPointer) &aoTupleId);
 				return true;
 			}
@@ -1849,14 +1855,15 @@ ReadNext:
 		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
 		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
 		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
-		 * hold here since the anchor column can be any attribute. Keep
-		 * tts_nvalid at 0 so slot_getattr()/slot_is_attr_valid() never trust
-		 * a stale count from a previous tuple and instead always go through
-		 * the AOCS-specific is_attr_valid()/fetchattr() lazy-fetch path,
-		 * which consults tts_is_valid per attribute.
+		 * hold here since the anchor column can be any attribute.
+		 * tts_nvalid is already 0 here -- the required ExecClearTuple(slot)
+		 * before this call (see the comment above this function) already
+		 * set it, and nothing above touches it -- so slot_getattr()/
+		 * slot_is_attr_valid() never trust a stale count from a previous
+		 * tuple and instead always go through the AOCS-specific
+		 * is_attr_valid()/fetchattr() lazy-fetch path, which consults
+		 * tts_is_valid per attribute.
 		 */
-		slot->tts_nvalid = 0;
-
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
 		/*
