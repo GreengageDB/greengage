@@ -262,7 +262,7 @@ typedef struct AOCSScanDescData
 		 * tts_virtual_aocs_fetchattr()/getsomeattrs() on demand).
 		 *
 		 * There's no correctness reason a qual-bearing scan couldn't also
-		 * use the eager path -- it's purely a cost tradeoff. A scan with no
+		 * use the eager path - it's purely a cost tradeoff. A scan with no
 		 * qual at all has nothing for per-Var lazy fetch to ever skip (every
 		 * projected column is needed for every row that survives
 		 * visibility), so the tts_is_valid/fetchattr bookkeeping is pure
@@ -278,7 +278,7 @@ typedef struct AOCSScanDescData
 
 		/*
 		 * Contiguous array backing ds[] for the projected columns, one
-		 * palloc'ed block instead of num_proj_atts separate allocations --
+		 * palloc'ed block instead of num_proj_atts separate allocations -
 		 * improves cache locality for the per-row, per-column struct field
 		 * reads in tts_virtual_aocs_fetch_attr(). NULL until open_ds_read()
 		 * runs; owned and freed as a single chunk alongside ds[].

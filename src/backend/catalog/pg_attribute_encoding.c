@@ -887,7 +887,7 @@ GetNextNAvailableFilenums(Oid relid, int n)
  *
  * Return a palloc'ed array based on the number of attributes, or NULL if
  * this relation has no lastrownums entries at all (i.e. it never had a
- * column added via ALTER TABLE ADD COLUMN) -- callers treat NULL as "no
+ * column added via ALTER TABLE ADD COLUMN) - callers treat NULL as "no
  * attribute value can ever be missing", letting them skip both this
  * allocation and the per-row AO_ATTR_VAL_IS_MISSING() lookup entirely.
  */

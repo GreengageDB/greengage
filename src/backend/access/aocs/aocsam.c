@@ -1437,19 +1437,8 @@ aocs_get_target_tuple(AOCSScanDesc aoscan, int64 targrow, TupleTableSlot *slot)
  * Eager per-row column fetch: used when this scan has no qual at all
  * (columnScanInfo.eagerFetch, set in aoco_beginscan_extractcolumns() from
  * (qual == NIL)). Fetches every column in proj_atts directly, for every
- * row -- this is (deliberately) the pre-lazy-fetch aocs_getnext()
+ * row - this is (deliberately) the pre-lazy-fetch aocs_getnext()
  * implementation, unchanged, ported back in as an alternate path.
- *
- * With no qual, every projected column is needed for every row that
- * survives visibility anyway, so there's nothing for the lazy per-Var
- * fetch mechanism (tts_virtual_aocs_fetchattr()/getsomeattrs(), driven by
- * EEOP_SCAN_VAR/EEOP_SCAN_FETCHSOME) to ever skip -- only its
- * tts_is_valid bookkeeping overhead to pay on every attribute touch. This
- * function sidesteps that machinery entirely: it never touches
- * tts_is_valid, and instead sets tts_nvalid to the full tuple descriptor
- * width, so slot_is_attr_valid()/slot_getsomeattrs() (see tuptable.h) see
- * every attribute as already valid and never call into
- * tts_virtual_aocs_fetchattr()/getsomeattrs() for this tuple at all.
  */
 static bool
 aocs_getnext_eager(AOCSScanDesc scan, TupleTableSlot *slot)
@@ -1477,13 +1466,6 @@ ReadNextEager:
 			/*
 			 * Bail out early if we do not have any column in the projection.
 			 * Placing here in order to have less impact on the hot path.
-			 *
-			 * No need to touch slotAocs->current_scan on this or the
-			 * no-more-seg bail-out just below: it's never read on the
-			 * eager path regardless of what it holds (see the comment near
-			 * this function's success return), and it's otherwise only set
-			 * once, in aocs_getnext()'s scan-init block, not reset per-row
-			 * here or by ExecClearTuple() anymore.
 			 */
 			if (unlikely(scan->columnScanInfo.num_proj_atts == 0))
 			{
@@ -1597,13 +1579,6 @@ ReadNextEager:
 			goto ReadNextEager;
 		}
 
-		/*
-		 * current_scan is deliberately left untouched (not reset to scan):
-		 * it's only read by fetchattr()/getsomeattrs(), both of which are
-		 * unreachable once tts_nvalid covers the full attribute range (see
-		 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path), which it
-		 * does here. Same invariant tts_virtual_aocs_copyslot() relies on.
-		 */
 		slot->tts_nvalid = natts;
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
@@ -1661,8 +1636,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		 * slot's entire lifetime (this init block itself only runs once,
 		 * guarded by relationTupleDesc), so set it here instead of on every
 		 * row in the lazy path's return below. Harmless to also set for an
-		 * eagerFetch scan even though nothing reads it there (see the
-		 * eagerFetch-path comment near aocs_getnext_eager()'s return).
+		 * eagerFetch scan even though nothing reads it there.
 		 */
 		slotAocs->eagerFetch = scan->columnScanInfo.eagerFetch;
 		slotAocs->current_scan = (void *) scan;
@@ -1691,12 +1665,7 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 					continue;
 				}
 
-				/*
-				 * tts_nvalid is already 0 here -- callers are required to
-				 * have called ExecClearTuple(slot) before this call (see
-				 * the comment above this function), which already set it,
-				 * and nothing above touches it. No need to set it again.
-				 */
+				slot->tts_nvalid = slot->tts_tupleDescriptor->natts;
 				slot->tts_tid = *((ItemPointer) &aoTupleId);
 				return true;
 			}
@@ -1724,11 +1693,9 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 				{
 					/*
 					 * No more seg, we are at the end. slotAocs->current_scan
-					 * is left pointing at this (now exhausted) scan --
+					 * is left pointing at this (now exhausted) scan -
 					 * harmless, since ExecClearTuple() below marks the slot
 					 * empty and nothing reads attributes off an empty slot.
-					 * See the scan-init block's comment for why it's not
-					 * reset here or anywhere per-row anymore.
 					 */
 					ExecClearTuple(slot);
 					scan->cur_seg = -1;
@@ -1768,7 +1735,7 @@ ReadNext:
 			 *
 			 * current_scan is set once, in aocs_getnext()'s scan-init
 			 * block, and is not touched on this or the no-more-seg bail-out
-			 * just below -- left pointing at the (about to be exhausted)
+			 * just below - left pointing at the (about to be exhausted)
 			 * scan is harmless, since ExecClearTuple() marks the slot empty
 			 * and nothing reads attributes off an empty slot.
 			 */
@@ -1819,10 +1786,6 @@ ReadNext:
 			Assert(err > 0);
 		}
 
-		/*
-		 * Get the column's datum right here since the data structures
-		 * should still be hot in CPU data cache memory.
-		 */
 		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
 
 		scan->segrowsprocessed++;
@@ -1856,9 +1819,9 @@ ReadNext:
 		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
 		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
 		 * hold here since the anchor column can be any attribute.
-		 * tts_nvalid is already 0 here -- the required ExecClearTuple(slot)
+		 * tts_nvalid is already 0 here - the required ExecClearTuple(slot)
 		 * before this call (see the comment above this function) already
-		 * set it, and nothing above touches it -- so slot_getattr()/
+		 * set it, and nothing above touches it - so slot_getattr()/
 		 * slot_is_attr_valid() never trust a stale count from a previous
 		 * tuple and instead always go through the AOCS-specific
 		 * is_attr_valid()/fetchattr() lazy-fetch path, which consults
@@ -1867,7 +1830,7 @@ ReadNext:
 		slot->tts_tid = *((ItemPointer) &aoTupleId);
 
 		/*
-		 * current_scan is already set to scan -- done once, in the
+		 * current_scan is already set to scan - done once, in the
 		 * scan-init block above, not here on every row (see the comment
 		 * there).
 		 */
@@ -3846,13 +3809,11 @@ aocs_writecol_rewritesegfiles(
 	Assert(list_length(idesc->newcolvals) > 0);
 
 	/*
-	 * aocs_getnext() requires the slot to have already been cleared once
-	 * (see its header comment) -- the ExecClearTuple() at the bottom of
-	 * this loop only primes it for the *next* iteration, so the very first
-	 * call needs its own clear here.
+	 * aocs_getnext() requires the slot to have already been cleared once -
+	 * the ExecClearTuple() at the bottom of this loop only primes it for
+	 * the *next* iteration, so the very first call needs its own clear here.
 	 */
 	ExecClearTuple(oldslot);
-
 	/* Loop over each row in the segment. */
 	while (aocs_getnext(scanDesc, ForwardScanDirection, oldslot))
 	{

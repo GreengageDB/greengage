@@ -292,11 +292,11 @@ typedef struct ExprEvalStep
 			/* all required att numbers (if NIL, use `last_var`) */
 			Bitmapset *all_vars;
 			/*
-			 * PROTOTYPE: true for a qual's own FETCHSOME (set at compile
+			 * True for a qual's own FETCHSOME (set at compile
 			 * time via EEO_FLAG_IS_QUAL), false for a target list's. Lets
 			 * the runtime EEOP_SCAN_FETCHSOME handler decide, per row and
 			 * against the slot type actually in play, whether to skip this
-			 * bulk fetch in favor of lazy per-EEOP_SCAN_VAR fetching --
+			 * bulk fetch in favor of lazy per-EEOP_SCAN_VAR fetching -
 			 * something that can't be decided once at compile time for a
 			 * dynamic/partitioned scan, since different partitions can use
 			 * different storage types (and therefore different slot types)

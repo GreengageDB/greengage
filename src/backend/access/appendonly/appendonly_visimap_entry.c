@@ -462,11 +462,6 @@ AppendOnlyVisimapEntry_IsVisible(
 
 	rowNum = AOTupleIdGet_rowNum(tupleId);
 
-	/*
-	 * PERFORMANCE EXPERIMENT: Only do trace checking for DEBUG builds --
-	 * this runs on every row of every AOCS/AO scan, so even the
-	 * disabled-by-default GUC check itself isn't free at that frequency.
-	 */
 #ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map entry: Check row visibility: "

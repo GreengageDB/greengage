@@ -83,7 +83,6 @@ static inline void tts_buffer_heap_store_tuple(TupleTableSlot *slot,
 											   bool transfer_pin);
 static void tts_heap_store_tuple(TupleTableSlot *slot, HeapTuple tuple, bool shouldFree);
 
-
 const TupleTableSlotOps TTSOpsVirtual;
 const TupleTableSlotOps TTSOpsVirtualAOCS;
 const TupleTableSlotOps TTSOpsHeapTuple;
@@ -134,12 +133,12 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	tts_virtual_clear(slot);
 
 	/*
-	 * current_scan is deliberately NOT reset to NULL here, unlike before:
+	 * current_scan is deliberately NOT reset to NULL here:
 	 * it never changes across a scan's lifetime (it's the AOCSScanDesc
 	 * driving this slot, set once in aocs_getnext()'s scan-init block next
 	 * to eagerFetch), so resetting and re-setting it to the same value on
-	 * every single row was pure waste. See tts_virtual_aocs_copyslot() for
-	 * the one place that still needs it explicitly NULLed (a slot that was
+	 * every single row would be a pure waste. See tts_virtual_aocs_copyslot()
+	 * for the one place that still needs it explicitly NULLed (a slot that was
 	 * never driven by aocs_getnext() at all, e.g. a freshly palloc0'd one,
 	 * already reads current_scan as NULL for free).
 	 */
@@ -148,13 +147,13 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	 * Clear is called once per tuple (via ExecClearTuple()) on the hottest
 	 * path of every AOCS scan, so the common case (buffer already allocated
 	 * for the slot's current attribute count) just bumps tts_valid_generation
-	 * -- an O(1) invalidation of every attribute, no array touch at all
+	 * - an O(1) invalidation of every attribute, no array touch at all
 	 * (see the comment on tts_is_valid in tuptable.h for why this is safe).
 	 *
 	 * Two things make tts_tupleDescriptor unsafe to dereference unconditionally
 	 * here:
 	 *
-	 * 1) A slot can be cleared before it has ever had a descriptor at all --
+	 * 1) A slot can be cleared before it has ever had a descriptor at all -
 	 *    ExecSetSlotDescriptor() itself calls ExecClearTuple() *before*
 	 *    installing the (possibly first-ever) descriptor, e.g. for a
 	 *    freshly-made junk-filter slot in ExecInitJunkFilterInsertion(). At
@@ -163,7 +162,7 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	 * 2) Even once a slot has a descriptor, it isn't guaranteed to keep the
 	 *    same size for its whole lifetime: ExecSetSlotDescriptor() can
 	 *    re-describe an *existing* slot to a different (typically wider)
-	 *    tupdesc -- e.g. ExecInitJunkFilterInsertion() widening an
+	 *    tupdesc - e.g. ExecInitJunkFilterInsertion() widening an
 	 *    UPDATE/DELETE junk-filter slot from the subplan's target list to the
 	 *    full relation width. Because that call clears before swapping in the
 	 *    new descriptor, tts_tupleDescriptor->natts can differ from what
@@ -174,7 +173,7 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 	 * mismatched -> reallocate; otherwise reuse the existing buffer.
 	 *
 	 * One more case short-circuits all of this: an eagerFetch scan (see
-	 * aocs_getnext_eager()) never reads or writes tts_is_valid -- it sets
+	 * aocs_getnext_eager()) never reads or writes tts_is_valid - it sets
 	 * tts_nvalid to the full attribute count instead, which makes every
 	 * tts_is_valid consumer unreachable via slot_is_attr_valid()'s
 	 * "tts_nvalid > attnum" fast path (same invariant
@@ -203,7 +202,7 @@ tts_virtual_aocs_clear(TupleTableSlot *slot)
 		{
 			/*
 			 * tts_valid_generation wrapped back to 0, which doubles as the
-			 * "never set" sentinel a zeroed array reads as -- resync the
+			 * "never set" sentinel a zeroed array reads as - resync the
 			 * array for real so a stale entry from ~256 rows ago can't
 			 * spuriously compare equal to the new generation. This fires
 			 * once every 256 rows; see the comment on tts_is_valid in
@@ -356,15 +355,6 @@ tts_virtual_aocs_is_attr_valid(TupleTableSlot *slot, int attnum)
 		slotAocs->tts_is_valid[attnum] == slotAocs->tts_valid_generation;
 }
 
-/*
- * PROTOTYPE: fetch exactly one attribute (see TupleTableSlotOps.fetchattr).
- * Used by EEOP_SCAN_VAR's lazy path when the qual's upfront
- * EEOP_SCAN_FETCHSOME step has been skipped for this scan (see
- * ExecPushExprSetupSteps in execExpr.c) so that a Var reference inside a
- * short-circuited branch doesn't force every other qual-referenced column
- * -- including ones in a sibling branch that's never reached -- to be
- * fetched too.
- */
 static void
 tts_virtual_aocs_fetchattr(TupleTableSlot *slot, int attnum)
 {
@@ -605,7 +595,7 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 
 	/*
 	 * tts_virtual_aocs_clear() no longer NULLs current_scan itself (see the
-	 * comment there) -- it's set once per scan and left alone precisely so
+	 * comment there) - it's set once per scan and left alone precisely so
 	 * a live scan doesn't pay to reset-then-reset-back on every row. But
 	 * dstslot here isn't necessarily driven by any scan at all, and if it
 	 * previously was, that scan could since have been closed or freed.
@@ -622,21 +612,6 @@ tts_virtual_aocs_copyslot(TupleTableSlot *dstslot, TupleTableSlot *srcslot)
 		dstslot->tts_isnull[natt] = srcslot->tts_isnull[natt];
 	}
 
-	/*
-	 * dstslot_aocs->tts_is_valid is intentionally left exactly as
-	 * tts_virtual_aocs_clear() above set it (every entry guaranteed to not
-	 * match the freshly bumped/reset tts_valid_generation), not copied from
-	 * srcslot: every reader of tts_is_valid[] either lives behind
-	 * slot_is_attr_valid()'s "tts_nvalid > attnum" fast path (which
-	 * tts_nvalid below already satisfies for the whole copied range) or
-	 * behind fetchattr()/getsomeattrs()'s "current_scan == NULL" guard
-	 * (which is true for dstslot, since we just explicitly nulled it above)
-	 * -- so nothing can ever observe tts_is_valid on a slot that just went
-	 * through copyslot. The explicit null above specifically matters for
-	 * the case this Assert allows -- srcdesc->natts < dstslot's own natts
-	 * -- where tts_nvalid's fast path doesn't cover the extra attributes
-	 * only dstslot's wider descriptor has.
-	 */
 	dstslot->tts_nvalid = srcdesc->natts;
 	dstslot->tts_flags &= ~TTS_FLAG_EMPTY;
 

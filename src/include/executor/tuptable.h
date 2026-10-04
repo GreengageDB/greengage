@@ -287,7 +287,7 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * iff tts_is_valid[attnum] == tts_valid_generation. This lets
 	 * tts_virtual_aocs_clear() invalidate every attribute in O(1) (just
 	 * bump tts_valid_generation) instead of memset-ing the whole array on
-	 * every single row -- a dense array rather than a Bitmapset for the
+	 * every single row - a dense array rather than a Bitmapset for the
 	 * same reason as before: reads/writes are a single inlined array
 	 * access instead of an out-of-line bms_is_member()/bms_add_member()
 	 * call.
@@ -305,7 +305,7 @@ typedef struct VirtualTupleTableSlotAOCS
 	 * tts_valid_generation is kept nonzero at all other times.
 	 *
 	 * Normally allocated once per slot (sized to 'tts_tupleDescriptor->natts')
-	 * and reused for the slot's lifetime -- but the descriptor is NOT
+	 * and reused for the slot's lifetime - but the descriptor is NOT
 	 * guaranteed to stay the same size for that lifetime: ExecSetSlotDescriptor()
 	 * can re-describe an existing slot (e.g. ExecInitJunkFilterInsertion()
 	 * widening an UPDATE/DELETE junk-filter slot to the full relation width).

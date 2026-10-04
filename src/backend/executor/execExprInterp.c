@@ -459,20 +459,13 @@ ExecInterpExpr(ExprState *state, ExprContext *econtext, bool *isnull)
 			/*
 			 * For a qual's FETCHSOME, against a slot type that supports
 			 * on-demand per-attribute fetch (fetchattr != NULL), skip this
-			 * bulk fetch entirely -- every Var referenced anywhere in the
+			 * bulk fetch entirely - every Var referenced anywhere in the
 			 * qual, including inside an AND/OR branch that short-circuit
 			 * evaluation would otherwise never reach, would otherwise get
 			 * fetched unconditionally before the AND/OR jump logic even
 			 * runs. Each EEOP_SCAN_VAR step fetches its own attribute
-			 * lazily instead (see below) -- only the Vars actually reached
+			 * lazily instead (see below) - only the Vars actually reached
 			 * still get touched.
-			 *
-			 * Deliberately NOT extended to target-list FETCHSOME: measured
-			 * (see git history), and skipping there was a net regression on
-			 * this session's TPC-DS set (~5% slower overall) -- most rows
-			 * that reach projection need most of their columns anyway, so
-			 * per-Var lazy fetch there just pays the same cost one
-			 * attribute at a time instead of in one batch.
 			 *
 			 * Checked here, per row, against the slot actually in play (not
 			 * decided once at compile time) so a dynamic/partitioned scan

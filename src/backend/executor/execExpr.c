@@ -2424,18 +2424,6 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
 
-		/*
-		 * PROTOTYPE: record whether this FETCHSOME belongs to a qual
-		 * (EEO_FLAG_IS_QUAL, set by ExecInitQual) as opposed to a target
-		 * list's own FETCHSOME. The runtime EEOP_SCAN_FETCHSOME handler
-		 * uses this, checked against the *actual* slot type in play for
-		 * this specific row, to decide whether to skip the bulk fetch in
-		 * favor of lazy per-EEOP_SCAN_VAR fetching -- something that can't
-		 * be decided here at compile time for a dynamic/partitioned scan,
-		 * since different partitions can flow through this very same
-		 * compiled step with different underlying storage (and therefore
-		 * slot) types.
-		 */
 		scratch.d.fetch.is_qual = (state->flags & EEO_FLAG_IS_QUAL) != 0;
 
 		ExecComputeSlotInfo(state, &scratch);
