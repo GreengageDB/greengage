@@ -580,6 +580,14 @@ aoco_beginscan_extractcolumns(Relation rel, Snapshot snapshot,
 							projKind,
 							flags);
 
+	/*
+	 * No qual on this scan means every projected column is needed for
+	 * every visible row -- nothing for per-Var lazy fetch to ever skip.
+	 * Take the eager (pre-lazy-fetch) path in aocs_getnext() instead.
+	 * See columnScanInfo.eagerFetch in cdbaocsam.h.
+	 */
+	aoscan->columnScanInfo.eagerFetch = (qual == NIL);
+
 	if (needFree)
 		pfree(proj);
 	return (TableScanDesc)aoscan;
@@ -719,26 +727,12 @@ aoco_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *sl
 	ExecClearTuple(slot);
 	if (aocs_getnext(aoscan, direction, slot))
 	{
-		ExecStoreVirtualTuple(slot);
-
 		/*
-		 * ExecStoreVirtualTuple() sets tts_nvalid to the
-		 * full attribute count, which is the generic TupleTableSlot
-		 * convention for "attributes 0..tts_nvalid-1 are all valid". That
-		 * does not hold for our lazy AOCS slot (TTSOpsVirtualAOCS): only the
-		 * anchor/projected column(s) fetched by aocs_getnext() are actually
-		 * populated in tts_values/tts_isnull, tracked per-attribute via
-		 * tts_is_valid. If tts_nvalid were left at natts, slot_getattr()/
-		 * slot_is_attr_valid() would trust it and return stale data from a
-		 * previous tuple instead of going through is_attr_valid()/
-		 * gettargetattr() to lazily fetch the column on demand. So reset it
-		 * to 0 here to force every later attribute access through the
-		 * AOCS-specific lazy-fetch path. This is skipped for AOCS_PROJ_ANY
-		 * (e.g. count(*)) since that projection never reads column values,
-		 * only row identity.
+		 * Mark the result slot as containing a valid virtual tuple
+		 * (inlined version of ExecStoreVirtualTuple(), but without touching
+		 * tts_nvalid, as it should be already properly set by aocs_getnext).
 		 */
-		if (aoscan->columnScanInfo.projKind != AOCS_PROJ_ANY)
-			slot->tts_nvalid = 0;
+		slot->tts_flags &= ~TTS_FLAG_EMPTY;
 
 		pgstat_count_heap_getnext(aoscan->rs_base.rs_rd);
 
@@ -1556,6 +1550,12 @@ aoco_relation_cluster_internals(Relation OldHeap, Relation NewHeap, TupleDesc ol
 	}
 	SIMPLE_FAULT_INJECTOR("cluster_ao_seq_scan_begin");
 
+	/*
+	 * aocs_getnext() requires the slot to have already been cleared once -
+	 * the ExecClearTuple() at the bottom of this loop only primes it for
+	 * the *next* iteration, so the very first call needs its own clear here.
+	 */
+	ExecClearTuple(slot);
 	while (aocs_getnext(scan, ForwardScanDirection, slot))
 	{
 		Datum	   *slot_values;

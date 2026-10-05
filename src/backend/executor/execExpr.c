@@ -2423,6 +2423,9 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
+
+		scratch.d.fetch.is_qual = (state->flags & EEO_FLAG_IS_QUAL) != 0;
+
 		ExecComputeSlotInfo(state, &scratch);
 		ExprEvalPushStep(state, &scratch);
 	}

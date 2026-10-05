@@ -166,10 +166,12 @@ AppendOnlyVisimap_Find(
 	Assert(visiMap);
 	Assert(aoTupleId);
 
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map: Find entry for "
 		   "(tupleId) = %s",
 		   AOTupleIdToString(aoTupleId));
+#endif
 
 	if (!AppendOnlyVisimapStore_Find(&visiMap->visimapStore,
 									 AOTupleIdGet_segmentFileNum(aoTupleId),
@@ -198,10 +200,12 @@ AppendOnlyVisimap_IsVisible(
 {
 	Assert(visiMap);
 
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map: Visibility check: "
 		   "(tupleId) = %s",
 		   AOTupleIdToString(aoTupleId));
+#endif
 
 	if (!AppendOnlyVisimapEntry_CoversTuple(&visiMap->visimapEntry,
 											aoTupleId))
