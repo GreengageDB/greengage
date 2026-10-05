@@ -112,6 +112,7 @@ extern bool gp_resource_group_bypass_direct_dispatch;
 extern char *gp_resource_group_cgroup_parent;
 extern bool gp_resource_group_retrieve;
 extern bool gp_resource_group_enable_alter_in_transaction;
+extern int gp_vmem_idle_resource_in_resgroup_timeout;
 
 /*
  * Non-GUC global variables.

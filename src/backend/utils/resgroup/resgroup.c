@@ -80,6 +80,8 @@ bool						gp_resgroup_debug_wait_queue = true;
 int							gp_resource_group_queuing_timeout = 0;
 int							gp_resource_group_move_timeout = 30000;
 
+int 						gp_vmem_idle_resource_in_resgroup_timeout = 0;
+
 /*
  * Data structures
  */
@@ -1970,12 +1972,14 @@ static void
 waitOnGroup(ResGroupData *group, bool isMoveQuery)
 {
 	int64 timeout = -1;
+	int64 waitedTime = 0;
 	int64 curTime;
 	const char *old_status;
 	char *new_status = NULL;
 	int len;
 	PGPROC *proc = MyProc;
 	const char *queueStr = " queuing";
+	bool idleQECleared = false;
 
 	Assert(!LWLockHeldByMeInMode(ResGroupLock, LW_EXCLUSIVE));
 	Assert(!selfIsAssigned() || isMoveQuery);
@@ -2022,23 +2026,35 @@ waitOnGroup(ResGroupData *group, bool isMoveQuery)
 			if (!procIsWaiting(proc))
 				break;
 
+			curTime = GetCurrentTimestamp();
+			waitedTime = (curTime - groupWaitStart) / 1000;
+			timeout = -1;
+
+			if (!isMoveQuery && !idleQECleared && gp_vmem_idle_resource_in_resgroup_timeout > 0)
+			{
+				if (waitedTime >= gp_vmem_idle_resource_in_resgroup_timeout)
+				{
+					DisconnectAndDestroyUnusedQEs();
+					idleQECleared = true;
+				}
+				else
+					timeout = gp_vmem_idle_resource_in_resgroup_timeout - waitedTime;
+			}
+
 			if (gp_resource_group_queuing_timeout > 0)
 			{
-				curTime = GetCurrentTimestamp();
-				timeout = gp_resource_group_queuing_timeout - (curTime - groupWaitStart) / 1000;
-				if (timeout < 0)
+				if (waitedTime >= gp_resource_group_queuing_timeout)
 					ereport(ERROR,
 							(errcode(ERRCODE_QUERY_CANCELED),
 							 errmsg("canceling statement due to resource group waiting timeout")));
+				
+				if (timeout == -1)
+					timeout = gp_resource_group_queuing_timeout - waitedTime;
+				else
+					timeout = Min(timeout, gp_resource_group_queuing_timeout - waitedTime);
+			}
 
-				WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-						  (long) timeout, PG_WAIT_RESOURCE_GROUP);
-			}
-			else
-			{
-				WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH, -1,
-						  PG_WAIT_RESOURCE_GROUP);
-			}
+			WaitLatch(&proc->procLatch, WL_LATCH_SET | WL_POSTMASTER_DEATH | (timeout > 0 ? WL_TIMEOUT : 0), (long) timeout, PG_WAIT_RESOURCE_GROUP);
 		}
 	}
 	PG_CATCH();

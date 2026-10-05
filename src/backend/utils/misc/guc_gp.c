@@ -3335,6 +3335,22 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 
 	{
+		{"gp_vmem_idle_resource_in_resgroup_timeout", PGC_USERSET, CLIENT_CONN_OTHER,
+			gettext_noop("Sets the time a session can be idle (in milliseconds) while waiting for resource group slot, before we release gangs on the segment DBs to free resources."),
+			gettext_noop("A value of 0 turns off the timeout."),
+			GUC_UNIT_MS
+		},
+		&gp_vmem_idle_resource_in_resgroup_timeout,
+#ifdef USE_ASSERT_CHECKING
+		0, 0, INT_MAX,	/* 10 minutes by default on debug
+										 * builds. */
+#else
+		0, 0, INT_MAX,
+#endif
+		NULL, NULL, NULL
+	},
+
+	{
 		{"xid_stop_limit", PGC_POSTMASTER, WAL,
 			gettext_noop("Sets the number of XIDs before XID wraparound at which we will no longer allow the system to be started."),
 			NULL,

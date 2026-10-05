@@ -251,6 +251,7 @@
 		"gp_subtrans_warn_limit",
 		"gp_use_legacy_hashops",
 		"gp_vmem_idle_resource_timeout",
+		"gp_vmem_idle_resource_in_resgroup_timeout",
 		"gp_vmem_limit_per_query",
 		"gp_vmem_protect_limit",
 		"gp_vmem_protect_segworker_cache_limit",
