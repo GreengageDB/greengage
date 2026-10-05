@@ -823,12 +823,16 @@ lo_export(PGconn *conn, Oid lobjId, const char *filename)
 	 */
 	while ((nbytes = lo_read(conn, lobj, buf, LO_BUFSIZE)) > 0)
 	{
+		errno = 0;
 		tmp = write(fd, buf, nbytes);
 		if (tmp != nbytes)
 		{
 			/* We must do lo_close before setting the errorMessage */
 			int			save_errno = errno;
 
+			/* if write didn't set errno, assume problem is no disk space */
+			if (save_errno == 0)
+				save_errno = ENOSPC;
 			(void) lo_close(conn, lobj);
 			(void) close(fd);
 			printfPQExpBuffer(&conn->errorMessage,

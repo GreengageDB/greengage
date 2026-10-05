@@ -1,3 +1,4 @@
 /results/
 regression.diffs
 regression.out
+global_sh_executor.sh
