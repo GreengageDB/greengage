@@ -761,6 +761,43 @@ CStatisticsUtils::CollectUnsupportedPredUsedColIds(CBitSet *colids_bitset,
 	}
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CStatisticsUtils::ShouldMarkUnsupportedPredDerived
+//
+//	@doc:
+//		Should a histogram combining histogram1 and histogram2 be marked as
+//		derived from an unsupported predicate?
+//
+//---------------------------------------------------------------------------
+BOOL
+CStatisticsUtils::ShouldMarkUnsupportedPredDerived(const CHistogram *histogram1,
+												   const CHistogram *histogram2)
+{
+	GPOS_ASSERT(nullptr != histogram1);
+	GPOS_ASSERT(nullptr != histogram2);
+
+	BOOL is_marked1 = histogram1->IsUnsupportedPredDerived();
+	BOOL is_marked2 = histogram2->IsUnsupportedPredDerived();
+
+	if (is_marked1 && is_marked2)
+	{
+		return true;
+	}
+	if (is_marked1)
+	{
+		// histogram2 is unmarked; only histogram2's own range already
+		// covering histogram1's makes the combined range trustworthy
+		// without histogram1's contribution
+		return !histogram2->ContainsRange(histogram1);
+	}
+	if (is_marked2)
+	{
+		return !histogram1->ContainsRange(histogram2);
+	}
+	return false;
+}
+
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -800,9 +837,10 @@ CStatisticsUtils::UpdateDisjStatistics(
 					&output_rows);
 
 			// a union can't undo either side's unsupported-predicate
-			// imprecision on this column
-			if (previous_histogram->IsUnsupportedPredDerived() ||
-				result_histogram->IsUnsupportedPredDerived())
+			// imprecision on this column, unless the other, unmarked side's
+			// own range already covers the marked side's
+			if (ShouldMarkUnsupportedPredDerived(previous_histogram,
+												 result_histogram))
 			{
 				new_histogram->SetUnsupportedPredDerived();
 			}
@@ -1018,9 +1056,11 @@ CStatisticsUtils::MergeHistogramMapsForDisjPreds(CMemoryPool *mp,
 							rows1, histogram2, rows2, &output_rows);
 
 					// a union can't undo either side's unsupported-predicate
-					// imprecision on this column
-					if (histogram1->IsUnsupportedPredDerived() ||
-						histogram2->IsUnsupportedPredDerived())
+					// imprecision on this column, unless the other,
+					// unmarked side's own range already covers the marked
+					// side's
+					if (ShouldMarkUnsupportedPredDerived(histogram1,
+														 histogram2))
 					{
 						normalized_union_histogram->SetUnsupportedPredDerived();
 					}

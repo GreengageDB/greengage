@@ -1052,6 +1052,33 @@ CHistogram::CopyHistogram() const
 	return histogram_copy;
 }
 
+// does this histogram's own bucket range span at least as wide a value
+// range as other's
+BOOL
+CHistogram::ContainsRange(const CHistogram *other) const
+{
+	GPOS_ASSERT(nullptr != other);
+
+	const ULONG num_buckets = GetNumBuckets();
+	const ULONG num_other_buckets = other->GetNumBuckets();
+	if (0 == num_buckets || 0 == num_other_buckets)
+	{
+		return false;
+	}
+
+	// buckets are kept sorted, so the overall range is the first bucket's
+	// lower bound through the last bucket's upper bound
+	CPoint *lower_bound = (*m_histogram_buckets)[0]->GetLowerBound();
+	CPoint *upper_bound =
+		(*m_histogram_buckets)[num_buckets - 1]->GetUpperBound();
+	CPoint *other_lower_bound = (*other->m_histogram_buckets)[0]->GetLowerBound();
+	CPoint *other_upper_bound =
+		(*other->m_histogram_buckets)[num_other_buckets - 1]->GetUpperBound();
+
+	return lower_bound->IsLessThanOrEqual(other_lower_bound) &&
+		   other_upper_bound->IsLessThanOrEqual(upper_bound);
+}
+
 BOOL
 CHistogram::IsOpSupportedForTextFilter(CStatsPred::EStatsCmpType stats_cmp_type)
 {

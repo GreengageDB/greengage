@@ -70,9 +70,10 @@ CUnionAllStatsProcessor::CreateStatsForUnionAll(
 						stats_first_child->Rows(), second_child_histogram,
 						stats_second_child->Rows());
 				// a union all can't undo either side's unsupported-predicate
-				// imprecision on this column
-				if (first_child_histogram->IsUnsupportedPredDerived() ||
-					second_child_histogram->IsUnsupportedPredDerived())
+				// imprecision on this column, unless the other, unmarked
+				// side's own range already covers the marked side's
+				if (CStatisticsUtils::ShouldMarkUnsupportedPredDerived(
+						first_child_histogram, second_child_histogram))
 				{
 					output_histogram->SetUnsupportedPredDerived();
 				}

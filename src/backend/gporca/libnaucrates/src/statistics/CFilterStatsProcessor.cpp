@@ -634,9 +634,10 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				cumulative_rows = output_rows;
 
 				// a union can't undo either side's unsupported-predicate
-				// imprecision on this column
-				if (previous_histogram->IsUnsupportedPredDerived() ||
-					disjunctive_child_col_histogram->IsUnsupportedPredDerived())
+				// imprecision on this column, unless the other, unmarked
+				// side's own range already covers the marked side's
+				if (CStatisticsUtils::ShouldMarkUnsupportedPredDerived(
+						previous_histogram, disjunctive_child_col_histogram))
 				{
 					new_histogram->SetUnsupportedPredDerived();
 				}
