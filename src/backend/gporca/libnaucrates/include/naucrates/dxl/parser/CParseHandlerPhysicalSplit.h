@@ -55,6 +55,9 @@ private:
 	// tuple oid column id
 	ULONG m_tuple_oid_col_oid;
 
+	// special field for resjunk flag assignment
+	BOOL m_needsResJunk;
+
 	// private copy ctor
 	CParseHandlerPhysicalSplit(const CParseHandlerPhysicalSplit &);
 
