@@ -1,0 +1,9 @@
+*.o
+.deps
+*.so
+.cproject
+.settings
+.project
+*.bc
+results/*
+regression.*

@@ -1,0 +1,38 @@
+
+-- Drop the event trigger if present
+DROP EVENT TRIGGER IF EXISTS valid_until_warning CASCADE;
+
+-- Add event trigger for valid until warning
+CREATE OR REPLACE FUNCTION warning_valid_until()
+  RETURNS event_trigger AS
+$$
+DECLARE
+   warn_days integer;
+   valid_warning integer;
+BEGIN
+	valid_warning := current_setting('credcheck.password_valid_warning', true)::integer;
+
+	IF (valid_warning IS NOT NULL AND valid_warning > 0) THEN
+		SELECT ((extract(epoch from valuntil) - extract(epoch from current_timestamp))/86400)::integer
+			INTO warn_days
+			FROM pg_catalog.pg_shadow
+			WHERE usename = SESSION_USER
+				AND valuntil IS NOT NULL
+				AND valuntil > current_timestamp;
+
+		IF (warn_days IS NOT NULL AND warn_days <= valid_warning) THEN
+			RAISE WARNING 'your password will expire in % days, please renew your password!', warn_days;
+		END IF;
+	END IF;
+END;
+$$
+LANGUAGE plpgsql
+SECURITY DEFINER
+;
+
+-- trigger definition
+CREATE EVENT TRIGGER valid_until_warning
+  ON login
+  EXECUTE FUNCTION warning_valid_until();
+ALTER EVENT TRIGGER valid_until_warning ENABLE ALWAYS;
+
