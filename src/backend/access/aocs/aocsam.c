@@ -1592,19 +1592,13 @@ ReadNextEager:
 bool
 aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 {
-	Datum	   *d = slot->tts_values;
-	bool	   *null = slot->tts_isnull;
-
 	AOTupleId	aoTupleId;
-	int64		rowNum = InvalidAORowNum;
-	int			err = 0;
-	bool		isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 	VirtualTupleTableSlotAOCS * slotAocs = (VirtualTupleTableSlotAOCS*)slot;
 
 	/*
 	 * Callers of aocs_getnext() are required to have already called
 	 * ExecClearTuple(slot) at least once (which allocates slotAocs->tts_is_valid)
-	 * before the first call for a given slot -- this function writes directly
+	 * before the first call for a given slot - this function writes directly
 	 * into tts_is_valid[attno] below without checking. See the callers in
 	 * aocsam_handler.c, aocsam.c and aocs_compaction.c for the required
 	 * "ExecClearTuple() before the scan loop" pattern.
@@ -1642,10 +1636,9 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 		slotAocs->current_scan = (void *) scan;
 	}
 
-	AttrNumber anchor_attr = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
-
 	if (unlikely(scan->soleRowIdScan.scan_blkdir))
 	{
+		bool	isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
 		/*
 		 * Short pass via visibility map and block directory for cases when
 		 * there is no actual need to access tables data, for ex. for queries
@@ -1724,7 +1717,14 @@ aocs_getnext(AOCSScanDesc scan, ScanDirection direction, TupleTableSlot *slot)
 	}
 	else
 	{
+		bool	isSnapshotAny = (scan->rs_base.rs_snapshot == SnapshotAny);
+		Datum	*d = slot->tts_values;
+		bool	*null = slot->tts_isnull;
+		int64	rowNum = InvalidAORowNum;
+		int		err = 0;
+		AttrNumber	anchor_attno = scan->columnScanInfo.proj_atts[ANCHOR_COL_IN_PROJ];
 		AOCSFileSegInfo *curseginfo;
+
 ReadNext:
 		/* If necessary, open next seg */
 		if (unlikely(scan->cur_seg < 0 || err < 0))
@@ -1762,13 +1762,11 @@ ReadNext:
 		curseginfo = scan->seginfo[scan->cur_seg];
 
 		/* Read from cur_seg */
-		AttrNumber	attno = anchor_attr;
-
-		err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+		err = datumstreamread_advance(scan->columnScanInfo.ds[anchor_attno]);
 		Assert(err >= 0);
 		if (unlikely(err == 0))
 		{
-			err = datumstreamread_block(scan->columnScanInfo.ds[attno], scan->blockDirectory, attno);
+			err = datumstreamread_block(scan->columnScanInfo.ds[anchor_attno], scan->blockDirectory, anchor_attno);
 			if (err < 0)
 			{
 				/*
@@ -1778,24 +1776,24 @@ ReadNext:
 				goto ReadNext;
 			}
 
-			AOCSScanDesc_UpdateTotalBytesRead(scan, attno);
+			AOCSScanDesc_UpdateTotalBytesRead(scan, anchor_attno);
 			pgstat_count_buffer_read_ao(scan->rs_base.rs_rd,
 										RelationGuessNumberOfBlocksFromSize(scan->totalBytesRead));
 
-			err = datumstreamread_advance(scan->columnScanInfo.ds[attno]);
+			err = datumstreamread_advance(scan->columnScanInfo.ds[anchor_attno]);
 			Assert(err > 0);
 		}
 
-		datumstreamread_get(scan->columnScanInfo.ds[attno], &d[attno], &null[attno]);
+		datumstreamread_get(scan->columnScanInfo.ds[anchor_attno], &d[anchor_attno], &null[anchor_attno]);
 
 		scan->segrowsprocessed++;
 
 		if (rowNum == InvalidAORowNum &&
-			scan->columnScanInfo.ds[attno]->blockFirstRowNum != InvalidAORowNum)
+			scan->columnScanInfo.ds[anchor_attno]->blockFirstRowNum != InvalidAORowNum)
 		{
-			int64 nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[attno]);
-			Assert(scan->columnScanInfo.ds[attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
-			rowNum = scan->columnScanInfo.ds[attno]->blockFirstRowNum + nthInBlock;
+			int64 nthInBlock = datumstreamread_nth(scan->columnScanInfo.ds[anchor_attno]);
+			Assert(scan->columnScanInfo.ds[anchor_attno]->blockFirstRowNum > 0 && nthInBlock >= 0);
+			rowNum = scan->columnScanInfo.ds[anchor_attno]->blockFirstRowNum + nthInBlock;
 		}
 		else
 		{
@@ -1811,11 +1809,11 @@ ReadNext:
 			goto ReadNext;
 		}
 
-		slotAocs->tts_is_valid[attno] = slotAocs->tts_valid_generation;
+		slotAocs->tts_is_valid[anchor_attno] = slotAocs->tts_valid_generation;
 
 		/*
-		 * Only the anchor column (attno above, not necessarily attribute 0)
-		 * was just fetched into tts_values[attno]/tts_isnull[attno], and its
+		 * Only the anchor column (anchor_attno above, not necessarily attribute
+		 * 0) was just fetched into tts_values/tts_isnull, and its
 		 * validity is tracked via tts_is_valid, not via tts_nvalid: the
 		 * generic "attributes 0..tts_nvalid-1 are valid" convention doesn't
 		 * hold here since the anchor column can be any attribute.
