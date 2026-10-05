@@ -65,9 +65,54 @@ CLeftAntiSemiJoinStatsProcessor::JoinHistogramsLASJ(
 		BOOL ignore_hist_computation = DoIgnoreLASJHistComputation ||
 									   histogram2->IsUnsupportedPredDerived();
 
-		*result_hist1 = histogram1->MakeLASJHistogramNormalize(
-			stats_cmp_type, num_rows1, histogram2, scale_factor,
-			ignore_hist_computation);
+		// only worth attempting the precise-vs-fallback comparison below
+		// when the mark is the reason we'd otherwise skip precise
+		// computation - if the caller itself asked to skip it regardless of
+		// marking (e.g. for an inner or semi join's own sub-computation),
+		// that request is unconditional and unrelated to marking, so it
+		// should be honored as-is.
+		if (!DoIgnoreLASJHistComputation &&
+			histogram2->IsUnsupportedPredDerived() &&
+			!CHistogram::NeedsNDVBasedCardEstimationForEq(histogram1) &&
+			!CHistogram::NeedsNDVBasedCardEstimationForEq(histogram2))
+		{
+			// histogram2's bucket bounds weren't genuinely narrowed, but for
+			// a range-comparable type (not one relying on NDV alone), the
+			// bucket-difference computation below can only find overlap
+			// where there genuinely is some - it can underestimate how many
+			// outer rows don't match (if histogram2's true, narrower range
+			// actually excludes more), but never overestimate it. That
+			// makes it a valid lower bound on the unmatched count, worth
+			// comparing against the conservative default guess instead of
+			// discarding outright.
+			CDouble precise_scale_factor(1.0);
+			CHistogram *precise_hist = histogram1->MakeLASJHistogramNormalize(
+				stats_cmp_type, num_rows1, histogram2, &precise_scale_factor,
+				false /* DoIgnoreLASJHistComputation */);
+			CDouble fallback_scale_factor(1.0);
+			CHistogram *fallback_hist = histogram1->MakeLASJHistogramNormalize(
+				stats_cmp_type, num_rows1, histogram2, &fallback_scale_factor,
+				true /* DoIgnoreLASJHistComputation */);
+
+			if (precise_scale_factor <= fallback_scale_factor)
+			{
+				*result_hist1 = precise_hist;
+				*scale_factor = precise_scale_factor;
+				GPOS_DELETE(fallback_hist);
+			}
+			else
+			{
+				*result_hist1 = fallback_hist;
+				*scale_factor = fallback_scale_factor;
+				GPOS_DELETE(precise_hist);
+			}
+		}
+		else
+		{
+			*result_hist1 = histogram1->MakeLASJHistogramNormalize(
+				stats_cmp_type, num_rows1, histogram2, scale_factor,
+				ignore_hist_computation);
+		}
 		*result_hist2 = nullptr;
 
 		if ((*result_hist1)->IsEmpty())

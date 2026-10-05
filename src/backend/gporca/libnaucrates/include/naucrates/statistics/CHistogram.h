@@ -179,9 +179,6 @@ private:
 		CDouble *result_distinct_remain, CDouble *result_freq_remain);
 
 
-	// check if the cardinality estimation should be done only via NDVs
-	static BOOL NeedsNDVBasedCardEstimationForEq(const CHistogram *histogram);
-
 	BOOL IsHistogramForTextRelatedTypes() const;
 
 	// add residual union all buckets after the merge
@@ -314,6 +311,11 @@ public:
 			DoIgnoreLASJHistComputation	 // except for the case of LOJ cardinality estimation this flag is always
 		// "true" since LASJ stats computation is very aggressive
 	) const;
+
+	// check if the cardinality estimation should be done only via NDVs
+	// (true for types, such as text, whose bucket bounds can't be compared
+	// directly) rather than by comparing bucket bounds
+	static BOOL NeedsNDVBasedCardEstimationForEq(const CHistogram *histogram);
 
 	// group by and normalize
 	CHistogram *MakeGroupByHistogramNormalize(CDouble rows,
