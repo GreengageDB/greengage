@@ -26,8 +26,7 @@
 	odd id2 values. The LEFT JOIN to t_mid matches those same 50 values and
 	adds 50 NULL rows for the unmatched even id2 values in t_mid, so 50 of
 	t_left's 100 rows are unmatched by the outer LASJ.
-  ]]>
-  </dxl:Comment>
+  ]]></dxl:Comment>
   <dxl:Thread Id="0">
     <dxl:OptimizerConfig>
       <dxl:EnumeratorConfig Id="0" PlanSamples="0" CostThreshold="0"/>
@@ -1509,7 +1508,7 @@
     <dxl:Plan Id="0" SpaceSize="17">
       <dxl:GatherMotion InputSegments="0,1,2" OutputSegments="-1">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="1293.035599" Rows="40.000000" Width="12"/>
+          <dxl:Cost StartupCost="0" TotalCost="1293.034600" Rows="40.000000" Width="12"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="id1">
@@ -1526,7 +1525,7 @@
         <dxl:SortingColumnList/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="1293.033810" Rows="40.000000" Width="12"/>
+            <dxl:Cost StartupCost="0" TotalCost="1293.032811" Rows="40.000000" Width="12"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="id1">
@@ -1547,7 +1546,7 @@
           <dxl:OneTimeFilter/>
           <dxl:HashJoin JoinType="Left">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="1293.032275" Rows="140.000000" Width="12"/>
+              <dxl:Cost StartupCost="0" TotalCost="1293.031715" Rows="100.000000" Width="12"/>
             </dxl:Properties>
             <dxl:ProjList>
               <dxl:ProjElem ColId="0" Alias="id1">

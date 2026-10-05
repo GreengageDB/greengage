@@ -23,7 +23,7 @@ private:
 		CMemoryPool *mp, const CStatistics *outer_stats,
 		const CStatistics *inner_side_stats, CStatistics *inner_join_stats,
 		CStatsPredJoinArray *join_preds_stats, CDouble num_rows_inner_join,
-		CDouble *result_rows_LASJ);
+		CDouble *result_rows_LASJ, CDouble *result_rows_inner_join);
 	// helper method to add histograms of the inner side of a LOJ
 	static void AddHistogramsLOJInner(CMemoryPool *mp,
 									  const CStatistics *inner_join_stats,

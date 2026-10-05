@@ -42,9 +42,12 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 		CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			mp, result_stats_outer_side, result_stats_inner_side,
 			inner_join_stats, join_preds_stats, num_rows_inner_join,
-			&num_rows_LASJ);
+			&num_rows_LASJ, &num_rows_inner_join);
 
-	// cardinality of LOJ is at least the cardinality of the outer child
+	// cardinality of LOJ is at least the cardinality of the outer child.
+	// num_rows_inner_join may have been bounded above (by MakeLOJHistogram)
+	// to stay consistent with num_rows_LASJ, so use its returned value here
+	// rather than the original, pre-call estimate.
 	CDouble num_rows_LOJ =
 		std::max(outer_side_stats->Rows(), num_rows_inner_join + num_rows_LASJ);
 
@@ -79,7 +82,7 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	CMemoryPool *mp, const CStatistics *outer_side_stats,
 	const CStatistics *inner_side_stats, CStatistics *inner_join_stats,
 	CStatsPredJoinArray *join_preds_stats, CDouble num_rows_inner_join,
-	CDouble *result_rows_LASJ)
+	CDouble *result_rows_LASJ, CDouble *result_rows_inner_join)
 {
 	GPOS_ASSERT(nullptr != outer_side_stats);
 	GPOS_ASSERT(nullptr != inner_side_stats);
@@ -107,6 +110,43 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	if (!LASJ_stats->IsEmpty())
 	{
 		num_rows_LASJ = LASJ_stats->Rows();
+	}
+
+	// if a join column's inner-side histogram was marked, num_rows_inner_join
+	// was computed from that same un-narrowed-but-scaled histogram without
+	// knowing that num_rows_LASJ (just computed above, from the same marked
+	// histogram's dedicated coverage check) says some outer rows don't match
+	// at all - so adding the two as-is double-counts those rows.
+	// num_rows_LASJ is the more trustworthy of the two here: it comes from a
+	// coverage check that deliberately falls back to a conservative answer
+	// once it knows the histogram's bucket content can't be trusted, while
+	// num_rows_inner_join's generic equi-join computation never consults the
+	// mark at all. So bound num_rows_inner_join's contribution to this LOJ by
+	// what's left after crediting num_rows_LASJ, rather than discounting
+	// num_rows_LASJ to fit - and do it before num_rows_inner_join is used to
+	// weight any of this LOJ's per-column histograms below, so every
+	// histogram this function builds, and the row count the caller derives
+	// from it, stay consistent.
+	BOOL any_join_col_marked = false;
+	for (ULONG j = 0; j < join_preds_stats->Size() && !any_join_col_marked; j++)
+	{
+		CStatsPredJoin *join_stats = (*join_preds_stats)[j];
+		if (join_stats->HasValidColIdInner())
+		{
+			const CHistogram *inner_histogram =
+				inner_side_stats->GetHistogram(join_stats->ColIdInner());
+			if (nullptr != inner_histogram &&
+				inner_histogram->IsUnsupportedPredDerived())
+			{
+				any_join_col_marked = true;
+			}
+		}
+	}
+	if (any_join_col_marked)
+	{
+		CDouble outer_rows = outer_side_stats->Rows();
+		num_rows_inner_join =
+			std::min(num_rows_inner_join, outer_rows - num_rows_LASJ);
 	}
 
 	UlongToHistogramMap *LOJ_histograms = GPOS_NEW(mp) UlongToHistogramMap(mp);
@@ -192,6 +232,7 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 						  num_rows_LASJ, num_rows_inner_join, LOJ_histograms);
 
 	*result_rows_LASJ = num_rows_LASJ;
+	*result_rows_inner_join = num_rows_inner_join;
 
 	// clean up
 	inner_colids_with_stats->Release();
