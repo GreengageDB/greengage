@@ -6,7 +6,7 @@
   sudo ./README.Rhel-Rocky.bash
   ```
 
-## For Ubuntu:
+## For Ubuntu 22.04:
 
 - Install Dependencies
   When you run the README.Ubuntu.bash script for dependencies, you will be asked to configure realm for kerberos.
@@ -16,14 +16,6 @@
 
   ```bash
   sudo ./README.Ubuntu.bash
-  ```
-
-- Ubuntu 18.04 and newer should have use gcc 7 or newer, but you can also enable gcc-7 on older versions of Ubuntu:
-
-  ```bash
-  sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-  sudo apt-get update
-  sudo apt-get install -y gcc-7 g++-7
   ```
 
 ## Common Platform Tasks:
@@ -55,6 +47,6 @@ then run command `ldconfig`.
    ssh <hostname of your machine>  # e.g., ssh briarwood (You can use `hostname` to get the hostname of your machine.)
    ```
 
-1. Set up your system configuration by following the installation guide on [docs.greengagedb.org](https://docs.greengagedb.org)
-
-
+1. The `README.Ubuntu.bash` script applies the system configuration and user
+   limits during dependency installation. Start a new login session before
+   building so the process limits are applied.
