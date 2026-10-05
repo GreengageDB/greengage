@@ -200,7 +200,7 @@ BufferedReadIo(
 		}
 
 		if (actualLen == 0)
-			ereport(ERROR, (errcode_for_file_access(),
+			ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED),
 							errmsg("read beyond eof in table \"%s\" file \"%s\", "
 								   "read position " INT64_FORMAT " (small offset %d), "
 								   "actual read length %d (large read length %d)",

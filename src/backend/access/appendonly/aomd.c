@@ -437,15 +437,22 @@ copy_file(char *srcsegpath, char *dstsegpath,
 	while(left > 0)
 	{
 		int			len;
+		int			nbytes;
 
 		CHECK_FOR_INTERRUPTS();
 
 		len = Min(left, BLCKSZ);
-		if (FileRead(srcFile, buffer, len, offset, WAIT_EVENT_DATA_FILE_READ) != len)
+		nbytes = FileRead(srcFile, buffer, len, offset, WAIT_EVENT_DATA_FILE_READ);
+		if (nbytes < 0)
 			ereport(ERROR,
 					(errcode_for_file_access(),
 					 errmsg("could not read %d bytes from file \"%s\": %m",
 							len, srcsegpath)));
+		else if (nbytes != len)
+			ereport(ERROR,
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read file \"%s\": read %d of %d",
+							srcsegpath, nbytes, len)));
 
 		if (FileWrite(dstFile, buffer, len, offset, WAIT_EVENT_DATA_FILE_WRITE) != len)
 			ereport(ERROR,
