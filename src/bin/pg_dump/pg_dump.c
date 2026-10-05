@@ -18162,6 +18162,11 @@ dumpTableSchema(Archive *fout, const TableInfo *tbinfo)
  * using "pg_restore -L" if you prefer.)  The last point motivates
  * treating ATTACH PARTITION as a completely separate ArchiveEntry
  * rather than emitting it within the child partition's ArchiveEntry.
+ *
+ * If the parent table is not dumped, ATTACH PARTITION is usually emitted
+ * in post-data after the partition's indexes, so that it attaches them to
+ * the parent's existing indexes instead of creating duplicates.  See
+ * flagPostDataAttaches.
  */
 static void
 dumpTableAttach(Archive *fout, const TableAttachInfo *attachinfo)
@@ -18210,7 +18215,8 @@ dumpTableAttach(Archive *fout, const TableAttachInfo *attachinfo)
 							  .namespace = attachinfo->dobj.namespace->dobj.name,
 							  .owner = attachinfo->partitionTbl->rolname,
 							  .description = "TABLE ATTACH",
-							  .section = SECTION_PRE_DATA,
+							  .section = attachinfo->postdata ?
+							  SECTION_POST_DATA : SECTION_PRE_DATA,
 							  .createStmt = q->data));
 
 	PQclear(res);
@@ -20171,7 +20177,6 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 			case DO_COLLATION:
 			case DO_CONVERSION:
 			case DO_TABLE:
-			case DO_TABLE_ATTACH:
 			case DO_ATTRDEF:
 			case DO_PROCLANG:
 			case DO_CAST:
@@ -20209,6 +20214,13 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 			case DO_SUBSCRIPTION:
 				/* Post-data objects: must come after the post-data boundary */
 				addObjectDependency(dobj, postDataBound->dumpId);
+				break;
+			case DO_TABLE_ATTACH:
+				/* Table attachments are pre-data, unless marked post-data */
+				if (((TableAttachInfo *) dobj)->postdata)
+					addObjectDependency(dobj, postDataBound->dumpId);
+				else
+					addObjectDependency(preDataBound, dobj->dumpId);
 				break;
 			case DO_RULE:
 				/* Rules are post-data, but only if dumped separately */

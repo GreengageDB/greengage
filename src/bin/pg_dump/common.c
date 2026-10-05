@@ -83,7 +83,11 @@ static catalogid_hash *catalogIdHash = NULL;
 
 static void flagInhTables(Archive *fout, TableInfo *tbinfo, int numTables,
 						  InhInfo *inhinfo, int numInherits);
+static void flagPostDataAttaches(Archive *fout, TableInfo *tblinfo,
+								 int numTables);
 static void flagInhIndexes(Archive *fout, TableInfo *tblinfo, int numTables);
+static void addTableAttachChildIdxDeps(DumpableObject *dobj,
+									   const IndxInfo *idx);
 static void flagInhAttrs(DumpOptions *dopt, TableInfo *tblinfo, int numTables);
 static void findParentsByOid(TableInfo *self,
 							 InhInfo *inhinfo, int numInherits);
@@ -258,6 +262,9 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 		pg_log_info("reading bitmap index info");
 		getBMIndxInfo(fout);
 	}
+	pg_log_info("flagging partitions to attach in post-data");
+	flagPostDataAttaches(fout, tblinfo, numTables);
+
 	pg_log_info("flagging indexes in partitioned tables");
 	flagInhIndexes(fout, tblinfo, numTables);
 
@@ -382,6 +389,8 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 			attachinfo->dobj.namespace = tblinfo[i].dobj.namespace;
 			attachinfo->parentTbl = tblinfo[i].parents[0];
 			attachinfo->partitionTbl = &tblinfo[i];
+			attachinfo->postdata = false;	/* see flagPostDataAttaches */
+			tblinfo[i].attachObj = attachinfo;
 
 			/*
 			 * We must state the DO_TABLE_ATTACH object's dependencies
@@ -399,22 +408,76 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 }
 
 /*
- * hasExtensionAncestorIndex -
- *	 Is idx or one of its ancestors an undumped extension table's index?
+ * flagPostDataAttaches -
+ *	 Decide which partitions to attach in post-data.
+ *
+ * If the parent table is not dumped (an extension member, or not selected),
+ * its indexes may already exist when the partition is attached, and ATTACH
+ * PARTITION would create new indexes on the partition that clash with the
+ * dumped ones.  Attach it in post-data instead, after the partition's own
+ * indexes, so that ATTACH PARTITION attaches those.  flagInhIndexes adds the
+ * dependencies.
+ *
+ * Don't do this if the parent has no indexes, since nothing is gained, and
+ * ATTACH PARTITION would have to scan the already loaded data.  Nor if any
+ * partition below is loaded via the partition root, since the data section
+ * needs the whole chain from the leaf up to the root attached.
+ *
+ * Must run after getPartitioningInfo, which sets unsafe_partitions.
  */
-static bool
-hasExtensionAncestorIndex(const IndxInfo *idx)
+static void
+flagPostDataAttaches(Archive *fout, TableInfo *tblinfo, int numTables)
 {
-	while (idx != NULL)
+	DumpOptions *dopt = fout->dopt;
+	int			i;
+
+	if (dopt->binary_upgrade || dopt->load_via_partition_root)
+		return;
+
+	for (i = 0; i < numTables; i++)
 	{
-		if (idx->indextable->dobj.ext_member &&
-			!(idx->dobj.dump & DUMP_COMPONENT_DEFINITION))
-			return true;
-		if (idx->parentidx == 0)
-			break;
-		idx = findIndexByOid(idx->parentidx);
+		TableAttachInfo *attachinfo = tblinfo[i].attachObj;
+
+		if (attachinfo != NULL &&
+			!(attachinfo->parentTbl->dobj.dump & DUMP_COMPONENT_DEFINITION) &&
+			attachinfo->parentTbl->hasindex)
+			attachinfo->postdata = true;
 	}
-	return false;
+
+	/*
+	 * A partition whose ancestor has an unsafe partitioning scheme is loaded
+	 * via the root (see forcePartitionRootLoad), so keep its whole chain of
+	 * attachments in pre-data.
+	 */
+	for (i = 0; i < numTables; i++)
+	{
+		TableInfo  *tbinfo = &tblinfo[i];
+		TableInfo  *ancestor;
+		bool		viaroot = false;
+
+		if (!tbinfo->ispartition || tbinfo->numParents != 1 ||
+			dopt->schemaOnly || !(tbinfo->dobj.dump & DUMP_COMPONENT_DATA))
+			continue;
+
+		for (ancestor = tbinfo->parents[0];; ancestor = ancestor->parents[0])
+		{
+			if (ancestor->unsafe_partitions)
+				viaroot = true;
+			if (!ancestor->ispartition || ancestor->numParents != 1)
+				break;
+		}
+
+		if (!viaroot)
+			continue;
+
+		for (ancestor = tbinfo;
+			 ancestor->ispartition && ancestor->numParents == 1;
+			 ancestor = ancestor->parents[0])
+		{
+			if (ancestor->attachObj != NULL)
+				ancestor->attachObj->postdata = false;
+		}
+	}
 }
 
 /*
@@ -447,26 +510,6 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			parentidx = findIndexByOid(index->parentidx);
 			if (parentidx == NULL)
 				continue;
-
-			/*
-			 * If an ancestor index belongs to an extension ATTACH PARTITION
-			 * recreates this index so don't dump it or its constraint.  This
-			 * loses its custom properties and name (comments on a renamed
-			 * index fail to restore) and loses the index entirely if CREATE
-			 * EXTENSION does not recreate the ancestor
-			 */
-			if (hasExtensionAncestorIndex(parentidx))
-			{
-				index->dobj.dump &= ~DUMP_COMPONENT_DEFINITION;
-				if (index->indexconstraint != 0)
-				{
-					DumpableObject *constraint;
-
-					constraint = findObjectByDumpId(index->indexconstraint);
-					if (constraint != NULL)
-						constraint->dump &= ~DUMP_COMPONENT_DEFINITION;
-				}
-			}
 
 			attachinfo = (IndexAttachInfo *) pg_malloc(sizeof(IndexAttachInfo));
 
@@ -501,9 +544,63 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			addObjectDependency(&attachinfo->dobj,
 								parentidx->indextable->dobj.dumpId);
 
+			/*
+			 * If the table is attached in post-data, the index can only be
+			 * attached after that.
+			 */
+			if (tblinfo[i].attachObj && tblinfo[i].attachObj->postdata)
+				addObjectDependency(&attachinfo->dobj,
+									tblinfo[i].attachObj->dobj.dumpId);
+
 			/* keep track of the list of partitions in the parent index */
 			simple_ptr_list_append(&parentidx->partattaches, &attachinfo->dobj);
 		}
+	}
+
+	/*
+	 * A partition attached in post-data must be attached after all of its
+	 * indexes and index constraints are created and valid, so that ATTACH
+	 * PARTITION attaches them instead of creating new ones.  A partitioned
+	 * index becomes valid only when all of its partitions are attached, so
+	 * also wait for those.  This needs the complete partattaches lists, so
+	 * it is done in a separate pass.
+	 */
+	for (i = 0; i < numTables; i++)
+	{
+		TableAttachInfo *tblattach = tblinfo[i].attachObj;
+
+		if (tblattach == NULL || !tblattach->postdata)
+			continue;
+
+		for (j = 0; j < tblinfo[i].numIndexes; j++)
+		{
+			IndxInfo   *index = &(tblinfo[i].indexes[j]);
+
+			addObjectDependency(&tblattach->dobj, index->dobj.dumpId);
+			if (index->indexconstraint != 0)
+				addObjectDependency(&tblattach->dobj, index->indexconstraint);
+			addTableAttachChildIdxDeps(&tblattach->dobj, index);
+		}
+	}
+}
+
+/*
+ * addTableAttachChildIdxDeps -
+ *	 Make dobj depend on each attachment of a partition to idx, recursing to
+ *	 children until all leaves are found, so that it is not restored until
+ *	 idx is valid.
+ */
+static void
+addTableAttachChildIdxDeps(DumpableObject *dobj, const IndxInfo *idx)
+{
+	SimplePtrListCell *cell;
+
+	for (cell = idx->partattaches.head; cell; cell = cell->next)
+	{
+		IndexAttachInfo *attach = (IndexAttachInfo *) cell->ptr;
+
+		addObjectDependency(dobj, attach->dobj.dumpId);
+		addTableAttachChildIdxDeps(dobj, attach->partitionIdx);
 	}
 }
 
