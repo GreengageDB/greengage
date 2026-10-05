@@ -1,0 +1,10 @@
+-- start_matchignore
+m/^NOTICE:  command without clusterwide effect/
+m/^LOG:  DTM protocol command '.*' for gid = \d+/
+m/^LOG:  An exception was encountered during the execution of statement: /
+m/^LOG:  statement: SET "credcheck\.no_password_logging" TO 'off'/
+-- end_matchignore
+-- start_matchsubs
+m/^LOG:  duration: \d+\.\d+ ms/
+s/^LOG:  duration: \d+\.\d+ ms/LOG:  duration: ### ms/
+-- end_matchsubs

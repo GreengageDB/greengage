@@ -13,6 +13,7 @@
 	- [Last login information](#last-login-information)
 	- [Examples](#examples)
 	- [Limitations](#limitations)
+	- [Greengage](#greengage)
 	- [Authors](#authors)
 	- [License](#license)
 	- [Credits](#credits)
@@ -362,7 +363,8 @@ restrict new passwords from being chosen from this history:
 * If an account is restricted based on time elapsed, a new password cannot be chosen from passwords in the history that are newer than `password_reuse_interval` days. For example, if the password reuse interval is set to 365, a new password must not be among those previously chosen within the last year. 
 
 To be able to list the content of the history a view is provided in the database you have created
-the credcheck extension. The view is named `public.pg_password_history`. This view is visible by everyone.
+the credcheck extension. The view is named `public.pg_password_history`. This view is visible by superusers only, since
+it shows the hashes of the passwords.
 
 A superuser can also reset the content of the password history by calling a function named `public.pg_password_history_reset()`. If it is called without an argument, all the passwords history will be cleared. To only remove the records registered for a single user, just pass his name as parameter. This function returns the number of records removed from the history.
 
@@ -451,6 +453,9 @@ The default value for the second setting is `false` which means that `postgres` 
 In case the `postgres` superuser was banned, he can not logged anymore. If there is no other superuser account that can be used to reset the record of the banned superuser, set the `credcheck.reset_superuser`configuration directive to `true` into postgresql.conf file and send the SIGHUP signal to the PostgreSQL process pid so that it will reread the configuration. Next time the superuser will try to connect, its authentication failure cache entry will be removed.
 
 Example: `kill -1 1234`
+
+The banned users are listed by the `public.pg_banned_role` view, which is visible by superusers and
+members of the `pg_read_all_stats` role.
 
 A superuser can also reset the content of the banned user cache by calling a function named `public.pg_banned_role_reset()`. If it is called without an argument, all the banned cache will be cleared. To only remove the record registered for a single user, just pass his name as parameter. This function returns the number of records removed from the cache. A restart of PostgreSQL also clear the cache.
 
@@ -632,6 +637,48 @@ postgres=# CREATE USER user1 PASSWORD 'this is some plain text';
 CREATE ROLE
 postgres=# ALTER USER user1 RENAME to test_user;
 ```
+
+### [Greengage](#greengage)
+
+In Greengage, add `credcheck` to `shared_preload_libraries` on all instances
+of the cluster, keeping the libraries already listed there, and restart the
+cluster:
+
+	gpconfig -c shared_preload_libraries -v '<current libraries>,credcheck'
+	gpstop -ar
+
+The checks, the password reuse policy, the authentication failure ban, the
+forced password change and the last login history work on the coordinator
+only. Segments only mask the passwords in the statements they write to the
+log. The functions changing the password history or the banned roles, and
+pg_check_password(), can't be executed on segments, for example when they are
+called for each row of a distributed table. pg_check_password() can't be
+executed by entry db processes on the coordinator either, for example when its
+result is inserted into a distributed table, since the credcheck settings of
+the session are not passed to them.
+
+Greengage 7 is based on PostgreSQL 12, so the password history is not
+replicated to the standby coordinator. `gpinitstandby` copies the
+`pg_password_history` and `credcheck.lastlog` files of the coordinator data
+directory, so after `gpactivatestandby` the password history and the last
+login history are the ones the coordinator had when the standby was
+initialized. The banned roles are kept in shared memory only, so they are
+lost on restart and after `gpactivatestandby`. `gpbackup` doesn't save these
+files; to keep the password history, back up the `pg_password_history` file
+of the coordinator data directory.
+
+The password history is not transactional: a new password is saved into the
+history before the statement changing it is executed, so it stays there if the
+statement fails, for example when it can't be dispatched to segments, or if the
+transaction is rolled back. Such a password can't be reused until it leaves the
+history; pg_password_history_reset() removes the history entries of a role.
+The history of a dropped role is removed once DROP ROLE succeeds, and isn't
+restored if the transaction is rolled back.
+
+The password history holds fast hashes of the passwords, the current ones
+included, salted with the role name, so in Greengage `pg_password_history`
+is visible by superusers only, and `pg_banned_role` by superusers and members
+of `pg_read_all_stats`, as `pg_lastlog` is.
 
 ### [Authors](#authors)
 

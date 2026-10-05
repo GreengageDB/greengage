@@ -7,3 +7,4 @@
 *.bc
 results/*
 regression.*
+/tmp_check/

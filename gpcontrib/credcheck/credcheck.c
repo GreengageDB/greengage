@@ -28,6 +28,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/parallel.h"
+#include "access/xact.h"
 #if PG_VERSION_NUM >= 150000
 #include "access/xlog.h"
 #include "access/xlog_internal.h"
@@ -93,6 +94,44 @@
 #include "utils/tuplestore.h"
 #endif
 #include "utils/varlena.h"
+
+#ifdef GP_VERSION_NUM
+#include "cdb/cdbvars.h"
+
+/*
+ * Entry db QEs run on the coordinator and execute the slices of the
+ * dispatcher's query, which the dispatcher has already checked. They don't
+ * see the uncommitted changes of the role settings made by the dispatcher
+ * either, so they must not check anything on their own.
+ *
+ * Any client can request the QE role in the startup packet, so the role
+ * alone doesn't identify an entry db QE. Real ones get the free pass for
+ * internal connections, which skips the pg_hba.conf lookup, while a client
+ * that has authenticated normally has a matching pg_hba.conf line.
+ */
+#define IS_ENTRY_DB_QE() \
+	(Gp_role == GP_ROLE_EXECUTE && MyProcPort != NULL && MyProcPort->hba == NULL)
+
+/*
+ * Password policy, history and authentication failures are handled on the
+ * coordinator only, segments have nothing to check, reset or change. Entry db
+ * QEs share the history and the banned roles with the dispatcher, but the
+ * credcheck settings of the session are not synchronized with them, so with
+ * uses_settings they are rejected too.
+ */
+static void
+check_coordinator(const char *funcname, bool uses_settings)
+{
+	if (!IS_QUERY_DISPATCHER() || (uses_settings && IS_ENTRY_DB_QE()))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("%s() can only be executed on the coordinator", funcname),
+				 IS_QUERY_DISPATCHER() ?
+				 errdetail("Entry db processes don't see the credcheck settings of the session.") : 0));
+}
+#else
+#define IS_ENTRY_DB_QE() false
+#endif
 
 #define NOT_IN_PARALLEL_WORKER (ParallelWorkerNumber < 0)
 
@@ -434,6 +473,9 @@ extern void _PG_init(void);
 extern void _PG_fini(void);
 static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
 static void cc_ExecutorStart(QueryDesc *queryDesc, int eflags);
+static void cc_XactCallback(XactEvent event, void *arg);
+static void cc_SubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+							   SubTransactionId parentSubid, void *arg);
 
 static void flush_password_history(void);
 static pgphEntry *pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date);
@@ -515,6 +557,11 @@ static int password_valid_max = 0;
 static int auth_delay_milliseconds = 0;
 static bool password_change_first_login = false;
 static bool force_change_password = false;
+/*
+ * The outermost transaction nesting level at which the forced password change
+ * has been cleared in the current transaction, 0 if it hasn't
+ */
+static int force_change_password_cleared_level = 0;
 static bool disallow_change_password = false;
 static bool superuser_nocheck = false;
 
@@ -2559,7 +2606,12 @@ _PG_init(void)
 					GUC_UNIT_S, NULL, NULL, NULL);
 
 		/* Register the lastlog flush/shutdown background worker. */
+#ifdef GP_VERSION_NUM
+		/* The last login history is kept on the coordinator only. */
+		if (lastlog_enabled && IS_QUERY_DISPATCHER())
+#else
 		if (lastlog_enabled)
+#endif
 		{
 			BackgroundWorker	worker;
 
@@ -2626,6 +2678,20 @@ _PG_init(void)
 				gettext_noop("comma separated list of username to exclude from max authentication failure check"), NULL,
 				&max_auth_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
 
+#ifdef GP_VERSION_NUM
+	/*
+	 * Password policy, history and authentication failures are handled on the
+	 * coordinator only. Segments log the dispatched statement text too, so
+	 * keep masking passwords there.
+	 */
+	if (!IS_QUERY_DISPATCHER())
+	{
+		prev_log_hook = emit_log_hook;
+		emit_log_hook = fix_log;
+		return;
+	}
+#endif
+
 #if PG_VERSION_NUM < 150000
 	EmitWarningsOnPlaceholders("credcheck");
 	EmitWarningsOnPlaceholders("credcheck_internal");
@@ -2670,6 +2736,9 @@ _PG_init(void)
 
 	prev_ExecutorStart = ExecutorStart_hook;
 	ExecutorStart_hook = cc_ExecutorStart;
+
+	RegisterXactCallback(cc_XactCallback, NULL);
+	RegisterSubXactCallback(cc_SubXactCallback, NULL);
 }
 
 void
@@ -2684,6 +2753,8 @@ _PG_fini(void)
 #endif
 	shmem_startup_hook = prev_shmem_startup_hook;
 	ClientAuthentication_hook = prev_ClientAuthentication;
+	UnregisterXactCallback(cc_XactCallback, NULL);
+	UnregisterSubXactCallback(cc_SubXactCallback, NULL);
 }
 
 /*
@@ -2749,13 +2820,17 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	char load_roleid[NAMEDATALEN] = {0};
 	Oid roleid = InvalidOid;
 	bool use_superuser_priv = false;
+	Oid     force_reset_roleid = InvalidOid;
+#if PG_VERSION_NUM >= 120000
+	DropRoleStmt *drop_stmt = NULL;
+#endif
 	Oid     save_userid;
 	int     save_sec_context;
 
 	elog(DEBUG1, "Start cc_ProcessUtility()");
 
 	/* If real user connection and top level (not SPI re-enter, etc) */
-	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER &&
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER && !IS_ENTRY_DB_QE() &&
 			(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY)
 	   )
 	{
@@ -2963,12 +3038,14 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 				if (save_password)
 					save_password_in_history(stmt->role->rolename, password);
 #endif
-				if (force_change_password)
-				{
-					/* RESET variable, valuestr = NULL*/
-					set_force_change_password(InvalidOid, get_role_oid(stmt->role->rolename, true), NULL);
-					force_change_password = false;
-				}
+				/*
+				 * The forced password change is cleared only when the session
+				 * user sets a new password for itself, and only once the
+				 * statement has succeeded, see below.
+				 */
+				if (force_change_password && dpassword && dpassword->arg &&
+					get_role_oid(stmt->role->rolename, true) == GetSessionUserId())
+					force_reset_roleid = GetSessionUserId();
 
 				break;
 			}
@@ -3100,15 +3177,8 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 #if PG_VERSION_NUM >= 120000
 			case T_DropRoleStmt:
 			{
-				DropRoleStmt *stmt = (DropRoleStmt *)parsetree;
-				ListCell   *item;
-
-				foreach(item, stmt->roles)
-				{
-					RoleSpec   *rolspec = lfirst(item);
-
-					remove_user_from_history(rolspec->rolename);
-				}
+				/* The roles are removed from the history below */
+				drop_stmt = (DropRoleStmt *)parsetree;
 				break;
 			}
 #endif
@@ -3136,6 +3206,44 @@ cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
 	/* Restore user's privileges */
 	if (use_superuser_priv)
 		SetUserIdAndSecContext(save_userid, save_sec_context);
+
+#if PG_VERSION_NUM >= 120000
+	/*
+	 * Remove the dropped roles from the password history only once DROP ROLE
+	 * has succeeded, so that a failed one keeps the history. DropRole()
+	 * rejects CURRENT_USER, SESSION_USER and PUBLIC, which have no rolename,
+	 * but check the role type anyway.
+	 */
+	if (drop_stmt != NULL)
+	{
+		ListCell   *item;
+
+		foreach(item, drop_stmt->roles)
+		{
+			RoleSpec   *rolspec = lfirst(item);
+
+			if (rolspec->roletype == ROLESPEC_CSTRING)
+				remove_user_from_history(rolspec->rolename);
+		}
+	}
+#endif
+
+	/*
+	 * The password has been changed, clear the forced password change. Use
+	 * the GUC machinery, so that the session is forced again if the
+	 * transaction is rolled back.
+	 */
+	if (OidIsValid(force_reset_roleid))
+	{
+		/* RESET variable, valuestr = NULL */
+		set_force_change_password(InvalidOid, force_reset_roleid, NULL);
+		(void) set_config_option("credcheck_internal.force_change_password",
+								 "false", PGC_SUSET, PGC_S_SESSION,
+								 GUC_ACTION_SET, true, 0, false);
+		if (force_change_password_cleared_level == 0 ||
+			force_change_password_cleared_level > GetCurrentTransactionNestLevel())
+			force_change_password_cleared_level = GetCurrentTransactionNestLevel();
+	}
 
 	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
 	{
@@ -3779,6 +3887,10 @@ pg_password_history_reset(PG_FUNCTION_ARGS)
 	int32       _i;
         pgphEntry  *entry;
 
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_password_history_reset", false);
+#endif
+
         /* Safety check... */
         if (!pgph || !pgph_hash)
                 return 0;
@@ -3939,6 +4051,10 @@ pg_password_history_timestamp(PG_FUNCTION_ARGS)
 	int         num_changed = 0;
 	int32       _i;
 
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_password_history_timestamp", false);
+#endif
+
         /* Safety check... */
         if (!pgph || !pgph_hash)
                 return 0;
@@ -4005,6 +4121,10 @@ pg_check_password(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 				 errmsg("username and password must not be NULL")));
+
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_check_password", true);
+#endif
 
 	username = NameStr(*(PG_GETARG_NAME(0)));
 	password = text_to_cstring(PG_GETARG_TEXT_PP(1));
@@ -4482,6 +4602,10 @@ pg_banned_role_reset(PG_FUNCTION_ARGS)
 	HASH_SEQ_STATUS hash_seq;
         pgafEntry  *entry;
 
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_banned_role_reset", false);
+#endif
+
         /* Safety check... */
         if (!pgaf || !pgaf_hash)
                 return 0;
@@ -4615,7 +4739,7 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 {
         elog(DEBUG1, "cc_ExecutorStart()");
 
-	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER)
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER && !IS_ENTRY_DB_QE())
 	{
 		/*
 		 * When first login we don't allow anything else than password change.
@@ -4637,7 +4761,7 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	}
 
 	/* Remember the last executed query for the lastlog view. */
-	if (queryDesc->sourceText != NULL)
+	if (queryDesc->sourceText != NULL && !IS_ENTRY_DB_QE())
 		lastlog_track_last_query(queryDesc->sourceText);
 
         /* Continue the normal behavior */
@@ -4649,16 +4773,74 @@ cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
 	elog(DEBUG1, "End of cc_ExecutorStart()");
 }
 
+/*
+ * The forced password change comes from the role settings at login, so it is
+ * also the value that DISCARD ALL or RESET restores. Once the password change
+ * is committed, make the cleared flag the session default too. This can't be
+ * done when the flag is cleared, since the session default is not restored
+ * if the transaction is rolled back. This also clears the flag again if RESET
+ * ALL has restored it later in the transaction, but not if it has been set by
+ * a superuser with SET, which takes precedence over the session default.
+ */
+static void
+cc_XactCallback(XactEvent event, void *arg)
+{
+	switch (event)
+	{
+		case XACT_EVENT_COMMIT:
+			if (force_change_password_cleared_level > 0)
+				(void) set_config_option("credcheck_internal.force_change_password",
+										 "false", PGC_SUSET, PGC_S_USER,
+										 GUC_ACTION_SET, true, 0, false);
+			force_change_password_cleared_level = 0;
+			break;
+		case XACT_EVENT_ABORT:
+		case XACT_EVENT_PREPARE:
+			force_change_password_cleared_level = 0;
+			break;
+		default:
+			break;
+	}
+}
+
+/*
+ * The rollback of the subtransaction in which the forced password change has
+ * been cleared restores the flag, and its commit passes the clearing on to
+ * the parent transaction.
+ */
+static void
+cc_SubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+				   SubTransactionId parentSubid, void *arg)
+{
+	int			level = GetCurrentTransactionNestLevel();
+
+	switch (event)
+	{
+		case SUBXACT_EVENT_COMMIT_SUB:
+			if (force_change_password_cleared_level == level)
+				force_change_password_cleared_level = level - 1;
+			break;
+		case SUBXACT_EVENT_ABORT_SUB:
+			if (force_change_password_cleared_level >= level)
+				force_change_password_cleared_level = 0;
+			break;
+		default:
+			break;
+	}
+}
+
 static void
 set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
 {
 	bool need_priv_escalation = !superuser(); /* we might be a SU */
 	Oid     save_userid;
 	int     save_sec_context;
+#ifndef GP_VERSION_NUM
 	HeapTuple	tuple;
 	Relation	rel;
 	ScanKeyData scankey[2];
 	SysScanDesc scan;
+#endif
 
 	if (roleid == InvalidOid)
 		return;
@@ -4674,6 +4856,32 @@ set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
 							| SECURITY_RESTRICTED_OPERATION);
 	}
 
+#ifdef GP_VERSION_NUM
+	/*
+	 * pg_db_role_setting must be the same on the coordinator and segments,
+	 * so change it as ALTER ROLE ... SET/RESET does, which also dispatches
+	 * the change to segments.
+	 */
+	{
+		VariableSetStmt *setstmt = makeNode(VariableSetStmt);
+
+		setstmt->name = "credcheck_internal.force_change_password";
+		if (valuestr)
+		{
+			A_Const    *arg = makeNode(A_Const);
+
+			arg->val.type = T_String;
+			arg->val.val.str = valuestr;
+			arg->location = -1;
+			setstmt->kind = VAR_SET_VALUE;
+			setstmt->args = list_make1(arg);
+		}
+		else
+			setstmt->kind = VAR_RESET;
+
+		AlterSetting(databaseid, roleid, setstmt);
+	}
+#else
 	/* Get the old tuple, if any. */
 	rel = table_open(DbRoleSettingRelationId, RowExclusiveLock);
 	ScanKeyInit(&scankey[0],
@@ -4749,6 +4957,7 @@ set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
 
 	/* Close pg_db_role_setting, but keep lock till commit */
 	table_close(rel, NoLock);
+#endif
 
 	/* Restore user's privileges */
 	if (need_priv_escalation)

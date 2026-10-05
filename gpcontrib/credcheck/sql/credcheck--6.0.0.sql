@@ -34,7 +34,7 @@ CREATE FUNCTION pg_password_history (
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT VOLATILE;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 -- Register a view on the function for ease of use.
 CREATE VIEW pg_password_history AS
@@ -50,9 +50,11 @@ RETURNS integer
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT VOLATILE;
 
-GRANT SELECT ON pg_password_history TO PUBLIC;
-
--- Don't want this to be available to non-superusers.
+-- Don't want this to be available to non-superusers. The history holds
+-- fast hashes of the passwords, the current ones included, salted with
+-- the role name.
+REVOKE ALL ON FUNCTION pg_password_history() FROM PUBLIC;
+REVOKE ALL ON pg_password_history FROM PUBLIC;
 REVOKE ALL ON FUNCTION pg_password_history_reset() FROM PUBLIC;
 REVOKE ALL ON FUNCTION pg_password_history_reset(name) FROM PUBLIC;
 REVOKE ALL ON FUNCTION pg_password_history_timestamp(name, timestamp with time zone) FROM PUBLIC;
@@ -85,13 +87,19 @@ CREATE FUNCTION pg_banned_role (
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT VOLATILE;
+LANGUAGE C STRICT VOLATILE EXECUTE ON COORDINATOR;
 
 -- Register a view on the function for ease of use.
 CREATE VIEW pg_banned_role AS
   SELECT roleid::regrole, failure_count, banned_date FROM pg_banned_role();
 
-GRANT SELECT ON pg_banned_role TO PUBLIC;
+-- The banned roles show which accounts are being attacked, so restrict them
+-- like pg_lastlog. The function is executed with the privileges of the user
+-- querying the view, so grant it too.
+REVOKE ALL ON FUNCTION pg_banned_role() FROM PUBLIC;
+REVOKE ALL ON pg_banned_role FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_banned_role() TO pg_read_all_stats;
+GRANT SELECT ON pg_banned_role TO pg_read_all_stats;
 
 -- Don't want this to be available to non-superusers.
 REVOKE ALL ON FUNCTION pg_banned_role_reset() FROM PUBLIC;
@@ -128,7 +136,7 @@ CREATE FUNCTION credcheck_lastlog (
 )
 RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'credcheck_lastlog'
-LANGUAGE C VOLATILE;
+LANGUAGE C VOLATILE EXECUTE ON COORDINATOR;
 
 CREATE VIEW pg_lastlog AS
   SELECT * FROM credcheck_lastlog();

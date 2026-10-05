@@ -4,6 +4,10 @@ SET credcheck.password_change_first_login = true;
 CREATE USER aaa PASSWORD 'DummY';
 -- verify that credcheck_internal.force_change_password is present after user creation
 SELECT 1 FROM pg_catalog.pg_db_role_setting WHERE setrole='aaa'::regrole AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
+-- and on all segments
+SELECT count(DISTINCT gp_segment_id) = (SELECT count(*) FROM gp_segment_configuration WHERE role = 'p' AND content >= 0)
+  FROM gp_dist_random('pg_catalog.pg_db_role_setting')
+  WHERE setrole='aaa'::regrole AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
 DROP USER aaa;
 
 -- Enforcement when a forced role actually logs in.
@@ -12,6 +16,7 @@ DROP USER aaa;
 -- production (the flag comes from pg_db_role_setting, not from a manual SET).
 SET credcheck.password_change_first_login = true;
 CREATE USER forced_login PASSWORD 'DummY1passWORD!';
+\set superuser :USER
 \c - forced_login
 
 -- Session/transaction-control statements that drivers and connection poolers
@@ -35,10 +40,53 @@ CREATE TABLE t_force (i int);
 -- A forced session must not be able to clear the flag itself.
 SET credcheck_internal.force_change_password = false;
 
--- The password change itself is allowed and clears the forced state.
+-- A rejected password change must not clear the forced state
+-- (credcheck.password_contain_username is on by default).
+ALTER USER forced_login PASSWORD 'forced_login_Pwd1';
+SELECT 1;
+-- Neither must a rolled back one,
+BEGIN;
+ALTER USER forced_login PASSWORD 'Rolled2backWORD!';
+ROLLBACK;
+SELECT 1;
+-- nor one rolled back to a savepoint, even after DISCARD ALL,
+BEGIN;
+SAVEPOINT s;
+ALTER USER forced_login PASSWORD 'Savepoint5WORD!';
+ROLLBACK TO SAVEPOINT s;
+COMMIT;
+DISCARD ALL;
+SELECT 1;
+-- nor removing the password.
+ALTER USER forced_login PASSWORD NULL;
+SELECT 1;
+
+-- A slice executed on the coordinator by an entry db QE in the transaction
+-- changing the password is not blocked, although the QE doesn't see the
+-- uncommitted reset of the flag.
+BEGIN;
+ALTER USER forced_login PASSWORD 'Entry4dbPassWORD!';
+CREATE TEMP TABLE t_entry (c int) DISTRIBUTED BY (c);
+INSERT INTO t_entry SELECT content FROM gp_segment_configuration;
+ROLLBACK;
+
+-- The password change itself is allowed and clears the forced state, even
+-- if RESET ALL restores the flag from the role settings later in the same
+-- transaction.
+BEGIN;
 ALTER USER forced_login PASSWORD 'BrandNew3passWORD!';
+RESET ALL;
+COMMIT;
 SELECT 1 AS after_password_change;
+-- DISCARD ALL, which poolers issue to reset the session, doesn't arm the
+-- flag again once the password change is committed.
+DISCARD ALL;
+SELECT 1 AS after_discard_all;
 
 -- Reconnect as the superuser to clean up.
-\c - postgres
+\c - :superuser
+-- The flag is cleared on the coordinator and on segments
+SELECT count(*) FROM (SELECT setrole FROM pg_catalog.pg_db_role_setting
+  UNION ALL SELECT setrole FROM gp_dist_random('pg_catalog.pg_db_role_setting')) s
+  WHERE setrole = 'forced_login'::regrole;
 DROP USER forced_login;
