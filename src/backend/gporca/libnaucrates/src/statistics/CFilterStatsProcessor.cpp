@@ -551,10 +551,24 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 		{
 			CStatsPredUnsupported *unsupported_pred_stats =
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
-			scale_factors->Append(
-				GPOS_NEW(mp) CDouble(unsupported_pred_stats->ScaleFactor()));
+			const ULongPtrArray *used_colids =
+				unsupported_pred_stats->GetUsedColIds();
+			if (nullptr == used_colids || 1 != used_colids->Size())
+			{
+				// no single column to attribute a histogram contribution
+				// to - just the scale factor's effect on the row count
+				scale_factors->Append(GPOS_NEW(mp) CDouble(
+					unsupported_pred_stats->ScaleFactor()));
 
-			continue;
+				continue;
+			}
+
+			// GetColId() is ulong_max, but this predicate touches exactly
+			// one real column - use it so this branch's full value range
+			// participates in the union below, instead of contributing no
+			// buckets at all and leaving the disjunction's result
+			// histogram for that column narrower than the true range
+			colid = *(*used_colids)[0];
 		}
 
 		if (IsNewStatsColumn(colid, previous_colid))
