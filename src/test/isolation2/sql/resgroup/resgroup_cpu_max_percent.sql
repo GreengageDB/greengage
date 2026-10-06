@@ -13,11 +13,6 @@ CREATE LANGUAGE plpython3u;
 --
 -- helper functions, tables and views
 --
-CREATE OR REPLACE FUNCTION get_cpu_cores() RETURNS INTEGER AS $$
-    import os
-    return os.cpu_count()
-$$ LANGUAGE plpython3u IMMUTABLE;
-
 DROP TABLE IF EXISTS cpu_usage_samples;
 CREATE TABLE cpu_usage_samples (sample text);
 
@@ -69,11 +64,12 @@ CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
             FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
         WHERE md5(c1::text || g::text) < '8'"""
 
+    import os
     nsegs = plpy.execute("""
         SELECT count(*) AS n FROM gp_segment_configuration
          WHERE content >= 0 AND role = 'p'
     """)[0]['n']
-    ncores = plpy.execute("SELECT get_cpu_cores() AS n")[0]['n']
+    ncores = os.cpu_count()
 
     import math
     procs_per_branch = 5 * nsegs
