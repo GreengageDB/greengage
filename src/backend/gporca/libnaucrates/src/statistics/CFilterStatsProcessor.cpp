@@ -530,6 +530,20 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	CStatisticsUtils::CollectUnsupportedPredUsedColIds(
 		unsupported_pred_used_colids, disjunctive_pred_stats);
 
+	// real column ids some direct child's own GetColId() reports - used
+	// below so a same-column unsupported branch only unions in its own
+	// histogram when it has a genuine sibling to merge with, rather than
+	// collapsing the OR's row count to a single branch's selectivity
+	CBitSet *direct_child_real_colids = GPOS_NEW(mp) CBitSet(mp);
+	for (ULONG ul = 0; ul < disjunctive_pred_stats->GetNumPreds(); ul++)
+	{
+		ULONG child_colid = disjunctive_pred_stats->GetPredStats(ul)->GetColId();
+		if (gpos::ulong_max != child_colid)
+		{
+			(void) direct_child_real_colids->ExchangeSet(child_colid);
+		}
+	}
+
 	CHistogram *previous_histogram = nullptr;
 	ULONG previous_colid = gpos::ulong_max;
 	// This is set to input_rows since SF = 1 / selectivity. So if SF is large, then we are less selective.
@@ -553,10 +567,12 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				CStatsPredUnsupported::ConvertPredStats(child_pred_stats);
 			const ULongPtrArray *used_colids =
 				unsupported_pred_stats->GetUsedColIds();
-			if (nullptr == used_colids || 1 != used_colids->Size())
+			if (nullptr == used_colids || 1 != used_colids->Size() ||
+				!direct_child_real_colids->Get(*(*used_colids)[0]))
 			{
 				// no single column to attribute a histogram contribution
-				// to - just the scale factor's effect on the row count
+				// to, or no sibling branch shares that column's own real
+				// colid - just the scale factor's effect on the row count
 				scale_factors->Append(GPOS_NEW(mp) CDouble(
 					unsupported_pred_stats->ScaleFactor()));
 
@@ -721,6 +737,7 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 		}
 	}
 	unsupported_pred_used_colids->Release();
+	direct_child_real_colids->Release();
 
 	non_updatable_cols->Release();
 
