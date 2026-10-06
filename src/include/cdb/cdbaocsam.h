@@ -177,9 +177,6 @@ typedef struct AOCSScanDescData
 	/* AM dependant part of the descriptor */
 	enum AOCSScanDescIdentifier descIdentifier;
 
-	/* synthetic system attributes */
-	ItemPointerData cdb_fake_ctid;
-
 	/*
 	 * used by `analyze`
 	 */
@@ -254,10 +251,39 @@ typedef struct AOCSScanDescData
 		/* Indicate if we proj some/all of the columns */
 		AOCSProjectionKind 		projKind;
 
+		/*
+		 * True when this scan's own plan-level qual is empty (set by the
+		 * caller in aoco_beginscan_extractcolumns(), NOT recomputed here).
+		 * When true, aocs_getnext() takes the pre-lazy-fetch eager path
+		 * (aocs_getnext_eager(): fetch every proj_atts column for every row,
+		 * directly, like the pre-refactor baseline) instead of the lazy
+		 * anchor-column-only path (aocs_getnext_lazy(): fetch just enough to
+		 * determine visibility, deferring the rest to
+		 * tts_virtual_aocs_fetchattr()/getsomeattrs() on demand).
+		 *
+		 * There's no correctness reason a qual-bearing scan couldn't also
+		 * use the eager path - it's purely a cost tradeoff. A scan with no
+		 * qual at all has nothing for per-Var lazy fetch to ever skip (every
+		 * projected column is needed for every row that survives
+		 * visibility), so the tts_is_valid/fetchattr bookkeeping is pure
+		 * overhead for it; a scan with a qual may short-circuit some columns
+		 * via qual evaluation, so it keeps the lazy path.
+		 */
+		bool				eagerFetch;
+
 		/* attnum to rownum mapping, used in reading missing column value */
 		int64 			   *attnum_to_rownum;
 
 		struct DatumStreamRead **ds;
+
+		/*
+		 * Contiguous array backing ds[] for the projected columns, one
+		 * palloc'ed block instead of num_proj_atts separate allocations -
+		 * improves cache locality for the per-row, per-column struct field
+		 * reads in tts_virtual_aocs_fetch_attr(). NULL until open_ds_read()
+		 * runs; owned and freed as a single chunk alongside ds[].
+		 */
+		struct DatumStreamRead *ds_arena;
 	} columnScanInfo;
 
 	struct AOCSFileSegInfo **seginfo;

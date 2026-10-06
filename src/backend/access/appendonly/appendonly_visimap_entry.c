@@ -462,17 +462,21 @@ AppendOnlyVisimapEntry_IsVisible(
 
 	rowNum = AOTupleIdGet_rowNum(tupleId);
 
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map entry: Check row visibility: "
 		   "firstRowNum " INT64_FORMAT ", rowNum " INT64_FORMAT,
 		   visiMapEntry->firstRowNum, rowNum);
+#endif
 
 	if (AppendOnlyVisimapEntry_AreAllVisible(visiMapEntry))
 	{
+#ifdef USE_ASSERT_CHECKING
 		elogif(Debug_appendonly_print_visimap, LOG,
 			   "Append-only visi map entry: All entries are visibile: "
 			   "(firstRowNum, rowNum) = (" INT64_FORMAT ", " INT64_FORMAT ")",
 			   visiMapEntry->firstRowNum, rowNum);
+#endif
 		return true;
 	}
 	Assert(rowNum >= visiMapEntry->firstRowNum);
@@ -484,10 +488,12 @@ AppendOnlyVisimapEntry_IsVisible(
 	visibilityBit = !bms_is_member(rowNumOffset,
 								   visiMapEntry->bitmap);
 
+#ifdef USE_ASSERT_CHECKING
 	elogif(Debug_appendonly_print_visimap, LOG,
 		   "Append-only visi map entry: (firstRowNum, rowNum, visible) = "
 		   "(" INT64_FORMAT ", " INT64_FORMAT ", %d)",
 		   visiMapEntry->firstRowNum, rowNum, (int) visibilityBit);
+#endif
 
 	return visibilityBit;
 }
