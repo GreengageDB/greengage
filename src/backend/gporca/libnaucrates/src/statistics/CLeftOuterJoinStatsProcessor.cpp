@@ -121,12 +121,22 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	// coverage check that deliberately falls back to a conservative answer
 	// once it knows the histogram's bucket content can't be trusted, while
 	// num_rows_inner_join's generic equi-join computation never consults the
-	// mark at all. So bound num_rows_inner_join's contribution to this LOJ by
-	// what's left after crediting num_rows_LASJ, rather than discounting
-	// num_rows_LASJ to fit - and do it before num_rows_inner_join is used to
-	// weight any of this LOJ's per-column histograms below, so every
-	// histogram this function builds, and the row count the caller derives
-	// from it, stay consistent.
+	// mark at all - so rather than adding num_rows_LASJ's unmatched rows on
+	// top of num_rows_inner_join's own total, credit num_rows_LASJ out of
+	// that same total instead, trusting it as already present within
+	// num_rows_inner_join's own count rather than additional to it. This
+	// still adds back up to the original, uncorrected num_rows_inner_join
+	// once num_rows_LASJ is added to the credited amount below, so it never
+	// discards a one-to-many join's genuine fan-out the way an absolute cap
+	// at the outer row count would. Only correct it when, taken together
+	// with num_rows_LASJ, it would already overcount past the outer side's
+	// own row count - num_rows_inner_join's generic computation may already
+	// be reporting fewer matches than that, in which case it's not in
+	// conflict with num_rows_LASJ's own finding and doesn't need adjusting.
+	// Do this before num_rows_inner_join is used to weight any of this
+	// LOJ's per-column histograms below, so every histogram this function
+	// builds, and the row count the caller derives from it, stay
+	// consistent.
 	BOOL any_join_col_marked = false;
 	for (ULONG j = 0; j < join_preds_stats->Size() && !any_join_col_marked; j++)
 	{
@@ -142,11 +152,15 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			}
 		}
 	}
-	if (any_join_col_marked)
+	if (any_join_col_marked && outer_side_stats->Rows() > CStatistics::Epsilon)
 	{
 		CDouble outer_rows = outer_side_stats->Rows();
-		num_rows_inner_join =
-			std::min(num_rows_inner_join, outer_rows - num_rows_LASJ);
+
+		if (num_rows_inner_join + num_rows_LASJ > outer_rows)
+		{
+			num_rows_inner_join =
+				std::max(CDouble(0.0), num_rows_inner_join - num_rows_LASJ);
+		}
 	}
 
 	UlongToHistogramMap *LOJ_histograms = GPOS_NEW(mp) UlongToHistogramMap(mp);
