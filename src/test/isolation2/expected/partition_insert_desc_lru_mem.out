@@ -1,13 +1,13 @@
--- gp_max_partition_open_insert_descs actually bounds backend memory.
+-- gp_partition_insert_desc_budget actually bounds backend memory.
 --
 -- Routing rows through a wide AOCS partition root opens one write stack per
 -- column for every leaf touched and, unbounded, keeps them all until end of
--- statement -- tens of MB per leaf. With the GUC > 0 only that many descriptors
--- are held at once.
+-- statement -- tens of MB per leaf. With the GUC on, the open descriptors are
+-- kept within the statement's memory (here statement_mem).
 --
 -- We suspend an INSERT at its 28th AOCS descriptor open and, from another
--- session, read this session's reserved vmem on the segments. Bounded (5) must
--- be well under half of unbounded (~28 leaves' worth of buffers).
+-- session, read this session's reserved vmem on the segments. The budgeted run
+-- must be well under half of unbounded (~28 leaves' worth of buffers).
 
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE
@@ -57,7 +57,7 @@ CREATE
  Success:        
  Success:        
 (3 rows)
-1: SET gp_max_partition_open_insert_descs = 0;
+1: SET gp_partition_insert_desc_budget = off;
 SET
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;  <waiting ...>
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
@@ -86,7 +86,7 @@ INSERT 1
 1<:  <... completed>
 INSERT 6000
 
--- ===================== bounded (5) =====================
+-- ===================== budget =====================
 1: TRUNCATE pdlru_wide;
 TRUNCATE
 2: SELECT gp_inject_fault('ao_column_insert_init_1','skip','','','',1,-1,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
@@ -103,7 +103,9 @@ TRUNCATE
  Success:        
  Success:        
 (3 rows)
-1: SET gp_max_partition_open_insert_descs = 5;
+1: SET gp_partition_insert_desc_budget = on;
+SET
+1: SET statement_mem = '8MB';
 SET
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;  <waiting ...>
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
@@ -139,9 +141,9 @@ INSERT 6000
  6000  
 (1 row)
 
--- The point: bounded's peak reserved vmem is a small fraction of unbounded's
--- (in practice ~3.5x smaller here; without the limit it grows with every leaf
--- touched and a wide, many-thousand-partition load exhausts segment memory).
+-- The point: the budgeted run's peak reserved vmem is a small fraction of
+-- unbounded's (without the budget it grows with every leaf touched and a wide,
+-- many-thousand-partition load exhausts segment memory).
 2: SELECT (SELECT vmem_mb FROM pdlru_vmem WHERE tag='bounded') * 2 < (SELECT vmem_mb FROM pdlru_vmem WHERE tag='unbounded') AS bounded_much_lower;
  bounded_much_lower 
 --------------------

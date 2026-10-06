@@ -17,6 +17,7 @@
 #define EXECUTOR_H
 
 #include "executor/execdesc.h"
+#include "lib/ilist.h"
 #include "nodes/parsenodes.h"
 
 #include "cdb/cdbdef.h"                 /* CdbVisitOpt */
@@ -239,10 +240,20 @@ typedef struct AttrMap
  * part OID -> ResultRelInfo and avoids repeated calculation of the
  * result information.
  */
-typedef struct ResultPartHashEntry 
+typedef struct ResultPartHashEntry
 {
 	Oid			targetid; /* OID of part relation */
 	ResultRelInfo resultRelInfo;
+
+	/*
+	 * gp_partition_insert_desc_budget bookkeeping, see execMain.c.
+	 * insertDescLruNode links this leaf into estate->es_partInsertLru while
+	 * it has an open AO/AOCS insert descriptor subject to eviction (both
+	 * pointers NULL when not tracked); insertDescCxt is the private context
+	 * that descriptor is allocated in, deleted on eviction.
+	 */
+	dlist_node	insertDescLruNode;
+	MemoryContext insertDescCxt;
 } ResultPartHashEntry;
 
 extern void ExecutorStart(QueryDesc *queryDesc, int eflags);

@@ -271,6 +271,7 @@ extern bool gp_local_distributed_cache_stats;
 extern bool gp_appendonly_verify_block_checksums;
 extern bool gp_appendonly_verify_write_block;
 extern bool gp_appendonly_compaction;
+extern bool gp_partition_insert_desc_budget;
 extern bool enable_implicit_timeformat_YYYYMMDDHH24MISS;
 
 /*
@@ -282,7 +283,6 @@ extern bool enable_implicit_timeformat_YYYYMMDDHH24MISS;
  * 10% of the tuples are hidden.
  */
 extern int  gp_appendonly_compaction_threshold;
-extern int  gp_max_partition_open_insert_descs;
 extern bool gp_heap_require_relhasoids_match;
 extern bool	debug_xlog_record_read;
 extern bool Debug_cancel_print;

@@ -60,6 +60,7 @@
 		"gp_max_partition_level",
 		"gp_mk_sort_check",
 		"gp_motion_slice_noop",
+		"gp_partition_insert_desc_budget",
 		"gp_partitioning_dynamic_selection_log",
 		"gp_perfmon_print_packet_info",
 		"gp_resgroup_memory_policy_auto_fixed_mem",

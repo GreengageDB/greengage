@@ -1,5 +1,5 @@
--- Concurrency properties of gp_max_partition_open_insert_descs (bounded set of
--- open per-partition AO/AOCS insert descriptors).
+-- Concurrency properties of gp_partition_insert_desc_budget (memory budget of
+-- the open per-partition AO/AOCS insert descriptors).
 --
 -- When the LRU evicts a leaf partition's insert descriptor mid-statement it
 -- flushes that leaf's buffered rows to the segment file. This must NOT make the
@@ -14,12 +14,16 @@ CREATE
 
 1: begin;
 BEGIN
-1: set gp_max_partition_open_insert_descs = 1;
+1: set gp_partition_insert_desc_budget = on;
+SET
+-- smaller than the descriptors of the leaves touched below
+1: set statement_mem = '1MB';
 SET
 -- open + lock leaf 0's segfile on every segment
 1: insert into pdlru_iso select g, 0 from generate_series(1, 2000) g;
 INSERT 2000
--- touch 18 other leaves; with limit 1 this evicts (flushes + closes) leaf 0
+-- touch 18 other leaves round-robin; the budget evicts (flushes + closes)
+-- them over and over
 1: insert into pdlru_iso select g, (g % 18) + 1 from generate_series(1, 6000) g;
 INSERT 6000
 
@@ -65,7 +69,9 @@ END
 -- leaf 19 is untouched by everything above
 1: begin;
 BEGIN
-1: set gp_max_partition_open_insert_descs = 1;
+1: set gp_partition_insert_desc_budget = on;
+SET
+1: set statement_mem = '1MB';
 SET
 1: insert into pdlru_iso select g, 19 from generate_series(1, 2000) g;
 INSERT 2000
@@ -87,7 +93,9 @@ ABORT
 (1 row)
 
 -- the leaf whose descriptor was evicted inside the aborted txn still works
-3: set gp_max_partition_open_insert_descs = 2;
+3: set gp_partition_insert_desc_budget = on;
+SET
+3: set statement_mem = '1MB';
 SET
 3: insert into pdlru_iso select g, 19 from generate_series(1, 500) g;
 INSERT 500

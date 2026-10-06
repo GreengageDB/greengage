@@ -1,5 +1,5 @@
--- Concurrency properties of gp_max_partition_open_insert_descs (bounded set of
--- open per-partition AO/AOCS insert descriptors).
+-- Concurrency properties of gp_partition_insert_desc_budget (memory budget of
+-- the open per-partition AO/AOCS insert descriptors).
 --
 -- When the LRU evicts a leaf partition's insert descriptor mid-statement it
 -- flushes that leaf's buffered rows to the segment file. This must NOT make the
@@ -15,10 +15,13 @@ create table pdlru_iso (id int, part int, v text)
 -- ============ commit path ============
 
 1: begin;
-1: set gp_max_partition_open_insert_descs = 1;
+1: set gp_partition_insert_desc_budget = on;
+-- smaller than the descriptors of the leaves touched below
+1: set statement_mem = '1MB';
 -- open + lock leaf 0's segfile on every segment
 1: insert into pdlru_iso select g, 0 from generate_series(1, 2000) g;
--- touch 18 other leaves; with limit 1 this evicts (flushes + closes) leaf 0
+-- touch 18 other leaves round-robin; the budget evicts (flushes + closes)
+-- them over and over
 1: insert into pdlru_iso select g, (g % 18) + 1 from generate_series(1, 6000) g;
 
 -- concurrent reader: leaf 0's flushed-but-uncommitted rows must be invisible
@@ -44,7 +47,8 @@ create table pdlru_iso (id int, part int, v text)
 
 -- leaf 19 is untouched by everything above
 1: begin;
-1: set gp_max_partition_open_insert_descs = 1;
+1: set gp_partition_insert_desc_budget = on;
+1: set statement_mem = '1MB';
 1: insert into pdlru_iso select g, 19 from generate_series(1, 2000) g;
 1: insert into pdlru_iso select g, (g % 17) + 1 from generate_series(1, 6000) g;
 1: abort;
@@ -54,7 +58,8 @@ create table pdlru_iso (id int, part int, v text)
 2: select count(*) from pdlru_iso;
 
 -- the leaf whose descriptor was evicted inside the aborted txn still works
-3: set gp_max_partition_open_insert_descs = 2;
+3: set gp_partition_insert_desc_budget = on;
+3: set statement_mem = '1MB';
 3: insert into pdlru_iso select g, 19 from generate_series(1, 500) g;
 3: select count(*) from pdlru_iso where part = 19;
 
