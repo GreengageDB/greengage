@@ -1052,8 +1052,10 @@ CHistogram::CopyHistogram() const
 	return histogram_copy;
 }
 
-// does this histogram's own bucket range span at least as wide a value
-// range as other's
+// does this histogram's own buckets cover every one of other's buckets
+// without a gap - a gap in other's own range is territory other doesn't
+// claim either, so this doesn't need to cover it there, but wherever
+// other does have a bucket, this's own buckets must span it continuously
 BOOL
 CHistogram::ContainsRange(const CHistogram *other) const
 {
@@ -1066,18 +1068,47 @@ CHistogram::ContainsRange(const CHistogram *other) const
 		return false;
 	}
 
-	// buckets are kept sorted, so the overall range is the first bucket's
-	// lower bound through the last bucket's upper bound
-	CPoint *lower_bound = (*m_histogram_buckets)[0]->GetLowerBound();
-	CPoint *upper_bound =
-		(*m_histogram_buckets)[num_buckets - 1]->GetUpperBound();
-	CPoint *other_lower_bound =
-		(*other->m_histogram_buckets)[0]->GetLowerBound();
-	CPoint *other_upper_bound =
-		(*other->m_histogram_buckets)[num_other_buckets - 1]->GetUpperBound();
+	// both bucket arrays are kept sorted and non-overlapping, so walk them
+	// together: for each of other's buckets in turn, advance past any of
+	// this's buckets that end before it starts, then make sure this's
+	// buckets span it with no gap
+	ULONG ul_this = 0;
+	for (ULONG ul_other = 0; ul_other < num_other_buckets; ul_other++)
+	{
+		CBucket *other_bucket = (*other->m_histogram_buckets)[ul_other];
+		CPoint *other_lower = other_bucket->GetLowerBound();
+		CPoint *other_upper = other_bucket->GetUpperBound();
 
-	return lower_bound->IsLessThanOrEqual(other_lower_bound) &&
-		   other_upper_bound->IsLessThanOrEqual(upper_bound);
+		while (ul_this < num_buckets &&
+			   (*m_histogram_buckets)[ul_this]->GetUpperBound()->IsLessThan(
+				   other_lower))
+		{
+			ul_this++;
+		}
+		if (ul_this == num_buckets ||
+			(*m_histogram_buckets)[ul_this]->GetLowerBound()->IsGreaterThan(
+				other_lower))
+		{
+			return false;
+		}
+
+		CPoint *covered_upto =
+			(*m_histogram_buckets)[ul_this]->GetUpperBound();
+		while (covered_upto->IsLessThan(other_upper))
+		{
+			ULONG ul_next = ul_this + 1;
+			if (ul_next == num_buckets ||
+				(*m_histogram_buckets)[ul_next]->GetLowerBound()->IsGreaterThan(
+					covered_upto))
+			{
+				return false;
+			}
+			ul_this = ul_next;
+			covered_upto = (*m_histogram_buckets)[ul_this]->GetUpperBound();
+		}
+	}
+
+	return true;
 }
 
 BOOL
