@@ -38,17 +38,16 @@ def get_port():
 def get_ip(hostname=None):
     if hostname is None:
         hostname = socket.gethostname()
-    else:
-        hostname = hostname
-    hostinfo = socket.getaddrinfo(hostname, None)
-    ipaddrlist = list(set([(ai[4][0]) for ai in hostinfo]))
-    for myip in ipaddrlist:
-        if myip.find(":") > 0:
-            ipv6 = myip
-            return ipv6
-        elif myip.find(".") > 0:
-            ipv4 = myip
-            return ipv4
+    hostinfo = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    ipv4 = None
+    ipv6 = None
+    for family, _, _, _, sockaddr in hostinfo:
+        if family == socket.AF_INET and ipv4 is None:
+            ipv4 = sockaddr[0]
+            break
+        elif family == socket.AF_INET6 and ipv6 is None:
+            ipv6 = sockaddr[0]
+    return ipv4 or ipv6
 
 def getPortMasterOnly(host = 'localhost',master_value = None,
                       user = os.environ.get('USER'),gphome = os.environ['GPHOME'],

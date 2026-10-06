@@ -320,4 +320,5 @@ test: gp_orphaned_files
 
 test: gp_libpq_events
 
+test: gp_local_extension
 # end of tests

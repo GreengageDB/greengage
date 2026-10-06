@@ -43,6 +43,7 @@
 #include "catalog/pg_type_encoding.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
 #include "miscadmin.h"
@@ -444,6 +445,19 @@ transformCreateStmt(CreateStmt *stmt, const char *queryString, bool createPartit
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					 errmsg("cannot create partition table in utility mode")));
+
+		/*
+		 * Partitioned tables aren't supported inside a local extension
+		 * script: transformDistributedBy() unconditionally nulls out
+		 * distributedBy for creating_extension_local below, but partition
+		 * children require it non-NULL (see the numsegments handling
+		 * further down).
+		 */
+		if (creating_extension_local &&
+			(stmt->partitionBy != NULL || stmt->is_part_child))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot create partition table inside a local extension script")));
 
 		AssertImply(stmt->is_part_parent,
 					stmt->distributedBy == NULL);
@@ -1849,9 +1863,43 @@ transformDistributedBy(CreateStmtContext *cxt,
 	int			numsegments;
 
 	/*
-	 * utility mode creates can't have a policy.  Only the QD can have policies
+	 * Checked ahead of the Gp_role/IsBinaryUpgrade fallback below: a local
+	 * extension's own install-script tables must always follow these rules
+	 * regardless of what mode the script happens to be running in -
+	 * normal or utility.
 	 */
-	if (Gp_role != GP_ROLE_DISPATCH && !IsBinaryUpgrade)
+	if (creating_extension_local)
+	{
+		/*
+		 * POLICYTYPE_ENTRY for local extensions. An explicit distribution
+		 * (given directly, or inherited via LIKE ... INCLUDING DISTRIBUTION)
+		 * can't be honored, but silently discarding it and returning NULL
+		 * here isn't safe either: some callers (writable external tables)
+		 * assume a non-NULL result whenever they passed in a non-NULL
+		 * distributedBy or likeDistributedBy, and dereference it right
+		 * after the call. Error out instead of handing them a NULL they
+		 * don't check for.
+		 */
+		if (distributedBy != NULL || likeDistributedBy != NULL)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("explicit distribution is not supported inside a local extension script")));
+		return NULL;
+	}
+
+	/*
+	 * utility mode creates can't have a policy.  Only the QD can have policies.
+	 *
+	 * IsBinaryUpgrade normally bypasses this, since --binary-upgrade restore
+	 * runs entirely in utility mode but still needs real policies computed
+	 * for tables that were actually distributed (pg_dump always emits an
+	 * explicit DISTRIBUTED BY/RANDOMLY/REPLICATED clause for those). But if
+	 * there is no such clause, the source table had no gp_distribution_policy
+	 * row at all, i.e. it was entry-distributed -- fall through to the
+	 * ordinary utility-mode behavior instead of guessing a default policy.
+	 */
+	if (Gp_role != GP_ROLE_DISPATCH &&
+		(!IsBinaryUpgrade || distributedBy == NULL))
 		return NULL;
 
 	if (distributedBy && distributedBy->numsegments > 0)

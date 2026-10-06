@@ -155,6 +155,9 @@ COptimizer::PrintQueryOrPlan(CMemoryPool *mp, CExpression *pexpr,
 		// code for debug counters, extract name of the next query, if applicable
 		// and prepare for logging the existing query and initializing state for
 		// the next one
+		//
+		// node, that providing query like 'SELECT NULL;' will trigger an assertions
+		// inside clib::Strlen and make ORCA fallback to the Postgres optimizer.
 		std::string query_name = "";
 
 		// try to recognize statements of the type select 'query name: <some name>' and

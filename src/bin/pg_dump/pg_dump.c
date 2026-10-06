@@ -2097,7 +2097,7 @@ dumpTableData(Archive *fout, TableDataInfo *tdinfo)
 	DataDumperPtr dumpFn;
 	char	   *copyStmt;
 
-	if (!dump_inserts)
+	if (!dump_inserts && !tdinfo->isCoordOnly)
 	{
 		/* Dump/restore using COPY */
 		dumpFn = dumpTableData_copy;
@@ -2111,6 +2111,13 @@ dumpTableData(Archive *fout, TableDataInfo *tdinfo)
 	}
 	else
 	{
+		if (tdinfo->oids)
+		{
+			write_msg(NULL, "options -o/--oids cannot be used "
+							"with coordinator-only tables \n");
+			write_msg(NULL, "(The INSERT command cannot set OIDs.)\n");
+			exit_nicely(1);
+		}
 		/* Restore using INSERT */
 		dumpFn = dumpTableData_insert;
 		copyStmt = NULL;
@@ -2250,6 +2257,7 @@ makeTableDataInfo(TableInfo *tbinfo, bool oids)
 	tdinfo->tdtable = tbinfo;
 	tdinfo->oids = oids;
 	tdinfo->filtercond = NULL;	/* might get set later */
+	tdinfo->isCoordOnly = false;/* might get set later */
 	addObjectDependency(&tdinfo->dobj, tbinfo->dobj.dumpId);
 
 	tbinfo->dataObj = tdinfo;
@@ -15884,6 +15892,14 @@ processExtensionTables(Archive *fout, ExtensionInfo extinfo[],
 					{
 						if (strlen(extconditionarray[j]) > 0)
 							configtbl->dataObj->filtercond = pg_strdup(extconditionarray[j]);
+
+						/*
+						 * A config table is coordinator-only (entry policy)
+						 * if it has no distribution policy row.
+						 */
+						Assert(configtbl->distclause);
+						configtbl->dataObj->isCoordOnly =
+							 configtbl->distclause[0] == '\0';
 					}
 				}
 			}

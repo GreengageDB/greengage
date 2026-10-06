@@ -56,7 +56,7 @@ apt-get install -y \
 
 curl -fsSL greengagedb.org/repositories/gpg | gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
 echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
-      https://greengagedb.org/repositories/ubuntu/22.04/x86_64 \
+      https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
       greengagedb main" \
       | tee /etc/apt/sources.list.d/greengagedb.list
 
@@ -71,6 +71,8 @@ if [ "$(lsb_release -si)" == "Ubuntu" ] && [ "$(lsb_release -sr)" == "22.04" ]; 
     python2 \
     python2-dev
   python2 -m pip install future==0.16
+  # Install pip3 from outside because from packages it conflicts with python-pip
+  curl https://bootstrap.pypa.io/pip/get-pip.py | python3
 else
   apt-get install -y \
     python3-pip \
