@@ -1092,8 +1092,7 @@ CHistogram::ContainsRange(const CHistogram *other) const
 			return false;
 		}
 
-		CPoint *covered_upto =
-			(*m_histogram_buckets)[ul_this]->GetUpperBound();
+		CPoint *covered_upto = (*m_histogram_buckets)[ul_this]->GetUpperBound();
 		while (covered_upto->IsLessThan(other_upper))
 		{
 			ULONG ul_next = ul_this + 1;
