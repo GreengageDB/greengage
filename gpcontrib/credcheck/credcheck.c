@@ -2383,6 +2383,10 @@ pg_password_history_internal(FunctionCallInfo fcinfo)
 				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 				 errmsg("credcheck must be loaded via shared_preload_libraries to use password history")));
 
+	/* Only superusers can see the history */
+	if (!superuser())
+		ereport(ERROR, (errmsg("only superuser can see password history")));
+
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
 		ereport(ERROR,
