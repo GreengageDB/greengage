@@ -544,14 +544,6 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			addObjectDependency(&attachinfo->dobj,
 								parentidx->indextable->dobj.dumpId);
 
-			/*
-			 * If the table is attached in post-data, the index can only be
-			 * attached after that.
-			 */
-			if (tblinfo[i].attachObj && tblinfo[i].attachObj->postdata)
-				addObjectDependency(&attachinfo->dobj,
-									tblinfo[i].attachObj->dobj.dumpId);
-
 			/* keep track of the list of partitions in the parent index */
 			simple_ptr_list_append(&parentidx->partattaches, &attachinfo->dobj);
 		}
@@ -564,13 +556,32 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 	 * index becomes valid only when all of its partitions are attached, so
 	 * also wait for those.  This needs the complete partattaches lists, so
 	 * it is done in a separate pass.
+	 *
+	 * Conversely, attach indexes to the parent's indexes only after all
+	 * partitions of the parent are attached.  An index can only be attached
+	 * after its table, and in a parallel restore an index attachment could
+	 * deadlock with attaching a sibling partition, which locks the parent's
+	 * DEFAULT partition and then the parent's indexes.  pg_restore can't see
+	 * that conflict, since the parent is not in the archive.
 	 */
 	for (i = 0; i < numTables; i++)
 	{
 		TableAttachInfo *tblattach = tblinfo[i].attachObj;
+		TableInfo  *parent;
 
 		if (tblattach == NULL || !tblattach->postdata)
 			continue;
+
+		parent = tblattach->parentTbl;
+		for (j = 0; j < parent->numIndexes; j++)
+		{
+			SimplePtrListCell *cell;
+
+			for (cell = parent->indexes[j].partattaches.head; cell;
+				 cell = cell->next)
+				addObjectDependency((DumpableObject *) cell->ptr,
+									tblattach->dobj.dumpId);
+		}
 
 		for (j = 0; j < tblinfo[i].numIndexes; j++)
 		{

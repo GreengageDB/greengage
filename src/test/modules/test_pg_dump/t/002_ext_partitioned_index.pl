@@ -369,6 +369,74 @@ is( $node->safe_psql(
 	'restored partition has a single index, attached to the parent index');
 
 #########################################
+# Parallel restore with a DEFAULT partition.  Attaching a partition locks the
+# DEFAULT partition, so attaching the DEFAULT partition's index at the same
+# time could deadlock.  The deadlock depends on timing, so restore a few
+# times.
+
+$node->safe_psql('postgres', 'CREATE DATABASE parallel');
+$node->safe_psql(
+	'parallel', q{
+	CREATE EXTENSION test_pg_dump;
+	DO $$ BEGIN FOR i IN 0..11 LOOP
+		EXECUTE format('CREATE TABLE regress_pg_dump_schema.parttab_p%s
+			PARTITION OF regress_pg_dump_schema.parttab
+			FOR VALUES FROM (%s) TO (%s)', i, i * 1000, (i + 1) * 1000);
+	END LOOP; END $$;
+	CREATE TABLE regress_pg_dump_schema.parttab_def
+		PARTITION OF regress_pg_dump_schema.parttab DEFAULT;
+	INSERT INTO regress_pg_dump_schema.parttab
+		SELECT g, g % 14000 FROM generate_series(1, 100000) g;
+});
+
+$node->command_ok(
+	[
+		'pg_dump', '--no-sync', '--format=directory',
+		"--file=$tempdir/parallel", 'parallel'
+	],
+	'pg_dump --format=directory runs');
+
+my $parallel_ok = 1;
+for my $run (1 .. 5)
+{
+	$node->safe_psql('postgres',
+		'DROP DATABASE IF EXISTS parallel_restored; CREATE DATABASE parallel_restored'
+	);
+	my ($stdout, $stderr);
+	my $ret = IPC::Run::run(
+		[
+			'pg_restore', '--jobs=8', '--exit-on-error',
+			'--port=' . $node->port, '--host=' . $node->host,
+			'--dbname=parallel_restored', "$tempdir/parallel"
+		],
+		'>', \$stdout, '2>', \$stderr);
+	if (!$ret)
+	{
+		diag("parallel restore run $run failed: $stderr");
+		$parallel_ok = 0;
+		last;
+	}
+}
+ok($parallel_ok, 'parallel restore with a DEFAULT partition succeeds');
+
+is( $node->safe_psql(
+		'parallel_restored', q{
+		SELECT count(*), count(DISTINCT i.inhparent), bool_and(x.indisvalid)
+		FROM pg_inherits t
+		JOIN pg_index x ON x.indrelid = t.inhrelid
+		LEFT JOIN pg_inherits i ON i.inhrelid = x.indexrelid
+		WHERE t.inhparent = 'regress_pg_dump_schema.parttab'::regclass
+	}),
+	'13|1|t',
+	'parallel restore attaches every partition with one valid index');
+
+is( $node->safe_psql(
+		'parallel_restored',
+		'SELECT count(*) FROM regress_pg_dump_schema.parttab'),
+	'100000',
+	'parallel restore keeps the data');
+
+#########################################
 # A partition of a parent without indexes is attached in pre-data: there is
 # no index to attach, and ATTACH PARTITION would have to scan the data.
 
