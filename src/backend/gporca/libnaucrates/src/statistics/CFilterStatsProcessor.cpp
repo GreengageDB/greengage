@@ -537,7 +537,8 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 	CBitSet *direct_child_real_colids = GPOS_NEW(mp) CBitSet(mp);
 	for (ULONG ul = 0; ul < disjunctive_pred_stats->GetNumPreds(); ul++)
 	{
-		ULONG child_colid = disjunctive_pred_stats->GetPredStats(ul)->GetColId();
+		ULONG child_colid =
+			disjunctive_pred_stats->GetPredStats(ul)->GetColId();
 		if (gpos::ulong_max != child_colid)
 		{
 			(void) direct_child_real_colids->ExchangeSet(child_colid);
