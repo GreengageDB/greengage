@@ -152,14 +152,14 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			}
 		}
 	}
-	if (any_join_col_marked && outer_side_stats->Rows() > CStatistics::Epsilon)
+	if (any_join_col_marked)
 	{
 		CDouble outer_rows = outer_side_stats->Rows();
 
 		if (num_rows_inner_join + num_rows_LASJ > outer_rows)
 		{
-			num_rows_inner_join =
-				std::max(CDouble(0.0), num_rows_inner_join - num_rows_LASJ);
+			num_rows_inner_join = std::max(CStatistics::MinRows,
+										   num_rows_inner_join - num_rows_LASJ);
 		}
 	}
 
