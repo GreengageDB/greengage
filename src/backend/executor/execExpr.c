@@ -60,7 +60,6 @@ typedef struct ExprSetupInfo
 	AttrNumber	last_inner;
 	AttrNumber	last_outer;
 	AttrNumber	last_scan;
-	Bitmapset  *all_scan_attrs;
 	/* MULTIEXPR SubPlan nodes appearing in the expression: */
 	List	   *multiexpr_subplans;
 } ExprSetupInfo;
@@ -2367,7 +2366,7 @@ ExecInitFunc(ExprEvalStep *scratch, Expr *node, List *args, Oid funcid,
 static void
 ExecCreateExprSetupSteps(ExprState *state, Node *node)
 {
-	ExprSetupInfo info = {0, 0, 0, NULL, NIL};
+	ExprSetupInfo info = {0, 0, 0, NIL};
 
 	/* Prescan to find out what we need. */
 	expr_setup_walker(node, &info);
@@ -2397,7 +2396,6 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 	{
 		scratch.opcode = EEOP_INNER_FETCHSOME;
 		scratch.d.fetch.last_var = info->last_inner;
-		scratch.d.fetch.all_vars = NULL;
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
@@ -2408,7 +2406,6 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 	{
 		scratch.opcode = EEOP_OUTER_FETCHSOME;
 		scratch.d.fetch.last_var = info->last_outer;
-		scratch.d.fetch.all_vars = NULL;
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
@@ -2419,7 +2416,6 @@ ExecPushExprSetupSteps(ExprState *state, ExprSetupInfo *info)
 	{
 		scratch.opcode = EEOP_SCAN_FETCHSOME;
 		scratch.d.fetch.last_var = info->last_scan;
-		scratch.d.fetch.all_vars = info->all_scan_attrs;
 		scratch.d.fetch.fixed = false;
 		scratch.d.fetch.kind = NULL;
 		scratch.d.fetch.known_desc = NULL;
@@ -2493,10 +2489,6 @@ expr_setup_walker(Node *node, ExprSetupInfo *info)
 
 			default:
 				info->last_scan = Max(info->last_scan, attnum);
-				if (attnum > 0)
-				{
-					info->all_scan_attrs = bms_add_member(info->all_scan_attrs, attnum - 1);
-				}
 				break;
 		}
 		return false;
@@ -3308,7 +3300,7 @@ ExecBuildAggTrans(AggState *aggstate, AggStatePerPhase phase,
 	ExprEvalStep scratch = {0};
 	int			transno = 0;
 	int			setoff = 0;
-	ExprSetupInfo deform = {0, 0, 0, NULL, NIL};
+	ExprSetupInfo deform = {0, 0, 0, NIL};
 
 	state->expr = (Expr *) aggstate;
 	state->parent = parent;

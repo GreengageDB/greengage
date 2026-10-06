@@ -322,33 +322,31 @@ llvm_compile_expr(ExprState *state)
 						v_slot = v_scanslot;
 
 					/*
-					 * For scan slots where the exact (possibly sparse) set
-					 * of required attnos is known, try slot_gettargetattr()
-					 * first: slot types that support it fetch just those
-					 * attributes and can skip the nvalid-prefix based deform
-					 * below entirely.
-					 * If the slot type doesn't support it,
-					 * slot_gettargetattr() returns false and we fall
-					 * through to the regular check, exactly mirroring the
+					 * For a qual's own FETCHSOME, against a slot type that
+					 * supports on-demand per-attribute fetch (fetchattr !=
+					 * NULL), skip this bulk fetch entirely - mirrors the
 					 * EEOP_SCAN_FETCHSOME handling in ExecInterpExpr().
+					 * Checked here, per row, against the slot actually in
+					 * play (not decided once at compile time) so a
+					 * dynamic/partitioned scan whose partitions mix storage
+					 * types still gets the right behavior for each one.
+					 * op->d.fetch.is_qual itself is a compile-time constant
+					 * (set once via EEO_FLAG_IS_QUAL), so when it's false
+					 * for this step no code is emitted for this check at
+					 * all.
 					 */
-					if (opcode == EEOP_SCAN_FETCHSOME && op->d.fetch.all_vars)
+					if (opcode == EEOP_SCAN_FETCHSOME && op->d.fetch.is_qual)
 					{
 						LLVMBasicBlockRef b_nvalid_check;
-						LLVMValueRef v_params[2];
 						LLVMValueRef v_ret;
 
 						b_nvalid_check = l_bb_before_v(b_fetch,
 													   "op.%d.nvalid_check", i);
 
-						v_params[0] = v_slot;
-						v_params[1] = l_ptr_const(op->d.fetch.all_vars,
-												   l_ptr(StructBitmapset));
-
 						v_ret = l_call(b,
-									   llvm_pg_var_func_type("slot_gettargetattr"),
-									   llvm_pg_func(mod, "slot_gettargetattr"),
-									   v_params, lengthof(v_params), "");
+									   llvm_pg_var_func_type("slot_fetchattr_supported"),
+									   llvm_pg_func(mod, "slot_fetchattr_supported"),
+									   &v_slot, 1, "");
 
 						LLVMBuildCondBr(b,
 										LLVMBuildICmp(b, LLVMIntNE, v_ret,
@@ -447,6 +445,56 @@ llvm_compile_expr(ExprState *state)
 						v_nulls = v_scannulls;
 					}
 
+					/*
+					 * Mirrors slot_fetchattr(): this attribute may not have
+					 * been fetched by a preceding EEOP_SCAN_FETCHSOME if
+					 * that step was skipped for a slot type that supports
+					 * on-demand fetch (see the comment there). Fetch it now
+					 * unless it's already within the valid tts_nvalid
+					 * prefix. Only EEOP_SCAN_VAR can ever reach a skipped
+					 * FETCHSOME (see ExecPushExprSetupSteps()), so inner/
+					 * outer Vars skip this check entirely.
+					 */
+					if (opcode == EEOP_SCAN_VAR)
+					{
+						LLVMBasicBlockRef b_fetchattr;
+						LLVMBasicBlockRef b_load;
+						LLVMValueRef v_nvalid;
+
+						b_load = l_bb_before_v(opblocks[i + 1],
+												"op.%d.load", i);
+						b_fetchattr = l_bb_before_v(b_load,
+													 "op.%d.fetchattr", i);
+
+						v_nvalid =
+							l_load_struct_gep(b,
+											  StructTupleTableSlot,
+											  v_scanslot,
+											  FIELDNO_TUPLETABLESLOT_NVALID,
+											  "");
+						LLVMBuildCondBr(b,
+										LLVMBuildICmp(b, LLVMIntUGT, v_nvalid,
+													  l_int16_const(lc, op->d.var.attnum),
+													  ""),
+										b_load, b_fetchattr);
+
+						LLVMPositionBuilderAtEnd(b, b_fetchattr);
+						{
+							LLVMValueRef v_params[2];
+
+							v_params[0] = v_scanslot;
+							v_params[1] = l_int32_const(lc, op->d.var.attnum);
+
+							l_call(b,
+								   llvm_pg_var_func_type("slot_fetchattr_int"),
+								   llvm_pg_func(mod, "slot_fetchattr_int"),
+								   v_params, lengthof(v_params), "");
+						}
+						LLVMBuildBr(b, b_load);
+
+						LLVMPositionBuilderAtEnd(b, b_load);
+					}
+
 					v_attnum = l_int32_const(lc, op->d.var.attnum);
 					value = l_load_gep1(b, TypeSizeT, v_values, v_attnum, "");
 					isnull = l_load_gep1(b, TypeStorageBool, v_nulls, v_attnum, "");
@@ -518,6 +566,51 @@ llvm_compile_expr(ExprState *state)
 					{
 						v_values = v_scanvalues;
 						v_nulls = v_scannulls;
+					}
+
+					/*
+					 * Mirrors slot_fetchattr(): see the matching comment on
+					 * EEOP_SCAN_VAR. Only EEOP_ASSIGN_SCAN_VAR can ever
+					 * reach a skipped FETCHSOME.
+					 */
+					if (opcode == EEOP_ASSIGN_SCAN_VAR)
+					{
+						LLVMBasicBlockRef b_fetchattr;
+						LLVMBasicBlockRef b_load;
+						LLVMValueRef v_nvalid;
+
+						b_load = l_bb_before_v(opblocks[i + 1],
+												"op.%d.load", i);
+						b_fetchattr = l_bb_before_v(b_load,
+													 "op.%d.fetchattr", i);
+
+						v_nvalid =
+							l_load_struct_gep(b,
+											  StructTupleTableSlot,
+											  v_scanslot,
+											  FIELDNO_TUPLETABLESLOT_NVALID,
+											  "");
+						LLVMBuildCondBr(b,
+										LLVMBuildICmp(b, LLVMIntUGT, v_nvalid,
+													  l_int16_const(lc, op->d.assign_var.attnum),
+													  ""),
+										b_load, b_fetchattr);
+
+						LLVMPositionBuilderAtEnd(b, b_fetchattr);
+						{
+							LLVMValueRef v_params[2];
+
+							v_params[0] = v_scanslot;
+							v_params[1] = l_int32_const(lc, op->d.assign_var.attnum);
+
+							l_call(b,
+								   llvm_pg_var_func_type("slot_fetchattr_int"),
+								   llvm_pg_func(mod, "slot_fetchattr_int"),
+								   v_params, lengthof(v_params), "");
+						}
+						LLVMBuildBr(b, b_load);
+
+						LLVMPositionBuilderAtEnd(b, b_load);
 					}
 
 					/* load data */

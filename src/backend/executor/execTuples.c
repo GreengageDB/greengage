@@ -1420,7 +1420,6 @@ const TupleTableSlotOps TTSOpsVirtual = {
 	.copy_heap_tuple = tts_virtual_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
 	.is_attr_valid = NULL,
 	.fetchattr = NULL
 };
@@ -1444,7 +1443,6 @@ const TupleTableSlotOps TTSOpsVirtualAOCS = {
 	.copy_heap_tuple = tts_virtual_aocs_copy_heap_tuple,
 	.copy_minimal_tuple = tts_virtual_aocs_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
 	.is_attr_valid = tts_virtual_aocs_is_attr_valid,
 	.fetchattr = tts_virtual_aocs_fetchattr
 };
@@ -1465,7 +1463,6 @@ const TupleTableSlotOps TTSOpsHeapTuple = {
 	.copy_heap_tuple = tts_heap_copy_heap_tuple,
 	.copy_minimal_tuple = tts_heap_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
 	.is_attr_valid = NULL,
 	.fetchattr = NULL
 };
@@ -1486,7 +1483,6 @@ const TupleTableSlotOps TTSOpsMinimalTuple = {
 	.copy_heap_tuple = tts_minimal_copy_heap_tuple,
 	.copy_minimal_tuple = tts_minimal_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
 	.is_attr_valid = NULL,
 	.fetchattr = NULL
 };
@@ -1507,7 +1503,6 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	.copy_heap_tuple = tts_buffer_heap_copy_heap_tuple,
 	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple,
 
-	.gettargetattr = NULL,
 	.is_attr_valid = NULL,
 	.fetchattr = NULL
 };
@@ -2342,22 +2337,22 @@ slot_getsomeattrs_int(TupleTableSlot *slot, int attnum)
 }
 
 /*
- * slot_gettargetattr - fetch exactly the given (possibly sparse) set of
- * attributes, for slot types that support it (see TupleTableSlotOps).
- *
- * Returns false, doing nothing, if the slot type has no gettargetattr
- * callback, so the caller can fall back to slot_getsomeattrs(). No slot type
- * currently implements the callback (see the comment on
- * TupleTableSlotOps.gettargetattr) -- only the LLVM JIT expression compiler
- * still calls this, always getting false back.
+ * slot_fetchattr_supported - see the declaration in tuptable.h.
  */
 bool
-slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs)
+slot_fetchattr_supported(TupleTableSlot *slot)
 {
-	if (NULL == slot->tts_ops->gettargetattr)
-		return false;
+	return slot->tts_ops->fetchattr != NULL;
+}
 
-	return slot->tts_ops->gettargetattr(slot, attrs);
+/*
+ * slot_fetchattr_int - see the declaration in tuptable.h.
+ */
+void
+slot_fetchattr_int(TupleTableSlot *slot, int attnum)
+{
+	if (slot->tts_ops->fetchattr)
+		slot->tts_ops->fetchattr(slot, attnum);
 }
 
 /* ----------------------------------------------------------------

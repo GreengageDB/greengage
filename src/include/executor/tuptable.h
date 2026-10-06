@@ -216,21 +216,6 @@ struct TupleTableSlotOps
 	MinimalTuple (*copy_minimal_tuple) (TupleTableSlot *slot);
 
 	/*
-	 * Fill up target entries of tts_values and tts_isnull arrays with
-	 * values from the tuple contained in the slot.
-	 *
-	 * No slot type currently implements this (superseded by fetchattr()
-	 * below); kept only because the LLVM JIT expression compiler still
-	 * generates a call to slot_gettargetattr() as a first attempt ahead of
-	 * its own EEOP_SCAN_FETCHSOME deform logic, mirroring
-	 * ExecInterpExpr()'s interpreted EEOP_SCAN_FETCHSOME handling. Since it
-	 * always returns false now, that JIT path is a harmless no-op that
-	 * simply falls through -- not updated to match the interpreter's
-	 * fetchattr()-based skip logic to avoid touching LLVM IR generation.
-	 */
-	bool		(*gettargetattr) (TupleTableSlot *slot, Bitmapset *attrs);
-
-	/*
 	 * Check if value for attnum in tts_values and tts_isnull arrays is valid.
 	 */
 	bool		(*is_attr_valid) (TupleTableSlot *slot, int attnum);
@@ -420,11 +405,30 @@ extern Datum ExecFetchSlotHeapTupleDatum(TupleTableSlot *slot);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum,
 								 int lastAttNum);
 extern void slot_getsomeattrs_int(TupleTableSlot *slot, int attnum);
-extern bool slot_gettargetattr(TupleTableSlot *slot, Bitmapset *attrs);
 
 /*
- * PROTOTYPE: fetch exactly one attribute, for slot types that support it
- * (see TupleTableSlotOps.fetchattr). Does nothing if the slot type has no
+ * Report whether this slot type supports on-demand single-attribute fetch
+ * (see TupleTableSlotOps.fetchattr). Used by the LLVM JIT expression
+ * compiler's EEOP_SCAN_FETCHSOME handling to decide, at runtime and against
+ * the slot actually in play, whether to skip the bulk fetch in favor of
+ * per-Var lazy fetching -- mirrors the inline check ExecInterpExpr() does
+ * directly against scanslot->tts_ops->fetchattr. Out-of-line so it can be
+ * called by symbol name from JIT-generated code.
+ */
+extern bool slot_fetchattr_supported(TupleTableSlot *slot);
+
+/*
+ * Out-of-line dispatch half of slot_fetchattr() below, split out so the LLVM
+ * JIT expression compiler's EEOP_SCAN_VAR/EEOP_ASSIGN_SCAN_VAR handling can
+ * call it by symbol name after doing its own inline tts_nvalid fast-path
+ * check (mirroring the one below), without needing slot_fetchattr() itself
+ * to be anything other than static inline on the interpreter's hot path.
+ */
+extern void slot_fetchattr_int(TupleTableSlot *slot, int attnum);
+
+/*
+ * Fetch exactly one attribute, for slot types that support it (see
+ * TupleTableSlotOps.fetchattr). Does nothing if the slot type has no
  * fetchattr callback -- always safe to call speculatively.
  */
 static inline void
@@ -433,8 +437,7 @@ slot_fetchattr(TupleTableSlot *slot, int attnum)
 	if (slot->tts_nvalid > attnum)
 		return;
 
-	if (slot->tts_ops->fetchattr)
-		slot->tts_ops->fetchattr(slot, attnum);
+	slot_fetchattr_int(slot, attnum);
 }
 
 extern MemTuple appendonly_form_memtuple(TupleTableSlot *slot, MemTupleBinding *mt_bind);
