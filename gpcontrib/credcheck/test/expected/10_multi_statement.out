@@ -1,0 +1,80 @@
+-- The statements of a query string holding several statements must be checked
+-- as well as a single statement
+-- start_ignore
+DROP USER IF EXISTS credtest;
+NOTICE:  role "credtest" does not exist, skipping
+DROP USER IF EXISTS shrt;
+NOTICE:  role "shrt" does not exist, skipping
+DROP USER IF EXISTS credtest_until;
+NOTICE:  role "credtest_until" does not exist, skipping
+DROP USER IF EXISTS credtest_first;
+NOTICE:  role "credtest_first" does not exist, skipping
+DROP EXTENSION IF EXISTS credcheck CASCADE;
+NOTICE:  extension "credcheck" does not exist, skipping
+-- end_ignore
+CREATE EXTENSION credcheck;
+SELECT pg_password_history_reset();
+ pg_password_history_reset 
+---------------------------
+                         0
+(1 row)
+
+SET credcheck.password_reuse_history = 2;
+CREATE USER credtest WITH PASSWORD 'H8Hdre=S2';
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+RESET credcheck.password_reuse_history;
+-- fail, the credential is still in the history
+\! PGOPTIONS='-c credcheck.password_reuse_history=2' psql -X -d postgres -c "ALTER USER credtest PASSWORD 'H8Hdre=S2'; SELECT 1"
+ERROR:  Cannot use this credential following the password reuse policy
+-- fail, the password change is not allowed
+\! PGOPTIONS='-c credcheck.disallow_change_password=on' psql -X -d postgres -c "ALTER USER credtest PASSWORD 'J8YuRe=6O'; SELECT 1"
+ERROR:  you are not allowed to change your password.
+-- fail, the username is too short
+\! PGOPTIONS='-c credcheck.username_min_length=10' psql -X -d postgres -c "CREATE USER shrt; SELECT 1"
+ERROR:  username length should match the configured credcheck.username_min_length (10)
+SELECT count(*) FROM pg_roles WHERE rolname = 'shrt';
+ count 
+-------
+     0
+(1 row)
+
+-- the expiration date must be set
+\! PGOPTIONS='-c credcheck.password_valid_until=30' psql -X -d postgres -c "CREATE USER credtest_until PASSWORD 'J8YuRe=6O'; SELECT 1"
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT rolvaliduntil IS NOT NULL FROM pg_roles WHERE rolname = 'credtest_until';
+ ?column? 
+----------
+ t
+(1 row)
+
+-- the password change at first login must be forced
+\! PGOPTIONS='-c credcheck.password_change_first_login=on' psql -X -d postgres -c "CREATE USER credtest_first PASSWORD 'J8YuRe=6O'; SELECT 1"
+NOTICE:  resource queue required -- using default resource queue "pg_default"
+ ?column? 
+----------
+        1
+(1 row)
+
+SELECT 1 FROM pg_catalog.pg_db_role_setting JOIN pg_catalog.pg_roles ON oid = setrole WHERE rolname='credtest_first' AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
+ ?column? 
+----------
+        1
+(1 row)
+
+DROP USER credtest;
+DROP USER IF EXISTS shrt;
+NOTICE:  role "shrt" does not exist, skipping
+DROP USER credtest_until;
+DROP USER credtest_first;
+SELECT pg_password_history_reset();
+ pg_password_history_reset 
+---------------------------
+                         1
+(1 row)
+
+DROP EXTENSION credcheck CASCADE;
