@@ -456,14 +456,28 @@ analyze empty_except_p1;
 analyze empty_except_p2;
 analyze empty_except_t3;
 
--- start_matchsubs
--- m/Buckets: \d+/
--- s/Buckets: \d+/Buckets: ###/
--- m/Memory Usage: \d+\w?B/
--- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
--- end_matchsubs
-explain (analyze, timing off, summary off)
-select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub
-join empty_except_t3 on sub.a = empty_except_t3.a;
+create function bfv_explain_rows(query text)
+returns table (optimizer_name text, plan_rows bigint)
+language plpgsql
+as $$
+declare
+  whole_plan json;
+begin
+  execute 'explain (format json) ' || query into whole_plan;
+  optimizer_name := whole_plan->0->>'Optimizer';
+  plan_rows := (whole_plan->0->'Plan'->>'Plan Rows')::bigint;
+  return next;
+end;
+$$;
 
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 except select * from empty_except_p2) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 where not exists (select 1 from empty_except_p2 where empty_except_p2.a = empty_except_p1.a)) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 where a not in (select a from empty_except_p2)) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+
+drop function bfv_explain_rows(text);
 drop table empty_except_p1, empty_except_p2, empty_except_t3;

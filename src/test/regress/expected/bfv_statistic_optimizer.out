@@ -680,42 +680,46 @@ insert into empty_except_t3 select i, i from generate_series(1, 1000) i;
 analyze empty_except_p1;
 analyze empty_except_p2;
 analyze empty_except_t3;
--- start_matchsubs
--- m/Buckets: \d+/
--- s/Buckets: \d+/Buckets: ###/
--- m/Memory Usage: \d+\w?B/
--- s/Memory Usage: \d+\w?B/Memory Usage: ###B/
--- end_matchsubs
-explain (analyze, timing off, summary off)
-select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub
-join empty_except_t3 on sub.a = empty_except_t3.a;
-                                                                                                                 QUERY PLAN                                                                                                                  
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Gather Motion 3:1  (slice1; segments: 3)  (cost=0.00..1293.11 rows=1 width=16) (actual rows=0 loops=1)
-   ->  Hash Join  (cost=0.00..1293.11 rows=1 width=16) (actual rows=0 loops=1)
-         Hash Cond: (empty_except_t3.a = empty_except_p1.a)
-         ->  Seq Scan on empty_except_t3  (cost=0.00..431.01 rows=334 width=8) (never executed)
-         ->  Hash  (cost=862.04..862.04 rows=1 width=8) (actual rows=0 loops=1)
-               Buckets: 131072  Batches: 1  Memory Usage: 1024kB
-               ->  Hash Anti Join  (cost=0.00..862.04 rows=1 width=8) (actual rows=0 loops=1)
-                     Hash Cond: ((NOT (empty_except_p1.a IS DISTINCT FROM empty_except_p2.a)) AND (NOT (empty_except_p1.b IS DISTINCT FROM empty_except_p2.b)) AND (NOT ((row_number() OVER (?)) IS DISTINCT FROM (row_number() OVER (?)))))
-                     ->  WindowAgg  (cost=0.00..431.00 rows=1 width=16) (actual rows=0 loops=1)
-                           Partition By: empty_except_p1.a, empty_except_p1.b
-                           ->  Sort  (cost=0.00..431.00 rows=1 width=8) (actual rows=0 loops=1)
-                                 Sort Key: empty_except_p1.a, empty_except_p1.b
-                                 Sort Method:  quicksort  Memory: 75kB
-                                 Executor Memory: 76kB  Segments: 3  Max: 26kB (segment 0)
-                                 ->  Seq Scan on empty_except_p1  (cost=0.00..431.00 rows=1 width=8) (actual rows=0 loops=1)
-                     ->  Hash  (cost=431.01..431.01 rows=34 width=16) (actual rows=38 loops=1)
-                           Buckets: 131072  Batches: 1  Memory Usage: 1026kB
-                           ->  WindowAgg  (cost=0.00..431.01 rows=34 width=16) (actual rows=38 loops=1)
-                                 Partition By: empty_except_p2.a, empty_except_p2.b
-                                 ->  Sort  (cost=0.00..431.01 rows=34 width=8) (actual rows=38 loops=1)
-                                       Sort Key: empty_except_p2.a, empty_except_p2.b
-                                       Sort Method:  quicksort  Memory: 80kB
-                                       Executor Memory: 79kB  Segments: 3  Max: 27kB (segment 0)
-                                       ->  Seq Scan on empty_except_p2  (cost=0.00..431.00 rows=34 width=8) (actual rows=38 loops=1)
- Optimizer: GPORCA
-(25 rows)
+create function bfv_explain_rows(query text)
+returns table (optimizer_name text, plan_rows bigint)
+language plpgsql
+as $$
+declare
+  whole_plan json;
+begin
+  execute 'explain (format json) ' || query into whole_plan;
+  optimizer_name := whole_plan->0->>'Optimizer';
+  plan_rows := (whole_plan->0->'Plan'->>'Plan Rows')::bigint;
+  return next;
+end;
+$$;
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 except all select * from empty_except_p2) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+ optimizer_name | plan_rows 
+----------------+-----------
+ GPORCA         |         1
+(1 row)
 
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 except select * from empty_except_p2) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+ optimizer_name | plan_rows 
+----------------+-----------
+ GPORCA         |         1
+(1 row)
+
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 where not exists (select 1 from empty_except_p2 where empty_except_p2.a = empty_except_p1.a)) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+ optimizer_name | plan_rows 
+----------------+-----------
+ GPORCA         |         1
+(1 row)
+
+select * from bfv_explain_rows(
+  'select * from (select * from empty_except_p1 where a not in (select a from empty_except_p2)) as sub join empty_except_t3 on sub.a = empty_except_t3.a');
+ optimizer_name | plan_rows 
+----------------+-----------
+ GPORCA         |         1
+(1 row)
+
+drop function bfv_explain_rows(text);
 drop table empty_except_p1, empty_except_p2, empty_except_t3;
