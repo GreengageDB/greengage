@@ -90,8 +90,12 @@
 
 /* Magic number identifying the stats file format */
 static const uint32 PGPH_FILE_HEADER = 0x48504750;
-/* credcheck password history version, changes in which invalidate all entries */
-static const uint32 PGPH_VERSION = 101;
+/*
+ * credcheck password history version, changes in which invalidate all entries.
+ * Greengage 6X stores salted hashes, unlike upstream version 100 on Postgres
+ * older than 14, so it uses a number that upstream never had.
+ */
+static const uint32 PGPH_VERSION = 99;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
 #define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
 
@@ -2117,6 +2121,10 @@ data_error:
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			 errmsg("ignoring invalid data in file \"%s\"",
 					PGPH_DUMP_FILE)));
+	/* Remove the file, so that it is not reported again at every startup */
+	FreeFile(file);
+	file = NULL;
+	unlink(PGPH_DUMP_FILE);
 fail:
 	if (file)
 		FreeFile(file);
