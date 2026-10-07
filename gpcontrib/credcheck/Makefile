@@ -13,7 +13,7 @@ MODULE_big = credcheck
 OBJS = credcheck.o $(WIN32RES)
 PGFILEDESC = "credcheck - postgresql credential checker"
 
-DATA = $(wildcard updates/*--*.sql) $(wildcard sql/*.sql)
+DATA = sql/$(EXTENSION)--$(EXTVERSION).sql
 
 REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
 TESTS = setup 01_username 02_password 03_rename 04_alter_pwd \
