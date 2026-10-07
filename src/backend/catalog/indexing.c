@@ -235,13 +235,13 @@ CatalogTupleInsert(Relation heapRel, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
+	CatalogTupleCheckConstraints(heapRel, tup);
+
 	if (IsTempTableScopeFor(heapRel))
 	{
 		tempcat_insert(heapRel, tup);
 		return;
 	}
-
-	CatalogTupleCheckConstraints(heapRel, tup);
 
 	indstate = CatalogOpenIndexes(heapRel);
 
@@ -263,13 +263,13 @@ void
 CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
+	CatalogTupleCheckConstraints(heapRel, tup);
+
 	if (IsTempTableScopeFor(heapRel))
 	{
 		tempcat_insert(heapRel, tup);
 		return;
 	}
-
-	CatalogTupleCheckConstraints(heapRel, tup);
 
 	simple_heap_insert(heapRel, tup);
 
@@ -292,13 +292,13 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 {
 	CatalogIndexState indstate;
 
+	CatalogTupleCheckConstraints(heapRel, tup);
+
 	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
 	}
-
-	CatalogTupleCheckConstraints(heapRel, tup);
 
 	indstate = CatalogOpenIndexes(heapRel);
 
@@ -320,13 +320,13 @@ void
 CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
+	CatalogTupleCheckConstraints(heapRel, tup);
+
 	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
 	}
-
-	CatalogTupleCheckConstraints(heapRel, tup);
 
 	simple_heap_update(heapRel, otid, tup);
 

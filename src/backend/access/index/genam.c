@@ -607,13 +607,16 @@ systable_beginscan_ordered(Relation heapRelation,
 
 	/*
 	 * Ordered catalog scans do not consult the in-memory temp catalog; they
-	 * read only on-disk tuples.  Make the (unused) tempscan pointer NULL so it
-	 * is never mistaken for a live tempcat scan, and assert the relation has no
-	 * virtual rows. On the codepath where ordered scan is needed there should be
-	 * no virtual tuples. 
+	 * read only on-disk tuples.  Make the (unused) tempscan pointer NULL so
+	 * it is never mistaken for a live tempcat scan, and refuse to scan a
+	 * relation that has virtual rows: silently skipping them would return
+	 * wrong results, so make it a hard error instead of an assertion (which
+	 * would not fire in production builds).
 	 */
 	sysscan->tempscan = NULL;
-	Assert(!tempcat_relation_has_entries(heapRelation));
+	if (tempcat_relation_has_entries(heapRelation))
+		elog(ERROR, "TEMPCAT: ordered catalog scan does not support in-memory tuples (relation \"%s\")",
+			 RelationGetRelationName(heapRelation));
 
 	if (snapshot == NULL)
 	{

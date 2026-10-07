@@ -253,9 +253,14 @@ RemoveAppendonlyEntry(Oid relid)
 
 	/*
 	 * Delete the appendonly table entry from the catalog (pg_appendonly).
+	 *
+	 * CatalogTupleDelete is used instead of simple_heap_delete so that a
+	 * virtual pg_appendonly tuple of a temporary AO table (stored in the
+	 * in-memory tempcat) is deleted there as well; simple_heap_delete would
+	 * try to delete it from the on-disk heap by its virtual TID.
 	 */
 	CatalogTupleDelete(pg_appendonly_rel, &tuple->t_self);
-	
+
 	/* Finish up scan and close appendonly catalog. */
 	systable_endscan(scan);
 	table_close(pg_appendonly_rel, NoLock);
@@ -569,6 +574,10 @@ SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2)
 							&aovisimaprelid2);
 
 	/* Since gp_fastsequence entry is referenced by aosegrelid, it rides along  */
+	/*
+	 * CatalogTupleDelete (not simple_heap_delete) so that virtual
+	 * pg_appendonly tuples of temporary AO tables are removed from tempcat.
+	 */
 	CatalogTupleDelete(pg_appendonly_rel, &tupleCopy1->t_self);
 	CatalogTupleDelete(pg_appendonly_rel, &tupleCopy2->t_self);
 
@@ -640,3 +649,4 @@ SwapAppendonlyEntries(Oid entryRelId1, Oid entryRelId2)
 		}
 	}
 }
+

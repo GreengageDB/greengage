@@ -150,12 +150,11 @@ GetLocalMemoryContext(void)
 {
 	if (!PointerIsValid(LocalMemoryContextPrivate))
 	{
-		LocalMemoryContextPrivate = AllocSetContextCreate(
-														  NULL,
-											"Virtual catalog memory context",
-													ALLOCSET_DEFAULT_MINSIZE,
-												   ALLOCSET_DEFAULT_INITSIZE,
-												   ALLOCSET_DEFAULT_MAXSIZE);
+		LocalMemoryContextPrivate = AllocSetContextCreate(TopMemoryContext,
+														  "Virtual catalog memory context",
+														  ALLOCSET_DEFAULT_MINSIZE,
+														  ALLOCSET_DEFAULT_INITSIZE,
+														  ALLOCSET_DEFAULT_MAXSIZE);
 	}
 
 	return LocalMemoryContextPrivate;
@@ -235,9 +234,7 @@ tempcat_mark_command_id_used(void)
 static TempcatSnapshot
 TempcatSnapshotCreateEmpty(void)
 {
-	TempcatSnapshot result;
-	result = MemoryContextAllocZero(GetLocalMemoryContext(), sizeof(TempcatSnapshotData));
-	return result;
+	return MemoryContextAllocZero(GetLocalMemoryContext(), sizeof(TempcatSnapshotData));
 }
 
 /*
@@ -284,12 +281,15 @@ TempcatSnapshotCopy(TempcatSnapshot src)
 static void
 TempcatSnapshotFree(TempcatSnapshot tempcat_snapshot)
 {
-	dlist_iter iter;
+	dlist_mutable_iter iter;
 
-	dlist_foreach(iter, &tempcat_snapshot->relationData)
+	dlist_foreach_modify(iter, &tempcat_snapshot->relationData)
 	{
-		TempcatSnapshotRelationData *rel_entry = dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+		TempcatSnapshotRelationData *rel_entry =
+			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+
 		TempcatDListFree(&rel_entry->tuples);
+		pfree(rel_entry);
 	}
 
 	pfree(tempcat_snapshot);
@@ -301,13 +301,15 @@ TempcatSnapshotFree(TempcatSnapshot tempcat_snapshot)
 static void
 TempcatSnapshotClear(TempcatSnapshot tempcat_snapshot)
 {
-	dlist_iter iter;
+	dlist_mutable_iter iter;
 
-	dlist_foreach(iter, &tempcat_snapshot->relationData)
+	dlist_foreach_modify(iter, &tempcat_snapshot->relationData)
 	{
 		TempcatSnapshotRelationData *rel_entry =
 			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+
 		TempcatDListFree(&rel_entry->tuples);
+		pfree(rel_entry);
 	}
 	dlist_init(&tempcat_snapshot->relationData);
 }
@@ -533,19 +535,26 @@ tempcat_abort_subtransaction(void)
 	TempcatDirtyFlag = true;
 }
 
-static TempcatSnapshotRelationData* find_relation_entry(TempcatSnapshot snapshot, Relation rel) {
+static TempcatSnapshotRelationData *
+find_relation_entry(TempcatSnapshot snapshot, Relation rel)
+{
 	dlist_iter iter;
+
 	dlist_foreach(iter, &snapshot->relationData)
 	{
 		TempcatSnapshotRelationData *entry = dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+
 		if (entry->relid == rel->rd_rel->oid)
 			return entry;
 	}
 	return NULL;
 }
 
-static TempcatSnapshotRelationData* find_or_create_relation_entry(TempcatSnapshot snapshot, Relation rel) {
+static TempcatSnapshotRelationData *
+find_or_create_relation_entry(TempcatSnapshot snapshot, Relation rel)
+{
 	TempcatSnapshotRelationData *entry = find_relation_entry(snapshot, rel);
+
 	if (entry == NULL)
 	{
 		entry = palloc(sizeof(TempcatSnapshotRelationData));
@@ -591,6 +600,7 @@ tempcat_insert(Relation relation, HeapTuple htup)
 
 	oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());
 	htup->t_self = GenTempcatItemPointerData();
+	htup->t_data->t_ctid = htup->t_self;
 	dlist_tup = palloc(sizeof(DListHeapTuple));
 	dlist_tup->tup = heap_copytuple(htup);
 
@@ -628,13 +638,13 @@ tempcat_delete(Relation relation, ItemPointer tid)
 	TempcatSnapshotRelationData *relation_entry;
 
 	if (!IsTempcatItemPointer(tid))
-		return;
+		elog(ERROR, "TEMPCAT: attempt to delete an on-disk tuple through the in-memory catalog");
 
 	tempcat_snapshot = TempcatSnapshotGetCurrent();
 	relation_entry = find_relation_entry(tempcat_snapshot, relation);
 	if (relation_entry == NULL)
-		return;
-	
+		elog(ERROR, "TEMPCAT: relation entry not found during delete");
+
 	dlist_foreach(iter, &relation_entry->tuples)
 	{
 		DListHeapTuple *dlist_tup = (DListHeapTuple *) iter.cur;
@@ -642,7 +652,7 @@ tempcat_delete(Relation relation, ItemPointer tid)
 		if (ItemPointerEquals(&dlist_tup->tup->t_self, tid))
 		{
 			pgstat_count_heap_delete(relation);
-			
+
 			/* Invalidate syscache */
 			CacheInvalidateHeapTuple(relation, dlist_tup->tup, NULL);
 			tempcat_mark_command_id_used();
@@ -684,7 +694,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 	TempcatSnapshotRelationData *relation_entry;
 
 	if (!IsTempcatItemPointer(otid))
-		return;
+		elog(ERROR, "TEMPCAT: attempt to update an on-disk tuple through the in-memory catalog");
 
 #ifdef TEMPCAT_DEBUG
 	elog(NOTICE, "TEMPCAT: tempcat_update, looking for otid = %08X/%04X",
@@ -692,7 +702,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 #endif
 
 	tempcat_snapshot = TempcatSnapshotGetCurrent();
-	
+
 	relation_entry = find_relation_entry(tempcat_snapshot, relation);
 	if (relation_entry == NULL)
 		elog(ERROR, "TEMPCAT: relation entry not found during update");
@@ -710,6 +720,7 @@ tempcat_update(Relation relation, ItemPointer otid, HeapTuple newtup)
 			tempcat_mark_command_id_used();
 			heap_freetuple(dlist_tup->tup);
 			newtup->t_self = GenTempcatItemPointerData();
+			newtup->t_data->t_ctid = newtup->t_self;
 			dlist_tup->tup = heap_copytuple(newtup);
 			MemoryContextSwitchTo(oldctx);
 
@@ -773,7 +784,6 @@ tempcat_index_filter_and_append_tuple(TempCatScanData *scan, HeapTuple tup)
 TempCatScanData *
 tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 {
-	MemoryContext	oldCtx;
 	TempCatScanData *scan;
 	TempcatSnapshot	tempcat_snapshot;
 	TempcatSnapshotRelationData *relation_entry;
@@ -785,9 +795,8 @@ tempcat_beginscan(Relation relation, int nkeys, ScanKey key)
 	if (!relation_entry)
 		return NULL;
 
-	oldCtx = MemoryContextSwitchTo(CurrentMemoryContext);
+	/* The scan data lives in the caller's memory context. */
 	scan = palloc_object(TempCatScanData);
-	MemoryContextSwitchTo(oldCtx);
 
 	scan->rel = relation_entry;
 	scan->tupdesc = RelationGetDescr(relation);
@@ -995,6 +1004,8 @@ tempcat_deserialize(int len, const char *data)
 	const char *ptr = data;
 	int32	ntuples;
 	int32	i;
+	Oid		last_reloid = InvalidOid;
+	Relation	rel = NULL;
 
 	/* Clear any existing state: pop non-root snapshots and clear the root */
 	{
@@ -1015,7 +1026,6 @@ tempcat_deserialize(int len, const char *data)
 		HeapTupleData htup;
 		uint32	t_len;
 		Oid		reloid;
-		Relation	rel;
 
 		if (ptr + sizeof(Oid) + sizeof(uint32) + sizeof(ItemPointerData) + sizeof(Oid) > end)
 			break;
@@ -1039,10 +1049,21 @@ tempcat_deserialize(int len, const char *data)
 		memcpy((char *) htup.t_data, ptr, t_len);
 		ptr += t_len;
 
-		rel = relation_open(reloid, AccessShareLock);
+		/* Relations are usually consecutive, so reopen only when the
+		 * relation changes. */
+		if (rel == NULL || reloid != last_reloid)
+		{
+			if (rel)
+				relation_close(rel, AccessShareLock);
+			rel = relation_open(reloid, AccessShareLock);
+			last_reloid = reloid;
+		}
+
 		tempcat_insert(rel, &htup);
-		relation_close(rel, AccessShareLock);
 
 		pfree((void *) htup.t_data);
 	}
+
+	if (rel)
+		relation_close(rel, AccessShareLock);
 }
