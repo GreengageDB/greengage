@@ -13,6 +13,7 @@ use warnings;
 use PostgreSQL::Test::Cluster;
 use PostgreSQL::Test::Utils;
 use Test::More;
+use Time::HiRes qw(usleep);
 
 my $tempdir = PostgreSQL::Test::Utils::tempdir;
 
@@ -368,73 +369,136 @@ is( $node->safe_psql(
 	'p_1_a_b_idx|p_a_b_idx',
 	'restored partition has a single index, attached to the parent index');
 
-#########################################
+#########
 # Parallel restore with a DEFAULT partition.  Attaching a partition locks the
-# DEFAULT partition, so attaching the DEFAULT partition's index at the same
-# time could deadlock.  The deadlock depends on timing, so restore a few
-# times.
+# DEFAULT partition and then the parent's indexes, while attaching the
+# DEFAULT partition's index locks them in the opposite order, so the index
+# attachments must wait for all partition attachments.
+#
+# To check this deterministically, first restore everything except the
+# attachment of parttab_p0 and the index attachments, so that the DEFAULT
+# partition is already attached.  Then restore those in parallel, with the
+# attachment of parttab_p0 suspended while it holds the DEFAULT partition,
+# and check that no index attachment starts until it is resumed.
 
-$node->safe_psql('postgres', 'CREATE DATABASE parallel');
-$node->safe_psql(
-	'parallel', q{
-	CREATE EXTENSION test_pg_dump;
-	DO $$ BEGIN FOR i IN 0..11 LOOP
-		EXECUTE format('CREATE TABLE regress_pg_dump_schema.parttab_p%s
-			PARTITION OF regress_pg_dump_schema.parttab
-			FOR VALUES FROM (%s) TO (%s)', i, i * 1000, (i + 1) * 1000);
-	END LOOP; END $$;
-	CREATE TABLE regress_pg_dump_schema.parttab_def
-		PARTITION OF regress_pg_dump_schema.parttab DEFAULT;
-	INSERT INTO regress_pg_dump_schema.parttab
-		SELECT g, g % 14000 FROM generate_series(1, 100000) g;
-});
-
-$node->command_ok(
-	[
-		'pg_dump', '--no-sync', '--format=directory',
-		"--file=$tempdir/parallel", 'parallel'
-	],
-	'pg_dump --format=directory runs');
-
-my $parallel_ok = 1;
-for my $run (1 .. 5)
+SKIP:
 {
-	$node->safe_psql('postgres',
-		'DROP DATABASE IF EXISTS parallel_restored; CREATE DATABASE parallel_restored'
-	);
-	my ($stdout, $stderr);
-	my $ret = IPC::Run::run(
+	skip 'gp_inject_fault is not available (--disable-debug-extensions)', 8
+	  unless $node->safe_psql('postgres',
+		"SELECT count(*) FROM pg_available_extensions WHERE name = 'gp_inject_fault'"
+	  ) eq '1';
+
+	$node->safe_psql('postgres', 'CREATE DATABASE parallel');
+	$node->safe_psql(
+		'parallel', q{
+		CREATE EXTENSION test_pg_dump;
+		CREATE TABLE regress_pg_dump_schema.parttab_p0
+			PARTITION OF regress_pg_dump_schema.parttab
+			FOR VALUES FROM (0) TO (1000);
+		CREATE TABLE regress_pg_dump_schema.parttab_def
+			PARTITION OF regress_pg_dump_schema.parttab DEFAULT;
+		INSERT INTO regress_pg_dump_schema.parttab
+			SELECT g, g % 2000 FROM generate_series(1, 10000) g;
+	});
+
+	$node->command_ok(
 		[
-			'pg_restore', '--jobs=8', '--exit-on-error',
-			'--port=' . $node->port, '--host=' . $node->host,
-			'--dbname=parallel_restored', "$tempdir/parallel"
+			'pg_dump', '--no-sync', '--format=custom',
+			"--file=$tempdir/parallel.dump", 'parallel'
 		],
-		'>', \$stdout, '2>', \$stderr);
-	if (!$ret)
+		'pg_dump --format=custom runs');
+
+	# Split the TOC into the items restored in the second, parallel step and
+	# the rest.
+	my ($toc) = run_command([ 'pg_restore', '--list', "$tempdir/parallel.dump" ]);
+	my $second_step =
+	  qr/ (?:TABLE ATTACH regress_pg_dump_schema parttab_p0|INDEX ATTACH) /;
+	my @toc = grep { /^\d+;/ } split /\n/, $toc;
+	my @second = grep { $_ =~ $second_step } @toc;
+	my @first = grep { $_ !~ $second_step } @toc;
+	is(scalar(@second), 3,
+		'second step attaches parttab_p0 and the two partition indexes');
+	append_to_file("$tempdir/first.list", join("\n", @first) . "\n");
+	append_to_file("$tempdir/second.list", join("\n", @second) . "\n");
+
+	$node->safe_psql('postgres', 'CREATE DATABASE parallel_restored');
+	$node->command_ok(
+		[
+			'pg_restore', '--exit-on-error', "--use-list=$tempdir/first.list",
+			'--dbname=' . $node->connstr('parallel_restored'),
+			"$tempdir/parallel.dump"
+		],
+		'first restore step runs');
+
+	$node->safe_psql(
+		'postgres', q{
+		CREATE EXTENSION gp_inject_fault;
+		SELECT gp_inject_fault('attach_partition_default_locked', 'suspend', 1);
+		SELECT gp_inject_fault('attach_partition_index', 'skip', 1);
+	});
+
+	my ($restore_out, $restore_err) = ('', '');
+	my $restore = IPC::Run::start(
+		[
+			'pg_restore', '--jobs=2', "--use-list=$tempdir/second.list",
+			'--dbname=' . $node->connstr('parallel_restored'),
+			"$tempdir/parallel.dump"
+		],
+		'>', \$restore_out, '2>', \$restore_err);
+
+	$node->safe_psql('postgres',
+		"SELECT gp_wait_until_triggered_fault('attach_partition_default_locked', 1, 1)"
+	);
+
+	# Wait until the restore makes no more progress: the only active restore
+	# session is the suspended one.  Without the dependencies, the DEFAULT
+	# partition's index attachment runs meanwhile, waiting for the lock.
+	my $steady = 0;
+	for (my $i = 0; $i < 10 * $PostgreSQL::Test::Utils::timeout_default; $i++)
 	{
-		diag("parallel restore run $run failed: $stderr");
-		$parallel_ok = 0;
-		last;
+		my $active = $node->safe_psql(
+			'postgres', q{
+			SELECT count(*) FROM pg_stat_activity
+			WHERE datname = 'parallel_restored' AND state <> 'idle'
+		});
+		$steady = $active eq '1' ? $steady + 1 : 0;
+		last if $steady >= 10;
+		usleep(100_000);
 	}
+	ok($steady >= 10, 'parallel restore waits for the suspended attachment');
+
+	like(
+		$node->safe_psql('postgres',
+			"SELECT gp_inject_fault('attach_partition_index', 'status', 1)"),
+		qr/num times hit:'0'/,
+		'no index is attached while a partition is being attached');
+
+	$node->safe_psql(
+		'postgres', q{
+		SELECT gp_inject_fault('attach_partition_default_locked', 'reset', 1);
+		SELECT gp_inject_fault('attach_partition_index', 'reset', 1);
+	});
+
+	ok($restore->finish, 'second, parallel restore step runs')
+	  or diag($restore_err);
+
+	is( $node->safe_psql(
+			'parallel_restored', q{
+			SELECT count(*), count(DISTINCT i.inhparent), bool_and(x.indisvalid)
+			FROM pg_inherits t
+			JOIN pg_index x ON x.indrelid = t.inhrelid
+			LEFT JOIN pg_inherits i ON i.inhrelid = x.indexrelid
+			WHERE t.inhparent = 'regress_pg_dump_schema.parttab'::regclass
+		}),
+		'2|1|t',
+		'parallel restore attaches every partition with one valid index');
+
+	is( $node->safe_psql(
+			'parallel_restored',
+			'SELECT count(*) FROM regress_pg_dump_schema.parttab'),
+		'10000',
+		'parallel restore keeps the data');
 }
-ok($parallel_ok, 'parallel restore with a DEFAULT partition succeeds');
-
-is( $node->safe_psql(
-		'parallel_restored', q{
-		SELECT count(*), count(DISTINCT i.inhparent), bool_and(x.indisvalid)
-		FROM pg_inherits t
-		JOIN pg_index x ON x.indrelid = t.inhrelid
-		LEFT JOIN pg_inherits i ON i.inhrelid = x.indexrelid
-		WHERE t.inhparent = 'regress_pg_dump_schema.parttab'::regclass
-	}),
-	'13|1|t',
-	'parallel restore attaches every partition with one valid index');
-
-is( $node->safe_psql(
-		'parallel_restored',
-		'SELECT count(*) FROM regress_pg_dump_schema.parttab'),
-	'100000',
-	'parallel restore keeps the data');
 
 #########################################
 # A partition of a parent without indexes is attached in pre-data: there is

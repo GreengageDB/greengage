@@ -113,6 +113,7 @@
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
+#include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -21149,7 +21150,10 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd)
 	defaultPartOid =
 		get_default_oid_from_partdesc(RelationRetrievePartitionDesc(rel));
 	if (OidIsValid(defaultPartOid))
+	{
 		LockRelationOid(defaultPartOid, AccessExclusiveLock);
+		SIMPLE_FAULT_INJECTOR("attach_partition_default_locked");
+	}
 
 	attachrel = table_openrv(cmd->name, AccessExclusiveLock);
 
@@ -22234,6 +22238,8 @@ ATExecAttachPartitionIdx(List **wqueue, Relation parentIdx, RangeVar *name)
 	Oid			partIdxId;
 	Oid			currParent;
 	struct AttachIndexCallbackState state;
+
+	SIMPLE_FAULT_INJECTOR("attach_partition_index");
 
 	/*
 	 * We need to obtain lock on the index 'name' to modify it, but we also
