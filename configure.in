@@ -1459,13 +1459,12 @@ Use --without-zlib to disable zlib support.])])
 fi
 
 if test "$with_zstd" = yes; then
-  dnl Spell out the action-if-found: the library is linked as -l:libzstd.a, so
-  dnl the name autoconf would derive for the automatic define does not match
-  dnl the HAVE_LIBZSTD the tree actually tests for.
-  AC_CHECK_LIB(:libzstd.a, ZSTD_compressCCtx,
+  dnl The static library is linked as -l:libzstd.a, which the macOS linker
+  dnl does not accept.  A static library path already listed in LIBS is used
+  dnl as is.
+  AC_SEARCH_LIBS(ZSTD_compressCCtx, [:libzstd.a],
                [AC_DEFINE(HAVE_LIBZSTD, 1,
-                          [Define to 1 if you have the `zstd' library (-lzstd).])
-                LIBS="-l:libzstd.a $LIBS"],
+                          [Define to 1 if you have the `zstd' library (-lzstd).])],
                [AC_MSG_ERROR([zstd library not found
 If you have libzstd already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
