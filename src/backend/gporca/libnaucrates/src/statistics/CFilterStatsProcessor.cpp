@@ -550,15 +550,16 @@ CFilterStatsProcessor::MakeCombinedUnsupportedSFByColId(
 				1 == other_used_colids->Size() &&
 				target_colid == *(*other_used_colids)[0])
 			{
-				group_scale_factors->Append(
-					GPOS_NEW(mp) CDouble(other_unsupported_pred->ScaleFactor()));
+				group_scale_factors->Append(GPOS_NEW(mp) CDouble(
+					other_unsupported_pred->ScaleFactor()));
 			}
 		}
 
 		if (1 < group_scale_factors->Size())
 		{
-			CDouble combined_sf = CScaleFactorUtils::CalcScaleFactorCumulativeDisj(
-				stats_config, group_scale_factors, input_rows);
+			CDouble combined_sf =
+				CScaleFactorUtils::CalcScaleFactorCumulativeDisj(
+					stats_config, group_scale_factors, input_rows);
 			combined_sf_by_colid->Insert(GPOS_NEW(mp) ULONG(target_colid),
 										 GPOS_NEW(mp) CDouble(combined_sf));
 		}
@@ -734,9 +735,8 @@ CFilterStatsProcessor::MakeHistHashMapDisjFilter(
 				// factor instead of just this branch's own
 				(void) unsupported_group_contributed->ExchangeSet(
 					combined_group_colid);
-				child_scale_factor =
-					*(combined_unsupported_sf_by_colid->Find(
-						&combined_group_colid));
+				child_scale_factor = *(combined_unsupported_sf_by_colid->Find(
+					&combined_group_colid));
 			}
 		}
 		else
