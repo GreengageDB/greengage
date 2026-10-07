@@ -60,27 +60,3 @@ echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
 	https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
 	greengagedb main" \
 	| tee /etc/apt/sources.list.d/greengagedb.list
-
-printf '%s\n' \
-	'kernel.shmmax = 5000000000000' \
-	'kernel.shmmni = 32768' \
-	'kernel.shmall = 40000000000' \
-	'kernel.sem = 1000 32768000 1000 32768' \
-	'kernel.msgmnb = 1048576' \
-	'kernel.msgmax = 1048576' \
-	'kernel.msgmni = 32768' \
-	'net.core.netdev_max_backlog = 80000' \
-	'net.core.rmem_default = 2097152' \
-	'net.core.rmem_max = 16777216' \
-	'net.core.wmem_max = 16777216' \
-	'vm.overcommit_memory = 2' \
-	'vm.overcommit_ratio = 95' \
-	| tee /etc/sysctl.d/90-greengage.conf >/dev/null
-sysctl -p /etc/sysctl.d/90-greengage.conf
-
-printf '%s\n' \
-	'* soft nofile 1048576' \
-	'* hard nofile 1048576' \
-	'* soft nproc 1048576' \
-	'* hard nproc 1048576' \
-	| tee /etc/security/limits.d/90-greengage.conf >/dev/null
