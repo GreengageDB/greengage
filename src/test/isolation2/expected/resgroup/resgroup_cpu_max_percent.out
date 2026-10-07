@@ -21,6 +21,7 @@ ERROR:  language "plpython3u" already exists
 --
 -- helper functions, tables and views
 --
+
 DROP TABLE IF EXISTS cpu_usage_samples;
 DROP TABLE
 CREATE TABLE cpu_usage_samples (sample text);
@@ -52,8 +53,9 @@ ANALYZE
 -- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
 -- branch.
 CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$ branch = """ SELECT count(*) AS s FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t WHERE md5(c1::text || g::text) < '8'""" 
-import os nsegs = plpy.execute(""" SELECT count(*) AS n FROM gp_segment_configuration WHERE content >= 0 AND role = 'p' """)[0]['n'] ncores = os.cpu_count() 
-import math procs_per_branch = 5 * nsegs k = min(16, math.ceil(ncores / procs_per_branch) + 1)  plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k))) $$ LANGUAGE plpython3u;
+import os nsegs = plpy.execute(""" SELECT count(*) AS n FROM gp_segment_configuration WHERE content >= 0 AND role = 'p' """)[0]['n'] ncores = len(os.sched_getaffinity(0)) 
+import math procs_per_branch = 5 * nsegs k = min(16, math.ceil(ncores / procs_per_branch) + 1) 
+plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format( ' UNION ALL '.join(['(' + branch + ')'] * k))) $$ LANGUAGE plpython3u;
 CREATE FUNCTION
 
 SELECT create_busy_view();
@@ -99,6 +101,10 @@ CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
 CREATE ROLE
+ALTER ROLE role1_cpu_test SET optimizer_force_multistage_agg = on;
+ALTER ROLE
+ALTER ROLE role2_cpu_test SET optimizer_force_multistage_agg = on;
+ALTER ROLE
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT
 GRANT ALL ON busy TO role2_cpu_test;

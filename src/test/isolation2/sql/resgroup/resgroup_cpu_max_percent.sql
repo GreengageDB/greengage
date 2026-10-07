@@ -13,6 +13,7 @@ CREATE LANGUAGE plpython3u;
 --
 -- helper functions, tables and views
 --
+
 DROP TABLE IF EXISTS cpu_usage_samples;
 CREATE TABLE cpu_usage_samples (sample text);
 
@@ -69,12 +70,12 @@ CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
         SELECT count(*) AS n FROM gp_segment_configuration
          WHERE content >= 0 AND role = 'p'
     """)[0]['n']
-    ncores = os.cpu_count()
+    ncores = len(os.sched_getaffinity(0))
 
     import math
     procs_per_branch = 5 * nsegs
     k = min(16, math.ceil(ncores / procs_per_branch) + 1)
-    
+
     plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format(
         ' UNION ALL '.join(['(' + branch + ')'] * k)))
 $$ LANGUAGE plpython3u;
@@ -107,6 +108,8 @@ ALTER RESOURCE GROUP admin_group SET cpu_max_percent 5;
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
+ALTER ROLE role1_cpu_test SET optimizer_force_multistage_agg = on;
+ALTER ROLE role2_cpu_test SET optimizer_force_multistage_agg = on;
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT ALL ON busy TO role2_cpu_test;
 
@@ -134,6 +137,8 @@ GRANT ALL ON busy TO role2_cpu_test;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -206,6 +211,8 @@ SELECT * FROM cancel_all;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -301,6 +308,8 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
 
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
+
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
 1:SELECT fetch_sample();
@@ -372,6 +381,8 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
