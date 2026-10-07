@@ -15,11 +15,13 @@ CREATE ROLE
 SET
 1&:BEGIN;  <waiting ...>
 
--- gg_wait_sampling_current shows the current wait event
-SELECT query, queryid, mppsessionid, command_id, wait_event_type FROM gg_wait_sampling_current JOIN pg_stat_activity USING(pid) WHERE wait_event_type='ResourceGroup';
- query  | queryid | mppsessionid | command_id | wait_event_type 
---------+---------+--------------+------------+-----------------
- BEGIN; | 0       | 0            | 0          | ResourceGroup   
+-- gg_wait_sampling_current shows the current wait event. The session id
+-- and command id come from the backend's PGPROC, so they are reported even
+-- though the backend blocks before parsing its statement.
+SELECT query, queryid, mppsessionid = sess_id AS session_matches, command_id > 0 AS has_command_id, wait_event_type FROM gg_wait_sampling_current JOIN pg_stat_activity USING(pid) WHERE wait_event_type='ResourceGroup';
+ query  | queryid | session_matches | has_command_id | wait_event_type 
+--------+---------+-----------------+----------------+-----------------
+ BEGIN; | 0       | t               | t              | ResourceGroup   
 (1 row)
 
 -- gg_wait_sampling_history shows the wait event history
