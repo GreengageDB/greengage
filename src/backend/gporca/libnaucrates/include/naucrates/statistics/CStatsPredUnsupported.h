@@ -36,6 +36,11 @@ private:
 	// scale factor of the predicate
 	CDouble m_default_scale_factor;
 
+	// columns actually referenced by the original predicate expression, for
+	// predicates that don't reduce to a single "the" column (GetColId() ==
+	// ulong_max). Null when not tracked. Owned by this object.
+	ULongPtrArray *m_used_colids;
+
 	// initialize the scale factor of the predicate
 	static CDouble InitScaleFactor();
 
@@ -44,16 +49,28 @@ public:
 
 	// ctors
 	CStatsPredUnsupported(ULONG colid,
-						  CStatsPred::EStatsCmpType stats_pred_type);
+						  CStatsPred::EStatsCmpType stats_pred_type,
+						  ULongPtrArray *used_colids = nullptr);
 	CStatsPredUnsupported(ULONG colid,
 						  CStatsPred::EStatsCmpType stats_pred_type,
-						  CDouble default_scale_factor);
+						  CDouble default_scale_factor,
+						  ULongPtrArray *used_colids = nullptr);
+
+	~CStatsPredUnsupported() override;
 
 	// filter type id
 	CStatsPred::EStatsPredType
 	GetPredStatsType() const override
 	{
 		return CStatsPred::EsptUnsupported;
+	}
+
+	// columns actually referenced by the original predicate expression
+	// (may be null, or empty, when not tracked / not applicable)
+	const ULongPtrArray *
+	GetUsedColIds() const
+	{
+		return m_used_colids;
 	}
 
 	// comparison types for stats computation

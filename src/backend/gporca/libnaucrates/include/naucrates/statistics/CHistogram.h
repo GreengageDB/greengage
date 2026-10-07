@@ -95,6 +95,13 @@ private:
 	// is column statistics missing in the database
 	BOOL m_is_col_stats_missing;
 
+	// was this histogram produced by applying a predicate whose selectivity
+	// could not be modeled precisely (e.g. an unsupported/computed-expression
+	// filter that only scaled the row count via a default selectivity guess,
+	// without narrowing which values remain); if set, consumers of the
+	// histogram should not treat its bucket content as reliable
+	BOOL m_is_unsupported_pred_derived = false;
+
 	// return an array buckets after applying equality filter on the histogram buckets
 	CBucketArray *MakeBucketsWithEqualityFilter(CPoint *point) const;
 
@@ -172,9 +179,6 @@ private:
 		CDouble *result_distinct_remain, CDouble *result_freq_remain);
 
 
-	// check if the cardinality estimation should be done only via NDVs
-	static BOOL NeedsNDVBasedCardEstimationForEq(const CHistogram *histogram);
-
 	BOOL IsHistogramForTextRelatedTypes() const;
 
 	// add residual union all buckets after the merge
@@ -237,6 +241,25 @@ public:
 	// set null frequency
 	void SetNullFrequency(CDouble null_freq);
 
+	// mark this histogram as derived from an unsupported-predicate filter
+	// (row count scaled by a default selectivity guess, bucket content
+	// unchanged/unnarrowed)
+	void
+	SetUnsupportedPredDerived()
+	{
+		m_is_unsupported_pred_derived = true;
+	}
+
+	// clear a mark inherited from a source histogram that doesn't actually
+	// apply here (e.g. a LOJ's preserved outer column, whose own value range
+	// is exact regardless of what was marked on the matched-rows histogram
+	// it was copied or derived from)
+	void
+	ResetUnsupportedPredDerived()
+	{
+		m_is_unsupported_pred_derived = false;
+	}
+
 	// set information about the scaling of NDVs
 	void
 	SetNDVScaled()
@@ -288,6 +311,11 @@ public:
 			DoIgnoreLASJHistComputation	 // except for the case of LOJ cardinality estimation this flag is always
 		// "true" since LASJ stats computation is very aggressive
 	) const;
+
+	// check if the cardinality estimation should be done only via NDVs
+	// (true for types, such as text, whose bucket bounds can't be compared
+	// directly) rather than by comparing bucket bounds
+	static BOOL NeedsNDVBasedCardEstimationForEq(const CHistogram *histogram);
 
 	// group by and normalize
 	CHistogram *MakeGroupByHistogramNormalize(CDouble rows,
@@ -343,6 +371,21 @@ public:
 	{
 		return m_is_col_stats_missing;
 	}
+
+	// was this histogram derived by applying an unsupported-predicate
+	// filter, so its bucket content should not be trusted for value-range
+	// reasoning (e.g. LASJ coverage checks)
+	BOOL
+	IsUnsupportedPredDerived() const
+	{
+		return m_is_unsupported_pred_derived;
+	}
+
+	// does this histogram's own bucket range span at least as wide a value
+	// range as other's - e.g. so that unioning other into this one can't
+	// possibly widen the result beyond this histogram's own, already-known
+	// range. False whenever either histogram has no buckets to compare.
+	BOOL ContainsRange(const CHistogram *other) const;
 
 	// print function
 	IOstream &OsPrint(IOstream &os) const;

@@ -84,6 +84,14 @@ private:
 	// check if the column is a new column for statistic calculation
 	static BOOL IsNewStatsColumn(ULONG colid, ULONG last_colid);
 
+	// for each real column id targeted by two or more direct unsupported
+	// branches of a disjunction, combine those branches' own scale
+	// factors into one
+	static UlongToDoubleMap *MakeCombinedUnsupportedSFByColId(
+		CMemoryPool *mp, const CStatisticsConfig *stats_config,
+		CStatsPredDisj *disjunctive_pred_stats, CDouble input_rows,
+		CBitSet *direct_child_real_colids);
+
 public:
 	// filter
 	static CStatistics *MakeStatsFilter(CMemoryPool *mp,
