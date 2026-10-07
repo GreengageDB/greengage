@@ -294,7 +294,7 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 
 	CatalogTupleCheckConstraints(heapRel, tup);
 
-	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
+	if (IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
@@ -322,7 +322,7 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 {
 	CatalogTupleCheckConstraints(heapRel, tup);
 
-	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(otid))
+	if (IsTempcatItemPointer(otid))
 	{
 		tempcat_update(heapRel, otid, tup);
 		return;
@@ -351,7 +351,7 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 void
 CatalogTupleDelete(Relation heapRel, ItemPointer tid)
 {
-	if (IsTempTableScopeFor(heapRel) || IsTempcatItemPointer(tid))
+	if (IsTempcatItemPointer(tid))
 	{
 		tempcat_delete(heapRel, tid);
 		return;
