@@ -74,6 +74,7 @@ VALUE__REPL_SENT_LEFT = FieldDefinition("Bytes remaining to send to mirror", "se
 VALUE__REPL_FLUSH_LEFT = FieldDefinition("Bytes received but remain to flush", "flush_left", "int")
 VALUE__REPL_REPLAY_LEFT = FieldDefinition("Bytes received but remain to replay", "replay_left", "int")
 VALUE__REPL_SYNC_REMAINING_BYTES = FieldDefinition("WAL sync remaining bytes", "wal_sync_bytes", "int")
+VALUE__REPL_REPL_REMAINING_BYTES = FieldDefinition("WAL replay remaining bytes", "wal_repl_bytes", "int")
 
 VALUE_RECOVERY_COMPLETED_BYTES = FieldDefinition("Completed bytes (kB)", "recovery_completed_bytes", "int")
 VALUE_RECOVERY_TOTAL_BYTES = FieldDefinition("Total bytes (kB)", "recovery_total_bytes", "int")
@@ -153,6 +154,7 @@ class GpStateData(object):
             VALUE__REPL_FLUSH_LEFT,
             VALUE__REPL_REPLAY_LEFT,
             VALUE__REPL_SYNC_REMAINING_BYTES,
+            VALUE__REPL_REPL_REMAINING_BYTES,
         ]
 
         self.__entriesByCategory[CATEGORY__STATUS] = \
@@ -665,7 +667,7 @@ class GpSystemStateProgram(object):
             pass # logger.info( "No segment pairs with switched roles")
 
         # segments that are not synchronized
-        unsync_segs = self._get_unsync_segs_add_wal_remaining_bytes(data, gpArray)
+        unsync_segs, repl_segs = self._get_unsync_segs_add_wal_remaining_bytes(data, gpArray)
         if unsync_segs:
             logger.info("----------------------------------------------------")
             logger.info("Unsynchronized Segment Pairs")
@@ -673,6 +675,14 @@ class GpSystemStateProgram(object):
             exitCode = 1
         else:
             pass # logger.info( "No segment pairs are in resynchronization")
+
+        if repl_segs:
+            logger.info("----------------------------------------------------")
+            logger.info("Segments that need to replay flushed logs")
+            logSegments(repl_segs, True, [VALUE__REPL_REPL_REMAINING_BYTES])
+            # This value doesn't change exit code, as it's only informational one.
+        else:
+            pass # logger.info( "No segments are replaying wals")
 
         # segments that are down
         segmentsThatAreDown = [s for s in gpArray.getSegDbList() if data.isSegmentProbablyDown(s)]
@@ -708,7 +718,10 @@ class GpSystemStateProgram(object):
         # final output -- no errors, then log this message
         if exitCode == 0:
             logger.info("----------------------------------------------------")
-            logger.info("All segments are running normally")
+            if repl_segs:
+                logger.info("All segments are running normally, but some of them are in the process of WAL replay.")
+            else:
+                logger.info("All segments are running normally")
 
         return exitCode
 
@@ -1038,6 +1051,7 @@ class GpSystemStateProgram(object):
         returns list of primary segments of pairs which aren't in sync state
         """
         unsync_segs = []
+        replaying_segs = []
         primaries = [s for s in gpArray.getSegDbList() if s.isSegmentPrimary(current_role=True)]
         for s in primaries:
             try:
@@ -1046,17 +1060,23 @@ class GpSystemStateProgram(object):
                 conn = dbconn.connect(url, utility=True)
                 with closing(conn) as conn:
                     cursor = dbconn.execSQL(conn,
-                                          "SELECT pg_xlog_location_diff(pg_current_xlog_location(), sent_location)"
-                                          ",sync_state FROM pg_stat_replication")
+                                          "SELECT pg_xlog_location_diff(pg_current_xlog_location(), sent_location), " \
+                                          "pg_xlog_location_diff(flush_location, replay_location), " \
+                                          "sync_state FROM pg_stat_replication")
                     rows = cursor.fetchall()
                     cursor.close()
                     if rows:
                         # wal connection is active.
-                        if rows[0][1] != 'sync':
+                        if rows[0][2] != 'sync':
                             # walsender is in 'catchup' state
                             wal_sync_bytes_out = rows[0][0]
                             unsync_segs.append(s)
                             data.addValue(VALUE__REPL_SYNC_REMAINING_BYTES, wal_sync_bytes_out)
+                        if rows[0][1] is not None and rows[0][1] != 0:
+                            # wals are being replayed
+                            wal_repl_bytes_out = rows[0][1]
+                            replaying_segs.append(s)
+                            data.addValue(VALUE__REPL_REPL_REMAINING_BYTES, wal_repl_bytes_out)
                     else:
                         # no return value from pg_stat_replication, there isn't a replication connection
                         wal_sync_bytes_out = 'Unknown'
@@ -1066,7 +1086,7 @@ class GpSystemStateProgram(object):
                 logger.warning('could not query segment {} ({}:{})'.format(
                     s.dbid, s.hostname, s.port
                 ))
-        return unsync_segs
+        return unsync_segs, replaying_segs
 
     @staticmethod
     def _add_replication_info(data, primary, mirror):
