@@ -1,17 +1,5 @@
 -- The statements of a query string holding several statements must be checked
 -- as well as a single statement
--- start_ignore
-DROP USER IF EXISTS credtest;
-NOTICE:  role "credtest" does not exist, skipping
-DROP USER IF EXISTS shrt;
-NOTICE:  role "shrt" does not exist, skipping
-DROP USER IF EXISTS credtest_until;
-NOTICE:  role "credtest_until" does not exist, skipping
-DROP USER IF EXISTS credtest_first;
-NOTICE:  role "credtest_first" does not exist, skipping
-DROP EXTENSION IF EXISTS credcheck CASCADE;
-NOTICE:  extension "credcheck" does not exist, skipping
--- end_ignore
 CREATE EXTENSION credcheck;
 SELECT pg_password_history_reset();
  pg_password_history_reset 
