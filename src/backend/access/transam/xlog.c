@@ -7568,6 +7568,7 @@ StartupXLOG(void)
 
 				/* Else, try to fetch the next WAL record */
 				record = ReadRecord(xlogreader, InvalidXLogRecPtr, LOG, false);
+				SIMPLE_FAULT_INJECTOR("replay_record_read");
 			} while (record != NULL);
 
 			/*
