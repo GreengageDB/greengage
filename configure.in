@@ -1144,9 +1144,11 @@ AC_SUBST(with_zstd)
 if test "$with_zstd" = yes; then
   dnl zstd_errors.h was renamed from error_public.h in v1.1.1
   dnl require static zstd library to use custom allocation functions
+  dnl the macOS linker does not accept -l:libzstd.a, a static library path
+  dnl already listed in LIBS is used as is
   PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0],
-                    [AC_CHECK_LIB([:libzstd.a], [ZSTD_compressCCtx], [],
-                                  [AC_MSG_ERROR([static zstd library not found])])])
+                    [AC_SEARCH_LIBS([ZSTD_compressCCtx], [:libzstd.a], [],
+                                    [AC_MSG_ERROR([static zstd library not found])])])
 fi
 
 #
