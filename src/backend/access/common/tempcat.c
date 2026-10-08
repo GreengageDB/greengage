@@ -47,6 +47,7 @@
 #include "access/sysattr.h"
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_inherits.h"
@@ -935,6 +936,54 @@ bool
 tempcat_is_dirty(void)
 {
 	return TempcatDirtyFlag;
+}
+
+/*
+ * Does the in-memory catalog hold any virtual tuples that belong to
+ * temporary table metadata?
+ *
+ * Checks the current (topmost) snapshot.  Snapshots pushed on top of the
+ * root are full copies of it plus subsequent changes, so the topmost one
+ * covers everything reachable in the stack: at transaction boundaries it
+ * *is* the root snapshot with the committed entries.
+ *
+ * The pg_temp_N / pg_toast_temp_N pg_namespace rows are deliberately
+ * ignored: they are virtual once the first temporary table was created
+ * and stay in tempcat for the whole session, even after every temporary
+ * table is dropped.  Catalog scans still merge them and TID-routed
+ * deletes still work with the feature disabled, so they do not block
+ * disabling the GUC.
+ *
+ * A relation entry with tuples_num == 0 can remain after all its tuples
+ * were deleted, so iterate over the entries instead of relying on
+ * dlist_is_empty().
+ *
+ * Used by the gp_enable_temp_memory_catalog check hook, which must not
+ * create state as a side effect, hence reading the private variable
+ * directly instead of calling TempcatSnapshotGetCurrent().
+ */
+bool
+tempcat_is_empty(void)
+{
+	TempcatSnapshot snapshot = CurrentTempcatSnapshotPrivate;
+	dlist_iter	iter;
+
+	if (!PointerIsValid(snapshot))
+		return true;
+
+	dlist_foreach(iter, &snapshot->relationData)
+	{
+		TempcatSnapshotRelationData *entry =
+			dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+
+		if (entry->relid == NamespaceRelationId)
+			continue;
+
+		if (entry->tuples_num > 0)
+			return false;
+	}
+
+	return true;
 }
 
 void

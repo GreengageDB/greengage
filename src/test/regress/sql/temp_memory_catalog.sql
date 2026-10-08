@@ -295,24 +295,52 @@ INSERT INTO tempcat_aoco SELECT i, 'v' || i FROM generate_series(1, 10) i;
 SELECT count(*), sum(a) FROM tempcat_aoco;
 DROP TABLE tempcat_aoco;
 
--- Dropping an AO temp table after the GUC was switched off: the delete has
--- to dispatch on the item pointer, not on the GUC.
+-- ============================================================
+-- GUC toggle hardening
+-- ============================================================
+
+-- The GUC cannot be disabled while the in-memory catalog still holds
+-- temporary table metadata.  Switching it off mid-session used to leave
+-- catalog rows invisible to the on-disk path (surprising visibility, see
+-- review discussion); catalog writes now route on the tuple TID instead
+-- of the GUC, and the toggle itself is refused while entries exist.
 CREATE TEMP TABLE tempcat_ao_off (a int) WITH (appendonly=true);
 SET gp_enable_temp_memory_catalog = off;
-DROP TABLE tempcat_ao_off;
+-- RESET would flip the setting back to its default (off): refused as well
+RESET gp_enable_temp_memory_catalog;
+-- Setting the current value again is a no-op and always allowed
 SET gp_enable_temp_memory_catalog = on;
+-- RESET ALL goes through the same check: refused while entries exist
+RESET ALL;
+
+-- No toggle inside a transaction block, in either direction
+BEGIN;
+SET gp_enable_temp_memory_catalog = off;
+ROLLBACK;
+
+DROP TABLE tempcat_ao_off;
+-- tempcat_test2 / tempcat_test_sp still have metadata in the catalog
+SET gp_enable_temp_memory_catalog = off;
+DROP TABLE tempcat_test2;
+SET gp_enable_temp_memory_catalog = off;
+DROP TABLE tempcat_test_sp;
+-- No temporary table metadata left (the pg_temp_N namespace rows don't
+-- count): the switch succeeds ...
+SET gp_enable_temp_memory_catalog = off;
+-- ... and toggling back on inside a transaction is refused as well
+BEGIN;
+SET gp_enable_temp_memory_catalog = on;
+ROLLBACK;
 
 -- ============================================================
 -- TEMP CATALOG is still respected when switched off
 -- ============================================================
 
-SET gp_enable_temp_memory_catalog = off;
-
 CREATE TEMP TABLE tempcat_test2 (id int);
-SELECT * FROM tempcat_test2 ORDER BY a;
+SELECT * FROM tempcat_test2 ORDER BY id;
 
 DROP TABLE tempcat_test2;
-SELECT * FROM tempcat_test2 ORDER BY a;
+SELECT * FROM tempcat_test2 ORDER BY id;
 
 SET gp_enable_temp_memory_catalog = on;
 
@@ -323,6 +351,13 @@ SELECT * FROM tempcat_test2 ORDER BY id;
 -- Cleanup
 -- ============================================================
 DROP TABLE IF EXISTS tempcat_test2;
-DROP TABLE IF EXISTS tempcat_test_sp;
 
 RESET gp_enable_temp_memory_catalog;
+
+-- DISCARD ALL must work while the in-memory catalog holds metadata: it
+-- drops the temporary tables before resetting the GUCs, so the toggle
+-- hook does not reject the reset
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_discard (x int);
+DISCARD ALL;
+SHOW gp_enable_temp_memory_catalog;

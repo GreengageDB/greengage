@@ -127,6 +127,12 @@ extern bool tempcat_is_dirty(void);
 extern void tempcat_clear_dirty(void);
 
 /*
+ * Does the in-memory catalog still hold temporary table metadata?
+ * (pg_temp_N namespace rows don't count, see tempcat.c)
+ */
+extern bool tempcat_is_empty(void);
+
+/*
  * Serialize the current tempcat snapshot state into a byte buffer for
  * transmission via shared memory (DSM segment).
  *
