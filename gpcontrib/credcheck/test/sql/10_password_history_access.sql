@@ -1,7 +1,3 @@
--- start_matchsubs
--- m/ \(credcheck.c:\d+\)/
--- s/ \(credcheck.c:\d+\)//
--- end_matchsubs
 -- start_ignore
 DROP USER IF EXISTS credtest;
 DROP USER IF EXISTS credtest_reader;

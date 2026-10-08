@@ -2385,7 +2385,9 @@ pg_password_history_internal(FunctionCallInfo fcinfo)
 
 	/* Only superusers can see the history */
 	if (!superuser())
-		ereport(ERROR, (errmsg("only superuser can see password history")));
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("only superuser can see password history")));
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
