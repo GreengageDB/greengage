@@ -108,8 +108,6 @@ ALTER RESOURCE GROUP admin_group SET cpu_max_percent 5;
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
-ALTER ROLE role1_cpu_test SET optimizer_force_multistage_agg = on;
-ALTER ROLE role2_cpu_test SET optimizer_force_multistage_agg = on;
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT ALL ON busy TO role2_cpu_test;
 
@@ -125,6 +123,18 @@ GRANT ALL ON busy TO role2_cpu_test;
 22: SET ROLE TO role2_cpu_test;
 23: SET ROLE TO role2_cpu_test;
 24: SET ROLE TO role2_cpu_test;
+
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
 
 --
 -- now we get prepared.
@@ -189,6 +199,18 @@ SELECT * FROM cancel_all;
 12: SET ROLE TO role1_cpu_test;
 13: SET ROLE TO role1_cpu_test;
 14: SET ROLE TO role1_cpu_test;
+
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
 
 --
 -- when there are multiple groups with parallel queries,
@@ -290,6 +312,18 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 23: SET ROLE TO role2_cpu_test;
 24: SET ROLE TO role2_cpu_test;
 
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
+
 --
 -- now we get prepared.
 --
@@ -359,6 +393,18 @@ SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND
 12: SET ROLE TO role1_cpu_test;
 13: SET ROLE TO role1_cpu_test;
 14: SET ROLE TO role1_cpu_test;
+
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
 
 --
 -- when there are multiple groups with parallel queries,
