@@ -40,6 +40,8 @@
 #include "common/int.h"
 #if PG_VERSION_NUM >= 140000
 #include "common/hmac.h"
+#else
+#include "common/scram-common.h"
 #endif
 #include "common/sha2.h"
 #include "executor/spi.h"
@@ -88,8 +90,12 @@
 
 /* Magic number identifying the stats file format */
 static const uint32 PGPH_FILE_HEADER = 0x48504750;
-/* credcheck password history version, changes in which invalidate all entries */
-static const uint32 PGPH_VERSION = 100;
+/*
+ * credcheck password history version, changes in which invalidate all entries.
+ * Greengage 6X stores salted hashes, unlike upstream version 100 on Postgres
+ * older than 14, so it uses a number that upstream never had.
+ */
+static const uint32 PGPH_VERSION = 99;
 #define PGPH_TRANCHE_NAME                "credcheck_history"
 #define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
 
@@ -1411,7 +1417,18 @@ _PG_init(void)
 
 #ifdef GP_VERSION_NUM
 	if (!IS_QUERY_DISPATCHER())
+	{
+		/*
+		 * The password history is kept only on the coordinator, but gpexpand
+		 * copied its file to new segments.  Remove it there.
+		 */
+		if (process_shared_preload_libraries_in_progress)
+		{
+			unlink(PGPH_DUMP_FILE_OLD);
+			unlink(PGPH_DUMP_FILE);
+		}
 		return;
+	}
 #endif
 
 #if PG_VERSION_NUM < 150000
@@ -1910,13 +1927,14 @@ char *
 str_to_sha256(const char *password, const char *salt)
 {
 	int          password_len = strlen(password);
+	int          saltlen = strlen(salt);
 	uint8        checksumbuf[PG_SHA256_DIGEST_LENGTH];
 	char        *result = palloc0(sizeof (char) * PG_SHA256_DIGEST_STRING_LENGTH);
-	pg_sha256_ctx sha256_ctx;
+	scram_HMAC_ctx hmac_ctx;
 
-	pg_sha256_init(&sha256_ctx);
-	pg_sha256_update(&sha256_ctx, (uint8 *) password, password_len);
-	pg_sha256_final(&sha256_ctx, checksumbuf);
+	scram_HMAC_init(&hmac_ctx, (uint8 *) password, password_len);
+	scram_HMAC_update(&hmac_ctx, salt, saltlen);
+	scram_HMAC_final(checksumbuf, &hmac_ctx);
 	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
 	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
 
@@ -2122,6 +2140,10 @@ data_error:
 			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			 errmsg("ignoring invalid data in file \"%s\"",
 					PGPH_DUMP_FILE)));
+	/* Remove the file, so that it is not reported again at every startup */
+	FreeFile(file);
+	file = NULL;
+	unlink(PGPH_DUMP_FILE);
 fail:
 	if (file)
 		FreeFile(file);

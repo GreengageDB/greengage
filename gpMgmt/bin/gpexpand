@@ -904,6 +904,12 @@ class SegmentTemplate(object):
                     remoteHost=self.srcSegHostname)
         cpCmd.run(validateAfter=True)
 
+        # The credcheck password history is kept only on the coordinator
+        password_history_file = os.path.join(self.tempDir, 'pg_password_history')
+        if os.path.exists(password_history_file):
+            self.logger.info('Removing pg_password_history from template')
+            os.remove(password_history_file)
+
     def _tar_template(self):
         """Tars up the template files"""
         self.logger.info('Creating schema tar file')
