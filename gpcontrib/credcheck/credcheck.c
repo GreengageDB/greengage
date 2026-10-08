@@ -1417,7 +1417,18 @@ _PG_init(void)
 
 #ifdef GP_VERSION_NUM
 	if (!IS_QUERY_DISPATCHER())
+	{
+		/*
+		 * The password history is kept only on the coordinator, but gpexpand
+		 * copied its file to new segments.  Remove it there.
+		 */
+		if (process_shared_preload_libraries_in_progress)
+		{
+			unlink(PGPH_DUMP_FILE_OLD);
+			unlink(PGPH_DUMP_FILE);
+		}
 		return;
+	}
 #endif
 
 #if PG_VERSION_NUM < 150000
