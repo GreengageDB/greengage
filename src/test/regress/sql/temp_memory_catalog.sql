@@ -348,6 +348,60 @@ CREATE TEMP TABLE tempcat_test2 (id int);
 SELECT * FROM tempcat_test2 ORDER BY id;
 
 -- ============================================================
+-- Cursor reader gangs receive tempcat state
+-- ============================================================
+
+CREATE TEMP TABLE tempcat_cursor_src (id int);
+INSERT INTO tempcat_cursor_src SELECT i FROM generate_series(1, 5) i;
+
+-- A cursor's slices run on reader gangs, which receive the session state
+-- through the cursor snapshot dump instead of the regular shared-snapshot
+-- handshake: they must still see the temp table's virtual catalog rows.
+BEGIN;
+DECLARE tempcat_cur CURSOR FOR SELECT id FROM tempcat_cursor_src ORDER BY id;
+FETCH 2 FROM tempcat_cur;
+FETCH ALL FROM tempcat_cur;
+CLOSE tempcat_cur;
+END;
+
+-- PL/pgSQL FOR loops over a query run through a cursor portal as well.
+CREATE OR REPLACE FUNCTION tempcat_for_loop() RETURNS int8 AS $$
+DECLARE
+    r record;
+    n int8 := 0;
+BEGIN
+    FOR r IN SELECT id FROM tempcat_cursor_src ORDER BY id LOOP
+        n := n + r.id;
+    END LOOP;
+    RETURN n;
+END;
+$$ LANGUAGE plpgsql;
+SELECT tempcat_for_loop();
+DROP FUNCTION tempcat_for_loop();
+
+-- Version bumps between cursor commands within one transaction: the reader
+-- gang must pick up both the new temp table and the altered table shape.
+BEGIN;
+DECLARE tempcat_cur2 CURSOR FOR SELECT id FROM tempcat_cursor_src ORDER BY id;
+FETCH 1 FROM tempcat_cur2;
+CLOSE tempcat_cur2;
+CREATE TEMP TABLE tempcat_cursor_mid (a int);
+INSERT INTO tempcat_cursor_mid VALUES (2), (4);
+DECLARE tempcat_cur3 CURSOR FOR SELECT s.id, m.a
+    FROM tempcat_cursor_src s JOIN tempcat_cursor_mid m ON s.id = m.a
+    ORDER BY s.id;
+FETCH ALL FROM tempcat_cur3;
+CLOSE tempcat_cur3;
+ALTER TABLE tempcat_cursor_src ADD COLUMN b text DEFAULT 'z';
+DECLARE tempcat_cur4 CURSOR FOR SELECT * FROM tempcat_cursor_src ORDER BY id;
+FETCH ALL FROM tempcat_cur4;
+CLOSE tempcat_cur4;
+END;
+
+DROP TABLE tempcat_cursor_src;
+DROP TABLE tempcat_cursor_mid;
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 DROP TABLE IF EXISTS tempcat_test2;

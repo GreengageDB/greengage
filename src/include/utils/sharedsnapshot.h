@@ -80,6 +80,14 @@ extern void lookupSharedSnapshot(char *lookerDescription, char *creatorDescripti
 extern void dumpSharedLocalSnapshot_forCursor(void);
 extern void readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTransactionContext);
 
+/*
+ * Process-local cache of the tempcat version consumed from the writer's
+ * SharedSnapshotSlot; see sharedsnapshot.c.  Shared by the cursor and the
+ * regular reader paths.
+ */
+extern uint64 ReaderLastTempcatVersion;
+extern void readerFillLocalTempcat(volatile SharedSnapshotSlot *slot);
+
 extern void AtEOXact_SharedSnapshot(void);
 
 #define NUM_SHARED_SNAPSHOT_SLOTS (2 * MaxBackends)

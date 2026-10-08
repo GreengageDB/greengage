@@ -149,6 +149,7 @@
 #include "postgres.h"
 
 #include "access/distributedlog.h"
+#include "access/tempcat.h"
 #include "access/twophase.h"  /*max_prepared_xacts*/
 #include "access/xact.h"
 #include "cdb/cdbtm.h"
@@ -156,6 +157,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "lib/stringinfo.h"
+#include "storage/dsm.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "utils/builtins.h"
@@ -187,6 +189,55 @@ static HTAB *dumpHtab = NULL;
 static bool created_dump = false;
 
 static ResourceOwner DumpResOwner = NULL;	/* shared snapshot dump resources */
+
+/*
+ * Process-local copy of the slot's tempcat_version, to skip redundant
+ * deserialization.  A pooled reader can be re-targeted to a different
+ * session and so to a different slot whose version counter starts over;
+ * ReaderTempcatSlot remembers which slot the version belongs to, and a
+ * slot change invalidates the cached version.
+ */
+uint64 ReaderLastTempcatVersion = 0;
+static SharedSnapshotSlot *ReaderTempcatSlot = NULL;
+
+/*
+ * Pick up the tempcat state published by the writer QE for the given slot,
+ * unless this process already loaded this version of it.  Used by both the
+ * cursor and the regular reader path.
+ *
+ * The caller must hold the slot's shared lock: the (handle, version) pair
+ * must be read atomically with respect to the writer's update.
+ */
+void
+readerFillLocalTempcat(volatile SharedSnapshotSlot *slot)
+{
+	dsm_segment *seg;
+
+	if (ReaderTempcatSlot != (SharedSnapshotSlot *) slot)
+	{
+		ReaderTempcatSlot = (SharedSnapshotSlot *) slot;
+		ReaderLastTempcatVersion = 0;
+	}
+
+	if (!enable_temp_memory_catalog ||
+		slot->tempcat_dsm == DSM_HANDLE_INVALID ||
+		slot->tempcat_version == ReaderLastTempcatVersion)
+		return;
+
+	seg = dsm_attach(slot->tempcat_dsm);
+	if (seg)
+	{
+		tempcat_deserialize(dsm_segment_map_length(seg),
+							dsm_segment_address(seg));
+		dsm_detach(seg);
+
+		ReaderLastTempcatVersion = slot->tempcat_version;
+
+		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+				(errmsg("readerFillLocalTempcat: deserialized tempcat from DSM, version=%lu",
+						(unsigned long) ReaderLastTempcatVersion)));
+	}
+}
 
 /* MPP Shared Snapshot. */
 typedef struct SharedSnapshotStruct
@@ -745,6 +796,13 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 		entry->localXid = pDump->localXid;
 
 		dsm_detach(segment);
+
+		/*
+		 * Cursor slices run on reader gangs: pick up the writer's tempcat
+		 * state as well (must run under the slot lock, see
+		 * readerFillLocalTempcat).
+		 */
+		readerFillLocalTempcat(src);
 
 		LWLockRelease(SharedLocalSnapshotSlot->slotLock);
 	}
