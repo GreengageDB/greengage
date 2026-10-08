@@ -4,7 +4,6 @@ import glob
 import json
 import os
 import re
-import pipes
 import shlex
 import shutil
 import socket
@@ -1549,7 +1548,7 @@ def stop_segments(context, where_clause):
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
         subprocess.check_call(['ssh', seg.getSegmentHostName(),
                                'source %s/greengage_path.sh && pg_ctl stop -m fast -D %s -w -t 120' % (
-                                   pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg.getSegmentDataDirectory()))
+                                   shlex.quote(os.environ.get("GPHOME")), shlex.quote(seg.getSegmentDataDirectory()))
                                ])
 
 
@@ -1584,7 +1583,7 @@ def stop_segments_immediate(context, where_clause):
         # Thus, need to add pg_ctl to the path when ssh'ing to a demo cluster.
         subprocess.check_call(['ssh', seg.getSegmentHostName(),
                                'source %s/greengage_path.sh && pg_ctl stop -m immediate -D %s -w' % (
-                                   pipes.quote(os.environ.get("GPHOME")), pipes.quote(seg.getSegmentDataDirectory()))
+                                   shlex.quote(os.environ.get("GPHOME")), shlex.quote(seg.getSegmentDataDirectory()))
                                ])
 
 @given('user can start transactions')
