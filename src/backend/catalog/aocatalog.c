@@ -139,11 +139,14 @@ CreateAOAuxiliaryTable(
 
 	/*
 	 * For a temporary append-only table, route the auxiliary catalog rows
-	 * (gp_fastsequence initial entries, the aux->base pg_depend dependency,
-	 * and the pg_appendonly aux-OID update) into the in-memory virtual
-	 * catalog (tempcat).  heap_create_with_catalog() and index_create()
-	 * already redirect their own writes based on the auxiliary table's
-	 * persistence, but the entries below would otherwise hit disk.
+	 * (the aux->base pg_depend dependency and the pg_appendonly aux-OID
+	 * update) into the in-memory virtual catalog (tempcat).
+	 * heap_create_with_catalog() and index_create() already redirect their
+	 * own writes based on the auxiliary table's persistence, but the
+	 * entries below would otherwise hit disk.  gp_fastsequence initial
+	 * entries deliberately stay on disk even here: their last_sequence
+	 * must never roll back (row numbers are embedded in index TIDs), see
+	 * IsTempTableScopeFor().
 	 */
 	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
 

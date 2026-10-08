@@ -596,6 +596,9 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	DListHeapTuple *dlist_tup;
 	TempcatSnapshotRelationData *relation_entry;
 
+	/* gp_fastsequence rows must never become virtual */
+	Assert(RelationGetRelid(relation) != FastSequenceRelationId);
+
 	tempcat_snapshot = TempcatSnapshotGetCurrent();
 
 	oldctx = MemoryContextSwitchTo(GetLocalMemoryContext());

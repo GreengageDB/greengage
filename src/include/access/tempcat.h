@@ -28,8 +28,10 @@
 #include "access/sdir.h"
 #include "access/genam.h"
 #include "catalog/catalog.h"
+#include "catalog/gp_fastsequence_d.h"
 #include "catalog/indexing.h"
 #include "storage/itemptr.h"
+#include "utils/rel.h"
 #include "utils/relcache.h"
 
 /*
@@ -109,8 +111,16 @@ extern bool temp_table_scope;
  * Being inside a temp table scope is not sufficient.  The CatalogTuple*
  * wrappers surprisingly are also used to write ordinary relations that are not catalogs at
  * all.
+ *
+ * gp_fastsequence is always excluded: its last_sequence must never roll
+ * back, even when the transaction that consumed the numbers aborts,
+ * because AO row numbers are embedded in index TIDs and reusing them
+ * yields wrong index scan results (see the invariant comment atop
+ * gp_fastsequence.c).
  */
-#define IsTempTableScopeFor(rel)  (temp_table_scope && IsCatalogRelation(rel))
+#define IsTempTableScopeFor(rel)  \
+	(temp_table_scope && IsCatalogRelation(rel) && \
+	 RelationGetRelid(rel) != FastSequenceRelationId)
 
 /* Dirty tracking for tempcat versioning */
 extern bool tempcat_is_dirty(void);
