@@ -1,0 +1,8 @@
+# gpAux/debian/.gitignore
+/*
+!/.gitignore
+!/compat
+!/control
+!/copyright
+!/lintian-overrides
+!/rules
