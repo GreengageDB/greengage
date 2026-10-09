@@ -292,6 +292,7 @@ LeftJoin-With-Col-Const-Pred LeftJoin-With-Coalesce LOJWithFalsePred LeftJoin-DP
 DPv2GreedyOnly DPv2MinCardOnly DPv2QueryOnly LOJ-PushDown LeftJoinDPv2JoinOrder
 LeftJoinNullsNotColocated InnerJoinBroadcastTableHashSpec LeftJoinBroadcastTableHashSpec InnerJoinReplicatedTableHashSpec
 LeftJoinPruning LeftJoinPruningOuterQuery LeftJoinPruningInnerQuery LeftJoinPruningInOuterInnerQuery
+LOJ-UnsupportedPred-IsNullFilter
 JoinCombinedHashSpecNullsNotColocated;
 
 COuterJoin2Test:
