@@ -15,10 +15,11 @@ PGFILEDESC = "credcheck - postgresql credential checker"
 
 DATA = sql/$(EXTENSION)--$(EXTVERSION).sql
 
-REGRESS_OPTS  = --inputdir=test --load-extension=credcheck
+REGRESS_OPTS  = --inputdir=test --load-extension=credcheck \
+	--init-file=$(top_builddir)/src/test/regress/init_file
 TESTS = setup 01_username 02_password 03_rename 04_alter_pwd \
 	05_reuse_history 06_reuse_interval 07_valid_until \
-	08_first_login 09_banned_role teardown
+	08_first_login 09_banned_role 10_multi_statement teardown
 
 REGRESS = $(patsubst test/sql/%.sql,%,$(TESTS))
 

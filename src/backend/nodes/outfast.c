@@ -1120,8 +1120,10 @@ _outCookedConstraint(StringInfo str, CookedConstraint *node)
 	WRITE_STRING_FIELD(name);
 	WRITE_INT_FIELD(attnum);
 	WRITE_NODE_FIELD(expr);
+	WRITE_BOOL_FIELD(skip_validation);
 	WRITE_BOOL_FIELD(is_local);
 	WRITE_INT_FIELD(inhcount);
+	WRITE_BOOL_FIELD(is_no_inherit);
 }
 
 static void
