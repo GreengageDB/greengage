@@ -1,9 +1,9 @@
--- gp_partition_insert_desc_budget actually bounds backend memory.
+-- gp_partition_insert_desc_memory_percent actually bounds backend memory.
 --
 -- Routing rows through a wide AOCS partition root opens one write stack per
 -- column for every leaf touched and, unbounded, keeps them all until end of
--- statement -- tens of MB per leaf. With the GUC on, the open descriptors are
--- kept within the statement's memory (here statement_mem).
+-- statement -- tens of MB per leaf. With the GUC > 0, the open descriptors are
+-- kept within that share of the statement's memory (here half of 16MB).
 --
 -- We suspend an INSERT at its 28th AOCS descriptor open and, from another
 -- session, read this session's reserved vmem on the segments. The budgeted run
@@ -57,7 +57,7 @@ CREATE
  Success:        
  Success:        
 (3 rows)
-1: SET gp_partition_insert_desc_budget = off;
+1: SET gp_partition_insert_desc_memory_percent = 0;
 SET
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;  <waiting ...>
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
@@ -103,9 +103,11 @@ TRUNCATE
  Success:        
  Success:        
 (3 rows)
-1: SET gp_partition_insert_desc_budget = on;
+1: SET gp_partition_insert_desc_memory_percent = 50;
 SET
-1: SET statement_mem = '8MB';
+1: SET statement_mem = '16MB';
+SET
+1: SET client_min_messages = error;
 SET
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;  <waiting ...>
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;

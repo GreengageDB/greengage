@@ -246,14 +246,18 @@ typedef struct ResultPartHashEntry
 	ResultRelInfo resultRelInfo;
 
 	/*
-	 * gp_partition_insert_desc_budget bookkeeping, see execMain.c.
-	 * insertDescLruNode links this leaf into estate->es_partInsertLru while
-	 * it has an open AO/AOCS insert descriptor subject to eviction (both
-	 * pointers NULL when not tracked); insertDescCxt is the private context
-	 * that descriptor is allocated in, deleted on eviction.
+	 * Bookkeeping of the memory-bounded per-partition insert descriptors
+	 * (gp_partition_insert_desc_memory_percent, gp_partition_copy_desc_budget),
+	 * see execMain.c. insertDescLruNode links this leaf into
+	 * estate->es_partInsertLru while it has an open AO/AOCS insert descriptor
+	 * subject to eviction (both pointers NULL when not tracked); insertDescCxt
+	 * is the private context that descriptor is allocated in, deleted on
+	 * eviction; insertDescOpened says it has been opened before in this
+	 * statement, so the next open is a re-open.
 	 */
 	dlist_node	insertDescLruNode;
 	MemoryContext insertDescCxt;
+	bool		insertDescOpened;
 } ResultPartHashEntry;
 
 extern void ExecutorStart(QueryDesc *queryDesc, int eflags);
@@ -521,6 +525,8 @@ extern ResultRelInfo *values_get_partition(Datum *values, bool *nulls,
 					 TupleDesc desc, EState *estate, bool openIndices);
 extern void PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *mapping);
 extern void PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *mapping);
+extern uint64 PartInsertDescMemoryReserve(PlannedStmt *stmt, uint64 query_mem);
+extern void PartInsertDescReport(EState *estate);
 
 extern void SendAOTupCounts(EState *estate);
 extern bool already_under_executor_run(void);

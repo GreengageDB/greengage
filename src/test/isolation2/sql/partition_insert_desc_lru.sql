@@ -1,5 +1,5 @@
--- Concurrency properties of gp_partition_insert_desc_budget (memory budget of
--- the open per-partition AO/AOCS insert descriptors).
+-- Concurrency properties of gp_partition_insert_desc_memory_percent (memory
+-- budget of the open per-partition AO/AOCS insert descriptors).
 --
 -- When the LRU evicts a leaf partition's insert descriptor mid-statement it
 -- flushes that leaf's buffered rows to the segment file. This must NOT make the
@@ -15,9 +15,11 @@ create table pdlru_iso (id int, part int, v text)
 -- ============ commit path ============
 
 1: begin;
-1: set gp_partition_insert_desc_budget = on;
+1: set gp_partition_insert_desc_memory_percent = 50;
 -- smaller than the descriptors of the leaves touched below
 1: set statement_mem = '1MB';
+-- the loads below re-open leaves enough to raise a WARNING on every segment
+1: set client_min_messages = error;
 -- open + lock leaf 0's segfile on every segment
 1: insert into pdlru_iso select g, 0 from generate_series(1, 2000) g;
 -- touch 18 other leaves round-robin; the budget evicts (flushes + closes)
@@ -47,7 +49,7 @@ create table pdlru_iso (id int, part int, v text)
 
 -- leaf 19 is untouched by everything above
 1: begin;
-1: set gp_partition_insert_desc_budget = on;
+1: set gp_partition_insert_desc_memory_percent = 50;
 1: set statement_mem = '1MB';
 1: insert into pdlru_iso select g, 19 from generate_series(1, 2000) g;
 1: insert into pdlru_iso select g, (g % 17) + 1 from generate_series(1, 6000) g;
@@ -58,8 +60,9 @@ create table pdlru_iso (id int, part int, v text)
 2: select count(*) from pdlru_iso;
 
 -- the leaf whose descriptor was evicted inside the aborted txn still works
-3: set gp_partition_insert_desc_budget = on;
+3: set gp_partition_insert_desc_memory_percent = 50;
 3: set statement_mem = '1MB';
+3: set client_min_messages = error;
 3: insert into pdlru_iso select g, 19 from generate_series(1, 500) g;
 3: select count(*) from pdlru_iso where part = 19;
 

@@ -1,25 +1,36 @@
 --
 -- Memory budget of the open per-partition AO/AOCS insert descriptors while
--- inserting through a partition root (GUC gp_partition_insert_desc_budget).
+-- inserting through a partition root (GUCs
+-- gp_partition_insert_desc_memory_percent for INSERT,
+-- gp_partition_copy_desc_budget for COPY).
 --
 -- Exercises the "flush + close the least-recently-used insert descriptor, then
 -- transparently re-open it when that partition is written to again" path, which
--- is not reachable by any other feature. The budget is the statement's memory
--- (query_mem, or statement_mem for COPY); a 1MB statement_mem is smaller than
--- the descriptors of the tables below, so they evict on almost every switch of
--- partition. This test pins the functional correctness of eviction + re-open.
+-- is not reachable by any other feature. The budget is a share of the
+-- statement's memory (query_mem for INSERT, statement_mem for COPY); a 1MB
+-- statement_mem is smaller than the descriptors of the tables below, so they
+-- evict on almost every switch of partition. This test pins the functional
+-- correctness of eviction + re-open. Such loads raise a "thrashing" WARNING
+-- on every segment, in no particular order; it is checked on its own in
+-- section 8 and silenced elsewhere.
 --
 
-set client_min_messages to warning;
+set client_min_messages to error;
 create schema pdlru;
 set search_path = pdlru, public;
 
--- GUC surface: USERSET, default off (unbounded / historical)
-show gp_partition_insert_desc_budget;
-set gp_partition_insert_desc_budget = on;
-show gp_partition_insert_desc_budget;
-reset gp_partition_insert_desc_budget;
-show gp_partition_insert_desc_budget;
+-- GUC surface: USERSET; INSERT: percent of query_mem, [0, 100], default 0
+-- (unbounded / historical); COPY: boolean, default off
+show gp_partition_insert_desc_memory_percent;
+set gp_partition_insert_desc_memory_percent = -1;
+set gp_partition_insert_desc_memory_percent = 101;
+set gp_partition_insert_desc_memory_percent = 50;
+show gp_partition_insert_desc_memory_percent;
+reset gp_partition_insert_desc_memory_percent;
+show gp_partition_copy_desc_budget;
+set gp_partition_copy_desc_budget = on;
+show gp_partition_copy_desc_budget;
+reset gp_partition_copy_desc_budget;
 
 -- Highest pg_ao(cs)seg.modcount over the leaves of a partitioned table, read on
 -- the segments. Every close of an insert descriptor bumps it, so after a
@@ -61,11 +72,11 @@ create table pdlru.ao_rr (like pdlru.ao_ref)
   partition by range (part) (start (0) end (8) every (1));
 
 -- unbounded reference load
-set gp_partition_insert_desc_budget = off;
+set gp_partition_insert_desc_memory_percent = 0;
 insert into pdlru.ao_ref select g, g % 8, 'v' || g from generate_series(1, 8000) g;
 
 -- same data, tight budget: evict + re-open on almost every row
-set gp_partition_insert_desc_budget = on;
+set gp_partition_insert_desc_memory_percent = 50;
 set statement_mem = '1MB';
 insert into pdlru.ao_rr select g, g % 8, 'v' || g from generate_series(1, 8000) g;
 reset statement_mem;
@@ -83,10 +94,18 @@ select pdlru.max_modcount('pdlru.ao_ref') as ref_modcount,
 
 -- COPY path (what gprestore of a non-leaf-partition backup runs)
 copy (select g, g % 8, 'v' || g from generate_series(1, 8000) g) to '/tmp/pdlru_ao.csv' csv;
+-- the INSERT setting does not apply to COPY
 truncate pdlru.ao_rr;
 set statement_mem = '1MB';
 copy pdlru.ao_rr from '/tmp/pdlru_ao.csv' csv;
 reset statement_mem;
+select pdlru.max_modcount('pdlru.ao_rr') as copy_unbounded_modcount;
+truncate pdlru.ao_rr;
+set gp_partition_copy_desc_budget = on;
+set statement_mem = '1MB';
+copy pdlru.ao_rr from '/tmp/pdlru_ao.csv' csv;
+reset statement_mem;
+reset gp_partition_copy_desc_budget;
 select count(*), sum(id), sum(length(payload)) from pdlru.ao_rr;
 select count(*) as dup_tids from (
   select gp_segment_id, part, ctid from pdlru.ao_rr group by 1, 2, 3 having count(*) > 1
@@ -111,9 +130,9 @@ create table pdlru.aocs (like pdlru.src)
   distributed by (id)
   partition by range (part) (start (0) end (10) every (1));
 
-set gp_partition_insert_desc_budget = off;
+set gp_partition_insert_desc_memory_percent = 0;
 insert into pdlru.aocs_ref select * from pdlru.src;
-set gp_partition_insert_desc_budget = on;
+set gp_partition_insert_desc_memory_percent = 50;
 set statement_mem = '1MB';
 insert into pdlru.aocs select * from pdlru.src;
 reset statement_mem;
@@ -207,9 +226,9 @@ create table pdlru.ml (like pdlru.ml_ref)
       default subpartition sdef )
   (start (0) end (4) every (1), default partition rdef);
 
-set gp_partition_insert_desc_budget = off;
+set gp_partition_insert_desc_memory_percent = 0;
 insert into pdlru.ml_ref select g, g % 6, g % 4, 'v' || g from generate_series(1, 8000) g;
-set gp_partition_insert_desc_budget = on;
+set gp_partition_insert_desc_memory_percent = 50;
 set statement_mem = '1MB';
 insert into pdlru.ml     select g, g % 6, g % 4, 'v' || g from generate_series(1, 8000) g;
 reset statement_mem;
@@ -255,6 +274,47 @@ reset statement_mem;
 reset gp_vmem_idle_resource_timeout;
 select pdlru.max_modcount('pdlru.ao_rr') > 1 as evicted_on_fresh_gangs;
 
-reset search_path;
+----------------------------------------------------------------------
+-- 8. A load that keeps re-opening leaves says so, once per statement and
+--    segment; one clustered by leaf does not. Every row goes to one
+--    segment, and generate_series() runs on a single sender, so the order
+--    survives the motion.
+----------------------------------------------------------------------
+
+-- start_matchsubs
+-- m/\(budget \d+ kB, \d+ open at once\).*/
+-- s/\(budget \d+ kB, \d+ open at once\).*/(budget ### kB, # open at once)/
+-- end_matchsubs
+
+create table pdlru.one_seg (id int, part int, payload text)
+  with (appendonly=true, orientation=row, blocksize=262144)
+  distributed by (id)
+  partition by range (part) (start (0) end (8) every (1));
 set client_min_messages to warning;
+set statement_mem = '1MB';
+insert into pdlru.one_seg select 1, g % 8, 'v' || g from generate_series(1, 2000) g;
+reset statement_mem;
+set client_min_messages to error;
+truncate pdlru.one_seg;
+set client_min_messages to warning;
+set statement_mem = '1MB';
+insert into pdlru.one_seg select 1, g % 8, 'v' || g from generate_series(1, 2000) g
+  order by g % 8;
+reset statement_mem;
+set client_min_messages to error;
+select pdlru.max_modcount('pdlru.one_seg') as clustered_modcount;
+
+----------------------------------------------------------------------
+-- 9. The descriptors' share is taken out of the operators' memory, but
+--    never below each operator's fixed minimum: even 100% still lets
+--    operator memory be assigned.
+----------------------------------------------------------------------
+
+set gp_partition_insert_desc_memory_percent = 100;
+truncate pdlru.aocs;
+insert into pdlru.aocs select * from pdlru.src;
+select count(*) from pdlru.aocs;
+reset gp_partition_insert_desc_memory_percent;
+
+reset search_path;
 drop schema pdlru cascade;

@@ -1,9 +1,9 @@
--- gp_partition_insert_desc_budget actually bounds backend memory.
+-- gp_partition_insert_desc_memory_percent actually bounds backend memory.
 --
 -- Routing rows through a wide AOCS partition root opens one write stack per
 -- column for every leaf touched and, unbounded, keeps them all until end of
--- statement -- tens of MB per leaf. With the GUC on, the open descriptors are
--- kept within the statement's memory (here statement_mem).
+-- statement -- tens of MB per leaf. With the GUC > 0, the open descriptors are
+-- kept within that share of the statement's memory (here half of 16MB).
 --
 -- We suspend an INSERT at its 28th AOCS descriptor open and, from another
 -- session, read this session's reserved vmem on the segments. The budgeted run
@@ -35,7 +35,7 @@ CREATE TABLE pdlru_vmem (tag text, vmem_mb int);
 -- ===================== unbounded =====================
 2: SELECT gp_inject_fault('ao_column_insert_init_1','skip','','','',1,-1,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
 2: SELECT gp_inject_fault('ao_column_insert_init_2','suspend','','','',28,28,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
-1: SET gp_partition_insert_desc_budget = off;
+1: SET gp_partition_insert_desc_memory_percent = 0;
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
 2: INSERT INTO pdlru_vmem SELECT 'unbounded', max(vmem_mb) FROM session_state.session_level_memory_consumption WHERE query LIKE 'INSERT INTO pdlru_wide SELECT%' AND segid >= 0;
@@ -47,8 +47,9 @@ CREATE TABLE pdlru_vmem (tag text, vmem_mb int);
 1: TRUNCATE pdlru_wide;
 2: SELECT gp_inject_fault('ao_column_insert_init_1','skip','','','',1,-1,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
 2: SELECT gp_inject_fault('ao_column_insert_init_2','suspend','','','',28,28,0,dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
-1: SET gp_partition_insert_desc_budget = on;
-1: SET statement_mem = '8MB';
+1: SET gp_partition_insert_desc_memory_percent = 50;
+1: SET statement_mem = '16MB';
+1: SET client_min_messages = error;
 1&: INSERT INTO pdlru_wide SELECT * FROM pdlru_stg;
 2: SELECT gp_wait_until_triggered_fault('ao_column_insert_init_2', 1, dbid::int) FROM gp_segment_configuration WHERE role='p' AND content>=0;
 2: INSERT INTO pdlru_vmem SELECT 'bounded', max(vmem_mb) FROM session_state.session_level_memory_consumption WHERE query LIKE 'INSERT INTO pdlru_wide SELECT%' AND segid >= 0;

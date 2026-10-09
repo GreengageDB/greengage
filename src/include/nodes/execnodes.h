@@ -668,7 +668,8 @@ typedef struct EState
 
 	/*
 	 * Memory budget of the open per-partition AO/AOCS insert descriptors when
-	 * inserting through a partition root (see gp_partition_insert_desc_budget),
+	 * inserting through a partition root (see
+	 * gp_partition_insert_desc_memory_percent, gp_partition_copy_desc_budget),
 	 * private to execMain.c; NULL until the first bounded descriptor is opened.
 	 * Kept at the end of the struct so adding it does not shift the offset of
 	 * any existing field.

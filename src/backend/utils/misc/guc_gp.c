@@ -141,7 +141,8 @@ int			gp_max_local_distributed_cache = 1024;
 bool		gp_appendonly_verify_block_checksums = true;
 bool		gp_appendonly_verify_write_block = false;
 bool		gp_appendonly_compaction = true;
-bool		gp_partition_insert_desc_budget = false;
+bool		gp_partition_copy_desc_budget = false;
+int			gp_partition_insert_desc_memory_percent = 0;
 int			gp_appendonly_compaction_threshold = 0;
 bool		gp_heap_require_relhasoids_match = true;
 bool		gp_local_distributed_cache_stats = false;
@@ -1103,18 +1104,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 	},
 
 	{
-		{"gp_partition_insert_desc_budget", PGC_USERSET, APPENDONLY_TABLES,
-			gettext_noop("Bounds the memory of the open AO/AOCS insert descriptors while inserting through a partition root."),
-			gettext_noop("A single COPY/INSERT into a partition root opens one write stack "
-						 "per column for every leaf partition it touches, all of it retained "
-						 "for the life of the statement. On a wide, many-partition AO/AOCS "
-						 "table that exhausts memory. When on, the least recently used insert "
+		{"gp_partition_copy_desc_budget", PGC_USERSET, APPENDONLY_TABLES,
+			gettext_noop("Bounds the memory of the open AO/AOCS insert descriptors of a COPY into a partition root."),
+			gettext_noop("A single COPY into a partition root opens one write stack per "
+						 "column for every leaf partition it touches, all of it retained for "
+						 "the life of the statement. On a wide, many-partition AO/AOCS table "
+						 "that exhausts memory. When on, the least recently used insert "
 						 "descriptors are flushed and closed once they together occupy more "
-						 "than the statement's memory (query_mem, or statement_mem when the "
-						 "statement has none, as with COPY); a closed descriptor is re-opened "
-						 "transparently if that partition is written to again.")
+						 "than the statement's memory: the resource group slot's memory "
+						 "quota, or statement_mem. A closed descriptor is re-opened "
+						 "transparently if that partition is written to again. "
+						 "See gp_partition_insert_desc_memory_percent for INSERT.")
 		},
-		&gp_partition_insert_desc_budget,
+		&gp_partition_copy_desc_budget,
 		false,
 		NULL, NULL, NULL
 	},
@@ -3685,6 +3687,29 @@ struct config_int ConfigureNamesInt_gp[] =
 		},
 		&gp_appendonly_compaction_threshold,
 		10, 0, 100,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_partition_insert_desc_memory_percent", PGC_USERSET, APPENDONLY_TABLES,
+			gettext_noop("Percentage of an INSERT's query memory reserved for the open AO/AOCS "
+						 "insert descriptors while inserting through a partition root."),
+			gettext_noop("A single INSERT into a partition root opens one write stack per "
+						 "column for every leaf partition it touches, all of it retained for "
+						 "the life of the statement. On a wide, many-partition AO/AOCS table "
+						 "that exhausts memory. When greater than 0, this share of query_mem "
+						 "is reserved for the insert descriptors before the plan's operators "
+						 "are sized from the rest (capped so every operator keeps its fixed "
+						 "minimum; memory-intensive operators such as hash joins, hash "
+						 "aggregates and sorts get correspondingly less), and the least "
+						 "recently used descriptors are flushed and closed once they "
+						 "together occupy more than it. A closed descriptor is re-opened "
+						 "transparently if that partition is written to again. 0 keeps the "
+						 "historical unbounded behavior. See gp_partition_copy_desc_budget "
+						 "for COPY.")
+		},
+		&gp_partition_insert_desc_memory_percent,
+		0, 0, 100,
 		NULL, NULL, NULL
 	},
 
