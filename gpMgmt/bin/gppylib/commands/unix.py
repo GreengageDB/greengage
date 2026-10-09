@@ -15,7 +15,12 @@ import pwd
 import socket
 import signal
 import uuid
-import pipes
+
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
+
 import re
 
 from gppylib.gplog import get_default_logger
@@ -583,7 +588,7 @@ class Rsync(Command):
         # of each line and redirects it to progress_file
         if progress_file:
             cmd_tokens.append(
-                '2>&1 | tr "\\r" "\\n" |sed -u -E "/[0-9]+%/ s/$/ :{0}/" > {1}'.format(name, pipes.quote(progress_file)))
+                '2>&1 | tr "\\r" "\\n" |sed -u -E "/[0-9]+%/ s/$/ :{0}/" > {1}'.format(name, quote(progress_file)))
 
         cmdStr = ' '.join(cmd_tokens)
         cmdStr = "set -o pipefail; {}".format(cmdStr)
