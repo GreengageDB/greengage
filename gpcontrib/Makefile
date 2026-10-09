@@ -24,7 +24,8 @@ ifeq "$(enable_debug_extensions)" "yes"
                gp_toolkit \
                pg_hint_plan \
                gg_tables_tracking \
-               gg_wait_sampling
+               gg_wait_sampling \
+               credcheck
 else
 	recurse_targets = gp_sparse_vector \
                gp_distribution_policy \
@@ -34,7 +35,8 @@ else
                gp_toolkit \
                pg_hint_plan \
                gg_tables_tracking \
-               gg_wait_sampling
+               gg_wait_sampling \
+               credcheck
 endif
 
 ifeq "$(with_zstd)" "yes"
@@ -84,6 +86,7 @@ installcheck:
 	$(MAKE) -C gg_tables_tracking/isolation2 installcheck
 	$(MAKE) -C gg_wait_sampling installcheck
 	$(MAKE) -C gg_wait_sampling/isolation2 installcheck
+	$(MAKE) -C credcheck installcheck
 
 installcheck-resgroup:
 	$(MAKE) -C gg_wait_sampling/isolation2 installcheck-resgroup

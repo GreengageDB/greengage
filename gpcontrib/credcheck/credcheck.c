@@ -1,0 +1,4967 @@
+/*-------------------------------------------------------------------------
+ *
+ * credcheck.c:
+ * 		This file has the general PostgreSQL credential checks.
+ *
+ * This program is open source, licensed under the PostgreSQL license.
+ * For license terms, see the LICENSE file.
+ *
+ * Copyright (c) 2021-2023: MigOps Inc
+ * Copyright (c) 2023: Gilles Darold
+ * Copyright (c) 2024-2026: HexaCluster Corp
+ *
+ *-------------------------------------------------------------------------
+ */
+#include <ctype.h>
+#include <limits.h>
+#include <unistd.h>
+
+#ifdef USE_CRACKLIB
+#include <crack.h>
+#endif
+
+#include "postgres.h"
+#include "funcapi.h"
+#include "miscadmin.h"
+
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/parallel.h"
+#include "access/xact.h"
+#if PG_VERSION_NUM >= 150000
+#include "access/xlog.h"
+#include "access/xlog_internal.h"
+#include "access/xloginsert.h"
+#include "access/xlogreader.h"
+#endif
+
+#if PG_VERSION_NUM >= 190000
+#include "port.h"
+#endif
+#include "catalog/catalog.h"
+#include "catalog/indexing.h"
+#include "catalog/pg_auth_members.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_db_role_setting.h"
+#include "commands/user.h"
+#include "common/int.h"
+#if PG_VERSION_NUM >= 140000
+#include "common/hmac.h"
+#include "common/hashfn.h"
+#else
+#include "access/hash.h"
+#endif
+#include "common/sha2.h"
+#include "executor/spi.h"
+#include "libpq/auth.h"
+#include "miscadmin.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/pg_list.h"
+#include "postmaster/postmaster.h"
+#include "postmaster/bgworker.h"
+#include "storage/latch.h"
+#include "storage/proc.h"
+#include "storage/procarray.h"
+#include "tcop/utility.h"
+#include "tcop/tcopprot.h"	/* debug_query_string */
+
+#ifndef WIN32
+#include <sys/mman.h>
+#endif
+#if PG_VERSION_NUM >= 190000
+#include "storage/fd.h"
+#endif
+#include "storage/ipc.h"
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
+#if PG_VERSION_NUM >= 140000
+#include "utils/wait_event.h"
+#else
+#include "pgstat.h"
+#endif
+#include "libpq/pqsignal.h"
+#include "utils/acl.h"
+#include "utils/builtins.h"
+#include "utils/datetime.h"
+#include "utils/fmgroids.h"
+#include "utils/guc.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
+#include "utils/timestamp.h"
+#if PG_VERSION_NUM >= 190000
+#include "utils/tuplestore.h"
+#endif
+#include "utils/varlena.h"
+
+#ifdef GP_VERSION_NUM
+#include "cdb/cdbvars.h"
+
+/*
+ * Entry db QEs run on the coordinator and execute the slices of the
+ * dispatcher's query, which the dispatcher has already checked. They don't
+ * see the uncommitted changes of the role settings made by the dispatcher
+ * either, so they must not check anything on their own.
+ *
+ * Any client can request the QE role in the startup packet, so the role
+ * alone doesn't identify an entry db QE. Real ones get the free pass for
+ * internal connections, which skips the pg_hba.conf lookup, while a client
+ * that has authenticated normally has a matching pg_hba.conf line.
+ */
+#define IS_ENTRY_DB_QE() \
+	(Gp_role == GP_ROLE_EXECUTE && MyProcPort != NULL && MyProcPort->hba == NULL)
+
+/*
+ * Password policy, history and authentication failures are handled on the
+ * coordinator only, segments have nothing to check, reset or change. Entry db
+ * QEs share the history and the banned roles with the dispatcher, but the
+ * credcheck settings of the session are not synchronized with them, so with
+ * uses_settings they are rejected too.
+ */
+static void
+check_coordinator(const char *funcname, bool uses_settings)
+{
+	if (!IS_QUERY_DISPATCHER() || (uses_settings && IS_ENTRY_DB_QE()))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("%s() can only be executed on the coordinator", funcname),
+				 IS_QUERY_DISPATCHER() ?
+				 errdetail("Entry db processes don't see the credcheck settings of the session.") : 0));
+}
+#else
+#define IS_ENTRY_DB_QE() false
+#endif
+
+#define NOT_IN_PARALLEL_WORKER (ParallelWorkerNumber < 0)
+
+/* Default passord encryption */
+#define Password_encryption = PASSWORD_TYPE_SCRAM_SHA_256;
+/* Name of external file to store password history in the PGDATA */
+#define PGPH_DUMP_FILE_OLD  "global/pg_password_history"
+#define PGPH_DUMP_FILE  "pg_password_history"
+
+/* Number of output arguments (columns) in the pg_password_history pseudo table */
+#define PG_PASSWORD_HISTORY_COLS	3
+/* Number of output arguments (columns) in the pg_banned_role pseudo table */
+#define PG_BANNED_ROLE_COLS		3
+
+/* Magic number identifying the stats file format */
+static const uint32 PGPH_FILE_HEADER = 0x48504750;
+/* credcheck password history version, changes in which invalidate all entries */
+static const uint32 PGPH_VERSION = 100;
+
+/*
+ * New (6.0) memory-mapped password history store. The dynahash is replaced by
+ * an integer-indexed, separately-chained hash table living entirely inside a
+ * mmap(MAP_SHARED) file (option C). No pointer is ever stored in the mapping:
+ * buckets and chains reference slots by index. The legacy 5.x dump file (magic
+ * PGPH_FILE_HEADER) is migrated into this store at startup.
+ */
+#define PGPH_MMAP_MAGIC     0x50484D50      /* "PHMP" */
+#define PGPH_MMAP_VERSION   200
+#define PGPH_TRANCHE_NAME                "credcheck_history"
+#define PGAF_TRANCHE_NAME                "credcheck_auth_failure"
+
+/*
+ * ---------------------------------------------------------------------------
+ * lastlog: utmp/wtmp-like login history persisted in a memory-mapped file.
+ *
+ * The runtime data lives in two areas:
+ *   - an anonymous shared memory control struct (LastlogShared) holding the
+ *     LWLock and the live (still connected) sessions array.  This is volatile
+ *     and never persisted.
+ *   - a memory-mapped, fixed-size ring of LastlogEntry records (the history
+ *     plus boot/shutdown/crash markers).  This *is* the file, the kernel
+ *     handles write-back; we only msync() periodically and at shutdown.
+ *
+ * Because the mapping base address differs between processes (EXEC_BACKEND,
+ * ASLR), NOTHING in the mapped region may store a pointer: records are
+ * addressed by integer index only.
+ * ---------------------------------------------------------------------------
+ */
+#define LASTLOG_DUMP_FILE       "credcheck.lastlog"
+#define LASTLOG_TRANCHE_NAME    "credcheck_lastlog"
+static const uint32 LASTLOG_FILE_HEADER = 0x4C4C4743;   /* "LLGC" */
+static const uint32 LASTLOG_VERSION = 100;
+#define LASTLOG_HOST_LEN        64
+
+typedef enum LastlogType
+{
+	LL_USER = 0,        /* a user session */
+	LL_BOOT,            /* PostgreSQL (re)start */
+	LL_SHUTDOWN,        /* clean shutdown */
+	LL_CRASH            /* unclean previous shutdown detected at next boot */
+} LastlogType;
+
+/*
+ * A single fixed-size record.  The query text is stored inline right after
+ * the struct, capped at lastlog_query_size bytes; the real on-disk/in-mmap
+ * stride is ll_record_stride (computed at startup and stored in the header),
+ * so last_query must remain the final member.
+ */
+typedef struct LastlogEntry
+{
+	uint64       seqno;                      /* monotonic; 0 == empty slot */
+	bool         complete;                   /* written last, torn-write guard */
+	LastlogType  type;
+	char         username[NAMEDATALEN];
+	int          pid;
+	char         remote_host[LASTLOG_HOST_LEN];   /* IP or "[local]" */
+	int          remote_port;
+	TimestampTz  login_time;
+	TimestampTz  logout_time;                /* 0 while still connected */
+	bool         active;                     /* still connected */
+	char         last_query[FLEXIBLE_ARRAY_MEMBER]; /* size lastlog_query_size */
+} LastlogEntry;
+
+#define LASTLOG_BASE_SIZE   (offsetof(LastlogEntry, last_query))
+
+/* On-disk/in-mmap header, kept at offset 0 of the mapping. */
+typedef struct LastlogFileHeader
+{
+	uint32       magic;
+	uint32       version;
+	uint32       record_stride;   /* bytes per record incl. inline query */
+	uint32       capacity;        /* number of record slots (= lastlog_max) */
+	uint32       head;            /* index of next slot to (over)write */
+	uint32       nused;           /* number of valid records (<= capacity) */
+	uint64       seqno;           /* last allocated sequence number */
+	bool         clean_shutdown;  /* set true only on clean shutdown */
+} LastlogFileHeader;
+
+/*
+ * Live session slot, one per backend, addressed by MyProc->pgprocno.
+ * Lives in anonymous shared memory, never persisted.
+ */
+typedef struct LastlogActive
+{
+	bool         in_use;
+	int          pid;
+	char         username[NAMEDATALEN];
+	char         remote_host[LASTLOG_HOST_LEN];
+	int          remote_port;
+	TimestampTz  login_time;
+	char        *last_query;      /* points inside LastlogShared->query_area */
+} LastlogActive;
+
+/* Anonymous shared control structure for lastlog. */
+typedef struct LastlogShared
+{
+	LWLock      *lock;            /* protects the mmap ring and active[] */
+	int          nactive_slots;   /* == MaxBackends */
+	LastlogActive active[FLEXIBLE_ARRAY_MEMBER];
+	/* query_area (nactive_slots * lastlog_query_size bytes) follows */
+} LastlogShared;
+
+#if PG_VERSION_NUM >= 150000
+/*
+ * Custom WAL resource manager used to keep the password history file in
+ * sync between the primary and its standbys.
+ *
+ * RM_CREDCHECK_ID (150) is a stable custom WAL resource manager ID
+ * allocated to credcheck; see the PostgreSQL custom WAL Rmgr registry at
+ * https://wiki.postgresql.org/wiki/CustomWALResourceManagers.
+ */
+#define RM_CREDCHECK_ID			150
+#define CREDCHECK_RMGR_NAME		"credcheck"
+
+#define XLOG_CREDCHECK_PWD_ADD			0x10
+#define XLOG_CREDCHECK_PWD_REMOVE		0x20
+#define XLOG_CREDCHECK_PWD_REMOVE_USER	0x30
+#define XLOG_CREDCHECK_PWD_RENAME		0x40
+#define XLOG_CREDCHECK_PWD_RESET		0x50
+#define XLOG_CREDCHECK_PWD_TIMESTAMP	0x60
+
+typedef struct xl_credcheck_pwd_add
+{
+	char		rolename[NAMEDATALEN];
+	char		password_hash[PG_SHA256_DIGEST_STRING_LENGTH];
+	TimestampTz	password_date;
+} xl_credcheck_pwd_add;
+
+typedef struct xl_credcheck_pwd_remove
+{
+	char		rolename[NAMEDATALEN];
+	char		password_hash[PG_SHA256_DIGEST_STRING_LENGTH];
+} xl_credcheck_pwd_remove;
+
+typedef struct xl_credcheck_pwd_remove_user
+{
+	char		rolename[NAMEDATALEN];
+} xl_credcheck_pwd_remove_user;
+
+typedef struct xl_credcheck_pwd_rename
+{
+	char		oldname[NAMEDATALEN];
+	char		newname[NAMEDATALEN];
+} xl_credcheck_pwd_rename;
+
+typedef struct xl_credcheck_pwd_reset
+{
+	bool		has_user;
+	char		rolename[NAMEDATALEN];	/* valid iff has_user */
+} xl_credcheck_pwd_reset;
+
+typedef struct xl_credcheck_pwd_timestamp
+{
+	char		rolename[NAMEDATALEN];
+	TimestampTz	new_timestamp;
+} xl_credcheck_pwd_timestamp;
+
+static void credcheck_rmgr_redo(XLogReaderState *record);
+static void credcheck_rmgr_desc(StringInfo buf, XLogReaderState *record);
+static const char *credcheck_rmgr_identify(uint8 info);
+
+static RmgrData credcheck_rmgr = {
+	.rm_name = CREDCHECK_RMGR_NAME,
+	.rm_redo = credcheck_rmgr_redo,
+	.rm_desc = credcheck_rmgr_desc,
+	.rm_identify = credcheck_rmgr_identify,
+};
+#endif		/* PG_VERSION_NUM >= 150000 */
+
+static bool no_password_logging    = true;
+
+#if PG_VERSION_NUM < 120000
+#define table_open(r,l)         heap_open(r,l)
+#define table_openrv(r,l)       heap_openrv(r,l)
+#define table_close(r,l)        heap_close(r,l)
+#endif
+
+#if PG_VERSION_NUM < 100000
+#error Minimum version of PostgreSQL required is 10
+#endif
+
+/* Define ProcessUtility hook proto/parameters following the PostgreSQL version */
+#if PG_VERSION_NUM >= 140000
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+				       bool readOnlyTree, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					QueryCompletion *qc
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc
+#else
+#if PG_VERSION_NUM >= 130000
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					QueryCompletion *qc
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, context, params, queryEnv, dest, qc
+#else
+#define PEL_PROCESSUTILITY_PROTO PlannedStmt *pstmt, const char *queryString, \
+					ProcessUtilityContext context, ParamListInfo params, \
+					QueryEnvironment *queryEnv, DestReceiver *dest, \
+					char *completionTag
+#define PEL_PROCESSUTILITY_ARGS pstmt, queryString, context, params, queryEnv, dest, completionTag
+#endif
+#endif
+
+PG_MODULE_MAGIC;
+
+/* Hooks */
+static check_password_hook_type prev_check_password_hook = NULL;
+static ProcessUtility_hook_type prev_ProcessUtility = NULL;
+static ExecutorStart_hook_type prev_ExecutorStart = NULL;
+static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+#if PG_VERSION_NUM >= 150000
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
+/* Hold previous client authent hook */
+static ClientAuthentication_hook_type prev_ClientAuthentication = NULL;
+/* Hold previous logging hook */
+static emit_log_hook_type prev_log_hook = NULL;
+
+
+/* In memory storage of password history */
+typedef struct pgphHashKey
+{
+        char rolename[NAMEDATALEN];
+        char password_hash[PG_SHA256_DIGEST_STRING_LENGTH];
+} pgphHashKey;
+
+typedef struct pgphEntry
+{
+	pgphHashKey key;                        /* hash key of entry - MUST BE FIRST */
+        TimestampTz password_date;
+} pgphEntry;
+
+/* On-disk/in-mmap header for the password history store. */
+typedef struct PgphMmapHeader
+{
+	uint32       magic;
+	uint32       version;
+	uint32       capacity;       /* number of slots (= pgph_max) */
+	uint32       nbuckets;       /* number of hash buckets */
+	int32        nused;          /* slots in use */
+	int32        freehead;       /* head of free-slot list, -1 if full */
+} PgphMmapHeader;
+
+/* One slot of the chained hash table; addressed by integer index only. */
+typedef struct PgphSlot
+{
+	int32        next;           /* next slot in bucket chain or free list */
+	int32        used;           /* 1 = occupied, 0 = free */
+	pgphEntry    entry;          /* {key, password_date} */
+} PgphSlot;
+
+/* Global shared state */
+typedef struct pgphSharedState
+{
+        LWLock     *lock;                   /* protects hashtable search/modification */
+	int	    num_entries;            /* number of entries in the password history */
+} pgphSharedState;
+
+
+/* Links to shared memory state */
+static pgphSharedState *pgph = NULL;
+static HTAB *pgph_hash = NULL;
+
+/* pgph memory-mapped store (process-local pointers into the mapping) */
+static char             *pgph_base = NULL;
+static PgphMmapHeader    *pgph_hdr = NULL;
+static int32             *pgph_buckets = NULL;
+static PgphSlot          *pgph_slots = NULL;
+static Size               pgph_mmap_size = 0;
+static int pgph_max = 65535;
+static int pgaf_max = 1024;
+
+/* lastlog runtime state (process-local where noted) */
+static LastlogShared *lastlog = NULL;            /* anon shmem control */
+static char          *ll_mmap_base = NULL;       /* process-local mmap base */
+static LastlogFileHeader *ll_hdr = NULL;         /* == (header *) ll_mmap_base */
+static Size           ll_mmap_size = 0;          /* process-local mapped size */
+static uint32         ll_record_stride = 0;      /* bytes per record */
+static int            ll_my_slot = -1;           /* this backend's active idx */
+
+/* lastlog GUCs */
+static bool lastlog_enabled = false;
+static int  lastlog_max = 1024;
+static bool lastlog_track_query = false;
+static int  lastlog_query_size = 1024;
+static int  lastlog_flush_interval = 0;          /* seconds; 0 = shutdown only */
+static int fail_max = 0;
+static bool reset_superuser = false;
+static bool encrypted_password_allowed = false;
+
+/* In memory storage of auth failure history */
+typedef struct pgafHashKey
+{
+	Oid  roleid;
+} pgafHashKey;
+
+typedef struct pgafEntry
+{
+	pgafHashKey key;                        /* hash key of entry - MUST BE FIRST */
+        float failure_count;
+        TimestampTz banned_date;
+} pgafEntry;
+
+/* Global shared state */
+typedef struct pgafSharedState
+{
+        LWLock     *lock;                   /* protects hashtable search/modification */
+	int	    num_entries;            /* number of entries in the auth failure history */
+} pgafSharedState;
+
+static pgafSharedState *pgaf = NULL;
+static HTAB *pgaf_hash = NULL;
+
+
+/* Functions */
+extern void _PG_init(void);
+extern void _PG_fini(void);
+static void cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO);
+static void cc_ExecutorStart(QueryDesc *queryDesc, int eflags);
+static void cc_XactCallback(XactEvent event, void *arg);
+static void cc_SubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+							   SubTransactionId parentSubid, void *arg);
+
+static void flush_password_history(void);
+static pgphEntry *pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date);
+
+/* pgph memory-mapped table API */
+static void pgph_mmap_attach(void);
+static void pgph_tab_init(void);
+static pgphEntry *pgph_tab_find(pgphHashKey *key);
+static pgphEntry *pgph_tab_enter(pgphHashKey *key, bool *found);
+static void pgph_tab_remove(pgphHashKey *key);
+static void pgph_tab_rekey(pgphEntry *entry, pgphHashKey *newkey);
+static int32 pgph_tab_count(void);
+static void pgph_msync(int flags);
+static pgphEntry *pgph_slurp_legacy(int32 *n_out);
+static pgafEntry *pgaf_entry_alloc(pgafHashKey *key, float failure_count);
+#if PG_VERSION_NUM >= 150000
+static void pghist_shmem_request(void);
+#endif
+static void pghist_shmem_startup(void);
+static void pgph_shmem_startup(void);
+static void pgaf_shmem_startup(void);
+
+/* lastlog forward declarations */
+static Size lastlog_memsize(void);
+static void lastlog_shmem_startup(void);
+static void lastlog_mmap_attach(void);
+static void lastlog_init_header(void);
+static void lastlog_append_marker(LastlogType type);
+static void lastlog_record_login(Port *port);
+static void lastlog_finalize_session(int code, Datum arg);
+static void lastlog_track_last_query(const char *query_string);
+static void lastlog_msync(int flags);
+PGDLLEXPORT void lastlog_bgworker_main(Datum main_arg);
+static void lastlog_bgworker_shutdown(int code, Datum arg);
+extern PGDLLEXPORT Datum credcheck_lastlog(PG_FUNCTION_ARGS);
+#if PG_VERSION_NUM >= 120000
+static int  entry_cmp(const void *lhs, const void *rhs);
+#endif
+static Size pgph_memsize(void);
+static void pg_password_history_internal(FunctionCallInfo fcinfo);
+static void fix_log(ErrorData *edata);
+static Size pgaf_memsize(void);
+static void credcheck_max_auth_failure(Port *port, int status);
+static float get_auth_failure(const char *username, Oid userid, int status);
+static float save_auth_failure(Port *port, Oid userid);
+static void remove_auth_failure(const char *username, Oid userid);
+static void pg_banned_role_internal(FunctionCallInfo fcinfo);
+static void set_force_change_password(Oid databaseid, Oid roleid, char *valuestr);
+
+/* Username flags*/
+static int username_min_length = 1;
+static int username_min_special = 0;
+static int username_min_digit = 0;
+static int username_min_upper = 0;
+static int username_min_lower = 0;
+static int username_min_repeat = 0;
+static char *username_not_contain = NULL;
+static char *username_contain = NULL;
+static bool username_contain_password = true;
+static bool username_ignore_case = false;
+static char *username_whitelist = NULL;
+static char *max_auth_whitelist = NULL;
+
+/* Password flags*/
+static int password_min_length = 1;
+static int password_min_special = 0;
+static int password_min_digit = 0;
+static int password_min_upper = 0;
+static int password_min_lower = 0;
+static int password_min_repeat = 0;
+static char *password_not_contain = NULL;
+static char *password_contain = NULL;
+static bool password_contain_username = true;
+static bool password_ignore_case = false;
+static int password_valid_until = 0;
+static int password_valid_min = 0;
+static int password_valid_warning = 0;
+static int password_valid_max = 0;
+static int auth_delay_milliseconds = 0;
+static bool password_change_first_login = false;
+static bool force_change_password = false;
+/*
+ * The outermost transaction nesting level at which the forced password change
+ * has been cleared in the current transaction, 0 if it hasn't
+ */
+static int force_change_password_cleared_level = 0;
+static bool disallow_change_password = false;
+static bool superuser_nocheck = false;
+
+#if PG_VERSION_NUM >= 120000
+/*
+ password_reuse_history:
+	number of distinct passwords set before a password can be reused.
+ password_reuse_interval:
+	amount of time it takes before a password can be reused again.
+*/
+static int password_reuse_history = 0;
+static int password_reuse_interval = 0;
+
+char *str_to_sha256(const char *str, const char *salt);
+#endif
+
+bool check_whitelist(char **newval, void **extra, GucSource source);
+bool is_in_whitelist(char *username, char *whitelist);
+
+static char *to_nlower(const char *str, size_t max) {
+  char *lower_str;
+  int i = 0;
+
+  lower_str = (char *)calloc(strlen(str) + 1, sizeof(char));
+
+  for (const char *p = str; *p && i < max; p++) {
+    lower_str[i++] = tolower(*p);
+  }
+  lower_str[i] = '\0';
+  return lower_str;
+}
+
+static bool str_contains(const char *chars, const char *str) {
+    char *chars_copy;
+    char *token;
+    char *saveptr = NULL;
+    bool found = false;
+    /* Make a copy of chars since strtok_r modifies the string */
+    chars_copy = pstrdup(chars);
+
+    token = strtok_r(chars_copy, ",", &saveptr);
+    while (token != NULL) {
+        if (strstr(str, token) != NULL) {
+            found = true;
+            break;
+        }
+        token = strtok_r(NULL, ",", &saveptr);
+    }
+    pfree(chars_copy);
+    return found;
+}
+
+static void check_str_counters(const char *str, int *lower, int *upper,
+                               int *digit, int *special) {
+  for (const char *i = str; *i; i++) {
+    if (islower(*i)) {
+      (*lower)++;
+    } else if (isupper(*i)) {
+      (*upper)++;
+    } else if (isdigit(*i)) {
+      (*digit)++;
+    } else {
+      (*special)++;
+    }
+  }
+}
+
+static bool char_repeat_exceeds(const char *str, int max_repeat) {
+  int occurred = 1;
+  size_t len = strlen(str);
+
+  /*if string has only one character, then no need to proceed further*/
+  if (len==1) {
+	  return false;
+  }
+
+  for (size_t i = 0; i < len;) {
+    occurred = 1;
+    /*first character = str[i]
+     second character = str[i+1]
+     search for an adjacent repeated characters
+     for example, in this string "weekend summary"
+     search for the series "ee", "mm"
+     */
+    for (size_t j = (i + 1), k = 1; j < len; j++, k++) {
+      /* character matched*/
+      if (str[i] == str[j]) {
+        /* is the previous, current character positions are adjacent*/
+        if (i + k == j) {
+          occurred++;
+          if (occurred > max_repeat) {
+            return true;
+          }
+        }
+      }
+
+      /* if we reach an end of the string, no need to process further*/
+      if (j + 1 == len) {
+        return false;
+      }
+
+      /* if the characters are not equal then point "i" to "j"*/
+      if (str[i] != str[j]) {
+        i = j;
+        break;
+      }
+    }
+  }
+  return false;
+}
+
+static void
+username_check(const char *username, const char *password)
+{
+	int user_total_special = 0;
+	int user_total_digit = 0;
+	int user_total_upper = 0;
+	int user_total_lower = 0;
+
+	char *tmp_pass = NULL;
+	char *tmp_user = NULL;
+	char *tmp_contains = NULL;
+	char *tmp_not_contains = NULL;
+
+	/* checks has to be done by ignoring case */
+	if (username_ignore_case)
+	{
+		if (password != NULL && strlen(password) > 0)
+			tmp_pass = to_nlower(password, INT_MAX);
+		tmp_user = to_nlower(username, INT_MAX);
+		tmp_contains = to_nlower(username_contain, INT_MAX);
+		tmp_not_contains = to_nlower(username_not_contain, INT_MAX);
+	}
+	else
+	{
+		if (password != NULL && strlen(password) > 0)
+			tmp_pass = strndup(password, INT_MAX);
+		tmp_user = strndup(username, INT_MAX);
+		tmp_contains = strndup(username_contain, INT_MAX);
+		tmp_not_contains = strndup(username_not_contain, INT_MAX);
+	}
+
+	/* Rule 1: username length */
+	if (strnlen(tmp_user, INT_MAX) < username_min_length)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("username length should match the configured %s (%d)"), 
+				     "credcheck.username_min_length", username_min_length)));
+		goto clean;
+	}
+
+	/* Rule 2: username contains password
+	 * Note:
+	 * tmp_pass is NULL for ALTER USER ... RENAME TO ...;
+	 * statement so this rule can not be applied.
+	 */
+	if (tmp_pass != NULL && username_contain_password)
+	{
+		if (strstr(tmp_user, tmp_pass)) {
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username should not contain password"))));
+			goto clean;
+		}
+	}
+
+	/* Rule 3: contain characters */
+	if (tmp_contains != NULL && strlen(tmp_contains) > 0)
+	{
+		if (str_contains(tmp_contains, tmp_user) == false)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username does not contain the configured %s characters: %s"),
+	 						"credcheck.username_contain", tmp_contains)));
+			goto clean;
+		}
+	}
+
+	/* Rule 4: not contain characters */
+	if (tmp_not_contains != NULL && strlen(tmp_not_contains) > 0)
+	{
+		if (str_contains(tmp_not_contains, tmp_user) == true)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("username contains the configured %s unauthorized characters: %s"),
+					       "credcheck.username_not_contain", tmp_not_contains)));
+			goto clean;
+		}
+	}
+
+	check_str_counters(tmp_user, &user_total_lower, &user_total_upper,
+		     &user_total_digit, &user_total_special);
+
+	/* Rule 5: total upper characters */
+	if (!username_ignore_case && user_total_upper < username_min_upper)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_upper", username_min_upper)));
+		goto clean;
+	}
+
+	/* Rule 6: total lower characters */
+	if (!username_ignore_case && user_total_lower < username_min_lower)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_lower", username_min_lower)));
+		goto clean;
+	}
+
+	/* Rule 7: total digits */
+	if (user_total_digit < username_min_digit)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_digit", username_min_digit)));
+		goto clean;
+	}
+
+	/* Rule 8: total special */
+	if (user_total_special < username_min_special)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username does not contain the configured %s characters (%d)",
+				     "credcheck.username_min_special", username_min_special)));
+		goto clean;
+	}
+
+	/* Rule 9: minimum char repeat */
+	if (username_min_repeat)
+	{
+		if (char_repeat_exceeds(tmp_user, username_min_repeat))
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				   errmsg(gettext_noop("%s characters are repeated more than the "
+						"configured %s times (%d)"), "username", "credcheck.username_min_repeat", username_min_repeat)));
+			goto clean;
+		}
+	}
+	clean:
+
+	free(tmp_pass);
+	free(tmp_user);
+	free(tmp_contains);
+	free(tmp_not_contains);
+}
+
+/* We just check that the list is valid, no username existing check */
+bool
+check_whitelist(char **newval, void **extra, GucSource source)
+{
+	char       *rawstring;
+	List       *elemlist;
+
+	/* Need a modifiable copy of string */
+	rawstring = pstrdup(*newval);
+	/* Parse string into list of identifiers */
+	if (!SplitIdentifierString(rawstring, ',', &elemlist))
+	{
+		/* syntax error in list */
+		GUC_check_errdetail("List syntax is invalid.");
+		pfree(rawstring);
+		list_free(elemlist);
+		return false;
+	}
+
+	pfree(rawstring);
+	list_free(elemlist);
+
+	return true;
+}
+
+/* check if the username is in the whitelist */
+bool
+is_in_whitelist(char *username, char *whitelist)
+{
+	char       *rawstring;
+	List       *elemlist;
+	ListCell   *l;
+	int len =  0;
+
+	Assert(username != NULL);
+	Assert(whitelist != NULL);
+
+	len =  strlen(whitelist);
+	if (len == 0)
+		return false;
+
+	/* Need a modifiable copy of string */
+	rawstring = palloc0(sizeof(char) * (len+1));
+	strcpy(rawstring, whitelist);
+	/* Parse string into list of identifiers */
+	if (!SplitIdentifierString(rawstring, ',', &elemlist))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("username list is invalid: %s", whitelist)));
+		list_free(elemlist);
+		pfree(rawstring);
+		return false;
+	}
+
+        foreach(l, elemlist)
+        {
+                char       *tok = (char *) lfirst(l);
+
+		/* the username is in the list */
+                if (pg_strcasecmp(tok, username) == 0)
+		{
+                        list_free(elemlist);
+			pfree(rawstring);
+                        return true;
+                }
+        }
+
+	list_free(elemlist);
+	pfree(rawstring);
+
+	return false;
+}
+
+
+static void password_check(const char *username, const char *password)
+{
+
+	int pass_total_special = 0;
+	int pass_total_digit = 0;
+	int pass_total_upper = 0;
+	int pass_total_lower = 0;
+
+	char *tmp_pass = NULL;
+	char *tmp_user = NULL;
+	char *tmp_contains = NULL;
+	char *tmp_not_contains = NULL;
+
+	Assert(username != NULL);
+	Assert(password != NULL);
+
+	/* checks has to be done by ignoring case */
+	if (password_ignore_case)
+	{
+		tmp_pass = to_nlower(password, INT_MAX);
+		tmp_user = to_nlower(username, INT_MAX);
+		tmp_contains = to_nlower(password_contain, INT_MAX);
+		tmp_not_contains = to_nlower(password_not_contain, INT_MAX);
+	}
+	else
+	{
+		tmp_pass = strndup(password, INT_MAX);
+		tmp_user = strndup(username, INT_MAX);
+		tmp_contains = strndup(password_contain, INT_MAX);
+		tmp_not_contains = strndup(password_not_contain, INT_MAX);
+	}
+
+	/* Rule 1: password length */
+	if (strnlen(tmp_pass, INT_MAX) < password_min_length)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("password length should match the configured %s (%d)"),
+				     "credcheck.password_min_length", password_min_length)));
+		goto clean;
+	}
+
+	/* Rule 2: password contains username */
+	if (password_contain_username)
+	{
+		if (strstr(tmp_pass, tmp_user))
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password should not contain username"))));
+			goto clean;
+		}
+	}
+
+	/* Rule 3: contain characters */
+	if (tmp_contains != NULL && strlen(tmp_contains) > 0)
+	{
+		if (str_contains(tmp_contains, tmp_pass) == false)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password does not contain the configured %s characters: %s"), 
+					       "credcheck.password_contain", tmp_contains)));
+			goto clean;
+		}
+	}
+
+	/* Rule 4: not contain characters */
+	if (tmp_not_contains != NULL && strlen(tmp_not_contains) > 0)
+	{
+		if (str_contains(tmp_not_contains, tmp_pass) == true)
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+					errmsg(gettext_noop("password contains the configured %s unauthorized characters: %s"),
+					       "credcheck.password_not_contain", tmp_not_contains)));
+			goto clean;
+		}
+	}
+
+	check_str_counters(tmp_pass, &pass_total_lower, &pass_total_upper,
+		     &pass_total_digit, &pass_total_special);
+
+	/* Rule 5: total upper characters */
+	if (!password_ignore_case && pass_total_upper < password_min_upper)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_upper", password_min_upper)));
+		goto clean;
+	}
+
+	/* Rule 6: total lower characters */
+	if (!password_ignore_case && pass_total_lower < password_min_lower)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_lower", password_min_lower)));
+		goto clean;
+	}
+
+	/* Rule 7: total digits */
+	if (pass_total_digit < password_min_digit)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_digit", password_min_digit)));
+		goto clean;
+	}
+
+	/* Rule 8: total special */
+	if (pass_total_special < password_min_special)
+	{
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg("password does not contain the configured %s characters (%d)",
+				     "credcheck.password_min_special", password_min_special)));
+		goto clean;
+	}
+
+	/* Rule 9: minimum char repeat */
+	if (password_min_repeat)
+	{
+		if (char_repeat_exceeds(tmp_pass, password_min_repeat))
+		{
+			ereport(ERROR,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				   errmsg("%s characters are repeated more than the "
+						"configured %s times (%d)", "password",
+						"credcheck.password_min_repeat", password_min_repeat)));
+			goto clean;
+		}
+	}
+
+	clean:
+
+	free(tmp_pass);
+	free(tmp_user);
+	free(tmp_contains);
+	free(tmp_not_contains);
+}
+
+static void
+username_guc(void)
+{
+	DefineCustomIntVariable("credcheck.username_min_length",
+				gettext_noop("minimum username length"), NULL,
+				&username_min_length, 1, 1, INT_MAX, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.username_min_special",
+				gettext_noop("minimum username special characters"),
+				NULL, &username_min_special, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.username_min_digit",
+				gettext_noop("minimum username digits"), NULL,
+				&username_min_digit, 0, 0, INT_MAX, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.username_min_upper",
+				gettext_noop("minimum username uppercase letters"),
+				NULL, &username_min_upper, 0, 0, INT_MAX, PGC_SUSET,
+				0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.username_min_lower",
+				gettext_noop("minimum username lowercase letters"),
+				NULL, &username_min_lower, 0, 0, INT_MAX, PGC_SUSET,
+				0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.username_min_repeat",
+				gettext_noop("minimum username characters repeat"),
+				NULL, &username_min_repeat, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.username_contain_password",
+				gettext_noop("username contains password"), NULL,
+				&username_contain_password, true, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.username_ignore_case",
+				gettext_noop("ignore case while username checking"),
+				NULL, &username_ignore_case, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.username_not_contain",
+				gettext_noop("username should not contain these characters"), NULL,
+				&username_not_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.username_contain",
+				gettext_noop("password should contain these characters"), NULL,
+				&username_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
+}
+
+static void
+password_guc(void)
+{
+	DefineCustomIntVariable("credcheck.password_min_length",
+				gettext_noop("minimum password length"), NULL,
+				&password_min_length, 1, 1, INT_MAX, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_min_special",
+				gettext_noop("minimum special characters"), NULL,
+				&password_min_special, 0, 0, INT_MAX, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_min_digit",
+				gettext_noop("minimum password digits"), NULL,
+				&password_min_digit, 0, 0, INT_MAX, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_min_upper",
+				gettext_noop("minimum password uppercase letters"),
+				NULL, &password_min_upper, 0, 0, INT_MAX, PGC_SUSET,
+				0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_min_lower",
+				gettext_noop("minimum password lowercase letters"),
+				NULL, &password_min_lower, 0, 0, INT_MAX, PGC_SUSET,
+				0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_min_repeat",
+				gettext_noop("minimum password characters repeat"),
+				NULL, &password_min_repeat, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.password_contain_username",
+				gettext_noop("password contains username"), NULL,
+				&password_contain_username, true, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.password_ignore_case",
+				gettext_noop("ignore case while password checking"),
+				NULL, &password_ignore_case, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.password_not_contain",
+				gettext_noop("password should not contain these characters"), NULL,
+				&password_not_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.password_contain",
+				gettext_noop("password should contain these characters"), NULL,
+				&password_contain, "", PGC_SUSET, 0, NULL, NULL, NULL);
+
+#if PG_VERSION_NUM >= 120000
+	DefineCustomIntVariable("credcheck.password_reuse_history",
+				gettext_noop("minimum number of password changes before permitting reuse"),
+				NULL, &password_reuse_history, 0, 0, 100,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_reuse_interval",
+				gettext_noop("minimum number of days elapsed before permitting reuse"),
+				NULL, &password_reuse_interval, 0, 0, 730, /* max 2 years */
+				PGC_SUSET, 0, NULL, NULL, NULL);
+#endif
+
+	DefineCustomIntVariable("credcheck.password_valid_until",
+				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
+					" with a minimum number of days or set it automatically to "
+					" now() + password_valid_until days in the ALTER ROLE statement"
+					" when the password is changed"),
+				NULL, &password_valid_until, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_valid_min",
+				gettext_noop("number of days used for the VALID UNTIL clause of newly"
+					" created roles (CREATE ROLE). When greater than zero it overrides"
+					" credcheck.password_valid_until at role creation only, so new roles"
+					" can be forced to change their password quickly while existing roles"
+					" that change their password keep the password_valid_until window."
+					" When set to 0 (default) CREATE ROLE keeps using password_valid_until."),
+				NULL, &password_valid_min, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_valid_max",
+				gettext_noop("force use of VALID UNTIL clause in CREATE ROLE statement"
+					" with a maximum number of days"),
+				NULL, &password_valid_max, 0, 0, INT_MAX,
+				PGC_SUSET, 1, NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.password_valid_warning",
+				gettext_noop("throw a warning N days before the password expires"),
+				NULL, &password_valid_warning, 0, 0, INT_MAX,
+				PGC_SUSET, 0, NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.password_change_first_login",
+				gettext_noop("force the user to change his password at first login"),
+				NULL, &password_change_first_login, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck_internal.force_change_password",
+				gettext_noop("force the user to change his password"),
+				NULL, &force_change_password, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.disallow_change_password",
+				gettext_noop("prevent users to change their password"),
+				NULL, &disallow_change_password, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.superuser_nocheck",
+				gettext_noop("don't do password check if the logged user is a superuser"),
+				NULL, &superuser_nocheck, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+}
+
+#if PG_VERSION_NUM >= 150000
+/*
+ * WAL emission helpers.  Each one inserts a single fixed-size record
+ * describing a mutation of the in-memory password history hash, so that
+ * the change can be replayed on a standby through credcheck_rmgr_redo().
+ *
+ * Callers must hold pgph->lock in exclusive mode.
+ */
+static void
+credcheck_xlog_pwd_add(const char *rolename, const char *password_hash,
+					   TimestampTz password_date)
+{
+	xl_credcheck_pwd_add xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	strlcpy(xlrec.password_hash, password_hash, PG_SHA256_DIGEST_STRING_LENGTH);
+	xlrec.password_date = password_date;
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_ADD);
+}
+
+static void
+credcheck_xlog_pwd_remove(const char *rolename, const char *password_hash)
+{
+	xl_credcheck_pwd_remove xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	strlcpy(xlrec.password_hash, password_hash, PG_SHA256_DIGEST_STRING_LENGTH);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_REMOVE);
+}
+
+static void
+credcheck_xlog_pwd_remove_user(const char *rolename)
+{
+	xl_credcheck_pwd_remove_user xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_REMOVE_USER);
+}
+
+static void
+credcheck_xlog_pwd_rename(const char *oldname, const char *newname)
+{
+	xl_credcheck_pwd_rename xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.oldname, oldname, NAMEDATALEN);
+	strlcpy(xlrec.newname, newname, NAMEDATALEN);
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+	(void) XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_RENAME);
+}
+
+static void
+credcheck_xlog_pwd_reset(const char *rolename)
+{
+	xl_credcheck_pwd_reset xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	if (rolename)
+	{
+		xlrec.has_user = true;
+		strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	}
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+
+	/*
+	 * pg_password_history_reset() is callable from a read-only SELECT, so
+	 * the surrounding transaction will not flush WAL on commit.  Force a
+	 * flush so that walsenders (and pg_current_wal_lsn() observers) see the
+	 * record promptly.
+	 */
+	XLogFlush(XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_RESET));
+}
+
+static void
+credcheck_xlog_pwd_timestamp(const char *rolename, TimestampTz new_timestamp)
+{
+	xl_credcheck_pwd_timestamp xlrec;
+
+	memset(&xlrec, 0, sizeof(xlrec));
+	strlcpy(xlrec.rolename, rolename, NAMEDATALEN);
+	xlrec.new_timestamp = new_timestamp;
+
+	XLogBeginInsert();
+	XLogRegisterData((char *) &xlrec, sizeof(xlrec));
+
+	/* See credcheck_xlog_pwd_reset() for why we flush. */
+	XLogFlush(XLogInsert(RM_CREDCHECK_ID, XLOG_CREDCHECK_PWD_TIMESTAMP));
+}
+
+/*
+ * Replay a credcheck WAL record on a standby (or during crash recovery on
+ * the primary).  After applying the change to the in-memory hash we flush
+ * the resulting state to the on-disk password history file, mirroring the
+ * behaviour of the foreground code paths.
+ */
+static void
+credcheck_rmgr_redo(XLogReaderState *record)
+{
+	uint8		info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+	char	   *rec = XLogRecGetData(record);
+
+	if (!pgph || !pgph_hash)
+		return;
+
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+	switch (info)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+		{
+			pgphHashKey key;
+			xl_credcheck_pwd_add *xlrec = (xl_credcheck_pwd_add *) rec;
+
+			memset(&key, 0, sizeof(key));
+			strlcpy(key.rolename, xlrec->rolename, NAMEDATALEN);
+			strlcpy(key.password_hash, xlrec->password_hash,
+					PG_SHA256_DIGEST_STRING_LENGTH);
+			(void) pgph_entry_alloc(&key, xlrec->password_date);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE:
+		{
+			pgphHashKey key;
+			xl_credcheck_pwd_remove *xlrec = (xl_credcheck_pwd_remove *) rec;
+
+			memset(&key, 0, sizeof(key));
+			strlcpy(key.rolename, xlrec->rolename, NAMEDATALEN);
+			strlcpy(key.password_hash, xlrec->password_hash,
+					PG_SHA256_DIGEST_STRING_LENGTH);
+			pgph_tab_remove(&key);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+		{
+			int32       _i;
+			xl_credcheck_pwd_remove_user *xlrec = (xl_credcheck_pwd_remove_user *) rec;
+
+			for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+			{
+				pgphEntry  *entry;
+
+				if (!pgph_slots[_i].used)
+					continue;
+				entry = &pgph_slots[_i].entry;
+				if (strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					pgph_tab_remove(&entry->key);
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RENAME:
+		{
+			int32       _i;
+			xl_credcheck_pwd_rename *xlrec = (xl_credcheck_pwd_rename *) rec;
+
+			for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+			{
+				pgphEntry  *entry;
+
+				if (!pgph_slots[_i].used)
+					continue;
+				entry = &pgph_slots[_i].entry;
+				if (strcmp(entry->key.rolename, xlrec->oldname) == 0)
+				{
+					pgphHashKey key;
+
+					memset(&key, 0, sizeof(key));
+					strlcpy(key.rolename, xlrec->newname, NAMEDATALEN);
+					strlcpy(key.password_hash, entry->key.password_hash,
+							PG_SHA256_DIGEST_STRING_LENGTH);
+					pgph_tab_rekey(entry, &key);
+				}
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RESET:
+		{
+			int32       _i;
+			xl_credcheck_pwd_reset *xlrec = (xl_credcheck_pwd_reset *) rec;
+
+			for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+			{
+				pgphEntry  *entry;
+
+				if (!pgph_slots[_i].used)
+					continue;
+				entry = &pgph_slots[_i].entry;
+				if (!xlrec->has_user ||
+					strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					pgph_tab_remove(&entry->key);
+			}
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+		{
+			int32       _i;
+			xl_credcheck_pwd_timestamp *xlrec = (xl_credcheck_pwd_timestamp *) rec;
+
+			for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+			{
+				pgphEntry  *entry;
+
+				if (!pgph_slots[_i].used)
+					continue;
+				entry = &pgph_slots[_i].entry;
+				if (strcmp(entry->key.rolename, xlrec->rolename) == 0)
+					entry->password_date = xlrec->new_timestamp;
+			}
+			break;
+		}
+		default:
+			LWLockRelease(pgph->lock);
+			elog(PANIC, "credcheck_rmgr_redo: unknown op code %u", info);
+	}
+
+	flush_password_history();
+
+	LWLockRelease(pgph->lock);
+}
+
+static void
+credcheck_rmgr_desc(StringInfo buf, XLogReaderState *record)
+{
+	char	   *rec = XLogRecGetData(record);
+	uint8		info = XLogRecGetInfo(record) & ~XLR_INFO_MASK;
+
+	switch (info)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+		{
+			xl_credcheck_pwd_add *xlrec = (xl_credcheck_pwd_add *) rec;
+
+			appendStringInfo(buf, "add role \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE:
+		{
+			xl_credcheck_pwd_remove *xlrec = (xl_credcheck_pwd_remove *) rec;
+
+			appendStringInfo(buf, "remove role \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+		{
+			xl_credcheck_pwd_remove_user *xlrec = (xl_credcheck_pwd_remove_user *) rec;
+
+			appendStringInfo(buf, "remove user \"%s\"", xlrec->rolename);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RENAME:
+		{
+			xl_credcheck_pwd_rename *xlrec = (xl_credcheck_pwd_rename *) rec;
+
+			appendStringInfo(buf, "rename \"%s\" to \"%s\"",
+							 xlrec->oldname, xlrec->newname);
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_RESET:
+		{
+			xl_credcheck_pwd_reset *xlrec = (xl_credcheck_pwd_reset *) rec;
+
+			if (xlrec->has_user)
+				appendStringInfo(buf, "reset user \"%s\"", xlrec->rolename);
+			else
+				appendStringInfoString(buf, "reset all");
+			break;
+		}
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+		{
+			xl_credcheck_pwd_timestamp *xlrec = (xl_credcheck_pwd_timestamp *) rec;
+
+			appendStringInfo(buf, "timestamp user \"%s\"", xlrec->rolename);
+			break;
+		}
+	}
+}
+
+static const char *
+credcheck_rmgr_identify(uint8 info)
+{
+	switch (info & ~XLR_INFO_MASK)
+	{
+		case XLOG_CREDCHECK_PWD_ADD:
+			return "PWD_ADD";
+		case XLOG_CREDCHECK_PWD_REMOVE:
+			return "PWD_REMOVE";
+		case XLOG_CREDCHECK_PWD_REMOVE_USER:
+			return "PWD_REMOVE_USER";
+		case XLOG_CREDCHECK_PWD_RENAME:
+			return "PWD_RENAME";
+		case XLOG_CREDCHECK_PWD_RESET:
+			return "PWD_RESET";
+		case XLOG_CREDCHECK_PWD_TIMESTAMP:
+			return "PWD_TIMESTAMP";
+	}
+	return NULL;
+}
+#endif		/* PG_VERSION_NUM >= 150000 */
+
+#if PG_VERSION_NUM >= 120000
+static void
+save_password_in_history(const char *username, const char *password)
+{
+	char       *encrypted_password;
+	pgphHashKey key;
+	pgphEntry  *entry;
+	TimestampTz dt_now = GetCurrentTimestamp();
+
+	Assert(username != NULL);
+	Assert(password != NULL);
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	/* Safety check... */
+	if (!pgph || !pgph_hash)
+		return;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	/* Store the password into share memory and password history file */
+	/* Set up key for hashtable search */
+        strcpy(key.rolename, username) ;
+        strcpy(key.password_hash, encrypted_password);
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+	/* Create new entry, if not present */
+	entry = pgph_tab_find(&key);
+	if (!entry)
+	{
+		dt_now = GetCurrentTimestamp();
+
+		elog(DEBUG1, "Add new entry in history hash table: (%s, '%s', '%s')",
+							username, encrypted_password,
+							timestamptz_to_str(dt_now));
+
+		/* OK to create a new hashtable entry */
+		entry = pgph_entry_alloc(&key, dt_now);
+
+		/* Flush the new entry to disk */
+		if (entry)
+		{
+#if PG_VERSION_NUM >= 150000
+			credcheck_xlog_pwd_add(username, encrypted_password, dt_now);
+#endif
+			elog(DEBUG1, "entry added, flush change to disk");
+			flush_password_history();
+		}
+	}
+
+	LWLockRelease(pgph->lock);
+
+	free(encrypted_password);
+}
+
+static void
+rename_user_in_history(const char *username, const char *newname)
+{
+        pgphEntry  *entry;
+	int32       _i;
+	int         num_changed = 0;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	Assert(username != NULL);
+	Assert(newname != NULL);
+
+        /* Safety check ... shouldn't get here unless shmem is set up. */
+        if (!pgph || !pgph_hash)
+                return;
+
+	elog(DEBUG1, "renaming user %s to %s into password history", username, newname);
+
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+        for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+        {
+		if (!pgph_slots[_i].used)
+			continue;
+		entry = &pgph_slots[_i].entry;
+		/* update the key of matching entries */
+                if (strcmp(entry->key.rolename, username) == 0)
+                {
+			pgphHashKey key;
+			memset(&key, 0, sizeof(key));
+			strcpy(key.rolename, newname) ;
+			strcpy(key.password_hash, entry->key.password_hash);
+			pgph_tab_rekey(entry, &key);
+			num_changed++;
+                }
+        }
+
+	if (num_changed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_rename(username, newname);
+#endif
+		elog(DEBUG1, "%d entries in paswword history hash table have been mofidied for user %s",
+													num_changed,
+													username);
+
+		/* Flush the new entry to disk */
+		flush_password_history();
+	}
+
+	LWLockRelease(pgph->lock);
+}
+
+/*
+ * qsort comparator for sorting into increasing usage order
+ */
+#if PG_VERSION_NUM >= 120000
+static int
+entry_cmp(const void *lhs, const void *rhs)
+{
+        TimestampTz l_password_date = (*(pgphEntry *const *) lhs)->password_date;
+        TimestampTz r_password_date = (*(pgphEntry *const *) rhs)->password_date;
+
+        if (l_password_date < r_password_date)
+                return -1;
+        else if (l_password_date > r_password_date)
+                return +1;
+        else
+                return 0;
+}
+#endif
+
+static void
+remove_password_from_history(const char *username, const char *password, int numentries)
+{
+	char         *encrypted_password;
+        int32         num_entries;
+        int32         num_user_entries = 0;
+        int32         num_removed = 0;
+        pgphEntry    *entry;
+	pgphEntry   **entries;
+	int           i = 0;
+
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	Assert(username != NULL);
+	Assert(password != NULL);
+
+        /* Safety check ... shouldn't get here unless shmem is set up. */
+        if (!pgph || !pgph_hash)
+                return;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	elog(DEBUG1, "attempting to remove historized password = '%s' for user = '%s'", encrypted_password, username);
+
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+        num_entries = pgph_tab_count();
+
+	entries = palloc((num_entries > 0 ? num_entries : 1) * sizeof(pgphEntry *));
+
+	/* stores entries related to the username to be sorted by date */
+        {
+		int32   _i;
+
+		for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+		{
+			if (!pgph_slots[_i].used)
+				continue;
+			entry = &pgph_slots[_i].entry;
+			if (strcmp(entry->key.rolename, username) == 0)
+				entries[i++] = entry;
+		}
+	}
+
+	if (i == 0)
+	{
+		elog(DEBUG1, "no entry in the history for user: %s", username);
+
+		LWLockRelease(pgph->lock);
+
+		pfree(entries);
+
+		return;
+	}
+
+	num_user_entries = i;
+
+	/* Sort into increasing order by date */
+	qsort(entries, i, sizeof(pgphEntry *), entry_cmp);
+
+	/*
+	 * Remove the oldest tuples when password_reuse_history is reached
+	 * until password_reuse_history size is respected for this user,
+	 * except if password_reuse_interval is enabled and not reached.
+	 *
+	 * A ascending index must exits on the date column of the table,
+	 * we use this index to treat the oldest entries first in the scan.
+	 */
+	for (i = 0; i < num_user_entries; i++)
+        {
+		bool keep = false;
+
+		/* if we have a retention delay remove entries that has expired */
+		if (password_reuse_interval > 0)
+		{
+			TimestampTz     dt_now = GetCurrentTimestamp();
+			float8          result;
+
+			result = ((float8) (dt_now - entries[i]->password_date)) / 1000000.0; /* in seconds */
+			result /= 86400; /* in days */
+
+			elog(DEBUG1, "password_reuse_interval: %d, entry age: %d",
+										password_reuse_interval,
+										(int) result);
+			/*
+			 * When the delay have not expired, keep the entry if the
+			 * number of entry exceed password_reuse_history
+			 */
+			if (password_reuse_interval >= (int) result)
+				keep = true;
+			else
+				elog(DEBUG1, "remove_password_from_history(): this history entry has expired");
+		}
+
+		if (!keep)
+		{
+			/* we need to remove the entries that exceed history size */
+			if ((num_user_entries - i) >= password_reuse_history)
+			{
+#if PG_VERSION_NUM >= 150000
+				credcheck_xlog_pwd_remove(entries[i]->key.rolename,
+										  entries[i]->key.password_hash);
+#endif
+				elog(DEBUG1, "removing entry %d from the history (%s, %s)", i,
+											entries[i]->key.rolename,
+											entries[i]->key.password_hash);
+				pgph_tab_remove(&entries[i]->key);
+				num_removed++;
+			}
+		}
+	}
+	pfree(entries);
+
+	/* Flush the new entry to disk */
+	if (num_removed > 0)
+		flush_password_history();
+
+	LWLockRelease(pgph->lock);
+}
+
+static void
+remove_user_from_history(const char *username)
+{
+        int32       num_removed = 0;
+        pgphEntry  *entry;
+	int32       _i;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return;
+
+	Assert(username != NULL);
+
+        /* Safety check ... shouldn't get here unless shmem is set up. */
+        if (!pgph || !pgph_hash)
+                return;
+
+	elog(DEBUG1, "removing user %s from password history", username);
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+	/* Scan all slots to find the entries to remove */
+        for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+        {
+		if (!pgph_slots[_i].used)
+			continue;
+		entry = &pgph_slots[_i].entry;
+		if (strcmp(entry->key.rolename, username) == 0)
+		{
+			pgph_tab_remove(&entry->key);
+			num_removed++;
+		}
+	}
+
+	/* Flush the new entry to disk */
+	if (num_removed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_remove_user(username);
+#endif
+		flush_password_history();
+	}
+
+	LWLockRelease(pgph->lock);
+}
+
+/* Check if the password can be reused */
+static bool
+check_password_reuse(const char *username, const char *password)
+{
+	int           count_in_history = 0;
+	pgphEntry    *entry;
+	bool          found = false;
+	char         *encrypted_password;
+	int32         _i;
+
+	Assert(username != NULL);
+
+	if (password == NULL)
+		return false;
+
+	if (password_reuse_history == 0 && password_reuse_interval == 0)
+		return false;
+
+	/* Safety check... */
+	if (!pgph || !pgph_hash)
+		return false;
+
+	/* Encrypt the password to the requested format. */
+	encrypted_password = strdup(str_to_sha256(password, username));
+
+	elog(DEBUG1, "Looking for registered password = '%s' for username = '%s'", encrypted_password, username);
+
+	/* Lookup the hash table entry with shared lock. */
+	LWLockAcquire(pgph->lock, LW_SHARED);
+
+        for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+        {
+                if (!pgph_slots[_i].used)
+                        continue;
+                entry = &pgph_slots[_i].entry;
+                if (strcmp(entry->key.rolename, username) == 0)
+                {
+			/* if the password is found in the history remove it if the interval is passed */
+			if (strcmp(encrypted_password, entry->key.password_hash) == 0)
+			{
+				elog(DEBUG1, "password found in history, username = '%s',"
+					     " password: '%s', saved at date: '%s'", username, 
+									     entry->key.password_hash,
+									     timestamptz_to_str(entry->password_date));
+
+				/* mark that the password hash was found in the history */
+				found = true;
+
+				/* Check the password age against the reuse interval */
+				if (password_reuse_interval > 0)
+				{
+					TimestampTz       dt_now = GetCurrentTimestamp();
+					float8          result;
+					result = ((float8) (dt_now - entry->password_date)) / 1000000.0; /* in seconds */
+					result /= 86400; /* in days */
+					elog(DEBUG1, "password_reuse_interval: %d, entry age: %d",
+												password_reuse_interval,
+												(int) result);
+
+					/*
+					 * if the delay have expired skip the entry, it will be
+					 * removed later in remove_password_from_history()
+					 */
+					if (password_reuse_interval < (int) result)
+					{
+						elog(DEBUG1, "this history entry has expired");
+						found = false;
+						count_in_history--;
+					}
+				}
+			}
+
+			/*
+			 * Even if the password was found we continue to count the number of
+			 * password stored in the history for this user. This count is used
+			 * to remove the oldest password that exceed the password_reuse_history
+			 */
+			count_in_history++;
+                }
+	}
+
+	LWLockRelease(pgph->lock);
+
+	free(encrypted_password);
+
+	if (found)
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				errmsg(gettext_noop("Cannot use this credential following the password reuse policy"))));
+
+	/* Password not found, remove passwords exceeding the history size */
+	remove_password_from_history(username, password, count_in_history);
+
+	/* The password was not found, add the password to the history */
+	return true;
+}
+#endif
+
+/* Return the number of days between current timestamp and the date given as parameter */
+static int
+check_valid_until(char *valid_until_date)
+{
+	int days = 0;
+
+	elog(DEBUG1, "option VALID UNTIL date: %s", valid_until_date);
+
+	if (valid_until_date)
+	{
+		Datum           validUntil_datum;
+		TimestampTz       dt_now = GetCurrentTimestamp();
+		TimestampTz       valid_date;
+		float8          result;
+
+		validUntil_datum = DirectFunctionCall3(timestamptz_in,
+									CStringGetDatum(valid_until_date),
+									ObjectIdGetDatum(InvalidOid),
+									Int32GetDatum(-1));
+		valid_date = DatumGetTimestampTz(validUntil_datum);
+
+		result = ((float8) (valid_date - dt_now)) / 1000000.0; /* in seconds */
+		result /= 86400; /* in days */
+		days = (int) result;
+
+		elog(DEBUG1, "option VALID UNTIL in days: %d", days);
+	}
+
+	return days;
+}
+
+static void
+check_password(const char *username, const char *password,
+                           PasswordType password_type, Datum validuntil_time,
+                           bool validuntil_null)
+{
+
+	switch (password_type)
+	{
+		case PASSWORD_TYPE_PLAINTEXT:
+		{
+#ifdef USE_CRACKLIB
+			const char *reason;
+#endif
+			/* don't do any password check if the role is whitelisted */
+			if (is_in_whitelist((char *)username, username_whitelist))
+				break;
+
+			username_check(username, password);
+			if (password != NULL)
+			{
+				password_check(username, password);
+#ifdef USE_CRACKLIB
+				/* call cracklib to check password */
+				if ((reason = FascistCheck(password, CRACKLIB_DICTPATH)))
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							 errmsg("password is easily cracked"),
+							 errdetail_log("cracklib diagnostic: %s", reason)));
+#endif
+			}
+			break;
+		}
+		default:
+			if (!encrypted_password_allowed)
+				ereport(ERROR,
+					(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+						errmsg(gettext_noop("password type is not a plain text"))));
+			break;
+	}
+}
+
+/*
+ * ===========================================================================
+ * lastlog implementation
+ * ===========================================================================
+ */
+
+/* Accessor: pointer to record slot i inside the mmap region (index-based). */
+static inline LastlogEntry *
+ll_slot(uint32 i)
+{
+	return (LastlogEntry *) (ll_mmap_base
+							 + MAXALIGN(sizeof(LastlogFileHeader))
+							 + (Size) i * ll_record_stride);
+}
+
+/*
+ * Estimate anonymous shared memory needed by lastlog (control struct + live
+ * sessions array + per-session query buffers).  The history ring itself does
+ * NOT live here: it is the memory-mapped file.
+ */
+static Size
+lastlog_memsize(void)
+{
+	Size	size;
+
+	if (!lastlog_enabled)
+		return 0;
+
+	size = offsetof(LastlogShared, active);
+	size = add_size(size, mul_size(MaxBackends, sizeof(LastlogActive)));
+	/* one query buffer per backend */
+	size = add_size(size, mul_size(MaxBackends, (Size) lastlog_query_size));
+	return MAXALIGN(size);
+}
+
+/*
+ * Map (creating/sizing if necessary) the lastlog history file.  Runs in every
+ * process that executes the shmem startup hook; the mapping is process-local.
+ */
+static void
+lastlog_mmap_attach(void)
+{
+	Size	filesize;
+
+	ll_record_stride = MAXALIGN(LASTLOG_BASE_SIZE + (Size) lastlog_query_size);
+
+	filesize = MAXALIGN(sizeof(LastlogFileHeader))
+		+ (Size) lastlog_max * ll_record_stride;
+	/* round up to a multiple of BLCKSZ to please pgBackRest backups */
+	filesize = TYPEALIGN(BLCKSZ, filesize);
+	ll_mmap_size = filesize;
+
+#ifndef WIN32
+	{
+		int		fd;
+
+		fd = BasicOpenFile(LASTLOG_DUMP_FILE, O_RDWR | O_CREAT | PG_BINARY);
+		if (fd < 0)
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not open lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+
+		if (ftruncate(fd, (off_t) filesize) != 0)
+		{
+			int		save_errno = errno;
+
+			close(fd);
+			errno = save_errno;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not size lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+		}
+
+		ll_mmap_base = mmap(NULL, filesize, PROT_READ | PROT_WRITE,
+							MAP_SHARED, fd, 0);
+		close(fd);				/* the mapping outlives the fd */
+		if (ll_mmap_base == MAP_FAILED)
+		{
+			ll_mmap_base = NULL;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not mmap lastlog file \"%s\": %m",
+							LASTLOG_DUMP_FILE)));
+		}
+	}
+#else
+	/*
+	 * Windows path: must be implemented with CreateFileMapping /
+	 * MapViewOfFile on a real file handle (not the paging file).  Left as a
+	 * follow-up; mmap-based persistence is currently POSIX-only.
+	 */
+	ereport(FATAL,
+			(errmsg("credcheck.lastlog is not yet supported on Windows")));
+#endif
+
+	ll_hdr = (LastlogFileHeader *) ll_mmap_base;
+}
+
+/* Initialise (or reset) the mmap header.  Caller holds the lastlog lock. */
+static void
+lastlog_init_header(void)
+{
+	memset(ll_mmap_base, 0, ll_mmap_size);
+	ll_hdr->magic = LASTLOG_FILE_HEADER;
+	ll_hdr->version = LASTLOG_VERSION;
+	ll_hdr->record_stride = ll_record_stride;
+	ll_hdr->capacity = lastlog_max;
+	ll_hdr->head = 0;
+	ll_hdr->nused = 0;
+	ll_hdr->seqno = 0;
+	ll_hdr->clean_shutdown = false;
+}
+
+/*
+ * Append a marker record (boot/shutdown/crash).  Caller holds the lock
+ * exclusively.  Markers are tiny and rare, so we msync them immediately.
+ */
+static void
+lastlog_append_marker(LastlogType type)
+{
+	LastlogEntry   *e;
+
+	if (!ll_hdr)
+		return;
+
+	e = ll_slot(ll_hdr->head);
+	memset(e, 0, ll_record_stride);
+	e->type = type;
+	e->login_time = GetCurrentTimestamp();
+	e->pid = (type == LL_BOOT) ? PostmasterPid : 0;
+	e->active = false;
+	e->seqno = ++ll_hdr->seqno;
+	pg_write_barrier();
+	e->complete = true;
+
+	ll_hdr->head = (ll_hdr->head + 1) % ll_hdr->capacity;
+	if (ll_hdr->nused < ll_hdr->capacity)
+		ll_hdr->nused++;
+
+	lastlog_msync(MS_ASYNC);
+}
+
+/*
+ * Record a successful login in the caller's live-session slot.  Called from
+ * the ClientAuthentication hook (status == STATUS_OK).  Also arms the
+ * proc_exit callback that will move the session into the history ring.
+ */
+static void
+lastlog_record_login(Port *port)
+{
+	LastlogActive  *a;
+
+	if (!lastlog_enabled || lastlog == NULL || MyProc == NULL)
+		return;
+
+#if PG_VERSION_NUM < 170000
+	ll_my_slot = MyProc->pgprocno;
+#else
+	ll_my_slot = MyProc->vxid.procNumber;
+#endif
+	if (ll_my_slot < 0 || ll_my_slot >= lastlog->nactive_slots)
+	{
+		ll_my_slot = -1;
+		return;
+	}
+
+	a = &lastlog->active[ll_my_slot];
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	a->in_use = true;
+	a->pid = MyProcPid;
+	strlcpy(a->username, port->user_name ? port->user_name : "",
+			NAMEDATALEN);
+	if (port->remote_host && port->remote_host[0] != '\0')
+		strlcpy(a->remote_host, port->remote_host, LASTLOG_HOST_LEN);
+	else
+		strlcpy(a->remote_host, "[local]", LASTLOG_HOST_LEN);
+	a->remote_port = (port->remote_port && port->remote_port[0] != '\0')
+		? atoi(port->remote_port) : 0;
+	a->login_time = GetCurrentTimestamp();
+	if (a->last_query)
+		a->last_query[0] = '\0';
+	LWLockRelease(lastlog->lock);
+
+	/* Ensure the session is flushed to history on backend exit. */
+	before_shmem_exit(lastlog_finalize_session, (Datum) 0);
+}
+
+/*
+ * proc_exit callback: turn this backend's live session into a finalized
+ * history record (with logout time / duration), then free the live slot.
+ */
+static void
+lastlog_finalize_session(int code, Datum arg)
+{
+	LastlogActive  *a;
+	LastlogEntry   *e;
+
+	if (!lastlog_enabled || lastlog == NULL || ll_hdr == NULL
+		|| ll_my_slot < 0)
+		return;
+
+	a = &lastlog->active[ll_my_slot];
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	if (!a->in_use)
+	{
+		LWLockRelease(lastlog->lock);
+		ll_my_slot = -1;
+		return;
+	}
+
+	e = ll_slot(ll_hdr->head);
+	memset(e, 0, ll_record_stride);
+	e->type = LL_USER;
+	strlcpy(e->username, a->username, NAMEDATALEN);
+	e->pid = a->pid;
+	strlcpy(e->remote_host, a->remote_host, LASTLOG_HOST_LEN);
+	e->remote_port = a->remote_port;
+	e->login_time = a->login_time;
+	e->logout_time = GetCurrentTimestamp();
+	e->active = false;
+	if (lastlog_track_query && a->last_query)
+		strlcpy(e->last_query, a->last_query, lastlog_query_size);
+	e->seqno = ++ll_hdr->seqno;
+	pg_write_barrier();
+	e->complete = true;
+
+	ll_hdr->head = (ll_hdr->head + 1) % ll_hdr->capacity;
+	if (ll_hdr->nused < ll_hdr->capacity)
+		ll_hdr->nused++;
+
+	a->in_use = false;
+	LWLockRelease(lastlog->lock);
+
+	ll_my_slot = -1;
+}
+
+/* Copy the current query text into this backend's live slot (ExecutorStart). */
+static void
+lastlog_track_last_query(const char *query_string)
+{
+	LastlogActive  *a;
+
+	if (!lastlog_enabled || !lastlog_track_query || lastlog == NULL
+		|| ll_my_slot < 0 || query_string == NULL)
+		return;
+
+	a = &lastlog->active[ll_my_slot];
+	if (a->last_query == NULL)
+		return;
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	if (a->in_use)
+		strlcpy(a->last_query, query_string, lastlog_query_size);
+	LWLockRelease(lastlog->lock);
+}
+
+/* Flush the mmap region to disk. */
+static void
+lastlog_msync(int flags)
+{
+#ifndef WIN32
+	if (ll_mmap_base != NULL && ll_mmap_size > 0)
+		(void) msync(ll_mmap_base, ll_mmap_size, flags);
+#endif
+}
+
+/*
+ * shmem startup hook for lastlog: allocate the anonymous control area, attach
+ * the mmap file, and (only in the first process) initialise the header,
+ * detect a previous crash and write the boot marker.
+ */
+static void
+lastlog_shmem_startup(void)
+{
+	bool	found;
+	Size	qoff;
+	char   *query_area;
+	int		i;
+
+	if (!lastlog_enabled)
+		return;
+
+	lastlog = NULL;
+	ll_mmap_base = NULL;
+	ll_hdr = NULL;
+
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	lastlog = ShmemInitStruct("credcheck lastlog",
+							  lastlog_memsize(), &found);
+
+	if (!found)
+	{
+		lastlog->lock = &(GetNamedLWLockTranche(LASTLOG_TRANCHE_NAME))->lock;
+		lastlog->nactive_slots = MaxBackends;
+		MemSet(lastlog->active, 0,
+			   mul_size(MaxBackends, sizeof(LastlogActive)));
+	}
+
+	/* wire each backend's query buffer into the area following active[] */
+	qoff = offsetof(LastlogShared, active)
+		+ mul_size(MaxBackends, sizeof(LastlogActive));
+	query_area = ((char *) lastlog) + qoff;
+	for (i = 0; i < MaxBackends; i++)
+		lastlog->active[i].last_query =
+			query_area + (Size) i * lastlog_query_size;
+
+	/* attach the memory-mapped history file (process-local) */
+	lastlog_mmap_attach();
+
+	if (!found)
+	{
+		bool	prev_unclean;
+
+		LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+
+		/* fresh / incompatible file -> (re)initialise */
+		if (ll_hdr->magic != LASTLOG_FILE_HEADER
+			|| ll_hdr->version != LASTLOG_VERSION
+			|| ll_hdr->record_stride != ll_record_stride
+			|| ll_hdr->capacity != (uint32) lastlog_max)
+		{
+			lastlog_init_header();
+			prev_unclean = false;
+		}
+		else
+		{
+			/* previous run crashed if it never set clean_shutdown */
+			prev_unclean = !ll_hdr->clean_shutdown;
+		}
+
+		if (prev_unclean)
+			lastlog_append_marker(LL_CRASH);
+
+		lastlog_append_marker(LL_BOOT);
+		ll_hdr->clean_shutdown = false;     /* cleared until clean exit */
+		lastlog_msync(MS_ASYNC);
+
+		LWLockRelease(lastlog->lock);
+	}
+
+	LWLockRelease(AddinShmemInitLock);
+}
+
+/*
+ * Background worker: periodic msync and, on SIGTERM, the clean-shutdown
+ * marker + a final synchronous flush.  This is the reliable place to catch
+ * server shutdown (a plain backend's before_shmem_exit is not).
+ */
+void
+lastlog_bgworker_main(Datum main_arg)
+{
+	pqsignal(SIGTERM, die);
+#if PG_VERSION_NUM >= 190000
+	pqsignal(SIGHUP, PG_SIG_IGN);
+#else
+	pqsignal(SIGHUP, SIG_IGN);
+#endif
+	BackgroundWorkerUnblockSignals();
+
+	/* write the clean-shutdown marker when we are asked to stop */
+	before_shmem_exit(lastlog_bgworker_shutdown, (Datum) 0);
+
+	/* attach to the already-created shared structures */
+	for (;;)
+	{
+		int		rc;
+		long	timeout_ms;
+
+		CHECK_FOR_INTERRUPTS();
+
+		if (lastlog_flush_interval > 0)
+		{
+			lastlog_msync(MS_ASYNC);
+			timeout_ms = (long) lastlog_flush_interval * 1000L;
+		}
+		else
+			timeout_ms = 60000L;	/* idle wakeup; shutdown flush only */
+
+		rc = WaitLatch(MyLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+					   timeout_ms, PG_WAIT_EXTENSION);
+		ResetLatch(MyLatch);
+
+		if (rc & WL_LATCH_SET)
+			CHECK_FOR_INTERRUPTS();		/* die() will longjmp out on SIGTERM */
+	}
+}
+
+/*
+ * proc_exit-time handler for the bgworker: write the clean shutdown marker.
+ * Registered via before_shmem_exit so it runs when die() unwinds.
+ */
+static void
+lastlog_bgworker_shutdown(int code, Datum arg)
+{
+	if (!lastlog_enabled || ll_hdr == NULL)
+		return;
+
+	LWLockAcquire(lastlog->lock, LW_EXCLUSIVE);
+	lastlog_append_marker(LL_SHUTDOWN);
+	ll_hdr->clean_shutdown = true;
+	LWLockRelease(lastlog->lock);
+	lastlog_msync(MS_SYNC);
+}
+
+#define PG_LASTLOG_COLS		10
+
+/*
+ * SQL-callable SRF returning the merged view of live sessions (from active[])
+ * and the history ring (from the mmap file), newest first.
+ */
+PG_FUNCTION_INFO_V1(credcheck_lastlog);
+Datum
+credcheck_lastlog(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo  *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc		tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext	per_query_ctx;
+	MemoryContext	oldcontext;
+	int				i;
+
+	if (!lastlog_enabled || lastlog == NULL || ll_hdr == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("credcheck.lastlog is disabled")));
+
+	if (rsinfo == NULL || !(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+	MemoryContextSwitchTo(oldcontext);
+
+	LWLockAcquire(lastlog->lock, LW_SHARED);
+
+	/* live sessions first (still logged in) */
+	for (i = 0; i < lastlog->nactive_slots; i++)
+	{
+		Datum		values[PG_LASTLOG_COLS];
+		bool		nulls[PG_LASTLOG_COLS];
+		LastlogActive *a = &lastlog->active[i];
+
+		if (!a->in_use)
+			continue;
+
+		MemSet(values, 0, sizeof(values));
+		MemSet(nulls, 0, sizeof(nulls));
+
+		values[0] = CStringGetTextDatum("user");
+		values[1] = CStringGetTextDatum(a->username);
+		values[2] = Int32GetDatum(a->pid);
+		values[3] = CStringGetTextDatum(a->remote_host);
+		values[4] = Int32GetDatum(a->remote_port);
+		values[5] = TimestampTzGetDatum(a->login_time);
+		nulls[6] = true;		/* logout_time */
+		values[7] = DirectFunctionCall2(timestamptz_age,
+						TimestampTzGetDatum(GetCurrentTimestamp()),
+						TimestampTzGetDatum(a->login_time));
+		values[8] = CStringGetTextDatum("still connected");
+		if (lastlog_track_query && a->last_query && a->last_query[0] != '\0')
+			values[9] = CStringGetTextDatum(a->last_query);
+		else
+			nulls[9] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* then the history ring, newest first */
+	if (ll_hdr->nused > 0)
+	{
+		uint32		n = ll_hdr->nused;
+		uint32		idx = (ll_hdr->head + ll_hdr->capacity - 1) % ll_hdr->capacity;
+		uint32		k;
+
+		for (k = 0; k < n; k++)
+		{
+			LastlogEntry *e = ll_slot(idx);
+			Datum		values[PG_LASTLOG_COLS];
+			bool		nulls[PG_LASTLOG_COLS];
+			const char *tname;
+
+			if (e->complete && e->seqno != 0)
+			{
+				MemSet(values, 0, sizeof(values));
+				MemSet(nulls, 0, sizeof(nulls));
+
+				switch (e->type)
+				{
+					case LL_BOOT:		tname = "boot";		break;
+					case LL_SHUTDOWN:	tname = "shutdown";	break;
+					case LL_CRASH:		tname = "crash";	break;
+					default:			tname = "user";		break;
+				}
+				values[0] = CStringGetTextDatum(tname);
+
+				if (e->type == LL_USER)
+					values[1] = CStringGetTextDatum(e->username);
+				else
+					nulls[1] = true;
+
+				if (e->pid != 0)
+					values[2] = Int32GetDatum(e->pid);
+				else
+					nulls[2] = true;
+
+				if (e->type == LL_USER)
+				{
+					values[3] = CStringGetTextDatum(e->remote_host);
+					values[4] = Int32GetDatum(e->remote_port);
+				}
+				else
+				{
+					nulls[3] = true;
+					nulls[4] = true;
+				}
+
+				values[5] = TimestampTzGetDatum(e->login_time);
+
+				if (e->logout_time != 0)
+				{
+					values[6] = TimestampTzGetDatum(e->logout_time);
+					values[7] = DirectFunctionCall2(timestamptz_age,
+								TimestampTzGetDatum(e->logout_time),
+								TimestampTzGetDatum(e->login_time));
+				}
+				else
+				{
+					nulls[6] = true;
+					nulls[7] = true;
+				}
+
+				values[8] = CStringGetTextDatum(
+					e->type == LL_USER ? "disconnected" : tname);
+
+				if (e->type == LL_USER && lastlog_track_query
+					&& e->last_query[0] != '\0')
+					values[9] = CStringGetTextDatum(e->last_query);
+				else
+					nulls[9] = true;
+
+				tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+			}
+
+			idx = (idx + ll_hdr->capacity - 1) % ll_hdr->capacity;
+		}
+	}
+
+	LWLockRelease(lastlog->lock);
+
+	return (Datum) 0;
+}
+
+void
+_PG_init(void)
+{
+	/* Defined GUCs */
+	username_guc();
+	password_guc();
+
+	if (process_shared_preload_libraries_in_progress)
+	{
+		DefineCustomIntVariable("credcheck.history_max_size",
+					gettext_noop("maximum of entries in the password history"), NULL,
+					&pgph_max, 65535, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.auth_failure_cache_size",
+					gettext_noop("maximum of entries in the auth failure cache"), NULL,
+					&pgaf_max, 1024, 1, (INT_MAX / 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomBoolVariable("credcheck.lastlog",
+					gettext_noop("enable the last-login history (utmp-like)"), NULL,
+					&lastlog_enabled, false, PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_max",
+					gettext_noop("number of records kept in the lastlog history ring"),
+					gettext_noop("Sizes the memory-mapped history file. Should be >= max_connections."),
+					&lastlog_max, 1024, 16, (INT_MAX / 4096), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_query_size",
+					gettext_noop("maximum length stored for the last SQL query in lastlog"),
+					NULL, &lastlog_query_size, 1024, 0, (1024 * 1024), PGC_POSTMASTER, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomBoolVariable("credcheck.lastlog_track_query",
+					gettext_noop("store the last executed SQL query in lastlog"), NULL,
+					&lastlog_track_query, false, PGC_SIGHUP, 0,
+					NULL, NULL, NULL);
+
+		DefineCustomIntVariable("credcheck.lastlog_flush_interval",
+					gettext_noop("seconds between lastlog msync flushes (0 = at shutdown only)"),
+					NULL, &lastlog_flush_interval, 0, 0, 86400, PGC_SIGHUP,
+					GUC_UNIT_S, NULL, NULL, NULL);
+
+		/* Register the lastlog flush/shutdown background worker. */
+#ifdef GP_VERSION_NUM
+		/* The last login history is kept on the coordinator only. */
+		if (lastlog_enabled && IS_QUERY_DISPATCHER())
+#else
+		if (lastlog_enabled)
+#endif
+		{
+			BackgroundWorker	worker;
+
+			MemSet(&worker, 0, sizeof(BackgroundWorker));
+			worker.bgw_flags = BGWORKER_SHMEM_ACCESS;
+			worker.bgw_start_time = BgWorkerStart_PostmasterStart;
+			worker.bgw_restart_time = 5;
+			snprintf(worker.bgw_library_name, BGW_MAXLEN, "credcheck");
+			snprintf(worker.bgw_function_name, BGW_MAXLEN, "lastlog_bgworker_main");
+			snprintf(worker.bgw_name, BGW_MAXLEN, "credcheck lastlog flusher");
+			snprintf(worker.bgw_type, BGW_MAXLEN, "credcheck lastlog");
+			worker.bgw_main_arg = (Datum) 0;
+			worker.bgw_notify_pid = 0;
+			RegisterBackgroundWorker(&worker);
+		}
+
+#if PG_VERSION_NUM >= 150000
+		/* Register custom WAL rmgr that replicates the password history. */
+		RegisterCustomRmgr(RM_CREDCHECK_ID, &credcheck_rmgr);
+#endif
+	}
+
+	DefineCustomBoolVariable("credcheck.no_password_logging",
+				gettext_noop("mask the password literal (PASSWORD '...') in statements"
+					"written to the server log"),
+				NULL, &no_password_logging, true, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.max_auth_failure",
+				gettext_noop("maximum number of authentication failure before"
+				" the user loggin account be invalidated"), NULL,
+				&fail_max, 0, 0, 64, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.reset_superuser",
+				gettext_noop("restore superuser acces when he have been banned."),
+				NULL, &reset_superuser, false, PGC_SIGHUP, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("credcheck.encrypted_password_allowed",
+				gettext_noop("allow encrypted password to be used or throw an error"),
+				NULL, &encrypted_password_allowed, false, PGC_SUSET, 0,
+				NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.whitelist",
+				gettext_noop("comma separated list of username to exclude from password policy check"), NULL,
+				&username_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
+
+	DefineCustomIntVariable("credcheck.auth_delay_ms",
+				"Milliseconds to delay before reporting authentication failure",
+				NULL,
+				&auth_delay_milliseconds,
+				0,
+				0, INT_MAX / 1000,
+				PGC_SIGHUP,
+				GUC_UNIT_MS,
+				NULL,
+				NULL,
+				NULL);
+
+	DefineCustomStringVariable(
+				"credcheck.whitelist_auth_failure",
+				gettext_noop("comma separated list of username to exclude from max authentication failure check"), NULL,
+				&max_auth_whitelist, "", PGC_SUSET, 0, check_whitelist, NULL, NULL);
+
+#ifdef GP_VERSION_NUM
+	/*
+	 * Password policy, history and authentication failures are handled on the
+	 * coordinator only. Segments log the dispatched statement text too, so
+	 * keep masking passwords there.
+	 */
+	if (!IS_QUERY_DISPATCHER())
+	{
+		prev_log_hook = emit_log_hook;
+		emit_log_hook = fix_log;
+		return;
+	}
+#endif
+
+#if PG_VERSION_NUM < 150000
+	EmitWarningsOnPlaceholders("credcheck");
+	EmitWarningsOnPlaceholders("credcheck_internal");
+
+        /*
+         * Request additional shared resources.  (These are no-ops if we're not in
+         * the postmaster process.)  We'll allocate or attach to the shared
+         * resources in pgph_shmem_startup().
+         */
+        RequestAddinShmemSpace(pgph_memsize());
+        RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
+        RequestAddinShmemSpace(pgaf_memsize());
+        RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
+        if (lastlog_enabled)
+        {
+                RequestAddinShmemSpace(lastlog_memsize());
+                RequestNamedLWLockTranche(LASTLOG_TRANCHE_NAME, 1);
+        }
+#else
+	MarkGUCPrefixReserved("credcheck");
+	MarkGUCPrefixReserved("credcheck_internal");
+
+#endif
+
+	/* Install hooks */
+	prev_ProcessUtility = ProcessUtility_hook;
+	ProcessUtility_hook = cc_ProcessUtility;
+	prev_check_password_hook = check_password_hook;
+	check_password_hook = check_password;
+#if PG_VERSION_NUM >= 150000
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = pghist_shmem_request;
+#endif
+        prev_shmem_startup_hook = shmem_startup_hook;
+        shmem_startup_hook = pghist_shmem_startup;
+
+	prev_log_hook = emit_log_hook;
+	emit_log_hook = fix_log;
+
+	prev_ClientAuthentication = ClientAuthentication_hook;
+	ClientAuthentication_hook = credcheck_max_auth_failure;
+
+	prev_ExecutorStart = ExecutorStart_hook;
+	ExecutorStart_hook = cc_ExecutorStart;
+
+	RegisterXactCallback(cc_XactCallback, NULL);
+	RegisterSubXactCallback(cc_SubXactCallback, NULL);
+}
+
+void
+_PG_fini(void)
+{
+	/* Uninstall hooks */
+	check_password_hook = prev_check_password_hook;
+	ProcessUtility_hook = prev_ProcessUtility;
+	emit_log_hook = prev_log_hook;
+#if PG_VERSION_NUM >= 150000
+	shmem_request_hook = prev_shmem_request_hook;
+#endif
+	shmem_startup_hook = prev_shmem_startup_hook;
+	ClientAuthentication_hook = prev_ClientAuthentication;
+	UnregisterXactCallback(cc_XactCallback, NULL);
+	UnregisterSubXactCallback(cc_SubXactCallback, NULL);
+}
+
+/*
+ * When a role must change its password first, we only want to allow the
+ * password change itself (ALTER ROLE, handled by the caller) plus the handful
+ * of harmless session/transaction-control statements that clients and
+ * connection poolers unavoidably issue while establishing a session:
+ *
+ *   - SET / RESET               (T_VariableSetStmt)   e.g. pgbouncer's
+ *                                                     varcache_apply, and the
+ *                                                     "SET extra_float_digits",
+ *                                                     "SET application_name",
+ *                                                     "SET client_encoding"
+ *                                                     that libpq/JDBC/psql send
+ *                                                     at connection time
+ *   - SHOW                      (T_VariableShowStmt)  incl. the
+ *                                                     "show password_encryption"
+ *                                                     issued by \password
+ *   - BEGIN/COMMIT/ROLLBACK/... (T_TransactionStmt)
+ *   - DISCARD [ALL]             (T_DiscardStmt)       pgbouncer server_reset_query
+ *
+ * None of these can read or write data or escalate privileges, and actual
+ * data access remains blocked in the ExecutorStart hook. Rejecting them here
+ * broke session setup through pgbouncer: the error is raised during the
+ * pooler's internal varcache_apply / setup phase, so pgbouncer closes the
+ * server connection and only logs "varcache_apply failed: ... you must change
+ * your password first." -- the client never receives it and just sees a failed
+ * connection. Letting these through lets the session establish, after which the
+ * user's first real query is blocked with an error that does reach them.
+ */
+static bool
+is_force_change_allowed_stmt(Node *parsetree)
+{
+	switch (nodeTag(parsetree))
+	{
+		case T_VariableSetStmt:
+		{
+			VariableSetStmt *setstmt = (VariableSetStmt *) parsetree;
+
+			/*
+			 * Defense in depth: never let a forced session turn the flag off
+			 * with SET. Only a superuser could (the GUC is SUSET), but keep
+			 * the invariant explicit regardless.
+			 */
+			if (setstmt->name != NULL &&
+				pg_strcasecmp(setstmt->name,
+							  "credcheck_internal.force_change_password") == 0)
+				return false;
+			return true;
+		}
+		case T_VariableShowStmt:
+		case T_TransactionStmt:
+		case T_DiscardStmt:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static void
+cc_ProcessUtility(PEL_PROCESSUTILITY_PROTO)
+{
+	char load_roleid[NAMEDATALEN] = {0};
+	Oid roleid = InvalidOid;
+	bool use_superuser_priv = false;
+	Oid     force_reset_roleid = InvalidOid;
+#if PG_VERSION_NUM >= 120000
+	DropRoleStmt *drop_stmt = NULL;
+#endif
+	Oid     save_userid;
+	int     save_sec_context;
+
+	elog(DEBUG1, "Start cc_ProcessUtility()");
+
+	/* If real user connection and top level (not SPI re-enter, etc) */
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER && !IS_ENTRY_DB_QE() &&
+			(context == PROCESS_UTILITY_TOPLEVEL || context == PROCESS_UTILITY_QUERY)
+	   )
+	{
+		Node *parsetree = pstmt->utilityStmt;
+
+
+		/*
+		 * no check at all if the user is superuser
+		 * and superuser_nocheck is enabled
+		 */
+		if (superuser() && superuser_nocheck)
+		{
+			if (prev_ProcessUtility)
+				prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+			else
+				standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+			return;
+		}
+
+		if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+		{
+			/*
+			 * When disallow_change_password is enable we return
+			 * an error to any usertrying to change his password.
+			 */
+			if (nodeTag(parsetree) == T_AlterRoleStmt && disallow_change_password)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("you are not allowed to change password."))));
+
+			/*
+			 * When first login we don't allow anything else than the password
+			 * change (ALTER ROLE) and the harmless session/transaction-control
+			 * statements that drivers and poolers must issue to set up a
+			 * session (see is_force_change_allowed_stmt). The \password command
+			 * issues "show password_encryption" before prompting, which is now
+			 * covered by the T_VariableShowStmt case. \password itself is
+			 * rejected anyway because it sends an encrypted password.
+			 */
+			if (nodeTag(parsetree) != T_AlterRoleStmt && force_change_password
+				&& !is_force_change_allowed_stmt(parsetree))
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("you must change your password first."))));
+		}
+
+		switch (nodeTag(parsetree))
+		{
+			/* Intercept ALTER USER .. RENAME statements */
+			case T_RenameStmt:
+			{
+				RenameStmt *stmt = (RenameStmt *)parsetree;
+
+				/* We only take care of user renaming */
+				if (stmt->renameType == OBJECT_ROLE && stmt->newname != NULL)
+				{
+					if (is_in_whitelist(stmt->newname, username_whitelist) || is_in_whitelist(stmt->subname, username_whitelist))
+						break;
+				
+					/* check the validity of the username */
+					username_check(stmt->newname, NULL);
+
+#if PG_VERSION_NUM >= 120000
+					/* rename the user in the history table */
+					rename_user_in_history(stmt->subname, stmt->newname);
+#endif
+				}
+				break;
+			}
+
+			case T_AlterRoleStmt:
+			{
+				AlterRoleStmt *stmt = (AlterRoleStmt *)parsetree;
+				ListCell      *option;
+				char          *password;
+				bool           save_password = false;
+				bool           has_other_option = false;
+				DefElem    *dvalidUntil = NULL;
+				DefElem    *dpassword = NULL;
+
+				/*
+				 * Protect against attacks via ALTER ROLE current_role.
+				 *
+				 * The current user may later be switched to
+				 * BOOTSTRAP_SUPERUSERID, so we must ensure we do not
+				 * accidentally change the bootstrap superuser's password.
+				 * It is achived by making sure that roletype is always set to
+				 * ROLESPEC_CSTRING.
+				 */
+				if (stmt->role->roletype != ROLESPEC_CSTRING)
+				{
+					stmt->role->rolename = get_rolespec_name(stmt->role);
+					stmt->role->roletype = ROLESPEC_CSTRING;
+				}
+
+				/* verify if the user in whitelisted or not */
+				if (is_in_whitelist(stmt->role->rolename, username_whitelist))
+					break;
+
+				/* Extract options from the statement node tree */
+				foreach(option, stmt->options)
+				{
+					DefElem    *defel = (DefElem *) lfirst(option);
+
+					if (strcmp(defel->defname, "password") == 0)
+					{
+						dpassword = defel;
+					}
+					else if (strcmp(defel->defname, "validUntil") == 0)
+					{
+						dvalidUntil = defel;
+					}
+					else
+					{
+						/* any other role option (SUPERUSER, CREATEROLE, ...) */
+						has_other_option = true;
+					}
+				}
+
+				if (dpassword == NULL && force_change_password)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("you must change your password first."))));
+
+#if PG_VERSION_NUM >= 120000
+				/* check the password set */
+				if (dpassword && dpassword->arg)
+				{
+					password = strVal(dpassword->arg);
+					save_password = check_password_reuse(stmt->role->rolename, password);
+				}
+#endif
+				/*
+				 * when the user change his password, automatically set the valid until
+				 * date to now() + password_valid_until days if password_valid_until is set.
+				 */
+				if (!dvalidUntil && password_valid_until > 0)
+				{
+					Timestamp dt_now = GetCurrentTimestamp();
+					struct pg_tm tt, *tm = &tt;
+					fsec_t          fsec;
+					int             julian;
+					char            *validuntil;
+					int             tz;
+
+					if (timestamp2tm(dt_now, &tz, tm, &fsec, NULL, session_timezone) != 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+
+					/*
+					 * Add credcheck.password_valid_until days by converting to and from Julian.
+					 */
+					julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+					if (pg_add_s32_overflow(julian, password_valid_until+1, &julian) ||
+						julian < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+					j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+					validuntil = malloc(sizeof(char)*11);
+					sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), -1);
+					((AlterRoleStmt *)parsetree)->options = lappend(((AlterRoleStmt *)parsetree)->options, dvalidUntil);
+					/*
+					 * As we modify the VALID UNTIL clause it will generate an error message
+					 * when the user changes his password:
+					 * 	Only roles with the CREATEROLE attribute and the ADMIN option
+					 * 	on role "..." may alter this role.
+					 * force use of the superuser privilege to modify the password user.
+					 * Restrict this elevation to a pure password change on the caller's
+					 * own role, otherwise privileged options (SUPERUSER, CREATEROLE, ...)
+					 * would run as the bootstrap superuser.
+					 */
+					if (!superuser() && dpassword != NULL && !has_other_option
+						&& get_rolespec_oid(stmt->role, false) == GetUserId())
+						use_superuser_priv = true;
+				}
+
+				/* when a valid until date is set check that it is > to password_valid_until */
+				if (dvalidUntil && dvalidUntil->arg && password_valid_until > 0)
+				{
+					int valid_until = check_valid_until(strVal(dvalidUntil->arg));
+					if (valid_until < password_valid_until)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must have a date older than %d days"), password_valid_until)));
+				}
+				/* check that the valid until date is not under the limit of days */
+				if (dvalidUntil && dvalidUntil->arg)
+				{
+					int valid_max = check_valid_until(strVal(dvalidUntil->arg));
+					if (password_valid_until > 0 && valid_max < password_valid_until)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must have a date beyond %d days"), password_valid_until)));
+					if (password_valid_max > 0 && valid_max > password_valid_max)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("the VALID UNTIL option must NOT have a date beyond %d days"), password_valid_max)));
+				}
+
+#if PG_VERSION_NUM >= 120000
+				/* The password can be saved into the history */
+				if (save_password)
+					save_password_in_history(stmt->role->rolename, password);
+#endif
+				/*
+				 * The forced password change is cleared only when the session
+				 * user sets a new password for itself, and only once the
+				 * statement has succeeded, see below.
+				 */
+				if (force_change_password && dpassword && dpassword->arg &&
+					get_role_oid(stmt->role->rolename, true) == GetSessionUserId())
+					force_reset_roleid = GetSessionUserId();
+
+				break;
+			}
+
+			case T_CreateRoleStmt:
+			{
+				CreateRoleStmt *stmt = (CreateRoleStmt *)parsetree;
+				ListCell       *option;
+				int             valid_until = 0;
+				int             valid_max = 0;
+				bool            has_valid_until = false; 
+				/*
+				 * At role creation credcheck.password_valid_min, when set,
+				 * takes precedence over credcheck.password_valid_until. This
+				 * lets a DBA force a short VALID UNTIL window on brand new
+				 * roles (so users must change their password quickly) while
+				 * keeping a longer password_valid_until window for existing
+				 * roles that change their password (see issue #77).
+				 */
+				int             create_valid = (password_valid_min > 0) ?
+										password_valid_min : password_valid_until;
+				bool            save_password = false;
+				char           *password;
+				DefElem    *dpassword = NULL;
+				DefElem    *dvalidUntil = NULL;
+
+				if (is_in_whitelist(stmt->role, username_whitelist))
+					break;
+
+				/* check the validity of the username */
+				username_check(stmt->role, NULL);
+
+				/* Extract options from the statement node tree */
+				foreach(option, stmt->options)
+				{
+					DefElem    *defel = (DefElem *) lfirst(option);
+
+					if (strcmp(defel->defname, "password") == 0)
+					{
+						dpassword = defel;
+					}
+					else if (strcmp(defel->defname, "validUntil") == 0)
+					{
+						dvalidUntil = defel;
+					}
+				}
+#if PG_VERSION_NUM >= 120000
+				if (dpassword && dpassword->arg)
+				{
+					password = strVal(dpassword->arg);
+					save_password = check_password_reuse(stmt->role, password);
+				}
+#endif
+				/*
+				 * At user creation automatically set the valid until date to
+				 * now() + create_valid days if a create-time window is set
+				 * (credcheck.password_valid_min, falling back to
+				 * credcheck.password_valid_until).
+				 */
+				if (!dvalidUntil && create_valid > 0)
+				{
+					Timestamp dt_now = GetCurrentTimestamp();
+					struct pg_tm tt, *tm = &tt;
+					fsec_t          fsec;
+					int             julian;
+					char            *validuntil;
+					int             tz;
+
+					if (timestamp2tm(dt_now, &tz, tm, &fsec, NULL, session_timezone) != 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+
+					/*
+					 * Add credcheck.password_valid_until days by converting to and from Julian.
+					 */
+					julian = date2j(tm->tm_year, tm->tm_mon, tm->tm_mday);
+					if (pg_add_s32_overflow(julian, create_valid+1, &julian) ||
+						julian < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_DATETIME_VALUE_OUT_OF_RANGE),
+								 errmsg("timestamp out of range")));
+					j2date(julian, &tm->tm_year, &tm->tm_mon, &tm->tm_mday);
+					validuntil = malloc(sizeof(char)*11);
+					sprintf(validuntil, "%d-%d-%d", tm->tm_year, tm->tm_mon, tm->tm_mday);
+					dvalidUntil = makeDefElem("validUntil", (Node *) makeString(validuntil), 1);
+					((CreateRoleStmt *)parsetree)->options = lappend(((CreateRoleStmt *)parsetree)->options, dvalidUntil);
+				}
+
+				if (dvalidUntil && dvalidUntil->arg && create_valid > 0)
+				{
+					valid_until = check_valid_until(strVal(dvalidUntil->arg));
+					has_valid_until = true;
+				}
+				if (dvalidUntil && dvalidUntil->arg && password_valid_max > 0)
+				{
+					valid_max = check_valid_until(strVal(dvalidUntil->arg));
+					has_valid_until = true;
+				}
+
+				/* check that a VALID UNTIL option is present */
+				if ( !has_valid_until && (create_valid > 0 || password_valid_max > 0) )
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option"))));
+
+				/* check that a minimum number of days for password validity is defined */
+				if (create_valid > 0 && valid_until < create_valid)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option with a date older than %d days"), create_valid)));
+
+				/* check that we do not exceed the number of days for password validity */
+				if (password_valid_max > 0 && valid_max > password_valid_max)
+					ereport(ERROR,
+						(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+							errmsg(gettext_noop("require a VALID UNTIL option with a date NOT beyond %d days"), password_valid_max)));
+
+#if PG_VERSION_NUM >= 120000
+				/* The password can be saved into the history */
+				if (save_password)
+					save_password_in_history(stmt->role, password);
+#endif
+				strcpy(load_roleid, stmt->role);
+
+				break;
+			}
+
+#if PG_VERSION_NUM >= 120000
+			case T_DropRoleStmt:
+			{
+				/* The roles are removed from the history below */
+				drop_stmt = (DropRoleStmt *)parsetree;
+				break;
+			}
+#endif
+			default:
+				break;
+		}
+	}
+
+	/* The password change must be done using SU privilege */
+	if (use_superuser_priv)
+	{
+		/* Get current user's Oid and security context */
+		GetUserIdAndSecContext(&save_userid, &save_sec_context);
+		/* Become superuser */
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context
+							| SECURITY_LOCAL_USERID_CHANGE
+							| SECURITY_RESTRICTED_OPERATION);
+	}
+
+	if (prev_ProcessUtility)
+		prev_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+	else
+		standard_ProcessUtility(PEL_PROCESSUTILITY_ARGS);
+
+	/* Restore user's privileges */
+	if (use_superuser_priv)
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+
+#if PG_VERSION_NUM >= 120000
+	/*
+	 * Remove the dropped roles from the password history only once DROP ROLE
+	 * has succeeded, so that a failed one keeps the history. DropRole()
+	 * rejects CURRENT_USER, SESSION_USER and PUBLIC, which have no rolename,
+	 * but check the role type anyway.
+	 */
+	if (drop_stmt != NULL)
+	{
+		ListCell   *item;
+
+		foreach(item, drop_stmt->roles)
+		{
+			RoleSpec   *rolspec = lfirst(item);
+
+			if (rolspec->roletype == ROLESPEC_CSTRING)
+				remove_user_from_history(rolspec->rolename);
+		}
+	}
+#endif
+
+	/*
+	 * The password has been changed, clear the forced password change. Use
+	 * the GUC machinery, so that the session is forced again if the
+	 * transaction is rolled back.
+	 */
+	if (OidIsValid(force_reset_roleid))
+	{
+		/* RESET variable, valuestr = NULL */
+		set_force_change_password(InvalidOid, force_reset_roleid, NULL);
+		(void) set_config_option("credcheck_internal.force_change_password",
+								 "false", PGC_SUSET, PGC_S_SESSION,
+								 GUC_ACTION_SET, true, 0, false);
+		if (force_change_password_cleared_level == 0 ||
+			force_change_password_cleared_level > GetCurrentTransactionNestLevel())
+			force_change_password_cleared_level = GetCurrentTransactionNestLevel();
+	}
+
+	if (MyProcPort != NULL && context == PROCESS_UTILITY_TOPLEVEL && NOT_IN_PARALLEL_WORKER)
+	{
+		if (load_roleid[0] != '\0')
+			roleid = get_role_oid(load_roleid, true);
+
+		/* set force change password option if password_change_first_login is set */
+		if (password_change_first_login && roleid != InvalidOid)
+			set_force_change_password(InvalidOid, roleid, "true");
+	}
+
+	elog(DEBUG1, "End cc_ProcessUtility()");
+}
+
+#if PG_VERSION_NUM >= 120000
+#if PG_VERSION_NUM >= 140000
+char *
+str_to_sha256(const char *password, const char *salt)
+{
+	int          password_len = strlen(password);
+	int          saltlen = strlen(salt);
+	uint8        checksumbuf[PG_SHA256_DIGEST_LENGTH];
+	char        *result = palloc0(sizeof (char) * PG_SHA256_DIGEST_STRING_LENGTH);
+	pg_hmac_ctx *hmac_ctx = pg_hmac_create(PG_SHA256);
+
+	if (hmac_ctx == NULL)
+	{
+		pfree(result);
+		elog(ERROR, gettext_noop("credcheck could not initialize checksum context"));
+	}
+
+	if (pg_hmac_init(hmac_ctx, (uint8 *) password, password_len) < 0 ||
+			pg_hmac_update(hmac_ctx, (uint8 *) salt, saltlen) < 0 ||
+			pg_hmac_final(hmac_ctx, checksumbuf, sizeof(checksumbuf)) < 0)
+	{
+		pfree(result);
+		pg_hmac_free(hmac_ctx);
+		elog(ERROR, gettext_noop("credcheck could not initialize checksum"));
+	}
+	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
+	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+
+	pg_hmac_free(hmac_ctx);
+
+	return result;
+}
+#else
+char *
+str_to_sha256(const char *password, const char *salt)
+{
+	int          password_len = strlen(password);
+	uint8        checksumbuf[PG_SHA256_DIGEST_LENGTH];
+	char        *result = palloc0(sizeof (char) * PG_SHA256_DIGEST_STRING_LENGTH);
+	pg_sha256_ctx sha256_ctx;
+
+	pg_sha256_init(&sha256_ctx);
+	pg_sha256_update(&sha256_ctx, (uint8 *) password, password_len);
+	pg_sha256_final(&sha256_ctx, checksumbuf);
+	hex_encode((char *) checksumbuf, sizeof checksumbuf, result);
+	result[PG_SHA256_DIGEST_STRING_LENGTH - 1] = '\0';
+
+	return result;
+}
+#endif
+#endif
+
+/****
+ * Password history feature
+ ****/
+
+/*
+ * ===========================================================================
+ * Memory-mapped password history store (option C).
+ *
+ * Layout of the mapped file:
+ *   [ PgphMmapHeader ]
+ *   [ int32 bucket[nbuckets] ]   (slot index of chain head, -1 = empty)
+ *   [ PgphSlot slot[capacity] ]
+ * Everything is referenced by integer index, never by pointer, so the mapping
+ * is valid regardless of the base address in each process.
+ * ===========================================================================
+ */
+
+static inline Size
+pgph_bucket_off(void)
+{
+	return MAXALIGN(sizeof(PgphMmapHeader));
+}
+
+static inline Size
+pgph_slots_off(uint32 nbuckets)
+{
+	return MAXALIGN(pgph_bucket_off() + (Size) nbuckets * sizeof(int32));
+}
+
+/* Map (creating/sizing if needed) the password history file. Process-local. */
+static void
+pgph_mmap_attach(void)
+{
+	uint32	nbuckets = (uint32) pgph_max;
+	Size	filesize;
+
+	filesize = pgph_slots_off(nbuckets) + (Size) pgph_max * sizeof(PgphSlot);
+	filesize = TYPEALIGN(BLCKSZ, filesize);		/* pgBackRest-friendly */
+	pgph_mmap_size = filesize;
+
+#ifndef WIN32
+	{
+		int		fd;
+
+		fd = BasicOpenFile(PGPH_DUMP_FILE, O_RDWR | O_CREAT | PG_BINARY);
+		if (fd < 0)
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not open password history file \"%s\": %m",
+							PGPH_DUMP_FILE)));
+		if (ftruncate(fd, (off_t) filesize) != 0)
+		{
+			int		save_errno = errno;
+
+			close(fd);
+			errno = save_errno;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not size password history file \"%s\": %m",
+							PGPH_DUMP_FILE)));
+		}
+		pgph_base = mmap(NULL, filesize, PROT_READ | PROT_WRITE,
+						 MAP_SHARED, fd, 0);
+		close(fd);
+		if (pgph_base == MAP_FAILED)
+		{
+			pgph_base = NULL;
+			ereport(FATAL,
+					(errcode_for_file_access(),
+					 errmsg("could not mmap password history file \"%s\": %m",
+							PGPH_DUMP_FILE)));
+		}
+	}
+#else
+	ereport(FATAL,
+			(errmsg("credcheck password history mmap store is not yet supported on Windows")));
+#endif
+
+	pgph_hdr = (PgphMmapHeader *) pgph_base;
+	pgph_buckets = (int32 *) (pgph_base + pgph_bucket_off());
+	pgph_slots = (PgphSlot *) (pgph_base + pgph_slots_off(nbuckets));
+
+	/* liveness sentinel so the existing "if (!pgph_hash)" guards keep working */
+	pgph_hash = (HTAB *) pgph_base;
+}
+
+/* Initialise an empty table (first process / holds the lock). */
+static void
+pgph_tab_init(void)
+{
+	uint32	nbuckets = (uint32) pgph_max;
+	int32	i;
+
+	memset(pgph_base, 0, pgph_mmap_size);
+	pgph_hdr->magic = PGPH_MMAP_MAGIC;
+	pgph_hdr->version = PGPH_MMAP_VERSION;
+	pgph_hdr->capacity = (uint32) pgph_max;
+	pgph_hdr->nbuckets = nbuckets;
+	pgph_hdr->nused = 0;
+
+	for (i = 0; i < (int32) nbuckets; i++)
+		pgph_buckets[i] = -1;
+
+	for (i = 0; i < pgph_max; i++)
+	{
+		pgph_slots[i].used = 0;
+		pgph_slots[i].next = (i + 1 < pgph_max) ? (i + 1) : -1;
+	}
+	pgph_hdr->freehead = (pgph_max > 0) ? 0 : -1;
+}
+
+static inline uint32
+pgph_bucket_of(pgphHashKey *key)
+{
+	uint32	h = hash_bytes((const unsigned char *) key, sizeof(pgphHashKey));
+
+	return h % pgph_hdr->nbuckets;
+}
+
+static pgphEntry *
+pgph_tab_find(pgphHashKey *key)
+{
+	int32	idx;
+
+	if (!pgph_hdr)
+		return NULL;
+
+	idx = pgph_buckets[pgph_bucket_of(key)];
+	while (idx != -1)
+	{
+		PgphSlot   *s = &pgph_slots[idx];
+
+		if (s->used && memcmp(&s->entry.key, key, sizeof(pgphHashKey)) == 0)
+			return &s->entry;
+		idx = s->next;
+	}
+	return NULL;
+}
+
+static pgphEntry *
+pgph_tab_enter(pgphHashKey *key, bool *found)
+{
+	uint32		b;
+	int32		idx;
+	pgphEntry  *existing = pgph_tab_find(key);
+
+	if (existing)
+	{
+		if (found)
+			*found = true;
+		return existing;
+	}
+	if (found)
+		*found = false;
+
+	if (pgph_hdr->freehead == -1)
+		return NULL;			/* table full */
+
+	idx = pgph_hdr->freehead;
+	pgph_hdr->freehead = pgph_slots[idx].next;
+
+	b = pgph_bucket_of(key);
+	pgph_slots[idx].used = 1;
+	pgph_slots[idx].entry.key = *key;
+	pgph_slots[idx].entry.password_date = 0;
+	pgph_slots[idx].next = pgph_buckets[b];
+	pgph_buckets[b] = idx;
+	pgph_hdr->nused++;
+
+	return &pgph_slots[idx].entry;
+}
+
+static bool
+pgph_unlink_from_bucket(uint32 b, int32 target)
+{
+	int32	idx = pgph_buckets[b];
+	int32	prev = -1;
+
+	while (idx != -1)
+	{
+		if (idx == target)
+		{
+			if (prev == -1)
+				pgph_buckets[b] = pgph_slots[idx].next;
+			else
+				pgph_slots[prev].next = pgph_slots[idx].next;
+			return true;
+		}
+		prev = idx;
+		idx = pgph_slots[idx].next;
+	}
+	return false;
+}
+
+static void
+pgph_tab_remove(pgphHashKey *key)
+{
+	uint32	b = pgph_bucket_of(key);
+	int32	idx = pgph_buckets[b];
+
+	while (idx != -1)
+	{
+		PgphSlot   *s = &pgph_slots[idx];
+
+		if (s->used && memcmp(&s->entry.key, key, sizeof(pgphHashKey)) == 0)
+		{
+			(void) pgph_unlink_from_bucket(b, idx);
+			s->used = 0;
+			s->next = pgph_hdr->freehead;
+			pgph_hdr->freehead = idx;
+			pgph_hdr->nused--;
+			return;
+		}
+		idx = s->next;
+	}
+}
+
+/* Change the key of an existing entry (ALTER ROLE ... RENAME). */
+static void
+pgph_tab_rekey(pgphEntry *entry, pgphHashKey *newkey)
+{
+	int32	idx = (int32) ((PgphSlot *) ((char *) entry
+				- offsetof(PgphSlot, entry)) - pgph_slots);
+	uint32	oldb = pgph_bucket_of(&pgph_slots[idx].entry.key);
+	uint32	newb;
+
+	(void) pgph_unlink_from_bucket(oldb, idx);
+	pgph_slots[idx].entry.key = *newkey;
+	newb = pgph_bucket_of(newkey);
+	pgph_slots[idx].next = pgph_buckets[newb];
+	pgph_buckets[newb] = idx;
+}
+
+static int32
+pgph_tab_count(void)
+{
+	return pgph_hdr ? pgph_hdr->nused : 0;
+}
+
+static void
+pgph_msync(int flags)
+{
+#ifndef WIN32
+	if (pgph_base != NULL && pgph_mmap_size > 0)
+		(void) msync(pgph_base, pgph_mmap_size, flags);
+#endif
+}
+
+/*
+ * Backward compatibility: read a legacy 5.x dump file (magic PGPH_FILE_HEADER)
+ * into a palloc'd array and rename it out of the way, so the caller can build
+ * the fresh mmap store and re-insert the entries. Returns NULL (and *n_out = 0)
+ * when there is no legacy file. MUST run before the mapping is initialised,
+ * because pgph_tab_init() memset()s through the mmap and would otherwise wipe
+ * the legacy bytes still sitting in the same file.
+ *
+ * Runs identically on a standby (the dump arrives via the base backup), so the
+ * 5.x -> 6.0 upgrade restart preserves the history on both primary and standby.
+ */
+static pgphEntry *
+pgph_slurp_legacy(int32 *n_out)
+{
+	FILE	   *f;
+	uint32		header = 0;
+	uint32		ver = 0;
+	int32		num = 0;
+	int32		i;
+	pgphEntry  *buf;
+
+	*n_out = 0;
+
+	f = AllocateFile(PGPH_DUMP_FILE, PG_BINARY_R);
+	if (f == NULL)
+		return NULL;
+
+	if (fread(&header, sizeof(uint32), 1, f) != 1
+		|| fread(&ver, sizeof(uint32), 1, f) != 1
+		|| fread(&num, sizeof(int32), 1, f) != 1
+		|| header != PGPH_FILE_HEADER || ver != PGPH_VERSION || num <= 0)
+	{
+		FreeFile(f);
+		return NULL;			/* not a legacy dump (e.g. our mmap store) */
+	}
+
+	elog(LOG, "credcheck: migrating %d legacy password history entries to the mmap store",
+		 num);
+
+	buf = (pgphEntry *) malloc((Size) num * sizeof(pgphEntry));
+	if (buf == NULL)
+	{
+		FreeFile(f);
+		ereport(LOG, (errmsg("credcheck: out of memory migrating password history")));
+		return NULL;
+	}
+
+	for (i = 0; i < num; i++)
+	{
+		if (fread(&buf[i], sizeof(pgphEntry), 1, f) != 1)
+			break;
+	}
+	FreeFile(f);
+	*n_out = i;
+
+	/* archive the legacy file so the mmap store can take the canonical name */
+	(void) durable_rename(PGPH_DUMP_FILE, PGPH_DUMP_FILE ".legacy-migrated", LOG);
+
+	return buf;
+}
+
+/*
+ * Estimate anonymous shared memory: only the control struct lives in shared
+ * memory now; the hash table itself is the memory-mapped file.
+ */
+static Size
+pgph_memsize(void)
+{
+	return MAXALIGN(sizeof(pgphSharedState));
+}
+
+/*
+ * Estimate shared memory space needed for auth failure history.
+ */
+static Size
+pgaf_memsize(void)
+{
+	Size            size;
+
+	size = MAXALIGN(sizeof(pgafSharedState));
+	size = add_size(size, hash_estimate_size(pgaf_max, sizeof(pgafEntry)));
+
+	return size;
+}
+
+
+#if PG_VERSION_NUM >= 150000
+static void
+pghist_shmem_request(void)
+{
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
+	/*
+	 * If you change code here, don't forget to also report the modifications in
+	 * _PG_init() for pg14 and below.
+	 */
+	RequestAddinShmemSpace(pgph_memsize());
+	RequestNamedLWLockTranche(PGPH_TRANCHE_NAME, 1);
+	RequestAddinShmemSpace(pgaf_memsize());
+	RequestNamedLWLockTranche(PGAF_TRANCHE_NAME, 1);
+	if (lastlog_enabled)
+	{
+		RequestAddinShmemSpace(lastlog_memsize());
+		RequestNamedLWLockTranche(LASTLOG_TRANCHE_NAME, 1);
+	}
+}
+#endif
+
+
+static void
+pghist_shmem_startup(void)
+{
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+
+	pgph_shmem_startup();
+
+	pgaf_shmem_startup();
+
+	lastlog_shmem_startup();
+}
+
+/*
+ * shmem_startup hook: allocate or attach to shared memory,
+ * then load any pre-existing password history from text file
+ * or create it (even if empty) while the module is enabled.
+ */
+static void
+pgph_shmem_startup(void)
+{
+	bool        found;
+	pgphEntry  *migrated = NULL;
+	int32       migrated_n = 0;
+
+	/* reset in case this is a restart within the postmaster */
+	pgph = NULL;
+	pgph_hash = NULL;
+	pgph_base = NULL;
+	pgph_hdr = NULL;
+
+	/* Create or attach to the anonymous control struct (LWLock holder). */
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	pgph = ShmemInitStruct("pg_password_history",
+						   sizeof(pgphSharedState),
+						   &found);
+	if (!found)
+		pgph->lock = &(GetNamedLWLockTranche(PGPH_TRANCHE_NAME))->lock;
+
+	/*
+	 * First process only: relocate an old global/ file, then slurp any legacy
+	 * 5.x dump into memory BEFORE we map and initialise the store (the init
+	 * memset writes through the mapping and would wipe the legacy bytes).
+	 */
+	if (!found)
+	{
+		FILE   *oldf = AllocateFile(PGPH_DUMP_FILE_OLD, PG_BINARY_R);
+
+		if (oldf != NULL)
+		{
+			FreeFile(oldf);
+			(void) durable_rename(PGPH_DUMP_FILE_OLD, PGPH_DUMP_FILE, LOG);
+		}
+
+		migrated = pgph_slurp_legacy(&migrated_n);
+	}
+
+	/* Attach the memory-mapped store (every process maps it locally). */
+	pgph_mmap_attach();
+
+	if (!found)
+	{
+		LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+		/* Keep an existing valid 6.0 store; otherwise start empty. */
+		if (!(pgph_hdr->magic == PGPH_MMAP_MAGIC
+			  && pgph_hdr->version == PGPH_MMAP_VERSION
+			  && pgph_hdr->capacity == (uint32) pgph_max))
+			pgph_tab_init();
+
+		/* Re-insert migrated legacy entries, if any. */
+		if (migrated != NULL)
+		{
+			int32	i;
+
+			for (i = 0; i < migrated_n; i++)
+			{
+				pgphEntry  *e = pgph_tab_enter(&migrated[i].key, NULL);
+
+				if (e)
+					e->password_date = migrated[i].password_date;
+			}
+			free(migrated);
+			pgph_msync(MS_SYNC);
+		}
+		else
+			pgph_msync(MS_ASYNC);
+
+		LWLockRelease(pgph->lock);
+	}
+
+	LWLockRelease(AddinShmemInitLock);
+}
+
+static pgphEntry *
+pgph_entry_alloc(pgphHashKey *key, TimestampTz password_date)
+{
+	pgphEntry  *entry;
+	bool        found;
+
+	entry = pgph_tab_enter(key, &found);
+	if (entry == NULL)
+	{
+		ereport(LOG,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("can not allocate enough memory for new entry in password history cache."),
+				 errhint("You shoul increase credcheck.history_max_size.")));
+		return NULL;
+	}
+
+	/* New entry, set the timestamp */
+	if (!found)
+		entry->password_date = password_date;
+
+	return entry;
+}
+
+static pgafEntry *
+pgaf_entry_alloc(pgafHashKey *key, float failure_count)
+{
+	pgafEntry  *entry;
+	bool        found;
+
+	if (hash_get_num_entries(pgaf_hash) >= pgph_max)
+	{
+		ereport(LOG,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("can not allocate enough memory for new entry in auth failure cache."),
+				 errhint("You shoul increase credcheck.history_max_size.")));
+		return NULL;
+	}
+
+	/* Find or create an entry with desired hash code */
+	entry = (pgafEntry *) hash_search(pgaf_hash, key, HASH_ENTER, &found);
+
+	/* New entry */
+	if (!found)
+	{
+		entry->failure_count = failure_count;
+		if (failure_count >= fail_max)
+			entry->banned_date = GetCurrentTimestamp();
+	}
+
+	return entry;
+}
+
+
+/*
+ * Flush password history to disk.
+ *
+ * With the memory-mapped store (option C) the history *is* the file, so a
+ * "flush" is just an msync(); the kernel handles the rest of the write-back.
+ * Kept under this name because it is called from every mutation path and from
+ * the WAL redo routine. The caller must hold pgph->lock exclusively.
+ */
+static void
+flush_password_history(void)
+{
+	if (!pgph || !pgph_base)
+		return;
+
+	elog(DEBUG1, "flushing password history (msync) to file %s", PGPH_DUMP_FILE);
+	pgph_msync(MS_ASYNC);
+}
+
+static void
+pgaf_shmem_startup(void)
+{
+	bool        found;
+	HASHCTL     info;
+
+	/* reset in case this is a restart within the postmaster */
+	pgaf = NULL;
+	pgaf_hash = NULL;
+
+	/*
+	 * Create or attach to the shared memory state, including hash table
+	 */
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	pgaf = ShmemInitStruct("pg_auth_failure_history",
+						   sizeof(pgafSharedState),
+						   &found);
+
+	if (!found)
+	{
+		/* First time through ... */
+		pgaf->lock = &(GetNamedLWLockTranche(PGAF_TRANCHE_NAME))->lock;
+	}
+
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(pgafHashKey);
+	info.entrysize = sizeof(pgafEntry);
+	pgaf_hash = ShmemInitHash("pg_auth_failure_history hash",
+#if PG_VERSION_NUM < 190000
+							  pgaf_max, pgaf_max,
+#else
+							  pgaf_max,
+#endif
+							  &info,
+							  HASH_ELEM | HASH_BLOBS);
+
+	LWLockRelease(AddinShmemInitLock);
+}
+
+PG_FUNCTION_INFO_V1(pg_password_history_reset);
+
+/*
+ * Reset password history.
+ */
+Datum
+pg_password_history_reset(PG_FUNCTION_ARGS)
+{
+	char       *username;
+	int         num_removed = 0;
+	int32       _i;
+        pgphEntry  *entry;
+
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_password_history_reset", false);
+#endif
+
+        /* Safety check... */
+        if (!pgph || !pgph_hash)
+                return 0;
+
+        /* Only superusers can reset the history */
+	if (!superuser())
+		ereport(ERROR, (errmsg("only superuser can reset password history")));
+
+	/*
+	 * Mutations are replicated through the credcheck custom WAL resource
+	 * manager, so this function must not be invoked while in recovery.
+	 */
+#if PG_VERSION_NUM >= 150000
+	if (RecoveryInProgress())
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("recovery is in progress"),
+				 errhint("pg_password_history_reset() cannot be executed during recovery.")));
+#endif
+
+	/* Get the username to filter the entries to remove if one specified */
+	if (PG_NARGS() > 0)
+		username = PG_GETARG_CSTRING(0);
+	else
+		username = NULL;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+        for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+        {
+		if (!pgph_slots[_i].used)
+			continue;
+		entry = &pgph_slots[_i].entry;
+		if (username == NULL || strcmp(entry->key.rolename, username) == 0)
+		{
+			pgph_tab_remove(&entry->key);
+			num_removed++;
+		}
+	}
+
+	/* Flush the new entry to disk */
+	if (num_removed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_reset(username);
+#endif
+		flush_password_history();
+	}
+
+	LWLockRelease(pgph->lock);
+
+        PG_RETURN_INT32(num_removed);
+}
+
+PG_FUNCTION_INFO_V1(pg_password_history);
+
+/*
+ * Show content of the password history.
+ */
+Datum
+pg_password_history(PG_FUNCTION_ARGS)
+{
+	pg_password_history_internal(fcinfo);
+
+	return (Datum) 0;
+}
+
+/* Common code for all versions of pg_password_history() */
+static void
+pg_password_history_internal(FunctionCallInfo fcinfo)
+{
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc       tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext per_query_ctx;
+	MemoryContext oldcontext;
+	int32       _i;
+	pgphEntry  *entry;
+
+	/* Safety check... */
+	if (!pgph || !pgph_hash)
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("credcheck must be loaded via shared_preload_libraries to use password history")));
+
+	/* check to see if caller supports us returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+	if (!(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not allowed in this context")));
+
+	/* Switch into long-lived context to construct returned data structures */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+
+	/* Build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+
+	MemoryContextSwitchTo(oldcontext);
+
+	/*
+	 * Get shared lock, iterate over the hashtable entries.
+	 *
+	 * With a large hash table, we might be holding the lock rather longer
+	 * than one could wish.  However, this only blocks creation of new hash
+	 * table entries, and the larger the hash table the less likely that is to
+	 * be needed.
+	 */
+	LWLockAcquire(pgph->lock, LW_SHARED);
+
+	for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+	{
+		Datum           values[PG_PASSWORD_HISTORY_COLS];
+		bool            nulls[PG_PASSWORD_HISTORY_COLS];
+		int                     i = 0;
+
+		if (!pgph_slots[_i].used)
+			continue;
+		entry = &pgph_slots[_i].entry;
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		values[i++] = CStringGetDatum(entry->key.rolename);
+		values[i++] = TimestampTzGetDatum(entry->password_date);
+		values[i++] = CStringGetTextDatum(entry->key.password_hash);
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* clean up and return the tuplestore */
+	LWLockRelease(pgph->lock);
+}
+
+PG_FUNCTION_INFO_V1(pg_password_history_timestamp);
+
+/*
+ * Change the password_date of all entries in password history
+ * for a specified user. Proposed for testing purpose only.
+ */
+Datum
+pg_password_history_timestamp(PG_FUNCTION_ARGS)
+{
+	char       *username = PG_GETARG_CSTRING(0);
+	TimestampTz new_timestamp = PG_GETARG_TIMESTAMPTZ(1);
+        pgphEntry  *entry;
+	int         num_changed = 0;
+	int32       _i;
+
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_password_history_timestamp", false);
+#endif
+
+        /* Safety check... */
+        if (!pgph || !pgph_hash)
+                return 0;
+
+        /* Only superusers can reset the history */
+	if (!superuser())
+		ereport(ERROR, (errmsg("only superuser can change timestamp in password history")));
+
+	/*
+	 * Mutations are replicated through the credcheck custom WAL resource
+	 * manager, so this function must not be invoked while in recovery.
+	 */
+#if PG_VERSION_NUM >= 150000
+	if (RecoveryInProgress())
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("recovery is in progress"),
+				 errhint("pg_password_history_timestamp() cannot be executed during recovery.")));
+#endif
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgph->lock, LW_EXCLUSIVE);
+
+        for (_i = 0; _i < (int32) pgph_hdr->capacity; _i++)
+        {
+		if (!pgph_slots[_i].used)
+			continue;
+		entry = &pgph_slots[_i].entry;
+		if (strcmp(entry->key.rolename, username) == 0)
+                {
+			entry->password_date = new_timestamp;
+			num_changed++;
+                }
+        }
+
+	/* Flush the new entry to disk */
+	if (num_changed > 0)
+	{
+#if PG_VERSION_NUM >= 150000
+		credcheck_xlog_pwd_timestamp(username, new_timestamp);
+#endif
+		flush_password_history();
+	}
+
+	LWLockRelease(pgph->lock);
+
+        PG_RETURN_INT32(num_changed);
+}
+
+PG_FUNCTION_INFO_V1(pg_check_password);
+
+/*
+ * SQL-callable wrapper exposing the internal check_password() routine so a
+ * user can validate a candidate password against the configured credcheck
+ * username/password policy *without* actually creating or altering a role.
+ */
+Datum
+pg_check_password(PG_FUNCTION_ARGS)
+{
+	char	   *username;
+	char	   *password;
+
+	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("username and password must not be NULL")));
+
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_check_password", true);
+#endif
+
+	username = NameStr(*(PG_GETARG_NAME(0)));
+	password = text_to_cstring(PG_GETARG_TEXT_PP(1));
+
+	check_password(username, password, PASSWORD_TYPE_PLAINTEXT,
+				   (Datum) 0, true);
+
+	PG_RETURN_BOOL(true);
+}
+
+/*
+ * Cheap, case-insensitive test for the substring "passw", used to avoid
+ * lexing every single log line when there cannot be a password to redact.
+ */
+static bool
+query_has_password(const char *s)
+{
+	if (s == NULL)
+		return false;
+
+	for (; *s; s++)
+	{
+		if ((s[0] == 'p' || s[0] == 'P') &&
+			(s[1] == 'a' || s[1] == 'A') &&
+			(s[2] == 's' || s[2] == 'S') &&
+			(s[3] == 's' || s[3] == 'S') &&
+			(s[4] == 'w' || s[4] == 'W'))
+			return true;
+	}
+	return false;
+}
+
+/* Advance past whitespace. */
+static char *
+skip_ws(char *p)
+{
+	while (*p && isspace((unsigned char) *p))
+		p++;
+	return p;
+}
+
+/* Skip constant SQL string literal.*/
+static char *
+skip_string(char *p, bool estr)
+{
+	p++;  /* skip opening quote */
+	while (*p)
+	{
+		if (estr && *p == '\\' && p[1] != '\0')
+		{
+			p += 2;
+			continue;
+		}
+		if (*p == '\'')
+		{
+			if (p[1] == '\'')
+			{
+				p += 2;
+				continue;
+			}
+			return p + 1;  /* closing quote */
+		}
+		p++;
+	}
+	return p;
+}
+
+/*
+ * Overwrite the interior of an SQL string literal with '.', preserving the
+ * quotes and the literal's overall length. 'p' points at the opening quote.
+ * Returns the position just past the closing quote.
+ */
+static char *
+mask_string_literal(char *p, bool estr)
+{
+	p++;  /* keep opening quote */
+	while (*p)
+	{
+		if (estr && *p == '\\' && p[1] != '\0')
+		{
+			*p = '.';
+			p[1] = '.';
+			p += 2;
+			continue;
+		}
+		if (*p == '\'')
+		{
+			if (p[1] == '\'')  /* doubled quote -> embedded ' */
+			{
+				*p = '.';
+				p[1] = '.';
+				p += 2;
+				continue;
+			}
+			return p + 1;  /* keep closing quote */
+		}
+		*p = '.';
+		p++;
+	}
+	return p;
+}
+
+/*
+ * Mask, in place, the value of every PASSWORD '<literal>' (and FDW-style
+ * "password '<literal>'") clause found in the SQL text 's'. A small lexer is
+ * used so that the PASSWORD keyword is only matched as real SQL: string
+ * literals, dollar-quoted strings, quoted identifiers and comments are skipped
+ * so the word "password" appearing inside ordinary data never triggers a
+ * (corrupting) match.
+ */
+static void
+mask_passwords(char *s)
+{
+	char *p = s;
+
+	if (s == NULL)
+		return;
+
+	while (*p)
+	{
+		unsigned char c = (unsigned char) *p;
+
+		/* line comment */
+		if (c == '-' && p[1] == '-')
+		{
+			p += 2;
+			while (*p && *p != '\n')
+				p++;
+			continue;
+		}
+
+		/* block comment (PostgreSQL allows nesting) */
+		if (c == '/' && p[1] == '*')
+		{
+			int depth = 1;
+
+			p += 2;
+			while (*p && depth > 0)
+			{
+				if (p[0] == '/' && p[1] == '*')
+				{
+					depth++;
+					p += 2;
+				}
+				else if (p[0] == '*' && p[1] == '/')
+				{
+					depth--;
+					p += 2;
+				}
+				else
+					p++;
+			}
+			continue;
+		}
+
+		/* quoted identifier */
+		if (c == '"')
+		{
+			p++;
+			while (*p)
+			{
+				if (*p == '"')
+				{
+					if (p[1] == '"')
+					{
+						p += 2;
+						continue;
+					}
+					p++;
+					break;
+				}
+				p++;
+			}
+			continue;
+		}
+
+		/* dollar-quoted string: $tag$ ... $tag$ */
+		if (c == '$')
+		{
+			char       *tagend = p + 1;
+
+			while (*tagend &&
+				   (*tagend == '_' || isalnum((unsigned char) *tagend)))
+				tagend++;
+
+			if (*tagend == '$')
+			{
+				size_t          taglen = (size_t) (tagend - p) + 1;
+				char       *body = tagend + 1;
+
+				for (; *body; body++)
+				{
+					if (*body == '$' && strncmp(body, p, taglen) == 0)
+					{
+						body += taglen;
+						break;
+					}
+				}
+				p = body;
+				continue;
+			}
+			/* not a dollar quote */
+			p++;
+			continue;
+		}
+
+		/* ordinary string literal */
+		if (c == '\'')
+		{
+			p = skip_string(p, false);
+			continue;
+		}
+
+		/* identifier or keyword */
+		if (c == '_' || isalpha(c))
+		{
+			char       *start = p;
+			size_t          len;
+
+			p++;
+			while (*p == '_' || *p == '$' || isalnum((unsigned char) *p))
+				p++;
+			len = (size_t) (p - start);
+
+			/* E'...' / e'...' escape string constant */
+			if (len == 1 && (start[0] == 'E' || start[0] == 'e') &&
+				*p == '\'')
+			{
+				p = skip_string(p, true);
+				continue;
+			}
+
+			if (len == 8 && pg_strncasecmp(start, "password", 8) == 0)
+			{
+				char       *lit = skip_ws(p);
+				bool            estr = false;
+
+				if ((*lit == 'E' || *lit == 'e') && lit[1] == '\'')
+				{
+					estr = true;
+					lit++;
+				}
+
+				if (*lit == '\'')
+				{
+					/* PASSWORD 'secret'  ->  PASSWORD '......' */
+					p = mask_string_literal(lit, estr);
+					continue;
+				}
+				/* PASSWORD NULL / PASSWORD $n / etc: nothing to mask */
+			}
+			continue;
+		}
+		p++;
+	}
+}
+
+static void
+fix_log(ErrorData *edata)
+{
+        /* Do not expose the password in the log. */
+	if (no_password_logging)
+	{
+		/*
+		 * Mask the password literal anywhere it could reach the log, for every
+		 * log level: log_statement / log_min_duration_statement emit at LOG,
+		 * policy violations and other failures at ERROR.
+		 */
+		if (query_has_password(edata->message))
+			mask_passwords(edata->message);
+		if (query_has_password(edata->detail))
+			mask_passwords(edata->detail);
+		if (query_has_password(edata->detail_log))
+			mask_passwords(edata->detail_log);
+		if (query_has_password(edata->context))
+			mask_passwords(edata->context);
+		if (query_has_password(edata->internalquery))
+			mask_passwords(edata->internalquery);
+
+		/*
+		 * The "STATEMENT: ..." line attached to an error is printed by
+		 * send_message_to_server_log() straight from debug_query_string, not
+		 * from edata, so mask it there too. The cast is safe: masking is
+		 * length-preserving and the backend resets this buffer to the next
+		 * statement's text on the following command.
+		 */
+		if (debug_query_string != NULL &&
+			query_has_password(debug_query_string))
+			mask_passwords((char *) debug_query_string);
+	}
+
+	/* Continue chain to previous hook */
+	if (prev_log_hook)
+		(*prev_log_hook) (edata);
+}
+
+static void
+credcheck_max_auth_failure(Port *port, int status)
+{
+
+	/* Inject a short delay if authentication failed. */
+	if (status != STATUS_OK)
+		pg_usleep(1000L * auth_delay_milliseconds);
+
+	/* get out if the user is whitelisted for auth failure */
+	if (is_in_whitelist(port->user_name, max_auth_whitelist))
+	{
+		if (prev_ClientAuthentication)
+			prev_ClientAuthentication(port, status);
+		return;
+	}
+
+	/* check for max auth failure */
+	if (fail_max > 0 && status != STATUS_EOF)
+	{
+		Oid userOid =  get_role_oid(port->user_name, true);
+
+		if (userOid != InvalidOid)
+		{
+			float fail_num = get_auth_failure(port->user_name, userOid, status);
+
+			/* register the auth failure if we not reach allowed max failure */
+			if (status == STATUS_ERROR && fail_num <= fail_max)
+				fail_num = save_auth_failure(port, userOid);
+
+			/* reject, this account has been banned */
+			if (fail_num >= fail_max)
+			{
+				/*
+				 * if superuser have been banned, restore the access if requested
+				 * through credcheck.reset_superuser and a configuration reload
+				 */
+				if (reset_superuser && userOid == 10)
+					remove_auth_failure(port->user_name, userOid);
+				else
+					ereport(FATAL, (errmsg("rejecting connection, user '%s' has been banned", port->user_name)));
+			}
+
+			/* connection is ok and we have not reach the failure limit, let's reset the counter */
+			if (status == STATUS_OK  && fail_num < fail_max)
+				remove_auth_failure(port->user_name, userOid);
+		}
+	}
+
+	/* Record the successful login in the lastlog history. */
+	if (status == STATUS_OK)
+		lastlog_record_login(port);
+
+	if (prev_ClientAuthentication)
+		prev_ClientAuthentication(port, status);
+
+}
+
+static float
+get_auth_failure(const char *username, Oid userid, int status)
+{
+	pgafHashKey key;
+	pgafEntry  *entry;
+	float fail_cnt = 0;
+
+	Assert(username != NULL);
+
+	if (fail_max == 0)
+		return 0;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return 0;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid ;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	/* Create new entry, if not present */
+	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
+	if (entry)
+		fail_cnt = entry->failure_count;
+
+	elog(DEBUG1, "Auth failure count for user %s is %f, fired by status: %d", username, fail_cnt, status);
+
+	LWLockRelease(pgaf->lock);
+
+	return fail_cnt;
+}
+
+static float
+save_auth_failure(Port *port, Oid userid)
+{
+	pgafHashKey key;
+	pgafEntry  *entry;
+	float fail_cnt = 1;
+
+	/*
+	if (port->ssl_in_use)
+		fail_cnt = 0.5;
+	*/
+
+	Assert(port->user_name != NULL);
+
+	if (fail_max == 0)
+		return 0;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return 0;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid ;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	/* Create new entry, if not present */
+	entry = (pgafEntry *) hash_search(pgaf_hash, &key, HASH_FIND, NULL);
+	if (entry)
+	{
+		/*
+		if (port->ssl_in_use)
+			fail_cnt = entry->failure_count + 0.5;
+		else
+		*/
+			fail_cnt = entry->failure_count + 1;
+
+		elog(DEBUG1, "Remove entry in auth failure hash table for user %s", port->user_name);
+		hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
+	}
+	elog(DEBUG1, "Add new entry in auth failure hash table for user %s (%d, %f)", port->user_name, userid, fail_cnt);
+
+	/* OK to create a new hashtable entry */
+	entry = pgaf_entry_alloc(&key, fail_cnt);
+
+	LWLockRelease(pgaf->lock);
+
+	return fail_cnt;
+}
+
+static void
+remove_auth_failure(const char *username, Oid userid)
+{
+	pgafHashKey key;
+
+	Assert(username != NULL);
+
+	if (fail_max == 0)
+		return;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		return;
+
+	/* Set up key for hashtable search */
+        key.roleid = userid;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+	elog(DEBUG1, "Remove entry in auth failure hash table for user %s", username);
+	hash_search(pgaf_hash, &key, HASH_REMOVE, NULL);
+
+	LWLockRelease(pgaf->lock);
+}
+
+PG_FUNCTION_INFO_V1(pg_banned_role_reset);
+
+/*
+ * Reset banned role cache.
+ */
+Datum
+pg_banned_role_reset(PG_FUNCTION_ARGS)
+{
+	char       *username;
+	int         num_removed = 0;
+	HASH_SEQ_STATUS hash_seq;
+        pgafEntry  *entry;
+
+#ifdef GP_VERSION_NUM
+	check_coordinator("pg_banned_role_reset", false);
+#endif
+
+        /* Safety check... */
+        if (!pgaf || !pgaf_hash)
+                return 0;
+
+        /* Only superusers can reset the history */
+	if (!superuser())
+		ereport(ERROR, (errmsg("only superuser can reset banned roles cache")));
+
+	/* Get the username to filter the entries to remove if one specified */
+	if (PG_NARGS() > 0)
+		username = PG_GETARG_CSTRING(0);
+	else
+		username = NULL;
+
+	/* Lookup the hash table entry with exclusive lock. */
+	LWLockAcquire(pgaf->lock, LW_EXCLUSIVE);
+
+        hash_seq_init(&hash_seq, pgaf_hash);
+
+	/* Sequential scan of the hash table to find the entries to remove */
+        while ((entry = hash_seq_search(&hash_seq)) != NULL)
+        {
+		if (username == NULL || (entry->key.roleid == get_role_oid(username, true)))
+		{
+			hash_search(pgaf_hash, &entry->key, HASH_REMOVE, NULL);
+			num_removed++;
+		}
+	}
+
+	LWLockRelease(pgaf->lock);
+
+        PG_RETURN_INT32(num_removed);
+}
+
+PG_FUNCTION_INFO_V1(pg_banned_role);
+
+/*
+ * Show list of the banned role
+ */
+Datum
+pg_banned_role(PG_FUNCTION_ARGS)
+{
+	pg_banned_role_internal(fcinfo);
+
+	return (Datum) 0;
+}
+
+/* Common code for all versions of pg_banned_role() */
+static void
+pg_banned_role_internal(FunctionCallInfo fcinfo)
+{
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc       tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext per_query_ctx;
+	MemoryContext oldcontext;
+	HASH_SEQ_STATUS hash_seq;
+	pgafEntry  *entry;
+
+	/* Safety check... */
+	if (!pgaf || !pgaf_hash)
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+				 errmsg("credcheck must be loaded via shared_preload_libraries to use auth failure feature")));
+
+	/* check to see if caller supports us returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+	if (!(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not allowed in this context")));
+
+	/* Switch into long-lived context to construct returned data structures */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+
+	/* Build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+
+	MemoryContextSwitchTo(oldcontext);
+
+	/*
+	 * Get shared lock, iterate over the hashtable entries.
+	 *
+	 * With a large hash table, we might be holding the lock rather longer
+	 * than one could wish.  However, this only blocks creation of new hash
+	 * table entries, and the larger the hash table the less likely that is to
+	 * be needed.
+	 */
+	LWLockAcquire(pgaf->lock, LW_SHARED);
+
+	hash_seq_init(&hash_seq, pgaf_hash);
+	while ((entry = hash_seq_search(&hash_seq)) != NULL)
+	{
+		Datum           values[PG_BANNED_ROLE_COLS];
+		bool            nulls[PG_BANNED_ROLE_COLS];
+		int             i = 0;
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		values[i++] = ObjectIdGetDatum(entry->key.roleid);
+#if PG_VERSION_NUM >= 190000
+		values[i++] = UInt8GetDatum(entry->failure_count);
+#else
+		values[i++] = Int8GetDatum(entry->failure_count);
+#endif
+		if (entry->banned_date)
+			values[i++] = TimestampTzGetDatum(entry->banned_date);
+		else
+			nulls[i++] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* clean up and return the tuplestore */
+	LWLockRelease(pgaf->lock);
+}
+
+static void
+cc_ExecutorStart(QueryDesc *queryDesc, int eflags)
+{
+        elog(DEBUG1, "cc_ExecutorStart()");
+
+	if (MyProcPort != NULL && NOT_IN_PARALLEL_WORKER && !IS_ENTRY_DB_QE())
+	{
+		/*
+		 * When first login we don't allow anything else than password change.
+		 * This rule is also checked in the ProcessUtility hook because we need
+		 * to allow the ALTER ROLE command to change the password. We must allow
+		 * SELECT CURRENT_USER which is sent by the \passwd command before
+		 * password change.
+		 */
+		if (debug_query_string != NULL && strcmp(debug_query_string, "SELECT CURRENT_USER") != 0)
+		{
+			if (!is_in_whitelist(MyProcPort->user_name, username_whitelist))
+			{
+				if (queryDesc->operation != CMD_UTILITY && force_change_password)
+						ereport(ERROR,
+							(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+								errmsg(gettext_noop("you must change your password first."))));
+			}
+		}
+	}
+
+	/* Remember the last executed query for the lastlog view. */
+	if (queryDesc->sourceText != NULL && !IS_ENTRY_DB_QE())
+		lastlog_track_last_query(queryDesc->sourceText);
+
+        /* Continue the normal behavior */
+        if (prev_ExecutorStart)
+                prev_ExecutorStart(queryDesc, eflags);
+        else
+                standard_ExecutorStart(queryDesc, eflags);
+
+	elog(DEBUG1, "End of cc_ExecutorStart()");
+}
+
+/*
+ * The forced password change comes from the role settings at login, so it is
+ * also the value that DISCARD ALL or RESET restores. Once the password change
+ * is committed, make the cleared flag the session default too. This can't be
+ * done when the flag is cleared, since the session default is not restored
+ * if the transaction is rolled back. This also clears the flag again if RESET
+ * ALL has restored it later in the transaction, but not if it has been set by
+ * a superuser with SET, which takes precedence over the session default.
+ */
+static void
+cc_XactCallback(XactEvent event, void *arg)
+{
+	switch (event)
+	{
+		case XACT_EVENT_COMMIT:
+			if (force_change_password_cleared_level > 0)
+				(void) set_config_option("credcheck_internal.force_change_password",
+										 "false", PGC_SUSET, PGC_S_USER,
+										 GUC_ACTION_SET, true, 0, false);
+			force_change_password_cleared_level = 0;
+			break;
+		case XACT_EVENT_ABORT:
+		case XACT_EVENT_PREPARE:
+			force_change_password_cleared_level = 0;
+			break;
+		default:
+			break;
+	}
+}
+
+/*
+ * The rollback of the subtransaction in which the forced password change has
+ * been cleared restores the flag, and its commit passes the clearing on to
+ * the parent transaction.
+ */
+static void
+cc_SubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+				   SubTransactionId parentSubid, void *arg)
+{
+	int			level = GetCurrentTransactionNestLevel();
+
+	switch (event)
+	{
+		case SUBXACT_EVENT_COMMIT_SUB:
+			if (force_change_password_cleared_level == level)
+				force_change_password_cleared_level = level - 1;
+			break;
+		case SUBXACT_EVENT_ABORT_SUB:
+			if (force_change_password_cleared_level >= level)
+				force_change_password_cleared_level = 0;
+			break;
+		default:
+			break;
+	}
+}
+
+static void
+set_force_change_password(Oid databaseid, Oid roleid, char *valuestr)
+{
+	bool need_priv_escalation = !superuser(); /* we might be a SU */
+	Oid     save_userid;
+	int     save_sec_context;
+#ifndef GP_VERSION_NUM
+	HeapTuple	tuple;
+	Relation	rel;
+	ScanKeyData scankey[2];
+	SysScanDesc scan;
+#endif
+
+	if (roleid == InvalidOid)
+		return;
+
+	/* The setting reseet must be done as SU */
+	if (need_priv_escalation)
+	{
+		/* Get current user's Oid and security context */
+		GetUserIdAndSecContext(&save_userid, &save_sec_context);
+		/* Become superuser */
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, save_sec_context
+							| SECURITY_LOCAL_USERID_CHANGE
+							| SECURITY_RESTRICTED_OPERATION);
+	}
+
+#ifdef GP_VERSION_NUM
+	/*
+	 * pg_db_role_setting must be the same on the coordinator and segments,
+	 * so change it as ALTER ROLE ... SET/RESET does, which also dispatches
+	 * the change to segments.
+	 */
+	{
+		VariableSetStmt *setstmt = makeNode(VariableSetStmt);
+
+		setstmt->name = "credcheck_internal.force_change_password";
+		if (valuestr)
+		{
+			A_Const    *arg = makeNode(A_Const);
+
+			arg->val.type = T_String;
+			arg->val.val.str = valuestr;
+			arg->location = -1;
+			setstmt->kind = VAR_SET_VALUE;
+			setstmt->args = list_make1(arg);
+		}
+		else
+			setstmt->kind = VAR_RESET;
+
+		AlterSetting(databaseid, roleid, setstmt);
+	}
+#else
+	/* Get the old tuple, if any. */
+	rel = table_open(DbRoleSettingRelationId, RowExclusiveLock);
+	ScanKeyInit(&scankey[0],
+				Anum_pg_db_role_setting_setdatabase,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(databaseid));
+	ScanKeyInit(&scankey[1],
+				Anum_pg_db_role_setting_setrole,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(roleid));
+	scan = systable_beginscan(rel, DbRoleSettingDatidRolidIndexId, true,
+							  NULL, 2, scankey);
+	tuple = systable_getnext(scan);
+
+	if (HeapTupleIsValid(tuple))
+	{
+		Datum		repl_val[Natts_pg_db_role_setting];
+		bool		repl_null[Natts_pg_db_role_setting];
+		bool		repl_repl[Natts_pg_db_role_setting];
+		HeapTuple	newtuple;
+		Datum		datum;
+		bool		isnull;
+		ArrayType  *a;
+
+		memset(repl_repl, false, sizeof(repl_repl));
+		repl_repl[Anum_pg_db_role_setting_setconfig - 1] = true;
+		repl_null[Anum_pg_db_role_setting_setconfig - 1] = false;
+
+		/* Extract old value of setconfig */
+		datum = heap_getattr(tuple, Anum_pg_db_role_setting_setconfig,
+							 RelationGetDescr(rel), &isnull);
+		a = isnull ? NULL : DatumGetArrayTypeP(datum);
+
+                /* Update (valuestr is NULL in RESET cases) */
+                if (valuestr)
+                        a = GUCArrayAdd(a, "credcheck_internal.force_change_password", valuestr);
+                else
+                        a = GUCArrayDelete(a,  "credcheck_internal.force_change_password");
+
+		if (a)
+		{
+			repl_val[Anum_pg_db_role_setting_setconfig - 1] =
+				PointerGetDatum(a);
+
+			newtuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+										 repl_val, repl_null, repl_repl);
+			CatalogTupleUpdate(rel, &tuple->t_self, newtuple);
+		}
+		else
+			CatalogTupleDelete(rel, &tuple->t_self);
+	}
+	else if (valuestr)
+	{
+                /* non-null valuestr means it's not RESET, so insert a new tuple */
+                HeapTuple       newtuple;
+                Datum           values[Natts_pg_db_role_setting];
+                bool            nulls[Natts_pg_db_role_setting];
+                ArrayType  *a;
+
+                memset(nulls, false, sizeof(nulls));
+
+                a = GUCArrayAdd(NULL, "credcheck_internal.force_change_password", valuestr);
+
+                values[Anum_pg_db_role_setting_setdatabase - 1] = ObjectIdGetDatum(databaseid);
+                values[Anum_pg_db_role_setting_setrole - 1] = ObjectIdGetDatum(roleid);
+                values[Anum_pg_db_role_setting_setconfig - 1] = PointerGetDatum(a);
+                newtuple = heap_form_tuple(RelationGetDescr(rel), values, nulls);
+
+                CatalogTupleInsert(rel, newtuple);
+	}
+
+	systable_endscan(scan);
+
+	/* Close pg_db_role_setting, but keep lock till commit */
+	table_close(rel, NoLock);
+#endif
+
+	/* Restore user's privileges */
+	if (need_priv_escalation)
+		SetUserIdAndSecContext(save_userid, save_sec_context);
+
+}
+

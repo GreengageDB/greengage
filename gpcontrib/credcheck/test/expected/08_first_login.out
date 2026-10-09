@@ -1,0 +1,115 @@
+LOAD 'credcheck';
+SET credcheck.password_change_first_login = true;
+CREATE USER aaa PASSWORD 'DummY';
+-- verify that credcheck_internal.force_change_password is present after user creation
+SELECT 1 FROM pg_catalog.pg_db_role_setting WHERE setrole='aaa'::regrole AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
+ ?column? 
+----------
+        1
+(1 row)
+
+-- and on all segments
+SELECT count(DISTINCT gp_segment_id) = (SELECT count(*) FROM gp_segment_configuration WHERE role = 'p' AND content >= 0)
+  FROM gp_dist_random('pg_catalog.pg_db_role_setting')
+  WHERE setrole='aaa'::regrole AND 'credcheck_internal.force_change_password=true'=ANY(setconfig);
+ ?column? 
+----------
+ t
+(1 row)
+
+DROP USER aaa;
+-- Enforcement when a forced role actually logs in.
+-- Create a forced role and reconnect as it so that
+-- credcheck_internal.force_change_password is applied at login, exactly as in
+-- production (the flag comes from pg_db_role_setting, not from a manual SET).
+SET credcheck.password_change_first_login = true;
+CREATE USER forced_login PASSWORD 'DummY1passWORD!';
+\set superuser :USER
+\c - forced_login
+-- Session/transaction-control statements that drivers and connection poolers
+-- must be able to issue while establishing a session (pgbouncer varcache_apply,
+-- pgbouncer server_reset_query = DISCARD ALL, JDBC/libpq startup SETs). These
+-- must be allowed even though the role has not changed its password yet.
+SET client_encoding = 'UTF8';
+SET application_name = 'x';
+BEGIN;
+COMMIT;
+DISCARD ALL;
+-- The flag stays armed after DISCARD ALL (its default comes from the role
+-- settings), so real data access is still blocked -- and, unlike the swallowed
+-- pooler-setup error, this one reaches the client.
+SELECT 1;
+ERROR:  you must change your password first.
+-- DDL and other utility statements remain blocked too.
+CREATE TABLE t_force (i int);
+ERROR:  you must change your password first.
+-- A forced session must not be able to clear the flag itself.
+SET credcheck_internal.force_change_password = false;
+ERROR:  you must change your password first.
+-- A rejected password change must not clear the forced state
+-- (credcheck.password_contain_username is on by default).
+ALTER USER forced_login PASSWORD 'forced_login_Pwd1';
+ERROR:  password should not contain username
+SELECT 1;
+ERROR:  you must change your password first.
+-- Neither must a rolled back one,
+BEGIN;
+ALTER USER forced_login PASSWORD 'Rolled2backWORD!';
+ROLLBACK;
+SELECT 1;
+ERROR:  you must change your password first.
+-- nor one rolled back to a savepoint, even after DISCARD ALL,
+BEGIN;
+SAVEPOINT s;
+ALTER USER forced_login PASSWORD 'Savepoint5WORD!';
+ROLLBACK TO SAVEPOINT s;
+COMMIT;
+DISCARD ALL;
+SELECT 1;
+ERROR:  you must change your password first.
+-- nor removing the password.
+ALTER USER forced_login PASSWORD NULL;
+SELECT 1;
+ERROR:  you must change your password first.
+-- A slice executed on the coordinator by an entry db QE in the transaction
+-- changing the password is not blocked, although the QE doesn't see the
+-- uncommitted reset of the flag.
+BEGIN;
+ALTER USER forced_login PASSWORD 'Entry4dbPassWORD!';
+CREATE TEMP TABLE t_entry (c int) DISTRIBUTED BY (c);
+INSERT INTO t_entry SELECT content FROM gp_segment_configuration;
+ROLLBACK;
+-- The password change itself is allowed and clears the forced state, even
+-- if RESET ALL restores the flag from the role settings later in the same
+-- transaction.
+BEGIN;
+ALTER USER forced_login PASSWORD 'BrandNew3passWORD!';
+RESET ALL;
+COMMIT;
+SELECT 1 AS after_password_change;
+ after_password_change 
+-----------------------
+                     1
+(1 row)
+
+-- DISCARD ALL, which poolers issue to reset the session, doesn't arm the
+-- flag again once the password change is committed.
+DISCARD ALL;
+SELECT 1 AS after_discard_all;
+ after_discard_all 
+-------------------
+                 1
+(1 row)
+
+-- Reconnect as the superuser to clean up.
+\c - :superuser
+-- The flag is cleared on the coordinator and on segments
+SELECT count(*) FROM (SELECT setrole FROM pg_catalog.pg_db_role_setting
+  UNION ALL SELECT setrole FROM gp_dist_random('pg_catalog.pg_db_role_setting')) s
+  WHERE setrole = 'forced_login'::regrole;
+ count 
+-------
+     0
+(1 row)
+
+DROP USER forced_login;

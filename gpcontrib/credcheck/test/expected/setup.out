@@ -1,0 +1,1 @@
+-- Setup shared_preload_libraries and allow connections for the role of 08_first_login

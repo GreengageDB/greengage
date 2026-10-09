@@ -1,0 +1,23 @@
+LOAD 'credcheck';
+
+SET lc_messages = 'C';
+SET credcheck.password_min_length = 8;
+SET credcheck.password_min_special = 0;
+SET credcheck.password_min_digit = 0;
+SET credcheck.password_min_upper = 0;
+SET credcheck.password_min_lower = 0;
+SET credcheck.password_contain_username = false;
+
+-- The coordinator logs the duration only after the statement is dispatched,
+-- so segments receive the password in clear text and have to mask it
+-- themselves.
+SET log_statement = 'none';
+SET log_min_duration_statement = 0;
+SET client_min_messages TO LOG;
+CREATE ROLE erin LOGIN PASSWORD 'Dur4tionPwd!';
+ALTER ROLE erin PASSWORD 'An0therDur4tion#';
+SET client_min_messages TO WARNING;
+RESET log_min_duration_statement;
+RESET log_statement;
+
+DROP ROLE erin;
