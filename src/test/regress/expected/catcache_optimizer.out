@@ -35,14 +35,14 @@ select count(distinct(b)) from dml_14027_union_s;
 
 rollback;
 explain update dml_14027_union_s set a = (select null union select null)::numeric;
-                                                                        QUERY PLAN
+                                                                        QUERY PLAN                                                                        
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
- Update on dml_14027_union_s  (cost=0.00..882689.40 rows=1 width=1)
+ Update on dml_14027_union_s  (cost=0.00..882689.36 rows=1 width=1)
    ->  Result  (cost=0.00..0.00 rows=0 width=0)
-         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..882689.33 rows=2 width=26)
+         ->  Redistribute Motion 3:3  (slice1; segments: 3)  (cost=0.00..882689.29 rows=2 width=26)
                Hash Key: a
-               ->  Split  (cost=0.00..882689.33 rows=1 width=26)
-                     ->  Nested Loop Left Join  (cost=0.00..882689.33 rows=1 width=30)
+               ->  Split  (cost=0.00..882689.29 rows=1 width=26)
+                     ->  Nested Loop Left Join  (cost=0.00..882689.29 rows=1 width=30)
                            Join Filter: true
                            ->  Dynamic Seq Scan on dml_14027_union_s  (cost=0.00..431.00 rows=1 width=22)
                                  Number of partitions to scan: 2 (out of 2)
