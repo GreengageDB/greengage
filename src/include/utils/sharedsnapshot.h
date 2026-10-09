@@ -46,6 +46,21 @@ typedef struct SharedSnapshotSlot
 
 	volatile int    cur_dump_id;
 	volatile SnapshotDump    dump[SNAPSHOTDUMPARRAYSZ];
+
+	/*
+	 * DSM segment carrying serialized tempcat state from writer to readers.
+	 * When non-zero, readers should attach, deserialize, and detach during
+	 * readerFillLocalSnapshot().
+	 */
+	volatile dsm_handle	tempcat_dsm;
+
+	/*
+	 * Monotonically increasing version of the tempcat state.  Bumped by the
+	 * writer whenever tempcat content changes.  Readers compare against a
+	 * process-local counter to skip redundant deserialization.
+	 */
+	volatile uint64		tempcat_version;
+
 	/* for debugging only */
 	FullTransactionId	fullXid;
 	TimestampTz		startTimestamp;

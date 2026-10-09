@@ -103,11 +103,17 @@ DiscardAll(bool isTopLevel)
 	/* Closing portals might run user-defined code, so do that first. */
 	PortalHashTableDeleteAll();
 	SetPGVariable("session_authorization", NIL, false);
+	/*
+	 * Drop temporary tables before resetting the GUCs: the check hook of
+	 * gp_enable_temp_memory_catalog refuses to disable it while the
+	 * in-memory catalog still holds temporary table metadata, so the
+	 * tables must be gone by the time RESET ALL reaches the GUC.
+	 */
+	ResetTempTableNamespace();
 	ResetAllOptions();
 	DropAllPreparedStatements();
 	Async_UnlistenAll();
 	LockReleaseAll(USER_LOCKMETHOD, true);
 	ResetPlanCache();
-	ResetTempTableNamespace();
 	ResetSequenceCaches();
 }
