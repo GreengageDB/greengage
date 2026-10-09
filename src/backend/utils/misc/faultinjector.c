@@ -260,7 +260,8 @@ checkBgProcessSkipFault(const char* faultName)
 				0 != strcmp("auto_vac_worker_after_report_activity", faultName) &&
 				0 != strcmp("auto_vac_worker_abort", faultName) &&
 				0 != strcmp("analyze_after_hold_lock", faultName) &&
-				0 != strcmp("analyze_finished_one_relation", faultName))
+				0 != strcmp("analyze_finished_one_relation", faultName) &&
+				0 != strcmp("tempcat_skip_autovacuum_sweep", faultName))
 		{
 			elog(LOG, "skipped fault '%s' in autovacuum worker process", faultName);
 			return true;

@@ -125,6 +125,7 @@
 #include "catalog/partition.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/dbcommands.h"
 #include "commands/vacuum.h"
 #include "lib/ilist.h"
@@ -2469,6 +2470,15 @@ do_autovacuum(void)
 		/* StartTransactionCommand changed current memory context */
 		MemoryContextSwitchTo(AutovacMemCxt);
 	}
+
+	/*
+	 * GPDB: likewise remove the on-disk catalog rows left by crashed
+	 * sessions' temporary objects kept in memory (see tempcat.c).
+	 */
+	tempcat_autovacuum_sweep();
+	CommitTransactionCommand();
+	StartTransactionCommand();
+	MemoryContextSwitchTo(AutovacMemCxt);
 
 	/*
 	 * Create a buffer access strategy object for VACUUM to use.  We want to

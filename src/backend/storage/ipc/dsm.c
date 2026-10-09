@@ -452,8 +452,23 @@ dsm_create(Size size, int flags)
 		if (seg->handle == DSM_HANDLE_INVALID)	/* Reserve sentinel */
 			continue;
 		if (dsm_impl_op(DSM_OP_CREATE, seg->handle, size, &seg->impl_private,
-						&seg->mapped_address, &seg->mapped_size, ERROR))
+						&seg->mapped_address, &seg->mapped_size,
+						(flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 ? DEBUG1 : ERROR))
 			break;
+
+		/*
+		 * GPDB: with DSM_CREATE_NULL_IF_NOSPACE, a failure other than a
+		 * handle collision (e.g. /dev/shm being full) gets here instead of
+		 * raising an error.  The implementation has cleaned up after itself.
+		 */
+		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 && errno != EEXIST)
+		{
+			if (seg->resowner != NULL)
+				ResourceOwnerForgetDSM(seg->resowner, seg);
+			dlist_delete(&seg->node);
+			pfree(seg);
+			return NULL;
+		}
 	}
 
 	/* Lock the control segment so we can register the new segment. */

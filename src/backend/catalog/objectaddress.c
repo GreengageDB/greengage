@@ -64,6 +64,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -2805,6 +2806,14 @@ getObjectDescription(const ObjectAddress *object)
 	StringInfoData buffer;
 
 	initStringInfo(&buffer);
+
+	/* GPDB: an in-memory temporary object of another session */
+	if (tempcat_object_missing(object))
+	{
+		appendStringInfo(&buffer, _("temporary object %u of another session"),
+						 object->objectId);
+		return buffer.data;
+	}
 
 	switch (getObjectClass(object))
 	{

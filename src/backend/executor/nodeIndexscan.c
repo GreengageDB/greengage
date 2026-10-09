@@ -36,6 +36,7 @@
 #include "catalog/pg_am.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexscan.h"
+#include "catalog/tempcat.h"
 #include "lib/pairingheap.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
@@ -70,6 +71,131 @@ static void reorderqueue_push(IndexScanState *node, TupleTableSlot *slot,
 							  Datum *orderbyvals, bool *orderbynulls);
 static HeapTuple reorderqueue_pop(IndexScanState *node);
 
+
+/*
+ * GPDB: keep a virtual row only if it satisfies the index quals.
+ */
+static bool
+IndexTempcatQual(HeapTuple tup, void *arg)
+{
+	IndexScanState *node = (IndexScanState *) arg;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	TupleTableSlot *slot = node->iss_DiskSlot;
+
+	ExecForceStoreHeapTuple(tup, slot, false);
+	econtext->ecxt_scantuple = slot;
+	return ExecQualAndReset(node->indexqualorig, econtext);
+}
+
+/*
+ * GPDB: collect the virtual catalog rows of in-memory temporary objects that
+ * the scan must return, sorted in index order (see tempcat.c).
+ */
+static void
+IndexScanSetupTempcat(IndexScanState *node, ScanDirection direction)
+{
+	Relation	rel = node->ss.ss_currentRelation;
+
+	node->iss_TempState = TEMPSCAN_NONE;
+	node->iss_TempScan = tempcat_begin_index_sql_scan(rel, node->iss_RelationDesc,
+													  node->ss.ps.state->es_snapshot,
+													  node->iss_ScanKeys,
+													  node->iss_NumScanKeys);
+	if (node->iss_TempScan == NULL)
+		return;
+
+	if (node->iss_DiskSlot == NULL)
+		node->iss_DiskSlot = ExecAllocTableSlot(&node->ss.ps.state->es_tupleTable,
+												RelationGetDescr(rel),
+												table_slot_callbacks(rel));
+
+	tempcat_scan_filter(node->iss_TempScan, IndexTempcatQual, node);
+	ExecClearTuple(node->iss_DiskSlot);
+
+	node->iss_TempState = TEMPSCAN_MERGE;
+	node->iss_TempForward = ScanDirectionIsForward(direction);
+	node->iss_DiskPeeked = false;
+	node->iss_DiskDone = false;
+}
+
+static void
+IndexScanResetTempcat(IndexScanState *node)
+{
+	if (node->iss_TempScan)
+		tempcat_endscan(node->iss_TempScan);
+	node->iss_TempScan = NULL;
+	node->iss_TempState = TEMPSCAN_UNKNOWN;
+	node->iss_DiskPeeked = false;
+	node->iss_DiskDone = false;
+	if (node->iss_DiskSlot)
+		ExecClearTuple(node->iss_DiskSlot);
+}
+
+/*
+ * GPDB: next row of an index scan that merges virtual rows, in index order.
+ */
+static TupleTableSlot *
+IndexNextTempcat(IndexScanState *node, IndexScanDesc scandesc,
+				 ScanDirection direction)
+{
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	bool		forward = node->iss_TempForward;
+	HeapTuple	vtup;
+
+	/* Fetch the next on-disk row, unless one is waiting already. */
+	while (!node->iss_DiskPeeked && !node->iss_DiskDone)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		if (!index_getnext_slot(scandesc, direction, node->iss_DiskSlot))
+		{
+			node->iss_DiskDone = true;
+			break;
+		}
+		if (scandesc->xs_recheck)
+		{
+			econtext->ecxt_scantuple = node->iss_DiskSlot;
+			if (!ExecQualAndReset(node->indexqualorig, econtext))
+			{
+				InstrCountFiltered2(node, 1);
+				continue;
+			}
+		}
+		/* developer option, see tempcat_hide_disk_row() */
+		if (gp_temp_memory_catalog_hide_others &&
+			tempcat_hide_disk_slot(node->ss.ss_currentRelation, node->iss_DiskSlot))
+			continue;
+		node->iss_DiskPeeked = true;
+	}
+
+	vtup = tempcat_scan_peek(node->iss_TempScan, forward);
+	if (vtup != NULL &&
+		(!node->iss_DiskPeeked ||
+		 tempcat_scan_compare(node->iss_TempScan, vtup,
+							  ExecFetchSlotHeapTuple(node->iss_DiskSlot, false, NULL))
+		 * (forward ? 1 : -1) <= 0))
+	{
+		tempcat_scan_advance(node->iss_TempScan);
+		ExecForceStoreHeapTuple(vtup, slot, false);
+		slot->tts_tableOid = RelationGetRelid(node->ss.ss_currentRelation);
+		slot->tts_tid = vtup->t_self;
+		return slot;
+	}
+
+	if (node->iss_DiskPeeked)
+	{
+		node->iss_DiskPeeked = false;
+		ExecCopySlot(slot, node->iss_DiskSlot);
+		/* ExecCopySlot() does not carry these over */
+		slot->tts_tableOid = node->iss_DiskSlot->tts_tableOid;
+		slot->tts_tid = node->iss_DiskSlot->tts_tid;
+		return slot;
+	}
+
+	node->iss_ReachedEnd = true;
+	return ExecClearTuple(slot);
+}
 
 /* ----------------------------------------------------------------
  *		IndexNext
@@ -126,6 +252,23 @@ IndexNext(IndexScanState *node)
 			index_rescan(scandesc,
 						 node->iss_ScanKeys, node->iss_NumScanKeys,
 						 node->iss_OrderByKeys, node->iss_NumOrderByKeys);
+	}
+
+	/*
+	 * GPDB: merge in the catalog rows of this session's temporary objects
+	 * that are kept in memory, see tempcat.c.
+	 */
+	if (node->iss_TempState == TEMPSCAN_UNKNOWN)
+		IndexScanSetupTempcat(node, direction);
+	if (node->iss_TempState == TEMPSCAN_MERGE)
+	{
+		if (ScanDirectionIsForward(direction) == node->iss_TempForward)
+			return IndexNextTempcat(node, scandesc, direction);
+
+		/* Direction changed mid-scan (scrollable cursor): not supported. */
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot change the direction of a catalog index scan that includes in-memory temporary objects")));
 	}
 
 	/*
@@ -590,6 +733,9 @@ ExecReScanIndexScan(IndexScanState *node)
 					 node->iss_OrderByKeys, node->iss_NumOrderByKeys);
 	node->iss_ReachedEnd = false;
 
+	/* GPDB: the keys may have changed; collect the virtual rows again */
+	IndexScanResetTempcat(node);
+
 	ExecScanReScan(&node->ss);
 }
 
@@ -817,6 +963,8 @@ ExecEndIndexScan(IndexScanState *node)
 	if (node->ss.ps.ps_ResultTupleSlot)
 		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
+
+	IndexScanResetTempcat(node);
 
 	/*
 	 * close the index relation (no-op if we didn't open it)

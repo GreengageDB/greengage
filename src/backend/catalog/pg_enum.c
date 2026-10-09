@@ -22,6 +22,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "storage/lmgr.h"
 #include "miscadmin.h"

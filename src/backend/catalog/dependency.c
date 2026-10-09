@@ -61,6 +61,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_type_encoding.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/comment.h"
@@ -332,6 +333,9 @@ performDeletion(const ObjectAddress *object,
 	Relation	depRel;
 	ObjectAddresses *targetObjects;
 
+	/* GPDB: remove leftovers of in-memory temporary objects first */
+	tempcat_sweep_before_drop();
+
 	/*
 	 * We save some cycles by opening pg_depend just once and passing the
 	 * Relation pointer down to all the recursive deletion steps.
@@ -395,6 +399,9 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	/* No work if no objects... */
 	if (objects->numrefs <= 0)
 		return;
+
+	/* GPDB: remove leftovers of in-memory temporary objects first */
+	tempcat_sweep_before_drop();
 
 	/*
 	 * We save some cycles by opening pg_depend just once and passing the
@@ -1290,6 +1297,18 @@ deleteOneObject(const ObjectAddress *object, Relation *depRel, int flags)
 	int			nkeys;
 	SysScanDesc scan;
 	HeapTuple	tup;
+
+	/*
+	 * GPDB: the catalog rows of another session's in-memory temporary objects
+	 * are not visible here, so we cannot drop them (e.g. by DROP ... CASCADE
+	 * of a type used by such a table).
+	 */
+	if (tempcat_object_missing(object))
+		ereport(ERROR,
+				(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+				 errmsg("cannot drop %s because another session uses it",
+						getObjectDescription(object)),
+				 errhint("The object belongs to a temporary table of another session.")));
 
 	/* DROP hook of the objects being removed */
 	InvokeObjectDropHookArg(object->classId, object->objectId,

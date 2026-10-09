@@ -328,6 +328,9 @@ def connect(user=None, password=None, host=None, port=None,
     # unset search path due to CVE-2018-1058
     options = '-c search_path='
     options += ' -c gp_dispatch_drop_always=on'
+    # catalog rows of other sessions' in-memory temporary objects that
+    # stayed on disk point at objects only those sessions can see
+    options += ' -c gp_temp_memory_catalog_hide_others=on'
     if utilityMode:
         options += ' -c gp_role=utility'
     for val in GV.opt['-x']:

@@ -19,6 +19,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "access/xlog.h"
+#include "catalog/tempcat.h"
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
 #include "postmaster/autovacuum.h"
@@ -594,6 +595,17 @@ GetNewObjectIdUnderLock(void)
 		}
 	}
 
+	/*
+	 * GPDB: OIDs from FirstTempcatObjectId up are reserved for temporary
+	 * objects kept in the in-memory catalog (see tempcat.c); wrap around
+	 * before reaching them, in every mode.  Bootstrap never gets that far.
+	 */
+	if (ShmemVariableCache->nextOid >= FirstTempcatObjectId)
+	{
+		ShmemVariableCache->nextOid = FirstNormalObjectId;
+		ShmemVariableCache->oidCount = 0;
+	}
+
 	/* If we run out of logged for use oids then we must log more */
 	if (ShmemVariableCache->oidCount == 0)
 	{
@@ -614,9 +626,19 @@ GetNewObjectIdUnderLock(void)
 		 * have some test-utils to verify logic under larger oid.
 		 */
 		if (result <= PG_INT32_MAX) {
-			result = PG_INT32_MAX + result % (PG_UINT32_MAX - PG_INT32_MAX) + 1;
+			result = PG_INT32_MAX + result % (FirstTempcatObjectId - PG_INT32_MAX - 1) + 1;
 		}
 	}
+
+	/*
+	 * Test hook: hand out an OID from the range reserved for in-memory
+	 * temporary objects, as ordinary objects created before the range was
+	 * reserved may have.  Use the tail of the range, which belongs to the
+	 * slice of the last PGPROCs (auxiliary processes), so it does not clash
+	 * with temporary objects of running sessions.
+	 */
+	if (SIMPLE_FAULT_INJECTOR("oid_in_tempcat_range") == FaultInjectorTypeSkip)
+		result = LastTempcatObjectId - 100000 + result % 100000;
 #endif
 
 	return result;

@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_subscription.h"
 #include "catalog/pg_subscription_rel.h"
 #include "executor/executor.h"
@@ -236,6 +237,9 @@ CatalogTupleInsert(Relation heapRel, HeapTuple tup)
 
 	CatalogTupleCheckConstraints(heapRel, tup);
 
+	if (tempcat_route_insert(heapRel, tup) && tempcat_insert(heapRel, tup))
+		return;
+
 	indstate = CatalogOpenIndexes(heapRel);
 
 	simple_heap_insert(heapRel, tup);
@@ -257,6 +261,9 @@ CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
 	CatalogTupleCheckConstraints(heapRel, tup);
+
+	if (tempcat_route_insert(heapRel, tup) && tempcat_insert(heapRel, tup))
+		return;
 
 	simple_heap_insert(heapRel, tup);
 
@@ -281,6 +288,25 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 
 	CatalogTupleCheckConstraints(heapRel, tup);
 
+	if (IsTempcatTid(otid))
+	{
+		if (tempcat_route_insert(heapRel, tup) &&
+			tempcat_update(heapRel, otid, tup))
+			return;
+
+		/*
+		 * The new version references an ordinary object (e.g. a pg_depend
+		 * row now pointing at a regular type), so it must be visible to
+		 * other sessions; or the in-memory area is full.  Move it to disk.
+		 */
+		tempcat_delete(heapRel, otid);
+		indstate = CatalogOpenIndexes(heapRel);
+		simple_heap_insert(heapRel, tup);
+		CatalogIndexInsert(indstate, tup);
+		CatalogCloseIndexes(indstate);
+		return;
+	}
+
 	indstate = CatalogOpenIndexes(heapRel);
 
 	simple_heap_update(heapRel, otid, tup);
@@ -302,6 +328,19 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
 	CatalogTupleCheckConstraints(heapRel, tup);
+
+	if (IsTempcatTid(otid))
+	{
+		if (!tempcat_route_insert(heapRel, tup) ||
+			!tempcat_update(heapRel, otid, tup))
+		{
+			/* see CatalogTupleUpdate */
+			tempcat_delete(heapRel, otid);
+			simple_heap_insert(heapRel, tup);
+			CatalogIndexInsert(indstate, tup);
+		}
+		return;
+	}
 
 	simple_heap_update(heapRel, otid, tup);
 

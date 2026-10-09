@@ -31,6 +31,7 @@
 #include "access/tableam.h"
 #include "executor/execdebug.h"
 #include "executor/nodeSeqscan.h"
+#include "catalog/tempcat.h"
 #include "utils/rel.h"
 #include "nodes/nodeFuncs.h"
 
@@ -85,9 +86,51 @@ SeqNext(SeqScanState *node)
 
 	/*
 	 * get the next tuple from the table
+	 *
+	 * GPDB: once exhausted, don't ask the table again while returning the
+	 * virtual rows below: the heap scan would start over.
 	 */
-	if (table_scan_getnextslot(scandesc, direction, slot))
-		return slot;
+	if (!node->heap_done)
+	{
+		while (table_scan_getnextslot(scandesc, direction, slot))
+		{
+			/* developer option, see tempcat_hide_disk_row() */
+			if (gp_temp_memory_catalog_hide_others &&
+				tempcat_hide_disk_slot(node->ss.ss_currentRelation, slot))
+				continue;
+			return slot;
+		}
+		node->heap_done = true;
+	}
+
+	/*
+	 * GPDB: then the catalog rows of this session's temporary objects that
+	 * are kept in memory (see tempcat.c).  Only forward scans see them.
+	 */
+	if (!node->tempscan_done && ScanDirectionIsForward(direction))
+	{
+		Relation	rel = node->ss.ss_currentRelation;
+		HeapTuple	tup;
+
+		if (node->tempscan == NULL)
+			node->tempscan = tempcat_begin_sql_scan(rel, estate->es_snapshot);
+		if (node->tempscan != NULL &&
+			(tup = tempcat_next_virtual(node->tempscan)) != NULL)
+		{
+			ExecForceStoreHeapTuple(tup, slot, false);
+			slot->tts_tableOid = RelationGetRelid(rel);
+			slot->tts_tid = tup->t_self;
+			return slot;
+		}
+		node->tempscan_done = true;
+	}
+
+	/* the next call starts a new scan, like the table AM does */
+	node->heap_done = false;
+	node->tempscan_done = false;
+	if (node->tempscan != NULL)
+		tempcat_endscan(node->tempscan);
+	node->tempscan = NULL;
 	return NULL;
 }
 
@@ -227,6 +270,10 @@ ExecEndSeqScan(SeqScanState *node)
 	 */
 	if (scanDesc != NULL)
 		table_endscan(scanDesc);
+
+	if (node->tempscan != NULL)
+		tempcat_endscan(node->tempscan);
+	node->tempscan = NULL;
 }
 
 /* ----------------------------------------------------------------
@@ -250,6 +297,12 @@ ExecReScanSeqScan(SeqScanState *node)
 	if (scan != NULL)
 		table_rescan(scan,		/* scan desc */
 					 NULL);		/* new scan keys */
+
+	if (node->tempscan != NULL)
+		tempcat_endscan(node->tempscan);
+	node->tempscan = NULL;
+	node->heap_done = false;
+	node->tempscan_done = false;
 
 	ExecScanReScan((ScanState *) node);
 }

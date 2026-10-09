@@ -28,6 +28,7 @@
 #include "cdb/cdbvars.h"
 #include "executor/execdebug.h"
 #include "executor/nodeTidscan.h"
+#include "catalog/tempcat.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
 #include "storage/bufmgr.h"
@@ -179,7 +180,8 @@ TidListEval(TidScanState *tidstate)
 			 * won't be possible for someone to truncate away the blocks we
 			 * intend to visit.).
 			 */
-			if (!table_tuple_tid_valid(scan, itemptr))
+			/* GPDB: virtual TIDs of in-memory catalog rows, see tempcat.c */
+			if (!IsTempcatTid(itemptr) && !table_tuple_tid_valid(scan, itemptr))
 				continue;
 
 			if (numTids >= numAllocTids)
@@ -223,7 +225,7 @@ TidListEval(TidScanState *tidstate)
 
 				itemptr = (ItemPointer) DatumGetPointer(ipdatums[i]);
 
-				if (!table_tuple_tid_valid(scan, itemptr))
+				if (!IsTempcatTid(itemptr) && !table_tuple_tid_valid(scan, itemptr))
 					continue;
 
 				tidList[numTids++] = *itemptr;
@@ -384,7 +386,22 @@ TidNext(TidScanState *node)
 		if (node->tss_isCurrentOf)
 			table_tuple_get_latest_tid(scan, &tid);
 
-		if (table_tuple_fetch_row_version(heapRelation, &tid, snapshot, slot))
+		/* GPDB: a catalog row of an in-memory temporary object */
+		if (IsTempcatTid(&tid))
+		{
+			HeapTuple	vtup = tempcat_fetch_tid(heapRelation, &tid, snapshot);
+
+			if (vtup != NULL)
+			{
+				ExecForceStoreHeapTuple(vtup, slot, true);
+				slot->tts_tableOid = RelationGetRelid(heapRelation);
+				slot->tts_tid = tid;
+				return slot;
+			}
+		}
+		else if (table_tuple_fetch_row_version(heapRelation, &tid, snapshot, slot) &&
+				 !(gp_temp_memory_catalog_hide_others &&
+				   tempcat_hide_disk_slot(heapRelation, slot)))
 			return slot;
 
 		/* Bad TID or failed snapshot qual; try next */

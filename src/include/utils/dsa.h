@@ -114,6 +114,7 @@ extern void dsa_detach(dsa_area *area);
 extern void dsa_pin(dsa_area *area);
 extern void dsa_unpin(dsa_area *area);
 extern void dsa_set_size_limit(dsa_area *area, size_t limit);
+extern void dsa_set_min_free_space(dsa_area *area, size_t bytes);
 extern size_t dsa_minimum_size(void);
 extern dsa_handle dsa_get_handle(dsa_area *area);
 extern dsa_pointer dsa_allocate_extended(dsa_area *area, size_t size, int flags);

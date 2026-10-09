@@ -45,6 +45,7 @@
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_dict.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/alter.h"
 #include "commands/dbcommands.h"
@@ -810,6 +811,23 @@ checkSharedDependencies(Oid classId, Oid objectId,
 			numNotReportedDbs++;
 		storeObjectDescription(&alldescs, REMOTE_OBJECT, &object,
 							   SHARED_DEPENDENCY_INVALID, dep->count);
+	}
+
+	/*
+	 * GPDB: temporary objects of other sessions whose catalog rows are kept
+	 * in memory (see tempcat.c) have no pg_shdepend rows on disk; the
+	 * sessions publish the roles their objects refer to instead.
+	 */
+	if (classId == AuthIdRelationId && tempcat_role_used_elsewhere(objectId))
+	{
+		const char *msg = _("objects in temporary schemas of other sessions");
+
+		if (descs.len > 0)
+			appendStringInfoChar(&descs, '\n');
+		appendStringInfoString(&descs, msg);
+		if (alldescs.len > 0)
+			appendStringInfoChar(&alldescs, '\n');
+		appendStringInfoString(&alldescs, msg);
 	}
 
 	pfree(objects);

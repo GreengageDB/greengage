@@ -40,6 +40,9 @@ test: prevent_ao_wal
 
 test: ao_temp
 
+# Injects faults (start_prepare, oid_in_tempcat_range), so needs its own group
+test: temp_memory_catalog
+
 # Tests for packcore, will use the coredumps generated in crash_recovery_dtm,
 # so must be scheduled after that one.
 test: packcore

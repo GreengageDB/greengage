@@ -1,0 +1,8 @@
+SeqScanState
+struct SeqScanState
+IndexScanState
+struct IndexScanState
+SysScanDescData
+struct SysScanDescData
+SharedSnapshotSlot
+struct SharedSnapshotSlot

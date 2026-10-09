@@ -1502,6 +1502,11 @@ typedef struct SeqScanState
 {
 	ScanState	ss;				/* its first field is NodeTag */
 	Size		pscan_len;		/* size of parallel heap scan descriptor */
+
+	/* GPDB: virtual catalog rows of in-memory temporary objects (tempcat.c) */
+	struct TempcatScanData *tempscan;
+	bool		heap_done;		/* on-disk rows exhausted */
+	bool		tempscan_done;
 } SeqScanState;
 
 /* ----------------
@@ -1573,6 +1578,11 @@ typedef struct
  *		PscanLen		   size of parallel index scan descriptor
  * ----------------
  */
+/* IndexScanState->iss_TempState */
+#define TEMPSCAN_UNKNOWN	0	/* not set up yet */
+#define TEMPSCAN_NONE		1	/* no virtual rows to merge */
+#define TEMPSCAN_MERGE		2	/* merging virtual rows */
+
 typedef struct IndexScanState
 {
 	ScanState	ss;				/* its first field is NodeTag */
@@ -1604,6 +1614,14 @@ typedef struct IndexScanState
 	 * index relation is defined.
 	 */
 	Oid			tableOid;
+
+	/* GPDB: virtual catalog rows of in-memory temporary objects (tempcat.c) */
+	int			iss_TempState;		/* TEMPSCAN_* */
+	struct TempcatScanData *iss_TempScan;
+	bool		iss_TempForward;	/* direction the merge was set up for */
+	TupleTableSlot *iss_DiskSlot;	/* next on-disk row, when peeked */
+	bool		iss_DiskPeeked;
+	bool		iss_DiskDone;
 } IndexScanState;
 
 /* ----------------

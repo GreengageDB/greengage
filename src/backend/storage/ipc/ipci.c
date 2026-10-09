@@ -44,6 +44,7 @@
 #include "storage/dsm.h"
 #include "storage/ipc.h"
 #include "catalog/storage_pending_deletes.h"
+#include "catalog/tempcat.h"
 #include "storage/pg_shmem.h"
 #include "storage/pmsignal.h"
 #include "storage/predicate.h"
@@ -163,6 +164,7 @@ CreateSharedMemoryAndSemaphores(int port)
 			size = add_size(size, FtsShmemSize());
 
 		size = add_size(size, ProcGlobalShmemSize());
+		size = add_size(size, TempcatShmemSize());
 		size = add_size(size, XLOGShmemSize());
 		size = add_size(size, DistributedLog_ShmemSize());
 		size = add_size(size, CLOGShmemSize());
@@ -342,6 +344,7 @@ CreateSharedMemoryAndSemaphores(int port)
 	 *		 know who we are.  
 	 */
 	CreateSharedSnapshotArray();
+	TempcatShmemInit();
 	TwoPhaseShmemInit();
 	BackgroundWorkerShmemInit();
 

@@ -1371,6 +1371,23 @@ setup_connection(Archive *AH, const char *dumpencoding,
 	ExecuteSqlStatement(AH, "SET enable_nestloop TO on");
 
 	/*
+	 * GPDB: catalog rows of other sessions' temporary objects kept in memory
+	 * that went to disk (e.g. because they did not fit in memory) point at
+	 * temporary schemas this session cannot see.  Hide them, if the server
+	 * keeps temporary objects in memory at all.
+	 */
+	if (AH->remoteVersion >= 90600)
+	{
+		PGresult   *res;
+
+		res = ExecuteSqlQueryForSingleRow(AH,
+										  "SELECT current_setting('gp_temp_memory_catalog_hide_others', true) IS NOT NULL");
+		if (strcmp(PQgetvalue(res, 0, 0), "t") == 0)
+			ExecuteSqlStatement(AH, "SET gp_temp_memory_catalog_hide_others = on");
+		PQclear(res);
+	}
+
+	/*
 	 * Disable timeouts if supported.
 	 */
 	ExecuteSqlStatement(AH, "SET statement_timeout = 0");

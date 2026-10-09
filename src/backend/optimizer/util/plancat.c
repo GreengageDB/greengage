@@ -33,6 +33,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic_ext.h"
+#include "catalog/tempcat.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "commands/tablecmds.h"
@@ -334,6 +335,21 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 				relation->rd_tableam->scan_bitmap_next_block != NULL;
 			info->amcanmarkpos = (amroutine->ammarkpos != NULL &&
 								  amroutine->amrestrpos != NULL);
+
+			/*
+			 * GPDB: only plain index scans merge in the virtual catalog rows
+			 * of in-memory temporary objects (see tempcat.c): no index-only
+			 * or bitmap scans, and no mark/restore, of such catalogs.
+			 */
+			if (tempcat_restrict_catalog_index_scans(RelationGetRelid(relation)))
+			{
+				int			c;
+
+				info->amhasgetbitmap = false;
+				info->amcanmarkpos = false;
+				for (c = 0; c < ncolumns; c++)
+					info->canreturn[c] = false;
+			}
 			info->amcostestimate = amroutine->amcostestimate;
 			Assert(info->amcostestimate != NULL);
 
