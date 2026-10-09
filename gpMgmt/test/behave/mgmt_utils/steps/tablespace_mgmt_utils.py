@@ -1,5 +1,10 @@
 from builtins import object
-import pipes
+
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
+
 import tempfile
 import os
 
@@ -23,7 +28,7 @@ class Tablespace(object):
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s mkdir -p %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd('ssh %s mkdir -p %s' % (quote(host), quote(self.path)))
 
         with dbconn.connect(dbconn.DbURL(), unsetSearchPath=False) as conn:
             db = pg.DB(conn)
@@ -58,7 +63,7 @@ class Tablespace(object):
 
         gparray = GpArray.initFromCatalog(dbconn.DbURL())
         for host in gparray.getHostList():
-            run_cmd('ssh %s rm -rf %s' % (pipes.quote(host), pipes.quote(self.path)))
+            run_cmd('ssh %s rm -rf %s' % (quote(host), quote(self.path)))
 
     def verify(self, hostname=None, port=0):
         """
