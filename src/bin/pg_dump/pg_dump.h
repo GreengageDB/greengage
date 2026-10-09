@@ -393,6 +393,7 @@ typedef struct _tableInfo
 	int			numIndexes;		/* number of indexes */
 	struct _indxInfo *indexes;	/* indexes */
 	struct _tableDataInfo *dataObj; /* TableDataInfo, if dumping its data */
+	struct _tableAttachInfo *attachObj; /* TableAttachInfo, if a partition */
 	int			numTriggers;	/* number of triggers for table */
 	struct _triggerInfo *triggers;	/* array of TriggerInfo structs */
 
@@ -424,6 +425,8 @@ typedef struct _tableAttachInfo
 	DumpableObject dobj;
 	TableInfo  *parentTbl;		/* link to partitioned table */
 	TableInfo  *partitionTbl;	/* link to partition */
+	bool		postdata;		/* attach in post-data after the partition's
+								 * indexes? */
 } TableAttachInfo;
 
 typedef struct _attrDefInfo
