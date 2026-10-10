@@ -665,6 +665,16 @@ typedef struct EState
 
 	/* List of cross-slice SharedScan consumers in the current slice */
 	List	   *sharedScanConsumers;
+
+	/*
+	 * Memory budget of the open per-partition AO/AOCS insert descriptors when
+	 * inserting through a partition root (see
+	 * gp_partition_insert_desc_memory_percent, gp_partition_copy_desc_budget),
+	 * private to execMain.c; NULL until the first bounded descriptor is opened.
+	 * Kept at the end of the struct so adding it does not shift the offset of
+	 * any existing field.
+	 */
+	struct PartInsertLru *es_partInsertLru;
 } EState;
 
 struct PlanState;

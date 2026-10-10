@@ -367,27 +367,9 @@ ExecInsert(TupleTableSlot *parentslot,
 	 * Prepare the right kind of "insert desc".
 	 */
 	if (rel_is_aorows)
-	{
-		if (resultRelInfo->ri_aoInsertDesc == NULL)
-		{
-			/* Set the pre-assigned fileseg number to insert into */
-			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-
-			resultRelInfo->ri_aoInsertDesc =
-				appendonly_insert_init(resultRelationDesc,
-									   resultRelInfo->ri_aosegno,
-									   false);
-		}
-	}
+		PartInsertDescEnsureAO(estate, resultRelInfo, estate->es_result_aosegnos);
 	else if (rel_is_aocols)
-	{
-		if (resultRelInfo->ri_aocsInsertDesc == NULL)
-		{
-			ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-			resultRelInfo->ri_aocsInsertDesc = aocs_insert_init(resultRelationDesc,
-																resultRelInfo->ri_aosegno, false);
-		}
-	}
+		PartInsertDescEnsureAOCS(estate, resultRelInfo, estate->es_result_aosegnos);
 	else if (rel_is_external)
 	{
 		if (resultRelInfo->ri_extInsertDesc == NULL)
@@ -554,16 +536,7 @@ ExecInsert(TupleTableSlot *parentslot,
 		{
 			MemTuple	mtuple;
 
-			if (resultRelInfo->ri_aoInsertDesc == NULL)
-			{
-				/* Set the pre-assigned fileseg number to insert into */
-				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-
-				resultRelInfo->ri_aoInsertDesc =
-					appendonly_insert_init(resultRelationDesc,
-										   resultRelInfo->ri_aosegno,
-										   false);
-			}
+			PartInsertDescEnsureAO(estate, resultRelInfo, estate->es_result_aosegnos);
 
 			mtuple = ExecFetchSlotMemTuple(slot);
 			newId = appendonly_insert(resultRelInfo->ri_aoInsertDesc, mtuple, tuple_oid, (AOTupleId *) &lastTid);
@@ -572,12 +545,7 @@ ExecInsert(TupleTableSlot *parentslot,
 		}
 		else if (rel_is_aocols)
 		{
-			if (resultRelInfo->ri_aocsInsertDesc == NULL)
-			{
-				ResultRelInfoSetSegno(resultRelInfo, estate->es_result_aosegnos);
-				resultRelInfo->ri_aocsInsertDesc = aocs_insert_init(resultRelationDesc, 
-																	resultRelInfo->ri_aosegno, false);
-			}
+			PartInsertDescEnsureAOCS(estate, resultRelInfo, estate->es_result_aosegnos);
 
 			newId = aocs_insert(resultRelInfo->ri_aocsInsertDesc, slot);
 			lastTid = *slot_get_ctid(slot);
