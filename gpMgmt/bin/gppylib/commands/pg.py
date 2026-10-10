@@ -6,7 +6,11 @@
 from __future__ import absolute_import
 from builtins import object
 import os
-import pipes
+
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
 
 from gppylib.gplog import *
 from gppylib.gparray import *
@@ -307,7 +311,7 @@ class PgRewind(Command):
         # pg_rewind prints progress updates to stdout, but it also prints
         # errors relating to relevant failures(like it will not rewind due to
         # a corrupted pg_control file) to stderr.
-        rewind_cmd = rewind_cmd + " > {} 2>&1".format(pipes.quote(progress_file))
+        rewind_cmd = rewind_cmd + " > {} 2>&1".format(quote(progress_file))
         self.cmdStr = rewind_cmd
 
         Command.__init__(self, name, self.cmdStr, LOCAL)
@@ -363,7 +367,7 @@ class PgBaseBackup(Command):
         cmd_tokens.append('--verbose')
 
         if progress_file:
-            cmd_tokens.append('> %s 2>&1' % pipes.quote(progress_file))
+            cmd_tokens.append('> %s 2>&1' % quote(progress_file))
 
         cmd_str = ' '.join(cmd_tokens)
 
