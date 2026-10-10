@@ -260,7 +260,7 @@ SET default_tablespace TO '';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save default_tablespace GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger default_tablespace GUC restore from gp_guc_restore_list
@@ -268,7 +268,7 @@ SELECT 1;
 -- When default_tablespace GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -284,7 +284,7 @@ SET gp_default_storage_options TO 'blocksize=32768,compresstype=none,checksum=fa
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save gp_default_storage_options GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger gp_default_storage_options GUC restore from gp_guc_restore_list
@@ -292,7 +292,7 @@ SELECT 1;
 -- When gp_default_storage_options GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -310,7 +310,7 @@ SET lc_numeric TO 'C';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save lc_numeric GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger lc_numeric GUC restore from gp_guc_restore_list
@@ -318,7 +318,7 @@ SELECT 1;
 -- When lc_numeric GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -334,7 +334,7 @@ SET pljava_classpath TO '';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save pljava_classpath GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger pljava_classpath GUC restore from gp_guc_restore_list
@@ -342,7 +342,7 @@ SELECT 1;
 -- When pljava_classpath GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -358,7 +358,7 @@ SET pljava_vmoptions TO '';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save pljava_vmoptions GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger pljava_vmoptions GUC restore from gp_guc_restore_list
@@ -366,7 +366,7 @@ SELECT 1;
 -- When pljava_vmoptions GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -384,7 +384,7 @@ SET TimeZone TO 'UTC';
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save TimeZone GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger TimeZone GUC restore from gp_guc_restore_list
@@ -392,7 +392,7 @@ SELECT 1;
 -- When TimeZone GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 
@@ -412,7 +412,7 @@ SET search_path TO "public";
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Save default_tablespace GUC to gp_guc_restore_list
 SELECT set_conf_param();
 -- Trigger default_tablespace GUC restore from gp_guc_restore_list
@@ -421,7 +421,7 @@ SELECT 1;
 -- When search_path GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
 -- Cleanup
 DROP TABLE just_a_temp_table;
 RESET search_path;

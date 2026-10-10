@@ -421,10 +421,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save default_tablespace GUC to gp_guc_restore_list
@@ -444,10 +444,10 @@ SELECT 1;
 -- When default_tablespace GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -466,10 +466,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save gp_default_storage_options GUC to gp_guc_restore_list
@@ -489,10 +489,10 @@ SELECT 1;
 -- When gp_default_storage_options GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -513,10 +513,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save lc_numeric GUC to gp_guc_restore_list
@@ -536,10 +536,10 @@ SELECT 1;
 -- When lc_numeric GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -558,10 +558,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save pljava_classpath GUC to gp_guc_restore_list
@@ -581,10 +581,10 @@ SELECT 1;
 -- When pljava_classpath GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -603,10 +603,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save pljava_vmoptions GUC to gp_guc_restore_list
@@ -626,10 +626,10 @@ SELECT 1;
 -- When pljava_vmoptions GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -650,10 +650,10 @@ CREATE TEMP TABLE just_a_temp_table (a int);
 NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
 HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save TimeZone GUC to gp_guc_restore_list
@@ -673,10 +673,10 @@ SELECT 1;
 -- When TimeZone GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup
@@ -696,10 +696,10 @@ SET search_path TO "public";
 -- Create temp table to create temp schema
 CREATE TEMP TABLE just_a_temp_table (a int);
 -- Temp schema should be created for each segment
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Save default_tablespace GUC to gp_guc_restore_list
@@ -719,10 +719,10 @@ SELECT 1;
 -- When search_path GUC is restored from gp_guc_restore_list
 -- successfully no RemoveTempRelationsCallback is called.
 -- So check that segments still have temp schemas
-SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname LIKE 'pg_temp%';
+SELECT count(nspname) FROM gp_dist_random('pg_namespace') WHERE nspname = 'pg_temp_' || current_setting('gp_session_id');
  count 
 -------
-     6
+     3
 (1 row)
 
 -- Cleanup

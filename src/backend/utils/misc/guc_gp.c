@@ -665,7 +665,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&gp_enable_temp_memory_catalog,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 	{
