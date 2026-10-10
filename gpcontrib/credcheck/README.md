@@ -292,7 +292,9 @@ restrict new passwords from being chosen from this history:
 * If an account is restricted based on time elapsed, a new password cannot be chosen from passwords in the history that are newer than `password_reuse_interval` days. For example, if the password reuse interval is set to 365, a new password must not be among those previously chosen within the last year. 
 
 To be able to list the content of the history a view is provided in the database you have created
-the credcheck extension. The view is named `public.pg_password_history`. This view is visible by everyone.
+the credcheck extension. The view is named `public.pg_password_history`. Only a superuser can see the content
+of this view or call the underlying `public.pg_password_history()` function, since the stored hashes, which
+include the current passwords, could be used to recover the passwords offline.
 
 A superuser can also reset the content of the password history by calling a function named `public.pg_password_history_reset()`. If it is called without an argument, all the passwords history will be cleared. To only remove the records registered for a single user, just pass his name as parameter. This function returns the number of records removed from the history.
 
