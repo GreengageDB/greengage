@@ -600,7 +600,16 @@ GetNewObjectIdUnderLock(void)
 	 * objects kept in the in-memory catalog (see tempcat.c); wrap around
 	 * before reaching them, in every mode.  Bootstrap never gets that far.
 	 */
-	if (ShmemVariableCache->nextOid >= FirstTempcatObjectId)
+	if (ShmemVariableCache->nextOid >= FirstTempcatObjectId
+#ifdef FAULT_INJECTOR
+	/*
+	 * Test hook: hand out OIDs from the reserved range, as an older version
+	 * did, to create the ordinary objects with such OIDs that a cluster
+	 * upgraded from it can have.
+	 */
+		&& SIMPLE_FAULT_INJECTOR("oid_keep_reserved_range") != FaultInjectorTypeSkip
+#endif
+		)
 	{
 		ShmemVariableCache->nextOid = FirstNormalObjectId;
 		ShmemVariableCache->oidCount = 0;

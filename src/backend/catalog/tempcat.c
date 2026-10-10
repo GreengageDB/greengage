@@ -1366,6 +1366,15 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 			goto oom;
 		nodes[nnodes] = dsa_allocate_extended(tc_area, sizeof(TempcatHashNode),
 											  DSA_ALLOC_NO_OOM);
+#ifdef FAULT_INJECTOR
+		/* Test hook: the area runs full in the middle of adding a row. */
+		if (DsaPointerIsValid(nodes[nnodes]) &&
+			SIMPLE_FAULT_INJECTOR("tempcat_hash_node_alloc") == FaultInjectorTypeSkip)
+		{
+			dsa_free(tc_area, nodes[nnodes]);
+			nodes[nnodes] = InvalidDsaPointer;
+		}
+#endif
 		if (!DsaPointerIsValid(nodes[nnodes]))
 			goto oom;
 		nnodes++;

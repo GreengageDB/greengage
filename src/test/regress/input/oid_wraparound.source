@@ -53,3 +53,58 @@ SELECT gp_get_next_oid_segments();
 CREATE TABLE oid_wraparound_table_other AS SELECT 1 AS a;
 SELECT gp_get_next_oid_master() in (16390, 16391);
 SELECT gp_get_next_oid_segments();
+
+-- Scenario 3: OIDs from 0xF0000000 (4026531840) up are reserved for temporary
+-- objects kept in memory (see tempcat.c), so the counter wraps around before
+-- reaching them, and none of the objects created meanwhile gets one.
+SELECT gp_set_next_oid_master(4026531838);
+CREATE TABLE oid_wraparound_reserved (a int, b text) DISTRIBUTED BY (a);
+SELECT count(*) AS reserved_oids FROM (
+	SELECT oid FROM pg_class WHERE oid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT oid FROM pg_type WHERE typrelid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT t.typarray FROM pg_type t WHERE t.typrelid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT reltoastrelid FROM pg_class WHERE oid = 'oid_wraparound_reserved'::regclass
+) o WHERE oid >= 4026531840;
+SELECT gp_get_next_oid_master() < 4026531840 AS wrapped_around;
+DROP TABLE oid_wraparound_reserved;
+
+-- Scenario 4: ordinary objects can have OIDs in the reserved range (created
+-- by an older version, which did not reserve it, and carried over by
+-- pg_upgrade; the fault lets the counter enter the range to create them).
+-- They may sit right where a session's temporary objects get their OIDs
+-- from: the session must skip them, and leave their rows on disk.
+CREATE EXTENSION gp_inject_fault;
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE oid_tc_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc_first'::regclass::oid::bigint + 1)::oid AS legacy_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_set_next_oid_master(:legacy_oid);
+CREATE TABLE oid_legacy (a int, b text) DISTRIBUTED BY (a);
+CREATE INDEX oid_legacy_i ON oid_legacy (b);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+INSERT INTO oid_legacy SELECT i, 'v' || i FROM generate_series(1, 10) i;
+SELECT 'oid_legacy'::regclass::oid = :legacy_oid AS legacy_in_session_slice;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS legacy_rows_on_disk FROM pg_class WHERE relname IN ('oid_legacy', 'oid_legacy_i');
+RESET gp_temp_memory_catalog_disk_only;
+DO $$ BEGIN FOR i IN 1..10 LOOP EXECUTE format('CREATE TEMP TABLE oid_tc_%s (a int, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+SELECT count(*) AS duplicate_oids FROM (
+	SELECT oid FROM pg_class GROUP BY oid HAVING count(*) > 1
+	UNION ALL SELECT oid FROM pg_type GROUP BY oid HAVING count(*) > 1
+	UNION ALL SELECT oid FROM gp_dist_random('pg_class') GROUP BY gp_segment_id, oid HAVING count(*) > 1
+) d;
+SELECT count(*) > 0 AS skipped_taken_oids FROM pg_class
+WHERE relname LIKE 'oid\_tc\_%' AND oid > 'oid_legacy_i'::regclass::oid;
+SET enable_seqscan = off;
+SELECT count(*) FROM oid_legacy WHERE b = 'v5';
+RESET enable_seqscan;
+INSERT INTO oid_tc_10 SELECT * FROM oid_legacy;
+SELECT count(*) FROM oid_tc_10;
+DO $$ BEGIN FOR i IN 1..10 LOOP EXECUTE format('DROP TABLE oid_tc_%s', i); END LOOP; END $$;
+DROP TABLE oid_tc_first;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS legacy_rows_on_disk FROM pg_class WHERE relname IN ('oid_legacy', 'oid_legacy_i');
+RESET gp_temp_memory_catalog_disk_only;
+SELECT count(*) FROM oid_legacy;
+DROP TABLE oid_legacy;
+SELECT gp_get_next_oid_master() < 4026531840 AS counter_below_reserved_range;

@@ -669,6 +669,28 @@ SELECT count(*) > 0 AS segs_leftovers FROM gp_dist_random('pg_depend') WHERE ref
 ----------------
  t              
 (1 row)
+-- A sweep whose transaction rolls back leaves the leftovers in place and
+-- asks for another sweep.  (The query on the segments starts a transaction
+-- in the writers that swept there.)
+BEGIN;
+BEGIN
+SELECT tc_retry('DROP TYPE tc_sw_type2');
+ tc_retry 
+----------
+ done     
+(1 row)
+ROLLBACK;
+ROLLBACK
+SELECT count(*) > 0 AS qd_leftovers_again FROM pg_depend WHERE refobjid = 'tc_sw_type2'::regtype AND objid >= 4026531840;
+ qd_leftovers_again 
+--------------------
+ t                  
+(1 row)
+SELECT count(*) > 0 AS segs_leftovers_again FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_sw_type2'::regtype AND objid >= 4026531840;
+ segs_leftovers_again 
+----------------------
+ t                    
+(1 row)
 4: SELECT tc_retry('DROP TYPE tc_sw_type2');
  tc_retry 
 ----------
@@ -767,12 +789,109 @@ SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname = 
 --------------
  0            
 (1 row)
+1: CREATE DOMAIN pg_temp.tc_noshm_dom AS int CHECK (VALUE > 0);
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_noshm2 (a pg_temp.tc_noshm_dom CHECK (a < 100)) DISTRIBUTED BY (a);
+CREATE TABLE
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
  Success:        
 (1 row)
+
+-- If such a session crashes, everything it put on disk is left behind, its
+-- temporary schema included; the sweep removes all of it, table and domain
+-- constraints too.
+CREATE TABLE tc_sess_ids (id int) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+1: INSERT INTO tc_sess_ids SELECT current_setting('gp_session_id')::int;
+INSERT 0 1
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
 1q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess_ids s ON a.sess_id = s.id); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT count(*) AS qd_leftover_schemas FROM pg_namespace WHERE oid >= 4026531840;
+ qd_leftover_schemas 
+---------------------
+ 2                   
+(1 row)
+SELECT count(*) > 0 AS qd_leftover_constraints FROM pg_constraint WHERE conrelid >= 4026531840 OR contypid >= 4026531840;
+ qd_leftover_constraints 
+-------------------------
+ t                       
+(1 row)
+SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_noshm_sweeper (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+2q: ... <quitting>
+SELECT count(*) AS qd_leftover_schemas FROM pg_namespace WHERE oid >= 4026531840;
+ qd_leftover_schemas 
+---------------------
+ 0                   
+(1 row)
+SELECT count(*) AS qd_leftover_constraints FROM pg_constraint WHERE conrelid >= 4026531840 OR contypid >= 4026531840;
+ qd_leftover_constraints 
+-------------------------
+ 0                       
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+DROP TABLE tc_sess_ids;
+DROP TABLE
 
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
@@ -825,8 +944,41 @@ SET
 -------------
  t           
 (1 row)
+-- (TID scans and COPY TO as well; tc_hide_type is an ordinary object)
+2: CREATE TEMP TABLE tc_ctids_hide (t tid) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+2: DO $$ BEGIN INSERT INTO tc_ctids_hide SELECT ctid FROM pg_class WHERE relname LIKE 'tc\_hide\_%' AND oid >= 4026531840; END $$;
+DO
+2: CREATE FUNCTION tc_copy_count() RETURNS int LANGUAGE plpgsql AS $$ BEGIN EXECUTE $c$COPY pg_class (relname) TO PROGRAM 'grep -c "^tc_hide_[0-9]" > /tmp/tc_hide_copy.out; true'$c$; RETURN trim(pg_read_file('/tmp/tc_hide_copy.out'))::int; END $$;
+CREATE FUNCTION
+2: SET enable_seqscan = off;
+SET
+2: SELECT count(*) > 0 AS tid_scan FROM pg_class WHERE ctid = ANY (ARRAY(SELECT t FROM tc_ctids_hide));
+ tid_scan 
+----------
+ t        
+(1 row)
+2: SELECT tc_copy_count() > 0 AS copy_to;
+ copy_to 
+---------
+ t       
+(1 row)
 2: SET gp_temp_memory_catalog_hide_others = on;
 SET
+2: SELECT count(*) AS tid_scan FROM pg_class WHERE ctid = ANY (ARRAY(SELECT t FROM tc_ctids_hide));
+ tid_scan 
+----------
+ 0        
+(1 row)
+2: RESET enable_seqscan;
+RESET
+2: SELECT tc_copy_count() AS copy_to;
+ copy_to 
+---------
+ 0       
+(1 row)
+2: DROP FUNCTION tc_copy_count();
+DROP FUNCTION
 2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
  count 
 -------
@@ -1138,6 +1290,79 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segm
 -----------------
  Success:        
 (1 row)
+
+--
+-- 14. A session publishes up to 8 roles that the owner and privilege rows
+-- (pg_shdepend) of its in-memory objects refer to; the rows for further
+-- roles go to disk.  Either way, other sessions cannot drop those roles
+-- while the references exist, and can once they are gone: the published
+-- list is recomputed at the session's next transaction.  gpcheckcat's
+-- hiding covers pg_shdepend rows on disk too.
+--
+DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP; END $$;
+DO
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_acl (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('GRANT SELECT ON tc_acl TO tc_r%s', i); END LOOP; END $$;
+DO
+2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE objid >= 4026531840;
+ shdepend_on_disk 
+------------------
+ 1                
+(1 row)
+2: SELECT tc_try('DROP ROLE tc_r1');
+ tc_try  
+---------
+ refused 
+(1 row)
+2: SELECT tc_try('DROP ROLE tc_r9');
+ tc_try  
+---------
+ refused 
+(1 row)
+2: SET gp_temp_memory_catalog_hide_others = on;
+SET
+2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE objid >= 4026531840;
+ shdepend_on_disk 
+------------------
+ 0                
+(1 row)
+2: RESET gp_temp_memory_catalog_hide_others;
+RESET
+1: REVOKE SELECT ON tc_acl FROM tc_r1;
+REVOKE
+1: REVOKE SELECT ON tc_acl FROM tc_r9;
+REVOKE
+1: SELECT count(*) FROM tc_acl;
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT tc_try('DROP ROLE tc_r1');
+ tc_try 
+--------
+ done   
+(1 row)
+2: SELECT tc_try('DROP ROLE tc_r9');
+ tc_try 
+--------
+ done   
+(1 row)
+2q: ... <quitting>
+1q: ... <quitting>
+SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
+ tc_retry 
+----------
+ done     
+ done     
+ done     
+ done     
+ done     
+ done     
+ done     
+(7 rows)
 
 DROP TABLE tc_relfile_paths;
 DROP TABLE

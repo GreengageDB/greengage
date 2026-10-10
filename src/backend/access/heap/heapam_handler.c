@@ -34,6 +34,7 @@
 #include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "catalog/storage.h"
+#include "catalog/tempcat.h"
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
@@ -182,6 +183,22 @@ heapam_index_fetch_tuple(struct IndexFetchTableData *scan,
  * ------------------------------------------------------------------------
  */
 
+/* GPDB: fetch a catalog row of an in-memory temporary object by TID */
+static bool
+heapam_fetch_tempcat_row(Relation relation, ItemPointer tid,
+						 Snapshot snapshot, TupleTableSlot *slot)
+{
+	HeapTuple	tup = tempcat_fetch_tid(relation, tid,
+										snapshot ? snapshot : GetActiveSnapshot());
+
+	if (tup == NULL)
+		return false;
+	ExecForceStoreHeapTuple(tup, slot, true);
+	slot->tts_tableOid = RelationGetRelid(relation);
+	slot->tts_tid = *tid;
+	return true;
+}
+
 static bool
 heapam_fetch_row_version(Relation relation,
 						 ItemPointer tid,
@@ -192,6 +209,10 @@ heapam_fetch_row_version(Relation relation,
 	Buffer		buffer;
 
 	Assert(TTS_IS_BUFFERTUPLE(slot));
+
+	/* GPDB: a catalog row of an in-memory temporary object, see tempcat.c */
+	if (IsTempcatTid(tid))
+		return heapam_fetch_tempcat_row(relation, tid, snapshot, slot);
 
 	bslot->base.tupdata.t_self = *tid;
 	if (heap_fetch(relation, snapshot, &bslot->base.tupdata, &buffer))
@@ -325,6 +346,17 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					TM_FailureData *tmfd, bool changingPart)
 {
 	/*
+	 * GPDB: SQL DML on a catalog (allow_system_table_mods) can reach catalog
+	 * rows of in-memory temporary objects, which have no place in the heap.
+	 * They are private to the session, so there is nothing to wait for.
+	 */
+	if (IsTempcatTid(tid))
+	{
+		tempcat_delete(relation, tid);
+		return TM_Ok;
+	}
+
+	/*
 	 * Currently Deleting of index tuples are handled at vacuum, in case if
 	 * the storage itself is cleaning the dead tuples by itself, it is the
 	 * time to call the index tuple deletion also.
@@ -346,6 +378,25 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	/* Update the tuple with table oid */
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
+
+	/* GPDB: see heapam_tuple_delete() and CatalogTupleUpdate() */
+	if (IsTempcatTid(otid))
+	{
+		if (tempcat_route_insert(relation, tuple) &&
+			tempcat_update(relation, otid, tuple))
+			*update_indexes = false;	/* not in the catalog's indexes */
+		else
+		{
+			/* the new version must go to disk */
+			tempcat_delete(relation, otid);
+			heap_insert(relation, tuple, cid, 0, NULL, GetCurrentTransactionId());
+			*update_indexes = true;
+		}
+		ItemPointerCopy(&tuple->t_self, &slot->tts_tid);
+		if (shouldFree)
+			pfree(tuple);
+		return TM_Ok;
+	}
 
 	result = heap_update(relation, otid, tuple, cid, crosscheck, wait,
 						 tmfd, lockmode);
@@ -383,6 +434,14 @@ heapam_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 	tmfd->traversed = false;
 
 	Assert(TTS_IS_BUFFERTUPLE(slot));
+
+	/*
+	 * GPDB: rows of in-memory temporary objects are private to the session;
+	 * there is nothing to lock.  See heapam_tuple_delete().
+	 */
+	if (IsTempcatTid(tid))
+		return heapam_fetch_tempcat_row(relation, tid, snapshot, slot) ?
+			TM_Ok : TM_Invisible;
 
 tuple_lock_retry:
 	tuple->t_self = *tid;

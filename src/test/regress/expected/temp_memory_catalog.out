@@ -61,6 +61,7 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
 -- Ordinary temporary tables are not affected.
+SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE tc_ordinary (a int) DISTRIBUTED BY (a);
 SELECT 'tc_ordinary'::regclass::oid >= 4026531840 AS in_reserved_range;
  in_reserved_range 
@@ -917,6 +918,210 @@ SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_d
 RESET gp_temp_memory_catalog_disk_only;
 DROP TABLE tc_rls;
 DROP ROLE tc_rls_user;
+-- SQL DML on catalog rows kept in memory (allow_system_table_mods): they
+-- have no place in the heap, so updates, deletes and row locks must not
+-- touch it (the gangsize test changes numsegments this way).
+SET allow_system_table_mods = on;
+CREATE TEMP TABLE tc_dml (a int, b int) DISTRIBUTED BY (a);
+UPDATE gp_distribution_policy SET numsegments = 2 WHERE localoid = 'tc_dml'::regclass;
+UPDATE gp_distribution_policy SET numsegments = 3 WHERE localoid = 'tc_dml'::regclass;
+UPDATE gp_distribution_policy SET numsegments = 2 WHERE localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           2
+(1 row)
+
+INSERT INTO tc_dml SELECT i, i FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_dml;
+ count 
+-------
+    10
+(1 row)
+
+BEGIN;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass FOR UPDATE;
+ numsegments 
+-------------
+           2
+(1 row)
+
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK;
+-- DELETE ... RETURNING fetches the old row by its TID
+BEGIN;
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass RETURNING numsegments;
+ numsegments 
+-------------
+           2
+(1 row)
+
+ROLLBACK;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           2
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- When the area cannot take the new version of a row (the fault makes an
+-- allocation fail), the row moves to the on-disk catalog: through SQL, and
+-- through internal catalog updates (VACUUM FULL swaps pg_class rows).
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+RESET client_min_messages;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+UPDATE gp_distribution_policy SET numsegments = 3 WHERE localoid = 'tc_dml'::regclass;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           3
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       1
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+VACUUM FULL tc_dml;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT count(*), sum(b) FROM tc_dml;
+ count | sum 
+-------+-----
+    10 |  55
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE oid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       1
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+RESET allow_system_table_mods;
+DROP TABLE tc_dml;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
+ qd_disk_rows 
+--------------
+            0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- An allocation failing in the middle of adding a row (here the second
+-- one) leaves nothing behind in memory; the row goes to disk.
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 2, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+INSERT INTO tc_oom SELECT i, 'x' FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_oom;
+ count 
+-------
+    10
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() > 0 AS some_on_disk;
+ some_on_disk 
+--------------
+ t
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_oom;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
+ qd_disk_rows 
+--------------
+            0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- A sequential scan that stops (LIMIT) or restarts (a correlated subquery)
+-- while returning in-memory rows.
+CREATE TEMP TABLE tc_seq1 (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_seq2 (a int) DISTRIBUTED BY (a);
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT count(*) FROM (SELECT relname FROM pg_class WHERE relname IN ('tc_seq1', 'tc_seq2') LIMIT 1) s;
+ count 
+-------
+     1
+(1 row)
+
+SELECT x, (SELECT count(*) FROM (SELECT 1 FROM pg_class WHERE relname IN ('tc_seq1', 'tc_seq2') AND x > 0 LIMIT 1) s) AS found
+FROM generate_series(1, 3) x ORDER BY x;
+ x | found 
+---+-------
+ 1 |     1
+ 2 |     1
+ 3 |     1
+(3 rows)
+
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+DROP TABLE tc_seq1, tc_seq2;
+-- Casts and transforms of temporary types (target types too) are refused.
+CREATE TYPE pg_temp.tc_cast_t AS (x int);
+CREATE CAST (text AS pg_temp.tc_cast_t) WITH INOUT;
+ERROR:  casts are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE CAST (pg_temp.tc_cast_t AS text) WITH INOUT;
+ERROR:  casts are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE TRANSFORM FOR pg_temp.tc_cast_t LANGUAGE plpgsql (FROM SQL WITH FUNCTION abs(int));
+ERROR:  transforms are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+DROP TYPE pg_temp.tc_cast_t;
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog
