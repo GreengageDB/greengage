@@ -14,6 +14,10 @@
 -- s/session id \=\s*\d+/session id \= DUMMY/gm
 -- end_matchsubs
 
+-- The commit of a transaction that only drops a temporary table must be
+-- two-phase for the fault below to hit it; with the temporary catalog in
+-- memory it is one-phase (no WAL for permanent relations).
+SET gp_enable_temp_memory_catalog = off;
 CREATE TABLE foo(a int, b int);
 -- 1
 CREATE TEMP TABLE foo_stg AS SELECT * FROM foo;
