@@ -440,12 +440,8 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	}
 
 
-	// finalize output_is_empty: for LASJ, empty only if every AND-ed
-	// predicate independently showed complete coverage (AND across
-	// predicates); for other join types, keep the OR-accumulated
-	// per-predicate result plus the (unchanged) outer-empty rule.
-	output_is_empty = IsLASJ ? lasj_all_preds_fully_covered
-							 : (output_is_empty || (outer_stats->IsEmpty()));
+	output_is_empty = outer_stats->IsEmpty() ||
+					  (IsLASJ ? lasj_all_preds_fully_covered : output_is_empty);
 
 	num_join_rows = CStatistics::MinRows;
 	if (!output_is_empty)
