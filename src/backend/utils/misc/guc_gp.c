@@ -21,6 +21,7 @@
 #include <sys/unistd.h>
 
 #include "access/reloptions.h"
+#include "catalog/tempcat.h"
 #include "access/transam.h"
 #include "access/url.h"
 #include "access/xlog_internal.h"
@@ -631,6 +632,40 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_enable_blkdir_sampling,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_temp_memory_catalog_disk_only", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Hide in-memory catalog rows of temporary objects from SQL queries."),
+			gettext_noop("Catalog queries then see the on-disk catalog only. For testing and debugging."),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_temp_memory_catalog_disk_only,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_temp_memory_catalog_hide_others", PGC_USERSET, DEVELOPER_OPTIONS,
+			gettext_noop("Hide on-disk catalog rows of other sessions' in-memory temporary objects from SQL queries."),
+			gettext_noop("Such rows (dependencies on ordinary objects, rows that did not fit in memory) "
+						 "point at objects only their session can see. Set by gpcheckcat."),
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
+		},
+		&gp_temp_memory_catalog_hide_others,
+		false,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_enable_temp_memory_catalog", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Keep catalog rows of temporary objects in memory."),
+			gettext_noop("Takes effect when the session's temporary schema is "
+						 "created: objects in it then get OIDs from a reserved "
+						 "range and their catalog rows are kept in session "
+						 "memory instead of the on-disk catalog."),
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_enable_temp_memory_catalog,
+		false,
 		NULL, NULL, NULL
 	},
 	{
@@ -3124,6 +3159,21 @@ struct config_bool ConfigureNamesBool_gp[] =
 
 struct config_int ConfigureNamesInt_gp[] =
 {
+	{
+		{"gp_temp_memory_catalog_max_size", PGC_USERSET, CUSTOM_OPTIONS,
+			gettext_noop("Maximum size of the in-memory catalog of temporary objects, per process."),
+			gettext_noop("Catalog rows that do not fit are stored in the on-disk catalog. "
+						 "The memory is dynamic shared memory (in /dev/shm with the default "
+						 "dynamic_shared_memory_type); when that runs short, rows go to the "
+						 "on-disk catalog too. Takes effect when a session creates its first "
+						 "temporary object."),
+			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
+		},
+		&gp_temp_memory_catalog_max_size,
+		16384, 1024, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
+
 	{
 		{"readable_external_table_timeout", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Cancel the query if no data read within N seconds."),

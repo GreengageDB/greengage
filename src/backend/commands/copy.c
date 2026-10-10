@@ -31,6 +31,7 @@
 #include "catalog/dependency.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
 #include "commands/progress.h"
@@ -3223,6 +3224,11 @@ CopyTo(CopyState cstate)
 					{
 						CHECK_FOR_INTERRUPTS();
 
+						/* GPDB: developer option, see tempcat_hide_disk_row() */
+						if (gp_temp_memory_catalog_hide_others &&
+							tempcat_hide_disk_slot(rel, slot))
+							continue;
+
 						/* Deconstruct the tuple ... */
 						slot_getallattrs(slot);
 
@@ -3240,6 +3246,25 @@ CopyTo(CopyState cstate)
 							SIMPLE_FAULT_INJECTOR("copy_processed_two_tuples");
 #endif
 					}
+
+					/* GPDB: catalog rows of in-memory temporary objects */
+					{
+						TempcatScan tempscan = tempcat_begin_sql_scan(rel, GetActiveSnapshot());
+						HeapTuple	vtup;
+
+						while (tempscan != NULL &&
+							   (vtup = tempcat_next_virtual(tempscan)) != NULL)
+						{
+							ExecForceStoreHeapTuple(vtup, slot, false);
+							slot_getallattrs(slot);
+							CopyOneRowTo(cstate, slot);
+							pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED,
+														 ++processed);
+						}
+						if (tempscan != NULL)
+							tempcat_endscan(tempscan);
+					}
+
 					ExecDropSingleTupleTableSlot(slot);
 					table_endscan(scandesc);
 					pfree(proj);

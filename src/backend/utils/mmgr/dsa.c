@@ -52,6 +52,7 @@
 
 #include "port/atomics.h"
 #include "storage/dsm.h"
+#include "storage/dsm_impl.h"
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/shmem.h"
@@ -372,6 +373,19 @@ struct dsa_area
 
 	/* The last observed freed_segment_counter. */
 	size_t		freed_segment_counter;
+
+	/*
+	 * GPDB: the current allocation was made with DSA_ALLOC_NO_OOM, so failing
+	 * to create a new segment (e.g. for lack of space in /dev/shm) is not an
+	 * error either.
+	 */
+	bool		no_oom;
+
+	/*
+	 * GPDB: do not create segments that would leave less than this many
+	 * bytes free for other users of dynamic shared memory (0: no limit).
+	 */
+	size_t		min_free_space;
 };
 
 #define DSA_SPAN_NOTHING_FREE	((uint16) -1)
@@ -669,6 +683,9 @@ dsa_allocate_extended(dsa_area *area, size_t size, int flags)
 	dsa_pointer start_pointer;
 	dsa_segment_map *segment_map;
 	dsa_pointer result;
+
+	/* GPDB: see dsa_area.no_oom */
+	area->no_oom = (flags & DSA_ALLOC_NO_OOM) != 0;
 
 	Assert(size > 0);
 
@@ -1018,6 +1035,17 @@ dsa_set_size_limit(dsa_area *area, size_t limit)
 }
 
 /*
+ * GPDB: do not grow the area by creating segments that would leave less than
+ * 'bytes' free where dynamic shared memory lives; allocations then fail (as
+ * when the size limit is reached).  Applies to this backend's allocations.
+ */
+void
+dsa_set_min_free_space(dsa_area *area, size_t bytes)
+{
+	area->min_free_space = bytes;
+}
+
+/*
  * Aggressively free all spare memory in the hope of returning DSM segments to
  * the operating system.
  */
@@ -1260,6 +1288,8 @@ create_internal(void *place, size_t size,
 	area = palloc(sizeof(dsa_area));
 	area->control = control;
 	area->mapping_pinned = false;
+	area->no_oom = false;
+	area->min_free_space = 0;
 	memset(area->segment_maps, 0, sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
 	area->freed_segment_counter = 0;
@@ -1316,6 +1346,8 @@ attach_internal(void *place, dsm_segment *segment, dsa_handle handle)
 	area = palloc(sizeof(dsa_area));
 	area->control = control;
 	area->mapping_pinned = false;
+	area->no_oom = false;
+	area->min_free_space = 0;
 	memset(&area->segment_maps[0], 0,
 		   sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
@@ -2145,8 +2177,21 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 			return NULL;
 	}
 
+	/* GPDB: leave room for other users of dynamic shared memory. */
+	if (area->min_free_space > 0)
+	{
+		Size		free_bytes;
+		Size		total_bytes;
+
+		if (dsm_impl_free_space(&free_bytes, &total_bytes) &&
+			free_bytes < total_size + area->min_free_space)
+			return NULL;
+	}
+
 	/* Create the segment. */
-	segment = dsm_create(total_size, 0);
+	segment = dsm_create(total_size,
+						 area->no_oom ?
+						 DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0);
 	if (segment == NULL)
 		return NULL;
 	dsm_pin_segment(segment);

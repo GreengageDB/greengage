@@ -52,6 +52,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/statvfs.h>
 #ifndef WIN32
 #include <sys/mman.h>
 #endif
@@ -1043,4 +1044,33 @@ errcode_for_dynamic_shared_memory(void)
 		errcode(ERRCODE_OUT_OF_MEMORY);
 	else
 		errcode_for_file_access();
+}
+
+/*
+ * GPDB: report the free and total space of the file system holding the
+ * segments (/dev/shm for posix, pg_dynshmem for mmap).  Returns false if
+ * unknown, e.g. for System V shared memory.
+ */
+bool
+dsm_impl_free_space(Size *free_bytes, Size *total_bytes)
+{
+	struct statvfs st;
+	const char *path;
+
+	switch (dynamic_shared_memory_type)
+	{
+		case DSM_IMPL_POSIX:
+			path = "/dev/shm";
+			break;
+		case DSM_IMPL_MMAP:
+			path = PG_DYNSHMEM_DIR;
+			break;
+		default:
+			return false;
+	}
+	if (statvfs(path, &st) != 0)
+		return false;
+	*free_bytes = (Size) st.f_bavail * st.f_frsize;
+	*total_bytes = (Size) st.f_blocks * st.f_frsize;
+	return true;
 }

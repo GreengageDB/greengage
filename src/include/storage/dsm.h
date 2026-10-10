@@ -18,6 +18,8 @@
 typedef struct dsm_segment dsm_segment;
 
 #define DSM_CREATE_NULL_IF_MAXSEGMENTS			0x0001
+/* GPDB: return NULL if the segment cannot be created, e.g. for lack of space */
+#define DSM_CREATE_NULL_IF_NOSPACE				0x0002
 
 /* A sentinel value for an invalid DSM handle. */
 #define DSM_HANDLE_INVALID 0

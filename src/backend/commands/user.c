@@ -26,6 +26,7 @@
 #include "catalog/objectaccess.h"
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_db_role_setting.h"
 #include "commands/comment.h"
@@ -1534,6 +1535,9 @@ DropRole(DropRoleStmt *stmt)
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permission denied to drop role")));
+
+	/* GPDB: leftovers of in-memory temporary objects may refer to roles */
+	tempcat_sweep_before_drop();
 
 	/*
 	 * Scan the pg_authid relation to find the Oid of the role(s) to be

@@ -1,0 +1,1254 @@
+--
+-- Catalog rows of temporary objects kept in memory (catalog/tempcat.c).
+--
+-- With gp_enable_temp_memory_catalog on when the session's temporary schema
+-- is created, temporary objects get OIDs from the reserved range starting at
+-- 0xF0000000 (4026531840) and their catalog rows never reach the on-disk
+-- catalogs.  Catalog lookups and SQL queries on the catalogs see the
+-- in-memory rows too; the developer option gp_temp_memory_catalog_disk_only
+-- hides them from SQL, which the tests below use to look at the on-disk
+-- catalogs.
+--
+-- Count on-disk catalog rows that belong to objects with reserved OIDs, on
+-- the coordinator and on the segments.  Dependencies of such objects on
+-- ordinary objects (a column of a user-defined type, a function in a
+-- procedural language, ...) are kept on disk on purpose, to protect the
+-- ordinary objects from DROP in other sessions; they are not counted.
+CREATE FUNCTION tempcat_disk_rows_qd() RETURNS bigint LANGUAGE sql AS $$
+  SELECT (SELECT count(*) FROM pg_class WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM pg_type WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM pg_namespace WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM pg_attribute WHERE attrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_depend WHERE refobjid >= 4026531840)
+       + (SELECT count(*) FROM pg_index WHERE indrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_attrdef WHERE adrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_constraint WHERE conrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_statistic WHERE starelid >= 4026531840)
+       + (SELECT count(*) FROM pg_description WHERE objoid >= 4026531840)
+       + (SELECT count(*) FROM pg_rewrite WHERE ev_class >= 4026531840)
+       + (SELECT count(*) FROM pg_sequence WHERE seqrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_inherits WHERE inhrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_distribution_policy WHERE localoid >= 4026531840)
+       + (SELECT count(*) FROM pg_appendonly WHERE relid >= 4026531840)
+       + (SELECT count(*) FROM gp_fastsequence WHERE objid >= 4026531840)
+       + (SELECT count(*) FROM pg_attribute_encoding WHERE attrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_policy WHERE polrelid >= 4026531840)
+       + (SELECT count(*) FROM pg_shdepend WHERE objid >= 4026531840
+            AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database()))
+       + (SELECT count(*) FROM pg_proc WHERE oid >= 4026531840 OR pronamespace >= 4026531840)
+       + (SELECT count(*) FROM pg_aggregate WHERE aggfnoid >= 4026531840)
+       + (SELECT count(*) FROM pg_operator WHERE oprnamespace >= 4026531840)
+       + (SELECT count(*) FROM pg_enum WHERE enumtypid >= 4026531840)
+       + (SELECT count(*) FROM pg_range WHERE rngtypid >= 4026531840)
+       + (SELECT count(*) FROM pg_statistic_ext WHERE stxrelid >= 4026531840)
+$$;
+CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
+  SELECT (SELECT count(*) FROM gp_dist_random('pg_class') WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_type') WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_namespace') WHERE oid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_attribute') WHERE attrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_depend') WHERE refobjid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_index') WHERE indrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_attrdef') WHERE adrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_constraint') WHERE conrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_statistic') WHERE starelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_appendonly') WHERE relid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('gp_fastsequence') WHERE objid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_attribute_encoding') WHERE attrelid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_proc') WHERE oid >= 4026531840 OR pronamespace >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_operator') WHERE oprnamespace >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_enum') WHERE enumtypid >= 4026531840)
+       + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
+$$;
+-- Ordinary temporary tables are not affected.
+SET gp_enable_temp_memory_catalog = off;
+CREATE TEMP TABLE tc_ordinary (a int) DISTRIBUTED BY (a);
+SELECT 'tc_ordinary'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ f
+(1 row)
+
+SELECT count(*) > 0 AS on_disk FROM pg_class WHERE relname = 'tc_ordinary';
+ on_disk 
+---------
+ t
+(1 row)
+
+-- The temporary schema was created on disk, so the setting has no effect
+-- for the rest of this session: changes to the existing table, and new
+-- tables, keep using the on-disk catalog (including in-place updates of
+-- the pg_class row, e.g. relhasindex).
+SET gp_enable_temp_memory_catalog = on;
+INSERT INTO tc_ordinary SELECT generate_series(1, 100);
+CREATE INDEX tc_ordinary_a ON tc_ordinary (a);
+ALTER TABLE tc_ordinary ADD COLUMN b int DEFAULT 5;
+SELECT relhasindex, relnatts FROM pg_class WHERE relname = 'tc_ordinary';
+ relhasindex | relnatts 
+-------------+----------
+ t           |        2
+(1 row)
+
+SELECT count(*), sum(b) FROM tc_ordinary;
+ count | sum 
+-------+-----
+   100 | 500
+(1 row)
+
+CREATE TEMP TABLE tc_ordinary2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_ordinary2'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ f
+(1 row)
+
+DROP TABLE tc_ordinary, tc_ordinary2;
+-- Start a new session: its temporary schema is created in memory.
+\c
+SET gp_enable_temp_memory_catalog = on;
+--
+-- Basic usage
+--
+CREATE TEMP TABLE tc_basic (a int, b text) DISTRIBUTED BY (a);
+SELECT 'tc_basic'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+SELECT count(*) AS visible_to_sql FROM pg_class WHERE relname = 'tc_basic';
+ visible_to_sql 
+----------------
+              1
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE relname = 'tc_basic';
+ on_disk 
+---------
+       0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+INSERT INTO tc_basic SELECT i, 'v' || i FROM generate_series(1, 100) i;
+SELECT count(*), sum(a) FROM tc_basic;
+ count | sum  
+-------+------
+   100 | 5050
+(1 row)
+
+-- Reader gangs attach to the writer's in-memory catalog.
+SELECT count(*) FROM tc_basic x JOIN tc_basic y ON x.a = y.a + 1;
+ count 
+-------
+    99
+(1 row)
+
+-- Cursors run on reader gangs as well.
+BEGIN;
+DECLARE c CURSOR FOR SELECT a, b FROM tc_basic ORDER BY a;
+FETCH 2 FROM c;
+ a | b  
+---+----
+ 1 | v1
+ 2 | v2
+(2 rows)
+
+CLOSE c;
+COMMIT;
+DO $$
+DECLARE
+  r record;
+  n int := 0;
+BEGIN
+  FOR r IN SELECT * FROM tc_basic LOOP
+    n := n + 1;
+  END LOOP;
+  RAISE NOTICE 'rows seen by FOR loop: %', n;
+END $$;
+NOTICE:  rows seen by FOR loop: 100
+-- In-memory rows are not counted as changes of the catalog tables, so they
+-- do not make autovacuum process the catalogs.
+BEGIN;
+CREATE TEMP TABLE tc_stat (a int, b text) DISTRIBUTED BY (a);
+DROP TABLE tc_stat;
+SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
+       pg_stat_get_xact_tuples_deleted('pg_class'::regclass) AS class_del,
+       pg_stat_get_xact_tuples_inserted('pg_attribute'::regclass) AS attr_ins,
+       pg_stat_get_xact_tuples_inserted('pg_type'::regclass) AS type_ins,
+       pg_stat_get_xact_tuples_inserted('pg_depend'::regclass) AS depend_ins;
+ class_ins | class_del | attr_ins | type_ins | depend_ins 
+-----------+-----------+----------+----------+------------
+         0 |         0 |        0 |        0 |          0
+(1 row)
+
+COMMIT;
+-- A function evaluated in a separate slice on the coordinator (entry-db
+-- reader) sees the temporary table too.
+CREATE FUNCTION tempcat_count_basic() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM tc_basic';
+CREATE TEMP TABLE tc_entrydb (a int, n bigint) DISTRIBUTED BY (a);
+INSERT INTO tc_entrydb SELECT g, s.n FROM generate_series(1, 3) g, (SELECT tempcat_count_basic() AS n) s;
+SELECT a, n FROM tc_entrydb ORDER BY a;
+ a |  n  
+---+-----
+ 1 | 100
+ 2 | 100
+ 3 | 100
+(3 rows)
+
+DROP FUNCTION tempcat_count_basic();
+-- A temporary table hides an ordinary table of the same name; name lookups
+-- merge in-memory and on-disk rows.
+CREATE TABLE tc_same (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_same VALUES (1);
+CREATE TEMP TABLE tc_same (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_same VALUES (2), (3);
+SELECT count(*) AS temp_rows FROM tc_same;
+ temp_rows 
+-----------
+         2
+(1 row)
+
+SELECT count(*) AS ordinary_rows FROM public.tc_same;
+ ordinary_rows 
+---------------
+             1
+(1 row)
+
+DROP TABLE tc_same;
+SELECT count(*) AS ordinary_rows FROM tc_same;
+ ordinary_rows 
+---------------
+             1
+(1 row)
+
+DROP TABLE tc_same;
+-- Out-of-line (TOASTed) values of a temporary table.
+CREATE TEMP TABLE tc_toast (a int, t text) DISTRIBUTED BY (a);
+INSERT INTO tc_toast SELECT i, repeat(md5(i::text), 10000) FROM generate_series(1, 3) i;
+SELECT a, length(t) FROM tc_toast ORDER BY a;
+ a | length 
+---+--------
+ 1 | 320000
+ 2 | 320000
+ 3 | 320000
+(3 rows)
+
+UPDATE tc_toast SET t = t || 'x' WHERE a = 2;
+SELECT a, length(t) FROM tc_toast ORDER BY a;
+ a | length 
+---+--------
+ 1 | 320000
+ 2 | 320001
+ 3 | 320000
+(3 rows)
+
+--
+-- DDL on temporary tables
+--
+CREATE INDEX tc_basic_a ON tc_basic (a);
+SET enable_seqscan = off;
+SELECT b FROM tc_basic WHERE a = 42;
+  b  
+-----
+ v42
+(1 row)
+
+RESET enable_seqscan;
+ALTER TABLE tc_basic ADD COLUMN c int DEFAULT 3;
+ALTER TABLE tc_basic ALTER COLUMN c TYPE bigint;
+ALTER TABLE tc_basic ADD CONSTRAINT tc_basic_chk CHECK (a > 0);
+INSERT INTO tc_basic VALUES (-1, 'bad');
+ERROR:  new row for relation "tc_basic" violates check constraint "tc_basic_chk"
+DETAIL:  Failing row contains (-1, bad, 3).
+ALTER TABLE tc_basic SET DISTRIBUTED BY (b);
+ALTER TABLE tc_basic SET WITH (reorganize = true);
+CLUSTER tc_basic USING tc_basic_a;
+VACUUM FULL tc_basic;
+REINDEX TABLE tc_basic;
+ALTER TABLE tc_basic RENAME COLUMN b TO bb;
+ALTER TABLE tc_basic DROP COLUMN c;
+ANALYZE tc_basic;
+COMMENT ON TABLE tc_basic IS 'kept in memory';
+SELECT count(*), sum(a), min(bb) FROM tc_basic;
+ count | sum  | min 
+-------+------+-----
+   100 | 5050 | v1
+(1 row)
+
+CREATE TEMP TABLE tc_serial (id serial, v text) DISTRIBUTED BY (id);
+INSERT INTO tc_serial (v) SELECT 'x' FROM generate_series(1, 10);
+SELECT max(id) FROM tc_serial;
+ max 
+-----
+  10
+(1 row)
+
+CREATE TEMP VIEW tc_view AS SELECT id FROM tc_serial WHERE id > 5;
+SELECT count(*) FROM tc_view;
+ count 
+-------
+     5
+(1 row)
+
+CREATE TEMP SEQUENCE tc_seq;
+SELECT nextval('tc_seq'), nextval('tc_seq');
+ nextval | nextval 
+---------+---------
+       1 |       2
+(1 row)
+
+CREATE TEMP TABLE tc_part (a int, d date) DISTRIBUTED BY (a)
+  PARTITION BY RANGE (d) (START ('2026-01-01') END ('2026-04-01') EVERY (interval '1 month'));
+INSERT INTO tc_part SELECT i, '2026-01-01'::date + i FROM generate_series(0, 80) i;
+ALTER TABLE tc_part ADD PARTITION START ('2026-04-01') END ('2026-05-01');
+ALTER TABLE tc_part DROP PARTITION FOR ('2026-01-15');
+SELECT count(*) FROM tc_part;
+ count 
+-------
+    50
+(1 row)
+
+CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_child (b int) INHERITS (tc_inh_parent) DISTRIBUTED BY (a);
+INSERT INTO tc_inh_child VALUES (1, 2);
+SELECT count(*) FROM tc_inh_parent;
+ count 
+-------
+     1
+(1 row)
+
+CREATE TEMP TABLE tc_aoco (a int, b text)
+  WITH (appendonly = true, orientation = column, compresstype = zlib) DISTRIBUTED BY (a);
+INSERT INTO tc_aoco SELECT i, i::text FROM generate_series(1, 1000) i;
+CREATE INDEX tc_aoco_a ON tc_aoco (a);
+DELETE FROM tc_aoco WHERE a % 2 = 0;
+UPDATE tc_aoco SET b = 'u' WHERE a < 100;
+VACUUM tc_aoco;
+ALTER TABLE tc_aoco ADD COLUMN c int DEFAULT 1;
+SELECT count(*), sum(c) FROM tc_aoco;
+ count | sum 
+-------+-----
+   500 | 500
+(1 row)
+
+SET enable_seqscan = off;
+SELECT count(*) FROM tc_aoco WHERE a BETWEEN 1 AND 500;
+ count 
+-------
+   250
+(1 row)
+
+RESET enable_seqscan;
+TRUNCATE tc_aoco;
+INSERT INTO tc_aoco SELECT i, 'x', 2 FROM generate_series(1, 10) i;
+SELECT count(*), sum(c) FROM tc_aoco;
+ count | sum 
+-------+-----
+    10 |  20
+(1 row)
+
+-- TRUNCATE of a column-oriented table followed by ADD COLUMN with a default
+-- (needs the attribute encoding rows of the truncated table).
+CREATE TEMP TABLE tc_aoco2 (a int, b int)
+  WITH (appendonly = true, orientation = column) DISTRIBUTED BY (a);
+INSERT INTO tc_aoco2 SELECT i, i FROM generate_series(1, 100) i;
+TRUNCATE tc_aoco2;
+INSERT INTO tc_aoco2 SELECT i, i FROM generate_series(1, 10) i;
+ALTER TABLE tc_aoco2 ADD COLUMN c int DEFAULT 7;
+SELECT count(*), sum(c) FROM tc_aoco2;
+ count | sum 
+-------+-----
+    10 |  70
+(1 row)
+
+CREATE TEMP TABLE tc_ctas AS SELECT * FROM tc_serial DISTRIBUTED BY (id);
+SELECT count(*) FROM tc_ctas;
+ count 
+-------
+    10
+(1 row)
+
+-- SQL queries on the catalogs see the in-memory rows, on the coordinator and
+-- on the segments.
+SELECT relname, relkind, relpersistence FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_basic_a', 'tc_view', 'tc_serial_id_seq') ORDER BY 1;
+     relname      | relkind | relpersistence 
+------------------+---------+----------------
+ tc_basic         | r       | t
+ tc_basic_a       | i       | t
+ tc_serial_id_seq | S       | t
+ tc_view          | v       | t
+(4 rows)
+
+SELECT attname, atttypid::regtype FROM pg_attribute
+WHERE attrelid = 'tc_basic'::regclass AND attnum > 0 AND NOT attisdropped ORDER BY attnum;
+ attname | atttypid 
+---------+----------
+ a       | integer
+ bb      | text
+(2 rows)
+
+SELECT pg_get_viewdef('tc_view');
+       pg_get_viewdef        
+-----------------------------
+  SELECT tc_serial.id       +
+    FROM tc_serial          +
+   WHERE (tc_serial.id > 5);
+(1 row)
+
+SELECT obj_description('tc_basic'::regclass);
+ obj_description 
+-----------------
+ kept in memory
+(1 row)
+
+SELECT table_name, table_type FROM information_schema.tables
+WHERE table_name IN ('tc_basic', 'tc_view') ORDER BY 1;
+ table_name |   table_type    
+------------+-----------------
+ tc_basic   | LOCAL TEMPORARY
+ tc_view    | LOCAL TEMPORARY
+(2 rows)
+
+SELECT count(*) > 0 AS has_stats FROM pg_stats WHERE tablename = 'tc_basic';
+ has_stats 
+-----------
+ t
+(1 row)
+
+SELECT count(*) AS seg_rows FROM gp_dist_random('pg_class') WHERE relname = 'tc_basic';
+ seg_rows 
+----------
+        3
+(1 row)
+
+-- TID scans and COPY TO of a catalog see them too.
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
+ relname  
+----------
+ tc_basic
+(1 row)
+
+\copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
+1
+-- Plain index scans merge the in-memory rows in index order; index-only and
+-- bitmap scans, which cannot return them, are not used for such catalogs.
+SET enable_seqscan = off;
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Index Scan using pg_class_relname_nsp_index on pg_class
+   Index Cond: (relname = ANY ('{tc_basic,tc_view,pg_am,pg_class}'::name[]))
+ Optimizer: Postgres-based planner
+(3 rows)
+
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+ relname  
+----------
+ pg_am
+ pg_class
+ tc_basic
+ tc_view
+(4 rows)
+
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Index Scan Backward using pg_class_relname_nsp_index on pg_class
+   Index Cond: (relname = ANY ('{tc_basic,tc_view,pg_am,pg_class}'::name[]))
+ Optimizer: Postgres-based planner
+(3 rows)
+
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+ relname  
+----------
+ tc_view
+ tc_basic
+ pg_class
+ pg_am
+(4 rows)
+
+-- system columns of merged on-disk and in-memory rows
+SELECT relname, tableoid::regclass FROM pg_class
+WHERE relname IN ('tc_basic', 'pg_am') ORDER BY relname;
+ relname  | tableoid 
+----------+----------
+ pg_am    | pg_class
+ tc_basic | pg_class
+(2 rows)
+
+-- a parameterized inner index scan
+SET enable_hashjoin = off;
+SET enable_mergejoin = off;
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY 1, 2;
+ relname  |  attname  
+----------+-----------
+ pg_am    | amhandler
+ pg_am    | amname
+ pg_am    | amtype
+ pg_am    | oid
+ tc_basic | a
+ tc_basic | bb
+(6 rows)
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+SET enable_indexscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Aggregate
+   ->  Index Scan using pg_class_relname_nsp_index on pg_class
+         Index Cond: (relname = 'tc_basic'::name)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+RESET enable_indexscan;
+RESET enable_seqscan;
+-- Nothing of the above reached the on-disk catalogs.
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+--
+-- An insert into an append-only table created in the same transaction uses
+-- the reserved segment file 0 (needs the real xmin of the pg_class row).
+--
+BEGIN;
+CREATE TEMP TABLE tc_ao_segno (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_ao_segno SELECT generate_series(1, 30);
+COMMIT;
+SELECT DISTINCT segno FROM gp_toolkit.__gp_aoseg('tc_ao_segno');
+ segno 
+-------
+     0
+(1 row)
+
+-- gp_fastsequence stays non-transactional for in-memory rows: rolled back
+-- inserts do not let later inserts reuse their row numbers, which would make
+-- index scans return wrong rows.  Cover both the segment file used in the
+-- creating transaction (whose gp_fastsequence row is created in memory) and
+-- later ones.
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+BEGIN;
+CREATE TEMP TABLE tc_ao_seq (a int, b int) WITH (appendonly = true) DISTRIBUTED BY (b);
+CREATE INDEX tc_ao_seq_a ON tc_ao_seq (a);
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(1, 10) i;
+SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(100, 199) i;
+ROLLBACK TO SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(1000, 1099) i;
+COMMIT;
+BEGIN;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(200, 299) i;
+ROLLBACK;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(2000, 2099) i;
+BEGIN;
+SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(300, 399) i;
+ROLLBACK TO SAVEPOINT s;
+INSERT INTO tc_ao_seq SELECT i, 1 FROM generate_series(3000, 3099) i;
+COMMIT;
+SELECT count(*) AS rolled_back_rows FROM tc_ao_seq WHERE a BETWEEN 100 AND 399;
+ rolled_back_rows 
+------------------
+                0
+(1 row)
+
+SELECT count(*) AS committed_rows FROM tc_ao_seq WHERE a BETWEEN 1000 AND 3099;
+ committed_rows 
+----------------
+            300
+(1 row)
+
+RESET enable_seqscan;
+RESET enable_bitmapscan;
+SET enable_indexscan = off;
+SELECT count(*) AS all_rows FROM tc_ao_seq;
+ all_rows 
+----------
+      310
+(1 row)
+
+RESET enable_indexscan;
+--
+-- Transactions
+--
+BEGIN;
+CREATE TEMP TABLE tc_rollback (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_rollback VALUES (1);
+ROLLBACK;
+SELECT to_regclass('tc_rollback') IS NULL AS rolled_back;
+ rolled_back 
+-------------
+ t
+(1 row)
+
+CREATE TEMP TABLE tc_rollback (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_rollback;
+BEGIN;
+DROP TABLE tc_serial CASCADE;
+NOTICE:  drop cascades to view tc_view
+ROLLBACK;
+SELECT count(*) FROM tc_serial;
+ count 
+-------
+    10
+(1 row)
+
+SELECT count(*) FROM tc_view;
+ count 
+-------
+     5
+(1 row)
+
+BEGIN;
+CREATE TEMP TABLE tc_sp1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s1;
+CREATE TEMP TABLE tc_sp2 (a int) DISTRIBUTED BY (a);
+ALTER TABLE tc_sp1 ADD COLUMN b int;
+ROLLBACK TO SAVEPOINT s1;
+SAVEPOINT s2;
+CREATE TEMP TABLE tc_sp3 (a int) DISTRIBUTED BY (a);
+RELEASE SAVEPOINT s2;
+COMMIT;
+SELECT to_regclass('tc_sp1') IS NOT NULL AS sp1, to_regclass('tc_sp2') IS NOT NULL AS sp2,
+       to_regclass('tc_sp3') IS NOT NULL AS sp3;
+ sp1 | sp2 | sp3 
+-----+-----+-----
+ t   | f   | t
+(1 row)
+
+SELECT * FROM tc_sp1;
+ a 
+---
+(0 rows)
+
+CREATE TEMP TABLE tc_sp2 (a int) DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  FOR i IN 1..5 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_exc_%s (a int) DISTRIBUTED BY (a)', i);
+      IF i % 2 = 0 THEN
+        RAISE EXCEPTION 'undo %', i;
+      END IF;
+    EXCEPTION WHEN raise_exception THEN
+      NULL;
+    END;
+  END LOOP;
+END $$;
+SELECT g, to_regclass('tc_exc_' || g) IS NOT NULL AS exists
+FROM generate_series(1, 5) g ORDER BY g;
+ g | exists 
+---+--------
+ 1 | t
+ 2 | f
+ 3 | t
+ 4 | f
+ 5 | t
+(5 rows)
+
+-- A failing CREATE TABLE AS leaves nothing behind.
+CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
+ERROR:  division by zero
+SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
+ not_created 
+-------------
+ t
+(1 row)
+
+CREATE TEMP TABLE tc_ctas_fail AS SELECT i AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
+SELECT count(*) FROM tc_ctas_fail;
+ count 
+-------
+    10
+(1 row)
+
+BEGIN;
+CREATE TEMP TABLE tc_oc_drop (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_oc_delete (a int) ON COMMIT DELETE ROWS DISTRIBUTED BY (a);
+INSERT INTO tc_oc_delete VALUES (1);
+COMMIT;
+SELECT to_regclass('tc_oc_drop') IS NULL AS dropped, (SELECT count(*) FROM tc_oc_delete) AS rows;
+ dropped | rows 
+---------+------
+ t       |    0
+(1 row)
+
+PREPARE tc_prep AS SELECT count(*) FROM tc_basic;
+EXECUTE tc_prep;
+ count 
+-------
+   100
+(1 row)
+
+ALTER TABLE tc_basic ADD COLUMN d int;
+EXECUTE tc_prep;
+ count 
+-------
+   100
+(1 row)
+
+DEALLOCATE tc_prep;
+--
+-- Turning the setting off does not affect the session's temporary objects:
+-- they stay in memory, and new ones join them.
+--
+SET gp_enable_temp_memory_catalog = off;
+SELECT count(*) FROM tc_basic x JOIN tc_basic y ON x.a = y.a + 1;
+ count 
+-------
+    99
+(1 row)
+
+CREATE TEMP TABLE tc_after_off (a int) DISTRIBUTED BY (a);
+SELECT 'tc_after_off'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t
+(1 row)
+
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DISCARD TEMP;
+SELECT to_regclass('tc_basic') IS NULL AS discarded;
+ discarded 
+-----------
+ t
+(1 row)
+
+CREATE TEMP TABLE tc_after_discard (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_after_discard VALUES (1);
+SELECT count(*) FROM tc_after_discard;
+ count 
+-------
+     1
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+--
+-- Functions, aggregates, operators, and enum, range and domain types can be
+-- created in a temporary schema kept in memory, and statistics objects on
+-- temporary tables; their catalog rows stay in memory too, also on the
+-- segments.  Other objects (operator classes, collations, text search
+-- objects, ...) and casts or transforms of such types are not supported:
+-- their on-disk rows would point at objects other sessions cannot see.
+--
+CREATE FUNCTION pg_temp.tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 * 10';
+SELECT pg_temp.tc_func(2);
+ tc_func 
+---------
+      20
+(1 row)
+
+CREATE TEMP TABLE tc_fn_data (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_fn_data SELECT i, i % 5 FROM generate_series(1, 100) i;
+-- executed on the segments, also by reader gangs
+SELECT sum(pg_temp.tc_func(a)) FROM tc_fn_data;
+  sum  
+-------
+ 50500
+(1 row)
+
+SELECT count(*) FROM tc_fn_data x JOIN tc_fn_data y ON pg_temp.tc_func(x.b) = y.a;
+ count 
+-------
+    80
+(1 row)
+
+CREATE FUNCTION pg_temp.tc_plfunc(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN n + 1; END $$;
+SELECT pg_temp.tc_plfunc(41);
+ tc_plfunc 
+-----------
+        42
+(1 row)
+
+CREATE AGGREGATE pg_temp.tc_sum(int) (sfunc = int4pl, stype = int, initcond = '0');
+SELECT pg_temp.tc_sum(a) FROM tc_fn_data;
+ tc_sum 
+--------
+   5050
+(1 row)
+
+CREATE OPERATOR pg_temp.=== (PROCEDURE = int4eq, LEFTARG = int, RIGHTARG = int);
+SELECT 1 OPERATOR(pg_temp.===) 1 AS eq, 1 OPERATOR(pg_temp.===) 2 AS ne;
+ eq | ne 
+----+----
+ t  | f
+(1 row)
+
+-- enum labels are also read by ordered (forward and backward) catalog scans
+CREATE TYPE pg_temp.tc_mood AS ENUM ('sad', 'ok', 'happy');
+ALTER TYPE pg_temp.tc_mood ADD VALUE 'meh' AFTER 'sad';
+CREATE TEMP TABLE tc_moods (m pg_temp.tc_mood) DISTRIBUTED RANDOMLY;
+INSERT INTO tc_moods VALUES ('happy'), ('sad'), ('meh'), ('ok');
+SELECT m FROM tc_moods ORDER BY m;
+   m   
+-------
+ sad
+ meh
+ ok
+ happy
+(4 rows)
+
+SELECT enum_first(NULL::pg_temp.tc_mood), enum_last(NULL::pg_temp.tc_mood),
+       enum_range(NULL::pg_temp.tc_mood);
+ enum_first | enum_last |     enum_range     
+------------+-----------+--------------------
+ sad        | happy     | {sad,meh,ok,happy}
+(1 row)
+
+CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
+SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
+ contains 
+----------
+ t
+(1 row)
+
+CREATE STATISTICS pg_temp.tc_stx (dependencies, ndistinct) ON a, b FROM tc_fn_data;
+ANALYZE tc_fn_data;
+SELECT stxname, stxkind FROM pg_statistic_ext WHERE stxrelid = 'tc_fn_data'::regclass;
+ stxname | stxkind 
+---------+---------
+ tc_stx  | {d,f}
+(1 row)
+
+SELECT d.stxdndistinct IS NOT NULL AS has_ndistinct
+FROM pg_statistic_ext_data d JOIN pg_statistic_ext s ON s.oid = d.stxoid
+WHERE s.stxname = 'tc_stx';
+ has_ndistinct 
+---------------
+ t
+(1 row)
+
+-- not supported
+CREATE STATISTICS tc_stx_public ON a, b FROM tc_fn_data;
+ERROR:  statistics object on a temporary table kept in memory must be in the temporary schema
+HINT:  Name it pg_temp.tc_stx_public.
+CREATE COLLATION pg_temp.tc_coll FROM "C";
+ERROR:  only relations, types, functions and operators can be created in a temporary schema kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
+ERROR:  casts are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
+-- Domains, composite types and row-level security policies are supported.
+CREATE DOMAIN pg_temp.tc_dom AS int CHECK (VALUE > 0);
+CREATE TYPE pg_temp.tc_comp AS (x int, y text);
+CREATE TEMP TABLE tc_typed (d pg_temp.tc_dom, c pg_temp.tc_comp) DISTRIBUTED RANDOMLY;
+INSERT INTO tc_typed VALUES (1, ROW(1, 'a'));
+INSERT INTO tc_typed VALUES (-1, ROW(2, 'b'));
+ERROR:  value for domain tc_dom violates check constraint "tc_dom_check"
+SELECT d, (c).y FROM tc_typed;
+ d | y 
+---+---
+ 1 | a
+(1 row)
+
+INSERT INTO tc_rls SELECT i, i FROM generate_series(1, 10) i;
+CREATE POLICY tc_rls_pol ON tc_rls USING (a > 5);
+ALTER TABLE tc_rls ENABLE ROW LEVEL SECURITY;
+CREATE ROLE tc_rls_user;
+GRANT SELECT ON tc_rls TO tc_rls_user;
+SET ROLE tc_rls_user;
+SELECT count(*) AS visible_rows FROM tc_rls;
+ visible_rows 
+--------------
+            5
+(1 row)
+
+RESET ROLE;
+SELECT count(*) AS all_rows FROM tc_rls;
+ all_rows 
+----------
+       10
+(1 row)
+
+DROP POLICY tc_rls_pol ON tc_rls;
+SET ROLE tc_rls_user;
+SELECT count(*) AS visible_rows FROM tc_rls;
+ visible_rows 
+--------------
+            0
+(1 row)
+
+RESET ROLE;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_rls;
+DROP ROLE tc_rls_user;
+-- SQL DML on catalog rows kept in memory (allow_system_table_mods): they
+-- have no place in the heap, so updates, deletes and row locks must not
+-- touch it (the gangsize test changes numsegments this way).
+SET allow_system_table_mods = on;
+CREATE TEMP TABLE tc_dml (a int, b int) DISTRIBUTED BY (a);
+UPDATE gp_distribution_policy SET numsegments = 2 WHERE localoid = 'tc_dml'::regclass;
+UPDATE gp_distribution_policy SET numsegments = 3 WHERE localoid = 'tc_dml'::regclass;
+UPDATE gp_distribution_policy SET numsegments = 2 WHERE localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           2
+(1 row)
+
+INSERT INTO tc_dml SELECT i, i FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_dml;
+ count 
+-------
+    10
+(1 row)
+
+BEGIN;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass FOR UPDATE;
+ numsegments 
+-------------
+           2
+(1 row)
+
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ count 
+-------
+     0
+(1 row)
+
+ROLLBACK;
+-- DELETE ... RETURNING fetches the old row by its TID
+BEGIN;
+DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass RETURNING numsegments;
+ numsegments 
+-------------
+           2
+(1 row)
+
+ROLLBACK;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           2
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- When the area cannot take the new version of a row (the fault makes an
+-- allocation fail), the row moves to the on-disk catalog: through SQL, and
+-- through internal catalog updates (VACUUM FULL swaps pg_class rows).
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+RESET client_min_messages;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+UPDATE gp_distribution_policy SET numsegments = 3 WHERE localoid = 'tc_dml'::regclass;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ numsegments 
+-------------
+           3
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       1
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+VACUUM FULL tc_dml;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT count(*), sum(b) FROM tc_dml;
+ count | sum 
+-------+-----
+    10 |  55
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE oid = 'tc_dml'::regclass;
+ on_disk 
+---------
+       1
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+RESET allow_system_table_mods;
+DROP TABLE tc_dml;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
+ qd_disk_rows 
+--------------
+            0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- An allocation failing in the middle of adding a row (here the second
+-- one) leaves nothing behind in memory; the row goes to disk.
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 2, 2, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+INSERT INTO tc_oom SELECT i, 'x' FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_oom;
+ count 
+-------
+    10
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() > 0 AS some_on_disk;
+ some_on_disk 
+--------------
+ t
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_oom;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
+ qd_disk_rows 
+--------------
+            0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+-- A sequential scan that stops (LIMIT) or restarts (a correlated subquery)
+-- while returning in-memory rows.
+CREATE TEMP TABLE tc_seq1 (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_seq2 (a int) DISTRIBUTED BY (a);
+SET enable_indexscan = off;
+SET enable_bitmapscan = off;
+SELECT count(*) FROM (SELECT relname FROM pg_class WHERE relname IN ('tc_seq1', 'tc_seq2') LIMIT 1) s;
+ count 
+-------
+     1
+(1 row)
+
+SELECT x, (SELECT count(*) FROM (SELECT 1 FROM pg_class WHERE relname IN ('tc_seq1', 'tc_seq2') AND x > 0 LIMIT 1) s) AS found
+FROM generate_series(1, 3) x ORDER BY x;
+ x | found 
+---+-------
+ 1 |     1
+ 2 |     1
+ 3 |     1
+(3 rows)
+
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+DROP TABLE tc_seq1, tc_seq2;
+-- Casts and transforms of temporary types (target types too) are refused.
+CREATE TYPE pg_temp.tc_cast_t AS (x int);
+CREATE CAST (text AS pg_temp.tc_cast_t) WITH INOUT;
+ERROR:  casts are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE CAST (pg_temp.tc_cast_t AS text) WITH INOUT;
+ERROR:  casts are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE TRANSFORM FOR pg_temp.tc_cast_t LANGUAGE plpgsql (FROM SQL WITH FUNCTION abs(int));
+ERROR:  transforms are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+DROP TYPE pg_temp.tc_cast_t;
+--
+-- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
+-- on-disk catalog.  The limit applies when the session's in-memory catalog
+-- is created, so start a new session.
+--
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+-- Rows that the transaction inserted and deleted are freed early when the
+-- area is full, so a transaction creating and dropping many tables does not
+-- overflow to disk: neither at top level, nor when each iteration runs in a
+-- subtransaction.  The transaction's own statistics count on-disk inserts.
+BEGIN;
+DO $$
+BEGIN
+  FOR i IN 1..400 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_loop_%s (a int, b text) DISTRIBUTED BY (a)', i);
+    EXECUTE format('INSERT INTO tc_loop_%s VALUES (%s, ''x'')', i, i);
+    EXECUTE format('DROP TABLE tc_loop_%s', i);
+  END LOOP;
+END $$;
+DO $$
+BEGIN
+  FOR i IN 1..150 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_subloop_%s (a int, b text) DISTRIBUTED BY (a)', i);
+      EXECUTE format('DROP TABLE tc_subloop_%s', i);
+      IF i % 3 = 0 THEN
+        RAISE EXCEPTION 'undo %', i;
+      END IF;
+    EXCEPTION WHEN raise_exception THEN
+      NULL;
+    END;
+  END LOOP;
+END $$;
+SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_disk_ins,
+       pg_stat_get_xact_tuples_inserted('pg_attribute'::regclass) AS attr_disk_ins;
+ class_disk_ins | attr_disk_ins 
+----------------+---------------
+              0 |             0
+(1 row)
+
+-- A deletion that can still be rolled back keeps its row.
+CREATE TEMP TABLE tc_keep (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_keep VALUES (42);
+DO $$
+BEGIN
+  BEGIN
+    DROP TABLE tc_keep;
+    FOR i IN 1..150 LOOP
+      EXECUTE format('CREATE TEMP TABLE tc_fill_%s (a int) DISTRIBUTED BY (a)', i);
+      EXECUTE format('DROP TABLE tc_fill_%s', i);
+    END LOOP;
+    RAISE EXCEPTION 'undo the drop';
+  EXCEPTION WHEN raise_exception THEN
+    NULL;
+  END;
+END $$;
+SELECT sum(a) FROM tc_keep;
+ sum 
+-----
+  42
+(1 row)
+
+COMMIT;
+SELECT sum(a) FROM tc_keep;
+ sum 
+-----
+  42
+(1 row)
+
+DROP TABLE tc_keep;
+-- Rows of live tables that do not fit go to disk.
+DO $$
+BEGIN
+  FOR i IN 1..300 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_spill_%s (a int, b text, c int) DISTRIBUTED BY (a)', i);
+    EXECUTE format('INSERT INTO tc_spill_%s VALUES (%s, ''x'', 1)', i, i);
+  END LOOP;
+END $$;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() > 0 AS spilled_to_disk;
+ spilled_to_disk 
+-----------------
+ t
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+SELECT sum(a) FROM tc_spill_1;
+ sum 
+-----
+   1
+(1 row)
+
+SELECT sum(a) FROM tc_spill_300;
+ sum 
+-----
+ 300
+(1 row)
+
+SELECT count(*) FROM tc_spill_10 x JOIN tc_spill_299 y ON x.c = y.c;
+ count 
+-------
+     1
+(1 row)
+
+ALTER TABLE tc_spill_300 ADD COLUMN d int DEFAULT 5;
+SELECT sum(d) FROM tc_spill_300;
+ sum 
+-----
+   5
+(1 row)
+
+DO $$
+BEGIN
+  FOR i IN 1..300 LOOP
+    EXECUTE format('DROP TABLE tc_spill_%s', i);
+  END LOOP;
+END $$;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
+ qd_disk_rows | seg_disk_rows 
+--------------+---------------
+            0 |             0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+\c
+DROP FUNCTION tempcat_disk_rows_qd();
+DROP FUNCTION tempcat_disk_rows_segs();

@@ -61,6 +61,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/catcache.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -4537,6 +4538,16 @@ RemoveTempRelations(Oid tempNamespaceId)
 static void
 RemoveTempRelationsCallback(int code, Datum arg)
 {
+#ifdef FAULT_INJECTOR
+	/*
+	 * Test hook: leave the temporary objects behind, like a crashed session
+	 * does (used to test the cleanup of in-memory temporary catalog rows'
+	 * on-disk leftovers, see tempcat.c).
+	 */
+	if (SIMPLE_FAULT_INJECTOR("skip_temp_relations_cleanup") == FaultInjectorTypeSkip)
+		return;
+#endif
+
 	if (DistributedTransactionContext == DTX_CONTEXT_QE_PREPARED)
 	{
 		/*

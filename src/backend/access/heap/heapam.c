@@ -51,6 +51,7 @@
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_database_d.h"
 #include "miscadmin.h"
@@ -3008,6 +3009,13 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 	TM_Result	result;
 	TM_FailureData tmfd;
 
+	/* Virtual catalog row of a temporary object */
+	if (IsTempcatTid(tid))
+	{
+		tempcat_delete(relation, tid);
+		return;
+	}
+
 	result = heap_delete(relation, tid,
 						 GetCurrentCommandId(true), InvalidSnapshot,
 						 true /* wait for commit */ ,
@@ -4254,6 +4262,17 @@ simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
 	TM_Result	result;
 	TM_FailureData tmfd;
 	LockTupleMode lockmode;
+
+	/* Virtual catalog row of a temporary object */
+	if (IsTempcatTid(otid))
+	{
+		if (!tempcat_update(relation, otid, tup))
+			ereport(ERROR,
+					(errcode(ERRCODE_OUT_OF_MEMORY),
+					 errmsg("in-memory temporary catalog is full"),
+					 errhint("Increase gp_temp_memory_catalog_max_size.")));
+		return;
+	}
 
 	result = heap_update_internal(relation, otid, tup,
 						 GetCurrentCommandId(true), InvalidSnapshot,
@@ -6249,6 +6268,10 @@ heap_inplace_update_and_unlock(Relation relation,
 	uint32		newlen;
 
 	Assert(ItemPointerEquals(&oldtup->t_self, &tuple->t_self));
+
+	/* systable_inplace_update_finish() routes virtual rows itself */
+	Assert(!IsTempcatTid(&tuple->t_self));
+
 	oldlen = oldtup->t_len - htup->t_hoff;
 	newlen = tuple->t_len - tuple->t_data->t_hoff;
 	if (oldlen != newlen || htup->t_hoff != tuple->t_data->t_hoff)
@@ -6340,6 +6363,13 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	HeapTupleHeader htup;
 	uint32		oldlen;
 	uint32		newlen;
+
+	/* Virtual catalog row of a temporary object */
+	if (IsTempcatTid(&tuple->t_self))
+	{
+		tempcat_inplace_update(relation, tuple);
+		return;
+	}
 
 	/*
 	 * For now, parallel operations are required to be strictly read-only.
@@ -7030,6 +7060,13 @@ heap_freeze_tuple_wal_logged(Relation rel, HeapTuple tup)
 	Buffer 			buffer;
 	Page 			page;
 	HeapTupleHeader		htup;
+
+	/* Virtual catalog row of a temporary object */
+	if (IsTempcatTid(&tup->t_self))
+	{
+		tempcat_freeze(rel, tup);
+		return;
+	}
 
 	/* Set the passed-in tuple to be frozen */
 	HeapTupleHeaderSetXminFrozen(tup->t_data);

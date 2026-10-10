@@ -27,6 +27,7 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
+#include "catalog/tempcat.h"
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
@@ -386,6 +387,10 @@ systable_beginscan(Relation heapRelation,
 		sysscan->snapshot = NULL;
 	}
 
+	/* Must run while the keys still hold heap attribute numbers. */
+	sysscan->tempscan = tempcat_beginscan(heapRelation, irel, snapshot,
+										  nkeys, key);
+
 	if (irel)
 	{
 		int			i;
@@ -430,21 +435,11 @@ systable_beginscan(Relation heapRelation,
 	return sysscan;
 }
 
-/*
- * systable_getnext --- get next tuple in a heap-or-index scan
- *
- * Returns NULL if no more tuples available.
- *
- * Note that returned tuple is a reference to data in a disk buffer;
- * it must not be modified, and should be presumed inaccessible after
- * next getnext() or endscan() call.
- *
- * XXX: It'd probably make sense to offer a slot based interface, at least
- * optionally.
- */
-HeapTuple
-systable_getnext(SysScanDesc sysscan)
+/* Next on-disk row of a systable scan */
+static HeapTuple
+systable_getnext_disk(void *arg)
 {
+	SysScanDesc sysscan = (SysScanDesc) arg;
 	HeapTuple	htup = NULL;
 
 	if (sysscan->irel)
@@ -483,6 +478,28 @@ systable_getnext(SysScanDesc sysscan)
 }
 
 /*
+ * systable_getnext --- get next tuple in a heap-or-index scan
+ *
+ * Returns NULL if no more tuples available.
+ *
+ * Note that returned tuple is a reference to data in a disk buffer;
+ * it must not be modified, and should be presumed inaccessible after
+ * next getnext() or endscan() call.
+ *
+ * XXX: It'd probably make sense to offer a slot based interface, at least
+ * optionally.
+ */
+HeapTuple
+systable_getnext(SysScanDesc sysscan)
+{
+	/* Merge in the virtual rows of temporary objects, see tempcat.c */
+	if (sysscan->tempscan)
+		return tempcat_getnext(sysscan->tempscan, systable_getnext_disk, sysscan);
+
+	return systable_getnext_disk(sysscan);
+}
+
+/*
  * systable_recheck_tuple --- recheck visibility of most-recently-fetched tuple
  *
  * In particular, determine if this tuple would be visible to a catalog scan
@@ -500,6 +517,10 @@ systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 {
 	Snapshot	freshsnap;
 	bool		result;
+
+	/* Virtual rows belong to this session; nobody else can change them. */
+	if (tempcat_scan_on_virtual(sysscan->tempscan))
+		return true;
 
 	Assert(tup == ExecFetchSlotHeapTuple(sysscan->slot, false, NULL));
 
@@ -526,6 +547,9 @@ systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 void
 systable_endscan(SysScanDesc sysscan)
 {
+	if (sysscan->tempscan)
+		tempcat_endscan(sysscan->tempscan);
+
 	if (sysscan->slot)
 	{
 		ExecDropSingleTupleTableSlot(sysscan->slot);
@@ -602,6 +626,10 @@ systable_beginscan_ordered(Relation heapRelation,
 		sysscan->snapshot = NULL;
 	}
 
+	/* Virtual rows, sorted in index order; keys still hold heap attnos. */
+	sysscan->tempscan = tempcat_beginscan(heapRelation, indexRelation, snapshot,
+										  nkeys, key);
+
 	/* Change attribute numbers to be index column numbers. */
 	for (i = 0; i < nkeys; i++)
 	{
@@ -630,9 +658,17 @@ systable_beginscan_ordered(Relation heapRelation,
 /*
  * systable_getnext_ordered --- get next tuple in an ordered catalog scan
  */
-HeapTuple
-systable_getnext_ordered(SysScanDesc sysscan, ScanDirection direction)
+typedef struct OrderedFetchArg
 {
+	SysScanDesc sysscan;
+	ScanDirection direction;
+} OrderedFetchArg;
+
+static HeapTuple
+systable_getnext_ordered_disk(void *arg)
+{
+	SysScanDesc sysscan = ((OrderedFetchArg *) arg)->sysscan;
+	ScanDirection direction = ((OrderedFetchArg *) arg)->direction;
 	HeapTuple	htup = NULL;
 
 	Assert(sysscan->irel);
@@ -646,12 +682,32 @@ systable_getnext_ordered(SysScanDesc sysscan, ScanDirection direction)
 	return htup;
 }
 
+HeapTuple
+systable_getnext_ordered(SysScanDesc sysscan, ScanDirection direction)
+{
+	OrderedFetchArg arg;
+
+	arg.sysscan = sysscan;
+	arg.direction = direction;
+
+	/* Merge in the virtual rows of temporary objects, see tempcat.c */
+	if (sysscan->tempscan)
+		return tempcat_getnext_dir(sysscan->tempscan,
+								   ScanDirectionIsForward(direction),
+								   systable_getnext_ordered_disk, &arg);
+
+	return systable_getnext_ordered_disk(&arg);
+}
+
 /*
  * systable_endscan_ordered --- close scan, release resources
  */
 void
 systable_endscan_ordered(SysScanDesc sysscan)
 {
+	if (sysscan->tempscan)
+		tempcat_endscan(sysscan->tempscan);
+
 	if (sysscan->slot)
 	{
 		ExecDropSingleTupleTableSlot(sysscan->slot);
@@ -751,6 +807,14 @@ systable_inplace_update_begin(Relation relation,
 			return;
 		}
 
+		/* A virtual row has no buffer to lock. */
+		if (IsTempcatTid(&oldtup->t_self))
+		{
+			*oldtupcopy = heap_copytuple(oldtup);
+			*state = scan;
+			return;
+		}
+
 		slot = scan->slot;
 		Assert(TTS_IS_BUFFERTUPLE(slot));
 		bslot = (BufferHeapTupleTableSlot *) slot;
@@ -775,9 +839,18 @@ systable_inplace_update_finish(void *state, HeapTuple tuple)
 	Relation	relation = scan->heap_rel;
 	TupleTableSlot *slot = scan->slot;
 	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
-	HeapTuple	oldtup = bslot->base.tuple;
-	Buffer		buffer = bslot->buffer;
+	HeapTuple	oldtup;
+	Buffer		buffer;
 
+	if (IsTempcatTid(&tuple->t_self))
+	{
+		tempcat_inplace_update(relation, tuple);
+		systable_endscan(scan);
+		return;
+	}
+
+	oldtup = bslot->base.tuple;
+	buffer = bslot->buffer;
 	heap_inplace_update_and_unlock(relation, oldtup, tuple, buffer);
 	systable_endscan(scan);
 }
@@ -794,9 +867,18 @@ systable_inplace_update_cancel(void *state)
 	Relation	relation = scan->heap_rel;
 	TupleTableSlot *slot = scan->slot;
 	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
-	HeapTuple	oldtup = bslot->base.tuple;
-	Buffer		buffer = bslot->buffer;
+	HeapTuple	oldtup;
+	Buffer		buffer;
 
+	/* A virtual row holds no buffer lock. */
+	if (tempcat_scan_on_virtual(scan->tempscan))
+	{
+		systable_endscan(scan);
+		return;
+	}
+
+	oldtup = bslot->base.tuple;
+	buffer = bslot->buffer;
 	heap_inplace_unlock(relation, oldtup, buffer);
 	systable_endscan(scan);
 }

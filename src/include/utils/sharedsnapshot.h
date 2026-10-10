@@ -14,6 +14,7 @@
 #define SHAREDSNAPSHOT_H
 
 #include "storage/proc.h"
+#include "utils/dsa.h"
 #include "utils/combocid.h"
 #include "utils/snapshot.h"
 
@@ -49,6 +50,10 @@ typedef struct SharedSnapshotSlot
 	/* for debugging only */
 	FullTransactionId	fullXid;
 	TimestampTz		startTimestamp;
+
+	/* writer's in-memory temp catalog area, see tempcat.c */
+	volatile dsa_handle		tempcat_handle;
+	volatile dsa_pointer	tempcat_root;
 } SharedSnapshotSlot;
 
 extern volatile SharedSnapshotSlot *SharedLocalSnapshotSlot;
@@ -61,6 +66,8 @@ extern char *SharedSnapshotDump(void);
 extern void SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription);
 extern void addSharedSnapshot(char *creatorDescription, int id);
 extern void lookupSharedSnapshot(char *lookerDescription, char *creatorDescription, int id);
+extern bool SharedSnapshotGetTempcatArea(int32 sessionId, dsa_handle *handle,
+										 dsa_pointer *root);
 
 extern void dumpSharedLocalSnapshot_forCursor(void);
 extern void readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTransactionContext);

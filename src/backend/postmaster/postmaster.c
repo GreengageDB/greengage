@@ -4558,6 +4558,15 @@ PostmasterStateMachine(void)
 		/* re-read control file into local memory */
 		LocalProcessControlFile(true);
 
+		/*
+		 * GPDB: remove the crashed sessions' temporary files and temporary
+		 * relation files.  Temporary tables whose catalog rows were kept in
+		 * memory (see tempcat.c) have no catalog rows left that could lead
+		 * anybody to their files.  (Like PostgreSQL 14's
+		 * remove_temp_files_after_crash.)
+		 */
+		RemovePgTempFiles();
+
 		reset_shared(PostPortNumber);
 
 		StartupPID = StartupDataBase();
