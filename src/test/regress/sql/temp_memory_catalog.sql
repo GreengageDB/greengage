@@ -464,6 +464,19 @@ WHERE s.stxname = 'tc_stx';
 CREATE STATISTICS tc_stx_public ON a, b FROM tc_fn_data;
 CREATE COLLATION pg_temp.tc_coll FROM "C";
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
+-- nor ordinary objects that depend on temporary objects kept in memory
+CREATE TEMP SEQUENCE tc_dep_seq;
+CREATE FUNCTION pg_temp.tc_trgfunc() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TABLE tc_perm_col (a int, c tc_fn_data) DISTRIBUTED BY (a);
+CREATE TABLE tc_perm_def (a int DEFAULT nextval('tc_dep_seq')) DISTRIBUTED BY (a);
+CREATE FUNCTION public.tc_perm_func(pg_temp.tc_mood) RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE TABLE tc_perm_trg (a int) DISTRIBUTED BY (a);
+-- (the detail names the session's temporary schema)
+\set VERBOSITY terse
+CREATE TRIGGER tc_trg BEFORE INSERT ON tc_perm_trg FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trgfunc();
+\set VERBOSITY default
+DROP TABLE tc_perm_trg;
+DROP SEQUENCE tc_dep_seq;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 -- Domains, composite types and row-level security policies are supported.
 CREATE DOMAIN pg_temp.tc_dom AS int CHECK (VALUE > 0);

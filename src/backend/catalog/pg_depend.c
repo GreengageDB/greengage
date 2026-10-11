@@ -22,6 +22,7 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/tempcat.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
 #include "storage/lmgr.h"
@@ -86,6 +87,9 @@ recordMultipleDependencies(const ObjectAddress *depender,
 
 	for (i = 0; i < nreferenced; i++, referenced++)
 	{
+		/* GPDB: see tempcat.c */
+		tempcat_check_dependency(depender, referenced);
+
 		/*
 		 * If the referenced object is pinned by the system, there's no real
 		 * need to record dependencies on it.  This saves lots of space in
@@ -399,6 +403,12 @@ changeDependencyFor(Oid classId, Oid objectId,
 	objAddr.objectId = newRefObjectId;
 
 	newIsPinned = isObjectPinned(&objAddr, depRel);
+
+	/* GPDB: see tempcat.c */
+	depAddr.classId = classId;
+	depAddr.objectId = objectId;
+	depAddr.objectSubId = 0;
+	tempcat_check_dependency(&depAddr, &objAddr);
 
 	if (oldIsPinned)
 	{

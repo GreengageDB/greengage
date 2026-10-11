@@ -1056,6 +1056,26 @@ tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what)
 }
 
 /*
+ * An ordinary object cannot depend on a temporary object kept in memory
+ * (e.g. a column of an ordinary table of a temporary table's row type):
+ * its on-disk rows would point at an object that other sessions cannot see,
+ * and that is gone after a crash.  Called for each new pg_depend row.
+ */
+void
+tempcat_check_dependency(const ObjectAddress *depender,
+						 const ObjectAddress *referenced)
+{
+	if (tempcat_owns_oid(referenced->classId, referenced->objectId) &&
+		!tempcat_owns_oid(depender->classId, depender->objectId))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("ordinary objects cannot depend on temporary objects kept in memory"),
+				 errdetail("The new object would depend on %s.",
+						   getObjectDescription(referenced)),
+				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+}
+
+/*
  * Allocate an OID for a new temporary object in 'relation' from this
  * backend's slice of the reserved range.
  *
