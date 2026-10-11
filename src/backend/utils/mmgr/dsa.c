@@ -1776,6 +1776,17 @@ ensure_active_superblock(dsa_area *area, dsa_area_pool *pool,
 		if (segment_map == NULL)
 		{
 			LWLockRelease(DSA_AREA_LOCK(area));
+
+			/*
+			 * GPDB: give back the span object we took above, as
+			 * dsa_allocate_extended() does.  Upstream leaks it, which matters
+			 * little while failing here raises an error; with
+			 * DSA_ALLOC_NO_OOM and an area at its limits (see
+			 * make_new_segment()) it happens on every allocation that does
+			 * not fit.
+			 */
+			if (size_class != DSA_SCLASS_BLOCK_OF_SPANS)
+				dsa_free(area, span_pointer);
 			return false;
 		}
 	}
