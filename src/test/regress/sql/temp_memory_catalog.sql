@@ -86,6 +86,30 @@ SELECT i, tc_count_rel('pg_class'),
 RESET enable_seqscan;
 RESET optimizer;
 
+-- Plain index scans of such plans merge the in-memory rows, and keep the
+-- state of that merge when a merge join marks and restores them.  The plan
+-- of tc_join_attrs() is made before the setting is turned on, and its later
+-- calls see the table that tc_make_early() creates in memory.
+SET optimizer = off;
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+SET enable_material = off;
+SET enable_sort = off;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexonlyscan = off;
+CREATE FUNCTION tc_join_attrs(n name) RETURNS bigint LANGUAGE sql VOLATILE AS $$
+  SELECT count(*) FROM pg_attribute a JOIN pg_attribute b ON a.attrelid = b.attrelid
+   WHERE a.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
+     AND b.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
+$$;
+SELECT i, tc_join_attrs('tc_early'),
+       set_config('gp_enable_temp_memory_catalog', 'on', false), tc_make_early(i)
+  FROM generate_series(1, 3) i;
+SELECT tc_join_attrs('tc_early') AS new_plan;
+DROP FUNCTION tc_join_attrs(name);
+\c
+
 -- Ordinary temporary tables are not affected.
 SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE tc_ordinary (a int) DISTRIBUTED BY (a);

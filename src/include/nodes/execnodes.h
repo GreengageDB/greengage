@@ -1622,6 +1622,11 @@ typedef struct IndexScanState
 	TupleTableSlot *iss_DiskSlot;	/* next on-disk row, when peeked */
 	bool		iss_DiskPeeked;
 	bool		iss_DiskDone;
+	/* the above as of ExecIndexMarkPos() */
+	int			iss_MarkTempPos;
+	TupleTableSlot *iss_MarkDiskSlot;
+	bool		iss_MarkDiskPeeked;
+	bool		iss_MarkDiskDone;
 } IndexScanState;
 
 /* ----------------

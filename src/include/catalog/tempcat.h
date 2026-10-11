@@ -101,6 +101,8 @@ extern void tempcat_scan_filter(TempcatScan scan,
 								bool (*keep) (HeapTuple, void *), void *arg);
 extern HeapTuple tempcat_scan_peek(TempcatScan scan, bool forward);
 extern void tempcat_scan_advance(TempcatScan scan);
+extern int	tempcat_scan_getpos(TempcatScan scan);
+extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern int	tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b);
 
 /* Objects of other sessions */

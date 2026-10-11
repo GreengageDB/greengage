@@ -4059,6 +4059,20 @@ tempcat_scan_advance(TempcatScan scan)
 	scan->next++;
 }
 
+/* How many rows the merge took, and going back there (mark/restore). */
+int
+tempcat_scan_getpos(TempcatScan scan)
+{
+	return scan->next;
+}
+
+void
+tempcat_scan_setpos(TempcatScan scan, int pos)
+{
+	Assert(pos >= 0 && pos <= scan->ntuples);
+	scan->next = pos;
+}
+
 int
 tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b)
 {
