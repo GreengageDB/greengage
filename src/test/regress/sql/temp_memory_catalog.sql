@@ -555,6 +555,15 @@ SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regcla
 DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
 SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
 ROLLBACK;
+-- A command that meets a row twice changes it once, as on disk.
+BEGIN;
+DELETE FROM gp_distribution_policy p USING generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+BEGIN;
+UPDATE gp_distribution_policy p SET numsegments = 3 FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
 -- DELETE ... RETURNING fetches the old row by its TID
 BEGIN;
 DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass RETURNING numsegments;

@@ -352,6 +352,8 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 	 */
 	if (IsTempcatTid(tid))
 	{
+		if (tempcat_self_modified(relation, tid, tmfd))
+			return TM_SelfModified;
 		tempcat_delete(relation, tid);
 		return TM_Ok;
 	}
@@ -382,6 +384,12 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	/* GPDB: see heapam_tuple_delete() and CatalogTupleUpdate() */
 	if (IsTempcatTid(otid))
 	{
+		if (tempcat_self_modified(relation, otid, tmfd))
+		{
+			if (shouldFree)
+				pfree(tuple);
+			return TM_SelfModified;
+		}
 		if (tempcat_route_insert(relation, tuple) &&
 			tempcat_update(relation, otid, tuple))
 			*update_indexes = false;	/* not in the catalog's indexes */

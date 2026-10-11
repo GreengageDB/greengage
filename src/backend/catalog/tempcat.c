@@ -72,6 +72,7 @@
 #include "access/multixact.h"
 #include "access/stratnum.h"
 #include "access/table.h"
+#include "access/tableam.h"
 #include "access/transam.h"
 #include "access/twophase.h"
 #include "access/valid.h"
@@ -2236,6 +2237,27 @@ tempcat_check_deletable(TempcatEntry *e)
 			elog(ERROR, "tuple concurrently updated");
 		/* deleted by an aborted transaction: may be overwritten */
 	}
+}
+
+/*
+ * For SQL DML on a catalog (heapam_handler.c): has the current transaction
+ * already deleted or updated the row, e.g. earlier in a command that meets
+ * the row twice?  Then fill in 'tmfd' for TM_SelfModified, as heap_delete()
+ * does, and the executor skips the row.
+ */
+bool
+tempcat_self_modified(Relation rel, ItemPointer tid, TM_FailureData *tmfd)
+{
+	dsa_pointer ep;
+	TempcatEntry *e = tempcat_lookup_tid(rel, tid, &ep);
+
+	if (!TransactionIdIsValid(e->xmax) ||
+		!TransactionIdIsCurrentTransactionId(e->xmax))
+		return false;
+	tmfd->ctid = *tid;
+	tmfd->xmax = e->xmax;
+	tmfd->cmax = e->cmax;
+	return true;
 }
 
 /* Set xmax on an entry.  Caller holds the lock and has checked it. */
