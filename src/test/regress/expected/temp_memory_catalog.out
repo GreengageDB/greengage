@@ -1022,6 +1022,47 @@ SELECT 1 OPERATOR(pg_temp.===) 1 AS eq, 1 OPERATOR(pg_temp.===) 2 AS ne;
  t  | f
 (1 row)
 
+-- Commutators and negators among them are fine, but not with ordinary
+-- operators: their rows would point at each other without a dependency.
+CREATE OPERATOR pg_temp.<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int,
+                             COMMUTATOR = OPERATOR(pg_temp.>>>),
+                             NEGATOR = OPERATOR(pg_temp.>>=));
+SELECT o.oprname, c.oprname AS commutator, n.oprname AS negator
+  FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom
+       LEFT JOIN pg_operator n ON n.oid = o.oprnegate
+ WHERE o.oprnamespace = pg_my_temp_schema() AND o.oprname LIKE '%>%' ORDER BY 1;
+ oprname | commutator | negator 
+---------+------------+---------
+ >>=     |            | <<<
+ >>>     | <<<        | 
+(2 rows)
+
+CREATE OPERATOR public.<<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int);
+CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
+                              COMMUTATOR = OPERATOR(public.<<<<));
+ERROR:  temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
+                              NEGATOR = OPERATOR(public.!>>>));
+ERROR:  temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE OPERATOR public.!<<< (PROCEDURE = int4ge, LEFTARG = int, RIGHTARG = int,
+                             NEGATOR = OPERATOR(pg_temp.<<<));
+ERROR:  temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+SELECT oprcom, oprnegate FROM pg_operator WHERE oid = 'public.<<<<(int, int)'::regoperator;
+ oprcom | oprnegate 
+--------+-----------
+      0 |         0
+(1 row)
+
+SELECT count(*) AS shells FROM pg_operator WHERE oprname IN ('!>>>', '!<<<');
+ shells 
+--------
+      0
+(1 row)
+
+DROP OPERATOR public.<<<< (int, int);
 -- enum labels are also read by ordered (forward and backward) catalog scans
 CREATE TYPE pg_temp.tc_mood AS ENUM ('sad', 'ok', 'happy');
 ALTER TYPE pg_temp.tc_mood ADD VALUE 'meh' AFTER 'sad';

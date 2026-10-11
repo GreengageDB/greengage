@@ -119,6 +119,7 @@ extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 extern void tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what);
 extern void tempcat_check_inheritance(Oid relid, Oid parentid);
 extern void tempcat_check_typed_table(Oid relid, Oid typid);
+extern void tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid);
 extern void tempcat_check_dependency(const struct ObjectAddress *depender,
 									 const struct ObjectAddress *referenced);
 

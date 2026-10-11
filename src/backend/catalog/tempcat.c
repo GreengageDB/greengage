@@ -1206,6 +1206,27 @@ tempcat_check_typed_table(Oid relid, Oid typid)
 }
 
 /*
+ * An operator in a temporary schema kept in memory and an ordinary operator
+ * cannot be commutators or negators of each other: each one's pg_operator
+ * row points at the other (oprcom, oprnegate) without a pg_depend row.  The
+ * ordinary one's row would point at an operator that other sessions cannot
+ * see, pg_dump would drop the link, and after a crash nobody would reset it.
+ * Called for the commutator and the negator (perhaps shells just made) of
+ * a new operator in 'namespaceOid'.
+ */
+void
+tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid)
+{
+	if (OidIsValid(otherOprOid) &&
+		tempcat_owns_oid(NamespaceRelationId, namespaceOid) !=
+		tempcat_owns_oid(OperatorRelationId, otherOprOid))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other"),
+				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+}
+
+/*
  * An ordinary object cannot depend on a temporary object kept in memory
  * (e.g. a column of an ordinary table of a temporary table's row type):
  * its on-disk rows would point at an object that other sessions cannot see,
