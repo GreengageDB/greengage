@@ -764,6 +764,21 @@ SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 RESET gp_temp_memory_catalog_disk_only;
 
+-- An error while the outcome of earlier transactions is applied to the rows
+-- (here after the first dropped row is freed, at the start of the next
+-- transaction) leaves the rows still to be done consistent: the next
+-- transaction finishes them.
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_pend;
+SELECT 1 AS fails_to_start;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_pend') IS NULL AS dropped;
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_pend VALUES (1, 'x');
+SELECT * FROM tc_pend;
+DROP TABLE tc_pend;
+
 -- A sequential scan that stops (LIMIT) or restarts (a correlated subquery)
 -- while returning in-memory rows.
 CREATE TEMP TABLE tc_seq1 (a int) DISTRIBUTED BY (a);

@@ -1876,6 +1876,19 @@ tempcat_add_pending(dsa_pointer ep)
 	e->flags |= TCE_PENDING;
 }
 
+/*
+ * Take entry 'i' off the pending list (the last one takes its place).  Do
+ * it before anything that can fail, e.g. freeing the row or forgetting its
+ * object (which queues a statistics purge): an error must not leave the
+ * list holding a row freed already, which the next pass would free again.
+ */
+static void
+tempcat_pending_take(int i)
+{
+	Assert(i >= 0 && i < tc_npending);
+	tc_pending[i] = tc_pending[--tc_npending];
+}
+
 /* ----------------------------------------------------------------
  * Visibility
  * ----------------------------------------------------------------
@@ -1951,6 +1964,11 @@ tempcat_xid_status(TransactionId xid)
 static void
 tempcat_forget_if_gone(int catidx, Oid objoid)
 {
+#ifdef FAULT_INJECTOR
+	/* Test hook: fail after the row was freed; see tempcat_pending_take(). */
+	SIMPLE_FAULT_INJECTOR("tempcat_forget_if_gone");
+#endif
+
 	if (tempcat_catalogs[catidx].relid == RelationRelationId)
 		tc_horizon_dirty = true;
 
@@ -1972,8 +1990,7 @@ tempcat_forget_if_gone(int catidx, Oid objoid)
 static void
 tempcat_resolve_pending(void)
 {
-	int			i;
-	int			keep = 0;
+	int			i = 0;
 
 	if (tc_npending == 0)
 		return;
@@ -1982,10 +1999,14 @@ tempcat_resolve_pending(void)
 
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 
-	for (i = 0; i < tc_npending; i++)
+	while (i < tc_npending)
 	{
 		dsa_pointer ep = tc_pending[i];
 		TempcatEntry *e = TC_ADDR(ep);
+
+		/* (a row freed already would fail this; see tempcat_pending_take()) */
+		Assert(e->catidx >= 0 && e->catidx < TEMPCAT_NCATALOGS &&
+			   (e->flags & TCE_PENDING));
 		int			catidx = e->catidx;
 		Oid			objoid = tempcat_catalog_has_oid(catidx) ? tempcat_entry_oid(e) : InvalidOid;
 		bool		in_progress = false;
@@ -1995,6 +2016,7 @@ tempcat_resolve_pending(void)
 			switch (tempcat_xid_status(e->xmin))
 			{
 				case TCX_ABORTED:
+					tempcat_pending_take(i);
 					tempcat_entry_remove(ep);
 					tempcat_forget_if_gone(catidx, objoid);
 					continue;
@@ -2012,6 +2034,7 @@ tempcat_resolve_pending(void)
 			switch (tempcat_xid_status(e->xmax))
 			{
 				case TCX_COMMITTED:
+					tempcat_pending_take(i);
 					tempcat_entry_remove(ep);
 					tempcat_forget_if_gone(catidx, objoid);
 					continue;
@@ -2026,11 +2049,13 @@ tempcat_resolve_pending(void)
 		}
 
 		if (in_progress)
-			tc_pending[keep++] = ep;
+			i++;
 		else
+		{
+			tempcat_pending_take(i);
 			e->flags &= ~TCE_PENDING;
+		}
 	}
-	tc_npending = keep;
 
 	LWLockRelease(&tc_root->lock);
 }
@@ -2096,17 +2121,20 @@ tempcat_reclaim_dead(void)
 {
 	TransactionId topxid = GetTopTransactionIdIfAny();
 	CommandId	curcid = GetCurrentCommandId(false);
-	int			keep = 0;
 	int			nfreed = 0;
-	int			i;
+	int			i = 0;
 
 	if (!TransactionIdIsValid(topxid))
 		return 0;
 
-	for (i = 0; i < tc_npending; i++)
+	while (i < tc_npending)
 	{
 		dsa_pointer ep = tc_pending[i];
 		TempcatEntry *e = TC_ADDR(ep);
+
+		/* (a row freed already would fail this; see tempcat_pending_take()) */
+		Assert(e->catidx >= 0 && e->catidx < TEMPCAT_NCATALOGS &&
+			   (e->flags & TCE_PENDING));
 
 		if ((TransactionIdEquals(e->xmax, topxid) ||
 			 TransactionIdEquals(e->xmax, e->xmin)) &&
@@ -2119,14 +2147,14 @@ tempcat_reclaim_dead(void)
 			Oid			objoid = tempcat_catalog_has_oid(catidx) ?
 				tempcat_entry_oid(e) : InvalidOid;
 
+			tempcat_pending_take(i);
 			tempcat_entry_remove(ep);
 			tempcat_forget_if_gone(catidx, objoid);
 			nfreed++;
 		}
 		else
-			tc_pending[keep++] = ep;
+			i++;
 	}
-	tc_npending = keep;
 
 	return nfreed;
 }
