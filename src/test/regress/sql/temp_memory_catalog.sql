@@ -300,6 +300,9 @@ SELECT table_name, table_type FROM information_schema.tables
 WHERE table_name IN ('tc_basic', 'tc_view') ORDER BY 1;
 SELECT count(*) > 0 AS has_stats FROM pg_stats WHERE tablename = 'tc_basic';
 SELECT count(*) AS seg_rows FROM gp_dist_random('pg_class') WHERE relname = 'tc_basic';
+-- TABLESAMPLE reads the heap's pages only, and refuses to miss them.
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_basic';
+SELECT count(*) FROM pg_class TABLESAMPLE BERNOULLI (100) WHERE relname = 'tc_basic';
 -- TID scans and COPY TO of a catalog see them too.
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
 \copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'

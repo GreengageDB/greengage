@@ -530,6 +530,11 @@ SELECT count(*) AS seg_rows FROM gp_dist_random('pg_class') WHERE relname = 'tc_
         3
 (1 row)
 
+-- TABLESAMPLE reads the heap's pages only, and refuses to miss them.
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_basic';
+ERROR:  cannot sample a catalog that includes in-memory temporary objects
+SELECT count(*) FROM pg_class TABLESAMPLE BERNOULLI (100) WHERE relname = 'tc_basic';
+ERROR:  cannot sample a catalog that includes in-memory temporary objects
 -- TID scans and COPY TO of a catalog see them too.
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
  relname  
