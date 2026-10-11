@@ -1231,6 +1231,9 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
  * checked that no object of its catalog has it, but an ordinary object can
  * exist on this node alone (created in utility mode, or left by a broken
  * catalog), and two rows with one OID would corrupt the catalog: refuse.
+ * Only live rows (and rows of transactions in progress) count: dead rows,
+ * e.g. removed by the sweep but not vacuumed yet, which the QD may not have
+ * (or no longer have), would make the OID unusable here until a VACUUM.
  */
 void
 tempcat_check_preassigned_oid(Relation relation, Oid indexId,
@@ -1238,11 +1241,13 @@ tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 {
 	ScanKeyData key;
 	SysScanDesc scan;
+	SnapshotData snapshot;
 	bool		taken;
 
+	InitDirtySnapshot(snapshot);
 	ScanKeyInit(&key, oidcolumn, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(oid));
-	scan = systable_beginscan(relation, indexId, true, SnapshotAny, 1, &key);
+	scan = systable_beginscan(relation, indexId, true, &snapshot, 1, &key);
 	taken = HeapTupleIsValid(systable_getnext(scan));
 	systable_endscan(scan);
 
