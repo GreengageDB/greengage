@@ -452,6 +452,9 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 		oid = GetPreassignedOid(searchkey);
 		if (temp && !IsBinaryUpgrade && IsTempcatOid(oid))
 			tempcat_note_temp_oid(searchkey->catalog, oid);
+		if (!IsBinaryUpgrade && IsTempcatOid(oid) &&
+			tempcat_owns_oid(searchkey->catalog, oid))
+			tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 
 		/*
 		 * During normal operation, all OIDs are preassigned unless the object
@@ -491,6 +494,9 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  searchkey->keyOid1, searchkey->keyOid2))
 			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
 		else
+			oid = InvalidOid;
+		/* (also when no reserved OID is free for a temporary schema) */
+		if (!OidIsValid(oid))
 			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 
 		oldcontext = MemoryContextSwitchTo(get_oids_context());
@@ -514,6 +520,9 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  searchkey->keyOid1, searchkey->keyOid2))
 			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
 		else
+			oid = InvalidOid;
+		/* (also when no reserved OID is free for a temporary schema) */
+		if (!OidIsValid(oid))
 			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 	}
 

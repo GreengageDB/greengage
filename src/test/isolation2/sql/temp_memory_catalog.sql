@@ -528,6 +528,32 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 1q:
 SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
 
+--
+-- 15. When ordinary objects take every OID of the session's slice of the
+-- reserved range (the fault pretends so), a session that has nothing in
+-- memory yet keeps its temporary objects on disk, with a warning; a session
+-- that already keeps some in memory cannot create more.
+--
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_noid_before (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_noid2 (a int, b text) DISTRIBUTED BY (a);
+1: SELECT count(*) AS in_reserved_range FROM pg_class WHERE relname IN ('tc_noid', 'tc_noid2') AND oid >= 4026531840;
+1: SET gp_temp_memory_catalog_disk_only = on;
+1: SELECT count(*) AS on_disk FROM pg_class WHERE relname IN ('tc_noid', 'tc_noid2');
+1: SELECT count(*) AS temp_schemas_on_disk FROM pg_namespace WHERE nspname IN ('pg_temp_' || current_setting('gp_session_id'), 'pg_toast_temp_' || current_setting('gp_session_id'));
+1: RESET gp_temp_memory_catalog_disk_only;
+1: INSERT INTO tc_noid2 SELECT i, 'x' FROM generate_series(1, 10) i;
+1: SELECT count(*) FROM tc_noid2;
+2: CREATE TEMP TABLE tc_noid_after (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: CREATE TEMP TABLE tc_noid_after (a int) DISTRIBUTED BY (a);
+2: SELECT 'tc_noid_after'::regclass::oid >= 4026531840 AS in_reserved_range;
+1q:
+2q:
+
 DROP TABLE tc_relfile_paths;
 DROP FUNCTION tc_relfile_path_on_segs(regclass);
 DROP FUNCTION tc_relfile_path_on_coordinator(regclass);
