@@ -84,6 +84,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_statistic_ext_data.h"
 #include "catalog/pg_statistic_ext.h"
@@ -607,6 +608,7 @@ typedef struct TempcatSharedData
 	int			tranche_id;		/* LWLock tranche of the session areas */
 	slock_t		mutex;			/* protects the swept list */
 	int			nswept;
+	int			nextswept;		/* entry to replace when the list is full */
 	Oid			swept[TEMPCAT_MAX_SWEPT_DBS];
 	int			nprocs;
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
@@ -645,6 +647,7 @@ TempcatShmemInit(void)
 	TempcatShared->tranche_id = LWLockNewTrancheId();
 	SpinLockInit(&TempcatShared->mutex);
 	TempcatShared->nswept = 0;
+	TempcatShared->nextswept = 0;
 	TempcatShared->nprocs = tempcat_total_procs();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
@@ -3035,10 +3038,18 @@ tempcat_unmark_swept(Oid dbid)
 static void
 tempcat_mark_swept(Oid dbid)
 {
-	/* If the list is full, databases beyond it are swept every time. */
+	/*
+	 * If the list is full, replace the entries in turn: the databases they
+	 * named are swept again, which is cheap (see tempcat_sweep_catalog()).
+	 */
 	SpinLockAcquire(&TempcatShared->mutex);
 	if (TempcatShared->nswept < TEMPCAT_MAX_SWEPT_DBS)
 		TempcatShared->swept[TempcatShared->nswept++] = dbid;
+	else
+	{
+		TempcatShared->swept[TempcatShared->nextswept] = dbid;
+		TempcatShared->nextswept = (TempcatShared->nextswept + 1) % TEMPCAT_MAX_SWEPT_DBS;
+	}
 	SpinLockRelease(&TempcatShared->mutex);
 }
 
@@ -3095,6 +3106,51 @@ tempcat_disk_object_exists(Oid classId, Oid objectId)
 }
 
 /*
+ * Classes of the objects that can be kept in memory (see also
+ * tempcat_catalog_has_oid())
+ */
+static const Oid tempcat_object_classes[] =
+{
+	RelationRelationId, TypeRelationId, NamespaceRelationId,
+	AttrDefaultRelationId, ConstraintRelationId, RewriteRelationId,
+	TriggerRelationId, PolicyRelationId, ProcedureRelationId,
+	OperatorRelationId, StatisticExtRelationId
+};
+
+/* A btree index of 'rel' whose leading key columns are 'atts', if any. */
+static Oid
+tempcat_leading_index(Relation rel, int natts, const AttrNumber *atts)
+{
+	List	   *indexes = RelationGetIndexList(rel);
+	ListCell   *lc;
+	Oid			result = InvalidOid;
+
+	foreach(lc, indexes)
+	{
+		Relation	irel = index_open(lfirst_oid(lc), AccessShareLock);
+		int			i;
+
+		if (irel->rd_rel->relam == BTREE_AM_OID &&
+			irel->rd_index->indisvalid &&
+			IndexRelationGetNumberOfKeyAttributes(irel) >= natts)
+		{
+			for (i = 0; i < natts; i++)
+			{
+				if (irel->rd_index->indkey.values[i] != atts[i])
+					break;
+			}
+			if (i == natts)
+				result = RelationGetRelid(irel);
+		}
+		index_close(irel, AccessShareLock);
+		if (OidIsValid(result))
+			break;
+	}
+	list_free(indexes);
+	return result;
+}
+
+/*
  * Delete the rows of 'catalog' whose column 'attr' holds a reserved OID of
  * an object (of class 'objclass', or of the class in column 'classattr')
  * that does not exist on disk.  For pg_shdepend, only rows of this
@@ -3108,37 +3164,86 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 	Relation	rel;
 	TupleDesc	desc;
 	SysScanDesc scan;
-	ScanKeyData key;
+	ScanKeyData key[3];
+	AttrNumber	atts[3];
+	AttrNumber	keyattr = attr;
+	int			nkeys = 0;
+	Oid			indexId;
+	int			nclasses = 1;
+	int			c;
 	HeapTuple	tup;
 	int			ndeleted = 0;
 
 	rel = table_open(catalog, RowExclusiveLock);
 	desc = RelationGetDescr(rel);
 
-	ScanKeyInit(&key, attr, BTGreaterEqualStrategyNumber, F_OIDGE,
-				ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, &key);
-	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	/*
+	 * Scan only the rows with reserved OIDs, with an index on the column if
+	 * there is one: the catalogs (pg_attribute, pg_depend, ...) can be large.
+	 * The class of a dependency-like row (pg_depend.classid, ...) precedes
+	 * the object in its index, so scan per class of temporary objects then.
+	 */
+	atts[0] = attr;
+	indexId = tempcat_leading_index(rel, 1, atts);
+	if (!OidIsValid(indexId) &&
+		(catalog == ProcedureRelationId || catalog == OperatorRelationId))
 	{
-		Oid			objid = tempcat_getoid(tup, desc, attr);
-		Oid			cls = classattr != 0 ? tempcat_getoid(tup, desc, classattr) : objclass;
-
-		if (!IsTempcatOid(objid))
-			continue;
-		if (catalog == SharedDependRelationId &&
-			tempcat_getoid(tup, desc, Anum_pg_shdepend_dbid) != MyDatabaseId)
-			continue;
-		if (catalog == ConstraintRelationId &&
-			OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)) == domain)
-			continue;
-		if (tempcat_oid_live_now(objid, MyDatabaseId) ||
-			tempcat_disk_object_exists(cls, objid))
-			continue;
-
-		if (tempcat_sweep_delete(rel, tup))
-			ndeleted++;
+		/* (functions and operators in a reserved namespace have reserved OIDs) */
+		atts[0] = keyattr = catalog == ProcedureRelationId ?
+			Anum_pg_proc_oid : Anum_pg_operator_oid;
+		indexId = tempcat_leading_index(rel, 1, atts);
 	}
-	systable_endscan(scan);
+	if (!OidIsValid(indexId) && classattr != 0)
+	{
+		if (catalog == SharedDependRelationId)
+			atts[nkeys++] = Anum_pg_shdepend_dbid;
+		atts[nkeys++] = classattr;
+		atts[nkeys++] = attr;
+		indexId = tempcat_leading_index(rel, nkeys, atts);
+		if (OidIsValid(indexId))
+			nclasses = lengthof(tempcat_object_classes);
+		else
+			nkeys = 0;
+	}
+
+	for (c = 0; c < nclasses; c++)
+	{
+		int			k = 0;
+
+		if (nkeys > 0)
+		{
+			if (catalog == SharedDependRelationId)
+				ScanKeyInit(&key[k++], Anum_pg_shdepend_dbid, BTEqualStrategyNumber,
+							F_OIDEQ, ObjectIdGetDatum(MyDatabaseId));
+			ScanKeyInit(&key[k++], classattr, BTEqualStrategyNumber, F_OIDEQ,
+						ObjectIdGetDatum(tempcat_object_classes[c]));
+		}
+		ScanKeyInit(&key[k++], keyattr, BTGreaterEqualStrategyNumber, F_OIDGE,
+					ObjectIdGetDatum(FirstTempcatObjectId));
+
+		scan = systable_beginscan(rel, indexId, OidIsValid(indexId), NULL, k, key);
+		while (HeapTupleIsValid(tup = systable_getnext(scan)))
+		{
+			Oid			objid = tempcat_getoid(tup, desc, attr);
+			Oid			cls = classattr != 0 ? tempcat_getoid(tup, desc, classattr) : objclass;
+
+			if (!IsTempcatOid(objid))
+				continue;
+			if (catalog == SharedDependRelationId &&
+				tempcat_getoid(tup, desc, Anum_pg_shdepend_dbid) != MyDatabaseId)
+				continue;
+			if (catalog == ConstraintRelationId &&
+				OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)) == domain)
+				continue;
+			if (tempcat_oid_live_now(objid, MyDatabaseId) ||
+				tempcat_disk_object_exists(cls, objid))
+				continue;
+
+			if (tempcat_sweep_delete(rel, tup))
+				ndeleted++;
+		}
+		systable_endscan(scan);
+	}
 	table_close(rel, RowExclusiveLock);
 
 	/* Let later passes (e.g. pg_depend by refobjid) see the deletions. */
@@ -3164,7 +3269,7 @@ tempcat_sweep_objects(void)
 	rel = table_open(NamespaceRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_namespace_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, &key);
+	scan = systable_beginscan(rel, NamespaceOidIndexId, true, NULL, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_namespace form = (Form_pg_namespace) GETSTRUCT(tup);
@@ -3185,7 +3290,7 @@ tempcat_sweep_objects(void)
 	rel = table_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_class_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, &key);
+	scan = systable_beginscan(rel, ClassOidIndexId, true, NULL, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_class form = (Form_pg_class) GETSTRUCT(tup);
@@ -3204,7 +3309,7 @@ tempcat_sweep_objects(void)
 	rel = table_open(TypeRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_type_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, InvalidOid, false, NULL, 1, &key);
+	scan = systable_beginscan(rel, TypeOidIndexId, true, NULL, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_type form = (Form_pg_type) GETSTRUCT(tup);
