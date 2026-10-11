@@ -1940,6 +1940,19 @@ tempcat_check_prepare(void)
 }
 
 /*
+ * Did the current transaction change virtual rows?  A QE reports it to the
+ * dispatcher like a WAL write for a permanent relation (see dest.c), so that
+ * the transaction is committed in two phases: in one phase, an error at
+ * commit on one segment (e.g. a deferred unique check) would leave the
+ * changes committed on the others while the coordinator rolls back.
+ */
+bool
+tempcat_xact_changed(void)
+{
+	return tc_xact_changed;
+}
+
+/*
  * After a subtransaction abort, free the rows it inserted and undo its
  * deletions right away, so that loops with exception blocks do not keep
  * dead rows around until the end of the top-level transaction.  Rows of the

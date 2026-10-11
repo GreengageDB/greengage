@@ -374,6 +374,19 @@ SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
 CREATE TEMP TABLE tc_ctas_fail AS SELECT i AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
 SELECT count(*) FROM tc_ctas_fail;
 
+-- Changes of in-memory rows on the segments are committed in two phases
+-- even though they write no WAL: a deferred unique check that fails at
+-- commit on one segment must not leave the new table on the others.
+CREATE TEMP TABLE tc_defer (i int UNIQUE DEFERRABLE INITIALLY DEFERRED) DISTRIBUTED BY (i);
+INSERT INTO tc_defer VALUES (1);
+BEGIN;
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_defer VALUES (1);
+COMMIT;
+SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_defer_new, tc_defer;
+
 BEGIN;
 CREATE TEMP TABLE tc_oc_drop (a int) ON COMMIT DROP DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_oc_delete (a int) ON COMMIT DELETE ROWS DISTRIBUTED BY (a);

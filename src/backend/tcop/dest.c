@@ -31,6 +31,7 @@
 #include "access/printsimple.h"
 #include "access/printtup.h"
 #include "access/xact.h"
+#include "catalog/tempcat.h"
 #include "commands/copy.h"
 #include "commands/createas.h"
 #include "commands/matview.h"
@@ -274,10 +275,13 @@ ReadyForQuery(CommandDest dest)
 					 * took locks or touched temporary objects still emits
 					 * lock/invalidation WAL, but that does not need a two-phase
 					 * commit, so the dispatcher can use a cheaper one-phase
-					 * commit.
+					 * commit.  Catalog rows of temporary objects kept in memory
+					 * write no WAL, but need a two-phase commit as well: see
+					 * tempcat_xact_changed().
 					 */
 					pq_beginmessage(&buf, 'x'); /* wrote_xlog */
-					pq_sendbyte(&buf, TransactionWroteWalForPermanentRel());
+					pq_sendbyte(&buf, TransactionWroteWalForPermanentRel() ||
+								tempcat_xact_changed());
 					pq_endmessage(&buf);
 				}
 
