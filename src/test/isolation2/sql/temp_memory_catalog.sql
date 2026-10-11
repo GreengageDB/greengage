@@ -622,7 +622,7 @@ CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_de
 -- (TID scans and COPY TO as well; tc_hide_type is an ordinary object)
 2: CREATE TEMP TABLE tc_ctids_hide (t tid) DISTRIBUTED RANDOMLY;
 2: DO $$ BEGIN INSERT INTO tc_ctids_hide SELECT ctid FROM pg_class WHERE relname LIKE 'tc\_hide\_%' AND oid >= 4026531840; END $$;
-2: CREATE FUNCTION tc_copy_count() RETURNS int LANGUAGE plpgsql AS $$ BEGIN EXECUTE $c$COPY pg_class (relname) TO PROGRAM 'grep -c "^tc_hide_[0-9]" > /tmp/tc_hide_copy.out; true'$c$; RETURN trim(pg_read_file('/tmp/tc_hide_copy.out'))::int; END $$;
+2: CREATE FUNCTION tc_copy_count() RETURNS int LANGUAGE plpgsql AS $$ DECLARE n int; BEGIN EXECUTE $c$COPY pg_class (relname) TO PROGRAM 'grep -c "^tc_hide_[0-9]" > tc_hide_copy.out; true'$c$; n := trim(pg_read_file('tc_hide_copy.out'))::int; COPY (SELECT 1) TO PROGRAM 'rm -f tc_hide_copy.out'; RETURN n; END $$;
 2: SET enable_seqscan = off;
 2: SELECT count(*) > 0 AS tid_scan FROM pg_class WHERE ctid = ANY (ARRAY(SELECT t FROM tc_ctids_hide));
 2: SELECT tc_copy_count() > 0 AS copy_to;
@@ -786,8 +786,9 @@ SELECT tc_retry('DROP ROLE IF EXISTS tc_r10');
 --
 -- 15. When ordinary objects take every OID of the session's slice of the
 -- reserved range (the fault pretends so), a session that has nothing in
--- memory yet keeps its temporary objects on disk, with a warning; a session
--- that already keeps some in memory cannot create more.
+-- memory yet keeps its temporary objects on disk, with a warning (checked by
+-- the regress test temp_memory_catalog: the output here has no warnings); a
+-- session that already keeps some in memory cannot create more.
 --
 2: SET gp_enable_temp_memory_catalog = on;
 2: CREATE TEMP TABLE tc_noid_before (a int) DISTRIBUTED BY (a);

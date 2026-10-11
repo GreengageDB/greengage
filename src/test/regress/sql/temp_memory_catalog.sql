@@ -231,6 +231,27 @@ DROP TABLE tc_stat_purge;
 SELECT pg_sleep(0.6);
 SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 0) AS analyze_count;
 DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
+-- Likewise those of dropped functions.
+CREATE FUNCTION pg_temp.tc_wait_function_calls(f oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_function_calls(f) IS NOT DISTINCT FROM n;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_function_calls(f);
+END $$;
+SET track_functions = 'pl';
+CREATE FUNCTION pg_temp.tc_stat_fn() RETURNS int LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';
+SELECT pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT 'pg_temp.tc_stat_fn'::regproc::oid AS tc_stat_fn_oid \gset
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, 1) AS calls;
+DROP FUNCTION pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, NULL) AS calls;
+RESET track_functions;
+DROP FUNCTION pg_temp.tc_wait_function_calls(oid, bigint);
 
 -- A function evaluated in a separate slice on the coordinator (entry-db
 -- reader) sees the temporary table too.
@@ -903,3 +924,15 @@ SET ROLE tc_guc_user;
 SET gp_temp_memory_catalog_max_size = 1048576;
 RESET ROLE;
 DROP ROLE tc_guc_user;
+
+-- When ordinary objects take every OID of the session's slice of the
+-- reserved range (the fault pretends so), a new session keeps its temporary
+-- objects on disk, with a warning.  (isolation2 temp_memory_catalog covers
+-- the rest; its output has no warnings.)
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_noid'::regclass::oid >= 4026531840 AS in_reserved_range;
+DROP TABLE tc_noid;
