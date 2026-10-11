@@ -1364,6 +1364,71 @@ SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
  done     
 (7 rows)
 
+--
+-- 15. When ordinary objects take every OID of the session's slice of the
+-- reserved range (the fault pretends so), a session that has nothing in
+-- memory yet keeps its temporary objects on disk, with a warning; a session
+-- that already keeps some in memory cannot create more.
+--
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_noid_before (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: CREATE TEMP TABLE tc_noid2 (a int, b text) DISTRIBUTED BY (a);
+CREATE TABLE
+1: SELECT count(*) AS in_reserved_range FROM pg_class WHERE relname IN ('tc_noid', 'tc_noid2') AND oid >= 4026531840;
+ in_reserved_range 
+-------------------
+ 0                 
+(1 row)
+1: SET gp_temp_memory_catalog_disk_only = on;
+SET
+1: SELECT count(*) AS on_disk FROM pg_class WHERE relname IN ('tc_noid', 'tc_noid2');
+ on_disk 
+---------
+ 2       
+(1 row)
+1: SELECT count(*) AS temp_schemas_on_disk FROM pg_namespace WHERE nspname IN ('pg_temp_' || current_setting('gp_session_id'), 'pg_toast_temp_' || current_setting('gp_session_id'));
+ temp_schemas_on_disk 
+----------------------
+ 2                    
+(1 row)
+1: RESET gp_temp_memory_catalog_disk_only;
+RESET
+1: INSERT INTO tc_noid2 SELECT i, 'x' FROM generate_series(1, 10) i;
+INSERT 0 10
+1: SELECT count(*) FROM tc_noid2;
+ count 
+-------
+ 10    
+(1 row)
+2: CREATE TEMP TABLE tc_noid_after (a int) DISTRIBUTED BY (a);
+ERROR:  out of OIDs for temporary objects in memory catalog
+DETAIL:  Ordinary objects use all OIDs that this session can take from the reserved range.
+SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: CREATE TEMP TABLE tc_noid_after (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2: SELECT 'tc_noid_after'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t                 
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+
 DROP TABLE tc_relfile_paths;
 DROP TABLE
 DROP FUNCTION tc_relfile_path_on_segs(regclass);

@@ -59,6 +59,8 @@ extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
 								  Oid namespaceOid, Oid keyOid1, Oid keyOid2);
 extern Oid	tempcat_allocate_oid(Relation relation, Oid indexId,
 								 AttrNumber oidcolumn);
+extern void tempcat_check_preassigned_oid(Relation relation, Oid indexId,
+										  AttrNumber oidcolumn, Oid oid);
 extern void tempcat_note_preassigned_oid(Oid catalog, const char *objname,
 										 Oid namespaceOid, Oid keyOid1,
 										 Oid keyOid2, Oid oid);

@@ -648,6 +648,9 @@ tempcat_my_state(void)
 /* Has this session started to keep temporary objects in memory? */
 static bool tc_activated = false;
 
+/* No reserved OID was free for the temporary schema; see tempcat_allocate_oid() */
+static bool tc_slice_exhausted = false;
+
 /* The published frozen horizon may be too old and needs recomputing. */
 static bool tc_horizon_dirty = false;
 
@@ -983,6 +986,9 @@ bool
 tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 					  Oid keyOid1, Oid keyOid2)
 {
+	/* the slice was full when the temporary schema was created */
+	if (tc_slice_exhausted)
+		return false;
 	return tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
 							   gp_enable_temp_memory_catalog);
 }
@@ -1068,15 +1074,21 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	uint64		span;
 	Oid			base;
 	int			tries;
-
-	tempcat_activate();
+	int			maxtries;
 
 	st = tempcat_my_state();
 	span = ((uint64) LastTempcatObjectId - FirstTempcatObjectId + 1) /
 		TempcatShared->nprocs;
 	base = FirstTempcatObjectId + (Oid) (span * MyProc->pgprocno);
+	maxtries = (int) Min(span, 1000000);
 
-	for (tries = 0; tries < (int) Min(span, 1000000); tries++)
+#ifdef FAULT_INJECTOR
+	/* Test hook: ordinary objects take every OID of our slice. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_oid_exhausted") == FaultInjectorTypeSkip)
+		maxtries = 0;
+#endif
+
+	for (tries = 0; tries < maxtries; tries++)
 	{
 		Oid			oid = st->nextOid;
 		ScanKeyData key;
@@ -1095,15 +1107,64 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 
 		if (!collides)
 		{
+			tempcat_activate();
 			tempcat_remember_oid(RelationGetRelid(relation), oid);
 			return oid;
 		}
 	}
 
+	/*
+	 * Ordinary objects with reserved OIDs (see the file header) take every
+	 * OID of our slice.  If nothing is in memory yet, i.e. this is the
+	 * temporary schema, the session can keep its temporary objects on disk
+	 * instead; the caller then assigns an ordinary OID.  Later, objects with
+	 * ordinary OIDs in a schema kept in memory would be visible to nobody
+	 * but the session, so give up.
+	 */
+	if (!tc_activated && RelationGetRelid(relation) == NamespaceRelationId)
+	{
+		tc_slice_exhausted = true;
+		ereport(WARNING,
+				(errmsg("no free OID for temporary objects kept in memory"),
+				 errdetail("Ordinary objects use all OIDs that this session can take from the reserved range."),
+				 errhint("The session keeps its temporary objects in the on-disk catalog.")));
+		return InvalidOid;
+	}
+
 	ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			 errmsg("out of OIDs for temporary objects in memory catalog")));
+			 errmsg("out of OIDs for temporary objects in memory catalog"),
+			 errdetail("Ordinary objects use all OIDs that this session can take from the reserved range.")));
 	return InvalidOid;			/* keep compiler quiet */
+}
+
+/*
+ * A QE received a reserved OID for a temporary object of ours.  The QD
+ * checked that no object of its catalog has it, but an ordinary object can
+ * exist on this node alone (created in utility mode, or left by a broken
+ * catalog), and two rows with one OID would corrupt the catalog: refuse.
+ */
+void
+tempcat_check_preassigned_oid(Relation relation, Oid indexId,
+							  AttrNumber oidcolumn, Oid oid)
+{
+	ScanKeyData key;
+	SysScanDesc scan;
+	bool		taken;
+
+	ScanKeyInit(&key, oidcolumn, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(oid));
+	scan = systable_beginscan(relation, indexId, true, SnapshotAny, 1, &key);
+	taken = HeapTupleIsValid(systable_getnext(scan));
+	systable_endscan(scan);
+
+	if (taken)
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("OID of a new temporary object is already used in catalog \"%s\" on this node",
+						RelationGetRelationName(relation)),
+				 errhint("OID %u belongs to an object that exists on this node only; gpcheckcat reports such objects.",
+						 oid)));
 }
 
 /* The first attribute of these catalogs is their oid column. */
