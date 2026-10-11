@@ -431,6 +431,30 @@ CREATE FUNCTION tc_churn(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN DROP TA
 1q:
 DROP FUNCTION tc_churn(int);
 
+-- A sweep whose transaction rolls back asks for another one, even if its
+-- session ends right after.  (Session 1 leaves leftovers, which asks for a
+-- sweep; session 2 sweeps in a DROP that it rolls back.)
+CREATE TYPE tc_rb_type AS (x int);
+CREATE TABLE tc_rb_dummy (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_rb (c tc_rb_type) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+2: BEGIN;
+2: DROP TABLE tc_rb_dummy;
+2: ROLLBACK;
+2q:
+3: DROP TABLE tc_rb_dummy;
+3q:
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT tc_retry('DROP TYPE tc_rb_type');
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions

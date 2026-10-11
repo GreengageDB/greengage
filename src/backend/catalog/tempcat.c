@@ -709,13 +709,22 @@ static bool tc_horizon_dirty = false;
 static bool tc_roles_dirty = false;
 
 static void tempcat_sweep_if_needed(bool allow_force);
+static void tempcat_sweep_xact_callback(XactEvent event, void *arg);
+static void tempcat_sweep_subxact_callback(SubXactEvent event,
+										   SubTransactionId mySubid,
+										   SubTransactionId parentSubid,
+										   void *arg);
+static void tempcat_sweep_exit(int code, Datum arg);
+static bool tc_sweep_callbacks = false;
 
 /*
  * The (sub)transaction whose sweep marked tc_sweep_db as swept before
- * committing; checked at the start of later transactions.
+ * committing; see tempcat_sweep_xact_callback().
  */
 static TransactionId tc_sweep_xid = InvalidTransactionId;
+static SubTransactionId tc_sweep_subid = InvalidSubTransactionId;
 static Oid	tc_sweep_db = InvalidOid;
+static void tempcat_sweep_resolved(bool committed);
 static void tempcat_unmark_swept(Oid dbid);
 static bool tempcat_area_has_live_rows(void);
 static void tempcat_unlink_live_relations(void);
@@ -2164,15 +2173,13 @@ tempcat_start_transaction(void)
 		}
 	}
 
-	/* A sweep was rolled back: the leftovers are still there. */
+	/* A prepared sweep was finished meanwhile; see tempcat_sweep_exit(). */
 	if (TransactionIdIsValid(tc_sweep_xid))
 	{
 		TempcatXidStatus status = tempcat_xid_status(tc_sweep_xid);
 
-		if (status == TCX_ABORTED)
-			tempcat_unmark_swept(tc_sweep_db);
 		if (status != TCX_IN_PROGRESS)
-			tc_sweep_xid = InvalidTransactionId;
+			tempcat_sweep_resolved(status == TCX_COMMITTED);
 	}
 
 	tempcat_resolve_pending();
@@ -3672,12 +3679,79 @@ tempcat_sweep_if_needed(bool allow_force)
 		tempcat_mark_swept(MyDatabaseId);
 
 		/* If the deletions do not commit, sweep again; see below. */
+		if (!tc_sweep_callbacks)
+		{
+			RegisterXactCallback(tempcat_sweep_xact_callback, NULL);
+			RegisterSubXactCallback(tempcat_sweep_subxact_callback, NULL);
+			before_shmem_exit(tempcat_sweep_exit, 0);
+			tc_sweep_callbacks = true;
+		}
 		tc_sweep_xid = GetCurrentTransactionIdIfAny();
+		tc_sweep_subid = GetCurrentSubTransactionId();
 		tc_sweep_db = MyDatabaseId;
 	}
 
 	UnlockDatabaseObject(DatabaseRelationId, MyDatabaseId,
 						 TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
+}
+
+/* The sweep's (sub)transaction ended: stop tracking it. */
+static void
+tempcat_sweep_resolved(bool committed)
+{
+	if (!committed)
+		tempcat_unmark_swept(tc_sweep_db);
+	tc_sweep_xid = InvalidTransactionId;
+	tc_sweep_subid = InvalidSubTransactionId;
+	tc_sweep_db = InvalidOid;
+}
+
+/*
+ * A sweep marks the database as swept before its transaction ends.  If the
+ * (sub)transaction aborts, ask for another sweep right away: the session
+ * may end before it starts another transaction.  The outcome of a prepared
+ * transaction is checked at the start of later transactions and at exit.
+ */
+static void
+tempcat_sweep_xact_callback(XactEvent event, void *arg)
+{
+	if (!OidIsValid(tc_sweep_db))
+		return;
+	switch (event)
+	{
+		case XACT_EVENT_COMMIT:
+		case XACT_EVENT_PARALLEL_COMMIT:
+			tempcat_sweep_resolved(true);
+			break;
+		case XACT_EVENT_ABORT:
+		case XACT_EVENT_PARALLEL_ABORT:
+			tempcat_sweep_resolved(false);
+			break;
+		default:
+			break;
+	}
+}
+
+static void
+tempcat_sweep_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
+							   SubTransactionId parentSubid, void *arg)
+{
+	/* (only if the sweep ran in this subtransaction or a child of it) */
+	if (!OidIsValid(tc_sweep_db) || tc_sweep_subid < mySubid)
+		return;
+	if (event == SUBXACT_EVENT_ABORT_SUB)
+		tempcat_sweep_resolved(false);
+	else if (event == SUBXACT_EVENT_COMMIT_SUB)
+		tc_sweep_subid = parentSubid;
+}
+
+static void
+tempcat_sweep_exit(int code, Datum arg)
+{
+	if (OidIsValid(tc_sweep_db) &&
+		(!TransactionIdIsValid(tc_sweep_xid) ||
+		 tempcat_xid_status(tc_sweep_xid) != TCX_COMMITTED))
+		tempcat_unmark_swept(tc_sweep_db);
 }
 
 /*
