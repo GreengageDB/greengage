@@ -64,6 +64,18 @@ SeqNext(SeqScanState *node)
 	direction = estate->es_direction;
 	slot = node->ss.ss_ScanTupleSlot;
 
+	/*
+	 * GPDB: a backward scan would miss the catalog rows of temporary objects
+	 * kept in memory, which only forward scans return (below).  Greengage
+	 * refuses backward fetches anyway (see PortalRunFetch()); this keeps the
+	 * scan from returning wrong results should that change.
+	 */
+	if (ScanDirectionIsBackward(direction) &&
+		tempcat_restrict_catalog_index_scans(RelationGetRelid(node->ss.ss_currentRelation)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot scan a catalog that includes in-memory temporary objects backward")));
+
 	if (scandesc == NULL)
 	{
 		/*
