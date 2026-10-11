@@ -82,6 +82,7 @@
 #include "catalog/gp_partition_template.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
+#include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_appendonly.h"
 #include "catalog/pg_statistic_ext_data.h"
@@ -130,6 +131,7 @@
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/plancache.h"
 #include "utils/rel.h"
@@ -2631,7 +2633,8 @@ tempcat_object_missing(const ObjectAddress *object)
  * other sessions had no temporary objects.
  *
  * The bounds are approximate: ordinary objects with reserved OIDs (see the
- * file header) between them are hidden too.
+ * file header) can lie between them, so rows within the bounds are hidden
+ * only if their object is not an ordinary one (tempcat_ordinary_object()).
  */
 typedef struct TempcatLiveRange
 {
@@ -2732,6 +2735,111 @@ tempcat_oid_live_elsewhere(Oid oid, Oid dbid)
 }
 
 /*
+ * Is the object an ordinary one rather than a temporary object of another
+ * session?  An ordinary object has its catalog row on disk, outside the
+ * temporary schemas.  A temporary object of another session has its row in
+ * that session's memory, where we cannot see it, or on disk in that
+ * session's temporary schema if the row did not fit in memory.  Follow the
+ * owner columns of the catalogs (a relation's or a type's namespace, a
+ * trigger's relation, ...) up to the namespace.
+ */
+static bool
+tempcat_ordinary_object(Oid classId, Oid objectId, int depth)
+{
+	const TempcatCatalogDef *def;
+	int			catidx;
+	Relation	rel;
+	HeapTuple	tup;
+	AttrNumber	oidattr;
+	AttrNumber	parentattr;
+	Oid			parentclass;
+	Oid			parent = InvalidOid;
+	bool		found;
+
+	/* (chains are short: attribute default -> relation -> namespace) */
+	if (!IsTempcatOid(objectId) || depth > 3)
+		return true;
+
+	if (classId == NamespaceRelationId)
+		return get_namespace_name(objectId) != NULL &&
+			!isAnyTempNamespace(objectId);
+
+	/* Objects of other classes are never kept in memory. */
+	catidx = tempcat_catalog_index(classId);
+	if (catidx < 0 ||
+		(classId != AttrDefaultRelationId && !is_objectclass_supported(classId)))
+		return true;
+	def = &tempcat_catalogs[catidx];
+
+	oidattr = classId == AttrDefaultRelationId ?
+		Anum_pg_attrdef_oid : get_object_attnum_oid(classId);
+	if (def->owner == oidattr)
+	{
+		/* a relation or a type: its own row decides */
+		parentattr = get_object_attnum_namespace(classId);
+		parentclass = NamespaceRelationId;
+	}
+	else
+	{
+		parentattr = def->owner;
+		parentclass = def->ownerclass;
+	}
+
+	rel = table_open(classId, AccessShareLock);
+	if (classId == AttrDefaultRelationId)
+	{
+		/* not in objectaddress.c's ObjectProperty in this version */
+		SysScanDesc scan;
+		ScanKeyData key;
+
+		ScanKeyInit(&key, Anum_pg_attrdef_oid, BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(objectId));
+		scan = systable_beginscan(rel, AttrDefaultOidIndexId, true, NULL, 1, &key);
+		tup = systable_getnext(scan);
+		if (HeapTupleIsValid(tup))
+			tup = heap_copytuple(tup);
+		systable_endscan(scan);
+	}
+	else
+		tup = get_catalog_object_by_oid(rel, oidattr, objectId);
+
+	found = HeapTupleIsValid(tup);
+	if (found)
+	{
+		parent = tempcat_getoid(tup, RelationGetDescr(rel), parentattr);
+		if (classId == ConstraintRelationId && !OidIsValid(parent))
+		{
+			/* domain constraint */
+			parent = tempcat_getoid(tup, RelationGetDescr(rel),
+									Anum_pg_constraint_contypid);
+			parentclass = TypeRelationId;
+		}
+		heap_freetuple(tup);
+	}
+	table_close(rel, AccessShareLock);
+
+	/* in another session's memory */
+	if (!found)
+		return false;
+	return tempcat_ordinary_object(parentclass, parent, depth + 1);
+}
+
+/*
+ * Does the owner column of an on-disk row point at a temporary object of
+ * another live session?
+ */
+static bool
+tempcat_owner_hidden(Oid classId, Oid objectId, Oid dbid)
+{
+	if (!tempcat_oid_live_elsewhere(objectId, dbid))
+		return false;
+	/* (we cannot look up objects of other databases: pg_shdepend) */
+	if (dbid != MyDatabaseId)
+		return true;
+	return !tempcat_ordinary_object(classId, objectId, 0);
+}
+
+/*
  * Should a SQL scan skip this on-disk row of 'rel'?  Only when
  * gp_temp_memory_catalog_hide_others is set; see above.
  */
@@ -2744,6 +2852,7 @@ tempcat_hide_disk_row(Relation rel, HeapTuple tup)
 	int			catidx;
 	Oid			dbid = MyDatabaseId;
 	Oid			owner;
+	Oid			ownerclass;
 
 	if (!gp_temp_memory_catalog_hide_others || TempcatShared == NULL)
 		return false;
@@ -2760,12 +2869,20 @@ tempcat_hide_disk_row(Relation rel, HeapTuple tup)
 		dbid = tempcat_getoid(tup, desc, Anum_pg_shdepend_dbid);
 
 	owner = tempcat_getoid(tup, desc, def->owner);
+	ownerclass = def->ownerclassattr != 0 ?
+		tempcat_getoid(tup, desc, def->ownerclassattr) : def->ownerclass;
 	if (relid == ConstraintRelationId && !OidIsValid(owner))
+	{
 		owner = tempcat_getoid(tup, desc, Anum_pg_constraint_contypid);
+		ownerclass = TypeRelationId;
+	}
 
-	return tempcat_oid_live_elsewhere(owner, dbid) ||
+	return tempcat_owner_hidden(ownerclass, owner, dbid) ||
 		(def->owner2 != 0 &&
-		 tempcat_oid_live_elsewhere(tempcat_getoid(tup, desc, def->owner2), dbid));
+		 tempcat_owner_hidden(def->owner2classattr != 0 ?
+							  tempcat_getoid(tup, desc, def->owner2classattr) :
+							  def->owner2class,
+							  tempcat_getoid(tup, desc, def->owner2), dbid));
 }
 
 bool

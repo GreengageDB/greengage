@@ -95,6 +95,10 @@ SELECT count(*) AS duplicate_oids FROM (
 ) d;
 SELECT count(*) > 0 AS skipped_taken_oids FROM pg_class
 WHERE relname LIKE 'oid\_tc\_%' AND oid > 'oid_legacy_i'::regclass::oid;
+-- The ordinary objects lie within the OID bounds this session publishes;
+-- gp_temp_memory_catalog_hide_others in another session (pg_dump,
+-- gpcheckcat) must not hide their rows.
+\! PGOPTIONS='-c gp_temp_memory_catalog_hide_others=on' psql -X -d oid_wraparound -c "SELECT (SELECT count(*) FROM pg_class WHERE relname IN ('oid_legacy', 'oid_legacy_i')) AS classes, (SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('oid_legacy', 'oid_legacy_i')) AS seg_classes, (SELECT count(*) FROM pg_type WHERE typname IN ('oid_legacy', '_oid_legacy')) AS types, (SELECT count(*) FROM pg_index WHERE indexrelid = 'oid_legacy_i'::regclass) AS indexes, (SELECT count(*) > 0 FROM pg_attribute WHERE attrelid = 'oid_legacy'::regclass) AS attributes"
 SET enable_seqscan = off;
 SELECT count(*) FROM oid_legacy WHERE b = 'v5';
 RESET enable_seqscan;
