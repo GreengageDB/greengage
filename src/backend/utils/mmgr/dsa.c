@@ -2270,18 +2270,23 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 		if (dsm_free_slots(&nfree, &nmax) && nfree <= area->min_free_slots)
 			return NULL;
 	}
-	if (area->vmem_tracked &&
-		VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
-		return NULL;
-
 	/* Create the segment. */
 	segment = dsm_create(total_size,
 						 area->no_oom ?
 						 DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0);
 	if (segment == NULL)
+		return NULL;
+
+	/*
+	 * GPDB: charge it to vmem, which may refuse.  Only now: dsm_create() can
+	 * still fail with an error (e.g. out of local memory), which must not
+	 * leave vmem charged.  Until pinned, the segment goes away on detach, or
+	 * at the end of the transaction if reserving fails with an error.
+	 */
+	if (area->vmem_tracked &&
+		VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
 	{
-		if (area->vmem_tracked)
-			VmemTracker_ReleaseVmem(total_size);
+		dsm_detach(segment);
 		return NULL;
 	}
 	dsm_pin_segment(segment);
