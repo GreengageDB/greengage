@@ -576,7 +576,8 @@ void IndexOpProperties(Oid opno, Oid opfamily, StrategyNumber *strategynumber,
 gpos::BOOL IndexCanReturn(Relation index, int attno);
 
 // GPDB: must index-only and bitmap scans of the catalog be avoided because
-// it holds rows of temporary objects kept in memory (see tempcat.c)?
+// it holds, or may come to hold, rows of temporary objects kept in memory
+// (see tempcat.c)?
 gpos::BOOL TempcatRestrictsCatalogIndexScans(Oid relid);
 
 // get oids of families this operator belongs to

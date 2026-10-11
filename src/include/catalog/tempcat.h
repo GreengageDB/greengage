@@ -90,6 +90,7 @@ extern void tempcat_endscan(TempcatScan scan);
 
 /* SQL-level catalog scans */
 extern bool tempcat_restrict_catalog_index_scans(Oid relid);
+extern bool tempcat_plan_catalog_index_scans(Oid relid);
 extern TempcatScan tempcat_begin_sql_scan(Relation rel, Snapshot snapshot);
 extern HeapTuple tempcat_next_virtual(TempcatScan scan);
 extern HeapTuple tempcat_fetch_tid(Relation rel, ItemPointer tid, Snapshot snapshot);

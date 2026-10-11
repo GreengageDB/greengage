@@ -63,6 +63,29 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
 
+-- Index-only and bitmap scans cannot return in-memory rows, so the planner
+-- keeps away from them for the catalogs in sessions that keep temporary
+-- objects in memory, or hide other sessions' ones.  Plans made before live
+-- on where the plan cache does not hold them, e.g. the plans of a SQL
+-- function for the rest of the calling statement: the executor refuses them.
+SET gp_enable_temp_memory_catalog = off;
+SET optimizer = off;
+SET enable_seqscan = off;
+CREATE FUNCTION tc_count_rel(n name) RETURNS bigint LANGUAGE sql VOLATILE AS
+  $$ SELECT count(*) FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_make_early(i int) RETURNS int LANGUAGE plpgsql AS $$
+BEGIN
+  IF i = 1 THEN
+    CREATE TEMP TABLE tc_early (a int) DISTRIBUTED BY (a);
+  END IF;
+  RETURN i;
+END $$;
+SELECT i, tc_count_rel('pg_class'),
+       set_config('gp_temp_memory_catalog_hide_others', 'on', false)
+  FROM generate_series(1, 2) i;
+RESET enable_seqscan;
+RESET optimizer;
+
 -- Ordinary temporary tables are not affected.
 SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE tc_ordinary (a int) DISTRIBUTED BY (a);
@@ -85,6 +108,19 @@ DROP TABLE tc_ordinary, tc_ordinary2;
 -- Start a new session: its temporary schema is created in memory.
 \c
 SET gp_enable_temp_memory_catalog = on;
+
+-- With the setting on, the planner keeps away from those scans before the
+-- first temporary object already: the plan of tc_count_rel(), made before
+-- tc_make_early() creates one, finds it in the later calls.  (The functions
+-- were created in the previous session, so that their on-disk catalog rows
+-- do not show in the statistics checked below.)
+SET enable_seqscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_early';
+SELECT i, tc_count_rel('tc_early'), tc_make_early(i) FROM generate_series(1, 3) i;
+RESET enable_seqscan;
+DROP TABLE tc_early;
+DROP FUNCTION tc_make_early(int);
+DROP FUNCTION tc_count_rel(name);
 
 --
 -- Basic usage

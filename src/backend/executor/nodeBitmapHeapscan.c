@@ -47,6 +47,7 @@
 #include "access/tableam.h"
 #include "access/transam.h"
 #include "access/visibilitymap.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeBitmapHeapscan.h"
 #include "miscadmin.h"
@@ -782,6 +783,18 @@ ExecInitBitmapHeapScanForPartition(BitmapHeapScan *node, EState *estate, int efl
 
 	/* check for unsupported flags */
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK)));
+
+	/*
+	 * GPDB: a bitmap scan would miss the catalog rows of temporary objects
+	 * kept in memory, so the planner does not use one for such a catalog;
+	 * refuse a plan made before (see tempcat.c).
+	 */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY) &&
+		tempcat_restrict_catalog_index_scans(RelationGetRelid(currentRelation)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot use a bitmap scan of a catalog that includes in-memory temporary objects"),
+				 errhint("Run the statement again to plan it anew.")));
 
 	/*
 	 * Assert caller didn't ask for an unsafe snapshot --- see comments at

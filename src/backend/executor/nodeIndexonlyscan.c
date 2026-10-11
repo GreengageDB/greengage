@@ -36,6 +36,7 @@
 #include "access/tupdesc.h"
 #include "access/visibilitymap.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexonlyscan.h"
 #include "executor/nodeIndexscan.h"
@@ -558,6 +559,18 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 	TupleDesc	tupDesc;
 	int			indnkeyatts;
 	int			namecount;
+
+	/*
+	 * GPDB: an index-only scan would miss the catalog rows of temporary
+	 * objects kept in memory, so the planner does not use one for such a
+	 * catalog; refuse a plan made before (see tempcat.c).
+	 */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY) &&
+		tempcat_restrict_catalog_index_scans(RelationGetRelid(currentRelation)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot use an index-only scan of a catalog that includes in-memory temporary objects"),
+				 errhint("Run the statement again to plan it anew.")));
 
 	/*
 	 * create state structure

@@ -3907,6 +3907,14 @@ tempcat_sweep_before_drop(void)
  * virtual rows, in the session's writer and in its readers (e.g. in
  * functions run in reader gangs).  ORCA leaves queries on such catalogs to
  * the planner.
+ *
+ * Plans made before are made anew at activation (ResetPlanCache()) only if
+ * the plan cache holds them; others live on, e.g. the plans of a SQL
+ * function called by the statement that creates the session's first
+ * temporary object.  So the planner keeps away from such scans from the
+ * moment the session could start keeping temporary objects in memory
+ * (tempcat_plan_catalog_index_scans()), and the executor refuses the ones it
+ * still meets in plans made earlier.
  * ----------------------------------------------------------------
  */
 bool
@@ -3918,6 +3926,31 @@ tempcat_restrict_catalog_index_scans(Oid relid)
 		return true;
 	/* a reader of a session that keeps temporary objects in memory */
 	return tempcat_is_reader() && tempcat_attach(false);
+}
+
+/*
+ * May the planner use index-only and bitmap scans of catalog 'relid'?  Not
+ * if tempcat_restrict_catalog_index_scans() forbids them, nor while the
+ * session could still start keeping temporary objects in memory: with the
+ * setting on, before it creates its temporary schema.
+ */
+bool
+tempcat_plan_catalog_index_scans(Oid relid)
+{
+	Oid			tempNamespaceId;
+	Oid			tempToastNamespaceId;
+
+	if (tempcat_restrict_catalog_index_scans(relid))
+		return false;
+	if (!gp_enable_temp_memory_catalog || tc_activated ||
+		tempcat_catalog_index(relid) < 0)
+		return true;
+	/* (see tempcat_want_temp_oid()) */
+	if (Gp_role == GP_ROLE_EXECUTE ||
+		(Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER()))
+		return true;
+	GetTempNamespaceState(&tempNamespaceId, &tempToastNamespaceId);
+	return OidIsValid(tempNamespaceId);
 }
 
 /* A scan without virtual rows, for scans that filter on-disk rows only. */

@@ -341,7 +341,7 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			 * of in-memory temporary objects (see tempcat.c): no index-only
 			 * or bitmap scans, and no mark/restore, of such catalogs.
 			 */
-			if (tempcat_restrict_catalog_index_scans(RelationGetRelid(relation)))
+			if (!tempcat_plan_catalog_index_scans(RelationGetRelid(relation)))
 			{
 				int			c;
 
