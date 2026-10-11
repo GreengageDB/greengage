@@ -368,6 +368,8 @@ CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_de
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 
 -- A column default of a temporary table depends on the function.
+-- (session 2 stands for gpcheckcat: its own objects stay on disk)
+2: SET gp_enable_temp_memory_catalog = off;
 2: SET client_min_messages = warning;
 2: SELECT tc_try('DROP FUNCTION tc_def()');
 2: SELECT tc_try('DROP FUNCTION tc_def() CASCADE');
