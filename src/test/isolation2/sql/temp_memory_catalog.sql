@@ -113,6 +113,14 @@ SELECT count(DISTINCT reloid) AS distinct_oids, bool_and(reloid >= 4026531840) A
 2q:
 DROP TABLE tc_oids;
 
+-- A utility-mode session on a segment keeps its temporary objects on disk:
+-- OIDs from the segment's slices of the reserved range could be the ones
+-- the coordinator gives the temporary objects of its sessions there.
+0U: SET gp_enable_temp_memory_catalog = on;
+0U: CREATE TEMP TABLE tc_utility (a int);
+0U: SELECT 'tc_utility'::regclass::oid >= 4026531840 AS in_reserved_range;
+0Uq:
+
 --
 -- 4. Reader gangs that are destroyed when idle and recreated later attach
 -- to the in-memory catalog again and see later changes.

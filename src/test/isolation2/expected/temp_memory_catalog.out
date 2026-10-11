@@ -242,6 +242,20 @@ COMMIT
 DROP TABLE tc_oids;
 DROP TABLE
 
+-- A utility-mode session on a segment keeps its temporary objects on disk:
+-- OIDs from the segment's slices of the reserved range could be the ones
+-- the coordinator gives the temporary objects of its sessions there.
+0U: SET gp_enable_temp_memory_catalog = on;
+SET
+0U: CREATE TEMP TABLE tc_utility (a int);
+CREATE TABLE
+0U: SELECT 'tc_utility'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ f                 
+(1 row)
+0Uq: ... <quitting>
+
 --
 -- 4. Reader gangs that are destroyed when idle and recreated later attach
 -- to the in-memory catalog again and see later changes.

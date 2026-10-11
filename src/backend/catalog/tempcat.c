@@ -1038,6 +1038,16 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 	/* the slice was full when the temporary schema was created */
 	if (tc_slice_exhausted)
 		return false;
+
+	/*
+	 * A utility-mode session on a segment keeps its temporary objects on
+	 * disk: OIDs from the segment's slices of the reserved range could be the
+	 * ones that the coordinator gives the temporary objects of its sessions
+	 * on this segment, whose in-memory rows we cannot see to avoid them.
+	 */
+	if (Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER())
+		return false;
+
 	return tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
 							   gp_enable_temp_memory_catalog);
 }
