@@ -2868,7 +2868,51 @@ tempcat_object_missing(const ObjectAddress *object)
 {
 	if (!IsTempcatOid(object->objectId))
 		return false;
+
+	if (object->classId == RelationRelationId)
+		return tempcat_relation_missing(object->objectId);
+
 	return tempcat_object_lookup(object->classId, object->objectId) == TCO_MISSING;
+}
+
+/*
+ * Is the relation missing for us, though perhaps its pg_class row is not?
+ * See tempcat_other_session_relation().  For try_relation_open().
+ */
+bool
+tempcat_relation_missing(Oid relid)
+{
+	HeapTuple	tup;
+	bool		missing;
+
+	if (!IsTempcatOid(relid))
+		return false;
+	tup = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	missing = !HeapTupleIsValid(tup) || tempcat_other_session_relation(tup);
+	if (HeapTupleIsValid(tup))
+		ReleaseSysCache(tup);
+	return missing;
+}
+
+/*
+ * Is this pg_class row that of a temporary relation that another session
+ * keeps in memory (or kept, if it crashed and the row is a leftover)?
+ * Such a row is on disk because it did not fit in the session's area, and
+ * the relation's other rows (attributes, ...) may not have: the relcache
+ * must not build an entry from it ("catalog is missing N attribute(s)")
+ * but treat the relation as missing, as for those kept in memory entirely
+ * (ScanPgRelation(), try_relation_open()).  Readers serve their session,
+ * and see its relations.
+ */
+bool
+tempcat_other_session_relation(HeapTuple tup)
+{
+	Form_pg_class form = (Form_pg_class) GETSTRUCT(tup);
+
+	if (form->relpersistence != RELPERSISTENCE_TEMP ||
+		!IsTempcatOid(form->oid) || tempcat_is_reader())
+		return false;
+	return !tempcat_owns_oid(RelationRelationId, form->oid);
 }
 
 /*

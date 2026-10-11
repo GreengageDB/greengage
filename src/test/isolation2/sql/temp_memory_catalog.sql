@@ -431,7 +431,17 @@ CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_de
 1: SET gp_enable_temp_memory_catalog = on;
 1: SET gp_temp_memory_catalog_max_size = 1024;
 1: CREATE TEMP TABLE tc_hide (a int DEFAULT tc_def(), c tc_hide_type) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+
+-- A relation can go to disk partly: here its pg_class row, updated while
+-- the area is full, but not the attributes it had.  Other sessions must not
+-- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
+-- to them it does not exist, like the relations kept in memory.
+1: ALTER TABLE tc_half ADD COLUMN z int;
+2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
+2: ANALYZE;
+2: VACUUM;
 
 -- A column default of a temporary table depends on the function.
 2: SET client_min_messages = warning;

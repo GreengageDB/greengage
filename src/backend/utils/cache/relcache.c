@@ -97,6 +97,7 @@
 #include "catalog/gp_distribution_policy.h"         /* GpPolicy */
 #include "catalog/heap.h"
 #include "catalog/index.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"        /* Gp_role */
 #include "cdb/cdbsreh.h"
@@ -396,6 +397,15 @@ ScanPgRelation(Oid targetRelId, bool indexOK, bool force_non_historic)
 									   1, key);
 
 	pg_class_tuple = systable_getnext(pg_class_scan);
+
+	/*
+	 * GPDB: a temporary relation of another session kept in memory, whose
+	 * pg_class row went to disk while other rows of it did not, does not
+	 * exist for us (see tempcat.c).
+	 */
+	if (HeapTupleIsValid(pg_class_tuple) &&
+		tempcat_other_session_relation(pg_class_tuple))
+		pg_class_tuple = NULL;
 
 	/*
 	 * Must copy tuple before releasing buffer.

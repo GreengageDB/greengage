@@ -1090,8 +1090,26 @@ SET
 SET
 1: CREATE TEMP TABLE tc_hide (a int DEFAULT tc_def(), c tc_hide_type) DISTRIBUTED BY (a);
 CREATE TABLE
+1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
+CREATE TABLE
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 DO
+
+-- A relation can go to disk partly: here its pg_class row, updated while
+-- the area is full, but not the attributes it had.  Other sessions must not
+-- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
+-- to them it does not exist, like the relations kept in memory.
+1: ALTER TABLE tc_half ADD COLUMN z int;
+ALTER TABLE
+2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
+ opened 
+--------
+ 0      
+(1 row)
+2: ANALYZE;
+ANALYZE
+2: VACUUM;
+VACUUM
 
 -- A column default of a temporary table depends on the function.
 2: SET client_min_messages = warning;
