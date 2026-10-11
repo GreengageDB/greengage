@@ -102,6 +102,7 @@ typedef dsm_handle dsa_handle;
 extern void dsa_startup(void);
 
 extern dsa_area *dsa_create(int tranche_id);
+extern dsa_area *dsa_try_create(int tranche_id);
 extern dsa_area *dsa_create_in_place(void *place, size_t size,
 									 int tranche_id, dsm_segment *segment);
 extern dsa_area *dsa_attach(dsa_handle handle);
@@ -115,6 +116,7 @@ extern void dsa_pin(dsa_area *area);
 extern void dsa_unpin(dsa_area *area);
 extern void dsa_set_size_limit(dsa_area *area, size_t limit);
 extern void dsa_set_min_free_space(dsa_area *area, size_t bytes);
+extern void dsa_set_min_free_slots(dsa_area *area, uint32 nslots);
 extern size_t dsa_minimum_size(void);
 extern dsa_handle dsa_get_handle(dsa_area *area);
 extern dsa_pointer dsa_allocate_extended(dsa_area *area, size_t size, int flags);

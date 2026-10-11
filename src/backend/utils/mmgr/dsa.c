@@ -386,6 +386,12 @@ struct dsa_area
 	 * bytes free for other users of dynamic shared memory (0: no limit).
 	 */
 	size_t		min_free_space;
+
+	/*
+	 * GPDB: nor segments that would leave fewer than this many slots of the
+	 * DSM control segment free (0: no limit).
+	 */
+	uint32		min_free_slots;
 };
 
 #define DSA_SPAN_NOTHING_FREE	((uint16) -1)
@@ -421,6 +427,7 @@ static dsa_area *attach_internal(void *place, dsm_segment *segment,
 static void check_for_freed_segments(dsa_area *area);
 static void check_for_freed_segments_locked(dsa_area *area);
 static void rebin_segment(dsa_area *area, dsa_segment_map *segment_map);
+static dsa_area *dsa_create_with_flags(int tranche_id, int dsm_flags);
 
 /*
  * Create a new shared area in a new DSM segment.  Further DSM segments will
@@ -434,6 +441,25 @@ static void rebin_segment(dsa_area *area, dsa_segment_map *segment_map);
 dsa_area *
 dsa_create(int tranche_id)
 {
+	return dsa_create_with_flags(tranche_id, 0);
+}
+
+/*
+ * GPDB: like dsa_create(), but return NULL instead of raising an error if
+ * the area's first DSM segment cannot be created (no free slot in the DSM
+ * control segment, or no space).
+ */
+dsa_area *
+dsa_try_create(int tranche_id)
+{
+	return dsa_create_with_flags(tranche_id,
+								 DSM_CREATE_NULL_IF_MAXSEGMENTS |
+								 DSM_CREATE_NULL_IF_NOSPACE);
+}
+
+static dsa_area *
+dsa_create_with_flags(int tranche_id, int dsm_flags)
+{
 	dsm_segment *segment;
 	dsa_area   *area;
 
@@ -441,7 +467,9 @@ dsa_create(int tranche_id)
 	 * Create the DSM segment that will hold the shared control object and the
 	 * first segment of usable space.
 	 */
-	segment = dsm_create(DSA_INITIAL_SEGMENT_SIZE, 0);
+	segment = dsm_create(DSA_INITIAL_SEGMENT_SIZE, dsm_flags);
+	if (segment == NULL)
+		return NULL;
 
 	/*
 	 * All segments backing this area are pinned, so that DSA can explicitly
@@ -1046,6 +1074,17 @@ dsa_set_min_free_space(dsa_area *area, size_t bytes)
 }
 
 /*
+ * GPDB: likewise, do not grow the area by creating segments that would leave
+ * fewer than 'nslots' slots of the DSM control segment free: every segment
+ * takes one.
+ */
+void
+dsa_set_min_free_slots(dsa_area *area, uint32 nslots)
+{
+	area->min_free_slots = nslots;
+}
+
+/*
  * Aggressively free all spare memory in the hope of returning DSM segments to
  * the operating system.
  */
@@ -1290,6 +1329,7 @@ create_internal(void *place, size_t size,
 	area->mapping_pinned = false;
 	area->no_oom = false;
 	area->min_free_space = 0;
+	area->min_free_slots = 0;
 	memset(area->segment_maps, 0, sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
 	area->freed_segment_counter = 0;
@@ -1348,6 +1388,7 @@ attach_internal(void *place, dsm_segment *segment, dsa_handle handle)
 	area->mapping_pinned = false;
 	area->no_oom = false;
 	area->min_free_space = 0;
+	area->min_free_slots = 0;
 	memset(&area->segment_maps[0], 0,
 		   sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
@@ -2185,6 +2226,14 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 
 		if (dsm_impl_free_space(&free_bytes, &total_bytes) &&
 			free_bytes < total_size + area->min_free_space)
+			return NULL;
+	}
+	if (area->min_free_slots > 0)
+	{
+		uint32		nfree;
+		uint32		nmax;
+
+		if (dsm_free_slots(&nfree, &nmax) && nfree <= area->min_free_slots)
 			return NULL;
 	}
 

@@ -893,6 +893,68 @@ SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_s
 DROP TABLE tc_sess_ids;
 DROP TABLE
 
+-- Every DSM segment takes a slot of the DSM control segment, and the area
+-- leaves the last quarter of them to other users too (here the fault
+-- pretends that none is free on the coordinator): an area that cannot grow
+-- keeps further rows on disk, and a new session creates no area.
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_slots_first (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('dsm_slots_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: DO $$ BEGIN FOR i IN 1..100 LOOP EXECUTE format('CREATE TEMP TABLE tc_slots_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+DO
+1: INSERT INTO tc_slots_100 SELECT i, 'x' FROM generate_series(1, 10) i;
+INSERT 0 10
+1: SELECT count(*) FROM tc_slots_100 x JOIN tc_slots_100 y ON x.a = y.a + 1;
+ count 
+-------
+ 9     
+(1 row)
+SELECT count(*) > 0 AS qd_on_disk FROM pg_class WHERE relname LIKE 'tc\_slots\_%';
+ qd_on_disk 
+------------
+ t          
+(1 row)
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname LIKE 'tc\_slots\_%';
+ segs_on_disk 
+--------------
+ 0            
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_slots_new (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT count(*) AS qd_on_disk FROM pg_class WHERE relname = 'tc_slots_new';
+ qd_on_disk 
+------------
+ 1          
+(1 row)
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname = 'tc_slots_new';
+ segs_on_disk 
+--------------
+ 0            
+(1 row)
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+-- (the sessions remove their on-disk rows asynchronously at exit)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT tc_disk_rows() AS disk_rows;
+ disk_rows 
+-----------
+ 0         
+(1 row)
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions

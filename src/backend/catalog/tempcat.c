@@ -395,8 +395,11 @@ tempcat_catalog_index(Oid relid)
  * makes the row go to the on-disk catalog (see DSM_CREATE_NULL_IF_NOSPACE).
  * Other users of DSM (e.g. combo CIDs shared with reader gangs) are not that
  * tolerant, so the area does not grow into the last quarter of the space
- * (dsa_set_min_free_space()).  The area's first segment, created by
- * dsa_create(), is checked before creating the area.
+ * (dsa_set_min_free_space()), nor into the last quarter of the slots of the
+ * DSM control segment, which every segment takes one of
+ * (dsa_set_min_free_slots()).  Both are checked before creating the area,
+ * and failing to create its first segment is no error either
+ * (dsa_try_create()).
  */
 #define TEMPCAT_DSA_FIRST_SEGMENT	(1024 * 1024)
 #define TEMPCAT_DSM_CHECK_ATTEMPTS	100
@@ -421,6 +424,17 @@ tempcat_dsm_space_low(size_t needed)
 #endif
 	return dsm_impl_free_space(&free_bytes, &total_bytes) &&
 		free_bytes < needed + total_bytes / TEMPCAT_DSM_HEADROOM_DIV;
+}
+
+/* Would creating a segment eat into the slots left to other users? */
+static bool
+tempcat_dsm_slots_low(void)
+{
+	uint32		nfree;
+	uint32		nmax;
+
+	return dsm_free_slots(&nfree, &nmax) &&
+		nfree <= nmax / TEMPCAT_DSM_HEADROOM_DIV;
 }
 
 static inline size_t
@@ -498,14 +512,22 @@ tempcat_attach(bool create)
 	if (tc_dsm_low && ++tc_attempts_since_check < TEMPCAT_DSM_CHECK_ATTEMPTS)
 		return false;
 	tc_attempts_since_check = 0;
-	tc_dsm_low = tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT);
+	tc_dsm_low = tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT) ||
+		tempcat_dsm_slots_low();
 	if (tc_dsm_low)
 		return false;
 
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	tc_area = dsa_create(tempcat_tranche_id());
-	dsa_pin_mapping(tc_area);
+	tc_area = dsa_try_create(tempcat_tranche_id());
+	if (tc_area != NULL)
+		dsa_pin_mapping(tc_area);
 	MemoryContextSwitchTo(oldcxt);
+	if (tc_area == NULL)
+	{
+		/* (the space or the slots ran out since the check) */
+		tc_dsm_low = true;
+		return false;
+	}
 
 	rootptr = dsa_allocate0(tc_area, sizeof(TempcatRoot));
 	tc_root = dsa_get_address(tc_area, rootptr);
@@ -517,8 +539,13 @@ tempcat_attach(bool create)
 		Size		free_bytes;
 		Size		total_bytes;
 
+		uint32		nfree;
+		uint32		nmax;
+
 		if (dsm_impl_free_space(&free_bytes, &total_bytes))
 			dsa_set_min_free_space(tc_area, total_bytes / TEMPCAT_DSM_HEADROOM_DIV);
+		if (dsm_free_slots(&nfree, &nmax))
+			dsa_set_min_free_slots(tc_area, nmax / TEMPCAT_DSM_HEADROOM_DIV);
 	}
 
 	/* Publish the area to the readers of this session. */
@@ -878,12 +905,20 @@ typedef struct TempcatOwnedKey
 	Oid			oid;
 } TempcatOwnedKey;
 
+typedef struct TempcatOwnedEntry
+{
+	TempcatOwnedKey key;
+	bool		on_disk;		/* some of its rows went to disk */
+} TempcatOwnedEntry;
+
 static HTAB *tc_owned = NULL;
 
 static void
 tempcat_remember_oid(Oid catalog, Oid oid)
 {
 	TempcatOwnedKey key;
+	TempcatOwnedEntry *entry;
+	bool		found;
 
 	if (tc_owned == NULL)
 	{
@@ -891,7 +926,7 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 
 		memset(&ctl, 0, sizeof(ctl));
 		ctl.keysize = sizeof(TempcatOwnedKey);
-		ctl.entrysize = sizeof(TempcatOwnedKey);
+		ctl.entrysize = sizeof(TempcatOwnedEntry);
 		ctl.hcxt = TopMemoryContext;
 		tc_owned = hash_create("tempcat owned OIDs", 256, &ctl,
 							   HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
@@ -899,7 +934,9 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 
 	key.catalog = catalog;
 	key.oid = oid;
-	(void) hash_search(tc_owned, &key, HASH_ENTER, NULL);
+	entry = hash_search(tc_owned, &key, HASH_ENTER, &found);
+	if (!found)
+		entry->on_disk = false;
 
 	/* Widen the published bounds; nobody else writes them. */
 	if (IsTempcatOid(oid))
@@ -915,16 +952,23 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 	}
 }
 
+/*
+ * The object's last row in memory is gone.  Unless some of its rows went to
+ * disk (the area was full), where it may live on, so is the object.
+ */
 static void
 tempcat_forget_oid(Oid catalog, Oid oid)
 {
 	TempcatOwnedKey key;
+	TempcatOwnedEntry *entry;
 
 	if (tc_owned == NULL)
 		return;
 	key.catalog = catalog;
 	key.oid = oid;
-	(void) hash_search(tc_owned, &key, HASH_REMOVE, NULL);
+	entry = hash_search(tc_owned, &key, HASH_FIND, NULL);
+	if (entry != NULL && !entry->on_disk)
+		(void) hash_search(tc_owned, &key, HASH_REMOVE, NULL);
 }
 
 /*
@@ -1219,6 +1263,29 @@ tempcat_catalog_has_oid(int catidx)
 		default:
 			return false;
 	}
+}
+
+/*
+ * A row of one of our objects goes to disk instead of memory (the area is
+ * full): the object no longer lives in memory only, so keep owning its OID
+ * when its rows in memory go away (tempcat_forget_oid()).
+ */
+static Oid	tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno);
+
+static void
+tempcat_note_disk_row(Relation rel, HeapTuple tup)
+{
+	int			catidx = tempcat_catalog_index(RelationGetRelid(rel));
+	TempcatOwnedKey key;
+	TempcatOwnedEntry *entry;
+
+	if (tc_owned == NULL || catidx < 0 || !tempcat_catalog_has_oid(catidx))
+		return;
+	key.catalog = RelationGetRelid(rel);
+	key.oid = tempcat_getoid(tup, RelationGetDescr(rel), 1);
+	entry = hash_search(tc_owned, &key, HASH_FIND, NULL);
+	if (entry != NULL)
+		entry->on_disk = true;
 }
 
 /* Does the catalog still hold an entry (of any visibility) for 'oid'? */
@@ -2081,7 +2148,10 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	/* No area (DSM space is short): the row goes to disk. */
 	if (!tempcat_attach(true))
+	{
+		tempcat_note_disk_row(rel, tup);
 		return false;
+	}
 
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
@@ -2095,7 +2165,10 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	LWLockRelease(&tc_root->lock);
 
 	if (!DsaPointerIsValid(ep))
+	{
+		tempcat_note_disk_row(rel, tup);
 		return false;
+	}
 
 	tempcat_set_caller_tuple(tup, rel, TC_ADDR(ep));
 	if (RelationGetRelid(rel) == RelationRelationId)
@@ -2178,6 +2251,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	{
 		LWLockRelease(&tc_root->lock);
 		heap_freetuple(oldtup);
+		tempcat_note_disk_row(rel, newtup);
 		return false;
 	}
 	tempcat_mark_deleted(olde, oldep, xid, cid);

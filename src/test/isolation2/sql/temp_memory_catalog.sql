@@ -352,6 +352,29 @@ SELECT count(*) AS qd_leftover_constraints FROM pg_constraint WHERE conrelid >= 
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 DROP TABLE tc_sess_ids;
 
+-- Every DSM segment takes a slot of the DSM control segment, and the area
+-- leaves the last quarter of them to other users too (here the fault
+-- pretends that none is free on the coordinator): an area that cannot grow
+-- keeps further rows on disk, and a new session creates no area.
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_slots_first (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('dsm_slots_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: DO $$ BEGIN FOR i IN 1..100 LOOP EXECUTE format('CREATE TEMP TABLE tc_slots_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+1: INSERT INTO tc_slots_100 SELECT i, 'x' FROM generate_series(1, 10) i;
+1: SELECT count(*) FROM tc_slots_100 x JOIN tc_slots_100 y ON x.a = y.a + 1;
+SELECT count(*) > 0 AS qd_on_disk FROM pg_class WHERE relname LIKE 'tc\_slots\_%';
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname LIKE 'tc\_slots\_%';
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_slots_new (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS qd_on_disk FROM pg_class WHERE relname = 'tc_slots_new';
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname = 'tc_slots_new';
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+2q:
+-- (the sessions remove their on-disk rows asynchronously at exit)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT tc_disk_rows() AS disk_rows;
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions
