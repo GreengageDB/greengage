@@ -120,6 +120,7 @@
 #include "cdb/cdbvars.h"
 #include "executor/tuptable.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 #include "port/atomics.h"
 #include "storage/dsm_impl.h"
 #include "storage/ipc.h"
@@ -966,21 +967,24 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 
 /*
  * The object's last row in memory is gone.  Unless some of its rows went to
- * disk (the area was full), where it may live on, so is the object.
+ * disk (the area was full), where it may live on, so is the object.  Returns
+ * whether we forgot it.
  */
-static void
+static bool
 tempcat_forget_oid(Oid catalog, Oid oid)
 {
 	TempcatOwnedKey key;
 	TempcatOwnedEntry *entry;
 
 	if (tc_owned == NULL)
-		return;
+		return false;
 	key.catalog = catalog;
 	key.oid = oid;
 	entry = hash_search(tc_owned, &key, HASH_FIND, NULL);
-	if (entry != NULL && !entry->on_disk)
-		(void) hash_search(tc_owned, &key, HASH_REMOVE, NULL);
+	if (entry == NULL || entry->on_disk)
+		return false;
+	(void) hash_search(tc_owned, &key, HASH_REMOVE, NULL);
+	return true;
 }
 
 /*
@@ -1810,8 +1814,19 @@ tempcat_forget_if_gone(int catidx, Oid objoid)
 	if (tempcat_catalogs[catidx].relid == RelationRelationId)
 		tc_horizon_dirty = true;
 
-	if (OidIsValid(objoid) && !tempcat_memory_has_oid(catidx, objoid))
-		tempcat_forget_oid(tempcat_catalogs[catidx].relid, objoid);
+	if (OidIsValid(objoid) && !tempcat_memory_has_oid(catidx, objoid) &&
+		tempcat_forget_oid(tempcat_catalogs[catidx].relid, objoid))
+	{
+		/*
+		 * pgstat_vacuum_stat() keeps the statistics of OIDs within our
+		 * published bounds, which never shrink: purge those of our dropped
+		 * tables and functions ourselves.
+		 */
+		if (tempcat_catalogs[catidx].relid == RelationRelationId)
+			pgstat_purge_relation(objoid);
+		else if (tempcat_catalogs[catidx].relid == ProcedureRelationId)
+			pgstat_purge_function(objoid);
+	}
 }
 
 static void

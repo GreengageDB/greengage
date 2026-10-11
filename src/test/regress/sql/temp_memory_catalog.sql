@@ -148,6 +148,30 @@ RESET optimizer_enable_coordinator_only_queries;
 RESET optimizer_enable_tablescan;
 DROP FUNCTION pg_temp.tc_att_count(oid);
 
+-- The statistics of dropped temporary tables are purged while the session
+-- lives: pgstat_vacuum_stat() keeps those of the session's OIDs, as it
+-- cannot see which of its temporary tables still exist.
+-- (Checked on the coordinator; the segments purge theirs at the writer's
+-- next transaction.)
+CREATE FUNCTION pg_temp.tc_wait_analyze_count_zero(r oid) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_analyze_count(r) = 0;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_analyze_count(r);
+END $$;
+CREATE TEMP TABLE tc_stat_purge (a int) DISTRIBUTED BY (a);
+ANALYZE tc_stat_purge;
+SELECT 'tc_stat_purge'::regclass::oid AS tc_stat_purge_oid \gset
+SELECT pg_stat_get_analyze_count(:tc_stat_purge_oid) AS analyze_count;
+DROP TABLE tc_stat_purge;
+-- (the purge goes with the next statistics report, at most every 500ms)
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count_zero(:tc_stat_purge_oid) AS analyze_count;
+DROP FUNCTION pg_temp.tc_wait_analyze_count_zero(oid);
+
 -- A function evaluated in a separate slice on the coordinator (entry-db
 -- reader) sees the temporary table too.
 CREATE FUNCTION tempcat_count_basic() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM tc_basic';
