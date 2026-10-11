@@ -37,6 +37,7 @@ extern "C" {
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
+#include "catalog/tempcat.h"
 #include "foreign/fdwapi.h"
 #include "optimizer/clauses.h"
 #include "optimizer/optimizer.h"
@@ -2176,6 +2177,16 @@ gpdb::IndexCanReturn(Relation index, int attno)
 	GP_WRAP_START;
 	{
 		return index_can_return(index, attno);
+	}
+	GP_WRAP_END;
+}
+
+gpos::BOOL
+gpdb::TempcatRestrictsCatalogIndexScans(Oid relid)
+{
+	GP_WRAP_START;
+	{
+		return tempcat_restrict_catalog_index_scans(relid);
 	}
 	GP_WRAP_END;
 }

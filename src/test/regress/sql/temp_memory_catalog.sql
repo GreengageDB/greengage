@@ -131,6 +131,23 @@ SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
        pg_stat_get_xact_tuples_inserted('pg_depend'::regclass) AS depend_ins;
 COMMIT;
 
+-- Catalog queries planned in reader gangs (e.g. in functions run there) do
+-- not use index-only or bitmap scans, which would miss the in-memory rows;
+-- nor does ORCA, which leaves queries on such catalogs to the planner.
+CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
+$$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
+SET enable_seqscan = off;
+SET enable_indexscan = off;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+RESET enable_seqscan;
+RESET enable_indexscan;
+SET optimizer_enable_coordinator_only_queries = on;
+SET optimizer_enable_tablescan = off;
+SELECT count(*) FROM pg_attribute WHERE attrelid = 'tc_basic'::regclass AND attnum > 0;
+RESET optimizer_enable_coordinator_only_queries;
+RESET optimizer_enable_tablescan;
+DROP FUNCTION pg_temp.tc_att_count(oid);
+
 -- A function evaluated in a separate slice on the coordinator (entry-db
 -- reader) sees the temporary table too.
 CREATE FUNCTION tempcat_count_basic() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM tc_basic';

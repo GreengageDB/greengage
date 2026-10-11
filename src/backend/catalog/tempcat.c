@@ -1657,6 +1657,9 @@ tempcat_set_caller_tuple(HeapTuple tup, Relation rel, TempcatEntry *e)
 /* The current transaction changed virtual rows; see tempcat_check_prepare(). */
 static bool tc_xact_changed = false;
 
+/* The writer's area this reader last saw (tempcat_start_transaction()) */
+static dsa_handle tc_reader_handle = DSM_HANDLE_INVALID;
+
 static void
 tempcat_add_pending(dsa_pointer ep)
 {
@@ -1993,6 +1996,20 @@ void
 tempcat_start_transaction(void)
 {
 	tc_xact_changed = false;
+
+	/*
+	 * A reader that sees the writer's area for the first time: plans cached
+	 * before (e.g. of functions run in reader gangs) can use index-only or
+	 * bitmap scans of the catalogs, which miss its rows (see
+	 * tempcat_restrict_catalog_index_scans()).
+	 */
+	if (tempcat_is_reader() && SharedLocalSnapshotSlot != NULL &&
+		SharedLocalSnapshotSlot->tempcat_handle != DSM_HANDLE_INVALID &&
+		SharedLocalSnapshotSlot->tempcat_handle != tc_reader_handle)
+	{
+		tc_reader_handle = SharedLocalSnapshotSlot->tempcat_handle;
+		ResetPlanCache();
+	}
 
 	/* A sweep was rolled back: the leftovers are still there. */
 	if (TransactionIdIsValid(tc_sweep_xid))
@@ -3481,14 +3498,20 @@ tempcat_sweep_before_drop(void)
  * which merge them in index order (nodeIndexscan.c).  Index-only and bitmap
  * scans cannot return them, so once a session keeps temporary objects in
  * memory, the planner does not use those for the catalogs that can hold
- * virtual rows.  ORCA does not plan catalog queries.
+ * virtual rows, in the session's writer and in its readers (e.g. in
+ * functions run in reader gangs).  ORCA leaves queries on such catalogs to
+ * the planner.
  * ----------------------------------------------------------------
  */
 bool
 tempcat_restrict_catalog_index_scans(Oid relid)
 {
-	return (tc_activated || gp_temp_memory_catalog_hide_others) &&
-		tempcat_catalog_index(relid) >= 0;
+	if (tempcat_catalog_index(relid) < 0)
+		return false;
+	if (tc_activated || gp_temp_memory_catalog_hide_others)
+		return true;
+	/* a reader of a session that keeps temporary objects in memory */
+	return tempcat_is_reader() && tempcat_attach(false);
 }
 
 /* A scan without virtual rows, for scans that filter on-disk rows only. */
