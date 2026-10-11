@@ -199,6 +199,41 @@ CREATE FUNCTION tc_disk_rows() RETURNS bigint AS $$ SELECT (SELECT count(*) FROM
 2: SELECT tc_disk_rows() AS disk_rows;
 2q:
 
+-- If the session cannot drop its temporary objects at exit (here the fault
+-- skips that), nothing leads to the files of the relations whose rows were
+-- in memory (on the segments): the session removes them itself.  Those
+-- whose rows were on disk (the fault leaves the coordinator without an
+-- area) go with their rows when the sweep removes the leftovers.
+TRUNCATE tc_relfile_paths;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_files_heap (a int, b text) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_files_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+1: INSERT INTO tc_files_heap SELECT i, repeat('x', 3000) FROM generate_series(1, 10) i;
+1: INSERT INTO tc_files_ao SELECT generate_series(1, 10);
+-- start_ignore
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_segs('tc_files_heap');
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_coordinator('tc_files_heap');
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_segs('tc_files_ao');
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_coordinator('tc_files_ao');
+-- end_ignore
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN (SELECT sum(n) FROM tc_count_files_on_segs()) = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT sum(n) AS files_on_segs FROM tc_count_files_on_segs();
+SELECT n AS files_on_coordinator FROM tc_count_files_on_coordinator();
+SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_files_sweeper (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2q:
+SELECT n AS files_on_coordinator FROM tc_count_files_on_coordinator();
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT tc_disk_rows() AS disk_rows;
+
 --
 -- 7. VACUUM cannot see the pg_class rows of other sessions' in-memory
 -- temporary tables, so the sessions publish the oldest relfrozenxid of their

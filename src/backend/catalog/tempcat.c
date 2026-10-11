@@ -129,6 +129,7 @@
 #include "storage/spin.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
+#include "storage/smgr.h"
 #include "utils/dsa.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
@@ -700,6 +701,7 @@ static TransactionId tc_sweep_xid = InvalidTransactionId;
 static Oid	tc_sweep_db = InvalidOid;
 static void tempcat_unmark_swept(Oid dbid);
 static bool tempcat_area_has_live_rows(void);
+static void tempcat_unlink_live_relations(void);
 
 /*
  * Runs after the temporary objects were dropped at session exit
@@ -708,6 +710,8 @@ static bool tempcat_area_has_live_rows(void);
  * or a prepared transaction kept it from seeing the objects), the on-disk
  * rows of the remaining objects are leftovers like those of a crashed
  * session, but no node restart will trigger their sweep: ask for one.
+ * The files of the relations whose rows are in memory would be left with
+ * nothing leading to them until the node restarts: remove them now.
  */
 static void
 tempcat_before_exit(int code, Datum arg)
@@ -723,7 +727,11 @@ tempcat_before_exit(int code, Datum arg)
 	pg_atomic_write_u32(&st->ownedMax, InvalidOid);
 
 	if (leftovers)
+	{
+		if (tc_area != NULL)
+			tempcat_unlink_live_relations();
 		tempcat_unmark_swept(MyDatabaseId);
+	}
 }
 
 static void
@@ -2026,6 +2034,52 @@ tempcat_area_has_live_rows(void)
 		}
 	}
 	return false;
+}
+
+/*
+ * Remove the files of a temporary relation of a session that is gone, or
+ * going: nothing else leads to them, as its catalog rows are gone with the
+ * session's area, or are leftovers that the sweep removes.  Not
+ * transactional, and that is fine: nobody can use such a relation.
+ */
+static void
+tempcat_unlink_files(Form_pg_class form)
+{
+	RelFileNode rnode;
+	SMgrRelation srel;
+
+	if (form->relpersistence != RELPERSISTENCE_TEMP ||
+		!OidIsValid(form->relfilenode))
+		return;
+
+	rnode.spcNode = OidIsValid(form->reltablespace) ?
+		form->reltablespace : MyDatabaseTableSpace;
+	rnode.dbNode = MyDatabaseId;
+	rnode.relNode = form->relfilenode;
+	srel = smgropen(rnode, TempRelBackendId,
+					IsAccessMethodAO(form->relam) ? SMGR_AO : SMGR_MD);
+	/* (isRedo: the files may be gone already) */
+	smgrdounlinkall(&srel, 1, true);
+	smgrclose(srel);
+}
+
+/* At session exit: see tempcat_before_exit(). */
+static void
+tempcat_unlink_live_relations(void)
+{
+	int			catidx = tempcat_catalog_index(RelationRelationId);
+	dsa_pointer ep = tc_root->catalogs[catidx].head;
+
+	while (DsaPointerIsValid(ep))
+	{
+		TempcatEntry *e = TC_ADDR(ep);
+		HeapTupleHeader hdr = TCE_DATA(e);
+
+		if (!TransactionIdIsValid(e->xmax) ||
+			tempcat_xid_status(e->xmax) != TCX_COMMITTED)
+			tempcat_unlink_files((Form_pg_class) ((char *) hdr + hdr->t_hoff));
+		ep = e->next;
+	}
 }
 
 void
@@ -3400,7 +3454,10 @@ tempcat_sweep_objects(void)
 			!tempcat_disk_object_exists(NamespaceRelationId, form->relnamespace))
 		{
 			if (tempcat_sweep_delete(rel, tup))
+			{
+				tempcat_unlink_files(form);
 				ndeleted++;
+			}
 		}
 	}
 	systable_endscan(scan);
