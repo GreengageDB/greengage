@@ -107,7 +107,11 @@
 #include "catalog/pg_index.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_foreign_table.h"
 #include "catalog/pg_policy.h"
+#include "catalog/pg_seclabel.h"
+#include "catalog/pg_stat_last_operation.h"
+#include "catalog/pg_type_encoding.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_rewrite.h"
@@ -233,6 +237,16 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{Anum_gp_partition_template_relid, 0}, {TCK_OID, TCK_NONE}},
 	{PolicyRelationId, Anum_pg_policy_polrelid, REL, 0, 0, 0, 0,
 	{Anum_pg_policy_polrelid, Anum_pg_policy_oid}, {TCK_OID, TCK_OID}},
+	/* foreign and external tables */
+	{ForeignTableRelationId, Anum_pg_foreign_table_ftrelid, REL, 0, 0, 0, 0,
+	{Anum_pg_foreign_table_ftrelid, 0}, {TCK_OID, TCK_NONE}},
+	{SecLabelRelationId, Anum_pg_seclabel_objoid, InvalidOid,
+		Anum_pg_seclabel_classoid, 0, 0, 0,
+	{Anum_pg_seclabel_objoid, 0}, {TCK_OID, TCK_NONE}},
+	/* GPDB's DDL tracking (MetaTrackAddObject() and friends) */
+	{StatLastOpRelationId, Anum_pg_stat_last_operation_objid, InvalidOid,
+		Anum_pg_stat_last_operation_classid, 0, 0, 0,
+	{Anum_pg_stat_last_operation_objid, 0}, {TCK_OID, TCK_NONE}},
 	/* objects in a temporary namespace kept in memory, and their parts */
 	{ProcedureRelationId, Anum_pg_proc_pronamespace, NamespaceRelationId, 0, 0, 0, 0,
 	{Anum_pg_proc_oid, Anum_pg_proc_proname}, {TCK_OID, TCK_NAME}},
@@ -246,6 +260,8 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{Anum_pg_enum_enumtypid, Anum_pg_enum_oid}, {TCK_OID, TCK_OID}},
 	{RangeRelationId, Anum_pg_range_rngtypid, TypeRelationId, 0, 0, 0, 0,
 	{Anum_pg_range_rngtypid, 0}, {TCK_OID, TCK_NONE}},
+	{TypeEncodingRelationId, Anum_pg_type_encoding_typid, TypeRelationId, 0, 0, 0, 0,
+	{Anum_pg_type_encoding_typid, 0}, {TCK_OID, TCK_NONE}},
 	{StatisticExtRelationId, Anum_pg_statistic_ext_stxrelid, REL, 0, 0, 0, 0,
 	{Anum_pg_statistic_ext_stxrelid, Anum_pg_statistic_ext_oid}, {TCK_OID, TCK_OID}},
 	{StatisticExtDataRelationId, Anum_pg_statistic_ext_data_stxoid, StatisticExtRelationId, 0, 0, 0, 0,

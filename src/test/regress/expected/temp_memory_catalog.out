@@ -222,11 +222,11 @@ DROP FUNCTION pg_temp.tc_att_count(oid);
 -- cannot see which of its temporary tables still exist.
 -- (Checked on the coordinator; the segments purge theirs at the writer's
 -- next transaction.)
-CREATE FUNCTION pg_temp.tc_wait_analyze_count_zero(r oid) RETURNS bigint LANGUAGE plpgsql AS $$
+CREATE FUNCTION pg_temp.tc_wait_analyze_count(r oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
 BEGIN
   FOR i IN 1..100 LOOP
     PERFORM pg_stat_clear_snapshot();
-    EXIT WHEN pg_stat_get_analyze_count(r) = 0;
+    EXIT WHEN pg_stat_get_analyze_count(r) = n;
     PERFORM pg_sleep(0.1);
   END LOOP;
   RETURN pg_stat_get_analyze_count(r);
@@ -234,7 +234,7 @@ END $$;
 CREATE TEMP TABLE tc_stat_purge (a int) DISTRIBUTED BY (a);
 ANALYZE tc_stat_purge;
 SELECT 'tc_stat_purge'::regclass::oid AS tc_stat_purge_oid \gset
-SELECT pg_stat_get_analyze_count(:tc_stat_purge_oid) AS analyze_count;
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 1) AS analyze_count;
  analyze_count 
 ---------------
              1
@@ -248,13 +248,13 @@ SELECT pg_sleep(0.6);
  
 (1 row)
 
-SELECT pg_temp.tc_wait_analyze_count_zero(:tc_stat_purge_oid) AS analyze_count;
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 0) AS analyze_count;
  analyze_count 
 ---------------
              0
 (1 row)
 
-DROP FUNCTION pg_temp.tc_wait_analyze_count_zero(oid);
+DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
 -- A function evaluated in a separate slice on the coordinator (entry-db
 -- reader) sees the temporary table too.
 CREATE FUNCTION tempcat_count_basic() RETURNS bigint LANGUAGE sql AS 'SELECT count(*) FROM tc_basic';
@@ -1008,6 +1008,59 @@ ERROR:  ordinary objects cannot depend on temporary objects kept in memory
 DROP TABLE tc_perm_trg;
 DROP SEQUENCE tc_dep_seq;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
+-- Foreign (external) tables, security labels, type encodings and the DDL
+-- tracking rows (pg_stat_last_operation) of temporary objects are kept in
+-- memory too.
+LOAD 'dummy_seclabel';
+CREATE TEMP TABLE tc_labeled (a int) DISTRIBUTED BY (a);
+SECURITY LABEL ON TABLE tc_labeled IS 'classified';
+TRUNCATE tc_labeled;
+CREATE POLICY tc_labeled_pol ON tc_labeled USING (a > 0);
+CREATE DOMAIN pg_temp.tc_enc_dom AS int;
+ALTER TYPE pg_temp.tc_enc_dom SET DEFAULT ENCODING (compresstype = zlib);
+CREATE EXTERNAL WEB TEMP TABLE tc_ext (a int) EXECUTE 'echo 1' FORMAT 'text';
+SELECT label FROM pg_seclabel WHERE objoid = 'tc_labeled'::regclass;
+   label    
+------------
+ classified
+(1 row)
+
+SELECT count(*) AS encodings FROM pg_type_encoding WHERE typid = 'pg_temp.tc_enc_dom'::regtype;
+ encodings 
+-----------
+         1
+(1 row)
+
+SELECT count(*) AS ext_rows FROM tc_ext;
+ ext_rows 
+----------
+        3
+(1 row)
+
+SELECT classid::regclass, staactionname FROM pg_stat_last_operation
+WHERE objid IN ('tc_labeled'::regclass, (SELECT oid FROM pg_policy WHERE polname = 'tc_labeled_pol')) ORDER BY 1, 2;
+  classid  | staactionname 
+-----------+---------------
+ pg_class  | TRUNCATE
+ pg_class  | VACUUM
+ pg_policy | CREATE
+(3 rows)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT (SELECT count(*) FROM pg_seclabel WHERE objoid >= 4026531840)
+     + (SELECT count(*) FROM pg_type_encoding WHERE typid >= 4026531840)
+     + (SELECT count(*) FROM pg_foreign_table WHERE ftrelid >= 4026531840)
+     + (SELECT count(*) FROM gp_dist_random('pg_foreign_table') WHERE ftrelid >= 4026531840)
+     + (SELECT count(*) FROM pg_stat_last_operation WHERE objid >= 4026531840) AS on_disk;
+ on_disk 
+---------
+       0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_labeled;
+DROP EXTERNAL TABLE tc_ext;
+DROP DOMAIN pg_temp.tc_enc_dom;
 -- Domains, composite types and row-level security policies are supported.
 CREATE DOMAIN pg_temp.tc_dom AS int CHECK (VALUE > 0);
 CREATE TYPE pg_temp.tc_comp AS (x int, y text);
