@@ -768,9 +768,10 @@ tempcat_before_exit(int code, Datum arg)
 
 	if (leftovers)
 	{
+		/* (first, so that an error removing files does not lose it) */
+		tempcat_unmark_swept(MyDatabaseId);
 		if (tc_area != NULL)
 			tempcat_unlink_live_relations();
-		tempcat_unmark_swept(MyDatabaseId);
 	}
 }
 
@@ -1390,10 +1391,12 @@ tempcat_note_disk_row(Relation rel, HeapTuple tup)
 	/*
 	 * A pg_shdepend row: tempcat_route_insert() published its role, which
 	 * other in-memory rows may not refer to.  Disk rows speak for themselves.
+	 * Recompute the published roles at the next transaction (once, however
+	 * many rows go to disk).
 	 */
 	if (RelationGetRelid(rel) == SharedDependRelationId)
 	{
-		tempcat_recompute_roles();
+		tc_roles_dirty = true;
 		return;
 	}
 
@@ -2442,11 +2445,14 @@ tempcat_check_deletable(TempcatEntry *e)
 
 /*
  * For SQL DML on a catalog (heapam_handler.c): has the current transaction
- * already deleted or updated the row, e.g. earlier in a command that meets
- * the row twice?  Then fill in 'tmfd' for TM_SelfModified, as heap_delete()
- * does, and the executor skips the row.
+ * already deleted or updated the row?  Like heap_delete() and
+ * heap_update(): TM_SelfModified, with 'tmfd' filled in, if the current
+ * command (or a later one) did, e.g. one that meets the row twice, and the
+ * executor skips the row; TM_Invisible if an earlier command did, which the
+ * caller's snapshot should not have let it see; TM_Ok otherwise.  (A
+ * TM_Result, as an int for tempcat.h.)
  */
-bool
+int
 tempcat_self_modified(Relation rel, ItemPointer tid, TM_FailureData *tmfd)
 {
 	dsa_pointer ep;
@@ -2454,11 +2460,13 @@ tempcat_self_modified(Relation rel, ItemPointer tid, TM_FailureData *tmfd)
 
 	if (!TransactionIdIsValid(e->xmax) ||
 		!TransactionIdIsCurrentTransactionId(e->xmax))
-		return false;
+		return TM_Ok;
+	if (e->cmax < GetCurrentCommandId(false))
+		return TM_Invisible;
 	tmfd->ctid = *tid;
 	tmfd->xmax = e->xmax;
 	tmfd->cmax = e->cmax;
-	return true;
+	return TM_SelfModified;
 }
 
 /* Set xmax on an entry.  Caller holds the lock and has checked it. */
@@ -3121,6 +3129,31 @@ tempcat_oid_live_elsewhere(Oid oid, Oid dbid)
 }
 
 /*
+ * An object's row by OID, as of the snapshot of the query that is running,
+ * if any: a row that a scan returns must be judged by the same snapshot
+ * (e.g. pg_dump's, which sees objects dropped since it started).
+ */
+static HeapTuple
+tempcat_fetch_object_row(Relation rel, Oid indexId, AttrNumber oidattr,
+						 Oid objectId)
+{
+	SysScanDesc scan;
+	ScanKeyData key;
+	HeapTuple	tup;
+
+	ScanKeyInit(&key, oidattr, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectId));
+	scan = systable_beginscan(rel, indexId, true,
+							  ActiveSnapshotSet() ? GetActiveSnapshot() : NULL,
+							  1, &key);
+	tup = systable_getnext(scan);
+	if (HeapTupleIsValid(tup))
+		tup = heap_copytuple(tup);
+	systable_endscan(scan);
+	return tup;
+}
+
+/*
  * Is the object an ordinary one rather than a temporary object of another
  * session?  An ordinary object has its catalog row on disk, outside the
  * temporary schemas.  A temporary object of another session has its row in
@@ -3147,8 +3180,23 @@ tempcat_ordinary_object(Oid classId, Oid objectId, int depth)
 		return true;
 
 	if (classId == NamespaceRelationId)
-		return get_namespace_name(objectId) != NULL &&
-			!isAnyTempNamespace(objectId);
+	{
+		bool		ordinary = false;
+
+		rel = table_open(NamespaceRelationId, AccessShareLock);
+		tup = tempcat_fetch_object_row(rel, NamespaceOidIndexId,
+									   Anum_pg_namespace_oid, objectId);
+		table_close(rel, AccessShareLock);
+		if (HeapTupleIsValid(tup))
+		{
+			const char *nspname = NameStr(((Form_pg_namespace) GETSTRUCT(tup))->nspname);
+
+			ordinary = strncmp(nspname, "pg_temp_", 8) != 0 &&
+				strncmp(nspname, "pg_toast_temp_", 14) != 0;
+			heap_freetuple(tup);
+		}
+		return ordinary;
+	}
 
 	/* Objects of other classes are never kept in memory. */
 	catidx = tempcat_catalog_index(classId);
@@ -3172,22 +3220,11 @@ tempcat_ordinary_object(Oid classId, Oid objectId, int depth)
 	}
 
 	rel = table_open(classId, AccessShareLock);
-	if (classId == AttrDefaultRelationId)
-	{
-		/* not in objectaddress.c's ObjectProperty in this version */
-		SysScanDesc scan;
-		ScanKeyData key;
-
-		ScanKeyInit(&key, Anum_pg_attrdef_oid, BTEqualStrategyNumber, F_OIDEQ,
-					ObjectIdGetDatum(objectId));
-		scan = systable_beginscan(rel, AttrDefaultOidIndexId, true, NULL, 1, &key);
-		tup = systable_getnext(scan);
-		if (HeapTupleIsValid(tup))
-			tup = heap_copytuple(tup);
-		systable_endscan(scan);
-	}
-	else
-		tup = get_catalog_object_by_oid(rel, oidattr, objectId);
+	/* (pg_attrdef is not in objectaddress.c's ObjectProperty in this version) */
+	tup = tempcat_fetch_object_row(rel,
+								   classId == AttrDefaultRelationId ?
+								   AttrDefaultOidIndexId : get_object_oid_index(classId),
+								   oidattr, objectId);
 
 	found = HeapTupleIsValid(tup);
 	if (found)

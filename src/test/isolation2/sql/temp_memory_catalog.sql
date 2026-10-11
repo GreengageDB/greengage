@@ -720,6 +720,21 @@ SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_c
 1q:
 2q:
 
+-- Whether a row with a reserved OID belongs to an ordinary object is judged
+-- as of the query's snapshot: pg_dump's sees an ordinary object dropped
+-- after it started, and must dump it.
+SELECT gp_inject_fault_infinite('oid_in_tempcat_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TYPE tc_snap_type AS (x int);
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_snap_type'::regtype::oid >= 4026531840 AS reserved;
+1: BEGIN ISOLATION LEVEL REPEATABLE READ;
+1: SET gp_temp_memory_catalog_hide_others = on;
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+DROP TYPE tc_snap_type;
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+1: COMMIT;
+1q:
+
 DROP TABLE tc_relfile_paths;
 DROP FUNCTION tc_relfile_path_on_segs(regclass);
 DROP FUNCTION tc_relfile_path_on_coordinator(regclass);

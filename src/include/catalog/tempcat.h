@@ -73,7 +73,7 @@ extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup);
 extern void tempcat_delete(Relation rel, ItemPointer tid);
-extern bool tempcat_self_modified(Relation rel, ItemPointer tid,
+extern int	tempcat_self_modified(Relation rel, ItemPointer tid,
 								  struct TM_FailureData *tmfd);
 extern void tempcat_inplace_update(Relation rel, HeapTuple tup);
 extern void tempcat_freeze(Relation rel, HeapTuple tup);

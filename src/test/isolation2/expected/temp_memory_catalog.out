@@ -1904,6 +1904,46 @@ CREATE TABLE
 1q: ... <quitting>
 2q: ... <quitting>
 
+-- Whether a row with a reserved OID belongs to an ordinary object is judged
+-- as of the query's snapshot: pg_dump's sees an ordinary object dropped
+-- after it started, and must dump it.
+SELECT gp_inject_fault_infinite('oid_in_tempcat_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+CREATE TYPE tc_snap_type AS (x int);
+CREATE TYPE
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT 'tc_snap_type'::regtype::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ t        
+(1 row)
+1: BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN
+1: SET gp_temp_memory_catalog_hide_others = on;
+SET
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+ count 
+-------
+ 1     
+(1 row)
+DROP TYPE tc_snap_type;
+DROP TYPE
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+ count 
+-------
+ 1     
+(1 row)
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+
 DROP TABLE tc_relfile_paths;
 DROP TABLE
 DROP FUNCTION tc_relfile_path_on_segs(regclass);
