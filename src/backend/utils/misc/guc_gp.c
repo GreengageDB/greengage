@@ -656,7 +656,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		NULL, NULL, NULL
 	},
 	{
-		{"gp_enable_temp_memory_catalog", PGC_USERSET, CUSTOM_OPTIONS,
+		{"gp_enable_temp_memory_catalog", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Keep catalog rows of temporary objects in memory."),
 			gettext_noop("Takes effect when the session's temporary schema is "
 						 "created: objects in it then get OIDs from a reserved "
@@ -3160,7 +3160,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 struct config_int ConfigureNamesInt_gp[] =
 {
 	{
-		{"gp_temp_memory_catalog_max_size", PGC_USERSET, CUSTOM_OPTIONS,
+		{"gp_temp_memory_catalog_max_size", PGC_USERSET, RESOURCES_MEM,
 			gettext_noop("Maximum size of the in-memory catalog of temporary objects, per process."),
 			gettext_noop("Catalog rows that do not fit are stored in the on-disk catalog. "
 						 "The memory is dynamic shared memory (in /dev/shm with the default "

@@ -464,6 +464,21 @@ dsm_create(Size size, int flags)
 		 */
 		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 && errno != EEXIST)
 		{
+			/*
+			 * Lack of space is what the caller expects.  Other failures
+			 * (e.g. permissions, too many open files) point at a
+			 * misconfiguration, which should not go unnoticed: log the first
+			 * one of the process.
+			 */
+			static bool reported = false;
+
+			if (errno != ENOSPC && errno != ENOMEM && !reported)
+			{
+				reported = true;
+				ereport(LOG,
+						(errmsg("could not create dynamic shared memory segment: %m")));
+			}
+
 			if (seg->resowner != NULL)
 				ResourceOwnerForgetDSM(seg->resowner, seg);
 			dlist_delete(&seg->node);
