@@ -774,3 +774,11 @@ RESET gp_temp_memory_catalog_disk_only;
 \c
 DROP FUNCTION tempcat_disk_rows_qd();
 DROP FUNCTION tempcat_disk_rows_segs();
+
+-- Only superusers can change the size limit of the in-memory catalog: its
+-- memory is shared memory of the node, if charged to the session's vmem.
+CREATE ROLE tc_guc_user;
+SET ROLE tc_guc_user;
+SET gp_temp_memory_catalog_max_size = 1048576;
+RESET ROLE;
+DROP ROLE tc_guc_user;

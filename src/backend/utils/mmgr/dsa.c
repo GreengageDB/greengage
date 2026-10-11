@@ -59,6 +59,7 @@
 #include "utils/dsa.h"
 #include "utils/freepage.h"
 #include "utils/memutils.h"
+#include "utils/vmem_tracker.h"
 
 /*
  * The size of the initial DSM segment that backs a dsa_area created by
@@ -392,6 +393,12 @@ struct dsa_area
 	 * DSM control segment free (0: no limit).
 	 */
 	uint32		min_free_slots;
+
+	/*
+	 * GPDB: charge the segments this backend creates (and frees) to its
+	 * vmem (gp_vmem_protect_limit, resource groups).
+	 */
+	bool		vmem_tracked;
 };
 
 #define DSA_SPAN_NOTHING_FREE	((uint16) -1)
@@ -1085,6 +1092,18 @@ dsa_set_min_free_slots(dsa_area *area, uint32 nslots)
 }
 
 /*
+ * GPDB: charge the segments that this backend creates for the area to its
+ * vmem from now on, and release them when it frees them; an allocation
+ * that the vmem limits do not allow fails (as when the size limit is
+ * reached).  The caller accounts for the segments created before.
+ */
+void
+dsa_set_vmem_tracked(dsa_area *area)
+{
+	area->vmem_tracked = true;
+}
+
+/*
  * Aggressively free all spare memory in the hope of returning DSM segments to
  * the operating system.
  */
@@ -1330,6 +1349,7 @@ create_internal(void *place, size_t size,
 	area->no_oom = false;
 	area->min_free_space = 0;
 	area->min_free_slots = 0;
+	area->vmem_tracked = false;
 	memset(area->segment_maps, 0, sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
 	area->freed_segment_counter = 0;
@@ -1389,6 +1409,7 @@ attach_internal(void *place, dsm_segment *segment, dsa_handle handle)
 	area->no_oom = false;
 	area->min_free_space = 0;
 	area->min_free_slots = 0;
+	area->vmem_tracked = false;
 	memset(&area->segment_maps[0], 0,
 		   sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
@@ -1922,6 +1943,8 @@ destroy_superblock(dsa_area *area, dsa_pointer span_pointer)
 				   segment_map->header->size);
 			area->control->total_segment_size -=
 				segment_map->header->size;
+			if (area->vmem_tracked)
+				VmemTracker_ReleaseVmem(segment_map->header->size);
 			dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
 			dsm_detach(segment_map->segment);
 			area->control->segment_handles[index] = DSM_HANDLE_INVALID;
@@ -2236,13 +2259,20 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 		if (dsm_free_slots(&nfree, &nmax) && nfree <= area->min_free_slots)
 			return NULL;
 	}
+	if (area->vmem_tracked &&
+		VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
+		return NULL;
 
 	/* Create the segment. */
 	segment = dsm_create(total_size,
 						 area->no_oom ?
 						 DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0);
 	if (segment == NULL)
+	{
+		if (area->vmem_tracked)
+			VmemTracker_ReleaseVmem(total_size);
 		return NULL;
+	}
 	dsm_pin_segment(segment);
 	if (area->mapping_pinned)
 		dsm_pin_mapping(segment);

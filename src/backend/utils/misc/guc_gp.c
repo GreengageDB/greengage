@@ -3160,7 +3160,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 struct config_int ConfigureNamesInt_gp[] =
 {
 	{
-		{"gp_temp_memory_catalog_max_size", PGC_USERSET, RESOURCES_MEM,
+		{"gp_temp_memory_catalog_max_size", PGC_SUSET, RESOURCES_MEM,
 			gettext_noop("Maximum size of the in-memory catalog of temporary objects, per process."),
 			gettext_noop("Catalog rows that do not fit are stored in the on-disk catalog. "
 						 "The memory is dynamic shared memory (in /dev/shm with the default "

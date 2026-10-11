@@ -146,6 +146,7 @@
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
 #include "utils/syscache.h"
+#include "utils/vmem_tracker.h"
 #include "utils/snapmgr.h"
 
 /* GUCs */
@@ -537,14 +538,27 @@ tempcat_attach(bool create)
 	if (tc_dsm_low)
 		return false;
 
+	/*
+	 * The area's memory is the session's, though shared: charge it to the
+	 * session's vmem (gp_vmem_protect_limit, resource groups), its first
+	 * segment here and later ones as the area grows (dsa_set_vmem_tracked()).
+	 * Without vmem to spare, rows go to the on-disk catalog.
+	 */
+	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
+		return false;
+
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	tc_area = dsa_try_create(tempcat_tranche_id());
 	if (tc_area != NULL)
+	{
 		dsa_pin_mapping(tc_area);
+		dsa_set_vmem_tracked(tc_area);
+	}
 	MemoryContextSwitchTo(oldcxt);
 	if (tc_area == NULL)
 	{
 		/* (the space or the slots ran out since the check) */
+		VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
 		tc_dsm_low = true;
 		return false;
 	}
