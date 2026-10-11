@@ -3301,9 +3301,15 @@ tempcat_mark_swept(Oid dbid)
 /*
  * Delete an on-disk leftover row, unless somebody else deleted or updated it
  * meanwhile (its session at exit, or another sweep): the sweep runs inside
- * users' commands, which must not fail because of it.  Rows in our own
- * memory are never leftovers.
+ * users' commands, which must not fail because of it.  Nor wait: if a
+ * transaction still in progress deletes the row (another sweep that has
+ * not committed yet, or a transaction prepared by a session that is gone),
+ * leave it alone, and the database to be swept again in case that
+ * transaction aborts (tc_sweep_incomplete).  Rows in our own memory are
+ * never leftovers.
  */
+static bool tc_sweep_incomplete = false;
+
 static bool
 tempcat_sweep_delete(Relation rel, HeapTuple tup)
 {
@@ -3314,12 +3320,15 @@ tempcat_sweep_delete(Relation rel, HeapTuple tup)
 		return false;
 
 	result = heap_delete(rel, &tup->t_self, GetCurrentCommandId(true),
-						 InvalidSnapshot, true /* wait for commit */ ,
+						 InvalidSnapshot, false /* do not wait */ ,
 						 &tmfd, false /* changingPart */ );
 	switch (result)
 	{
 		case TM_Ok:
 			return true;
+		case TM_BeingModified:
+			tc_sweep_incomplete = true;
+			return false;
 		case TM_SelfModified:
 		case TM_Updated:
 		case TM_Deleted:
@@ -3675,7 +3684,15 @@ tempcat_sweep_if_needed(bool allow_force)
 
 	if (force || !tempcat_db_swept(MyDatabaseId))
 	{
+		tc_sweep_incomplete = false;
 		tempcat_sweep_orphans();
+		if (tc_sweep_incomplete)
+		{
+			/* (and leave the tracking of an earlier sweep as it is) */
+			UnlockDatabaseObject(DatabaseRelationId, MyDatabaseId,
+								 TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
+			return;
+		}
 		tempcat_mark_swept(MyDatabaseId);
 
 		/* If the deletions do not commit, sweep again; see below. */

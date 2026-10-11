@@ -455,6 +455,39 @@ SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regty
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT tc_retry('DROP TYPE tc_rb_type');
 
+-- The sweep does not wait for a transaction that deletes the same leftover
+-- (another sweep that has not committed yet): it leaves the row alone, and
+-- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
+-- asking for a sweep; session 1 sweeps the first ones and stays open.)
+CREATE TYPE tc_w_type AS (x int);
+CREATE TABLE tc_w1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_w2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+3: SET gp_enable_temp_memory_catalog = on;
+3: CREATE TEMP TABLE tc_wl1 (c tc_w_type) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+3q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: BEGIN;
+1: DROP TABLE tc_w1;
+4: SET gp_enable_temp_memory_catalog = on;
+4: CREATE TEMP TABLE tc_wl2 (c tc_w_type) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+4q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+-- (without waiting, so a lock timeout would fail it)
+2: SET lock_timeout = '10s';
+2: DROP TABLE tc_w2;
+1: COMMIT;
+1q:
+2q:
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT tc_retry('DROP TYPE tc_w_type');
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions

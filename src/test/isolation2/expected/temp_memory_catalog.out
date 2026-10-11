@@ -1178,6 +1178,119 @@ SELECT tc_retry('DROP TYPE tc_rb_type');
  done     
 (1 row)
 
+-- The sweep does not wait for a transaction that deletes the same leftover
+-- (another sweep that has not committed yet): it leaves the row alone, and
+-- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
+-- asking for a sweep; session 1 sweeps the first ones and stays open.)
+CREATE TYPE tc_w_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_w1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_w2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+3: SET gp_enable_temp_memory_catalog = on;
+SET
+3: CREATE TEMP TABLE tc_wl1 (c tc_w_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+3q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+1: BEGIN;
+BEGIN
+1: DROP TABLE tc_w1;
+DROP TABLE
+4: SET gp_enable_temp_memory_catalog = on;
+SET
+4: CREATE TEMP TABLE tc_wl2 (c tc_w_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+4q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+-- (without waiting, so a lock timeout would fail it)
+2: SET lock_timeout = '10s';
+SET
+2: DROP TABLE tc_w2;
+DROP TABLE
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+2q: ... <quitting>
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_w_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions
