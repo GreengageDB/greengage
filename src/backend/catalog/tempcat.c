@@ -1212,7 +1212,17 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		SysScanDesc scan;
 		bool		collides;
 
-		if (oid < base || oid >= base + span)
+		if (!OidIsValid(oid))
+		{
+			/*
+			 * First use of the slice since the node started: start at a
+			 * random point rather than where its users before a restart or
+			 * a failover started, whose objects may still live in QE
+			 * writers on the segments (see tempcat_check_preassigned_oid()).
+			 */
+			oid = base + (Oid) (random() % span);
+		}
+		else if (oid < base || oid >= base + span)
 			oid = base;
 		st->nextOid = oid + 1;
 
@@ -1272,6 +1282,7 @@ tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 	SysScanDesc scan;
 	SnapshotData snapshot;
 	bool		taken;
+	int			i;
 
 	InitDirtySnapshot(snapshot);
 	ScanKeyInit(&key, oidcolumn, BTEqualStrategyNumber, F_OIDEQ,
@@ -1287,6 +1298,32 @@ tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 						RelationGetRelationName(relation)),
 				 errhint("OID %u belongs to an object that exists on this node only; gpcheckcat reports such objects.",
 						 oid)));
+
+	/*
+	 * Nor may another process of this node publish it within its bounds: a
+	 * QE writer of a session whose coordinator is gone may still run, with
+	 * its objects in memory, where the scan above does not see them, while
+	 * the coordinator, restarted or failed over, assigns the OIDs of its
+	 * slices anew.  Otherwise the slices of the coordinator's sessions do
+	 * not overlap.
+	 */
+	for (i = 0; i < TempcatShared->nprocs; i++)
+	{
+		TempcatProcState *st = &TempcatShared->procs[i];
+		Oid			lo;
+		Oid			hi;
+
+		if (i == MyProc->pgprocno || st->databaseId != MyDatabaseId)
+			continue;
+		lo = pg_atomic_read_u32(&st->ownedMin);
+		hi = pg_atomic_read_u32(&st->ownedMax);
+		if (OidIsValid(lo) && oid >= lo && oid <= hi)
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("OID %u of a new temporary object is in use by another session on this node",
+							oid),
+					 errhint("A session of a coordinator that restarted or failed over may still run here; retry when it has ended.")));
+	}
 }
 
 /* The first attribute of these catalogs is their oid column. */
