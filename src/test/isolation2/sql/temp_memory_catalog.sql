@@ -453,6 +453,17 @@ SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FRO
 SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+-- Likewise if the sweep's transaction is prepared and then rolled back, by
+-- another transaction, which commits.  (Here in a utility-mode session on
+-- the coordinator; the fault allows its PREPARE TRANSACTION, see below.)
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+-1U: BEGIN;
+-1U: DROP TABLE tc_rb_dummy;
+-1U: PREPARE TRANSACTION 'tc_rb_sweep';
+-1U: ROLLBACK PREPARED 'tc_rb_sweep';
+-1Uq:
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
 2: BEGIN;
 2: DROP TABLE tc_rb_dummy;
 2: ROLLBACK;

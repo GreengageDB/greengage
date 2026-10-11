@@ -1168,6 +1168,33 @@ SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid
 -----------
  t         
 (1 row)
+-- Likewise if the sweep's transaction is prepared and then rolled back, by
+-- another transaction, which commits.  (Here in a utility-mode session on
+-- the coordinator; the fault allows its PREPARE TRANSACTION, see below.)
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+-1U: BEGIN;
+BEGIN
+-1U: DROP TABLE tc_rb_dummy;
+DROP TABLE
+-1U: PREPARE TRANSACTION 'tc_rb_sweep';
+PREPARE TRANSACTION
+-1U: ROLLBACK PREPARED 'tc_rb_sweep';
+ROLLBACK PREPARED
+-1Uq: ... <quitting>
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
 2: BEGIN;
 BEGIN
 2: DROP TABLE tc_rb_dummy;

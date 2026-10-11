@@ -3888,6 +3888,15 @@ tempcat_sweep_xact_callback(XactEvent event, void *arg)
 	{
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PARALLEL_COMMIT:
+
+			/*
+			 * Unless the sweep's transaction was prepared: the transaction
+			 * that finishes it with COMMIT or ROLLBACK PREPARED commits
+			 * either way (on a QE, the one that runs ABORT PREPARED).
+			 */
+			if (TransactionIdIsValid(tc_sweep_xid) &&
+				!TransactionIdIsCurrentTransactionId(tc_sweep_xid))
+				break;
 			tempcat_sweep_resolved(true);
 			break;
 		case XACT_EVENT_ABORT:
