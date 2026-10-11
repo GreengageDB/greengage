@@ -6,3 +6,5 @@ SysScanDescData
 struct SysScanDescData
 SharedSnapshotSlot
 struct SharedSnapshotSlot
+HeapScanDescData
+struct HeapScanDescData

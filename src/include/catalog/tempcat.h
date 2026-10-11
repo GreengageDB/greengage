@@ -102,6 +102,7 @@ extern int	tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b);
 /* Objects of other sessions */
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
+extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_hide_disk_row(Relation rel, HeapTuple tup);
 extern bool tempcat_hide_disk_slot(Relation rel, struct TupleTableSlot *slot);
 

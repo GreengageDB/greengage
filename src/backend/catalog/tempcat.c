@@ -2718,6 +2718,17 @@ tempcat_oid_live_now(Oid oid, Oid dbid)
 	return false;
 }
 
+/*
+ * May the OID belong to a temporary object that a live session of the
+ * database keeps in memory?  For pgstat_vacuum_stat(), which must not purge
+ * the statistics of objects it cannot see.
+ */
+bool
+tempcat_oid_maybe_live(Oid oid, Oid dbid)
+{
+	return TempcatShared != NULL && tempcat_oid_live_now(oid, dbid);
+}
+
 static bool
 tempcat_oid_live_elsewhere(Oid oid, Oid dbid)
 {

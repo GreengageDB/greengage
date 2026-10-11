@@ -43,6 +43,7 @@
 #include "access/xlog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
+#include "catalog/tempcat.h"
 #include "executor/instrument.h"
 #include "common/ip.h"
 #include "executor/instrument.h"
@@ -1182,6 +1183,13 @@ pgstat_vacuum_stat(void)
 			continue;
 
 		/*
+		 * GPDB: nor drop the statistics of temporary tables that other
+		 * sessions keep in memory, which we cannot see (see tempcat.c)
+		 */
+		if (tempcat_oid_maybe_live(tabid, MyDatabaseId))
+			continue;
+
+		/*
 		 * Not there, so add this table's Oid to the message
 		 */
 		msg.m_tableid[msg.m_nentries++] = tabid;
@@ -1239,6 +1247,10 @@ pgstat_vacuum_stat(void)
 			CHECK_FOR_INTERRUPTS();
 
 			if (hash_search(htab, (void *) &funcid, HASH_FIND, NULL) != NULL)
+				continue;
+
+			/* GPDB: see above */
+			if (tempcat_oid_maybe_live(funcid, MyDatabaseId))
 				continue;
 
 			/*

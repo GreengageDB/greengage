@@ -229,6 +229,24 @@ SELECT count(*), sum(c) FROM tc_aoco2;
 CREATE TEMP TABLE tc_ctas AS SELECT * FROM tc_serial DISTRIBUTED BY (id);
 SELECT count(*) FROM tc_ctas;
 
+-- Utility commands that scan the catalogs directly (heap_getnext()) see the
+-- in-memory rows too.
+CREATE TYPE tc_ct AS (a int);
+CREATE TEMP TABLE tc_typed_of OF tc_ct DISTRIBUTED RANDOMLY;
+ALTER TYPE tc_ct ADD ATTRIBUTE b int;
+ALTER TYPE tc_ct ADD ATTRIBUTE b int CASCADE;
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
+DROP TABLE tc_typed_of;
+DROP TYPE tc_ct;
+CREATE TEMP TABLE tc_grant (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_grant_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_temp TO PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pg_temp FROM PUBLIC;
+SELECT relacl IS NOT NULL AS table_acl FROM pg_class WHERE oid = 'tc_grant'::regclass;
+SELECT proacl IS NOT NULL AS function_acl FROM pg_proc WHERE proname = 'tc_grant_func';
+DROP TABLE tc_grant;
+DROP FUNCTION pg_temp.tc_grant_func();
+
 -- SQL queries on the catalogs see the in-memory rows, on the coordinator and
 -- on the segments.
 SELECT relname, relkind, relpersistence FROM pg_class
