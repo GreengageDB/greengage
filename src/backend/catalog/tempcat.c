@@ -2047,6 +2047,29 @@ tempcat_start_transaction(void)
 		ResetPlanCache();
 	}
 
+	/*
+	 * A retrieve connection can outlive the writer of the cursor session it
+	 * serves, which ends or is replaced (e.g. after its gang was reset).
+	 * Detach from that writer's area then: the area, segments and all, stays
+	 * in memory as long as anyone is attached.  The next lookup attaches to
+	 * the session's current area, if any.
+	 */
+	if (am_cursor_retrieve_handler && tc_area != NULL)
+	{
+		dsa_handle	handle;
+		dsa_pointer rootptr;
+		int			sessionId = RetrieveSessionId();
+
+		if (sessionId < 0 ||
+			!SharedSnapshotGetTempcatArea(sessionId, &handle, &rootptr) ||
+			handle != dsa_get_handle(tc_area))
+		{
+			dsa_detach(tc_area);
+			tc_area = NULL;
+			tc_root = NULL;
+		}
+	}
+
 	/* A sweep was rolled back: the leftovers are still there. */
 	if (TransactionIdIsValid(tc_sweep_xid))
 	{
