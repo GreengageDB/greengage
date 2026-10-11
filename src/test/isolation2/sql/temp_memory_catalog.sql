@@ -475,6 +475,42 @@ SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regty
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT tc_retry('DROP TYPE tc_rb_type');
 
+-- A sweep marks the database as swept only if no session asked for another
+-- sweep meanwhile: one that leaves leftovers while the sweep runs may have
+-- had its rows skipped as those of a live session.  (Session 1 leaves
+-- leftovers, which asks for a sweep; session 2 sweeps in a DROP, stopped by
+-- the fault after its scans on the coordinator, while session 3 leaves
+-- leftovers too.)
+CREATE TYPE tc_mk_type AS (x int);
+CREATE TABLE tc_mk1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_mk2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SET gp_enable_temp_memory_catalog = on;
+1: SET application_name = 'tc_mk_session';
+1: CREATE TEMP TABLE tc_mk_l1 (c tc_mk_type) DISTRIBUTED RANDOMLY;
+3: SET gp_enable_temp_memory_catalog = on;
+3: SET application_name = 'tc_mk_session';
+3: CREATE TEMP TABLE tc_mk_l3 (c tc_mk_type) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1q:
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN (SELECT count(*) FROM pg_stat_activity WHERE application_name = 'tc_mk_session') < 2; PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2&: DROP TABLE tc_mk1;
+SELECT gp_wait_until_triggered_fault('tempcat_sweep_before_mark', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3q:
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_mk_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2<:
+2q:
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_mk_type'::regtype AND objid >= 4026531840;
+4: DROP TABLE tc_mk2;
+4q:
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_mk_type'::regtype AND objid >= 4026531840;
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT tc_retry('DROP TYPE tc_mk_type');
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each

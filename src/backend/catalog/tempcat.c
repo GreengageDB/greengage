@@ -644,6 +644,7 @@ typedef struct TempcatSharedData
 	int			nswept;
 	int			nextswept;		/* entry to replace when the list is full */
 	Oid			swept[TEMPCAT_MAX_SWEPT_DBS];
+	uint64		nunmarks;		/* tempcat_unmark_swept() calls so far */
 	int			nprocs;
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
@@ -682,6 +683,7 @@ TempcatShmemInit(void)
 	SpinLockInit(&TempcatShared->mutex);
 	TempcatShared->nswept = 0;
 	TempcatShared->nextswept = 0;
+	TempcatShared->nunmarks = 0;
 	TempcatShared->nprocs = tempcat_total_procs();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
@@ -3419,6 +3421,8 @@ tempcat_unmark_swept(Oid dbid)
 	int			i;
 
 	SpinLockAcquire(&TempcatShared->mutex);
+	/* (counted even if not marked: a sweep may be about to mark it) */
+	TempcatShared->nunmarks++;
 	for (i = 0; i < TempcatShared->nswept; i++)
 	{
 		if (TempcatShared->swept[i] == dbid)
@@ -3430,14 +3434,38 @@ tempcat_unmark_swept(Oid dbid)
 	SpinLockRelease(&TempcatShared->mutex);
 }
 
-static void
-tempcat_mark_swept(Oid dbid)
+/* The count that tempcat_mark_swept() checks; see there. */
+static uint64
+tempcat_unmark_count(void)
 {
+	uint64		n;
+
+	SpinLockAcquire(&TempcatShared->mutex);
+	n = TempcatShared->nunmarks;
+	SpinLockRelease(&TempcatShared->mutex);
+	return n;
+}
+
+static bool
+tempcat_mark_swept(Oid dbid, uint64 nunmarks)
+{
+	/*
+	 * Not if someone asked for a sweep since 'nunmarks' was read, before the
+	 * sweep began: a session that leaves leftovers stops protecting them
+	 * (clears its OID bounds) before it asks, so the sweep may have skipped
+	 * them as rows of a live session.  The next sweep removes them.
+	 */
+	SpinLockAcquire(&TempcatShared->mutex);
+	if (TempcatShared->nunmarks != nunmarks)
+	{
+		SpinLockRelease(&TempcatShared->mutex);
+		return false;
+	}
+
 	/*
 	 * If the list is full, replace the entries in turn: the databases they
 	 * named are swept again, which is cheap (see tempcat_sweep_catalog()).
 	 */
-	SpinLockAcquire(&TempcatShared->mutex);
 	if (TempcatShared->nswept < TEMPCAT_MAX_SWEPT_DBS)
 		TempcatShared->swept[TempcatShared->nswept++] = dbid;
 	else
@@ -3446,6 +3474,7 @@ tempcat_mark_swept(Oid dbid)
 		TempcatShared->nextswept = (TempcatShared->nextswept + 1) % TEMPCAT_MAX_SWEPT_DBS;
 	}
 	SpinLockRelease(&TempcatShared->mutex);
+	return true;
 }
 
 /*
@@ -3834,16 +3863,22 @@ tempcat_sweep_if_needed(bool allow_force)
 
 	if (force || !tempcat_db_swept(MyDatabaseId))
 	{
+		uint64		nunmarks = tempcat_unmark_count();
+
 		tc_sweep_incomplete = false;
 		tempcat_sweep_orphans();
-		if (tc_sweep_incomplete)
+#ifdef FAULT_INJECTOR
+		/* Test hook: let a session leave leftovers after the scans. */
+		SIMPLE_FAULT_INJECTOR("tempcat_sweep_before_mark");
+#endif
+		if (tc_sweep_incomplete ||
+			!tempcat_mark_swept(MyDatabaseId, nunmarks))
 		{
 			/* (and leave the tracking of an earlier sweep as it is) */
 			UnlockDatabaseObject(DatabaseRelationId, MyDatabaseId,
 								 TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
 			return;
 		}
-		tempcat_mark_swept(MyDatabaseId);
 
 		/* If the deletions do not commit, sweep again; see below. */
 		if (!tc_sweep_callbacks)
