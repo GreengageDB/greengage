@@ -511,6 +511,39 @@ SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_mk_type'::regty
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT tc_retry('DROP TYPE tc_mk_type');
 
+-- Nor while rows of a session that is gone may still come: those that a
+-- transaction it prepared inserted (a QE writer that exits while prepared,
+-- whose transaction distributed recovery commits later).  (Here a
+-- utility-mode session on the coordinator prepares one; with no room in
+-- memory, its rows are all on disk, which allows that, see section 13.)
+CREATE TYPE tc_pp_type AS (x int);
+CREATE TABLE tc_pp1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_pp2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+-1U: SET gp_enable_temp_memory_catalog = on;
+-1U: SET application_name = 'tc_pp_session';
+-1U: BEGIN;
+-1U: CREATE TEMP TABLE tc_pp (c tc_pp_type);
+-1U: SELECT 'tc_pp'::regclass::oid >= 4026531840 AS in_reserved_range;
+-1U: PREPARE TRANSACTION 'tc_pp';
+-1Uq:
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_pp_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: DROP TABLE tc_pp1;
+2q:
+-1U: COMMIT PREPARED 'tc_pp';
+-1Uq:
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_pp_type'::regtype AND objid >= 4026531840;
+3: DROP TABLE tc_pp2;
+3q:
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_pp_type'::regtype AND objid >= 4026531840;
+SELECT count(*) AS namespaces FROM pg_namespace WHERE oid >= 4026531840 AND nspname LIKE 'pg_temp%';
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT tc_retry('DROP TYPE tc_pp_type');
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each

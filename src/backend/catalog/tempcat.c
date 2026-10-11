@@ -3518,6 +3518,23 @@ tempcat_sweep_delete(Relation rel, HeapTuple tup)
 	}
 }
 
+/*
+ * The sweep scans with a dirty snapshot, which also returns rows that a
+ * transaction still in progress inserted.  Outside the OID bounds of live
+ * sessions (checked first), those are leftovers to be: rows of a
+ * transaction prepared by a QE writer that is gone, which distributed
+ * recovery may still commit.  They cannot be deleted yet; leave the
+ * database to be swept again.  Call right after fetching the row.
+ */
+static bool
+tempcat_sweep_row_in_progress(Snapshot dirty)
+{
+	if (!TransactionIdIsValid(dirty->xmin))
+		return false;
+	tc_sweep_incomplete = true;
+	return true;
+}
+
 /* Does the object exist in the on-disk catalogs? */
 static bool
 tempcat_disk_object_exists(Oid classId, Oid objectId)
@@ -3606,7 +3623,9 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 	int			c;
 	HeapTuple	tup;
 	int			ndeleted = 0;
+	SnapshotData dirty;
 
+	InitDirtySnapshot(dirty);
 	rel = table_open(catalog, RowExclusiveLock);
 	desc = RelationGetDescr(rel);
 
@@ -3654,7 +3673,7 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 		ScanKeyInit(&key[k++], keyattr, BTGreaterEqualStrategyNumber, F_OIDGE,
 					ObjectIdGetDatum(FirstTempcatObjectId));
 
-		scan = systable_beginscan(rel, indexId, OidIsValid(indexId), NULL, k, key);
+		scan = systable_beginscan(rel, indexId, OidIsValid(indexId), &dirty, k, key);
 		while (HeapTupleIsValid(tup = systable_getnext(scan)))
 		{
 			Oid			objid = tempcat_getoid(tup, desc, attr);
@@ -3669,6 +3688,7 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 				OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)) == domain)
 				continue;
 			if (tempcat_oid_live_now(objid, MyDatabaseId) ||
+				tempcat_sweep_row_in_progress(&dirty) ||
 				tempcat_disk_object_exists(cls, objid))
 				continue;
 
@@ -3698,17 +3718,20 @@ tempcat_sweep_objects(void)
 	ScanKeyData key;
 	HeapTuple	tup;
 	int			ndeleted = 0;
+	SnapshotData dirty;
 
+	InitDirtySnapshot(dirty);
 	rel = table_open(NamespaceRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_namespace_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, NamespaceOidIndexId, true, NULL, 1, &key);
+	scan = systable_beginscan(rel, NamespaceOidIndexId, true, &dirty, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_namespace form = (Form_pg_namespace) GETSTRUCT(tup);
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
+			!tempcat_sweep_row_in_progress(&dirty) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
 			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0))
 		{
@@ -3723,13 +3746,14 @@ tempcat_sweep_objects(void)
 	rel = table_open(RelationRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_class_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, ClassOidIndexId, true, NULL, 1, &key);
+	scan = systable_beginscan(rel, ClassOidIndexId, true, &dirty, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_class form = (Form_pg_class) GETSTRUCT(tup);
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
+			!tempcat_sweep_row_in_progress(&dirty) &&
 			!tempcat_disk_object_exists(NamespaceRelationId, form->relnamespace))
 		{
 			if (tempcat_sweep_delete(rel, tup))
@@ -3745,13 +3769,14 @@ tempcat_sweep_objects(void)
 	rel = table_open(TypeRelationId, RowExclusiveLock);
 	ScanKeyInit(&key, Anum_pg_type_oid, BTGreaterEqualStrategyNumber,
 				F_OIDGE, ObjectIdGetDatum(FirstTempcatObjectId));
-	scan = systable_beginscan(rel, TypeOidIndexId, true, NULL, 1, &key);
+	scan = systable_beginscan(rel, TypeOidIndexId, true, &dirty, 1, &key);
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		Form_pg_type form = (Form_pg_type) GETSTRUCT(tup);
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
+			!tempcat_sweep_row_in_progress(&dirty) &&
 			!tempcat_disk_object_exists(NamespaceRelationId, form->typnamespace))
 		{
 			if (tempcat_sweep_delete(rel, tup))
