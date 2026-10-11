@@ -1671,6 +1671,28 @@ static bool tc_xact_changed = false;
 /* The writer's area this reader last saw (tempcat_start_transaction()) */
 static dsa_handle tc_reader_handle = DSM_HANDLE_INVALID;
 
+/*
+ * Make room for 'n' more pending entries.  Called before creating or
+ * changing entries: running out of memory after that would leave an entry
+ * that no transaction end looks at (an aborted insertion never freed).
+ */
+static void
+tempcat_reserve_pending(int n)
+{
+	if (tc_npending + n > tc_maxpending)
+	{
+		int			newmax = Max(64, Max(tc_maxpending * 2, tc_npending + n));
+
+		if (tc_pending == NULL)
+			tc_pending = MemoryContextAlloc(TopMemoryContext,
+											sizeof(dsa_pointer) * newmax);
+		else
+			tc_pending = repalloc(tc_pending, sizeof(dsa_pointer) * newmax);
+		tc_maxpending = newmax;
+	}
+}
+
+/* Caller made room with tempcat_reserve_pending(). */
 static void
 tempcat_add_pending(dsa_pointer ep)
 {
@@ -1681,17 +1703,7 @@ tempcat_add_pending(dsa_pointer ep)
 	if (e->flags & TCE_PENDING)
 		return;
 
-	if (tc_npending >= tc_maxpending)
-	{
-		int			newmax = Max(64, tc_maxpending * 2);
-
-		if (tc_pending == NULL)
-			tc_pending = MemoryContextAlloc(TopMemoryContext,
-											sizeof(dsa_pointer) * newmax);
-		else
-			tc_pending = repalloc(tc_pending, sizeof(dsa_pointer) * newmax);
-		tc_maxpending = newmax;
-	}
+	Assert(tc_npending < tc_maxpending);
 	tc_pending[tc_npending++] = ep;
 	e->flags |= TCE_PENDING;
 }
@@ -2187,6 +2199,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
 
+	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	ep = tempcat_entry_create(catidx, tup, RelationGetDescr(rel), xid, cid);
 	if (!DsaPointerIsValid(ep) && tempcat_reclaim_dead() > 0)
@@ -2295,6 +2308,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
 
+	tempcat_reserve_pending(2);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	newep = tempcat_entry_create(catidx, newtup, RelationGetDescr(rel), xid, cid);
 	if (!DsaPointerIsValid(newep) && tempcat_reclaim_dead() > 0)
@@ -2340,6 +2354,7 @@ tempcat_delete(Relation rel, ItemPointer tid)
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
 
+	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	tempcat_mark_deleted(e, ep, xid, cid);
 	LWLockRelease(&tc_root->lock);
