@@ -599,6 +599,13 @@ CREATE TRIGGER tc_trg BEFORE INSERT ON tc_perm_trg FOR EACH ROW EXECUTE FUNCTION
 \set VERBOSITY default
 DROP TABLE tc_perm_trg;
 DROP SEQUENCE tc_dep_seq;
+-- nor temporary tables inheriting from ordinary ones, which other sessions
+-- could not see among the ordinary table's children
+CREATE TABLE tc_perm_parent (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_perm () INHERITS (tc_perm_parent) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_perm (a int) DISTRIBUTED BY (a);
+ALTER TABLE tc_inh_perm INHERIT tc_perm_parent;
+DROP TABLE tc_inh_perm, tc_perm_parent;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 -- Foreign (external) tables, security labels, type encodings and the DDL
 -- tracking rows (pg_stat_last_operation) of temporary objects are kept in

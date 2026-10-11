@@ -1168,6 +1168,26 @@ tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what)
 }
 
 /*
+ * A temporary table kept in memory cannot inherit from an ordinary table.
+ * Other sessions could not see it among the ordinary table's children, and
+ * would treat the ordinary table as if it had none: ANALYZE would clear its
+ * relhassubclass, hiding the child's rows from the child's own session, and
+ * ALTER TABLE would leave the child behind instead of failing.  Called for
+ * each new pg_inherits row.
+ */
+void
+tempcat_check_inheritance(Oid relid, Oid parentid)
+{
+	if (tempcat_owns_oid(RelationRelationId, relid) &&
+		!tempcat_owns_oid(RelationRelationId, parentid))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("temporary tables kept in memory cannot inherit from ordinary table \"%s\"",
+						get_rel_name(parentid)),
+				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+}
+
+/*
  * An ordinary object cannot depend on a temporary object kept in memory
  * (e.g. a column of an ordinary table of a temporary table's row type):
  * its on-disk rows would point at an object that other sessions cannot see,

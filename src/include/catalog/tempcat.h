@@ -117,6 +117,7 @@ extern bool tempcat_hide_disk_slot(Relation rel, struct TupleTableSlot *slot);
 /* Object restrictions */
 extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 extern void tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what);
+extern void tempcat_check_inheritance(Oid relid, Oid parentid);
 extern void tempcat_check_dependency(const struct ObjectAddress *depender,
 									 const struct ObjectAddress *referenced);
 
