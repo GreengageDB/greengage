@@ -556,6 +556,19 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 2q:
 1q:
 SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
+-- A role whose pg_shdepend row goes to disk after all (here the fault
+-- leaves the coordinator without an area) is not left published.
+CREATE ROLE tc_r10;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_owned_by (a int) DISTRIBUTED BY (a);
+1: ALTER TABLE tc_owned_by OWNER TO tc_r10;
+1: DROP TABLE tc_owned_by;
+1: CREATE TEMP TABLE tc_owned_by_next (a int) DISTRIBUTED BY (a);
+SELECT tc_try('DROP ROLE tc_r10');
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+SELECT tc_retry('DROP ROLE IF EXISTS tc_r10');
 
 --
 -- 15. When ordinary objects take every OID of the session's slice of the

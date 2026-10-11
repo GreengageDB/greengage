@@ -1285,6 +1285,7 @@ tempcat_catalog_has_oid(int catidx)
  * when its rows in memory go away (tempcat_forget_oid()).
  */
 static Oid	tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno);
+static void tempcat_recompute_roles(void);
 
 static void
 tempcat_note_disk_row(Relation rel, HeapTuple tup)
@@ -1292,6 +1293,16 @@ tempcat_note_disk_row(Relation rel, HeapTuple tup)
 	int			catidx = tempcat_catalog_index(RelationGetRelid(rel));
 	TempcatOwnedKey key;
 	TempcatOwnedEntry *entry;
+
+	/*
+	 * A pg_shdepend row: tempcat_route_insert() published its role, which
+	 * other in-memory rows may not refer to.  Disk rows speak for themselves.
+	 */
+	if (RelationGetRelid(rel) == SharedDependRelationId)
+	{
+		tempcat_recompute_roles();
+		return;
+	}
 
 	if (tc_owned == NULL || catidx < 0 || !tempcat_catalog_has_oid(catidx))
 		return;
@@ -1964,7 +1975,9 @@ tempcat_recompute_roles(void)
 
 	tc_roles_dirty = false;
 
-	for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
+	/* (no area: the rows that published roles all went to disk) */
+	for (ep = tc_area != NULL ? tc_root->catalogs[catidx].head : InvalidDsaPointer;
+		 DsaPointerIsValid(ep);)
 	{
 		TempcatEntry *e = TC_ADDR(ep);
 		HeapTupleHeader hdr = TCE_DATA(e);
@@ -2048,7 +2061,7 @@ tempcat_start_transaction(void)
 	tempcat_resolve_pending();
 	if (tc_horizon_dirty && tc_area != NULL)
 		tempcat_recompute_horizon();
-	if (tc_roles_dirty && tc_area != NULL)
+	if (tc_roles_dirty)
 		tempcat_recompute_roles();
 }
 
