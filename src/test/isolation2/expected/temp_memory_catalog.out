@@ -17,6 +17,8 @@ CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP
 CREATE FUNCTION
 CREATE TYPE tc_type AS (x int);
 CREATE TYPE
+CREATE DOMAIN tc_dom AS int;
+CREATE DOMAIN
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE FUNCTION
 CREATE ROLE tc_role;
@@ -32,6 +34,8 @@ SET
 CREATE TABLE
 1: INSERT INTO tc_dep VALUES (1, ROW(1));
 INSERT 0 1
+1: CREATE TEMP TABLE tc_dep_dom (a int, d tc_dom) DISTRIBUTED BY (a);
+CREATE TABLE
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 CREATE INDEX
 1: SET ROLE tc_role;
@@ -75,6 +79,16 @@ REVOKE
 ---------
  refused 
 (1 row)
+-- Nor can it change the types they use, as it cannot check how they use
+-- them (a constraint that needs no check is fine).
+2: ALTER TYPE tc_type ALTER ATTRIBUTE x TYPE bigint;
+ERROR:  cannot alter type "tc_type" because a temporary table of another session uses it
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom" because a temporary table of another session uses it
+2: ALTER DOMAIN tc_dom SET NOT NULL;
+ERROR:  cannot alter type "tc_dom" because a temporary table of another session uses it
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0) NOT VALID;
+ALTER DOMAIN
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
@@ -106,6 +120,11 @@ RESET
  done     
 (1 row)
 2: SELECT tc_retry('DROP ROLE tc_role');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom');
  tc_retry 
 ----------
  done     

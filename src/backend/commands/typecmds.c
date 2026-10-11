@@ -78,6 +78,7 @@
 
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_type_encoding.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
 
@@ -3101,6 +3102,16 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 		{
 			/* First attribute found for this relation */
 			Relation	rel;
+
+			/*
+			 * GPDB: a temporary table of another session kept in memory,
+			 * which cannot be opened, let alone checked (see tempcat.c).
+			 */
+			if (tempcat_relation_missing(pg_depend->objid))
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot alter type \"%s\" because a temporary table of another session uses it",
+								domainTypeName)));
 
 			/* Acquire requested lock on relation */
 			rel = relation_open(pg_depend->objid, lockmode);

@@ -13,6 +13,7 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE FUNCTION tc_try(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN dependent_objects_still_exist THEN RETURN 'refused'; END $$ LANGUAGE plpgsql;
 CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP IF tc_try(cmd) = 'done' THEN RETURN 'done'; END IF; PERFORM pg_sleep(0.1); END LOOP; RETURN 'refused'; END $$ LANGUAGE plpgsql;
 CREATE TYPE tc_type AS (x int);
+CREATE DOMAIN tc_dom AS int;
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE ROLE tc_role;
 DO $$ BEGIN EXECUTE format('GRANT TEMP ON DATABASE %I TO tc_role', current_database()); END $$;
@@ -21,6 +22,7 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 1: SET gp_enable_temp_memory_catalog = on;
 1: CREATE TEMP TABLE tc_dep (a int, c tc_type) DISTRIBUTED BY (a);
 1: INSERT INTO tc_dep VALUES (1, ROW(1));
+1: CREATE TEMP TABLE tc_dep_dom (a int, d tc_dom) DISTRIBUTED BY (a);
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 1: SET ROLE tc_role;
 1: CREATE TEMP TABLE tc_dep_owned (a int) DISTRIBUTED BY (a);
@@ -37,6 +39,12 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 2: DO $$ BEGIN EXECUTE format('REVOKE TEMP ON DATABASE %I FROM tc_role', current_database()); END $$;
 2: REVOKE USAGE ON TYPE tc_type FROM tc_role;
 2: SELECT tc_try('DROP ROLE tc_role');
+-- Nor can it change the types they use, as it cannot check how they use
+-- them (a constraint that needs no check is fine).
+2: ALTER TYPE tc_type ALTER ATTRIBUTE x TYPE bigint;
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0);
+2: ALTER DOMAIN tc_dom SET NOT NULL;
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0) NOT VALID;
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
@@ -50,6 +58,7 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 2: SELECT tc_retry('DROP TYPE tc_type');
 2: SELECT tc_retry('DROP FUNCTION tc_func(int)');
 2: SELECT tc_retry('DROP ROLE tc_role');
+2: SELECT tc_retry('DROP DOMAIN tc_dom');
 2q:
 
 --

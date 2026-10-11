@@ -7319,6 +7319,18 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 		if (pg_depend->classid != RelationRelationId)
 			continue;
 
+		/*
+		 * GPDB: a temporary table of another session kept in memory, which
+		 * cannot be opened to see how it uses the type (see tempcat.c).
+		 */
+		if (tempcat_relation_missing(pg_depend->objid))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot alter type \"%s\" because a temporary table of another session uses it",
+							origTypeName ? origTypeName :
+							origRelation ? RelationGetRelationName(origRelation) :
+							format_type_be(typeOid))));
+
 		rel = relation_open(pg_depend->objid, AccessShareLock);
 		tupleDesc = RelationGetDescr(rel);
 
