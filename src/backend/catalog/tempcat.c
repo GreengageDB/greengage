@@ -1943,10 +1943,13 @@ tempcat_recompute_horizon(void)
  * transaction itself, or by the same (sub)transaction that inserted them
  * (any rollback undoing the deletion then undoes the insertion too, e.g. a
  * loop body with an exception block).  Not rows deleted by a subtransaction
- * that may roll back while their insertion stays.  New catalog snapshots do not see rows deleted in an earlier command
- * any more, and scans copy the rows they return when they start.  (A cursor
- * over a catalog opened before the deletion in the same transaction will
- * not see them, unlike on-disk rows.)
+ * that may roll back while their insertion stays.  And only rows that no
+ * snapshot of ours still in use can see (SnapshotsSeeCommandRange()): an
+ * older snapshot of the transaction, e.g. that of the outer query or of a
+ * cursor, still sees rows deleted after it was taken.  Scans copy the rows
+ * they return when they start.  (The readers of a QE writer take its
+ * snapshots, but a reader of a cursor opened earlier in the transaction
+ * could miss such rows in a scan it starts later, unlike on-disk rows.)
  */
 static int
 tempcat_reclaim_dead(void)
@@ -1969,7 +1972,8 @@ tempcat_reclaim_dead(void)
 			 TransactionIdEquals(e->xmax, e->xmin)) &&
 			e->cmax < curcid &&
 			!(e->flags & TCE_XMIN_COMMITTED) &&
-			TransactionIdIsCurrentTransactionId(e->xmin))
+			TransactionIdIsCurrentTransactionId(e->xmin) &&
+			!SnapshotsSeeCommandRange(e->cmin, e->cmax))
 		{
 			int			catidx = e->catidx;
 			Oid			objoid = tempcat_catalog_has_oid(catidx) ?

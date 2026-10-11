@@ -116,6 +116,7 @@ extern void UpdateActiveSnapshotCommandId(void);
 extern void PopActiveSnapshot(void);
 extern Snapshot GetActiveSnapshot(void);
 extern bool ActiveSnapshotSet(void);
+extern bool SnapshotsSeeCommandRange(CommandId cmin, CommandId cmax);
 
 extern Snapshot RegisterSnapshot(Snapshot snapshot);
 extern void UnregisterSnapshot(Snapshot snapshot);

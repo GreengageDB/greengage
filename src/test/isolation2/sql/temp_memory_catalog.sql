@@ -418,6 +418,19 @@ SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configura
 DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT tc_disk_rows() AS disk_rows;
 
+-- When the area is full, rows that the transaction deleted are freed early,
+-- but not those that a snapshot still in use can see: here the outer
+-- query's, for its subquery, taken before the function dropped the table.
+CREATE FUNCTION tc_churn(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN DROP TABLE tc_pre; FOR i IN 1..n LOOP EXECUTE format('CREATE TEMP TABLE tc_churn_%s (a int, b text, c int PRIMARY KEY) DISTRIBUTED BY (c)', i); EXECUTE format('DROP TABLE tc_churn_%s', i); END LOOP; RETURN n; END $$;
+1: SET gp_enable_temp_memory_catalog = on;
+1: SET gp_temp_memory_catalog_max_size = 1024;
+1: BEGIN;
+1: CREATE TEMP TABLE tc_pre (a int) DISTRIBUTED BY (a);
+1: SELECT tc_churn(300) AS churned, (SELECT count(*) FROM pg_class WHERE relname = 'tc_pre') AS pre_seen;
+1: ROLLBACK;
+1q:
+DROP FUNCTION tc_churn(int);
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions
