@@ -1430,16 +1430,17 @@ select j, (select j) AS "Correlated Field" from t;
 (1 row)
 
 explain (costs off) select j, (select 5) AS "Uncorrelated Field" from t;
-                QUERY PLAN                
-------------------------------------------
- Gather Motion 1:1  (slice1; segments: 1)
-   ->  Nested Loop Left Join
-         Join Filter: true
-         ->  Seq Scan on t
-         ->  Materialize
-               ->  Result
+                   QUERY PLAN                   
+------------------------------------------------
+ Result
+   ->  Gather Motion 1:1  (slice1; segments: 1)
+         ->  Nested Loop Left Join
+               Join Filter: true
+               ->  Seq Scan on t
+               ->  Materialize
+                     ->  Result
  Optimizer: Pivotal Optimizer (GPORCA)
-(7 rows)
+(8 rows)
 
 select j, (select 5) AS "Uncorrelated Field" from t;
  j | Uncorrelated Field 
