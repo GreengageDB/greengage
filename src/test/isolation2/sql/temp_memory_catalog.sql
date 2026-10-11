@@ -293,6 +293,15 @@ SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_seg
 -- The leftovers are on disk.
 SELECT tc_disk_rows() > 0 AS leftovers;
 SELECT count(*) > 0 AS leftover_shdepend FROM pg_shdepend WHERE objid >= 4026531840;
+-- Until they are removed, gp_temp_memory_catalog_hide_others hides them as
+-- it hides those of live sessions: relations in schemas that are gone
+-- would make pg_dump (pg_upgrade's too, which no sweep runs before) fail.
+-- The ordinary table with reserved OIDs stays visible.
+SET gp_temp_memory_catalog_hide_others = on;
+SELECT count(*) AS dangling FROM pg_class c WHERE oid >= 4026531840 AND NOT EXISTS (SELECT 1 FROM pg_namespace n WHERE n.oid = c.relnamespace);
+SELECT relname FROM pg_class WHERE oid >= 4026531840 ORDER BY 1;
+RESET gp_temp_memory_catalog_hide_others;
+!\retcode pg_dump --schema-only isolation2test > /dev/null;
 DO $$ BEGIN EXECUTE format('REVOKE TEMP ON DATABASE %I FROM tc_sw_role', current_database()); END $$;
 REVOKE USAGE ON TYPE tc_sw_type FROM tc_sw_role;
 

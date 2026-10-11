@@ -2999,15 +2999,17 @@ tempcat_other_session_relation(HeapTuple tup)
  * Rows of in-memory temporary objects can still be on disk: dependencies on
  * ordinary objects, and rows that went to disk when the session's area was
  * full.  To another session they point at objects that do not exist, which
- * is what catalog consistency checks look for.  gpcheckcat therefore sets
- * gp_temp_memory_catalog_hide_others, which hides from SQL scans the on-disk
- * rows whose owner column holds a reserved OID within the bounds published
- * by a live session of the row's database: such a catalog looks as if the
- * other sessions had no temporary objects.
- *
- * The bounds are approximate: ordinary objects with reserved OIDs (see the
- * file header) can lie between them, so rows within the bounds are hidden
- * only if their object is not an ordinary one (tempcat_ordinary_object()).
+ * is what catalog consistency checks look for, and what made pg_dump fail.
+ * gpcheckcat and pg_dump therefore set gp_temp_memory_catalog_hide_others,
+ * which hides from SQL scans the on-disk rows whose owner column holds a
+ * reserved OID of a temporary object of another session: such a catalog
+ * looks as if the other sessions had no temporary objects.  That includes
+ * the leftovers of sessions that are gone, until the sweep removes them
+ * (pg_upgrade's pg_dump runs before any sweep).  Ordinary objects with
+ * reserved OIDs (see the file header) are not hidden
+ * (tempcat_ordinary_object()).  Rows of other databases (pg_shdepend)
+ * cannot be looked up and are hidden if their OIDs lie within the bounds
+ * that a live session of their database publishes.
  */
 typedef struct TempcatLiveRange
 {
@@ -3210,16 +3212,19 @@ tempcat_ordinary_object(Oid classId, Oid objectId, int depth)
 
 /*
  * Does the owner column of an on-disk row point at a temporary object of
- * another live session?
+ * another session, live or gone?
  */
 static bool
 tempcat_owner_hidden(Oid classId, Oid objectId, Oid dbid)
 {
-	if (!tempcat_oid_live_elsewhere(objectId, dbid))
+	if (!IsTempcatOid(objectId))
 		return false;
 	/* (we cannot look up objects of other databases: pg_shdepend) */
 	if (dbid != MyDatabaseId)
-		return true;
+		return tempcat_oid_live_elsewhere(objectId, dbid);
+	/* (we see our own objects, wherever their rows are) */
+	if (OidIsValid(classId) && tempcat_owns_oid(classId, objectId))
+		return false;
 	return !tempcat_ordinary_object(classId, objectId, 0);
 }
 
@@ -3246,8 +3251,6 @@ tempcat_hide_disk_row(Relation rel, HeapTuple tup)
 	def = &tempcat_catalogs[catidx];
 
 	tempcat_collect_live_ranges();
-	if (tc_nlive == 0)
-		return false;
 
 	if (relid == SharedDependRelationId)
 		dbid = tempcat_getoid(tup, desc, Anum_pg_shdepend_dbid);
