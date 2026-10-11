@@ -593,6 +593,14 @@ INSERT INTO tc_moods VALUES ('happy'), ('sad'), ('meh'), ('ok');
 SELECT m FROM tc_moods ORDER BY m;
 SELECT enum_first(NULL::pg_temp.tc_mood), enum_last(NULL::pg_temp.tc_mood),
        enum_range(NULL::pg_temp.tc_mood);
+-- Their labels get reserved OIDs too, the same on the segments.
+SELECT count(*) AS labels, bool_and(oid >= 4026531840) AS reserved
+  FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
+SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
+ WHERE s.enumtypid = 'pg_temp.tc_mood'::regtype
+   AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype);
+SELECT count(*) AS seg_labels FROM gp_dist_random('pg_enum')
+ WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
 CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
 SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
 CREATE STATISTICS pg_temp.tc_stx (dependencies, ndistinct) ON a, b FROM tc_fn_data;

@@ -54,6 +54,22 @@ static int	sort_order_cmp(const void *p1, const void *p2);
 
 
 /*
+ * GPDB: a new OID for a label of enum type 'enumTypeOid'.  The labels of a
+ * temporary enum type kept in memory get one from the reserved range, like
+ * the type (see tempcat.c): their rows are visible to their session only,
+ * so other sessions could not avoid ordinary OIDs they took, and once the
+ * OID counter wrapped around, a label of another session could get the
+ * same one.
+ */
+static Oid
+GetNewEnumOid(Relation pg_enum, Oid enumTypeOid)
+{
+	if (tempcat_owns_oid(TypeRelationId, enumTypeOid))
+		return tempcat_allocate_oid(pg_enum, EnumOidIndexId, Anum_pg_enum_oid);
+	return GetNewOidWithIndex(pg_enum, EnumOidIndexId, Anum_pg_enum_oid);
+}
+
+/*
  * EnumValuesCreate
  *		Create an entry in pg_enum for each of the supplied enum values.
  *
@@ -115,8 +131,7 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 				break;
 			}
 
-			new_oid = GetNewOidWithIndex(pg_enum, EnumOidIndexId,
-										 Anum_pg_enum_oid);
+			new_oid = GetNewEnumOid(pg_enum, enumTypeOid);
 		} while (new_oid & 1);
 		oids[elemno] = new_oid;
 
@@ -413,8 +428,7 @@ restart:
 			bool		sorts_ok;
 
 			/* Get a new OID (different from all existing pg_enum tuples) */
-			newOid = GetNewOidWithIndex(pg_enum, EnumOidIndexId,
-										Anum_pg_enum_oid);
+			newOid = GetNewEnumOid(pg_enum, enumTypeOid);
 
 			/*
 			 * Detect whether it sorts correctly relative to existing
