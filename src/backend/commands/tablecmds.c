@@ -57,6 +57,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/tempcat.h"
 #include "catalog/toasting.h"
 #include "catalog/gp_fastsequence.h"
 #include "cdb/cdbappendonlyam.h"
@@ -19105,6 +19106,8 @@ ATExecAddOf(Relation rel, const TypeName *ofTypename, LOCKMODE lockmode)
 	check_of_type(typetuple);
 	typeform = (Form_pg_type) GETSTRUCT(typetuple);
 	typeid = typeform->oid;
+	/* GPDB: see tempcat.c */
+	tempcat_check_typed_table(RelationGetRelid(rel), typeid);
 
 	/* Fail if the table has any inheritance parents. */
 	inheritsRelation = table_open(InheritsRelationId, AccessShareLock);

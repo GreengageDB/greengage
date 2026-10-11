@@ -135,6 +135,7 @@
 #include "storage/proc.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
+#include "utils/builtins.h"
 #include "utils/dsa.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
@@ -1184,6 +1185,23 @@ tempcat_check_inheritance(Oid relid, Oid parentid)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("temporary tables kept in memory cannot inherit from ordinary table \"%s\"",
 						get_rel_name(parentid)),
+				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+}
+
+/*
+ * Nor can it be a typed table of an ordinary composite type: other sessions
+ * could not see it among the type's typed tables, and ALTER TYPE would
+ * change the type without it instead of failing.
+ */
+void
+tempcat_check_typed_table(Oid relid, Oid typid)
+{
+	if (tempcat_owns_oid(RelationRelationId, relid) &&
+		!tempcat_owns_oid(TypeRelationId, typid))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("temporary tables kept in memory cannot be typed tables of ordinary type %s",
+						format_type_be(typid)),
 				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
 }
 

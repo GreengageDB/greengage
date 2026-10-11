@@ -332,13 +332,13 @@ SELECT count(*) FROM tc_ctas;
 
 -- Utility commands that scan the catalogs directly (heap_getnext()) see the
 -- in-memory rows too.
-CREATE TYPE tc_ct AS (a int);
-CREATE TEMP TABLE tc_typed_of OF tc_ct DISTRIBUTED RANDOMLY;
-ALTER TYPE tc_ct ADD ATTRIBUTE b int;
-ALTER TYPE tc_ct ADD ATTRIBUTE b int CASCADE;
+CREATE TYPE pg_temp.tc_ct AS (a int);
+CREATE TEMP TABLE tc_typed_of OF pg_temp.tc_ct DISTRIBUTED RANDOMLY;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int CASCADE;
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
 DROP TABLE tc_typed_of;
-DROP TYPE tc_ct;
+DROP TYPE pg_temp.tc_ct;
 CREATE TEMP TABLE tc_grant (a int) DISTRIBUTED BY (a);
 CREATE FUNCTION pg_temp.tc_grant_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
 GRANT SELECT ON ALL TABLES IN SCHEMA pg_temp TO PUBLIC;
@@ -606,6 +606,18 @@ CREATE TEMP TABLE tc_inh_perm () INHERITS (tc_perm_parent) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_inh_perm (a int) DISTRIBUTED BY (a);
 ALTER TABLE tc_inh_perm INHERIT tc_perm_parent;
 DROP TABLE tc_inh_perm, tc_perm_parent;
+-- nor typed tables of ordinary composite types, which other sessions could
+-- not see among the type's typed tables (those of temporary types are fine)
+CREATE TYPE tc_perm_comp AS (x int);
+CREATE TEMP TABLE tc_typed OF tc_perm_comp DISTRIBUTED BY (x);
+CREATE TEMP TABLE tc_typed (x int) DISTRIBUTED BY (x);
+ALTER TABLE tc_typed OF tc_perm_comp;
+CREATE TYPE pg_temp.tc_temp_comp AS (x int);
+ALTER TABLE tc_typed OF pg_temp.tc_temp_comp;
+CREATE TEMP TABLE tc_typed2 OF pg_temp.tc_temp_comp DISTRIBUTED BY (x);
+DROP TABLE tc_typed, tc_typed2;
+DROP TYPE pg_temp.tc_temp_comp;
+DROP TYPE tc_perm_comp;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 -- Foreign (external) tables, security labels, type encodings and the DDL
 -- tracking rows (pg_stat_last_operation) of temporary objects are kept in

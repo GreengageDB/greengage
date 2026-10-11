@@ -530,12 +530,12 @@ SELECT count(*) FROM tc_ctas;
 
 -- Utility commands that scan the catalogs directly (heap_getnext()) see the
 -- in-memory rows too.
-CREATE TYPE tc_ct AS (a int);
-CREATE TEMP TABLE tc_typed_of OF tc_ct DISTRIBUTED RANDOMLY;
-ALTER TYPE tc_ct ADD ATTRIBUTE b int;
+CREATE TYPE pg_temp.tc_ct AS (a int);
+CREATE TEMP TABLE tc_typed_of OF pg_temp.tc_ct DISTRIBUTED RANDOMLY;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int;
 ERROR:  cannot alter type "tc_ct" because it is the type of a typed table
 HINT:  Use ALTER ... CASCADE to alter the typed tables too.
-ALTER TYPE tc_ct ADD ATTRIBUTE b int CASCADE;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int CASCADE;
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
  attname 
 ---------
@@ -544,7 +544,7 @@ SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND at
 (2 rows)
 
 DROP TABLE tc_typed_of;
-DROP TYPE tc_ct;
+DROP TYPE pg_temp.tc_ct;
 CREATE TEMP TABLE tc_grant (a int) DISTRIBUTED BY (a);
 CREATE FUNCTION pg_temp.tc_grant_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
 GRANT SELECT ON ALL TABLES IN SCHEMA pg_temp TO PUBLIC;
@@ -1110,6 +1110,22 @@ ALTER TABLE tc_inh_perm INHERIT tc_perm_parent;
 ERROR:  temporary tables kept in memory cannot inherit from ordinary table "tc_perm_parent"
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 DROP TABLE tc_inh_perm, tc_perm_parent;
+-- nor typed tables of ordinary composite types, which other sessions could
+-- not see among the type's typed tables (those of temporary types are fine)
+CREATE TYPE tc_perm_comp AS (x int);
+CREATE TEMP TABLE tc_typed OF tc_perm_comp DISTRIBUTED BY (x);
+ERROR:  temporary tables kept in memory cannot be typed tables of ordinary type tc_perm_comp
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE TEMP TABLE tc_typed (x int) DISTRIBUTED BY (x);
+ALTER TABLE tc_typed OF tc_perm_comp;
+ERROR:  temporary tables kept in memory cannot be typed tables of ordinary type tc_perm_comp
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE TYPE pg_temp.tc_temp_comp AS (x int);
+ALTER TABLE tc_typed OF pg_temp.tc_temp_comp;
+CREATE TEMP TABLE tc_typed2 OF pg_temp.tc_temp_comp DISTRIBUTED BY (x);
+DROP TABLE tc_typed, tc_typed2;
+DROP TYPE pg_temp.tc_temp_comp;
+DROP TYPE tc_perm_comp;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 -- Foreign (external) tables, security labels, type encodings and the DDL
 -- tracking rows (pg_stat_last_operation) of temporary objects are kept in
