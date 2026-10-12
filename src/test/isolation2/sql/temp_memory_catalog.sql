@@ -276,7 +276,7 @@ CREATE DATABASE tc_frozen_db;
 2: VACUUM FREEZE;
 2: SELECT datfrozenxid::text::bigint <= (SELECT x FROM tc_xid) AS held_back FROM pg_database WHERE datname = current_database();
 1q:
-2: DO $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
+2: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 2: VACUUM FREEZE;
 2: SELECT datfrozenxid::text::bigint > (SELECT x FROM tc_xid) AS advanced FROM pg_database WHERE datname = current_database();
 -- Nor past the XIDs of rows whose transaction's outcome the session has not
@@ -293,7 +293,7 @@ CREATE DATABASE tc_frozen_db;
 2: VACUUM FREEZE;
 2: SELECT datfrozenxid::text::bigint <= (SELECT x FROM tc_xid) AS held_back FROM pg_database WHERE datname = current_database();
 3q:
-2: DO $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_view_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
+2: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_view_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 2q:
 DROP DATABASE tc_frozen_db;
 
@@ -430,7 +430,7 @@ SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FRO
 1q:
 SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess_ids s ON a.sess_id = s.id); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess_ids s ON a.sess_id = s.id); PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT count(*) AS qd_leftover_schemas FROM pg_namespace WHERE oid >= 4026531840;
 SELECT count(*) > 0 AS qd_leftover_constraints FROM pg_constraint WHERE conrelid >= 4026531840 OR contypid >= 4026531840;
 SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
@@ -532,12 +532,12 @@ SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) F
 3: CREATE TEMP TABLE tc_mk_l3 (c tc_mk_type) DISTRIBUTED RANDOMLY;
 SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1q:
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN (SELECT count(*) FROM pg_stat_activity WHERE application_name = 'tc_mk_session') < 2; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN (SELECT count(*) FROM pg_stat_activity WHERE application_name = 'tc_mk_session') < 2; PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT gp_inject_fault('tempcat_sweep_before_mark', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 2&: DROP TABLE tc_mk1;
 SELECT gp_wait_until_triggered_fault('tempcat_sweep_before_mark', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 3q:
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_mk_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_mk_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT gp_inject_fault('tempcat_sweep_before_mark', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
@@ -568,7 +568,7 @@ SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_s
 -1U: SELECT 'tc_pp'::regclass::oid >= 4026531840 AS in_reserved_range;
 -1U: PREPARE TRANSACTION 'tc_pp';
 -1Uq:
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_pp_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_pp_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 2: DROP TABLE tc_pp1;
 2q:
@@ -600,7 +600,7 @@ SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) F
 1: CREATE TEMP TABLE tc_ord_l (c tc_ord_type) DISTRIBUTED RANDOMLY;
 SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1q:
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ord_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ord_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 2: BEGIN;
 2: ALTER TABLE tc_ord ADD COLUMN b int;
@@ -633,7 +633,7 @@ SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_s
 1: INSERT INTO tc_lns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
 SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1q:
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 2: SET allow_system_table_mods = on;
@@ -903,6 +903,28 @@ SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_c
 2: SELECT 'tc_noid_after'::regclass::oid >= 4026531840 AS in_reserved_range;
 1q:
 2q:
+
+-- A session's OIDs wrap around at the end of its slice (the fault puts the
+-- session near it) and go on from its start; the bounds it publishes cover
+-- both parts but not the slice in between.  The sweep leaves the on-disk
+-- dependency rows of its tables on both sides alone.
+CREATE TYPE tc_wrap_type AS (x int);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_wrap1 (c tc_wrap_type) DISTRIBUTED RANDOMLY;
+1: CREATE TEMP TABLE tc_wrap2 (c tc_wrap_type) DISTRIBUTED RANDOMLY;
+1: SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_wrap_sweeper (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS deps FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
+2: SELECT tc_try('DROP TYPE tc_wrap_type');
+1: SELECT count(*) FROM tc_wrap1, tc_wrap2;
+1q:
+2q:
+SELECT tc_retry('DROP TYPE tc_wrap_type');
 
 -- Whether a row with a reserved OID belongs to an ordinary object is judged
 -- as of the query's snapshot: pg_dump's sees an ordinary object dropped

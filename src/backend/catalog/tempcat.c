@@ -641,13 +641,25 @@ typedef struct TempcatProcState
 
 	/*
 	 * Bounds of the reserved OIDs the session assigned to (QD) or received
-	 * for (QE) its temporary objects, or InvalidOid; for
-	 * tempcat_hide_disk_row() in other sessions.  Written by the session
-	 * only.
+	 * for (QE) its temporary objects, or InvalidOid; for other processes
+	 * (see tempcat_bounds_cover()).  Written by the session only.  The OIDs
+	 * of a session come in order from its slice of the range, which starts
+	 * anywhere in the slice and wraps around at its end: those taken after
+	 * a wrap get bounds of their own (wrapMin, wrapMax), rather than make
+	 * the bounds span the whole slice.
 	 */
 	pg_atomic_uint32 ownedMin;
 	pg_atomic_uint32 ownedMax;
+	pg_atomic_uint32 wrapMin;
+	pg_atomic_uint32 wrapMax;
 } TempcatProcState;
+
+/*
+ * An OID that far below the bounds of a session, at most, widens them
+ * rather than starting the second ones: OIDs of one command can come out of
+ * order on a QE.
+ */
+#define TEMPCAT_BOUNDS_GAP		10000
 
 typedef struct TempcatSharedData
 {
@@ -708,6 +720,8 @@ TempcatShmemInit(void)
 		pg_atomic_init_u32(&st->minMulti, InvalidMultiXactId);
 		pg_atomic_init_u32(&st->ownedMin, InvalidOid);
 		pg_atomic_init_u32(&st->ownedMax, InvalidOid);
+		pg_atomic_init_u32(&st->wrapMin, InvalidOid);
+		pg_atomic_init_u32(&st->wrapMax, InvalidOid);
 	}
 }
 
@@ -738,6 +752,9 @@ static bool tc_horizon_dirty = false;
 static bool tc_roles_dirty = false;
 
 static void tempcat_sweep_if_needed(bool allow_force);
+static void tempcat_publish_oid(Oid oid);
+static bool tempcat_bounds_cover(TempcatProcState *st, Oid oid);
+static void tempcat_clear_bounds(TempcatProcState *st);
 static void tempcat_sweep_db(bool force);
 static void tempcat_sweep_xact_callback(XactEvent event, void *arg);
 static void tempcat_sweep_subxact_callback(SubXactEvent event,
@@ -779,8 +796,7 @@ tempcat_before_exit(int code, Datum arg)
 	leftovers = tc_area == NULL || tempcat_area_has_live_rows();
 
 	/* Stop protecting our rows from the sweep before asking for it. */
-	pg_atomic_write_u32(&st->ownedMin, InvalidOid);
-	pg_atomic_write_u32(&st->ownedMax, InvalidOid);
+	tempcat_clear_bounds(st);
 
 	if (leftovers)
 	{
@@ -798,8 +814,7 @@ tempcat_proc_exit(int code, Datum arg)
 
 	pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
 	pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
-	pg_atomic_write_u32(&st->ownedMin, InvalidOid);
-	pg_atomic_write_u32(&st->ownedMax, InvalidOid);
+	tempcat_clear_bounds(st);
 	st->databaseId = InvalidOid;
 
 	SpinLockAcquire(&TempcatShared->mutex);
@@ -1015,18 +1030,108 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 	if (!found)
 		entry->on_disk = false;
 
-	/* Widen the published bounds; nobody else writes them. */
 	if (IsTempcatOid(oid))
-	{
-		TempcatProcState *st = tempcat_my_state();
-		Oid			lo = pg_atomic_read_u32(&st->ownedMin);
-		Oid			hi = pg_atomic_read_u32(&st->ownedMax);
+		tempcat_publish_oid(oid);
+}
 
-		if (!OidIsValid(lo) || oid < lo)
-			pg_atomic_write_u32(&st->ownedMin, oid);
-		if (!OidIsValid(hi) || oid > hi)
-			pg_atomic_write_u32(&st->ownedMax, oid);
+/*
+ * Widen the published bounds to cover 'oid'; nobody else writes them.  They
+ * only ever widen while the session lives: other processes read them
+ * without a lock, and a row of ours must never be outside what they read.
+ */
+static void
+tempcat_publish_oid(Oid oid)
+{
+	TempcatProcState *st = tempcat_my_state();
+	Oid			lo = pg_atomic_read_u32(&st->ownedMin);
+	Oid			hi = pg_atomic_read_u32(&st->ownedMax);
+	Oid			wlo = pg_atomic_read_u32(&st->wrapMin);
+	Oid			whi = pg_atomic_read_u32(&st->wrapMax);
+
+	if (!OidIsValid(lo))
+	{
+		/* (the upper bound first: readers take a valid lower one for both) */
+		pg_atomic_write_u32(&st->ownedMax, oid);
+		pg_write_barrier();
+		pg_atomic_write_u32(&st->ownedMin, oid);
+		return;
 	}
+	if ((oid >= lo && oid <= hi) ||
+		(OidIsValid(wlo) && oid >= wlo && oid <= whi))
+		return;
+
+	if (oid > hi)
+		pg_atomic_write_u32(&st->ownedMax, oid);
+	else if (lo - oid <= TEMPCAT_BOUNDS_GAP)
+		pg_atomic_write_u32(&st->ownedMin, oid);
+	else if (!OidIsValid(wlo))
+	{
+		/* the slice wrapped around */
+		pg_atomic_write_u32(&st->wrapMax, oid);
+		pg_write_barrier();
+		pg_atomic_write_u32(&st->wrapMin, oid);
+	}
+	else if (oid < wlo)
+		pg_atomic_write_u32(&st->wrapMin, oid);
+	else if (oid - whi <= lo - oid)
+		pg_atomic_write_u32(&st->wrapMax, oid);
+	else
+		pg_atomic_write_u32(&st->ownedMin, oid);
+}
+
+/* Read the published bounds of a process: up to two ranges. */
+static int
+tempcat_read_bounds(TempcatProcState *st, Oid *lo, Oid *hi)
+{
+	int			n = 0;
+	Oid			l;
+	Oid			h;
+
+	l = pg_atomic_read_u32(&st->ownedMin);
+	pg_read_barrier();
+	h = pg_atomic_read_u32(&st->ownedMax);
+	if (OidIsValid(l) && OidIsValid(h))
+	{
+		lo[n] = l;
+		hi[n] = h;
+		n++;
+	}
+	l = pg_atomic_read_u32(&st->wrapMin);
+	pg_read_barrier();
+	h = pg_atomic_read_u32(&st->wrapMax);
+	if (OidIsValid(l) && OidIsValid(h))
+	{
+		lo[n] = l;
+		hi[n] = h;
+		n++;
+	}
+	return n;
+}
+
+/* Is the OID within the bounds a process publishes? */
+static bool
+tempcat_bounds_cover(TempcatProcState *st, Oid oid)
+{
+	Oid			lo[2];
+	Oid			hi[2];
+	int			n = tempcat_read_bounds(st, lo, hi);
+	int			i;
+
+	for (i = 0; i < n; i++)
+	{
+		if (oid >= lo[i] && oid <= hi[i])
+			return true;
+	}
+	return false;
+}
+
+static void
+tempcat_clear_bounds(TempcatProcState *st)
+{
+	pg_atomic_write_u32(&st->ownedMin, InvalidOid);
+	pg_atomic_write_u32(&st->ownedMax, InvalidOid);
+	pg_atomic_write_u32(&st->wrapMin, InvalidOid);
+	pg_atomic_write_u32(&st->wrapMax, InvalidOid);
 }
 
 /*
@@ -1321,6 +1426,11 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		}
 		else if (oid < base || oid >= base + span)
 			oid = base;
+#ifdef FAULT_INJECTOR
+		/* Test hook: go near the end of the slice, to wrap around soon. */
+		if (SIMPLE_FAULT_INJECTOR("tempcat_slice_near_end") == FaultInjectorTypeSkip)
+			oid = base + (Oid) span - 3;
+#endif
 		st->nextOid = oid + 1;
 
 		ScanKeyInit(&key, oidcolumn, BTEqualStrategyNumber, F_OIDEQ,
@@ -1407,14 +1517,10 @@ tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
 		TempcatProcState *st = &TempcatShared->procs[i];
-		Oid			lo;
-		Oid			hi;
 
 		if (i == MyProc->pgprocno || st->databaseId != MyDatabaseId)
 			continue;
-		lo = pg_atomic_read_u32(&st->ownedMin);
-		hi = pg_atomic_read_u32(&st->ownedMax);
-		if (OidIsValid(lo) && oid >= lo && oid <= hi)
+		if (tempcat_bounds_cover(st, oid))
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("OID %u of a new temporary object is in use by another session on this node",
@@ -3233,26 +3339,30 @@ tempcat_collect_live_ranges(void)
 
 	if (tc_live == NULL)
 		tc_live = MemoryContextAlloc(TopMemoryContext,
-									 sizeof(TempcatLiveRange) * TempcatShared->nprocs);
+									 sizeof(TempcatLiveRange) * 2 * TempcatShared->nprocs);
 	tc_nlive = 0;
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
 		TempcatProcState *st = &TempcatShared->procs[i];
-		Oid			lo;
-		Oid			hi;
+		Oid			lo[2];
+		Oid			hi[2];
 		Oid			db;
+		int			n;
+		int			k;
 
 		if (i == MyProc->pgprocno)
 			continue;
-		lo = pg_atomic_read_u32(&st->ownedMin);
-		hi = pg_atomic_read_u32(&st->ownedMax);
+		n = tempcat_read_bounds(st, lo, hi);
 		db = st->databaseId;
-		if (!OidIsValid(lo) || !OidIsValid(hi) || !OidIsValid(db))
+		if (!OidIsValid(db))
 			continue;
-		tc_live[tc_nlive].databaseId = db;
-		tc_live[tc_nlive].lo = lo;
-		tc_live[tc_nlive].hi = hi;
-		tc_nlive++;
+		for (k = 0; k < n; k++)
+		{
+			tc_live[tc_nlive].databaseId = db;
+			tc_live[tc_nlive].lo = lo[k];
+			tc_live[tc_nlive].hi = hi[k];
+			tc_nlive++;
+		}
 	}
 	tc_live_lxid = MyProc->lxid;
 	tc_live_cid = cid;
@@ -3277,15 +3387,11 @@ tempcat_oid_live_now(Oid oid, Oid dbid)
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
 		TempcatProcState *st = &TempcatShared->procs[i];
-		Oid			lo;
-		Oid			hi;
 
 		/* (our own objects count: the sweep can run in a session with some) */
 		if (st->databaseId != dbid)
 			continue;
-		lo = pg_atomic_read_u32(&st->ownedMin);
-		hi = pg_atomic_read_u32(&st->ownedMax);
-		if (OidIsValid(lo) && oid >= lo && oid <= hi)
+		if (tempcat_bounds_cover(st, oid))
 			return true;
 	}
 	return false;
