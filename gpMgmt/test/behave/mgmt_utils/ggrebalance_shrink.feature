@@ -949,6 +949,39 @@ Feature: ggrebalance behave tests
          And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 1, row count = 100
 
+    Scenario: test 4.8. test shrink rollback, when a rolled back table is dropped and a not yet rolled back table is renamed to its name
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And segment information for content 1 is saved in context
+         And all files in gpAdminLogs directory are deleted
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_1_new" in "test_db_1" with "100" rows
+         And there is a "heap" partition table "test_schema_1.part_test_table_1" in "test_db_1" with "100" rows
+         And database "test_db_2" exists
+         And schema "test_schema_2" exists in "test_db_2"
+         And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
+        When set fault inject "on_enter_STATE_SHRINK_CATALOG_STARTED_begin"
+         And the user runs "ggrebalance -x 1 --skip-rebalance"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And unset fault inject
+         And all files in gpAdminLogs directory are deleted
+        When set fault inject "fault_rebalance_table_test_db_1.test_schema_1.test_table_1_new"
+         And set fault inject type to suspend
+        When the user asynchronously runs "ggrebalance -r -n 2 --non-interactive-mode" and the process is saved
+         And the user waits till ggrebalance prints "Complete table rebalance for \"test_db_1\".\"test_schema_1\".\"test_table_1\"" in the logs (with timeout of "60" sec)
+         And sql "DROP TABLE test_schema_1.test_table_1; ALTER TABLE test_schema_1.test_table_1_new RENAME TO test_table_1;" is executed in "test_db_1" db
+         And unset fault inject
+        Then the async process finished with a return code of 0
+         And ggrebalance should print "Found 1 table(s) not yet rolled back" to logfile with latest timestamp
+         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
+         And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 2, row count = 100
+
     Scenario: test 5. test shrink continue, when a db with the table planned for rebalance was dropped
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
