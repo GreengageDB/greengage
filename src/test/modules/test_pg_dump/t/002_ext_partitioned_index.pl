@@ -139,6 +139,23 @@ is( $node->safe_psql(
 	'restored child index keeps its comment');
 
 #########################################
+# Dumps without index definitions don't warn
+
+$node->command_checks_all(
+	[ 'pg_dump', '--no-sync', '--data-only', 'postgres' ],
+	0,
+	[qr/^/],
+	[qr/^$/],
+	'pg_dump --data-only runs without warnings');
+
+$node->command_checks_all(
+	[ 'pg_dump', '--no-sync', '--section=pre-data', 'postgres' ],
+	0,
+	[qr/^/],
+	[qr/^$/],
+	'pg_dump --section=pre-data runs without warnings');
+
+#########################################
 # Binary upgrade dump
 
 $node->command_checks_all(

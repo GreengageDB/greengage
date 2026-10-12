@@ -462,7 +462,10 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 			extidx = findExtensionAncestorIndex(parentidx);
 			if (extidx != NULL)
 			{
-				if (index->dobj.dump & DUMP_COMPONENT_DEFINITION)
+				/* Only warn if index definitions would otherwise be dumped */
+				if ((index->dobj.dump & DUMP_COMPONENT_DEFINITION) &&
+					!fout->dopt->dataOnly &&
+					(fout->dopt->dumpSections & DUMP_POST_DATA))
 					pg_log_warning("index \"%s.%s\" on partition \"%s\" is not dumped; "
 								   "it is restored only if CREATE EXTENSION creates index \"%s.%s\"",
 								   index->dobj.namespace->dobj.name,
