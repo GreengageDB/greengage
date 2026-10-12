@@ -714,6 +714,51 @@ SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid IN (4294967001, 4294
 2q:
 DROP TABLE tc_lns_ids;
 
+-- Such a sweep leaves the database to be swept again, in case the session
+-- never takes the name: once it is gone, the next sweep (here before a DROP)
+-- removes the schema.  (Session 2 creates no temporary object; session 1's
+-- own left schema forces its sweep, though the database was swept.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+2: SET application_name = 'tc_lns_claimant';
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_lns_c (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+2q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_claimant'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+1q:
+DROP TABLE tc_lns_ids;
+
+-- If another transaction is removing the schema, e.g. a sweep on a segment
+-- where the session has no writer yet, the session waits for it rather than
+-- fail.  (Session 3 deletes the row itself, in a transaction it keeps open.)
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_late';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_late';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967003::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967003;
+2: SET gp_enable_temp_memory_catalog = on;
+2&: CREATE TEMP TABLE tc_lns_late (a int) DISTRIBUTED BY (a);
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted;
+3: COMMIT;
+2<:
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967003;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
@@ -915,8 +960,9 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segm
 -- (pg_shdepend) of its in-memory objects refer to; the rows for further
 -- roles go to disk.  Either way, other sessions cannot drop those roles
 -- while the references exist, and can once they are gone: the published
--- list is recomputed at the session's next transaction.  gpcheckcat's
--- hiding covers pg_shdepend rows on disk too.
+-- list is recomputed when the session goes idle, also on the segments, which
+-- get no transaction while it runs statements on the coordinator only.
+-- gpcheckcat's hiding covers pg_shdepend rows on disk too.
 --
 DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP; END $$;
 1: SET gp_enable_temp_memory_catalog = on;
@@ -928,9 +974,9 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 2: SET gp_temp_memory_catalog_hide_others = on;
 2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE objid >= 4026531840;
 2: RESET gp_temp_memory_catalog_hide_others;
-1: REVOKE SELECT ON tc_acl FROM tc_r1;
 1: REVOKE SELECT ON tc_acl FROM tc_r9;
-1: SELECT count(*) FROM tc_acl;
+1: REVOKE SELECT ON tc_acl FROM tc_r1;
+1: SELECT 1 AS coordinator_only;
 2: SELECT tc_try('DROP ROLE tc_r1');
 2: SELECT tc_try('DROP ROLE tc_r9');
 2q:

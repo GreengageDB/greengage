@@ -136,7 +136,6 @@
 #include "storage/spin.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
-#include "storage/sinvaladt.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/dsa.h"
@@ -405,17 +404,35 @@ tempcat_is_reader(void)
 		am_cursor_retrieve_handler;
 }
 
+/*
+ * The index of each covered catalog in tempcat_catalogs[], plus one, by the
+ * catalog's OID (0 for others), built at the first lookup: catalog scans
+ * look it up all the time, also with the feature off.  Catalogs have OIDs
+ * below FirstGenbkiObjectId.
+ */
+static uint8 tc_catidx_by_relid[FirstGenbkiObjectId];
+static bool tc_catidx_ready = false;
+
+StaticAssertDecl(lengthof(tempcat_catalogs) < PG_UINT8_MAX,
+				 "too many catalogs for tc_catidx_by_relid");
+
 static int
 tempcat_catalog_index(Oid relid)
 {
-	int			i;
-
-	for (i = 0; i < TEMPCAT_NCATALOGS; i++)
+	if (unlikely(!tc_catidx_ready))
 	{
-		if (tempcat_catalogs[i].relid == relid)
-			return i;
+		int			i;
+
+		for (i = 0; i < TEMPCAT_NCATALOGS; i++)
+		{
+			Assert(tempcat_catalogs[i].relid < FirstGenbkiObjectId);
+			tc_catidx_by_relid[tempcat_catalogs[i].relid] = i + 1;
+		}
+		tc_catidx_ready = true;
 	}
-	return -1;
+	if (relid >= FirstGenbkiObjectId)
+		return -1;
+	return (int) tc_catidx_by_relid[relid] - 1;
 }
 
 /*
@@ -484,6 +501,8 @@ tempcat_max_area_bytes(void)
 static bool
 tempcat_attach(bool create)
 {
+	static bool tranche_registered = false;
+	static LocalTransactionId no_area_lxid = InvalidLocalTransactionId;
 	MemoryContext oldcxt;
 	dsa_pointer rootptr;
 	dsa_area   *area;
@@ -491,7 +510,15 @@ tempcat_attach(bool create)
 	if (tc_area != NULL)
 		return true;
 
-	LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
+	/*
+	 * Once per process, also where no area is to come: pg_stat_activity
+	 * names other processes' waits for the lock by this process's tranches.
+	 */
+	if (unlikely(!tranche_registered))
+	{
+		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
+		tranche_registered = true;
+	}
 
 	if (am_cursor_retrieve_handler)
 	{
@@ -504,10 +531,20 @@ tempcat_attach(bool create)
 		dsa_handle	handle;
 		int			sessionId = RetrieveSessionId();
 
-		/* (free slots have session ID -1, like an unauthenticated session) */
+		/*
+		 * (free slots have session ID -1, like an unauthenticated session;
+		 * and do not search the slots, under their lock, at every catalog
+		 * scan of a transaction that found no area: it sees committed rows
+		 * only, which the next transaction looks for again)
+		 */
+		if (no_area_lxid == MyProc->lxid && MyProc->lxid != InvalidLocalTransactionId)
+			return false;
 		if (sessionId < 0 ||
 			!SharedSnapshotGetTempcatArea(sessionId, &handle, &rootptr))
+		{
+			no_area_lxid = MyProc->lxid;
 			return false;
+		}
 
 		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		tc_area = dsa_attach(handle);
@@ -2268,10 +2305,12 @@ tempcat_recompute_horizon(void)
 }
 
 /*
- * Command IDs of the snapshots this process handed to cursors in the current
+ * Command IDs of the snapshots a QE writer handed to cursors in the current
  * transaction (dumpSharedLocalSnapshot_forCursor()).  The cursors' reader
  * gangs scan with them in other processes, where SnapshotsSeeCommandRange()
- * does not see them; they are kept for the rest of the transaction.
+ * does not see them; they are kept for the rest of the transaction, as the
+ * writer does not learn when the cursors close.  (The coordinator registers
+ * a cursor's snapshot itself, which its entry-db readers use.)
  */
 static List *tc_cursor_cids = NIL;
 static LocalTransactionId tc_cursor_lxid = InvalidLocalTransactionId;
@@ -2281,7 +2320,7 @@ tempcat_note_cursor_snapshot(CommandId cid)
 {
 	MemoryContext oldcxt;
 
-	if (!IsTransactionState())
+	if (Gp_role != GP_ROLE_EXECUTE || !IsTransactionState())
 		return;
 	if (tc_cursor_lxid != MyProc->lxid)
 	{
@@ -2568,13 +2607,14 @@ tempcat_start_transaction(void)
 /*
  * The session goes idle, out of any transaction: apply the outcome of its
  * finished transactions to the pending rows now, rather than at the start
- * of its next transaction, and let the published horizon rise (see
- * tempcat_add_pending()).  The next transaction may be long in coming,
- * especially for a QE writer, which gets none while the session's queries
- * go to other segments or to the coordinator only: until then, the XIDs of
- * its last transaction (committed in two phases, after its last start)
- * held back datfrozenxid on its segment, even with all its temporary
- * objects dropped.
+ * of its next transaction, let the published horizon rise (see
+ * tempcat_add_pending()), and republish the roles its rows refer to.  The
+ * next transaction may be long in coming, especially for a QE writer, which
+ * gets none while the session's queries go to other segments or to the
+ * coordinator only: until then, the XIDs of its last transaction (committed
+ * in two phases, after its last start) held back datfrozenxid on its
+ * segment, even with all its temporary objects dropped, and roles it no
+ * longer used could not be dropped by other sessions.
  *
  * Out of a transaction, an error would not release the lock, and could
  * repeat at every return here: log it instead, and leave the rows to the
@@ -2586,14 +2626,21 @@ tempcat_idle(void)
 {
 	MemoryContext oldcxt = CurrentMemoryContext;
 
-	if (tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty))
+	if (!tc_roles_dirty &&
+		(tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty)))
 		return;
 
 	PG_TRY();
 	{
-		tempcat_resolve_pending();
-		if (tc_horizon_dirty)
-			tempcat_recompute_horizon();
+		if (tc_area != NULL)
+		{
+			tempcat_resolve_pending();
+			if (tc_horizon_dirty)
+				tempcat_recompute_horizon();
+		}
+		/* and the roles that DROP ROLE in other sessions sees us use */
+		if (tc_roles_dirty)
+			tempcat_recompute_roles();
 	}
 	PG_CATCH();
 	{
@@ -3057,10 +3104,11 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	int			i;
 	int			maxtuples;
 
+	/* the area first: there is none with the feature off, most often */
+	if (!tempcat_attach(false))
+		return NULL;
 	catidx = tempcat_catalog_index(RelationGetRelid(rel));
 	if (catidx < 0)
-		return NULL;
-	if (!tempcat_attach(false))
 		return NULL;
 
 	cat = &tc_root->catalogs[catidx];
@@ -4155,13 +4203,13 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 }
 
 /*
- * Is 'nspname' the name of the temporary namespace that another live backend
- * of the database would take (pg_temp_N or pg_toast_temp_N: N is the session
- * ID, or the backend ID after a 0 in utility mode)?  That backend removes a
- * left namespace of its name itself, in its own transaction, when it comes
- * to create its own (InitTempTableNamespace()).  Were it removed by a sweep
- * elsewhere, it would find the row still there until that sweep's
- * transaction ended, and fail.
+ * Is 'nspname' the name of the temporary namespace that another live session
+ * of the database would take (pg_temp_N or pg_toast_temp_N, N its session
+ * ID)?  The session removes a left namespace of its name itself, in its own
+ * transaction, when it comes to create its own (InitTempTableNamespace()).
+ * Were it removed by a sweep elsewhere, the session would find the row still
+ * there until that sweep's transaction ended, and fail.  (Not the names of
+ * utility mode, a 0 and a backend ID, which any backend may hold.)
  */
 static bool
 tempcat_namespace_name_claimed(const char *nspname)
@@ -4180,13 +4228,10 @@ tempcat_namespace_name_claimed(const char *nspname)
 	if (!isdigit((unsigned char) digits[0]))
 		return false;
 	n = strtol(digits, &end, 10);
-	if (*end != '\0' || n <= 0 || n > INT_MAX)
+	if (*end != '\0' || n <= 0 || n > INT_MAX || digits[0] == '0')
 		return false;
 
-	if (digits[0] == '0')
-		proc = (n != MyBackendId) ? BackendIdGetProc((int) n) : NULL;
-	else
-		proc = FindProcByGpSessionId(n);
+	proc = FindProcByGpSessionId(n);
 	return proc != NULL && proc->databaseId == MyDatabaseId;
 }
 
@@ -4219,11 +4264,17 @@ tempcat_sweep_objects(void)
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
-			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0) &&
-			!tempcat_namespace_name_claimed(NameStr(form->nspname)) &&
-			!tempcat_sweep_row_in_progress(&dirty))
+			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0))
 		{
-			if (tempcat_sweep_delete(rel, tup))
+			/*
+			 * Left to the live session that would take its name: sweep
+			 * again later, in case it never does (with its objects, which
+			 * stay as long as their namespace).
+			 */
+			if (tempcat_namespace_name_claimed(NameStr(form->nspname)))
+				tc_sweep_incomplete = true;
+			else if (!tempcat_sweep_row_in_progress(&dirty) &&
+					 tempcat_sweep_delete(rel, tup))
 				ndeleted++;
 		}
 	}
@@ -4405,7 +4456,13 @@ tempcat_sweep_db(bool force, bool wait)
 		if (tc_sweep_incomplete ||
 			!tempcat_mark_swept(MyDatabaseId, nunmarks))
 		{
-			/* (and leave the tracking of an earlier sweep as it is) */
+			/*
+			 * Not even marked by an earlier sweep, if forced to run again:
+			 * the next one finishes.  (And leave the tracking of the earlier
+			 * sweep as it is.)
+			 */
+			if (tc_sweep_incomplete)
+				tempcat_unmark_swept(MyDatabaseId);
 			UnlockDatabaseObject(DatabaseRelationId, MyDatabaseId,
 								 TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
 			return;
@@ -4531,6 +4588,30 @@ tempcat_sweep_before_drop(void)
 }
 
 /*
+ * The transaction in progress that deletes the namespace's row, if any.
+ */
+static TransactionId
+tempcat_namespace_deleter(Oid namespaceId)
+{
+	Relation	rel;
+	SysScanDesc scan;
+	ScanKeyData key;
+	SnapshotData dirty;
+	TransactionId deleter = InvalidTransactionId;
+
+	InitDirtySnapshot(dirty);
+	rel = table_open(NamespaceRelationId, AccessShareLock);
+	ScanKeyInit(&key, Anum_pg_namespace_oid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(namespaceId));
+	scan = systable_beginscan(rel, NamespaceOidIndexId, true, &dirty, 1, &key);
+	if (HeapTupleIsValid(systable_getnext(scan)))
+		deleter = dirty.xmax;
+	systable_endscan(scan);
+	table_close(rel, AccessShareLock);
+	return deleter;
+}
+
+/*
  * InitTempTableNamespace() found the temporary namespace 'namespaceName',
  * 'namespaceId', left on disk by a session that is gone (its area could not
  * be created, so the namespace went to disk), and is about to remove it.
@@ -4539,10 +4620,12 @@ tempcat_sweep_before_drop(void)
  * tempcat_object_missing()), and the sweep that performDeletion() runs
  * first would remove the namespace under it.  Sweep now, even if the
  * database was swept already, waiting for a sweep under way (after a
- * restart, many sessions may come for their namespaces at once).  Returns
- * the namespace's OID as found then, which the caller removes as usual if
- * valid: if it still has a reserved OID, e.g. while another transaction
- * deleting it has not committed yet, fail rather than try that.
+ * restart, many sessions may come for their namespaces at once).  If
+ * another transaction deletes it, e.g. a sweep that did not know this session
+ * yet (on a segment, before its writer started), wait for that transaction
+ * and look again.  Returns the namespace's OID as found then, which the
+ * caller removes as usual if valid: if it still has a reserved OID, e.g.
+ * inserted by a transaction in progress, fail rather than try that.
  */
 Oid
 tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
@@ -4551,17 +4634,30 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 		TempcatShared == NULL || IsBinaryUpgrade || !IsUnderPostmaster ||
 		RecoveryInProgress())
 		return namespaceId;
-	tempcat_sweep_db(true, true);
-	CommandCounterIncrement();
 
-	namespaceId = get_namespace_oid(namespaceName, true);
-	if (IsTempcatOid(namespaceId))
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_IN_USE),
-				 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
-						namespaceName),
-				 errhint("Try again.")));
-	return namespaceId;
+	for (;;)
+	{
+		TransactionId deleter;
+
+		tempcat_sweep_db(true, true);
+		CommandCounterIncrement();
+
+		namespaceId = get_namespace_oid(namespaceName, true);
+		if (!IsTempcatOid(namespaceId))
+			return namespaceId;
+
+		deleter = tempcat_namespace_deleter(namespaceId);
+		if (!TransactionIdIsValid(deleter))
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_IN_USE),
+					 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
+							namespaceName),
+					 errhint("Try again.")));
+
+		/* (if it aborts, the next round sweeps the namespace itself) */
+		XactLockTableWait(deleter, NULL, NULL, XLTW_None);
+		AcceptInvalidationMessages();
+	}
 }
 
 /* ----------------------------------------------------------------
