@@ -456,9 +456,8 @@ CJoinCardinalityTest::EresUnittest_LOJUnsupportedPred()
 	loj_stats->Release();
 
 	// now add an unsupported join predicate; it gets the default
-	// selectivity, so only 40% of the matched pairs survive it, and the
-	// outer rows that lose their (single) match must come back as
-	// null-extended rows
+	// selectivity, so only 40% of the matched pairs survive it, and 60% of
+	// the matched outer rows must come back as null-extended rows
 	CStatsPredPtrArry *unsupported_preds = GPOS_NEW(mp) CStatsPredPtrArry(mp);
 	unsupported_preds->Append(GPOS_NEW(mp) CStatsPredUnsupported(
 		gpos::ulong_max, CStatsPred::EstatscmptOther));
@@ -493,8 +492,49 @@ CJoinCardinalityTest::EresUnittest_LOJUnsupportedPred()
 				 .Get()));
 	GPOS_UNITTEST_ASSERT(outer_freq_diff < 0.01);
 
+	loj_stats->Release();
+
+	// fan-out: the inner side has 1000 rows over the same 100 values, so every
+	// outer row has 10 matches under the supported predicate (inner join 1000
+	// pairs). The unsupported predicate keeps 40% of the pairs (400) and, by
+	// the per-outer-row model, 40% of the matched outer rows; the other 60
+	// outer rows become null-extended: Card(LOJ) = 400 + 60 = 460 and the
+	// inner column's null fraction is 60 / 460
+	UlongToHistogramMap *fanout_histograms =
+		GPOS_NEW(mp) UlongToHistogramMap(mp);
+	fanout_histograms->Insert(
+		GPOS_NEW(mp) ULONG(inner_colid),
+		CCardinalityTestUtils::PhistInt4Remain(
+			mp, 10 /*num_of_buckets*/, 10.0 /*dNDVPerBucket*/,
+			false /*fNullFreq*/, 0.0 /*num_NDV_remain*/));
+	UlongToDoubleMap *fanout_widths = GPOS_NEW(mp) UlongToDoubleMap(mp);
+	fanout_widths->Insert(GPOS_NEW(mp) ULONG(inner_colid),
+						  GPOS_NEW(mp) CDouble(4.0));
+	CStatistics *fanout_inner_stats =
+		GPOS_NEW(mp) CStatistics(mp, fanout_histograms, fanout_widths,
+								 CDouble(1000.0), false /*is_empty*/);
+
+	loj_stats = CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
+		mp, outer_stats, fanout_inner_stats, join_preds_stats,
+		unsupported_pred_stats);
+	GPOS_UNITTEST_ASSERT(nullptr != loj_stats);
+	CCardinalityTestUtils::PrintStats(mp, loj_stats);
+
+	CDouble expected_matched_pairs = CDouble(1000.0) * default_selectivity;
+	CDouble expected_unmatched = num_rows * (1.0 - default_selectivity);
+	CDouble expected_rows = expected_matched_pairs + expected_unmatched;
+	GPOS_UNITTEST_ASSERT(fabs((loj_stats->Rows() - expected_rows).Get()) <
+						 0.01);
+	inner_hist = loj_stats->GetHistogram(inner_colid);
+	GPOS_UNITTEST_ASSERT(nullptr != inner_hist);
+	CDouble fanout_null_freq_diff(
+		fabs((inner_hist->GetNullFreq() - expected_unmatched / expected_rows)
+				 .Get()));
+	GPOS_UNITTEST_ASSERT(fanout_null_freq_diff < 0.01);
+
 	// clean up
 	loj_stats->Release();
+	fanout_inner_stats->Release();
 	unsupported_pred_stats->Release();
 	join_preds_stats->Release();
 	inner_stats->Release();

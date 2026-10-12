@@ -99,24 +99,30 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 //   num_rows_inner_join_unfiltered: matched pairs under the supported predicates,
 //   num_rows_inner_join: matched pairs that also survive the unsupported predicates.
 //
-// With k matches per matched outer row and a fraction s of the matched pairs
-// surviving the unsupported predicates, an outer row keeps at least one
-// match with probability 1 - (1 - s)^k. This assumes attribute value
-// independence, as the rest of the cardinality model does: the unsupported
-// predicates do not favor the rows the supported ones matched, and they act
-// independently on the k matches of a row. Under positive correlation
-// between the predicates (e.g. an unsupported predicate that depends on the
-// outer row only, so it succeeds or fails for all k matches at once) the
-// true number of unmatched rows lies between the value computed here and
-// num_rows_matched * (1 - s), the perfectly correlated case; for k = 1 the
-// two coincide.
+// The unsupported predicates are applied with a default selectivity s to
+// the matched pairs (see CStatsPredUnsupported). We take that same fraction
+// to apply to the matched outer rows: a fraction 1 - s of them loses all
+// its matches and becomes null-extended. This treats the predicates as
+// deciding per outer row rather than per matched pair, i.e. as perfectly
+// correlated across the matches of one row. The alternative, per-pair
+// independence, gives (1 - s)^k for k matches per outer row; with the
+// default s = 0.4 that is below 1% for k >= 9, so for any key-to-foreign-key
+// left join it would predict no null-extended rows at all, which is the
+// estimate this function exists to correct. The per-row form is bounded by
+// the outer cardinality, and for one-to-one joins both forms coincide.
 CDouble
 CLeftOuterJoinStatsProcessor::NumRowsUnmatchedByUnsupportedPreds(
 	CDouble num_rows_outer, CDouble num_rows_LASJ,
 	CDouble num_rows_inner_join_unfiltered, CDouble num_rows_inner_join)
 {
+	// the unsupported predicates are applied as a filter on the inner join,
+	// and a filter can only reduce the row count or clamp it to MinRows
+	GPOS_ASSERT(num_rows_inner_join <=
+				num_rows_inner_join_unfiltered + CStatistics::Epsilon);
+
 	if (num_rows_inner_join_unfiltered < CStatistics::Epsilon ||
-		num_rows_inner_join >= num_rows_inner_join_unfiltered)
+		num_rows_inner_join_unfiltered - num_rows_inner_join <
+			CStatistics::Epsilon)
 	{
 		// nothing was filtered out
 		return CDouble(0.0);
@@ -134,16 +140,7 @@ CLeftOuterJoinStatsProcessor::NumRowsUnmatchedByUnsupportedPreds(
 	// fraction of the matched pairs that survive the unsupported predicates
 	CDouble selectivity = num_rows_inner_join / num_rows_inner_join_unfiltered;
 
-	// average number of matches of a matched outer row; assuming the
-	// unsupported predicates act independently on each of these matches,
-	// an outer row keeps at least one match with probability 1 - (1 - s)^k
-	CDouble matches_per_outer_row =
-		std::max(CDouble(1.0),
-				 CDouble(num_rows_inner_join_unfiltered / num_rows_matched));
-	CDouble prob_keeps_match =
-		CDouble(1.0) - (CDouble(1.0) - selectivity).Pow(matches_per_outer_row);
-
-	return num_rows_matched * (CDouble(1.0) - prob_keeps_match);
+	return num_rows_matched * (CDouble(1.0) - selectivity);
 }
 
 // create a new hash map of histograms for LOJ from the histograms
