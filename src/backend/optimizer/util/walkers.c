@@ -307,6 +307,8 @@ plan_tree_walker(Node *node,
 				return true;
 			if (walker((Node *) ((IndexOnlyScan *) node)->indexqual, context))
 				return true;
+			if (walker((Node *) ((IndexOnlyScan *) node)->recheckqual, context))
+				return true;
 			break;
 
 		case T_BitmapIndexScan:
