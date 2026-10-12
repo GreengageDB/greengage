@@ -140,6 +140,7 @@ extern void TempcatShmemInit(void);
 
 /* Transaction support */
 extern void tempcat_start_transaction(void);
+extern void tempcat_idle(void);
 extern void tempcat_abort_subtransaction(void);
 extern void tempcat_check_prepare(void);
 extern bool tempcat_xact_changed(void);

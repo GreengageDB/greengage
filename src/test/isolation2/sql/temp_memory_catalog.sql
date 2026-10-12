@@ -295,18 +295,25 @@ CREATE DATABASE tc_frozen_db;
 2: VACUUM FREEZE;
 2: SELECT datfrozenxid::text::bigint > (SELECT x FROM tc_xid) AS advanced FROM pg_database WHERE datname = current_database();
 -- Nor past the XIDs of rows whose transaction's outcome the session has not
--- applied yet (at the start of its next transaction), which it looks up in
--- the clog then: here those of a temporary view, which has no relfrozenxid.
+-- applied yet, which it looks up in the clog until then.  It applies them
+-- when it goes idle, so a session that keeps no table holds nothing back:
+-- here one with a temporary view (no relfrozenxid), whose segment writers
+-- get no transaction after the two-phase commit of their last one.  (The
+-- rows of tc_seg_xid carry the segments' XIDs of that transaction.)
 3:@db_name tc_frozen_db: SET gp_enable_temp_memory_catalog = on;
 3: SET application_name = 'tc_frozen_view_session';
+3: CREATE TABLE tc_seg_xid (a int) DISTRIBUTED BY (a);
 3: BEGIN;
 3: CREATE TEMP VIEW tc_frozen_v AS SELECT 1 AS a;
 3: DELETE FROM tc_xid;
 3: INSERT INTO tc_xid SELECT txid_current() % 4294967296;
+3: INSERT INTO tc_seg_xid SELECT generate_series(1, 30);
 3: COMMIT;
 2: DO $$ BEGIN FOR i IN 1..100 LOOP PERFORM txid_current(); COMMIT; END LOOP; END $$;
 2: VACUUM FREEZE;
-2: SELECT datfrozenxid::text::bigint <= (SELECT x FROM tc_xid) AS held_back FROM pg_database WHERE datname = current_database();
+2: SELECT datfrozenxid::text::bigint > (SELECT x FROM tc_xid) AS advanced FROM pg_database WHERE datname = current_database();
+2: SELECT count(*) AS segs_advanced FROM gp_dist_random('pg_database') d JOIN (SELECT gp_segment_id AS seg, max(xmin::text::bigint) AS x FROM tc_seg_xid GROUP BY 1) s ON d.gp_segment_id = s.seg WHERE d.datname = current_database() AND d.datfrozenxid::text::bigint > s.x;
+3: SELECT * FROM tc_frozen_v;
 3q:
 2: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_view_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 2q:

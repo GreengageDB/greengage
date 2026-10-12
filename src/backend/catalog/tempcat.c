@@ -45,7 +45,8 @@
  * Every row carries xmin/xmax/cmin/cmax and is checked with the usual MVCC
  * rules, so subtransactions, aborts and two-phase commit behave like on-disk
  * rows: an aborted insert simply never becomes visible.  Rows whose fate is
- * known are cleaned up by the writer at the start of the next transaction.
+ * known are cleaned up by the writer when it goes idle, or at the start of
+ * its next transaction.
  * Frozen inserts and in-place updates (gp_fastsequence, relpages, ...) stay
  * non-transactional, like on disk.
  *
@@ -2007,10 +2008,10 @@ tempcat_add_pending(dsa_pointer ep)
 	tc_xact_changed = true;
 
 	/*
-	 * Until the outcome of its transactions is applied to the row, at the
-	 * start of the session's next transaction (which may be long in coming),
-	 * its xids are looked up in the clog: keep vac_update_datfrozenxid(), and
-	 * so clog truncation, from passing them.
+	 * Until the outcome of its transactions is applied to the row, when the
+	 * session goes idle or starts its next transaction, its xids are looked
+	 * up in the clog: keep vac_update_datfrozenxid(), and so clog
+	 * truncation, from passing them.
 	 */
 	if (!(e->flags & TCE_XMIN_COMMITTED))
 		tempcat_cover_xid(e->xmin);
@@ -2101,8 +2102,9 @@ tempcat_xid_status(TransactionId xid)
  * aborted inserts and committed deletes, clear aborted deletes.  Entries of
  * a prepared transaction that has not been finished yet stay pending.
  *
- * Called by the writer at the start of each transaction, when none of the
- * pending XIDs can be the current one anymore.
+ * Called by the writer at the start of each transaction, and when it goes
+ * idle (tempcat_idle()), when none of the pending XIDs can be the current
+ * one anymore.
  */
 /*
  * After removing an entry, stop treating its object's OID as ours if no
@@ -2511,6 +2513,52 @@ tempcat_start_transaction(void)
 		tempcat_recompute_horizon();
 	if (tc_roles_dirty)
 		tempcat_recompute_roles();
+}
+
+/*
+ * The session goes idle, out of any transaction: apply the outcome of its
+ * finished transactions to the pending rows now, rather than at the start
+ * of its next transaction, and let the published horizon rise (see
+ * tempcat_add_pending()).  The next transaction may be long in coming,
+ * especially for a QE writer, which gets none while the session's queries
+ * go to other segments or to the coordinator only: until then, the XIDs of
+ * its last transaction (committed in two phases, after its last start)
+ * held back datfrozenxid on its segment, even with all its temporary
+ * objects dropped.
+ *
+ * Out of a transaction, an error would not release the lock, and could
+ * repeat at every return here: log it instead, and leave the rows to the
+ * start of the next transaction, which reports any error as usual.  The
+ * pending list stays consistent (see tempcat_pending_take()).
+ */
+void
+tempcat_idle(void)
+{
+	MemoryContext oldcxt = CurrentMemoryContext;
+
+	if (tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty))
+		return;
+
+	PG_TRY();
+	{
+		tempcat_resolve_pending();
+		if (tc_horizon_dirty)
+			tempcat_recompute_horizon();
+	}
+	PG_CATCH();
+	{
+		ErrorData  *edata;
+
+		LWLockReleaseAll();
+		MemoryContextSwitchTo(oldcxt);
+		edata = CopyErrorData();
+		FlushErrorState();
+		ereport(LOG,
+				(errmsg("could not apply the outcome of finished transactions to in-memory catalog rows: %s",
+						edata->message)));
+		FreeErrorData(edata);
+	}
+	PG_END_TRY();
 }
 
 /*

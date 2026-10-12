@@ -875,13 +875,14 @@ SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 RESET gp_temp_memory_catalog_disk_only;
 
 -- An error while the outcome of earlier transactions is applied to the rows
--- (here after the first dropped row is freed, at the start of the next
--- transaction) leaves the rows still to be done consistent: the next
--- transaction finishes them.
+-- (here after the first dropped row is freed, when the session goes idle
+-- after the drop) is only logged, and leaves the rows still to be done
+-- consistent: the next transaction finishes them.  (At the start of a
+-- transaction, it would fail the transaction.)
 CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 DROP TABLE tc_pend;
-SELECT 1 AS fails_to_start;
+SELECT gp_wait_until_triggered_fault('tempcat_forget_if_gone', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT to_regclass('tc_pend') IS NULL AS dropped;
 CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);

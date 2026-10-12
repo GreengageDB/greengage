@@ -1412,7 +1412,7 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 ERROR:  default privileges cannot be set for a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
-CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_42 GRANT SELECT ON TABLES TO PUBLIC"
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_31 GRANT SELECT ON TABLES TO PUBLIC"
 PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
@@ -1765,9 +1765,10 @@ SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 
 RESET gp_temp_memory_catalog_disk_only;
 -- An error while the outcome of earlier transactions is applied to the rows
--- (here after the first dropped row is freed, at the start of the next
--- transaction) leaves the rows still to be done consistent: the next
--- transaction finishes them.
+-- (here after the first dropped row is freed, when the session goes idle
+-- after the drop) is only logged, and leaves the rows still to be done
+-- consistent: the next transaction finishes them.  (At the start of a
+-- transaction, it would fail the transaction.)
 CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
@@ -1776,8 +1777,12 @@ SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid) FROM gp_segment_
 (1 row)
 
 DROP TABLE tc_pend;
-SELECT 1 AS fails_to_start;
-ERROR:  fault triggered, fault name:'tempcat_forget_if_gone' fault type:'error'
+SELECT gp_wait_until_triggered_fault('tempcat_forget_if_gone', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:
+(1 row)
+
 SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
