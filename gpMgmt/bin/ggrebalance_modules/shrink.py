@@ -454,7 +454,7 @@ class GGShrink:
     def on_enter_STATE_SHRINK_TABLES_DONE(self) -> None:
         self.logger.info('Checking for tables that were not rebalanced...')
         if self.are_not_rebalanced_tables_left(False):
-            self.logger.info('Found tables yet not rebalanced...')
+            self.logger.info('Found tables not yet rebalanced, rebuilding the list of tables to rebalance...')
             self.trigger('move_to_STATE_PREPARE_SHRINK_SCHEMA_STARTED')
         else:
             self.logger.info('Tables rebalance complete')
@@ -592,7 +592,7 @@ class GGShrink:
     def on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE(self) -> None:
         self.logger.info('Checking for tables that were not rolled back after rebalance...')
         if self.are_not_rebalanced_tables_left(True):
-            self.logger.info('Found tables yet not rolled back...')
+            self.logger.info('Found tables not yet rolled back, rebuilding the list of tables to roll back...')
             self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START')
         else:
             self.logger.info('Tables rollback after rebalance complete')

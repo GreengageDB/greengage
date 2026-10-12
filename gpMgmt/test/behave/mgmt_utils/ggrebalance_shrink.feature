@@ -858,7 +858,7 @@ Feature: ggrebalance behave tests
          And sql "CREATE SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
          And unset fault inject
         Then the async process finished with a return code of 1
-         And ggrebalance should print "Found tables yet not rebalanced" to logfile with latest timestamp
+         And ggrebalance should print "Found tables not yet rebalanced" to logfile with latest timestamp
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And sql "DROP SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
         When user will answer "yes" to the prompt "Proceed with continue?"
@@ -907,7 +907,7 @@ Feature: ggrebalance behave tests
          And sql "CREATE SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
          And unset fault inject
         Then the async process finished with a return code of 1
-         And ggrebalance should print "Found tables yet not rolled back" to logfile with latest timestamp
+         And ggrebalance should print "Found tables not yet rolled back" to logfile with latest timestamp
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And sql "DROP SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
         When user will answer "yes" to the prompt "Proceed with continue?"
