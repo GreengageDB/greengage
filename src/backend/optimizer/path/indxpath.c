@@ -25,6 +25,7 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/supportnodes.h"
@@ -1053,6 +1054,16 @@ build_index_paths(PlannerInfo *root, RelOptInfo *rel,
 	 */
 	index_only_scan = (scantype != ST_BITMAPSCAN &&
 					   check_index_only(rel, index));
+
+	/*
+	 * GPDB: never of a catalog that holds, or may come to hold, rows of
+	 * temporary objects kept in memory, which its indexes do not have (see
+	 * tempcat.c).  get_relation_info() makes its index columns not
+	 * returnable, but a scan that needs no column at all still qualified.
+	 */
+	if (index_only_scan && rel->rtekind == RTE_RELATION &&
+		!tempcat_plan_catalog_index_scans(planner_rt_fetch(rel->relid, root)->relid))
+		index_only_scan = false;
 
 	/*
 	 * 4. Generate an indexscan path if there are relevant restriction clauses

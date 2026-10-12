@@ -145,6 +145,16 @@ RESET enable_seqscan;
 DROP TABLE tc_early;
 DROP FUNCTION tc_make_early(int);
 DROP FUNCTION tc_count_rel(name);
+-- Not even for queries that need no column of the catalog, which any of its
+-- indexes would cover; nor while hiding other sessions' objects.
+SET enable_seqscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class;
+SELECT count(*) > 0 AS some_rows FROM pg_class;
+SELECT EXISTS (SELECT FROM pg_type) AS some_types;
+SET gp_temp_memory_catalog_hide_others = on;
+SELECT count(*) > 0 AS some_rows FROM pg_attribute;
+RESET gp_temp_memory_catalog_hide_others;
+RESET enable_seqscan;
 
 --
 -- Basic usage
