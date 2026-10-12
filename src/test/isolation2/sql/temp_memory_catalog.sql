@@ -728,6 +728,16 @@ RESET allow_system_table_mods;
 1: SET gp_enable_temp_memory_catalog = on;
 1: CREATE TEMP TABLE tc_lns_c (a int) DISTRIBUTED BY (a);
 SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+-- (but not while the session lives: then a DROP would sweep every time)
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 2q:
 DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_claimant'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);

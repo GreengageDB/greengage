@@ -710,6 +710,19 @@ typedef struct TempcatProcState
  */
 #define TEMPCAT_BOUNDS_GAP		10000
 
+/*
+ * A live session that a sweep left a left temporary namespace to, as it
+ * would take its name; see tempcat_note_claim().
+ */
+typedef struct TempcatClaim
+{
+	Oid			databaseId;
+	int			pgprocno;
+	int			sessionId;
+} TempcatClaim;
+
+#define TEMPCAT_MAX_CLAIMS 16
+
 typedef struct TempcatSharedData
 {
 	int			tranche_id;		/* LWLock tranche of the session areas */
@@ -718,6 +731,8 @@ typedef struct TempcatSharedData
 	int			nextswept;		/* entry to replace when the list is full */
 	Oid			swept[TEMPCAT_MAX_SWEPT_DBS];
 	uint64		nunmarks;		/* tempcat_unmark_swept() calls so far */
+	int			nclaims;		/* also protected by mutex */
+	TempcatClaim claims[TEMPCAT_MAX_CLAIMS];
 	int			nprocs;
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
@@ -757,6 +772,7 @@ TempcatShmemInit(void)
 	TempcatShared->nswept = 0;
 	TempcatShared->nextswept = 0;
 	TempcatShared->nunmarks = 0;
+	TempcatShared->nclaims = 0;
 	TempcatShared->nprocs = tempcat_total_procs();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
@@ -4314,16 +4330,17 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 }
 
 /*
- * Is 'nspname' the name of the temporary namespace that another live session
- * of the database would take (pg_temp_N or pg_toast_temp_N, N its session
- * ID)?  The session removes a left namespace of its name itself, in its own
- * transaction, when it comes to create its own (InitTempTableNamespace()).
- * Were it removed by a sweep elsewhere, the session would find the row still
- * there until that sweep's transaction ended, and fail.  (Not the names of
- * utility mode, a 0 and a backend ID, which any backend may hold.)
+ * The other live session of the database that would take 'nspname' as the
+ * name of its temporary namespace (pg_temp_N or pg_toast_temp_N, N its
+ * session ID), or NULL.  The session removes a left namespace of its name
+ * itself, in its own transaction, when it comes to create its own
+ * (InitTempTableNamespace()).  Were it removed by a sweep elsewhere, the
+ * session would find the row still there until that sweep's transaction
+ * ended, and fail.  (Not the names of utility mode, a 0 and a backend ID,
+ * which any backend may hold.)
  */
-static bool
-tempcat_namespace_name_claimed(const char *nspname)
+static PGPROC *
+tempcat_namespace_claimant(const char *nspname)
 {
 	const char *digits;
 	char	   *end;
@@ -4335,15 +4352,90 @@ tempcat_namespace_name_claimed(const char *nspname)
 	else if (strncmp(nspname, "pg_toast_temp_", 14) == 0)
 		digits = nspname + 14;
 	else
-		return false;
+		return NULL;
 	if (!isdigit((unsigned char) digits[0]))
-		return false;
+		return NULL;
 	n = strtol(digits, &end, 10);
 	if (*end != '\0' || n <= 0 || n > INT_MAX || digits[0] == '0')
-		return false;
+		return NULL;
 
 	proc = FindProcByGpSessionId(n);
-	return proc != NULL && proc->databaseId == MyDatabaseId;
+	return proc != NULL && proc->databaseId == MyDatabaseId ? proc : NULL;
+}
+
+/*
+ * A sweep leaves a left temporary namespace to the live session 'proc' that
+ * would take its name (tempcat_namespace_claimant()).  Remember the session,
+ * so that the database is swept again once it is gone, in case it never
+ * took the name (tempcat_check_claims()); asking for another sweep right
+ * away would make every DROP sweep while the session lives.  Returns false
+ * if there is no room: then the database must not count as swept.
+ */
+static bool
+tempcat_note_claim(PGPROC *proc)
+{
+	bool		noted = false;
+	int			i;
+
+	SpinLockAcquire(&TempcatShared->mutex);
+	for (i = 0; i < TempcatShared->nclaims; i++)
+	{
+		TempcatClaim *c = &TempcatShared->claims[i];
+
+		if (c->databaseId == MyDatabaseId && c->pgprocno == proc->pgprocno &&
+			c->sessionId == proc->mppSessionId)
+		{
+			noted = true;
+			break;
+		}
+	}
+	if (!noted && TempcatShared->nclaims < TEMPCAT_MAX_CLAIMS)
+	{
+		TempcatClaim *c = &TempcatShared->claims[TempcatShared->nclaims++];
+
+		c->databaseId = MyDatabaseId;
+		c->pgprocno = proc->pgprocno;
+		c->sessionId = proc->mppSessionId;
+		noted = true;
+	}
+	SpinLockRelease(&TempcatShared->mutex);
+	return noted;
+}
+
+/*
+ * Ask for another sweep of this database if a session that a sweep left a
+ * namespace to is gone (see tempcat_note_claim()).  Its PGPROC has been
+ * given up, or taken by another session, then.
+ */
+static void
+tempcat_check_claims(void)
+{
+	bool		gone = false;
+	int			i;
+
+	/* (a claim noted meanwhile is checked the next time) */
+	if (TempcatShared->nclaims == 0)
+		return;
+
+	SpinLockAcquire(&TempcatShared->mutex);
+	for (i = 0; i < TempcatShared->nclaims; i++)
+	{
+		TempcatClaim *c = &TempcatShared->claims[i];
+		PGPROC	   *proc = &ProcGlobal->allProcs[c->pgprocno];
+
+		if (c->databaseId != MyDatabaseId)
+			continue;
+		if (proc->pid != 0 && proc->mppSessionId == c->sessionId &&
+			proc->databaseId == c->databaseId)
+			continue;
+		*c = TempcatShared->claims[--TempcatShared->nclaims];
+		i--;
+		gone = true;
+	}
+	SpinLockRelease(&TempcatShared->mutex);
+
+	if (gone)
+		tempcat_unmark_swept(MyDatabaseId);
 }
 
 /*
@@ -4379,11 +4471,17 @@ tempcat_sweep_objects(void)
 		{
 			/*
 			 * Left to the live session that would take its name: sweep
-			 * again later, in case it never does (with its objects, which
-			 * stay as long as their namespace).
+			 * again once it is gone, in case it never does (with its
+			 * objects, which stay as long as their namespace).
 			 */
-			if (tempcat_namespace_name_claimed(NameStr(form->nspname)))
-				tc_sweep_incomplete = true;
+			PGPROC	   *claimant;
+
+			claimant = tempcat_namespace_claimant(NameStr(form->nspname));
+			if (claimant != NULL)
+			{
+				if (!tempcat_note_claim(claimant))
+					tc_sweep_incomplete = true;
+			}
 			else if (!tempcat_sweep_row_in_progress(&dirty) &&
 					 tempcat_sweep_delete(rel, tup))
 				ndeleted++;
@@ -4534,6 +4632,7 @@ tempcat_sweep_if_needed(bool allow_force)
 static void
 tempcat_sweep_db(bool force, bool wait)
 {
+	tempcat_check_claims();
 	if (!force && tempcat_db_swept(MyDatabaseId))
 		return;
 
