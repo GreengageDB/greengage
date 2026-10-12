@@ -144,6 +144,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/plancache.h"
 #include "utils/rel.h"
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
@@ -4416,6 +4417,19 @@ tempcat_restrict_catalog_index_scans(Oid relid)
 		return true;
 	/* a reader of a session that keeps temporary objects in memory */
 	return tempcat_is_reader() && tempcat_attach(false);
+}
+
+/*
+ * Plans made before gp_temp_memory_catalog_hide_others was turned on may
+ * have index-only scans of such catalogs, which the executor then refuses:
+ * have the cached ones made anew.  (Others, e.g. those of SQL functions,
+ * live for the rest of the statement.)
+ */
+void
+assign_gp_temp_memory_catalog_hide_others(bool newval, void *extra)
+{
+	if (newval && !gp_temp_memory_catalog_hide_others)
+		ResetPlanCache();
 }
 
 /*

@@ -653,7 +653,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_temp_memory_catalog_hide_others,
 		false,
-		NULL, NULL, NULL
+		NULL, assign_gp_temp_memory_catalog_hide_others, NULL
 	},
 	{
 		{"gp_enable_temp_memory_catalog", PGC_USERSET, CLIENT_CONN_STATEMENT,

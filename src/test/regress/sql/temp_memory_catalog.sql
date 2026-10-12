@@ -83,6 +83,19 @@ END $$;
 SELECT i, tc_count_rel('pg_class'),
        set_config('gp_temp_memory_catalog_hide_others', 'on', false)
   FROM generate_series(1, 2) i;
+-- Cached plans are made anew when the option is turned on.
+SET enable_bitmapscan = off;
+SET enable_indexscan = off;
+PREPARE tc_ios_count AS SELECT count(*) FROM pg_class WHERE relname = 'pg_class';
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+EXECUTE tc_ios_count;
+SET gp_temp_memory_catalog_hide_others = on;
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+EXECUTE tc_ios_count;
+RESET gp_temp_memory_catalog_hide_others;
+DEALLOCATE tc_ios_count;
+RESET enable_bitmapscan;
+RESET enable_indexscan;
 RESET enable_seqscan;
 RESET optimizer;
 

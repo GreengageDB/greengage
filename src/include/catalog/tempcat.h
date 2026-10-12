@@ -48,6 +48,7 @@ extern bool gp_enable_temp_memory_catalog;
 extern int	gp_temp_memory_catalog_max_size;
 extern bool gp_temp_memory_catalog_disk_only;
 extern bool gp_temp_memory_catalog_hide_others;
+extern void assign_gp_temp_memory_catalog_hide_others(bool newval, void *extra);
 
 typedef struct TempcatScanData *TempcatScan;
 

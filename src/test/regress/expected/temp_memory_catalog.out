@@ -83,6 +83,45 @@ SELECT i, tc_count_rel('pg_class'),
 ERROR:  cannot use an index-only scan of a catalog while hiding other sessions' temporary objects
 HINT:  Run the statement again to plan it anew.
 CONTEXT:  SQL function "tc_count_rel" statement 1
+-- Cached plans are made anew when the option is turned on.
+SET enable_bitmapscan = off;
+SET enable_indexscan = off;
+PREPARE tc_ios_count AS SELECT count(*) FROM pg_class WHERE relname = 'pg_class';
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using pg_class_relname_nsp_index on pg_class
+         Index Cond: (relname = 'pg_class'::name)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+EXECUTE tc_ios_count;
+ count 
+-------
+     1
+(1 row)
+
+SET gp_temp_memory_catalog_hide_others = on;
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+                          QUERY PLAN                           
+---------------------------------------------------------------
+ Aggregate
+   ->  Index Scan using pg_class_relname_nsp_index on pg_class
+         Index Cond: (relname = 'pg_class'::name)
+ Optimizer: Postgres-based planner
+(4 rows)
+
+EXECUTE tc_ios_count;
+ count 
+-------
+     1
+(1 row)
+
+RESET gp_temp_memory_catalog_hide_others;
+DEALLOCATE tc_ios_count;
+RESET enable_bitmapscan;
+RESET enable_indexscan;
 RESET enable_seqscan;
 RESET optimizer;
 -- Plain and index-only scans of plans made before a session keeps
