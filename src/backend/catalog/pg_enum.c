@@ -53,6 +53,40 @@ static void RenumberEnumType(Relation pg_enum, HeapTuple *existing, int nelems);
 static int	sort_order_cmp(const void *p1, const void *p2);
 
 
+static int
+enum_label_cmp(const void *p1, const void *p2)
+{
+	return strcmp(*(char *const *) p1, *(char *const *) p2);
+}
+
+/*
+ * GPDB: fail if the labels of a new enum type repeat; see EnumValuesCreate().
+ * (Labels longer than a name are refused there anyway.)
+ */
+static void
+CheckEnumLabelsUnique(List *vals)
+{
+	int			n = list_length(vals);
+	char	  **labels;
+	ListCell   *lc;
+	int			i = 0;
+
+	if (n < 2)
+		return;
+	labels = palloc(sizeof(char *) * n);
+	foreach(lc, vals)
+		labels[i++] = strVal(lfirst(lc));
+	qsort(labels, n, sizeof(char *), enum_label_cmp);
+	for (i = 1; i < n; i++)
+	{
+		if (strcmp(labels[i - 1], labels[i]) == 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("enum label \"%s\" already exists", labels[i])));
+	}
+	pfree(labels);
+}
+
 /*
  * GPDB: a new OID for a label of enum type 'enumTypeOid'.  The labels of a
  * temporary enum type kept in memory get one from the reserved range, like
@@ -94,7 +128,12 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 	 * We do not bother to check the list of values for duplicates --- if you
 	 * have any, you'll get a less-than-friendly unique-index violation. It is
 	 * probably not worth trying harder.
+	 *
+	 * GPDB: but the rows of a temporary enum type kept in memory do not go
+	 * through that index (see tempcat.c), so check them here.
 	 */
+	if (tempcat_owns_oid(TypeRelationId, enumTypeOid))
+		CheckEnumLabelsUnique(vals);
 
 	pg_enum = table_open(EnumRelationId, RowExclusiveLock);
 

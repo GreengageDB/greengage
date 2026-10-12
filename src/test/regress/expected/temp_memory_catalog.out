@@ -1185,6 +1185,9 @@ SELECT count(*) AS seg_labels FROM gp_dist_random('pg_enum')
          12
 (1 row)
 
+-- Repeated labels are refused, as the unique index on disk would.
+CREATE TYPE pg_temp.tc_dup AS ENUM ('a', 'b', 'a');
+ERROR:  enum label "a" already exists
 CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
 SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
  contains 

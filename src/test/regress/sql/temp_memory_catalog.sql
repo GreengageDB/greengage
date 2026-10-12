@@ -632,6 +632,8 @@ SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
    AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype);
 SELECT count(*) AS seg_labels FROM gp_dist_random('pg_enum')
  WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
+-- Repeated labels are refused, as the unique index on disk would.
+CREATE TYPE pg_temp.tc_dup AS ENUM ('a', 'b', 'a');
 CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
 SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
 CREATE STATISTICS pg_temp.tc_stx (dependencies, ndistinct) ON a, b FROM tc_fn_data;
