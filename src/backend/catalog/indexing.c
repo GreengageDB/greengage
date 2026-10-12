@@ -271,6 +271,25 @@ CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 }
 
 /*
+ * CatalogTupleInsertOnDisk - as CatalogTupleInsert, but on disk even if the
+ * row is of a temporary object kept in memory (see tempcat.c)
+ */
+void
+CatalogTupleInsertOnDisk(Relation heapRel, HeapTuple tup)
+{
+	CatalogIndexState indstate;
+
+	CatalogTupleCheckConstraints(heapRel, tup);
+
+	indstate = CatalogOpenIndexes(heapRel);
+
+	simple_heap_insert(heapRel, tup);
+
+	CatalogIndexInsert(indstate, tup);
+	CatalogCloseIndexes(indstate);
+}
+
+/*
  * CatalogTupleUpdate - do heap and indexing work for updating a catalog tuple
  *
  * Update the tuple identified by "otid", replacing it with the data in "tup".

@@ -1910,6 +1910,34 @@ SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294
 --------------
  1            
 (1 row)
+-- (but not while the session lives: then a DROP would sweep every time)
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+DROP TABLE tc_lns_drop;
+DROP TABLE
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+------------
+ Success:                 
+(1 row)
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+DROP TABLE tc_lns_drop;
+DROP TABLE
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+DROP TABLE tc_lns_drop;
+DROP TABLE
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ sweeps 
+--------
+ 0      
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
 2q: ... <quitting>
 DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_claimant'); PERFORM pg_sleep(0.1); END LOOP; END $$;
 DO
@@ -1970,6 +1998,85 @@ CREATE TABLE
 3q: ... <quitting>
 DROP TABLE tc_lns_ids;
 DROP TABLE
+
+-- On a segment it waits only as long as deadlock_timeout, then fails as
+-- before: the transaction may be waiting for the session's own, e.g. on the
+-- coordinator for a lock, where no deadlock detector sees the cycle.
+-- (Session 1's sweep on segment 0, which the fault makes run, removes the
+-- schema there before session 2 has a writer on it; then each session waits
+-- for the other.)
+CREATE TABLE tc_dl_bar (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE FUNCTION tc_try_again(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN object_in_use THEN RETURN 'try again'; END $$ LANGUAGE plpgsql;
+CREATE FUNCTION
+-- (not a SET: it would start the session's writers already)
+2: SELECT 'tc_lns_dl' AS marker;
+ marker    
+-----------
+ tc_lns_dl 
+(1 row)
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE query = 'SELECT ''tc_lns_dl'' AS marker;';
+INSERT 0 1
+0U: SET allow_system_table_mods = on;
+SET
+0U: INSERT INTO pg_namespace SELECT 4294967005::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+INSERT 0 1
+0Uq: ... <quitting>
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE tc_dl_x (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: BEGIN;
+BEGIN
+2: LOCK tc_dl_bar IN ACCESS SHARE MODE;
+LOCK TABLE
+2&: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_s (a int) DISTRIBUTED BY (a)');  <waiting ...>
+1: SET statement_timeout = '20s';
+SET
+1&: LOCK tc_dl_bar IN ACCESS EXCLUSIVE MODE;  <waiting ...>
+2<:  <... completed>
+ tc_try_again 
+------------
+ try again    
+(1 row)
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+LOCK TABLE
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+2: CREATE TEMP TABLE tc_dl_s2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2q: ... <quitting>
+0U: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967005;
+ left_schemas 
+------------
+ 0            
+(1 row)
+0Uq: ... <quitting>
+DROP TABLE tc_lns_ids;
+DROP TABLE
+DROP TABLE tc_dl_bar;
+DROP TABLE
+DROP FUNCTION tc_try_again(text);
+DROP FUNCTION
 
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
@@ -2097,6 +2204,20 @@ CREATE TYPE tc_hide_type AS (x int);
 CREATE TYPE
 CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_depend d LEFT JOIN pg_class c ON d.objid = c.oid WHERE d.classid = 'pg_class'::regclass AND c.oid IS NULL $$ LANGUAGE sql;
 CREATE FUNCTION
+CREATE ROLE tc_cluster_role;
+CREATE ROLE
+!\retcode rm -rf /tmp/tc_hide_ts;
+GP_IGNORE:-- start_ignore
+GP_IGNORE:
+GP_IGNORE:-- end_ignore
+(exited with code 0)
+!\retcode mkdir -p /tmp/tc_hide_ts;
+GP_IGNORE:-- start_ignore
+GP_IGNORE:
+GP_IGNORE:-- end_ignore
+(exited with code 0)
+CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
+CREATE TABLESPACE
 1: SET gp_enable_temp_memory_catalog = on;
 SET
 1: SET gp_temp_memory_catalog_max_size = 1024;
@@ -2105,8 +2226,18 @@ SET
 CREATE TABLE
 1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
 CREATE TABLE
+1: CREATE TEMP TABLE tc_clu (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: CREATE INDEX tc_clu_i ON tc_clu (a);
+CREATE INDEX
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 DO
+-- (more rows that do not fit: an index marked for CLUSTER, whose table did
+-- fit, and a table in a tablespace)
+1: ALTER TABLE tc_clu CLUSTER ON tc_clu_i;
+ALTER TABLE
+1: CREATE TEMP TABLE tc_in_ts (a int) TABLESPACE tc_hide_ts DISTRIBUTED BY (a);
+CREATE TABLE
 
 -- A relation can go to disk partly: here its pg_class row, updated while
 -- the area is full, but not the attributes it had.  Other sessions must not
@@ -2123,6 +2254,45 @@ ALTER TABLE
 ANALYZE
 2: VACUUM;
 VACUUM
+-- The session's namespaces went to disk with its first row that did not
+-- fit there, so that code naming the objects finds them (it crashed the
+-- server).  Temporary, they keep the objects missing for other sessions.
+2: SELECT bool_and(i.schema LIKE 'pg\_%temp\_%') AS named FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
+ named 
+-------
+ t     
+(1 row)
+2: SELECT bool_and(pg_relation_filepath(oid) IS NOT NULL) AS filepath FROM pg_class WHERE oid >= 4026531840 AND relkind = 'r';
+ filepath 
+----------
+ t        
+(1 row)
+2: ALTER TABLE ALL IN TABLESPACE tc_hide_ts SET TABLESPACE pg_default;
+ALTER TABLE
+2: SET ROLE tc_cluster_role;
+SET
+2: CLUSTER;
+CLUSTER
+2: RESET ROLE;
+RESET
+-- Readers tell their session's objects by the OID bounds its writer
+-- publishes: here a reader gang (one of the two scans that the join needs
+-- moved) and an entry-db reader find the relation missing, as the writer
+-- does.
+2: SELECT count(*) AS missing FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NULL;
+ missing 
+---------
+ 9       
+(1 row)
+2: CREATE TEMP TABLE tc_sink (n int) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+2: INSERT INTO tc_sink SELECT pg_relation_is_updatable(oid::regclass, false) FROM pg_class WHERE relname = 'tc_half';
+INSERT 0 1
+2: SELECT n FROM tc_sink;
+ n 
+---
+ 0 
+(1 row)
 
 -- A column default of a temporary table depends on the function.
 -- (session 2 stands for gpcheckcat: its own objects stay on disk)
@@ -2277,6 +2447,21 @@ SET
 -------
  453   
 (1 row)
+-- (in its readers too)
+1: SELECT count(*) FROM gp_dist_random('pg_class') a JOIN gp_dist_random('pg_class') b USING (relname) WHERE a.relname LIKE 'tc_hide%' AND a.relkind = 'r' AND b.relkind = 'r';
+ count 
+-------
+ 1359  
+(1 row)
+1: CREATE TEMP TABLE tc_cnt (n bigint) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+1: INSERT INTO tc_cnt SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
+INSERT 0 1
+1: SELECT n FROM tc_cnt;
+ n   
+-----
+ 151 
+(1 row)
 1q: ... <quitting>
 
 SELECT tc_retry('DROP FUNCTION tc_def()');
@@ -2291,6 +2476,10 @@ SELECT tc_retry('DROP TYPE tc_hide_type');
 (1 row)
 DROP FUNCTION tc_orphan_deps();
 DROP FUNCTION
+DROP ROLE tc_cluster_role;
+DROP ROLE
+DROP TABLESPACE tc_hide_ts;
+DROP TABLESPACE
 
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
@@ -2528,6 +2717,10 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segm
 --
 DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP; END $$;
 DO
+CREATE ROLE tc_ro;
+CREATE ROLE
+CREATE ROLE tc_rp;
+CREATE ROLE
 1: SET gp_enable_temp_memory_catalog = on;
 SET
 1: CREATE TEMP TABLE tc_acl (a int) DISTRIBUTED BY (a);
@@ -2558,6 +2751,46 @@ SET
 (1 row)
 2: RESET gp_temp_memory_catalog_hide_others;
 RESET
+-- DROP OWNED and REASSIGN OWNED in other sessions leave the objects alone,
+-- whether their rows are in memory or on disk: here the privilege of
+-- tc_r9, a policy's role, and the owner of a table, a function and a type.
+1: CREATE TEMP TABLE tc_owned (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: ALTER TABLE tc_owned OWNER TO tc_ro;
+ALTER TABLE
+1: CREATE FUNCTION pg_temp.tc_owned_f() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION
+1: ALTER FUNCTION pg_temp.tc_owned_f() OWNER TO tc_ro;
+ALTER FUNCTION
+1: CREATE TYPE pg_temp.tc_owned_t AS (x int);
+CREATE TYPE
+1: ALTER TYPE pg_temp.tc_owned_t OWNER TO tc_ro;
+ALTER TYPE
+1: CREATE POLICY tc_pol ON tc_acl TO tc_rp USING (true);
+CREATE POLICY
+2: DROP OWNED BY tc_r9;
+DROP OWNED
+2: DROP OWNED BY tc_rp;
+DROP OWNED
+2: REASSIGN OWNED BY tc_ro TO tc_r1;
+REASSIGN OWNED
+2: DROP OWNED BY tc_ro;
+DROP OWNED
+2: SELECT tc_try('DROP ROLE tc_ro');
+ tc_try  
+---------
+ refused 
+(1 row)
+1: SELECT has_table_privilege('tc_r9', 'tc_acl', 'SELECT') AS granted, (SELECT count(*) FROM pg_policy WHERE polname = 'tc_pol') AS policies;
+ granted | policies 
+---------+----------
+ t       | 1        
+(1 row)
+1: SELECT relowner::regrole AS table_owner, (SELECT proowner::regrole FROM pg_proc WHERE proname = 'tc_owned_f') AS function_owner, (SELECT typowner::regrole FROM pg_type WHERE typname = 'tc_owned_t') AS type_owner FROM pg_class WHERE relname = 'tc_owned';
+ table_owner | function_owner | type_owner 
+-------------+----------------+------------
+ tc_ro       | tc_ro          | tc_ro      
+(1 row)
 1: REVOKE SELECT ON tc_acl FROM tc_r9;
 REVOKE
 1: REVOKE SELECT ON tc_acl FROM tc_r1;
@@ -2590,6 +2823,16 @@ SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
  done     
  done     
 (7 rows)
+SELECT tc_retry('DROP ROLE tc_ro');
+ tc_retry 
+----------
+ done     
+(1 row)
+SELECT tc_retry('DROP ROLE tc_rp');
+ tc_retry 
+----------
+ done     
+(1 row)
 -- A role whose pg_shdepend row goes to disk after all (here the fault
 -- leaves the coordinator without an area) is not left published.
 CREATE ROLE tc_r10;

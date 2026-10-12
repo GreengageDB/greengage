@@ -41,6 +41,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_tablespace.h"
+#include "catalog/tempcat.h"
 #include "catalog/toasting.h"
 #include "cdb/cdbdispatchresult.h"
 #include "commands/cluster.h"
@@ -1869,6 +1870,10 @@ get_tables_to_cluster(MemoryContext cluster_context)
 	while ((indexTuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
 		index = (Form_pg_index) GETSTRUCT(indexTuple);
+
+		/* GPDB: a relation of another session, see tempcat.c */
+		if (tempcat_relation_missing(index->indrelid))
+			continue;
 
 		if (!pg_class_ownercheck(index->indrelid, GetUserId()))
 			continue;

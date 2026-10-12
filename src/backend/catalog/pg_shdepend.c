@@ -105,6 +105,7 @@ static void storeObjectDescription(StringInfo descs,
 								   SharedDependencyType deptype,
 								   int count);
 static bool isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel);
+static bool shdepObjectOfOtherSession(Form_pg_shdepend sdepForm);
 
 
 /*
@@ -1387,6 +1388,10 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 				sdepForm->dbid != InvalidOid)
 				continue;
 
+			/* GPDB: nor on those we cannot see */
+			if (shdepObjectOfOtherSession(sdepForm))
+				continue;
+
 			switch (sdepForm->deptype)
 			{
 					/* Shouldn't happen */
@@ -1537,6 +1542,10 @@ shdepReassignOwned(List *roleids, Oid newrole)
 				sdepForm->dbid != InvalidOid)
 				continue;
 
+			/* GPDB: nor on those we cannot see */
+			if (shdepObjectOfOtherSession(sdepForm))
+				continue;
+
 			/* Unexpected because we checked for pins above */
 			if (sdepForm->deptype == SHARED_DEPENDENCY_PIN)
 				elog(ERROR, "unexpected shared pin");
@@ -1658,4 +1667,25 @@ shdepReassignOwned(List *roleids, Oid newrole)
 	}
 
 	table_close(sdepRel, RowExclusiveLock);
+}
+
+/*
+ * GPDB: is the object of this dependency a temporary object that another
+ * session keeps in memory (see tempcat.c)?  Such dependencies are on disk
+ * only when the roles the session publishes ran out; DROP OWNED and
+ * REASSIGN OWNED leave the objects alone, as they do those whose
+ * dependencies are in memory, which they do not see.  (DROP ROLE still
+ * refuses to drop the role.)
+ */
+static bool
+shdepObjectOfOtherSession(Form_pg_shdepend sdepForm)
+{
+	ObjectAddress obj;
+
+	if (sdepForm->dbid != MyDatabaseId)
+		return false;
+	obj.classId = sdepForm->classid;
+	obj.objectId = sdepForm->objid;
+	obj.objectSubId = 0;
+	return tempcat_object_missing(&obj);
 }

@@ -869,6 +869,8 @@ SELECT count(*) AS on_disk FROM pg_class WHERE oid = 'tc_dml'::regclass;
 RESET gp_temp_memory_catalog_disk_only;
 RESET allow_system_table_mods;
 DROP TABLE tc_dml;
+-- (the session's two temporary namespaces went to disk with its first row
+-- that did not fit, above, and stay there)
 SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 RESET gp_temp_memory_catalog_disk_only;
@@ -903,6 +905,26 @@ CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
 INSERT INTO tc_pend VALUES (1, 'x');
 SELECT * FROM tc_pend;
 DROP TABLE tc_pend;
+
+-- A subtransaction abort applies outcomes only if the subtransaction, or
+-- one committed into it (here s1), changed rows: exception blocks that
+-- change none do not walk the pending rows of the whole transaction.
+BEGIN;
+CREATE TEMP TABLE tc_sx1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s1;
+CREATE TEMP TABLE tc_sx2 (a int) DISTRIBUTED BY (a);
+RELEASE SAVEPOINT s1;
+SELECT gp_inject_fault_infinite('tempcat_resolve_pending', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DO $$ BEGIN FOR i IN 1..3 LOOP BEGIN PERFORM 1 / 0; EXCEPTION WHEN division_by_zero THEN NULL; END; END LOOP; END $$;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SAVEPOINT s2;
+CREATE TEMP TABLE tc_sx3 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s2;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
+COMMIT;
+DROP TABLE tc_sx1, tc_sx2;
 
 -- A sequential scan that stops (LIMIT) or restarts (a correlated subquery)
 -- while returning in-memory rows.

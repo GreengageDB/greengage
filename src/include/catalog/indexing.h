@@ -38,6 +38,7 @@ extern void CatalogCloseIndexes(CatalogIndexState indstate);
 extern void CatalogTupleInsert(Relation heapRel, HeapTuple tup);
 extern void CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 									   CatalogIndexState indstate);
+extern void CatalogTupleInsertOnDisk(Relation heapRel, HeapTuple tup);
 extern void CatalogTupleUpdate(Relation heapRel, ItemPointer otid,
 							   HeapTuple tup);
 extern void CatalogTupleUpdateWithInfo(Relation heapRel,
