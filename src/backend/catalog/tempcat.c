@@ -3612,10 +3612,12 @@ tempcat_sweep_delete(Relation rel, HeapTuple tup)
 /*
  * The sweep scans with a dirty snapshot, which also returns rows that a
  * transaction still in progress inserted.  Outside the OID bounds of live
- * sessions (checked first), those are leftovers to be: rows of a
- * transaction prepared by a QE writer that is gone, which distributed
- * recovery may still commit.  They cannot be deleted yet; leave the
- * database to be swept again.  Call right after fetching the row.
+ * sessions, and for objects that do not exist (both checked first: a
+ * transaction changing an ordinary object with a reserved OID inserts such
+ * rows too), those are leftovers to be: rows of a transaction prepared by a
+ * QE writer that is gone, which distributed recovery may still commit.  They
+ * cannot be deleted yet; leave the database to be swept again.  Call after
+ * fetching the row, before fetching the next one.
  */
 static bool
 tempcat_sweep_row_in_progress(Snapshot dirty)
@@ -3779,8 +3781,8 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 				OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)) == domain)
 				continue;
 			if (tempcat_oid_live_now(objid, MyDatabaseId) ||
-				tempcat_sweep_row_in_progress(&dirty) ||
-				tempcat_disk_object_exists(cls, objid))
+				tempcat_disk_object_exists(cls, objid) ||
+				tempcat_sweep_row_in_progress(&dirty))
 				continue;
 
 			if (tempcat_sweep_delete(rel, tup))
@@ -3822,9 +3824,9 @@ tempcat_sweep_objects(void)
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
-			!tempcat_sweep_row_in_progress(&dirty) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
-			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0))
+			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0) &&
+			!tempcat_sweep_row_in_progress(&dirty))
 		{
 			if (tempcat_sweep_delete(rel, tup))
 				ndeleted++;
@@ -3844,8 +3846,8 @@ tempcat_sweep_objects(void)
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
-			!tempcat_sweep_row_in_progress(&dirty) &&
-			!tempcat_disk_object_exists(NamespaceRelationId, form->relnamespace))
+			!tempcat_disk_object_exists(NamespaceRelationId, form->relnamespace) &&
+			!tempcat_sweep_row_in_progress(&dirty))
 		{
 			if (tempcat_sweep_delete(rel, tup))
 			{
@@ -3867,8 +3869,8 @@ tempcat_sweep_objects(void)
 
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
-			!tempcat_sweep_row_in_progress(&dirty) &&
-			!tempcat_disk_object_exists(NamespaceRelationId, form->typnamespace))
+			!tempcat_disk_object_exists(NamespaceRelationId, form->typnamespace) &&
+			!tempcat_sweep_row_in_progress(&dirty))
 		{
 			if (tempcat_sweep_delete(rel, tup))
 				ndeleted++;

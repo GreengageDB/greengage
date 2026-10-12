@@ -568,6 +568,40 @@ SELECT count(*) AS namespaces FROM pg_namespace WHERE oid >= 4026531840 AND nspn
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 SELECT tc_retry('DROP TYPE tc_pp_type');
 
+-- But rows that an open transaction inserts for an ordinary object with a
+-- reserved OID are no leftovers: the database is marked swept once, not
+-- swept again at every DROP.  (Session 1 leaves leftovers, which asks for a
+-- sweep; session 2 alters the ordinary table and stays open; the fault
+-- counts the sweeps on the coordinator.)
+SELECT gp_inject_fault_infinite('oid_in_tempcat_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_ord (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TYPE tc_ord_type AS (x int);
+CREATE TABLE tc_ord1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_ord2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SET gp_enable_temp_memory_catalog = on;
+1: SET application_name = 'tc_ord_session';
+1: CREATE TEMP TABLE tc_ord_l (c tc_ord_type) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1q:
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ord_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+2: BEGIN;
+2: ALTER TABLE tc_ord ADD COLUMN b int;
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3: DROP TABLE tc_ord1;
+3: DROP TABLE tc_ord2;
+3q:
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) FROM 'num times hit:''([0-9]+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: COMMIT;
+2q:
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_ord_type'::regtype AND objid >= 4026531840;
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT tc_retry('DROP TYPE tc_ord_type');
+DROP TABLE tc_ord;
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
