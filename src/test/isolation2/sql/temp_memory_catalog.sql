@@ -835,6 +835,14 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 2: SET ROLE tc_cluster_role;
 2: CLUSTER;
 2: RESET ROLE;
+-- Readers tell their session's objects by the OID bounds its writer
+-- publishes: here a reader gang (one of the two scans that the join needs
+-- moved) and an entry-db reader find the relation missing, as the writer
+-- does.
+2: SELECT count(*) AS missing FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NULL;
+2: CREATE TEMP TABLE tc_sink (n int) DISTRIBUTED RANDOMLY;
+2: INSERT INTO tc_sink SELECT pg_relation_is_updatable(oid::regclass, false) FROM pg_class WHERE relname = 'tc_half';
+2: SELECT n FROM tc_sink;
 
 -- A column default of a temporary table depends on the function.
 2: SET client_min_messages = warning;
@@ -880,6 +888,11 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 1: SET gp_temp_memory_catalog_hide_others = on;
 1: SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
 1: SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
+-- (in its readers too)
+1: SELECT count(*) FROM gp_dist_random('pg_class') a JOIN gp_dist_random('pg_class') b USING (relname) WHERE a.relname LIKE 'tc_hide%' AND a.relkind = 'r' AND b.relkind = 'r';
+1: CREATE TEMP TABLE tc_cnt (n bigint) DISTRIBUTED RANDOMLY;
+1: INSERT INTO tc_cnt SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
+1: SELECT n FROM tc_cnt;
 1q:
 
 SELECT tc_retry('DROP FUNCTION tc_def()');

@@ -309,6 +309,7 @@ typedef struct TempcatCatalog
 typedef struct TempcatRoot
 {
 	LWLock		lock;
+	int			writer_pgprocno;	/* the writer's, see tempcat_writer_state() */
 	uint64		next_tid;
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
@@ -625,6 +626,7 @@ tempcat_attach(bool create)
 	rootptr = dsa_allocate0(tc_area, sizeof(TempcatRoot));
 	tc_root = dsa_get_address(tc_area, rootptr);
 	LWLockInitialize(&tc_root->lock, tempcat_tranche_id());
+	tc_root->writer_pgprocno = MyProc->pgprocno;
 
 	/* Rows that do not fit go to the on-disk catalog instead. */
 	dsa_set_size_limit(tc_area, tempcat_max_area_bytes());
@@ -1216,6 +1218,42 @@ tempcat_owns_oid(Oid catalog, Oid oid)
 	key.catalog = catalog;
 	key.oid = oid;
 	return hash_search(tc_owned, &key, HASH_FIND, NULL) != NULL;
+}
+
+/*
+ * The state of the writer whose area a reader looks at: NULL if not known
+ * (a parallel retrieve connection to a session without an area).
+ */
+static TempcatProcState *
+tempcat_writer_state(void)
+{
+	if (am_cursor_retrieve_handler)
+		return tempcat_attach(false) ?
+			&TempcatShared->procs[tc_root->writer_pgprocno] : NULL;
+	if (SharedLocalSnapshotSlot == NULL ||
+		SharedLocalSnapshotSlot->writer_proc == NULL)
+		return NULL;
+	return &TempcatShared->procs[SharedLocalSnapshotSlot->writer_proc->pgprocno];
+}
+
+/*
+ * Is 'oid' that of a temporary object of our session?  Readers do not know
+ * which OIDs their writer assigned, but it publishes bounds that cover
+ * them, and no OID of another session's temporary object: each session
+ * takes them from a slice of the reserved range of its own.  (What is not
+ * known is taken as ours, as all the session's readers did before.)
+ */
+static bool
+tempcat_session_owns_oid(Oid catalog, Oid oid)
+{
+	TempcatProcState *st;
+
+	if (!tempcat_is_reader())
+		return tempcat_owns_oid(catalog, oid);
+	if (!IsTempcatOid(oid))
+		return false;
+	st = tempcat_writer_state();
+	return st == NULL || tempcat_bounds_cover(st, oid);
 }
 
 /*
@@ -3505,7 +3543,8 @@ tempcat_object_relation(Oid classId, Oid objectId)
  * cannot see (it is in the other session's memory) or that is temporary.
  * Ordinary objects with reserved OIDs live in ordinary namespaces.  Objects
  * without a namespace (defaults, triggers, rules, policies) go with their
- * relation.  Readers serve their session, and see its objects.
+ * relation.  Readers tell their session's objects by its writer's bounds
+ * (tempcat_session_owns_oid()).
  */
 bool
 tempcat_object_missing(const ObjectAddress *object)
@@ -3529,8 +3568,7 @@ tempcat_object_missing(const ObjectAddress *object)
 			break;
 	}
 
-	if (tempcat_is_reader() ||
-		tempcat_owns_oid(object->classId, object->objectId))
+	if (tempcat_session_owns_oid(object->classId, object->objectId))
 		return false;
 	relid = tempcat_object_relation(object->classId, object->objectId);
 	if (OidIsValid(relid))
@@ -3538,7 +3576,8 @@ tempcat_object_missing(const ObjectAddress *object)
 	if (!is_objectclass_supported(object->classId))
 		return false;
 	nspid = get_object_namespace(object);
-	if (!IsTempcatOid(nspid) || tempcat_owns_oid(NamespaceRelationId, nspid))
+	if (!IsTempcatOid(nspid) ||
+		tempcat_session_owns_oid(NamespaceRelationId, nspid))
 		return false;
 	return !SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(nspid)) ||
 		isAnyTempNamespace(nspid);
@@ -3600,8 +3639,8 @@ tempcat_relation_missing(Oid relid)
  * the relation's other rows (attributes, ...) may not have: the relcache
  * must not build an entry from it ("catalog is missing N attribute(s)")
  * but treat the relation as missing, as for those kept in memory entirely
- * (ScanPgRelation(), try_relation_open()).  Readers serve their session,
- * and see its relations.
+ * (ScanPgRelation(), try_relation_open()).  Readers tell their session's
+ * relations by its writer's bounds (tempcat_session_owns_oid()).
  */
 bool
 tempcat_other_session_relation(HeapTuple tup)
@@ -3609,9 +3648,9 @@ tempcat_other_session_relation(HeapTuple tup)
 	Form_pg_class form = (Form_pg_class) GETSTRUCT(tup);
 
 	if (form->relpersistence != RELPERSISTENCE_TEMP ||
-		!IsTempcatOid(form->oid) || tempcat_is_reader())
+		!IsTempcatOid(form->oid))
 		return false;
-	return !tempcat_owns_oid(RelationRelationId, form->oid);
+	return !tempcat_session_owns_oid(RelationRelationId, form->oid);
 }
 
 /*
@@ -3873,7 +3912,7 @@ tempcat_owner_hidden(Oid classId, Oid objectId, Oid dbid)
 	if (dbid != MyDatabaseId)
 		return tempcat_oid_live_elsewhere(objectId, dbid);
 	/* (we see our own objects, wherever their rows are) */
-	if (OidIsValid(classId) && tempcat_owns_oid(classId, objectId))
+	if (OidIsValid(classId) && tempcat_session_owns_oid(classId, objectId))
 		return false;
 	return !tempcat_ordinary_object(classId, objectId, 0);
 }
