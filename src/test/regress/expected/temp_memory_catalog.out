@@ -389,8 +389,27 @@ SELECT count(*) FROM pg_attribute WHERE attrelid = 'tc_basic'::regclass AND attn
      2
 (1 row)
 
-RESET optimizer_enable_coordinator_only_queries;
 RESET optimizer_enable_tablescan;
+-- Its index-only scans filter the in-memory rows by all the index
+-- conditions, also by those that make no simple scan keys (= ANY).
+SET optimizer = on;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE oid IN ('pg_am'::regclass, 'pg_class'::regclass);
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Aggregate
+   ->  Index Only Scan using pg_class_oid_index on pg_class
+         Index Cond: (oid = ANY ('{2601,1259}'::oid[]))
+ Optimizer: GPORCA
+(4 rows)
+
+SELECT count(*) FROM pg_class WHERE oid IN ('tc_basic'::regclass, 'pg_class'::regclass);
+ count 
+-------
+     2
+(1 row)
+
+RESET optimizer;
+RESET optimizer_enable_coordinator_only_queries;
 DROP FUNCTION pg_temp.tc_att_count(oid);
 -- The statistics of dropped temporary tables are purged while the session
 -- lives: pgstat_vacuum_stat() keeps those of the session's OIDs, as it
@@ -1393,7 +1412,7 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 ERROR:  default privileges cannot be set for a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
-CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_87 GRANT SELECT ON TABLES TO PUBLIC"
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_42 GRANT SELECT ON TABLES TO PUBLIC"
 PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory

@@ -233,8 +233,14 @@ RESET enable_indexscan;
 SET optimizer_enable_coordinator_only_queries = on;
 SET optimizer_enable_tablescan = off;
 SELECT count(*) FROM pg_attribute WHERE attrelid = 'tc_basic'::regclass AND attnum > 0;
-RESET optimizer_enable_coordinator_only_queries;
 RESET optimizer_enable_tablescan;
+-- Its index-only scans filter the in-memory rows by all the index
+-- conditions, also by those that make no simple scan keys (= ANY).
+SET optimizer = on;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE oid IN ('pg_am'::regclass, 'pg_class'::regclass);
+SELECT count(*) FROM pg_class WHERE oid IN ('tc_basic'::regclass, 'pg_class'::regclass);
+RESET optimizer;
+RESET optimizer_enable_coordinator_only_queries;
 DROP FUNCTION pg_temp.tc_att_count(oid);
 
 -- The statistics of dropped temporary tables are purged while the session
