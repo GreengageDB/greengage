@@ -831,6 +831,96 @@ Feature: ggrebalance behave tests
          And the numsegments of table "ext_test" is 2
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 2, row count = 100
 
+    # Shrink is interrupted while it re-collects the list of tables to rebalance (the 2nd
+    # pass, triggered by a table renamed after the 1st list was built). At this moment
+    # the stored state is 'STATE_SHRINK_TABLES_DONE', and continue must not skip the
+    # renamed table. The 2nd pass is made to fail by a pre-existing temp schema, which
+    # ggrebalance creates in each database to collect the data size for detailed progress.
+    Scenario: test 4.5. test shrink continue, when shrink is interrupted while re-collecting the list of tables to rebalance
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And segment information for content 1 is saved in context
+         And all files in gpAdminLogs directory are deleted
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And there is a "heap" partition table "test_schema_1.part_test_table_1" in "test_db_1" with "100" rows
+         And database "test_db_2" exists
+         And schema "test_schema_2" exists in "test_db_2"
+         And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
+        When set fault inject "on_enter_STATE_SHRINK_TABLES_STARTED_begin"
+         And set fault inject type to suspend
+        When the user asynchronously runs "ggrebalance -x 1 --skip-rebalance --detailed-progress" and the process is saved
+         And the user waits till ggrebalance prints "Initiated list of tables to rebalance" in the logs (with timeout of "60" sec)
+         And sql "ALTER TABLE test_schema_1.test_table_2 RENAME TO test_table_2_new;" is executed in "test_db_1" db
+         And sql "CREATE SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
+         And unset fault inject
+        Then the async process finished with a return code of 1
+         And ggrebalance should print "Found tables yet not rebalanced" to logfile with latest timestamp
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And sql "DROP SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Previous run stopped after state 'STATE_SHRINK_TABLES_DONE'" to logfile with latest timestamp
+         And ggrebalance should print "Shrink is complete" to logfile with latest timestamp
+         And clear user's answers
+         And verify no segment running for saved segment information
+         And distribution information from table "test_schema_1.test_table_2_new" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 1, row count = 100
+
+    # The same as test 4.5, but for rollback. Rollback is interrupted while it re-collects
+    # the list of tables to roll back (the 2nd pass, triggered by a table renamed after the
+    # 1st list was built). At this moment the stored state is
+    # 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE', and continue must not skip the renamed
+    # table. The progress type is taken from the shrink run, so rollback uses detailed
+    # progress too.
+    Scenario: test 4.6. test shrink rollback continue, when rollback is interrupted while re-collecting the list of tables to roll back
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And segment information for content 1 is saved in context
+         And all files in gpAdminLogs directory are deleted
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table_1" in "test_db_1" with "100" rows
+         And there is a "ao" table "test_schema_1.test_table_2" in "test_db_1" with "100" rows
+         And there is a "heap" partition table "test_schema_1.part_test_table_1" in "test_db_1" with "100" rows
+         And database "test_db_2" exists
+         And schema "test_schema_2" exists in "test_db_2"
+         And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
+        When set fault inject "on_enter_STATE_SHRINK_CATALOG_STARTED_begin"
+         And the user runs "ggrebalance -x 1 --skip-rebalance --detailed-progress"
+        Then ggrebalance should return a return code of 1
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And unset fault inject
+         And all files in gpAdminLogs directory are deleted
+        When set fault inject "on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START_begin"
+         And set fault inject type to suspend
+        When the user asynchronously runs "ggrebalance -r --non-interactive-mode" and the process is saved
+         And the user waits till ggrebalance prints "Initiated list of tables to roll back after rebalance" in the logs (with timeout of "60" sec)
+         And sql "ALTER TABLE test_schema_1.test_table_2 RENAME TO test_table_2_new;" is executed in "test_db_1" db
+         And sql "CREATE SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
+         And unset fault inject
+        Then the async process finished with a return code of 1
+         And ggrebalance should print "Found tables yet not rolled back" to logfile with latest timestamp
+         And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
+         And sql "DROP SCHEMA __ggrebalance_temp_schema;" is executed in "test_db_1" db
+        When user will answer "yes" to the prompt "Proceed with continue?"
+         And the user runs "ggrebalance"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Previous run stopped after state 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE'" to logfile with latest timestamp
+         And ggrebalance should print "Rollback is complete" to logfile with latest timestamp
+         And clear user's answers
+         And distribution information from table "test_schema_1.test_table_2_new" with data in "test_db_1" is equal to segment count = 2, row count = 100
+         And distribution information from table "test_schema_1.test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
+         And distribution information from table "test_schema_1.part_test_table_1" with data in "test_db_1" is equal to segment count = 2, row count = 100
+         And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 2, row count = 100
+
     Scenario: test 5. test shrink continue, when a db with the table planned for rebalance was dropped
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'

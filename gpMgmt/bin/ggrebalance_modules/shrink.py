@@ -263,8 +263,23 @@ class GGShrink:
             if bool(row[0]) is False:
                 self.logger.info("Cluster restarted after previous run, trying to repopulate the relation queue")
                 return 'STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_STARTED'
-        
+
+            # 'STATE_SHRINK_TABLES_DONE' is stored both before another round of table list
+            # repopulation and before catalog shrink, so re-run the check for tables
+            # not yet rebalanced instead of moving forward blindly
+            if prev_state == 'STATE_SHRINK_TABLES_DONE':
+                return 'STATE_SHRINK_TABLES_DONE'
+
         return self.states_main_shrink_flow[prev_idx + 1]
+
+    def get_rollback_state_after_interrupt(self, prev_state) -> str:
+        # 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE' is stored both before another round
+        # of table list repopulation and before rebalance schema drop, so re-run the check
+        # for tables not yet rolled back instead of moving forward blindly
+        if prev_state == 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE':
+            return 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE'
+
+        return self.states_rollback_flow[self.states_rollback_flow.index(prev_state) + 1]
 
     def on_every_state(self) -> None:
         if self.shutdown_requested:
@@ -366,7 +381,7 @@ class GGShrink:
                 self.logger.info('Continue interrupted shrink rollback operation...')
                 self.logger.info(f"Previous run stopped after state '{state_from_prev_run}', trying to continue from the next state...")
                 try:
-                    next_state = self.states_rollback_flow[ self.states_rollback_flow.index(state_from_prev_run) + 1 ]
+                    next_state = self.get_rollback_state_after_interrupt(state_from_prev_run)
                 except:
                     self.logger.error("Can't determine next rollback state")
                     self.trigger('move_to_STATE_ERROR')
@@ -563,6 +578,7 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE(self) -> None:
+        self.logger.info(f'Initiated list of tables to roll back after rebalance')
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START')
 
     @wrap_func_with_faults
@@ -880,7 +896,7 @@ class GGShrink:
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
-    def are_not_rebalanced_tables_left(self, is_rollback: bool):
+    def are_not_rebalanced_tables_left(self, is_rollback: bool) -> bool:
         cmp = '<=' if is_rollback else '>'
         databases_to_process = self.collect_databases_to_process()
         for db in databases_to_process:
