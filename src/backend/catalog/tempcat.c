@@ -149,6 +149,7 @@
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
 #include "utils/vmem_tracker.h"
 #include "utils/snapmgr.h"
 
@@ -4733,10 +4734,13 @@ tempcat_namespace_deleter(Oid namespaceId)
  * restart, many sessions may come for their namespaces at once).  If
  * another transaction deletes it, e.g. a sweep that did not know this session
  * yet (on a segment, before its writer started), wait for that transaction
- * and look again.  Returns the namespace's OID as found then, which the
- * caller removes as usual if valid: if it still has a reserved OID, e.g.
- * inserted by a transaction in progress, fail rather than try that.
+ * and look again (tempcat_wait_for_deleter()).  Returns the namespace's OID
+ * as found then, which the caller removes as usual if valid: if it still
+ * has a reserved OID, e.g. inserted by a transaction in progress, fail
+ * rather than try that.
  */
+static bool tempcat_wait_for_deleter(TransactionId xid);
+
 Oid
 tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 {
@@ -4756,18 +4760,48 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 		if (!IsTempcatOid(namespaceId))
 			return namespaceId;
 
+		/* (if the deleter aborts, the next round sweeps the namespace) */
 		deleter = tempcat_namespace_deleter(namespaceId);
-		if (!TransactionIdIsValid(deleter))
+		if (!TransactionIdIsValid(deleter) ||
+			!tempcat_wait_for_deleter(deleter))
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_IN_USE),
 					 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
 							namespaceName),
 					 errhint("Try again.")));
-
-		/* (if it aborts, the next round sweeps the namespace itself) */
-		XactLockTableWait(deleter, NULL, NULL, XLTW_None);
 		AcceptInvalidationMessages();
 	}
+}
+
+/*
+ * Wait for the transaction 'xid' to end.  On a segment, only as long as
+ * deadlock_timeout, and return false if it has not ended by then: that
+ * transaction may itself be waiting for ours, on another node (e.g. on the
+ * coordinator for a lock we took earlier in our transaction), and no
+ * deadlock detector sees such a cycle.  (Locks are waited for on the
+ * coordinator, whose detector sees the waits there.)
+ */
+static bool
+tempcat_wait_for_deleter(TransactionId xid)
+{
+	TimestampTz start;
+
+	if (Gp_role != GP_ROLE_EXECUTE)
+	{
+		XactLockTableWait(xid, NULL, NULL, XLTW_None);
+		return true;
+	}
+
+	start = GetCurrentTimestamp();
+	while (!ConditionalXactLockTableWait(xid))
+	{
+		if (TimestampDifferenceExceeds(start, GetCurrentTimestamp(),
+									   DeadlockTimeout))
+			return false;
+		CHECK_FOR_INTERRUPTS();
+		pg_usleep(10000L);
+	}
+	return true;
 }
 
 /* ----------------------------------------------------------------

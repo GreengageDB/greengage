@@ -1971,6 +1971,85 @@ CREATE TABLE
 DROP TABLE tc_lns_ids;
 DROP TABLE
 
+-- On a segment it waits only as long as deadlock_timeout, then fails as
+-- before: the transaction may be waiting for the session's own, e.g. on the
+-- coordinator for a lock, where no deadlock detector sees the cycle.
+-- (Session 1's sweep on segment 0, which the fault makes run, removes the
+-- schema there before session 2 has a writer on it; then each session waits
+-- for the other.)
+CREATE TABLE tc_dl_bar (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE FUNCTION tc_try_again(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN object_in_use THEN RETURN 'try again'; END $$ LANGUAGE plpgsql;
+CREATE FUNCTION
+-- (not a SET: it would start the session's writers already)
+2: SELECT 'tc_lns_dl' AS marker;
+ marker    
+-----------
+ tc_lns_dl 
+(1 row)
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE query = 'SELECT ''tc_lns_dl'' AS marker;';
+INSERT 0 1
+0U: SET allow_system_table_mods = on;
+SET
+0U: INSERT INTO pg_namespace SELECT 4294967005::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+INSERT 0 1
+0Uq: ... <quitting>
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE tc_dl_x (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: BEGIN;
+BEGIN
+2: LOCK tc_dl_bar IN ACCESS SHARE MODE;
+LOCK TABLE
+2&: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_s (a int) DISTRIBUTED BY (a)');  <waiting ...>
+1: SET statement_timeout = '20s';
+SET
+1&: LOCK tc_dl_bar IN ACCESS EXCLUSIVE MODE;  <waiting ...>
+2<:  <... completed>
+ tc_try_again 
+------------
+ try again    
+(1 row)
+2: COMMIT;
+COMMIT
+1<:  <... completed>
+LOCK TABLE
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+2: CREATE TEMP TABLE tc_dl_s2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2q: ... <quitting>
+0U: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967005;
+ left_schemas 
+------------
+ 0            
+(1 row)
+0Uq: ... <quitting>
+DROP TABLE tc_lns_ids;
+DROP TABLE
+DROP TABLE tc_dl_bar;
+DROP TABLE
+DROP FUNCTION tc_try_again(text);
+DROP FUNCTION
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each

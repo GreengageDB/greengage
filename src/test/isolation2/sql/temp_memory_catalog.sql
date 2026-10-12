@@ -759,6 +759,45 @@ SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NO
 3q:
 DROP TABLE tc_lns_ids;
 
+-- On a segment it waits only as long as deadlock_timeout, then fails as
+-- before: the transaction may be waiting for the session's own, e.g. on the
+-- coordinator for a lock, where no deadlock detector sees the cycle.
+-- (Session 1's sweep on segment 0, which the fault makes run, removes the
+-- schema there before session 2 has a writer on it; then each session waits
+-- for the other.)
+CREATE TABLE tc_dl_bar (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+CREATE FUNCTION tc_try_again(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN object_in_use THEN RETURN 'try again'; END $$ LANGUAGE plpgsql;
+-- (not a SET: it would start the session's writers already)
+2: SELECT 'tc_lns_dl' AS marker;
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE query = 'SELECT ''tc_lns_dl'' AS marker;';
+0U: SET allow_system_table_mods = on;
+0U: INSERT INTO pg_namespace SELECT 4294967005::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+0Uq:
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+1: SET gp_enable_temp_memory_catalog = on;
+1: BEGIN;
+1: CREATE TEMP TABLE tc_dl_x (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+2: SET gp_enable_temp_memory_catalog = on;
+2: BEGIN;
+2: LOCK tc_dl_bar IN ACCESS SHARE MODE;
+2&: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_s (a int) DISTRIBUTED BY (a)');
+1: SET statement_timeout = '20s';
+1&: LOCK tc_dl_bar IN ACCESS EXCLUSIVE MODE;
+2<:
+2: COMMIT;
+1<:
+1: COMMIT;
+1q:
+2: CREATE TEMP TABLE tc_dl_s2 (a int) DISTRIBUTED BY (a);
+2q:
+0U: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967005;
+0Uq:
+DROP TABLE tc_lns_ids;
+DROP TABLE tc_dl_bar;
+DROP FUNCTION tc_try_again(text);
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
