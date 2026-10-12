@@ -3055,6 +3055,28 @@ tempcat_object_missing(const ObjectAddress *object)
 }
 
 /*
+ * ALTER DOMAIN and ALTER TYPE follow pg_depend from a type to the columns
+ * and the types (sub-domains, domains and ranges over it, arrays) that use
+ * it, to check them.  Another session's in-memory temporary relations and
+ * types cannot be checked: only their on-disk dependency rows are visible
+ * here, not what uses them in turn.  Fail rather than miss them.
+ */
+void
+tempcat_check_type_user(Oid classId, Oid objectId, const char *typeName)
+{
+	ObjectAddress object;
+
+	object.classId = classId;
+	object.objectId = objectId;
+	object.objectSubId = 0;
+	if (tempcat_object_missing(&object))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot alter type \"%s\" because a temporary object of another session uses it",
+						typeName)));
+}
+
+/*
  * Is the relation missing for us, though perhaps its pg_class row is not?
  * See tempcat_other_session_relation().  For try_relation_open().
  */

@@ -109,6 +109,8 @@ extern int	tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b);
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_other_session_relation(HeapTuple tup);
 extern bool tempcat_relation_missing(Oid relid);
+extern void tempcat_check_type_user(Oid classId, Oid objectId,
+									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_hide_disk_row(Relation rel, HeapTuple tup);

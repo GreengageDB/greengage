@@ -7305,6 +7305,15 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 		if (pg_depend->classid == TypeRelationId)
 		{
 			/*
+			 * GPDB: not one of another session's in-memory types, whose uses
+			 * cannot be seen here (see tempcat.c).
+			 */
+			tempcat_check_type_user(TypeRelationId, pg_depend->objid,
+									origTypeName ? origTypeName :
+									origRelation ? RelationGetRelationName(origRelation) :
+									format_type_be(typeOid));
+
+			/*
 			 * This must be an array, domain, or range containing the given
 			 * type, so recursively check for uses of this type.  Note that
 			 * any error message will mention the original type not the
@@ -7323,13 +7332,10 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 		 * GPDB: a temporary table of another session kept in memory, which
 		 * cannot be opened to see how it uses the type (see tempcat.c).
 		 */
-		if (tempcat_relation_missing(pg_depend->objid))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("cannot alter type \"%s\" because a temporary table of another session uses it",
-							origTypeName ? origTypeName :
-							origRelation ? RelationGetRelationName(origRelation) :
-							format_type_be(typeOid))));
+		tempcat_check_type_user(RelationRelationId, pg_depend->objid,
+								origTypeName ? origTypeName :
+								origRelation ? RelationGetRelationName(origRelation) :
+								format_type_be(typeOid));
 
 		rel = relation_open(pg_depend->objid, AccessShareLock);
 		tupleDesc = RelationGetDescr(rel);

@@ -14,6 +14,8 @@ CREATE FUNCTION tc_try(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'd
 CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP IF tc_try(cmd) = 'done' THEN RETURN 'done'; END IF; PERFORM pg_sleep(0.1); END LOOP; RETURN 'refused'; END $$ LANGUAGE plpgsql;
 CREATE TYPE tc_type AS (x int);
 CREATE DOMAIN tc_dom AS int;
+CREATE DOMAIN tc_dom_base AS int;
+CREATE TYPE tc_comp_base AS (i int, j int);
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE ROLE tc_role;
 DO $$ BEGIN EXECUTE format('GRANT TEMP ON DATABASE %I TO tc_role', current_database()); END $$;
@@ -23,6 +25,12 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 1: CREATE TEMP TABLE tc_dep (a int, c tc_type) DISTRIBUTED BY (a);
 1: INSERT INTO tc_dep VALUES (1, ROW(1));
 1: CREATE TEMP TABLE tc_dep_dom (a int, d tc_dom) DISTRIBUTED BY (a);
+1: CREATE DOMAIN pg_temp.tc_subdom AS tc_dom_base;
+1: CREATE TEMP TABLE tc_dep_subdom (a int, d pg_temp.tc_subdom) DISTRIBUTED BY (a);
+1: INSERT INTO tc_dep_subdom VALUES (1, -5);
+1: CREATE DOMAIN pg_temp.tc_compdom AS tc_comp_base;
+1: CREATE TEMP TABLE tc_dep_compdom (a int, c pg_temp.tc_compdom) DISTRIBUTED BY (a);
+1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 1: SET ROLE tc_role;
 1: CREATE TEMP TABLE tc_dep_owned (a int) DISTRIBUTED BY (a);
@@ -45,9 +53,14 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0);
 2: ALTER DOMAIN tc_dom SET NOT NULL;
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0) NOT VALID;
+-- Nor through their own types: a sub-domain, a domain over a composite type.
+2: ALTER DOMAIN tc_dom_base ADD CONSTRAINT tc_dom_base_pos CHECK (VALUE > 0);
+2: ALTER TYPE tc_comp_base ALTER ATTRIBUTE j TYPE text;
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
+1: SELECT d FROM tc_dep_subdom;
+1: SELECT (c).j FROM tc_dep_compdom;
 1: SET enable_seqscan = off;
 1: SELECT a FROM tc_dep WHERE tc_func(a) = 2;
 1: RESET enable_seqscan;
@@ -59,6 +72,8 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 2: SELECT tc_retry('DROP FUNCTION tc_func(int)');
 2: SELECT tc_retry('DROP ROLE tc_role');
 2: SELECT tc_retry('DROP DOMAIN tc_dom');
+2: SELECT tc_retry('DROP DOMAIN tc_dom_base');
+2: SELECT tc_retry('DROP TYPE tc_comp_base');
 2q:
 
 --

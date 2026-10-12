@@ -19,6 +19,10 @@ CREATE TYPE tc_type AS (x int);
 CREATE TYPE
 CREATE DOMAIN tc_dom AS int;
 CREATE DOMAIN
+CREATE DOMAIN tc_dom_base AS int;
+CREATE DOMAIN
+CREATE TYPE tc_comp_base AS (i int, j int);
+CREATE TYPE
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE FUNCTION
 CREATE ROLE tc_role;
@@ -36,6 +40,18 @@ CREATE TABLE
 INSERT 0 1
 1: CREATE TEMP TABLE tc_dep_dom (a int, d tc_dom) DISTRIBUTED BY (a);
 CREATE TABLE
+1: CREATE DOMAIN pg_temp.tc_subdom AS tc_dom_base;
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_subdom (a int, d pg_temp.tc_subdom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_subdom VALUES (1, -5);
+INSERT 0 1
+1: CREATE DOMAIN pg_temp.tc_compdom AS tc_comp_base;
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_compdom (a int, c pg_temp.tc_compdom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
+INSERT 0 1
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 CREATE INDEX
 1: SET ROLE tc_role;
@@ -82,19 +98,34 @@ REVOKE
 -- Nor can it change the types they use, as it cannot check how they use
 -- them (a constraint that needs no check is fine).
 2: ALTER TYPE tc_type ALTER ATTRIBUTE x TYPE bigint;
-ERROR:  cannot alter type "tc_type" because a temporary table of another session uses it
+ERROR:  cannot alter type "tc_type" because a temporary object of another session uses it
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0);
-ERROR:  cannot alter type "tc_dom" because a temporary table of another session uses it
+ERROR:  cannot alter type "tc_dom" because a temporary object of another session uses it
 2: ALTER DOMAIN tc_dom SET NOT NULL;
-ERROR:  cannot alter type "tc_dom" because a temporary table of another session uses it
+ERROR:  cannot alter type "tc_dom" because a temporary object of another session uses it
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0) NOT VALID;
 ALTER DOMAIN
+-- Nor through their own types: a sub-domain, a domain over a composite type.
+2: ALTER DOMAIN tc_dom_base ADD CONSTRAINT tc_dom_base_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom_base" because a temporary object of another session uses it
+2: ALTER TYPE tc_comp_base ALTER ATTRIBUTE j TYPE text;
+ERROR:  cannot alter type "tc_comp_base" because a temporary object of another session uses it
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
  x | tc_func 
 ---+---------
  1 | 2       
+(1 row)
+1: SELECT d FROM tc_dep_subdom;
+ d  
+----
+ -5 
+(1 row)
+1: SELECT (c).j FROM tc_dep_compdom;
+ j 
+---
+ 2 
 (1 row)
 1: SET enable_seqscan = off;
 SET
@@ -125,6 +156,16 @@ RESET
  done     
 (1 row)
 2: SELECT tc_retry('DROP DOMAIN tc_dom');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom_base');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP TYPE tc_comp_base');
  tc_retry 
 ----------
  done     
