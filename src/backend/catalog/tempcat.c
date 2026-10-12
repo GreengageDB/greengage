@@ -143,7 +143,6 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
-#include "utils/plancache.h"
 #include "utils/rel.h"
 #include "utils/faultinjector.h"
 #include "utils/sharedsnapshot.h"
@@ -914,13 +913,6 @@ tempcat_activate(void)
 	st->databaseId = MyDatabaseId;
 	on_shmem_exit(tempcat_proc_exit, (Datum) 0);
 	before_shmem_exit(tempcat_before_exit, (Datum) 0);
-
-	/*
-	 * From now on catalog queries must not use index-only scans of catalog
-	 * indexes (see tempcat_restrict_catalog_index_scans()); forget plans
-	 * made before.
-	 */
-	ResetPlanCache();
 
 	tempcat_sweep_if_needed(true);
 }
@@ -1984,8 +1976,6 @@ tempcat_set_caller_tuple(HeapTuple tup, Relation rel, TempcatEntry *e)
 /* The current transaction changed virtual rows; see tempcat_check_prepare(). */
 static bool tc_xact_changed = false;
 
-/* The writer's area this reader last saw (tempcat_start_transaction()) */
-static dsa_handle tc_reader_handle = DSM_HANDLE_INVALID;
 
 /*
  * Make room for 'n' more pending entries.  Called before creating or
@@ -2483,20 +2473,6 @@ void
 tempcat_start_transaction(void)
 {
 	tc_xact_changed = false;
-
-	/*
-	 * A reader that sees the writer's area for the first time: plans cached
-	 * before (e.g. of functions run in reader gangs) can use index-only or
-	 * bitmap scans of the catalogs, which miss its rows (see
-	 * tempcat_restrict_catalog_index_scans()).
-	 */
-	if (tempcat_is_reader() && SharedLocalSnapshotSlot != NULL &&
-		SharedLocalSnapshotSlot->tempcat_handle != DSM_HANDLE_INVALID &&
-		SharedLocalSnapshotSlot->tempcat_handle != tc_reader_handle)
-	{
-		tc_reader_handle = SharedLocalSnapshotSlot->tempcat_handle;
-		ResetPlanCache();
-	}
 
 	/*
 	 * A retrieve connection can outlive the writer of the cursor session it
@@ -4319,20 +4295,16 @@ tempcat_sweep_leftover_namespace(Oid namespaceId)
  *
  * Catalog queries see the virtual rows through sequential and bitmap
  * scans, which return them after the on-disk rows (nodeSeqscan.c,
- * nodeBitmapHeapscan.c), and plain index scans, which merge them in index
- * order (nodeIndexscan.c).  Index-only scans cannot return them, so once a
- * session keeps temporary objects in memory, the planner does not use those
- * (nor mark and restore index scans) for the catalogs that can hold virtual
- * rows, in the session's writer and in its readers (e.g. in functions run in
- * reader gangs).  ORCA leaves queries on such catalogs to the planner.
+ * nodeBitmapHeapscan.c), and plain and index-only scans, which merge them in
+ * index order (nodeIndexscan.c, nodeIndexonlyscan.c), across mark and
+ * restore too.  So plans need not care whether, or since when, a session
+ * keeps temporary objects in memory, in its writer or in its readers.
  *
- * Plans made before are made anew at activation (ResetPlanCache()) only if
- * the plan cache holds them; others live on, e.g. the plans of a SQL
- * function called by the statement that creates the session's first
- * temporary object.  So the planner keeps away from such scans from the
- * moment the session could start keeping temporary objects in memory
- * (tempcat_plan_catalog_index_scans()), and the executor refuses the ones it
- * still meets in plans made earlier.
+ * Only gp_temp_memory_catalog_hide_others needs the heap rows, to tell those
+ * of other sessions' temporary objects (tempcat_hide_disk_row()): while it is
+ * set, the planner does not use index-only scans of such catalogs
+ * (tempcat_plan_catalog_index_scans()), ORCA leaves queries on them to the
+ * planner, and the executor refuses such scans in plans made before.
  * ----------------------------------------------------------------
  */
 bool
@@ -4347,29 +4319,14 @@ tempcat_restrict_catalog_index_scans(Oid relid)
 }
 
 /*
- * May the planner use index-only scans of catalog 'relid', and mark and
- * restore its index scans?  Not
- * if tempcat_restrict_catalog_index_scans() forbids them, nor while the
- * session could still start keeping temporary objects in memory: with the
- * setting on, before it creates its temporary schema.
+ * May the planner use index-only scans of catalog 'relid'?  Not while hiding
+ * other sessions' temporary objects; see above.
  */
 bool
 tempcat_plan_catalog_index_scans(Oid relid)
 {
-	Oid			tempNamespaceId;
-	Oid			tempToastNamespaceId;
-
-	if (tempcat_restrict_catalog_index_scans(relid))
-		return false;
-	if (!gp_enable_temp_memory_catalog || tc_activated ||
-		tempcat_catalog_index(relid) < 0)
-		return true;
-	/* (see tempcat_want_temp_oid()) */
-	if (Gp_role == GP_ROLE_EXECUTE ||
-		(Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER()))
-		return true;
-	GetTempNamespaceState(&tempNamespaceId, &tempToastNamespaceId);
-	return OidIsValid(tempNamespaceId);
+	return !gp_temp_memory_catalog_hide_others ||
+		tempcat_catalog_index(relid) < 0;
 }
 
 /* A scan without virtual rows, for scans that filter on-disk rows only. */
@@ -4505,6 +4462,42 @@ int
 tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b)
 {
 	return tempcat_compare(scan, a, b);
+}
+
+/*
+ * Like tempcat_scan_compare(), with an on-disk row as an index-only scan has
+ * it: the values of the index's columns in a slot (in index column order).
+ */
+int
+tempcat_scan_compare_index(TempcatScan scan, HeapTuple a, TupleTableSlot *islot)
+{
+	int			i;
+
+	for (i = 0; i < scan->nidxkeys; i++)
+	{
+		AttrNumber	attno = scan->irel->rd_index->indkey.values[i];
+		bool		anull;
+		bool		bnull;
+		Datum		ad = heap_getattr(a, attno, scan->heapdesc, &anull);
+		Datum		bd = slot_getattr(islot, i + 1, &bnull);
+		int			cmp;
+
+		if (anull || bnull)
+		{
+			if (anull && bnull)
+				continue;
+			cmp = anull ? 1 : -1;	/* NULLS LAST */
+		}
+		else
+			cmp = DatumGetInt32(FunctionCall2Coll(scan->procs[i],
+												  scan->irel->rd_indcollation[i],
+												  ad, bd));
+		if (scan->irel->rd_indoption[i] & INDOPTION_DESC)
+			cmp = -cmp;
+		if (cmp != 0)
+			return cmp;
+	}
+	return 0;
 }
 
 /*

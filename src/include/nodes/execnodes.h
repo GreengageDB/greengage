@@ -1669,6 +1669,19 @@ typedef struct IndexOnlyScanState
 	Size		ioss_PscanLen;
 	AttrNumber *ioss_NameCStringAttNums;
 	int			ioss_NameCStringCount;
+
+	/* GPDB: virtual catalog rows of in-memory temporary objects (tempcat.c) */
+	int			ioss_TempState;		/* TEMPSCAN_* */
+	struct TempcatScanData *ioss_TempScan;
+	bool		ioss_TempForward;	/* direction the merge was set up for */
+	TupleTableSlot *ioss_DiskSlot;	/* next on-disk row, when peeked */
+	bool		ioss_DiskPeeked;
+	bool		ioss_DiskDone;
+	/* the above as of ExecIndexOnlyMarkPos() */
+	int			ioss_MarkTempPos;
+	TupleTableSlot *ioss_MarkDiskSlot;
+	bool		ioss_MarkDiskPeeked;
+	bool		ioss_MarkDiskDone;
 } IndexOnlyScanState;
 
 /*

@@ -104,6 +104,8 @@ extern void tempcat_scan_advance(TempcatScan scan);
 extern int	tempcat_scan_getpos(TempcatScan scan);
 extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern int	tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b);
+extern int	tempcat_scan_compare_index(TempcatScan scan, HeapTuple a,
+									   struct TupleTableSlot *islot);
 
 /* Objects of other sessions */
 extern bool tempcat_object_missing(const struct ObjectAddress *object);

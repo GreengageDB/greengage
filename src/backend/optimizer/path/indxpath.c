@@ -1056,10 +1056,10 @@ build_index_paths(PlannerInfo *root, RelOptInfo *rel,
 					   check_index_only(rel, index));
 
 	/*
-	 * GPDB: never of a catalog that holds, or may come to hold, rows of
-	 * temporary objects kept in memory, which its indexes do not have (see
-	 * tempcat.c).  get_relation_info() makes its index columns not
-	 * returnable, but a scan that needs no column at all still qualified.
+	 * GPDB: never of a catalog that can hold rows of temporary objects kept
+	 * in memory while hiding other sessions' ones (see tempcat.c).
+	 * get_relation_info() makes its index columns not returnable then, but a
+	 * scan that needs no column at all would still qualify.
 	 */
 	if (index_only_scan && rel->rtekind == RTE_RELATION &&
 		!tempcat_plan_catalog_index_scans(planner_rt_fetch(rel->relid, root)->relid))

@@ -63,11 +63,11 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
 
--- Index-only scans cannot return in-memory rows, so the planner
--- keeps away from them for the catalogs in sessions that keep temporary
--- objects in memory, or hide other sessions' ones.  Plans made before live
--- on where the plan cache does not hold them, e.g. the plans of a SQL
--- function for the rest of the calling statement: the executor refuses them.
+-- Index-only scans cannot tell the on-disk rows of other sessions'
+-- temporary objects, which needs the heap rows, so the planner keeps away
+-- from them for the catalogs while hiding those.  Plans made before live on
+-- where the plan cache does not hold them, e.g. the plans of a SQL function
+-- for the rest of the calling statement: the executor refuses them.
 SET gp_enable_temp_memory_catalog = off;
 SET optimizer = off;
 SET enable_seqscan = off;
@@ -86,9 +86,10 @@ SELECT i, tc_count_rel('pg_class'),
 RESET enable_seqscan;
 RESET optimizer;
 
--- Plain index scans of such plans merge the in-memory rows, and keep the
--- state of that merge when a merge join marks and restores them.  The plan
--- of tc_join_attrs() is made before the setting is turned on, and its later
+-- Plain and index-only scans of plans made before a session keeps
+-- temporary objects in memory merge the in-memory rows, and keep the state of
+-- that merge when a merge join marks and restores them.  The plan of
+-- tc_join_attrs() is made before the setting is turned on, and its later
 -- calls see the table that tc_make_early() creates in memory.
 SET optimizer = off;
 SET enable_hashjoin = off;
@@ -103,6 +104,23 @@ CREATE FUNCTION tc_join_attrs(n name) RETURNS bigint LANGUAGE sql VOLATILE AS $$
    WHERE a.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
      AND b.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
 $$;
+SELECT i, tc_join_attrs('tc_early'),
+       set_config('gp_enable_temp_memory_catalog', 'on', false), tc_make_early(i)
+  FROM generate_series(1, 3) i;
+SELECT tc_join_attrs('tc_early') AS new_plan;
+\c
+SET optimizer = off;
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+SET enable_material = off;
+SET enable_sort = off;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexscan = off;
+EXPLAIN (costs off)
+  SELECT count(*) FROM pg_attribute a JOIN pg_attribute b ON a.attrelid = b.attrelid
+   WHERE a.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = 'tc_early'), 'pg_class'::regclass])
+     AND b.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = 'tc_early'), 'pg_class'::regclass]);
 SELECT i, tc_join_attrs('tc_early'),
        set_config('gp_enable_temp_memory_catalog', 'on', false), tc_make_early(i)
   FROM generate_series(1, 3) i;
@@ -133,9 +151,9 @@ DROP TABLE tc_ordinary, tc_ordinary2;
 \c
 SET gp_enable_temp_memory_catalog = on;
 
--- With the setting on, the planner keeps away from those scans before the
--- first temporary object already: the plan of tc_count_rel(), made before
--- tc_make_early() creates one, finds it in the later calls.  (The functions
+-- So do those of plans made with the setting on, before the first
+-- temporary object: the plan of tc_count_rel(), made before tc_make_early()
+-- creates one, finds it in the later calls.  (The functions
 -- were created in the previous session, so that their on-disk catalog rows
 -- do not show in the statistics checked below.)
 SET enable_seqscan = off;
@@ -145,13 +163,14 @@ RESET enable_seqscan;
 DROP TABLE tc_early;
 DROP FUNCTION tc_make_early(int);
 DROP FUNCTION tc_count_rel(name);
--- Not even for queries that need no column of the catalog, which any of its
--- indexes would cover; nor while hiding other sessions' objects.
+-- Also for queries that need no column of the catalog, which any of its
+-- indexes covers; but not while hiding other sessions' objects, even then.
 SET enable_seqscan = off;
 EXPLAIN (costs off) SELECT count(*) FROM pg_class;
 SELECT count(*) > 0 AS some_rows FROM pg_class;
 SELECT EXISTS (SELECT FROM pg_type) AS some_types;
 SET gp_temp_memory_catalog_hide_others = on;
+EXPLAIN (costs off) SELECT count(*) FROM pg_attribute;
 SELECT count(*) > 0 AS some_rows FROM pg_attribute;
 RESET gp_temp_memory_catalog_hide_others;
 RESET enable_seqscan;
@@ -201,9 +220,9 @@ SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
        pg_stat_get_xact_tuples_inserted('pg_depend'::regclass) AS depend_ins;
 COMMIT;
 
--- Catalog queries planned in reader gangs (e.g. in functions run there) do
--- not use index-only scans, which would miss the in-memory rows; nor does
--- ORCA, which leaves queries on such catalogs to the planner.
+-- Catalog queries planned in reader gangs (e.g. in functions run there)
+-- see the in-memory rows through index-only scans too, and so do those
+-- planned by ORCA.
 CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
 $$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
 SET enable_seqscan = off;
@@ -397,11 +416,11 @@ SELECT count(*) FROM pg_class TABLESAMPLE BERNOULLI (100) WHERE relname = 'tc_ba
 -- TID scans and COPY TO of a catalog see them too.
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
 \copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
--- Plain index scans merge the in-memory rows in index order, bitmap scans
--- return them after the on-disk rows; index-only scans, which cannot return
--- them, are not used for such catalogs.
+-- Plain and index-only scans merge the in-memory rows in index order,
+-- bitmap scans return them after the on-disk rows.
 SET enable_seqscan = off;
 SET enable_bitmapscan = off;
+SET enable_indexonlyscan = off;
 EXPLAIN (costs off) SELECT relname FROM pg_class
 WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
 SELECT relname FROM pg_class
@@ -430,6 +449,30 @@ WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
 SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
 WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY 1, 2;
+-- index-only scans
+SET enable_bitmapscan = off;
+RESET enable_indexonlyscan;
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+SELECT relname FROM pg_class WHERE relname BETWEEN 'tc_basic' AND 'tc_basic_z' ORDER BY relname;
+SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_attribute a JOIN pg_attribute b
+  ON a.attrelid = b.attrelid AND a.attname = b.attname
+WHERE a.attrelid = 'pg_am'::regclass AND b.attrelid = 'pg_am'::regclass;
+SELECT count(*) FROM pg_attribute a JOIN pg_attribute b
+  ON a.attrelid = b.attrelid AND a.attname = b.attname
+WHERE a.attrelid = 'tc_basic'::regclass AND b.attrelid = 'tc_basic'::regclass;
+RESET enable_hashjoin;
+RESET enable_nestloop;
+RESET enable_bitmapscan;
 RESET enable_indexscan;
 RESET enable_seqscan;
 

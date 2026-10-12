@@ -337,16 +337,14 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 								  amroutine->amrestrpos != NULL);
 
 			/*
-			 * GPDB: index-only scans cannot return the virtual catalog rows
-			 * of in-memory temporary objects (see tempcat.c), which plain
-			 * and bitmap index scans do: no index-only scans, and no
-			 * mark/restore, of such catalogs.
+			 * GPDB: no index-only scans of catalogs that can hold rows of
+			 * in-memory temporary objects while hiding other sessions'
+			 * ones, which needs the heap rows (see tempcat.c).
 			 */
 			if (!tempcat_plan_catalog_index_scans(RelationGetRelid(relation)))
 			{
 				int			c;
 
-				info->amcanmarkpos = false;
 				for (c = 0; c < ncolumns; c++)
 					info->canreturn[c] = false;
 			}

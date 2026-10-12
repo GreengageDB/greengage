@@ -54,69 +54,20 @@ static void StoreIndexTuple(IndexOnlyScanState *node, TupleTableSlot *slot,
 
 
 /* ----------------------------------------------------------------
- *		IndexOnlyNext
+ *		IndexOnlyFetch
  *
- *		Retrieve a tuple from the IndexOnlyScan node's index.
+ *		Retrieve the next on-disk tuple from the index into 'slot'
+ *		(GPDB: split out of IndexOnlyNext(), see there).
  * ----------------------------------------------------------------
  */
 static TupleTableSlot *
-IndexOnlyNext(IndexOnlyScanState *node)
+IndexOnlyFetch(IndexOnlyScanState *node, ScanDirection direction,
+			   TupleTableSlot *slot)
 {
-	EState	   *estate;
-	ExprContext *econtext;
-	ScanDirection direction;
-	IndexScanDesc scandesc;
-	TupleTableSlot *slot;
+	EState	   *estate = node->ss.ps.state;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	IndexScanDesc scandesc = node->ioss_ScanDesc;
 	ItemPointer tid;
-
-	/*
-	 * extract necessary information from index scan node
-	 */
-	estate = node->ss.ps.state;
-	direction = estate->es_direction;
-	/* flip direction if this is an overall backward scan */
-	if (ScanDirectionIsBackward(((IndexOnlyScan *) node->ss.ps.plan)->indexorderdir))
-	{
-		if (ScanDirectionIsForward(direction))
-			direction = BackwardScanDirection;
-		else if (ScanDirectionIsBackward(direction))
-			direction = ForwardScanDirection;
-	}
-	scandesc = node->ioss_ScanDesc;
-	econtext = node->ss.ps.ps_ExprContext;
-	slot = node->ss.ss_ScanTupleSlot;
-
-	if (scandesc == NULL)
-	{
-		/*
-		 * We reach here if the index only scan is not parallel, or if we're
-		 * serially executing an index only scan that was planned to be
-		 * parallel.
-		 */
-		scandesc = index_beginscan(node->ss.ss_currentRelation,
-								   node->ioss_RelationDesc,
-								   estate->es_snapshot,
-								   node->ioss_NumScanKeys,
-								   node->ioss_NumOrderByKeys);
-
-		node->ioss_ScanDesc = scandesc;
-
-
-		/* Set it up for index-only scan */
-		node->ioss_ScanDesc->xs_want_itup = true;
-		node->ioss_VMBuffer = InvalidBuffer;
-
-		/*
-		 * If no run-time keys to calculate or they are ready, go ahead and
-		 * pass the scankeys to the index AM.
-		 */
-		if (node->ioss_NumRuntimeKeys == 0 || node->ioss_RuntimeKeysReady)
-			index_rescan(scandesc,
-						 node->ioss_ScanKeys,
-						 node->ioss_NumScanKeys,
-						 node->ioss_OrderByKeys,
-						 node->ioss_NumOrderByKeys);
-	}
 
 	/*
 	 * OK, now that we have what we need, fetch the next tuple.
@@ -275,6 +226,231 @@ IndexOnlyNext(IndexOnlyScanState *node)
 }
 
 /*
+ * GPDB: keep a virtual row only if it satisfies the index quals, in the form
+ * of an index row (see IndexOnlyStoreTempcat()).
+ */
+static void IndexOnlyStoreTempcat(IndexOnlyScanState *node, HeapTuple tup,
+								  TupleTableSlot *slot);
+
+static bool
+IndexOnlyTempcatQual(HeapTuple tup, void *arg)
+{
+	IndexOnlyScanState *node = (IndexOnlyScanState *) arg;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	TupleTableSlot *slot = node->ioss_DiskSlot;
+	bool		keep;
+
+	IndexOnlyStoreTempcat(node, tup, slot);
+	econtext->ecxt_scantuple = slot;
+	keep = ExecQualAndReset(node->recheckqual, econtext);
+	ExecClearTuple(slot);
+	return keep;
+}
+
+/*
+ * GPDB: put the values of the index's columns of a virtual row (a heap row)
+ * in the slot, as an index row would give them.  The indexes of catalogs
+ * have no expressions.
+ */
+static void
+IndexOnlyStoreTempcat(IndexOnlyScanState *node, HeapTuple tup,
+					  TupleTableSlot *slot)
+{
+	Relation	irel = node->ioss_RelationDesc;
+	TupleDesc	heapdesc = RelationGetDescr(node->ss.ss_currentRelation);
+	int			natts = slot->tts_tupleDescriptor->natts;
+	int			i;
+
+	ExecClearTuple(slot);
+	for (i = 0; i < natts; i++)
+	{
+		AttrNumber	attno = irel->rd_index->indkey.values[i];
+
+		Assert(attno > 0);
+		slot->tts_values[i] = heap_getattr(tup, attno, heapdesc,
+										   &slot->tts_isnull[i]);
+	}
+	ExecStoreVirtualTuple(slot);
+}
+
+/*
+ * GPDB: collect the virtual catalog rows of in-memory temporary objects that
+ * the scan must return, sorted in index order (see tempcat.c), as
+ * IndexScanSetupTempcat() does for plain index scans.
+ */
+static void
+IndexOnlySetupTempcat(IndexOnlyScanState *node, ScanDirection direction)
+{
+	EState	   *estate = node->ss.ps.state;
+	TupleDesc	idesc = node->ss.ss_ScanTupleSlot->tts_tupleDescriptor;
+
+	node->ioss_TempState = TEMPSCAN_NONE;
+	node->ioss_TempScan = tempcat_begin_index_sql_scan(node->ss.ss_currentRelation,
+													   node->ioss_RelationDesc,
+													   estate->es_snapshot,
+													   node->ioss_ScanKeys,
+													   node->ioss_NumScanKeys);
+	if (node->ioss_TempScan == NULL)
+		return;
+
+	if (node->ioss_DiskSlot == NULL)
+		node->ioss_DiskSlot = ExecAllocTableSlot(&estate->es_tupleTable, idesc,
+												 &TTSOpsVirtual);
+
+	tempcat_scan_filter(node->ioss_TempScan, IndexOnlyTempcatQual, node);
+
+	node->ioss_TempState = TEMPSCAN_MERGE;
+	node->ioss_TempForward = ScanDirectionIsForward(direction);
+	node->ioss_DiskPeeked = false;
+	node->ioss_DiskDone = false;
+}
+
+static void
+IndexOnlyResetTempcat(IndexOnlyScanState *node)
+{
+	if (node->ioss_TempScan)
+		tempcat_endscan(node->ioss_TempScan);
+	node->ioss_TempScan = NULL;
+	node->ioss_TempState = TEMPSCAN_UNKNOWN;
+	node->ioss_DiskPeeked = false;
+	node->ioss_DiskDone = false;
+	if (node->ioss_DiskSlot)
+		ExecClearTuple(node->ioss_DiskSlot);
+}
+
+/*
+ * GPDB: next row of an index-only scan that merges virtual rows, in index
+ * order.
+ */
+static TupleTableSlot *
+IndexOnlyNextTempcat(IndexOnlyScanState *node, ScanDirection direction)
+{
+	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	bool		forward = node->ioss_TempForward;
+	HeapTuple	vtup;
+
+	/* Fetch the next on-disk row, unless one is waiting already. */
+	if (!node->ioss_DiskPeeked && !node->ioss_DiskDone)
+	{
+		/* (not within TupIsNull(), which evaluates its argument twice) */
+		TupleTableSlot *disk = IndexOnlyFetch(node, direction, node->ioss_DiskSlot);
+
+		if (TupIsNull(disk))
+			node->ioss_DiskDone = true;
+		else
+		{
+			/*
+			 * It may wait while virtual rows go first, and its values may be
+			 * in the index row, or in per-tuple memory (names): copy them.
+			 */
+			ExecMaterializeSlot(node->ioss_DiskSlot);
+			node->ioss_DiskPeeked = true;
+		}
+	}
+
+	vtup = tempcat_scan_peek(node->ioss_TempScan, forward);
+	if (vtup != NULL &&
+		(!node->ioss_DiskPeeked ||
+		 tempcat_scan_compare_index(node->ioss_TempScan, vtup, node->ioss_DiskSlot)
+		 * (forward ? 1 : -1) <= 0))
+	{
+		tempcat_scan_advance(node->ioss_TempScan);
+		IndexOnlyStoreTempcat(node, vtup, slot);
+		return slot;
+	}
+
+	if (node->ioss_DiskPeeked)
+	{
+		node->ioss_DiskPeeked = false;
+		ExecCopySlot(slot, node->ioss_DiskSlot);
+		return slot;
+	}
+
+	return ExecClearTuple(slot);
+}
+
+/* ----------------------------------------------------------------
+ *		IndexOnlyNext
+ *
+ *		Retrieve a tuple from the IndexOnlyScan node's index.
+ * ----------------------------------------------------------------
+ */
+static TupleTableSlot *
+IndexOnlyNext(IndexOnlyScanState *node)
+{
+	EState	   *estate;
+	ScanDirection direction;
+	IndexScanDesc scandesc;
+
+	/*
+	 * extract necessary information from index scan node
+	 */
+	estate = node->ss.ps.state;
+	direction = estate->es_direction;
+	/* flip direction if this is an overall backward scan */
+	if (ScanDirectionIsBackward(((IndexOnlyScan *) node->ss.ps.plan)->indexorderdir))
+	{
+		if (ScanDirectionIsForward(direction))
+			direction = BackwardScanDirection;
+		else if (ScanDirectionIsBackward(direction))
+			direction = ForwardScanDirection;
+	}
+	scandesc = node->ioss_ScanDesc;
+
+	if (scandesc == NULL)
+	{
+		/*
+		 * We reach here if the index only scan is not parallel, or if we're
+		 * serially executing an index only scan that was planned to be
+		 * parallel.
+		 */
+		scandesc = index_beginscan(node->ss.ss_currentRelation,
+								   node->ioss_RelationDesc,
+								   estate->es_snapshot,
+								   node->ioss_NumScanKeys,
+								   node->ioss_NumOrderByKeys);
+
+		node->ioss_ScanDesc = scandesc;
+
+
+		/* Set it up for index-only scan */
+		node->ioss_ScanDesc->xs_want_itup = true;
+		node->ioss_VMBuffer = InvalidBuffer;
+
+		/*
+		 * If no run-time keys to calculate or they are ready, go ahead and
+		 * pass the scankeys to the index AM.
+		 */
+		if (node->ioss_NumRuntimeKeys == 0 || node->ioss_RuntimeKeysReady)
+			index_rescan(scandesc,
+						 node->ioss_ScanKeys,
+						 node->ioss_NumScanKeys,
+						 node->ioss_OrderByKeys,
+						 node->ioss_NumOrderByKeys);
+	}
+
+
+	/*
+	 * GPDB: merge in the catalog rows of this session's temporary objects
+	 * that are kept in memory, see tempcat.c.
+	 */
+	if (node->ioss_TempState == TEMPSCAN_UNKNOWN)
+		IndexOnlySetupTempcat(node, direction);
+	if (node->ioss_TempState == TEMPSCAN_MERGE)
+	{
+		if (ScanDirectionIsForward(direction) == node->ioss_TempForward)
+			return IndexOnlyNextTempcat(node, direction);
+
+		/* Direction changed mid-scan (scrollable cursor): not supported. */
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot change the direction of a catalog index scan that includes in-memory temporary objects")));
+	}
+
+	return IndexOnlyFetch(node, direction, node->ss.ss_ScanTupleSlot);
+}
+
+/*
  * StoreIndexTuple
  *		Fill the slot with data from the index tuple.
  *
@@ -403,6 +579,9 @@ ExecReScanIndexOnlyScan(IndexOnlyScanState *node)
 					 node->ioss_ScanKeys, node->ioss_NumScanKeys,
 					 node->ioss_OrderByKeys, node->ioss_NumOrderByKeys);
 
+	/* GPDB: the keys may have changed; collect the virtual rows again */
+	IndexOnlyResetTempcat(node);
+
 	ExecScanReScan(&node->ss);
 }
 
@@ -445,6 +624,8 @@ ExecEndIndexOnlyScan(IndexOnlyScanState *node)
 	if (node->ss.ps.ps_ResultTupleSlot)
 		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
+
+	IndexOnlyResetTempcat(node);
 
 	/*
 	 * close the index relation (no-op if we didn't open it)
@@ -493,6 +674,26 @@ ExecIndexOnlyMarkPos(IndexOnlyScanState *node)
 	}
 
 	index_markpos(node->ioss_ScanDesc);
+
+	/*
+	 * GPDB: and the state of the merge of virtual rows; see
+	 * ExecIndexMarkPos().
+	 */
+	if (node->ioss_TempState == TEMPSCAN_MERGE)
+	{
+		node->ioss_MarkTempPos = tempcat_scan_getpos(node->ioss_TempScan);
+		node->ioss_MarkDiskPeeked = node->ioss_DiskPeeked;
+		node->ioss_MarkDiskDone = node->ioss_DiskDone;
+		if (node->ioss_DiskPeeked)
+		{
+			if (node->ioss_MarkDiskSlot == NULL)
+				node->ioss_MarkDiskSlot =
+					ExecAllocTableSlot(&estate->es_tupleTable,
+									   node->ioss_DiskSlot->tts_tupleDescriptor,
+									   &TTSOpsVirtual);
+			ExecCopySlot(node->ioss_MarkDiskSlot, node->ioss_DiskSlot);
+		}
+	}
 }
 
 /* ----------------------------------------------------------------
@@ -522,6 +723,18 @@ ExecIndexOnlyRestrPos(IndexOnlyScanState *node)
 	}
 
 	index_restrpos(node->ioss_ScanDesc);
+
+	/* GPDB: and the state of the merge; see ExecIndexOnlyMarkPos() */
+	if (node->ioss_TempState == TEMPSCAN_MERGE)
+	{
+		tempcat_scan_setpos(node->ioss_TempScan, node->ioss_MarkTempPos);
+		node->ioss_DiskPeeked = node->ioss_MarkDiskPeeked;
+		node->ioss_DiskDone = node->ioss_MarkDiskDone;
+		if (node->ioss_DiskPeeked)
+			ExecCopySlot(node->ioss_DiskSlot, node->ioss_MarkDiskSlot);
+		else
+			ExecClearTuple(node->ioss_DiskSlot);
+	}
 }
 
 /* ----------------------------------------------------------------
@@ -561,15 +774,17 @@ ExecInitIndexOnlyScanForPartition(IndexOnlyScan *node, EState *estate, int eflag
 	int			namecount;
 
 	/*
-	 * GPDB: an index-only scan would miss the catalog rows of temporary
-	 * objects kept in memory, so the planner does not use one for such a
-	 * catalog; refuse a plan made before (see tempcat.c).
+	 * GPDB: an index-only scan merges in the catalog rows of temporary
+	 * objects kept in memory, but cannot hide on-disk rows of other sessions'
+	 * ones (gp_temp_memory_catalog_hide_others), which takes the heap rows;
+	 * the planner does not use one then.  Refuse a plan made before the
+	 * option was set (see tempcat.c).
 	 */
 	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY) &&
-		tempcat_restrict_catalog_index_scans(RelationGetRelid(currentRelation)))
+		!tempcat_plan_catalog_index_scans(RelationGetRelid(currentRelation)))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot use an index-only scan of a catalog that includes in-memory temporary objects"),
+				 errmsg("cannot use an index-only scan of a catalog while hiding other sessions' temporary objects"),
 				 errhint("Run the statement again to plan it anew.")));
 
 	/*
