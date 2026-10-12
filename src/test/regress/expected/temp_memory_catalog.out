@@ -282,12 +282,13 @@ DROP FUNCTION tc_make_early(int);
 DROP FUNCTION tc_count_rel(name);
 -- Also for queries that need no column of the catalog, which any of its
 -- indexes covers; but not while hiding other sessions' objects, even then.
+-- (Explained for a catalog with one index, as which one is cheapest varies.)
 SET enable_seqscan = off;
-EXPLAIN (costs off) SELECT count(*) FROM pg_class;
-                                QUERY PLAN                                 
----------------------------------------------------------------------------
+EXPLAIN (costs off) SELECT count(*) FROM pg_statistic;
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
  Aggregate
-   ->  Index Only Scan using pg_class_tblspc_relfilenode_index on pg_class
+   ->  Index Only Scan using pg_statistic_relid_att_inh_index on pg_statistic
  Optimizer: Postgres-based planner
 (3 rows)
 
@@ -1451,7 +1452,7 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 ERROR:  default privileges cannot be set for a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
-CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_31 GRANT SELECT ON TABLES TO PUBLIC"
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_357 GRANT SELECT ON TABLES TO PUBLIC"
 PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
