@@ -44,6 +44,7 @@
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_type.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/async.h"
 #include "commands/extension.h"
 #include "commands/prepare.h"
@@ -5333,6 +5334,9 @@ PostgresMain(int argc, char *argv[],
 				 */
 				if (notifyInterruptPending)
 					ProcessNotifyInterrupt();
+
+				/* GPDB: settle the in-memory temporary catalog rows */
+				tempcat_idle();
 
 				pgstat_report_stat(false);
 				pgstat_report_queuestat();

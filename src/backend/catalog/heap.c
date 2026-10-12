@@ -70,6 +70,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/tempcat.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
 #include "executor/executor.h"
@@ -1757,6 +1758,9 @@ heap_create_with_catalog(const char *relname,
 	 * creating the same relation name in parallel but hadn't committed yet
 	 * when we checked for a duplicate name above.
 	 */
+	/* GPDB: see tempcat.c */
+	if (OidIsValid(reloftypeid))
+		tempcat_check_typed_table(relid, reloftypeid);
 	AddNewRelationTuple(pg_class_desc,
 						new_rel_desc,
 						relid,

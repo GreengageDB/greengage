@@ -352,6 +352,14 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 	 */
 	if (IsTempcatTid(tid))
 	{
+		TM_Result	result = tempcat_self_modified(relation, tid, tmfd);
+
+		if (result == TM_Invisible)
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					 errmsg("attempted to delete invisible tuple")));
+		if (result != TM_Ok)
+			return result;
 		tempcat_delete(relation, tid);
 		return TM_Ok;
 	}
@@ -382,6 +390,17 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	/* GPDB: see heapam_tuple_delete() and CatalogTupleUpdate() */
 	if (IsTempcatTid(otid))
 	{
+		result = tempcat_self_modified(relation, otid, tmfd);
+		if (result == TM_Invisible)
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					 errmsg("attempted to update invisible tuple")));
+		if (result != TM_Ok)
+		{
+			if (shouldFree)
+				pfree(tuple);
+			return result;
+		}
 		if (tempcat_route_insert(relation, tuple) &&
 			tempcat_update(relation, otid, tuple))
 			*update_indexes = false;	/* not in the catalog's indexes */

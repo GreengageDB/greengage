@@ -67,10 +67,10 @@ extern bool dsm_impl_op(dsm_op op, dsm_handle handle, Size request_size,
 						void **impl_private, void **mapped_address, Size *mapped_size,
 						int elevel);
 
-/* Implementation-dependent actions required to keep segment until shutdown. */
 /* GPDB: free and total bytes where segments live, if known */
 extern bool dsm_impl_free_space(Size *free_bytes, Size *total_bytes);
 
+/* Implementation-dependent actions required to keep segment until shutdown. */
 extern void dsm_impl_pin_segment(dsm_handle handle, void *impl_private,
 								 void **impl_private_pm_handle);
 extern void dsm_impl_unpin_segment(dsm_handle handle, void **impl_private);

@@ -69,6 +69,7 @@
 #include "utils/gpexpand.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/spccache.h"
@@ -1280,9 +1281,22 @@ heap_beginscan(Relation relation, Snapshot snapshot,
 	else
 		scan->rs_base.rs_key = NULL;
 
+	scan->rs_tempscan = NULL;
+	scan->rs_heapdone = false;
+
 	initscan(scan, key, false);
 
 	return (TableScanDesc) scan;
+}
+
+/* GPDB: end the scan of in-memory catalog rows, see heap_getnext() */
+static void
+heap_end_tempscan(HeapScanDesc scan)
+{
+	if (scan->rs_tempscan != NULL)
+		tempcat_endscan(scan->rs_tempscan);
+	scan->rs_tempscan = NULL;
+	scan->rs_heapdone = false;
 }
 
 void
@@ -1316,6 +1330,8 @@ heap_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
 	if (BufferIsValid(scan->rs_cbuf))
 		ReleaseBuffer(scan->rs_cbuf);
 
+	heap_end_tempscan(scan);
+
 	/*
 	 * reinitialize scan descriptor
 	 */
@@ -1334,6 +1350,8 @@ heap_endscan(TableScanDesc sscan)
 	 */
 	if (BufferIsValid(scan->rs_cbuf))
 		ReleaseBuffer(scan->rs_cbuf);
+
+	heap_end_tempscan(scan);
 
 	/*
 	 * decrement relation reference count and free scan descriptor storage
@@ -1367,6 +1385,48 @@ heap_endscan(TableScanDesc sscan)
 #endif							/* !defined(HEAPDEBUGALL) */
 
 
+/*
+ * GPDB: after the heap, a catalog scan started by table_beginscan_catalog()
+ * returns the catalog rows of this session's temporary objects kept in
+ * memory (see tempcat.c), which callers that scan the catalogs directly
+ * would miss otherwise (e.g. ALTER TYPE looking for typed tables).  Scans
+ * through slots (SeqScan nodes, systable scans) merge them themselves.  As
+ * for the heap, a call after the end starts a new scan.
+ */
+static HeapTuple
+heap_getnext_tempcat(HeapScanDesc scan, ScanDirection direction)
+{
+	HeapTuple	tup;
+
+	if (!scan->rs_heapdone)
+	{
+		MemoryContext oldcxt;
+
+		if (!(scan->rs_base.rs_flags & SO_TYPE_SEQSCAN) ||
+			!(scan->rs_base.rs_flags & SO_TEMP_SNAPSHOT) ||
+			scan->rs_base.rs_parallel != NULL ||
+			!ScanDirectionIsForward(direction))
+			return NULL;
+
+		oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
+		scan->rs_tempscan = tempcat_beginscan(scan->rs_base.rs_rd, NULL,
+											  scan->rs_base.rs_snapshot,
+											  scan->rs_base.rs_nkeys,
+											  scan->rs_base.rs_key);
+		MemoryContextSwitchTo(oldcxt);
+		if (scan->rs_tempscan == NULL)
+			return NULL;
+		scan->rs_heapdone = true;
+	}
+
+	if (ScanDirectionIsForward(direction) &&
+		(tup = tempcat_next_virtual(scan->rs_tempscan)) != NULL)
+		return tup;
+
+	heap_end_tempscan(scan);
+	return NULL;
+}
+
 HeapTuple
 heap_getnext(TableScanDesc sscan, ScanDirection direction)
 {
@@ -1388,6 +1448,10 @@ heap_getnext(TableScanDesc sscan, ScanDirection direction)
 
 	HEAPDEBUG_1;				/* heap_getnext( info ) */
 
+	/* GPDB: past the heap, see heap_getnext_tempcat() */
+	if (scan->rs_heapdone)
+		return heap_getnext_tempcat(scan, direction);
+
 	if (scan->rs_base.rs_flags & SO_ALLOW_PAGEMODE)
 		heapgettup_pagemode(scan, direction,
 							scan->rs_base.rs_nkeys, scan->rs_base.rs_key);
@@ -1398,7 +1462,7 @@ heap_getnext(TableScanDesc sscan, ScanDirection direction)
 	if (scan->rs_ctup.t_data == NULL)
 	{
 		HEAPDEBUG_2;			/* heap_getnext returning EOS */
-		return NULL;
+		return heap_getnext_tempcat(scan, direction);
 	}
 
 	/*

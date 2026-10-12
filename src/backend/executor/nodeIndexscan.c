@@ -112,6 +112,18 @@ IndexScanSetupTempcat(IndexScanState *node, ScanDirection direction)
 	tempcat_scan_filter(node->iss_TempScan, IndexTempcatQual, node);
 	ExecClearTuple(node->iss_DiskSlot);
 
+	/*
+	 * Nothing to merge in: scan the index alone, unless the on-disk rows are
+	 * to be filtered, which the merge does.
+	 */
+	if (tempcat_scan_is_empty(node->iss_TempScan) &&
+		!gp_temp_memory_catalog_hide_others)
+	{
+		tempcat_endscan(node->iss_TempScan);
+		node->iss_TempScan = NULL;
+		return;
+	}
+
 	node->iss_TempState = TEMPSCAN_MERGE;
 	node->iss_TempForward = ScanDirectionIsForward(direction);
 	node->iss_DiskPeeked = false;
@@ -1013,6 +1025,33 @@ ExecIndexMarkPos(IndexScanState *node)
 	}
 
 	index_markpos(node->iss_ScanDesc);
+
+	/*
+	 * GPDB: when merging virtual rows (see IndexNextTempcat()), the index is
+	 * positioned at the last on-disk row fetched, which may still wait to be
+	 * returned after virtual rows.  Save that row, and how far the virtual
+	 * rows got.  (The planner does not mark such scans, but a plan made
+	 * before the session started keeping temporary objects in memory may.)
+	 */
+	if (node->iss_TempState == TEMPSCAN_MERGE)
+	{
+		node->iss_MarkTempPos = tempcat_scan_getpos(node->iss_TempScan);
+		node->iss_MarkDiskPeeked = node->iss_DiskPeeked;
+		node->iss_MarkDiskDone = node->iss_DiskDone;
+		if (node->iss_DiskPeeked)
+		{
+			Relation	rel = node->ss.ss_currentRelation;
+
+			if (node->iss_MarkDiskSlot == NULL)
+				node->iss_MarkDiskSlot = ExecAllocTableSlot(&estate->es_tupleTable,
+															RelationGetDescr(rel),
+															table_slot_callbacks(rel));
+			ExecCopySlot(node->iss_MarkDiskSlot, node->iss_DiskSlot);
+			/* ExecCopySlot() does not carry these over */
+			node->iss_MarkDiskSlot->tts_tableOid = node->iss_DiskSlot->tts_tableOid;
+			node->iss_MarkDiskSlot->tts_tid = node->iss_DiskSlot->tts_tid;
+		}
+	}
 }
 
 /* ----------------------------------------------------------------
@@ -1042,6 +1081,22 @@ ExecIndexRestrPos(IndexScanState *node)
 	}
 
 	index_restrpos(node->iss_ScanDesc);
+
+	/* GPDB: and the state of the merge; see ExecIndexMarkPos() */
+	if (node->iss_TempState == TEMPSCAN_MERGE)
+	{
+		tempcat_scan_setpos(node->iss_TempScan, node->iss_MarkTempPos);
+		node->iss_DiskPeeked = node->iss_MarkDiskPeeked;
+		node->iss_DiskDone = node->iss_MarkDiskDone;
+		if (node->iss_DiskPeeked)
+		{
+			ExecCopySlot(node->iss_DiskSlot, node->iss_MarkDiskSlot);
+			node->iss_DiskSlot->tts_tableOid = node->iss_MarkDiskSlot->tts_tableOid;
+			node->iss_DiskSlot->tts_tid = node->iss_MarkDiskSlot->tts_tid;
+		}
+		else
+			ExecClearTuple(node->iss_DiskSlot);
+	}
 }
 
 /* ----------------------------------------------------------------

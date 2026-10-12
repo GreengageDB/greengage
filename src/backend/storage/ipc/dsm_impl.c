@@ -1048,8 +1048,10 @@ errcode_for_dynamic_shared_memory(void)
 
 /*
  * GPDB: report the free and total space of the file system holding the
- * segments (/dev/shm for posix, pg_dynshmem for mmap).  Returns false if
- * unknown, e.g. for System V shared memory.
+ * segments (/dev/shm for posix).  Returns false if unknown: for System V
+ * shared memory, and for mmap, whose segments are files in pg_dynshmem on
+ * the data directory's file system, which the database itself fills (a
+ * share of it says nothing about the room left for segments).
  */
 bool
 dsm_impl_free_space(Size *free_bytes, Size *total_bytes)
@@ -1061,9 +1063,6 @@ dsm_impl_free_space(Size *free_bytes, Size *total_bytes)
 	{
 		case DSM_IMPL_POSIX:
 			path = "/dev/shm";
-			break;
-		case DSM_IMPL_MMAP:
-			path = PG_DYNSHMEM_DIR;
 			break;
 		default:
 			return false;

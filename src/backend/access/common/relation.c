@@ -23,6 +23,7 @@
 #include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/lmgr.h"
@@ -120,7 +121,9 @@ try_relation_open(Oid relationId, LOCKMODE lockmode, bool noWait)
 	 * Now that we have the lock, probe to see if the relation really exists
 	 * or not.
 	 */
-	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relationId)))
+	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(relationId)) ||
+		/* GPDB: or exists for its own session only, see tempcat.c */
+		tempcat_relation_missing(relationId))
 	{
 		/* Release useless lock */
 		if (lockmode != NoLock)

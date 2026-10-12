@@ -59,6 +59,7 @@
 #include "utils/dsa.h"
 #include "utils/freepage.h"
 #include "utils/memutils.h"
+#include "utils/vmem_tracker.h"
 
 /*
  * The size of the initial DSM segment that backs a dsa_area created by
@@ -386,6 +387,18 @@ struct dsa_area
 	 * bytes free for other users of dynamic shared memory (0: no limit).
 	 */
 	size_t		min_free_space;
+
+	/*
+	 * GPDB: nor segments that would leave fewer than this many slots of the
+	 * DSM control segment free (0: no limit).
+	 */
+	uint32		min_free_slots;
+
+	/*
+	 * GPDB: charge the segments this backend creates (and frees) to its
+	 * vmem (gp_vmem_protect_limit, resource groups).
+	 */
+	bool		vmem_tracked;
 };
 
 #define DSA_SPAN_NOTHING_FREE	((uint16) -1)
@@ -421,6 +434,7 @@ static dsa_area *attach_internal(void *place, dsm_segment *segment,
 static void check_for_freed_segments(dsa_area *area);
 static void check_for_freed_segments_locked(dsa_area *area);
 static void rebin_segment(dsa_area *area, dsa_segment_map *segment_map);
+static dsa_area *dsa_create_with_flags(int tranche_id, int dsm_flags);
 
 /*
  * Create a new shared area in a new DSM segment.  Further DSM segments will
@@ -434,6 +448,25 @@ static void rebin_segment(dsa_area *area, dsa_segment_map *segment_map);
 dsa_area *
 dsa_create(int tranche_id)
 {
+	return dsa_create_with_flags(tranche_id, 0);
+}
+
+/*
+ * GPDB: like dsa_create(), but return NULL instead of raising an error if
+ * the area's first DSM segment cannot be created (no free slot in the DSM
+ * control segment, or no space).
+ */
+dsa_area *
+dsa_try_create(int tranche_id)
+{
+	return dsa_create_with_flags(tranche_id,
+								 DSM_CREATE_NULL_IF_MAXSEGMENTS |
+								 DSM_CREATE_NULL_IF_NOSPACE);
+}
+
+static dsa_area *
+dsa_create_with_flags(int tranche_id, int dsm_flags)
+{
 	dsm_segment *segment;
 	dsa_area   *area;
 
@@ -441,7 +474,9 @@ dsa_create(int tranche_id)
 	 * Create the DSM segment that will hold the shared control object and the
 	 * first segment of usable space.
 	 */
-	segment = dsm_create(DSA_INITIAL_SEGMENT_SIZE, 0);
+	segment = dsm_create(DSA_INITIAL_SEGMENT_SIZE, dsm_flags);
+	if (segment == NULL)
+		return NULL;
 
 	/*
 	 * All segments backing this area are pinned, so that DSA can explicitly
@@ -1046,6 +1081,29 @@ dsa_set_min_free_space(dsa_area *area, size_t bytes)
 }
 
 /*
+ * GPDB: likewise, do not grow the area by creating segments that would leave
+ * fewer than 'nslots' slots of the DSM control segment free: every segment
+ * takes one.
+ */
+void
+dsa_set_min_free_slots(dsa_area *area, uint32 nslots)
+{
+	area->min_free_slots = nslots;
+}
+
+/*
+ * GPDB: charge the segments that this backend creates for the area to its
+ * vmem from now on, and release them when it frees them; an allocation
+ * that the vmem limits do not allow fails (as when the size limit is
+ * reached).  The caller accounts for the segments created before.
+ */
+void
+dsa_set_vmem_tracked(dsa_area *area)
+{
+	area->vmem_tracked = true;
+}
+
+/*
  * Aggressively free all spare memory in the hope of returning DSM segments to
  * the operating system.
  */
@@ -1290,6 +1348,8 @@ create_internal(void *place, size_t size,
 	area->mapping_pinned = false;
 	area->no_oom = false;
 	area->min_free_space = 0;
+	area->min_free_slots = 0;
+	area->vmem_tracked = false;
 	memset(area->segment_maps, 0, sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
 	area->freed_segment_counter = 0;
@@ -1348,6 +1408,8 @@ attach_internal(void *place, dsm_segment *segment, dsa_handle handle)
 	area->mapping_pinned = false;
 	area->no_oom = false;
 	area->min_free_space = 0;
+	area->min_free_slots = 0;
+	area->vmem_tracked = false;
 	memset(&area->segment_maps[0], 0,
 		   sizeof(dsa_segment_map) * DSA_MAX_SEGMENTS);
 	area->high_segment_index = 0;
@@ -1714,6 +1776,17 @@ ensure_active_superblock(dsa_area *area, dsa_area_pool *pool,
 		if (segment_map == NULL)
 		{
 			LWLockRelease(DSA_AREA_LOCK(area));
+
+			/*
+			 * GPDB: give back the span object we took above, as
+			 * dsa_allocate_extended() does.  Upstream leaks it, which matters
+			 * little while failing here raises an error; with
+			 * DSA_ALLOC_NO_OOM and an area at its limits (see
+			 * make_new_segment()) it happens on every allocation that does
+			 * not fit.
+			 */
+			if (size_class != DSA_SCLASS_BLOCK_OF_SPANS)
+				dsa_free(area, span_pointer);
 			return false;
 		}
 	}
@@ -1881,6 +1954,8 @@ destroy_superblock(dsa_area *area, dsa_pointer span_pointer)
 				   segment_map->header->size);
 			area->control->total_segment_size -=
 				segment_map->header->size;
+			if (area->vmem_tracked)
+				VmemTracker_ReleaseVmem(segment_map->header->size);
 			dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
 			dsm_detach(segment_map->segment);
 			area->control->segment_handles[index] = DSM_HANDLE_INVALID;
@@ -2187,13 +2262,44 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 			free_bytes < total_size + area->min_free_space)
 			return NULL;
 	}
+	if (area->min_free_slots > 0)
+	{
+		uint32		nfree;
+		uint32		nmax;
+
+		if (dsm_free_slots(&nfree, &nmax) && nfree <= area->min_free_slots)
+			return NULL;
+	}
+	/*
+	 * GPDB: charge it to vmem, which may refuse, before creating it: a
+	 * refusal then costs nothing, while the allocations of a full area keep
+	 * coming.  dsm_create() can still fail with an error (e.g. out of local
+	 * memory), which must not leave vmem charged.
+	 */
+	if (area->vmem_tracked &&
+		VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
+		return NULL;
 
 	/* Create the segment. */
-	segment = dsm_create(total_size,
-						 area->no_oom ?
-						 DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0);
+	PG_TRY();
+	{
+		segment = dsm_create(total_size,
+							 area->no_oom ?
+							 DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0);
+	}
+	PG_CATCH();
+	{
+		if (area->vmem_tracked)
+			VmemTracker_ReleaseVmem(total_size);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 	if (segment == NULL)
+	{
+		if (area->vmem_tracked)
+			VmemTracker_ReleaseVmem(total_size);
 		return NULL;
+	}
 	dsm_pin_segment(segment);
 	if (area->mapping_pinned)
 		dsm_pin_mapping(segment);

@@ -17,6 +17,16 @@ CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP
 CREATE FUNCTION
 CREATE TYPE tc_type AS (x int);
 CREATE TYPE
+CREATE DOMAIN tc_dom AS int;
+CREATE DOMAIN
+CREATE DOMAIN tc_dom_base AS int;
+CREATE DOMAIN
+CREATE DOMAIN tc_dom_spill AS int;
+CREATE DOMAIN
+CREATE FUNCTION tc_def_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION
+CREATE TYPE tc_comp_base AS (i int, j int);
+CREATE TYPE
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE FUNCTION
 CREATE ROLE tc_role;
@@ -32,6 +42,51 @@ SET
 CREATE TABLE
 1: INSERT INTO tc_dep VALUES (1, ROW(1));
 INSERT 0 1
+1: CREATE TEMP TABLE tc_dep_dom (a int, d tc_dom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: CREATE DOMAIN pg_temp.tc_subdom AS tc_dom_base;
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_subdom (a int, d pg_temp.tc_subdom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_subdom VALUES (1, -5);
+INSERT 0 1
+1: CREATE DOMAIN pg_temp.tc_compdom AS tc_comp_base;
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_compdom (a int, c pg_temp.tc_compdom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
+INSERT 0 1
+-- (a domain whose pg_type row did not fit in memory, the fault pretends,
+-- used by a table that did; and a table that did not, with a default)
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1: CREATE DOMAIN pg_temp.tc_spilldom AS tc_dom_spill;
+CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_spilldef (a int, b int DEFAULT tc_def_func()) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+1: CREATE TEMP TABLE tc_dep_spilldom (a int, d pg_temp.tc_spilldom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_spilldom VALUES (1, -5);
+INSERT 0 1
+SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
+ spilled_domain 
+----------------
+ 1              
+(1 row)
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 CREATE INDEX
 1: SET ROLE tc_role;
@@ -75,12 +130,57 @@ REVOKE
 ---------
  refused 
 (1 row)
+-- Nor can it change the types they use, as it cannot check how they use
+-- them (a constraint that needs no check is fine).
+2: ALTER TYPE tc_type ALTER ATTRIBUTE x TYPE bigint;
+ERROR:  cannot alter type "tc_type" because a temporary object of another session uses it
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom" because a temporary object of another session uses it
+2: ALTER DOMAIN tc_dom SET NOT NULL;
+ERROR:  cannot alter type "tc_dom" because a temporary object of another session uses it
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_pos CHECK (VALUE > 0) NOT VALID;
+ALTER DOMAIN
+-- Nor through their own types: a sub-domain, a domain over a composite type.
+2: ALTER DOMAIN tc_dom_base ADD CONSTRAINT tc_dom_base_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom_base" because a temporary object of another session uses it
+2: ALTER TYPE tc_comp_base ALTER ATTRIBUTE j TYPE text;
+ERROR:  cannot alter type "tc_comp_base" because a temporary object of another session uses it
+-- Nor through their types whose rows are on disk, which are missing for
+-- other sessions like those in memory: what uses them may be in memory.
+2: ALTER DOMAIN tc_dom_spill ADD CONSTRAINT tc_dom_spill_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom_spill" because a temporary object of another session uses it
+2: SELECT tc_try('DROP DOMAIN tc_dom_spill CASCADE');
+ tc_try  
+---------
+ refused 
+(1 row)
+-- (also for objects that have no namespace, but a relation, as defaults)
+2: SELECT tc_try('DROP FUNCTION tc_def_func() CASCADE');
+ tc_try  
+---------
+ refused 
+(1 row)
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
  x | tc_func 
 ---+---------
  1 | 2       
+(1 row)
+1: SELECT d FROM tc_dep_subdom;
+ d  
+----
+ -5 
+(1 row)
+1: SELECT (c).j FROM tc_dep_compdom;
+ j 
+---
+ 2 
+(1 row)
+1: SELECT d FROM tc_dep_spilldom;
+ d  
+----
+ -5 
 (1 row)
 1: SET enable_seqscan = off;
 SET
@@ -106,6 +206,31 @@ RESET
  done     
 (1 row)
 2: SELECT tc_retry('DROP ROLE tc_role');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom_base');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP TYPE tc_comp_base');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom_spill');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP FUNCTION tc_def_func()');
  tc_retry 
 ----------
  done     
@@ -241,6 +366,20 @@ COMMIT
 2q: ... <quitting>
 DROP TABLE tc_oids;
 DROP TABLE
+
+-- A utility-mode session on a segment keeps its temporary objects on disk:
+-- OIDs from the segment's slices of the reserved range could be the ones
+-- the coordinator gives the temporary objects of its sessions there.
+0U: SET gp_enable_temp_memory_catalog = on;
+SET
+0U: CREATE TEMP TABLE tc_utility (a int);
+CREATE TABLE
+0U: SELECT 'tc_utility'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ f                 
+(1 row)
+0Uq: ... <quitting>
 
 --
 -- 4. Reader gangs that are destroyed when idle and recreated later attach
@@ -430,6 +569,108 @@ SET
 (1 row)
 2q: ... <quitting>
 
+-- If the session cannot drop its temporary objects at exit (here the fault
+-- skips that), nothing leads to the files of the relations whose rows were
+-- in memory (on the segments): the session removes them itself.  Those
+-- whose rows were on disk (the fault leaves the coordinator without an
+-- area) go with their rows when the sweep removes the leftovers.
+TRUNCATE tc_relfile_paths;
+TRUNCATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_files_heap (a int, b text) DISTRIBUTED BY (a);
+CREATE TABLE
+1: CREATE TEMP TABLE tc_files_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_files_heap SELECT i, repeat('x', 3000) FROM generate_series(1, 10) i;
+INSERT 0 10
+1: INSERT INTO tc_files_ao SELECT generate_series(1, 10);
+INSERT 0 10
+-- start_ignore
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_segs('tc_files_heap');
+INSERT 0 3
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_coordinator('tc_files_heap');
+INSERT 0 1
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_segs('tc_files_ao');
+INSERT 0 3
+1: INSERT INTO tc_relfile_paths SELECT * FROM tc_relfile_path_on_coordinator('tc_files_ao');
+INSERT 0 1
+-- end_ignore
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN (SELECT sum(n) FROM tc_count_files_on_segs()) = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT sum(n) AS files_on_segs FROM tc_count_files_on_segs();
+ files_on_segs 
+---------------
+ 0             
+(1 row)
+SELECT n AS files_on_coordinator FROM tc_count_files_on_coordinator();
+ files_on_coordinator 
+----------------------
+ 2                    
+(1 row)
+SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_files_sweeper (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2q: ... <quitting>
+SELECT n AS files_on_coordinator FROM tc_count_files_on_coordinator();
+ files_on_coordinator 
+----------------------
+ 0                    
+(1 row)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT tc_disk_rows() AS disk_rows;
+ disk_rows 
+-----------
+ 0         
+(1 row)
+
 --
 -- 7. VACUUM cannot see the pg_class rows of other sessions' in-memory
 -- temporary tables, so the sessions publish the oldest relfrozenxid of their
@@ -461,7 +702,7 @@ VACUUM
  t         
 (1 row)
 1q: ... <quitting>
-2: DO $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
+2: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 DO
 2: VACUUM FREEZE;
 VACUUM
@@ -470,6 +711,52 @@ VACUUM
 ----------
  t        
 (1 row)
+-- Nor past the XIDs of rows whose transaction's outcome the session has not
+-- applied yet, which it looks up in the clog until then.  It applies them
+-- when it goes idle, so a session that keeps no table holds nothing back:
+-- here one with a temporary view (no relfrozenxid), whose segment writers
+-- get no transaction after the two-phase commit of their last one.  (The
+-- rows of tc_seg_xid carry the segments' XIDs of that transaction.)
+3:@db_name tc_frozen_db: SET gp_enable_temp_memory_catalog = on;
+SET
+3: SET application_name = 'tc_frozen_view_session';
+SET
+3: CREATE TABLE tc_seg_xid (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+3: BEGIN;
+BEGIN
+3: CREATE TEMP VIEW tc_frozen_v AS SELECT 1 AS a;
+CREATE VIEW
+3: DELETE FROM tc_xid;
+DELETE 1
+3: INSERT INTO tc_xid SELECT txid_current() % 4294967296;
+INSERT 0 1
+3: INSERT INTO tc_seg_xid SELECT generate_series(1, 30);
+INSERT 0 30
+3: COMMIT;
+COMMIT
+2: DO $$ BEGIN FOR i IN 1..100 LOOP PERFORM txid_current(); COMMIT; END LOOP; END $$;
+DO
+2: VACUUM FREEZE;
+VACUUM
+2: SELECT datfrozenxid::text::bigint > (SELECT x FROM tc_xid) AS advanced FROM pg_database WHERE datname = current_database();
+ advanced 
+----------
+ t        
+(1 row)
+2: SELECT count(*) AS segs_advanced FROM gp_dist_random('pg_database') d JOIN (SELECT gp_segment_id AS seg, max(xmin::text::bigint) AS x FROM tc_seg_xid GROUP BY 1) s ON d.gp_segment_id = s.seg WHERE d.datname = current_database() AND d.datfrozenxid::text::bigint > s.x;
+ segs_advanced 
+---------------
+ 3             
+(1 row)
+3: SELECT * FROM tc_frozen_v;
+ a 
+---
+ 1 
+(1 row)
+3q: ... <quitting>
+2: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_view_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
 2q: ... <quitting>
 DROP DATABASE tc_frozen_db;
 DROP DATABASE
@@ -566,10 +853,38 @@ SELECT count(*) > 0 AS leftover_shdepend FROM pg_shdepend WHERE objid >= 4026531
 -------------------
  t                 
 (1 row)
+-- Until they are removed, gp_temp_memory_catalog_hide_others hides them as
+-- it hides those of live sessions: relations in schemas that are gone
+-- would make pg_dump (pg_upgrade's too, which no sweep runs before) fail.
+-- The ordinary table with reserved OIDs stays visible.
+SET gp_temp_memory_catalog_hide_others = on;
+SET
+SELECT count(*) AS dangling FROM pg_class c WHERE oid >= 4026531840 AND NOT EXISTS (SELECT 1 FROM pg_namespace n WHERE n.oid = c.relnamespace);
+ dangling 
+----------
+ 0        
+(1 row)
+SELECT relname FROM pg_class WHERE oid >= 4026531840 ORDER BY 1;
+ relname      
+--------------
+ tc_legacy2   
+ tc_legacy2_i 
+(2 rows)
+RESET gp_temp_memory_catalog_hide_others;
+RESET
+!\retcode pg_dump --schema-only isolation2test > /dev/null;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
 DO $$ BEGIN EXECUTE format('REVOKE TEMP ON DATABASE %I FROM tc_sw_role', current_database()); END $$;
 DO
 REVOKE USAGE ON TYPE tc_sw_type FROM tc_sw_role;
 REVOKE
+-- Nor do they keep the types they point at from changing: nothing uses
+-- those anymore.
+ALTER TYPE tc_sw_type ALTER ATTRIBUTE x TYPE bigint;
+ALTER TYPE
 
 SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
  gp_inject_fault_infinite 
@@ -839,7 +1154,7 @@ SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_seg
  Success:        
  Success:        
 (4 rows)
-DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess_ids s ON a.sess_id = s.id); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess_ids s ON a.sess_id = s.id); PERFORM pg_sleep(0.1); END LOOP; END $$;
 DO
 SELECT count(*) AS qd_leftover_schemas FROM pg_namespace WHERE oid >= 4026531840;
  qd_leftover_schemas 
@@ -893,6 +1208,794 @@ SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_s
 DROP TABLE tc_sess_ids;
 DROP TABLE
 
+-- Every DSM segment takes a slot of the DSM control segment, and the area
+-- leaves the last quarter of them to other users too (here the fault
+-- pretends that none is free on the coordinator): an area that cannot grow
+-- keeps further rows on disk, and a new session creates no area.
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_slots_first (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('dsm_slots_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: DO $$ BEGIN FOR i IN 1..100 LOOP EXECUTE format('CREATE TEMP TABLE tc_slots_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+DO
+1: INSERT INTO tc_slots_100 SELECT i, 'x' FROM generate_series(1, 10) i;
+INSERT 0 10
+1: SELECT count(*) FROM tc_slots_100 x JOIN tc_slots_100 y ON x.a = y.a + 1;
+ count 
+-------
+ 9     
+(1 row)
+SELECT count(*) > 0 AS qd_on_disk FROM pg_class WHERE relname LIKE 'tc\_slots\_%';
+ qd_on_disk 
+------------
+ t          
+(1 row)
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname LIKE 'tc\_slots\_%';
+ segs_on_disk 
+--------------
+ 0            
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_slots_new (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT count(*) AS qd_on_disk FROM pg_class WHERE relname = 'tc_slots_new';
+ qd_on_disk 
+------------
+ 1          
+(1 row)
+SELECT count(*) AS segs_on_disk FROM gp_dist_random('pg_class') WHERE relname = 'tc_slots_new';
+ segs_on_disk 
+--------------
+ 0            
+(1 row)
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+-- (the sessions remove their on-disk rows asynchronously at exit)
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN tc_disk_rows() = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT tc_disk_rows() AS disk_rows;
+ disk_rows 
+-----------
+ 0         
+(1 row)
+
+-- When the area is full, rows that the transaction deleted are freed early,
+-- but not those that a snapshot still in use can see: here the outer
+-- query's, for its subquery, taken before the function dropped the table.
+CREATE FUNCTION tc_churn(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN DROP TABLE tc_pre; FOR i IN 1..n LOOP EXECUTE format('CREATE TEMP TABLE tc_churn_%s (a int, b text, c int PRIMARY KEY) DISTRIBUTED BY (c)', i); EXECUTE format('DROP TABLE tc_churn_%s', i); END LOOP; RETURN n; END $$;
+CREATE FUNCTION
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET gp_temp_memory_catalog_max_size = 1024;
+SET
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE tc_pre (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: SELECT tc_churn(300) AS churned, (SELECT count(*) FROM pg_class WHERE relname = 'tc_pre') AS pre_seen;
+ churned | pre_seen 
+---------+----------
+ 300     | 1        
+(1 row)
+1: ROLLBACK;
+ROLLBACK
+1q: ... <quitting>
+DROP FUNCTION tc_churn(int);
+DROP FUNCTION
+
+-- A sweep whose transaction rolls back asks for another one, even if its
+-- session ends right after.  (Session 1 leaves leftovers, which asks for a
+-- sweep; session 2 sweeps in a DROP that it rolls back.)
+CREATE TYPE tc_rb_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_rb_dummy (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_rb (c tc_rb_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+-- Likewise if the sweep's transaction is prepared and then rolled back, by
+-- another transaction, which commits.  (Here in a utility-mode session on
+-- the coordinator; the fault allows its PREPARE TRANSACTION, see below.)
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+-1U: BEGIN;
+BEGIN
+-1U: DROP TABLE tc_rb_dummy;
+DROP TABLE
+-1U: PREPARE TRANSACTION 'tc_rb_sweep';
+PREPARE TRANSACTION
+-1U: ROLLBACK PREPARED 'tc_rb_sweep';
+ROLLBACK PREPARED
+-1Uq: ... <quitting>
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+2: BEGIN;
+BEGIN
+2: DROP TABLE tc_rb_dummy;
+DROP TABLE
+2: ROLLBACK;
+ROLLBACK
+2q: ... <quitting>
+3: DROP TABLE tc_rb_dummy;
+DROP TABLE
+3q: ... <quitting>
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_rb_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_rb_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
+-- A sweep marks the database as swept only if no session asked for another
+-- sweep meanwhile: one that leaves leftovers while the sweep runs may have
+-- had its rows skipped as those of a live session.  (Session 1 leaves
+-- leftovers, which asks for a sweep; session 2 sweeps in a DROP, stopped by
+-- the fault after its scans on the coordinator, while session 3 leaves
+-- leftovers too.)
+CREATE TYPE tc_mk_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_mk1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_mk2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET application_name = 'tc_mk_session';
+SET
+1: CREATE TEMP TABLE tc_mk_l1 (c tc_mk_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+3: SET gp_enable_temp_memory_catalog = on;
+SET
+3: SET application_name = 'tc_mk_session';
+SET
+3: CREATE TEMP TABLE tc_mk_l3 (c tc_mk_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN (SELECT count(*) FROM pg_stat_activity WHERE application_name = 'tc_mk_session') < 2; PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2&: DROP TABLE tc_mk1;  <waiting ...>
+SELECT gp_wait_until_triggered_fault('tempcat_sweep_before_mark', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+3q: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_mk_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2<:  <... completed>
+DROP TABLE
+2q: ... <quitting>
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_mk_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+4: DROP TABLE tc_mk2;
+DROP TABLE
+4q: ... <quitting>
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_mk_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_mk_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
+-- Nor while rows of a session that is gone may still come: those that a
+-- transaction it prepared inserted (a QE writer that exits while prepared,
+-- whose transaction distributed recovery commits later).  (Here a
+-- utility-mode session on the coordinator prepares one; with no room in
+-- memory, its rows are all on disk, which allows that, see section 13.)
+CREATE TYPE tc_pp_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_pp1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_pp2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+-1U: SET gp_enable_temp_memory_catalog = on;
+SET
+-1U: SET application_name = 'tc_pp_session';
+SET
+-1U: BEGIN;
+BEGIN
+-1U: CREATE TEMP TABLE tc_pp (c tc_pp_type);
+CREATE TABLE
+-1U: SELECT 'tc_pp'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t                 
+(1 row)
+-1U: PREPARE TRANSACTION 'tc_pp';
+PREPARE TRANSACTION
+-1Uq: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_pp_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: DROP TABLE tc_pp1;
+DROP TABLE
+2q: ... <quitting>
+-1U: COMMIT PREPARED 'tc_pp';
+COMMIT PREPARED
+-1Uq: ... <quitting>
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_pp_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+3: DROP TABLE tc_pp2;
+DROP TABLE
+3q: ... <quitting>
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_pp_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT count(*) AS namespaces FROM pg_namespace WHERE oid >= 4026531840 AND nspname LIKE 'pg_temp%';
+ namespaces 
+------------
+ 0          
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_pp_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
+-- But rows that an open transaction inserts for an ordinary object with a
+-- reserved OID are no leftovers: the database is marked swept once, not
+-- swept again at every DROP.  (Session 1 leaves leftovers, which asks for a
+-- sweep; session 2 alters the ordinary table and stays open; the fault
+-- counts the sweeps on the coordinator.)
+SELECT gp_inject_fault_infinite('oid_in_tempcat_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+CREATE TABLE tc_ord (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+CREATE TYPE tc_ord_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_ord1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_ord2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET application_name = 'tc_ord_session';
+SET
+1: CREATE TEMP TABLE tc_ord_l (c tc_ord_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ord_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+2: BEGIN;
+BEGIN
+2: ALTER TABLE tc_ord ADD COLUMN b int;
+ALTER TABLE
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+3: DROP TABLE tc_ord1;
+DROP TABLE
+3: DROP TABLE tc_ord2;
+DROP TABLE
+3q: ... <quitting>
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) FROM 'num times hit:''([0-9]+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ sweeps 
+--------
+ 1      
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: COMMIT;
+COMMIT
+2q: ... <quitting>
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_ord_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_ord_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+DROP TABLE tc_ord;
+DROP TABLE
+
+-- A session whose temporary schema is to have the name of one left on disk,
+-- with a reserved OID, by a session that is gone (its area could not be
+-- created) has the sweep remove that first: dropping its objects as usual
+-- would take them for another session's.  (Session 1 leaves the schema;
+-- session 2 gives it its own name, as a session with the same ID would
+-- find it after a restart.)  It waits for a sweep under way, rather than
+-- go on without: here session 3's, which the fault holds up meanwhile.
+CREATE TABLE tc_lns_name (n name) DISTRIBUTED REPLICATED;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+3: SET gp_enable_temp_memory_catalog = on;
+SET
+3&: CREATE TEMP TABLE tc_lns3 (a int) DISTRIBUTED BY (a);  <waiting ...>
+SELECT gp_wait_until_triggered_fault('tempcat_sweep_before_mark', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET application_name = 'tc_lns_session';
+SET
+1: CREATE TEMP TABLE tc_lns (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: SELECT pg_my_temp_schema() >= 4026531840 AS reserved, (SELECT count(*) FROM pg_namespace WHERE oid = pg_my_temp_schema()) AS on_disk;
+ reserved | on_disk 
+----------+---------
+ t        | 1       
+(1 row)
+1: INSERT INTO tc_lns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
+INSERT 0 1
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: SET allow_system_table_mods = on;
+SET
+2: DO $$ BEGIN EXECUTE format('UPDATE pg_namespace SET nspname = %L WHERE nspname = %L', 'pg_temp_' || current_setting('gp_session_id'), (SELECT n FROM tc_lns_name)); END $$;
+DO
+2: RESET allow_system_table_mods;
+RESET
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2&: CREATE TEMP TABLE tc_lns2 (a int) DISTRIBUTED BY (a);  <waiting ...>
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'object' AND classid = 'pg_database'::regclass AND objid = (SELECT oid FROM pg_database WHERE datname = current_database()) AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT count(*) AS waiting_for_sweep FROM pg_locks WHERE locktype = 'object' AND classid = 'pg_database'::regclass AND objid = (SELECT oid FROM pg_database WHERE datname = current_database()) AND NOT granted;
+ waiting_for_sweep 
+-------------------
+ 1                 
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+3<:  <... completed>
+CREATE TABLE
+3q: ... <quitting>
+2<:  <... completed>
+CREATE TABLE
+2: SELECT 'tc_lns2'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t                 
+(1 row)
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid >= 4026531840 AND nspname LIKE 'pg\_temp\_%' AND oid <> pg_my_temp_schema();
+ left_schemas 
+--------------
+ 0            
+(1 row)
+2q: ... <quitting>
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+DROP TABLE tc_lns_name;
+DROP TABLE
+
+-- A sweep leaves a left temporary schema whose name a live session would
+-- take to that session, which removes it itself: removed in the sweep's
+-- transaction, which may last, the session would find it there until then
+-- and fail to create its own.  (Schemas made up with the names of sessions
+-- 1 and 2, as after a restart; session 1's sweeps both, in a transaction it
+-- keeps open.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+INSERT 0 1
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+INSERT 0 1
+SET allow_system_table_mods = on;
+SET
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+INSERT 0 2
+RESET allow_system_table_mods;
+RESET
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: BEGIN;
+BEGIN
+1: CREATE TEMP TABLE tc_lns_a (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_lns_b (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: COMMIT;
+COMMIT
+SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+ left_schemas 
+--------------
+ 0            
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+DROP TABLE tc_lns_ids;
+DROP TABLE
+
+-- The sweep does not wait for a transaction that deletes the same leftover
+-- (another sweep that has not committed yet): it leaves the row alone, and
+-- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
+-- asking for a sweep; session 1 sweeps the first ones and stays open.)
+CREATE TYPE tc_w_type AS (x int);
+CREATE TYPE
+CREATE TABLE tc_w1 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_w2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+3: SET gp_enable_temp_memory_catalog = on;
+SET
+3: CREATE TEMP TABLE tc_wl1 (c tc_w_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+3q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+1: BEGIN;
+BEGIN
+1: DROP TABLE tc_w1;
+DROP TABLE
+4: SET gp_enable_temp_memory_catalog = on;
+SET
+4: CREATE TEMP TABLE tc_wl2 (c tc_w_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+4q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+-- (without waiting, so a lock timeout would fail it)
+2: SET lock_timeout = '10s';
+SET
+2: DROP TABLE tc_w2;
+DROP TABLE
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
+2q: ... <quitting>
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT count(*) AS leftovers FROM pg_depend WHERE refobjid = 'tc_w_type'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ 0         
+(1 row)
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT tc_retry('DROP TYPE tc_w_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
 --
 -- 10. Some rows of in-memory temporary objects are on disk: dependencies on
 -- ordinary objects, and rows that did not fit in memory.  To other sessions
@@ -912,8 +2015,26 @@ SET
 SET
 1: CREATE TEMP TABLE tc_hide (a int DEFAULT tc_def(), c tc_hide_type) DISTRIBUTED BY (a);
 CREATE TABLE
+1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
+CREATE TABLE
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 DO
+
+-- A relation can go to disk partly: here its pg_class row, updated while
+-- the area is full, but not the attributes it had.  Other sessions must not
+-- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
+-- to them it does not exist, like the relations kept in memory.
+1: ALTER TABLE tc_half ADD COLUMN z int;
+ALTER TABLE
+2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
+ opened 
+--------
+ 0      
+(1 row)
+2: ANALYZE;
+ANALYZE
+2: VACUUM;
+VACUUM
 
 -- A column default of a temporary table depends on the function.
 -- (session 2 stands for gpcheckcat: its own objects stay on disk)
@@ -952,7 +2073,7 @@ SET
 CREATE TABLE
 2: DO $$ BEGIN INSERT INTO tc_ctids_hide SELECT ctid FROM pg_class WHERE relname LIKE 'tc\_hide\_%' AND oid >= 4026531840; END $$;
 DO
-2: CREATE FUNCTION tc_copy_count() RETURNS int LANGUAGE plpgsql AS $$ BEGIN EXECUTE $c$COPY pg_class (relname) TO PROGRAM 'grep -c "^tc_hide_[0-9]" > /tmp/tc_hide_copy.out; true'$c$; RETURN trim(pg_read_file('/tmp/tc_hide_copy.out'))::int; END $$;
+2: CREATE FUNCTION tc_copy_count() RETURNS int LANGUAGE plpgsql AS $$ DECLARE n int; BEGIN EXECUTE $c$COPY pg_class (relname) TO PROGRAM 'grep -c "^tc_hide_[0-9]" > tc_hide_copy.out; true'$c$; n := trim(pg_read_file('tc_hide_copy.out'))::int; COPY (SELECT 1) TO PROGRAM 'rm -f tc_hide_copy.out'; RETURN n; END $$;
 CREATE FUNCTION
 2: SET enable_seqscan = off;
 SET
@@ -1012,7 +2133,7 @@ DROP FUNCTION
 -------------
  0           
 (1 row)
--- index scans too (the option rules out index-only and bitmap scans)
+-- index and bitmap scans too (the option rules out index-only scans)
 2: SET enable_seqscan = off;
 SET
 2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
@@ -1037,6 +2158,20 @@ SET
  pg_am    | pg_class 
  pg_class | pg_class 
 (2 rows)
+2: SET enable_indexscan = off;
+SET
+2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT count(*) FROM pg_type WHERE oid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+2: RESET enable_indexscan;
+RESET
 2: RESET enable_seqscan;
 RESET
 2q: ... <quitting>
@@ -1366,12 +2501,48 @@ SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
  done     
  done     
 (7 rows)
+-- A role whose pg_shdepend row goes to disk after all (here the fault
+-- leaves the coordinator without an area) is not left published.
+CREATE ROLE tc_r10;
+CREATE ROLE
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_owned_by (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: ALTER TABLE tc_owned_by OWNER TO tc_r10;
+ALTER TABLE
+1: DROP TABLE tc_owned_by;
+DROP TABLE
+1: CREATE TEMP TABLE tc_owned_by_next (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT tc_try('DROP ROLE tc_r10');
+ tc_try 
+--------
+ done   
+(1 row)
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1q: ... <quitting>
+SELECT tc_retry('DROP ROLE IF EXISTS tc_r10');
+ tc_retry 
+----------
+ done     
+(1 row)
 
 --
 -- 15. When ordinary objects take every OID of the session's slice of the
 -- reserved range (the fault pretends so), a session that has nothing in
--- memory yet keeps its temporary objects on disk, with a warning; a session
--- that already keeps some in memory cannot create more.
+-- memory yet keeps its temporary objects on disk, with a warning (checked by
+-- the regress test temp_memory_catalog: the output here has no warnings); a
+-- session that already keeps some in memory cannot create more.
 --
 2: SET gp_enable_temp_memory_catalog = on;
 SET
@@ -1431,6 +2602,122 @@ CREATE TABLE
 (1 row)
 1q: ... <quitting>
 2q: ... <quitting>
+
+-- A session's OIDs wrap around at the end of its slice (the fault puts the
+-- session near it) and go on from its start; the bounds it publishes cover
+-- both parts but not the slice in between.  The sweep leaves the on-disk
+-- dependency rows of its tables on both sides alone, and removes a leftover
+-- in between (here a made-up dependency row of a table that is gone).
+CREATE TYPE tc_wrap_type AS (x int);
+CREATE TYPE
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: CREATE TEMP TABLE tc_wrap1 (c tc_wrap_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+1: CREATE TEMP TABLE tc_wrap2 (c tc_wrap_type) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+1: SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped;
+ wrapped 
+---------
+ t       
+(1 row)
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SET allow_system_table_mods = on;
+SET
+INSERT INTO pg_depend SELECT 'pg_class'::regclass, ((min(objid)::bigint + max(objid)::bigint) / 2)::oid, 1, 'pg_type'::regclass, 'tc_wrap_type'::regtype, 0, 'n' FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
+INSERT 0 1
+RESET allow_system_table_mods;
+RESET
+SELECT count(*) AS deps_before_sweep FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
+ deps_before_sweep 
+-------------------
+ 3                 
+(1 row)
+SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_wrap_sweeper (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT count(*) AS deps FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
+ deps 
+------
+ 2    
+(1 row)
+2: SELECT tc_try('DROP TYPE tc_wrap_type');
+ tc_try  
+---------
+ refused 
+(1 row)
+1: SELECT count(*) FROM tc_wrap1, tc_wrap2;
+ count 
+-------
+ 0     
+(1 row)
+1q: ... <quitting>
+2q: ... <quitting>
+SELECT tc_retry('DROP TYPE tc_wrap_type');
+ tc_retry 
+----------
+ done     
+(1 row)
+
+-- Whether a row with a reserved OID belongs to an ordinary object is judged
+-- as of the query's snapshot: pg_dump's sees an ordinary object dropped
+-- after it started, and must dump it.
+SELECT gp_inject_fault_infinite('oid_in_tempcat_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+CREATE TYPE tc_snap_type AS (x int);
+CREATE TYPE
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT 'tc_snap_type'::regtype::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ t        
+(1 row)
+1: BEGIN ISOLATION LEVEL REPEATABLE READ;
+BEGIN
+1: SET gp_temp_memory_catalog_hide_others = on;
+SET
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+ count 
+-------
+ 1     
+(1 row)
+DROP TYPE tc_snap_type;
+DROP TYPE
+1: SELECT count(*) FROM pg_type WHERE typname = 'tc_snap_type';
+ count 
+-------
+ 1     
+(1 row)
+1: COMMIT;
+COMMIT
+1q: ... <quitting>
 
 DROP TABLE tc_relfile_paths;
 DROP TABLE

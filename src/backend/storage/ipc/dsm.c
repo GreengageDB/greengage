@@ -39,6 +39,7 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/pg_shmem.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/resowner_private.h"
@@ -463,6 +464,21 @@ dsm_create(Size size, int flags)
 		 */
 		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 && errno != EEXIST)
 		{
+			/*
+			 * Lack of space is what the caller expects.  Other failures
+			 * (e.g. permissions, too many open files) point at a
+			 * misconfiguration, which should not go unnoticed: log the first
+			 * one of the process.
+			 */
+			static bool reported = false;
+
+			if (errno != ENOSPC && errno != ENOMEM && !reported)
+			{
+				reported = true;
+				ereport(LOG,
+						(errmsg("could not create dynamic shared memory segment: %m")));
+			}
+
 			if (seg->resowner != NULL)
 				ResourceOwnerForgetDSM(seg->resowner, seg);
 			dlist_delete(&seg->node);
@@ -980,6 +996,39 @@ dsm_handle
 dsm_segment_handle(dsm_segment *seg)
 {
 	return seg->handle;
+}
+
+/*
+ * GPDB: how many slots of the control segment are free, out of how many?
+ * Every segment takes one, so users that create many segments (in-memory
+ * temporary catalogs, see tempcat.c) can leave some to others.  Returns
+ * false if there is no control segment.
+ */
+bool
+dsm_free_slots(uint32 *nfree, uint32 *nmax)
+{
+	uint32		n = 0;
+	uint32		i;
+
+	if (dsm_control == NULL)
+		return false;
+
+	LWLockAcquire(DynamicSharedMemoryControlLock, LW_SHARED);
+	for (i = 0; i < dsm_control->nitems; ++i)
+	{
+		if (dsm_control->item[i].refcnt == 0)
+			n++;
+	}
+	*nfree = n + (dsm_control->maxitems - dsm_control->nitems);
+	*nmax = dsm_control->maxitems;
+	LWLockRelease(DynamicSharedMemoryControlLock);
+
+#ifdef FAULT_INJECTOR
+	/* Test hook: pretend that every slot is taken. */
+	if (SIMPLE_FAULT_INJECTOR("dsm_slots_low") == FaultInjectorTypeSkip)
+		*nfree = 0;
+#endif
+	return true;
 }
 
 /*

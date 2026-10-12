@@ -63,6 +63,84 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
 
+-- Index-only scans cannot tell the on-disk rows of other sessions'
+-- temporary objects, which needs the heap rows, so the planner keeps away
+-- from them for the catalogs while hiding those.  Plans made before live on
+-- where the plan cache does not hold them, e.g. the plans of a SQL function
+-- for the rest of the calling statement: the executor refuses them.
+SET gp_enable_temp_memory_catalog = off;
+SET optimizer = off;
+SET enable_seqscan = off;
+CREATE FUNCTION tc_count_rel(n name) RETURNS bigint LANGUAGE sql VOLATILE AS
+  $$ SELECT count(*) FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_make_early(i int) RETURNS int LANGUAGE plpgsql AS $$
+BEGIN
+  IF i = 1 THEN
+    CREATE TEMP TABLE tc_early (a int) DISTRIBUTED BY (a);
+  END IF;
+  RETURN i;
+END $$;
+SELECT i, tc_count_rel('pg_class'),
+       set_config('gp_temp_memory_catalog_hide_others', 'on', false)
+  FROM generate_series(1, 2) i;
+-- Cached plans are made anew when the option is turned on.
+SET enable_bitmapscan = off;
+SET enable_indexscan = off;
+PREPARE tc_ios_count AS SELECT count(*) FROM pg_class WHERE relname = 'pg_class';
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+EXECUTE tc_ios_count;
+SET gp_temp_memory_catalog_hide_others = on;
+EXPLAIN (costs off) EXECUTE tc_ios_count;
+EXECUTE tc_ios_count;
+RESET gp_temp_memory_catalog_hide_others;
+DEALLOCATE tc_ios_count;
+RESET enable_bitmapscan;
+RESET enable_indexscan;
+RESET enable_seqscan;
+RESET optimizer;
+
+-- Plain and index-only scans of plans made before a session keeps
+-- temporary objects in memory merge the in-memory rows, and keep the state of
+-- that merge when a merge join marks and restores them.  The plan of
+-- tc_join_attrs() is made before the setting is turned on, and its later
+-- calls see the table that tc_make_early() creates in memory.
+SET optimizer = off;
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+SET enable_material = off;
+SET enable_sort = off;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexonlyscan = off;
+CREATE FUNCTION tc_join_attrs(n name) RETURNS bigint LANGUAGE sql VOLATILE AS $$
+  SELECT count(*) FROM pg_attribute a JOIN pg_attribute b ON a.attrelid = b.attrelid
+   WHERE a.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
+     AND b.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = n), 'pg_class'::regclass])
+$$;
+SELECT i, tc_join_attrs('tc_early'),
+       set_config('gp_enable_temp_memory_catalog', 'on', false), tc_make_early(i)
+  FROM generate_series(1, 3) i;
+SELECT tc_join_attrs('tc_early') AS new_plan;
+\c
+SET optimizer = off;
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+SET enable_material = off;
+SET enable_sort = off;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexscan = off;
+EXPLAIN (costs off)
+  SELECT count(*) FROM pg_attribute a JOIN pg_attribute b ON a.attrelid = b.attrelid
+   WHERE a.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = 'tc_early'), 'pg_class'::regclass])
+     AND b.attrelid = ANY (ARRAY[(SELECT oid FROM pg_class WHERE relname = 'tc_early'), 'pg_class'::regclass]);
+SELECT i, tc_join_attrs('tc_early'),
+       set_config('gp_enable_temp_memory_catalog', 'on', false), tc_make_early(i)
+  FROM generate_series(1, 3) i;
+SELECT tc_join_attrs('tc_early') AS new_plan;
+DROP FUNCTION tc_join_attrs(name);
+\c
+
 -- Ordinary temporary tables are not affected.
 SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE tc_ordinary (a int) DISTRIBUTED BY (a);
@@ -85,6 +163,31 @@ DROP TABLE tc_ordinary, tc_ordinary2;
 -- Start a new session: its temporary schema is created in memory.
 \c
 SET gp_enable_temp_memory_catalog = on;
+
+-- So do those of plans made with the setting on, before the first
+-- temporary object: the plan of tc_count_rel(), made before tc_make_early()
+-- creates one, finds it in the later calls.  (The functions
+-- were created in the previous session, so that their on-disk catalog rows
+-- do not show in the statistics checked below.)
+SET enable_seqscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_early';
+SELECT i, tc_count_rel('tc_early'), tc_make_early(i) FROM generate_series(1, 3) i;
+RESET enable_seqscan;
+DROP TABLE tc_early;
+DROP FUNCTION tc_make_early(int);
+DROP FUNCTION tc_count_rel(name);
+-- Also for queries that need no column of the catalog, which any of its
+-- indexes covers; but not while hiding other sessions' objects, even then.
+-- (Explained for a catalog with one index, as which one is cheapest varies.)
+SET enable_seqscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_statistic;
+SELECT count(*) > 0 AS some_rows FROM pg_class;
+SELECT EXISTS (SELECT FROM pg_type) AS some_types;
+SET gp_temp_memory_catalog_hide_others = on;
+EXPLAIN (costs off) SELECT count(*) FROM pg_attribute;
+SELECT count(*) > 0 AS some_rows FROM pg_attribute;
+RESET gp_temp_memory_catalog_hide_others;
+RESET enable_seqscan;
 
 --
 -- Basic usage
@@ -130,6 +233,74 @@ SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
        pg_stat_get_xact_tuples_inserted('pg_type'::regclass) AS type_ins,
        pg_stat_get_xact_tuples_inserted('pg_depend'::regclass) AS depend_ins;
 COMMIT;
+
+-- Catalog queries planned in reader gangs (e.g. in functions run there)
+-- see the in-memory rows through index-only scans too, and so do those
+-- planned by ORCA.
+CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
+$$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
+SET enable_seqscan = off;
+SET enable_indexscan = off;
+SELECT DISTINCT pg_temp.tc_att_count('tc_basic'::regclass) FROM gp_dist_random('gp_id');
+RESET enable_seqscan;
+RESET enable_indexscan;
+SET optimizer_enable_coordinator_only_queries = on;
+SET optimizer_enable_tablescan = off;
+SELECT count(*) FROM pg_attribute WHERE attrelid = 'tc_basic'::regclass AND attnum > 0;
+RESET optimizer_enable_tablescan;
+-- Its index-only scans filter the in-memory rows by all the index
+-- conditions, also by those that make no simple scan keys (= ANY).
+SET optimizer = on;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE oid IN ('pg_am'::regclass, 'pg_class'::regclass);
+SELECT count(*) FROM pg_class WHERE oid IN ('tc_basic'::regclass, 'pg_class'::regclass);
+RESET optimizer;
+RESET optimizer_enable_coordinator_only_queries;
+DROP FUNCTION pg_temp.tc_att_count(oid);
+
+-- The statistics of dropped temporary tables are purged while the session
+-- lives: pgstat_vacuum_stat() keeps those of the session's OIDs, as it
+-- cannot see which of its temporary tables still exist.
+-- (Checked on the coordinator; the segments purge theirs at the writer's
+-- next transaction.)
+CREATE FUNCTION pg_temp.tc_wait_analyze_count(r oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_analyze_count(r) = n;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_analyze_count(r);
+END $$;
+CREATE TEMP TABLE tc_stat_purge (a int) DISTRIBUTED BY (a);
+ANALYZE tc_stat_purge;
+SELECT 'tc_stat_purge'::regclass::oid AS tc_stat_purge_oid \gset
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 1) AS analyze_count;
+DROP TABLE tc_stat_purge;
+-- (the purge goes with the next statistics report, at most every 500ms)
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_purge_oid, 0) AS analyze_count;
+DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
+-- Likewise those of dropped functions.
+CREATE FUNCTION pg_temp.tc_wait_function_calls(f oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_function_calls(f) IS NOT DISTINCT FROM n;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_function_calls(f);
+END $$;
+SET track_functions = 'pl';
+CREATE FUNCTION pg_temp.tc_stat_fn() RETURNS int LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';
+SELECT pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT 'pg_temp.tc_stat_fn'::regproc::oid AS tc_stat_fn_oid \gset
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, 1) AS calls;
+DROP FUNCTION pg_temp.tc_stat_fn();
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_fn_oid, NULL) AS calls;
+RESET track_functions;
+DROP FUNCTION pg_temp.tc_wait_function_calls(oid, bigint);
 
 -- A function evaluated in a separate slice on the coordinator (entry-db
 -- reader) sees the temporary table too.
@@ -229,6 +400,24 @@ SELECT count(*), sum(c) FROM tc_aoco2;
 CREATE TEMP TABLE tc_ctas AS SELECT * FROM tc_serial DISTRIBUTED BY (id);
 SELECT count(*) FROM tc_ctas;
 
+-- Utility commands that scan the catalogs directly (heap_getnext()) see the
+-- in-memory rows too.
+CREATE TYPE pg_temp.tc_ct AS (a int);
+CREATE TEMP TABLE tc_typed_of OF pg_temp.tc_ct DISTRIBUTED RANDOMLY;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int;
+ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int CASCADE;
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
+DROP TABLE tc_typed_of;
+DROP TYPE pg_temp.tc_ct;
+CREATE TEMP TABLE tc_grant (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_grant_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
+GRANT SELECT ON ALL TABLES IN SCHEMA pg_temp TO PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pg_temp FROM PUBLIC;
+SELECT relacl IS NOT NULL AS table_acl FROM pg_class WHERE oid = 'tc_grant'::regclass;
+SELECT proacl IS NOT NULL AS function_acl FROM pg_proc WHERE proname = 'tc_grant_func';
+DROP TABLE tc_grant;
+DROP FUNCTION pg_temp.tc_grant_func();
+
 -- SQL queries on the catalogs see the in-memory rows, on the coordinator and
 -- on the segments.
 SELECT relname, relkind, relpersistence FROM pg_class
@@ -241,12 +430,17 @@ SELECT table_name, table_type FROM information_schema.tables
 WHERE table_name IN ('tc_basic', 'tc_view') ORDER BY 1;
 SELECT count(*) > 0 AS has_stats FROM pg_stats WHERE tablename = 'tc_basic';
 SELECT count(*) AS seg_rows FROM gp_dist_random('pg_class') WHERE relname = 'tc_basic';
+-- TABLESAMPLE reads the heap's pages only, and refuses to miss them.
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_basic';
+SELECT count(*) FROM pg_class TABLESAMPLE BERNOULLI (100) WHERE relname = 'tc_basic';
 -- TID scans and COPY TO of a catalog see them too.
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
 \copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
--- Plain index scans merge the in-memory rows in index order; index-only and
--- bitmap scans, which cannot return them, are not used for such catalogs.
+-- Plain and index-only scans merge the in-memory rows in index order,
+-- bitmap scans return them after the on-disk rows.
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+SET enable_indexonlyscan = off;
 EXPLAIN (costs off) SELECT relname FROM pg_class
 WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
 SELECT relname FROM pg_class
@@ -266,8 +460,39 @@ WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY 1, 2;
 RESET enable_hashjoin;
 RESET enable_mergejoin;
+RESET enable_bitmapscan;
 SET enable_indexscan = off;
 EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY 1, 2;
+-- index-only scans
+SET enable_bitmapscan = off;
+RESET enable_indexonlyscan;
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+EXPLAIN (costs off) SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname DESC;
+SELECT relname FROM pg_class WHERE relname BETWEEN 'tc_basic' AND 'tc_basic_z' ORDER BY relname;
+SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SET enable_hashjoin = off;
+SET enable_nestloop = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_attribute a JOIN pg_attribute b
+  ON a.attrelid = b.attrelid AND a.attname = b.attname
+WHERE a.attrelid = 'pg_am'::regclass AND b.attrelid = 'pg_am'::regclass;
+SELECT count(*) FROM pg_attribute a JOIN pg_attribute b
+  ON a.attrelid = b.attrelid AND a.attname = b.attname
+WHERE a.attrelid = 'tc_basic'::regclass AND b.attrelid = 'tc_basic'::regclass;
+RESET enable_hashjoin;
+RESET enable_nestloop;
+RESET enable_bitmapscan;
 RESET enable_indexscan;
 RESET enable_seqscan;
 
@@ -374,6 +599,19 @@ SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
 CREATE TEMP TABLE tc_ctas_fail AS SELECT i AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
 SELECT count(*) FROM tc_ctas_fail;
 
+-- Changes of in-memory rows on the segments are committed in two phases
+-- even though they write no WAL: a deferred unique check that fails at
+-- commit on one segment must not leave the new table on the others.
+CREATE TEMP TABLE tc_defer (i int UNIQUE DEFERRABLE INITIALLY DEFERRED) DISTRIBUTED BY (i);
+INSERT INTO tc_defer VALUES (1);
+BEGIN;
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_defer VALUES (1);
+COMMIT;
+SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
+CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_defer_new, tc_defer;
+
 BEGIN;
 CREATE TEMP TABLE tc_oc_drop (a int) ON COMMIT DROP DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_oc_delete (a int) ON COMMIT DELETE ROWS DISTRIBUTED BY (a);
@@ -431,6 +669,25 @@ CREATE AGGREGATE pg_temp.tc_sum(int) (sfunc = int4pl, stype = int, initcond = '0
 SELECT pg_temp.tc_sum(a) FROM tc_fn_data;
 CREATE OPERATOR pg_temp.=== (PROCEDURE = int4eq, LEFTARG = int, RIGHTARG = int);
 SELECT 1 OPERATOR(pg_temp.===) 1 AS eq, 1 OPERATOR(pg_temp.===) 2 AS ne;
+-- Commutators and negators among them are fine, but not with ordinary
+-- operators: their rows would point at each other without a dependency.
+CREATE OPERATOR pg_temp.<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int,
+                             COMMUTATOR = OPERATOR(pg_temp.>>>),
+                             NEGATOR = OPERATOR(pg_temp.>>=));
+SELECT o.oprname, c.oprname AS commutator, n.oprname AS negator
+  FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom
+       LEFT JOIN pg_operator n ON n.oid = o.oprnegate
+ WHERE o.oprnamespace = pg_my_temp_schema() AND o.oprname LIKE '%>%' ORDER BY 1;
+CREATE OPERATOR public.<<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int);
+CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
+                              COMMUTATOR = OPERATOR(public.<<<<));
+CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
+                              NEGATOR = OPERATOR(public.!>>>));
+CREATE OPERATOR public.!<<< (PROCEDURE = int4ge, LEFTARG = int, RIGHTARG = int,
+                             NEGATOR = OPERATOR(pg_temp.<<<));
+SELECT oprcom, oprnegate FROM pg_operator WHERE oid = 'public.<<<<(int, int)'::regoperator;
+SELECT count(*) AS shells FROM pg_operator WHERE oprname IN ('!>>>', '!<<<');
+DROP OPERATOR public.<<<< (int, int);
 -- enum labels are also read by ordered (forward and backward) catalog scans
 CREATE TYPE pg_temp.tc_mood AS ENUM ('sad', 'ok', 'happy');
 ALTER TYPE pg_temp.tc_mood ADD VALUE 'meh' AFTER 'sad';
@@ -439,6 +696,16 @@ INSERT INTO tc_moods VALUES ('happy'), ('sad'), ('meh'), ('ok');
 SELECT m FROM tc_moods ORDER BY m;
 SELECT enum_first(NULL::pg_temp.tc_mood), enum_last(NULL::pg_temp.tc_mood),
        enum_range(NULL::pg_temp.tc_mood);
+-- Their labels get reserved OIDs too, the same on the segments.
+SELECT count(*) AS labels, bool_and(oid >= 4026531840) AS reserved
+  FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
+SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
+ WHERE s.enumtypid = 'pg_temp.tc_mood'::regtype
+   AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype);
+SELECT count(*) AS seg_labels FROM gp_dist_random('pg_enum')
+ WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
+-- Repeated labels are refused, as the unique index on disk would.
+CREATE TYPE pg_temp.tc_dup AS ENUM ('a', 'b', 'a');
 CREATE TYPE pg_temp.tc_range AS RANGE (subtype = int4);
 SELECT pg_temp.tc_range(1, 5) @> 3 AS contains;
 CREATE STATISTICS pg_temp.tc_stx (dependencies, ndistinct) ON a, b FROM tc_fn_data;
@@ -450,8 +717,77 @@ WHERE s.stxname = 'tc_stx';
 -- not supported
 CREATE STATISTICS tc_stx_public ON a, b FROM tc_fn_data;
 CREATE COLLATION pg_temp.tc_coll FROM "C";
+DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
+-- nor ordinary objects that depend on temporary objects kept in memory
+CREATE TEMP SEQUENCE tc_dep_seq;
+CREATE FUNCTION pg_temp.tc_trgfunc() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;
+CREATE TABLE tc_perm_col (a int, c tc_fn_data) DISTRIBUTED BY (a);
+CREATE TABLE tc_perm_def (a int DEFAULT nextval('tc_dep_seq')) DISTRIBUTED BY (a);
+CREATE FUNCTION public.tc_perm_func(pg_temp.tc_mood) RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE TABLE tc_perm_trg (a int) DISTRIBUTED BY (a);
+-- (the detail names the session's temporary schema)
+\set VERBOSITY terse
+CREATE TRIGGER tc_trg BEFORE INSERT ON tc_perm_trg FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trgfunc();
+\set VERBOSITY default
+DROP TABLE tc_perm_trg;
+DROP SEQUENCE tc_dep_seq;
+-- nor temporary tables inheriting from ordinary ones, which other sessions
+-- could not see among the ordinary table's children
+CREATE TABLE tc_perm_parent (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_perm () INHERITS (tc_perm_parent) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_inh_perm (a int) DISTRIBUTED BY (a);
+ALTER TABLE tc_inh_perm INHERIT tc_perm_parent;
+DROP TABLE tc_inh_perm, tc_perm_parent;
+-- nor typed tables of ordinary composite types, which other sessions could
+-- not see among the type's typed tables (those of temporary types are fine)
+CREATE TYPE tc_perm_comp AS (x int);
+CREATE TEMP TABLE tc_typed OF tc_perm_comp DISTRIBUTED BY (x);
+CREATE TEMP TABLE tc_typed (x int) DISTRIBUTED BY (x);
+ALTER TABLE tc_typed OF tc_perm_comp;
+CREATE TYPE pg_temp.tc_temp_comp AS (x int);
+ALTER TABLE tc_typed OF pg_temp.tc_temp_comp;
+CREATE TEMP TABLE tc_typed2 OF pg_temp.tc_temp_comp DISTRIBUTED BY (x);
+DROP TABLE tc_typed, tc_typed2;
+DROP TYPE pg_temp.tc_temp_comp;
+DROP TYPE tc_perm_comp;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
+-- Foreign (external) tables, security labels, type encodings and the DDL
+-- tracking rows (pg_stat_last_operation) of temporary objects are kept in
+-- memory too.  (Security labels need a label provider: dummy_seclabel, from
+-- src/test/modules, which not every installation has; without it, that part
+-- is skipped.)
+CREATE TEMP TABLE tc_labeled (a int) DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  EXECUTE 'LOAD ''dummy_seclabel''';
+  SECURITY LABEL ON TABLE tc_labeled IS 'classified';
+  IF (SELECT label FROM pg_seclabel WHERE objoid = 'tc_labeled'::regclass)
+     IS DISTINCT FROM 'classified' THEN
+    RAISE EXCEPTION 'security label of an in-memory table not found';
+  END IF;
+EXCEPTION WHEN undefined_file THEN
+  NULL;
+END $$;
+TRUNCATE tc_labeled;
+CREATE POLICY tc_labeled_pol ON tc_labeled USING (a > 0);
+CREATE DOMAIN pg_temp.tc_enc_dom AS int;
+ALTER TYPE pg_temp.tc_enc_dom SET DEFAULT ENCODING (compresstype = zlib);
+CREATE EXTERNAL WEB TEMP TABLE tc_ext (a int) EXECUTE 'echo 1' FORMAT 'text';
+SELECT count(*) AS encodings FROM pg_type_encoding WHERE typid = 'pg_temp.tc_enc_dom'::regtype;
+SELECT count(*) AS ext_rows FROM tc_ext;
+SELECT classid::regclass, staactionname FROM pg_stat_last_operation
+WHERE objid IN ('tc_labeled'::regclass, (SELECT oid FROM pg_policy WHERE polname = 'tc_labeled_pol')) ORDER BY 1, 2;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT (SELECT count(*) FROM pg_seclabel WHERE objoid >= 4026531840)
+     + (SELECT count(*) FROM pg_type_encoding WHERE typid >= 4026531840)
+     + (SELECT count(*) FROM pg_foreign_table WHERE ftrelid >= 4026531840)
+     + (SELECT count(*) FROM gp_dist_random('pg_foreign_table') WHERE ftrelid >= 4026531840)
+     + (SELECT count(*) FROM pg_stat_last_operation WHERE objid >= 4026531840) AS on_disk;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_labeled;
+DROP EXTERNAL TABLE tc_ext;
+DROP DOMAIN pg_temp.tc_enc_dom;
 -- Domains, composite types and row-level security policies are supported.
 CREATE DOMAIN pg_temp.tc_dom AS int CHECK (VALUE > 0);
 CREATE TYPE pg_temp.tc_comp AS (x int, y text);
@@ -493,6 +829,15 @@ BEGIN;
 SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass FOR UPDATE;
 DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
 SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+-- A command that meets a row twice changes it once, as on disk.
+BEGIN;
+DELETE FROM gp_distribution_policy p USING generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT count(*) FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+BEGIN;
+UPDATE gp_distribution_policy p SET numsegments = 3 FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
 ROLLBACK;
 -- DELETE ... RETURNING fetches the old row by its TID
 BEGIN;
@@ -542,6 +887,22 @@ DROP TABLE tc_oom;
 SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 RESET gp_temp_memory_catalog_disk_only;
+
+-- An error while the outcome of earlier transactions is applied to the rows
+-- (here after the first dropped row is freed, when the session goes idle
+-- after the drop) is only logged, and leaves the rows still to be done
+-- consistent: the next transaction finishes them.  (At the start of a
+-- transaction, it would fail the transaction.)
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_pend;
+SELECT gp_wait_until_triggered_fault('tempcat_forget_if_gone', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_pend') IS NULL AS dropped;
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_pend VALUES (1, 'x');
+SELECT * FROM tc_pend;
+DROP TABLE tc_pend;
 
 -- A sequential scan that stops (LIMIT) or restarts (a correlated subquery)
 -- while returning in-memory rows.
@@ -651,3 +1012,58 @@ RESET gp_temp_memory_catalog_disk_only;
 \c
 DROP FUNCTION tempcat_disk_rows_qd();
 DROP FUNCTION tempcat_disk_rows_segs();
+
+-- When a segment's area runs full, rows the transaction inserted and then
+-- deleted are freed early, but not while a cursor can still see them: its
+-- reader gang scans with a snapshot that the writer handed it, here declared
+-- between the creation and the drop of tc_cur_x1.  (The readers stop in the
+-- on-disk rows until fetched from, and come to the in-memory ones after the
+-- area was filled.)
+\c
+SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+CREATE FUNCTION pg_temp.tc_count_x1(c refcursor) RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+  r record;
+  n bigint := 0;
+BEGIN
+  LOOP
+    FETCH c INTO r;
+    EXIT WHEN NOT FOUND;
+    IF r.x1 THEN n := n + 1; END IF;
+  END LOOP;
+  RETURN n;
+END $$;
+BEGIN;
+CREATE TEMP TABLE tc_cur_x1 (a int, b int, c int) DISTRIBUTED BY (a);
+SELECT 'tc_cur_x1'::regclass::oid AS tc_cur_x1 \gset
+DECLARE tc_cur CURSOR FOR SELECT a.attrelid = :tc_cur_x1 AS x1, a.attname
+  FROM gp_dist_random('pg_attribute') a, generate_series(1, 3) g
+  WHERE a.attrelid = :tc_cur_x1 OR a.attrelid < 3000;
+DROP TABLE tc_cur_x1;
+DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_cur_fill%s (a int PRIMARY KEY, b text, c int, d int, e int) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+-- (10 attributes, 3 segments, 3 times)
+SELECT pg_temp.tc_count_x1('tc_cur') AS dropped_table_rows;
+COMMIT;
+\c
+
+-- Only superusers can change the size limit of the in-memory catalog: its
+-- memory is shared memory of the node, if charged to the session's vmem.
+CREATE ROLE tc_guc_user;
+SET ROLE tc_guc_user;
+SET gp_temp_memory_catalog_max_size = 1048576;
+RESET ROLE;
+DROP ROLE tc_guc_user;
+
+-- When ordinary objects take every OID of the session's slice of the
+-- reserved range (the fault pretends so), a new session keeps its temporary
+-- objects on disk, with a warning.  (isolation2 temp_memory_catalog covers
+-- the rest; its output has no warnings.)
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_noid'::regclass::oid >= 4026531840 AS in_reserved_range;
+DROP TABLE tc_noid;

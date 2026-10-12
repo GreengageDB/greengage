@@ -643,8 +643,10 @@ GetNewObjectIdUnderLock(void)
 	 * Test hook: hand out an OID from the range reserved for in-memory
 	 * temporary objects, as ordinary objects created before the range was
 	 * reserved may have.  Use the tail of the range, which belongs to the
-	 * slice of the last PGPROCs (auxiliary processes), so it does not clash
-	 * with temporary objects of running sessions.
+	 * slice of the last PGPROC (a prepared transaction's dummy PGPROC, or
+	 * with no prepared transactions an auxiliary process's), which no
+	 * session uses, so it does not clash with temporary objects of running
+	 * sessions.
 	 */
 	if (SIMPLE_FAULT_INJECTOR("oid_in_tempcat_range") == FaultInjectorTypeSkip)
 		result = LastTempcatObjectId - 100000 + result % 100000;

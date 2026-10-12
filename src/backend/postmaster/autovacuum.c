@@ -2234,6 +2234,15 @@ do_autovacuum(void)
 			 * using the temporary schema.  Also, for safety, ignore it if the
 			 * namespace doesn't exist or isn't a temp namespace after all.
 			 */
+			/*
+			 * GPDB: one with a reserved OID is a temporary object kept in
+			 * memory, or of a session that would have: another session's,
+			 * which cannot be dropped from here, or a leftover, which the
+			 * sweep below removes (see tempcat.c).
+			 */
+			if (IsTempcatOid(relid))
+				continue;
+
 			if (isTempNamespaceMustBeIdle(classForm->relnamespace, sessionhash))
 			{
 				/*

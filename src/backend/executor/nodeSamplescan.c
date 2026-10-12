@@ -17,6 +17,7 @@
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "access/tsmapi.h"
+#include "catalog/tempcat.h"
 #include "executor/executor.h"
 #include "executor/nodeSamplescan.h"
 #include "miscadmin.h"
@@ -241,6 +242,16 @@ tablesample_init(SampleScanState *scanstate)
 	bool		allow_sync;
 	int			i;
 	ListCell   *arg;
+
+	/*
+	 * GPDB: sampling reads the heap's pages, which do not hold the catalog
+	 * rows of temporary objects kept in memory (see tempcat.c); rather than
+	 * miss them, refuse.
+	 */
+	if (tempcat_restrict_catalog_index_scans(RelationGetRelid(scanstate->ss.ss_currentRelation)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot sample a catalog that includes in-memory temporary objects")));
 
 	scanstate->donetuples = 0;
 	params = (Datum *) palloc(list_length(scanstate->args) * sizeof(Datum));

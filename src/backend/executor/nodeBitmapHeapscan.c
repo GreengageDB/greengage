@@ -47,6 +47,7 @@
 #include "access/tableam.h"
 #include "access/transam.h"
 #include "access/visibilitymap.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeBitmapHeapscan.h"
 #include "miscadmin.h"
@@ -101,7 +102,7 @@ freeBitmapState(BitmapHeapScanState *scanstate)
  * ----------------------------------------------------------------
  */
 static TupleTableSlot *
-BitmapHeapNext(BitmapHeapScanState *node)
+BitmapHeapNextHeap(BitmapHeapScanState *node)
 {
 	ExprContext *econtext;
 	TableScanDesc scan;
@@ -378,6 +379,80 @@ BitmapHeapNext(BitmapHeapScanState *node)
 	 * if we get here it means we are at the end of the scan..
 	 */
 	return ExecClearTuple(slot);
+}
+
+/*
+ * GPDB: the catalog rows of this session's temporary objects kept in memory
+ * are in no index, nor in the bitmap; return those that satisfy the index
+ * conditions after the on-disk rows (see tempcat.c), as SeqScan does.  The
+ * order of the rows does not matter here.
+ */
+static TupleTableSlot *
+BitmapHeapNextTempcat(BitmapHeapScanState *node)
+{
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	Relation	rel = node->ss.ss_currentRelation;
+	HeapTuple	tup;
+
+	if (node->tc_temp_done)
+		return ExecClearTuple(slot);
+	if (node->tc_tempscan == NULL)
+		node->tc_tempscan = tempcat_begin_sql_scan(rel, node->ss.ps.state->es_snapshot);
+	while (node->tc_tempscan != NULL &&
+		   (tup = tempcat_next_virtual(node->tc_tempscan)) != NULL)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		ExecForceStoreHeapTuple(tup, slot, false);
+		slot->tts_tableOid = RelationGetRelid(rel);
+		slot->tts_tid = tup->t_self;
+		econtext->ecxt_scantuple = slot;
+		if (ExecQualAndReset(node->bitmapqualorig, econtext))
+			return slot;
+		InstrCountFiltered2(node, 1);
+	}
+	node->tc_temp_done = true;
+	return ExecClearTuple(slot);
+}
+
+static void
+BitmapHeapResetTempcat(BitmapHeapScanState *node)
+{
+	if (node->tc_tempscan != NULL)
+		tempcat_endscan(node->tc_tempscan);
+	node->tc_tempscan = NULL;
+	node->tc_heap_done = false;
+	node->tc_temp_done = false;
+}
+
+/* ----------------------------------------------------------------
+ *		BitmapHeapNext
+ *
+ *		Retrieve next tuple from the BitmapHeapScan node's currentRelation
+ * ----------------------------------------------------------------
+ */
+static TupleTableSlot *
+BitmapHeapNext(BitmapHeapScanState *node)
+{
+	TupleTableSlot *slot;
+
+	/* GPDB: first the on-disk rows, then the in-memory ones (see above) */
+	while (!node->tc_heap_done)
+	{
+		slot = BitmapHeapNextHeap(node);
+		if (TupIsNull(slot))
+		{
+			node->tc_heap_done = true;
+			break;
+		}
+		/* developer option, see tempcat_hide_disk_row() */
+		if (gp_temp_memory_catalog_hide_others &&
+			tempcat_hide_disk_slot(node->ss.ss_currentRelation, slot))
+			continue;
+		return slot;
+	}
+	return BitmapHeapNextTempcat(node);
 }
 
 /*
@@ -672,6 +747,7 @@ ExecReScanBitmapHeapScan(BitmapHeapScanState *node)
 	node->shared_prefetch_iterator = NULL;
 	node->vmbuffer = InvalidBuffer;
 	node->pvmbuffer = InvalidBuffer;
+	BitmapHeapResetTempcat(node);
 
 	ExecScanReScan(&node->ss);
 
@@ -736,6 +812,7 @@ ExecEndBitmapHeapScan(BitmapHeapScanState *node)
 	 * close heap scan
 	 */
 	table_endscan(scanDesc);
+	BitmapHeapResetTempcat(node);
 }
 
 /* ----------------------------------------------------------------
@@ -828,6 +905,14 @@ ExecInitBitmapHeapScanForPartition(BitmapHeapScan *node, EState *estate, int efl
 	 */
 	scanstate->can_skip_fetch = (node->scan.plan.qual == NIL &&
 								 node->scan.plan.targetlist == NIL);
+
+	/*
+	 * GPDB: rows hidden from this session (see tempcat_hide_disk_row()) are
+	 * told by their contents, so fetch them.
+	 */
+	if (gp_temp_memory_catalog_hide_others &&
+		tempcat_restrict_catalog_index_scans(RelationGetRelid(currentRelation)))
+		scanstate->can_skip_fetch = false;
 
 	/*
 	 * Miscellaneous initialization

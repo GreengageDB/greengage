@@ -48,11 +48,13 @@ extern bool gp_enable_temp_memory_catalog;
 extern int	gp_temp_memory_catalog_max_size;
 extern bool gp_temp_memory_catalog_disk_only;
 extern bool gp_temp_memory_catalog_hide_others;
+extern void assign_gp_temp_memory_catalog_hide_others(bool newval, void *extra);
 
 typedef struct TempcatScanData *TempcatScan;
 
 struct ObjectAddress;
 struct TupleTableSlot;
+struct TM_FailureData;
 
 /* OID assignment */
 extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
@@ -72,6 +74,8 @@ extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup);
 extern void tempcat_delete(Relation rel, ItemPointer tid);
+extern int	tempcat_self_modified(Relation rel, ItemPointer tid,
+								  struct TM_FailureData *tmfd);
 extern void tempcat_inplace_update(Relation rel, HeapTuple tup);
 extern void tempcat_freeze(Relation rel, HeapTuple tup);
 
@@ -87,6 +91,7 @@ extern void tempcat_endscan(TempcatScan scan);
 
 /* SQL-level catalog scans */
 extern bool tempcat_restrict_catalog_index_scans(Oid relid);
+extern bool tempcat_plan_catalog_index_scans(Oid relid);
 extern TempcatScan tempcat_begin_sql_scan(Relation rel, Snapshot snapshot);
 extern HeapTuple tempcat_next_virtual(TempcatScan scan);
 extern HeapTuple tempcat_fetch_tid(Relation rel, ItemPointer tid, Snapshot snapshot);
@@ -95,23 +100,40 @@ extern TempcatScan tempcat_begin_index_sql_scan(Relation rel, Relation irel,
 												ScanKey indexkeys, int nindexkeys);
 extern void tempcat_scan_filter(TempcatScan scan,
 								bool (*keep) (HeapTuple, void *), void *arg);
+extern bool tempcat_scan_is_empty(TempcatScan scan);
 extern HeapTuple tempcat_scan_peek(TempcatScan scan, bool forward);
 extern void tempcat_scan_advance(TempcatScan scan);
+extern int	tempcat_scan_getpos(TempcatScan scan);
+extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern int	tempcat_scan_compare(TempcatScan scan, HeapTuple a, HeapTuple b);
+extern int	tempcat_scan_compare_index(TempcatScan scan, HeapTuple a,
+									   struct TupleTableSlot *islot);
 
 /* Objects of other sessions */
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
+extern bool tempcat_other_session_relation(HeapTuple tup);
+extern bool tempcat_relation_missing(Oid relid);
+extern bool tempcat_check_type_user(Oid classId, Oid objectId,
+									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
+extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_hide_disk_row(Relation rel, HeapTuple tup);
 extern bool tempcat_hide_disk_slot(Relation rel, struct TupleTableSlot *slot);
 
 /* Object restrictions */
 extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 extern void tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what);
+extern void tempcat_check_inheritance(Oid relid, Oid parentid);
+extern void tempcat_check_typed_table(Oid relid, Oid typid);
+extern void tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid);
+extern void tempcat_check_dependency(const struct ObjectAddress *depender,
+									 const struct ObjectAddress *referenced);
 
 /* VACUUM support */
 extern void tempcat_autovacuum_sweep(void);
 extern void tempcat_sweep_before_drop(void);
+extern Oid tempcat_sweep_leftover_namespace(const char *namespaceName,
+											 Oid namespaceId);
 extern void tempcat_fold_frozen_horizon(TransactionId *frozenXid,
 										MultiXactId *minMulti);
 
@@ -121,7 +143,10 @@ extern void TempcatShmemInit(void);
 
 /* Transaction support */
 extern void tempcat_start_transaction(void);
+extern void tempcat_idle(void);
 extern void tempcat_abort_subtransaction(void);
 extern void tempcat_check_prepare(void);
+extern bool tempcat_xact_changed(void);
+extern void tempcat_note_cursor_snapshot(CommandId cid);
 
 #endif							/* TEMPCAT_H */

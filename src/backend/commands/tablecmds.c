@@ -57,6 +57,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/tempcat.h"
 #include "catalog/toasting.h"
 #include "catalog/gp_fastsequence.h"
 #include "cdb/cdbappendonlyam.h"
@@ -7304,6 +7305,16 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 		if (pg_depend->classid == TypeRelationId)
 		{
 			/*
+			 * GPDB: not one of another session's in-memory types, whose uses
+			 * cannot be seen here (see tempcat.c).
+			 */
+			if (tempcat_check_type_user(TypeRelationId, pg_depend->objid,
+										origTypeName ? origTypeName :
+										origRelation ? RelationGetRelationName(origRelation) :
+										format_type_be(typeOid)))
+				continue;
+
+			/*
 			 * This must be an array, domain, or range containing the given
 			 * type, so recursively check for uses of this type.  Note that
 			 * any error message will mention the original type not the
@@ -7316,6 +7327,16 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 
 		/* Else, ignore dependees that aren't relations */
 		if (pg_depend->classid != RelationRelationId)
+			continue;
+
+		/*
+		 * GPDB: a temporary table of another session kept in memory, which
+		 * cannot be opened to see how it uses the type (see tempcat.c).
+		 */
+		if (tempcat_check_type_user(RelationRelationId, pg_depend->objid,
+									origTypeName ? origTypeName :
+									origRelation ? RelationGetRelationName(origRelation) :
+									format_type_be(typeOid)))
 			continue;
 
 		rel = relation_open(pg_depend->objid, AccessShareLock);
@@ -19105,6 +19126,8 @@ ATExecAddOf(Relation rel, const TypeName *ofTypename, LOCKMODE lockmode)
 	check_of_type(typetuple);
 	typeform = (Form_pg_type) GETSTRUCT(typetuple);
 	typeid = typeform->oid;
+	/* GPDB: see tempcat.c */
+	tempcat_check_typed_table(RelationGetRelid(rel), typeid);
 
 	/* Fail if the table has any inheritance parents. */
 	inheritsRelation = table_open(InheritsRelationId, AccessShareLock);
