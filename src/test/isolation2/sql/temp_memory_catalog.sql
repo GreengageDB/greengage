@@ -997,6 +997,8 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segm
 -- gpcheckcat's hiding covers pg_shdepend rows on disk too.
 --
 DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP; END $$;
+CREATE ROLE tc_ro;
+CREATE ROLE tc_rp;
 1: SET gp_enable_temp_memory_catalog = on;
 1: CREATE TEMP TABLE tc_acl (a int) DISTRIBUTED BY (a);
 1: DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('GRANT SELECT ON tc_acl TO tc_r%s', i); END LOOP; END $$;
@@ -1006,6 +1008,23 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 2: SET gp_temp_memory_catalog_hide_others = on;
 2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE objid >= 4026531840;
 2: RESET gp_temp_memory_catalog_hide_others;
+-- DROP OWNED and REASSIGN OWNED in other sessions leave the objects alone,
+-- whether their rows are in memory or on disk: here the privilege of
+-- tc_r9, a policy's role, and the owner of a table, a function and a type.
+1: CREATE TEMP TABLE tc_owned (a int) DISTRIBUTED BY (a);
+1: ALTER TABLE tc_owned OWNER TO tc_ro;
+1: CREATE FUNCTION pg_temp.tc_owned_f() RETURNS int LANGUAGE sql AS 'SELECT 1';
+1: ALTER FUNCTION pg_temp.tc_owned_f() OWNER TO tc_ro;
+1: CREATE TYPE pg_temp.tc_owned_t AS (x int);
+1: ALTER TYPE pg_temp.tc_owned_t OWNER TO tc_ro;
+1: CREATE POLICY tc_pol ON tc_acl TO tc_rp USING (true);
+2: DROP OWNED BY tc_r9;
+2: DROP OWNED BY tc_rp;
+2: REASSIGN OWNED BY tc_ro TO tc_r1;
+2: DROP OWNED BY tc_ro;
+2: SELECT tc_try('DROP ROLE tc_ro');
+1: SELECT has_table_privilege('tc_r9', 'tc_acl', 'SELECT') AS granted, (SELECT count(*) FROM pg_policy WHERE polname = 'tc_pol') AS policies;
+1: SELECT relowner::regrole AS table_owner, (SELECT proowner::regrole FROM pg_proc WHERE proname = 'tc_owned_f') AS function_owner, (SELECT typowner::regrole FROM pg_type WHERE typname = 'tc_owned_t') AS type_owner FROM pg_class WHERE relname = 'tc_owned';
 1: REVOKE SELECT ON tc_acl FROM tc_r9;
 1: REVOKE SELECT ON tc_acl FROM tc_r1;
 1: SELECT 1 AS coordinator_only;
@@ -1014,6 +1033,8 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 2q:
 1q:
 SELECT tc_retry(format('DROP ROLE tc_r%s', i)) FROM generate_series(2, 8) i;
+SELECT tc_retry('DROP ROLE tc_ro');
+SELECT tc_retry('DROP ROLE tc_rp');
 -- A role whose pg_shdepend row goes to disk after all (here the fault
 -- leaves the coordinator without an area) is not left published.
 CREATE ROLE tc_r10;
