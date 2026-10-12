@@ -828,9 +828,24 @@ class GGShrink:
                 databases_to_process.append(database_name)
         return databases_to_process
 
+    def get_tables_to_rebalance_from_where(self, is_rollback: bool) -> str:
+        # FROM and WHERE clauses selecting the relations that still need to be rebalanced (or
+        # rolled back). Shared by the list initiation and by the check for not rebalanced
+        # tables, so both always agree on the set of relations.
+        # Foreign tables are included only if they are writable external tables.
+        cmp = '<=' if is_rollback else '>'
+        return f'''FROM pg_class c
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            JOIN gp_distribution_policy p ON c.oid = p.localoid
+            LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
+            WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
+            (c.relkind != 'f' OR pe.reloid IS NOT NULL) AND
+            c.relpersistence != 't' AND
+            p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
+            n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')'''
+
     def prepare_shrink_schema(self, is_rollback: bool) -> None:
         status = 'done' if is_rollback else 'none'
-        cmp = '<=' if is_rollback else '>'
 
         dbconn.execSQL(self.conn, 'BEGIN')
 
@@ -883,18 +898,9 @@ class GGShrink:
                         ) SELECT sum(pg_catalog.pg_relation_size(cte.oid)) FROM cte;
                         $$ LANGUAGE sql STABLE''')
                 cursor = dbconn.query(conn,
-                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
-                                      FROM pg_class c
-                                      JOIN pg_namespace n ON c.relnamespace = n.oid
-                                      JOIN gp_distribution_policy p ON c.oid = p.localoid
-                                      LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
-                                      WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
-                                      c.relpersistence != 't' AND
-                                      p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
-                                      n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
-                for schema_name, rel_name, rel_kind, external_writable, data_move_size in cursor:
-                    if rel_kind == 'f' and not external_writable:
-                        continue
+                                      f'''SELECT n.nspname, c.relname, {str_data_move_size}
+                                      {self.get_tables_to_rebalance_from_where(is_rollback)}''')
+                for schema_name, rel_name, data_move_size in cursor:
                     self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, data_move_size)
 
                 if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
@@ -903,7 +909,6 @@ class GGShrink:
         dbconn.execSQL(self.conn, 'COMMIT')
 
     def collect_not_rebalanced_tables(self, is_rollback: bool) -> List[str]:
-        cmp = '<=' if is_rollback else '>'
         not_rebalanced_tables = []
         databases_to_process = self.collect_databases_to_process()
         for db in databases_to_process:
@@ -911,14 +916,7 @@ class GGShrink:
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                 cursor = dbconn.query(conn,
                     f'''SELECT n.nspname, c.relname
-                    FROM pg_class c
-                    JOIN pg_namespace n ON c.relnamespace = n.oid
-                    JOIN gp_distribution_policy p ON c.oid = p.localoid
-                    LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
-                    WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
-                    c.relpersistence != 't' AND
-                    p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
-                    n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')
+                    {self.get_tables_to_rebalance_from_where(is_rollback)}
                     ORDER BY n.nspname, c.relname''')
                 for schema_name, rel_name in cursor:
                     not_rebalanced_tables.append(f'"{db}"."{schema_name}"."{rel_name}"')
