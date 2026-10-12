@@ -38,6 +38,7 @@ operating systems:
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
   DockerHub. Runs for push to the default branch (retags to `latest`) and tags
   after build.
+- **Package**: Builds Debian packages and optionally tests their installation.
 
 ## Usage
 
@@ -68,12 +69,14 @@ To use this pipeline:
 > the configuration.
 >
 > **Recommended approach**:
+>
 > - For `ubuntu`, **omit** `target_os_version` (leave it empty) to use the
 >   default behavior.
 > - Specify `target_os_version: "24.04"` only when you explicitly need Ubuntu
 >   24.04.
 >
 > **Example**:
+>
 > ```yaml
 > # Correct for default Ubuntu (recommended)
 > - target_os: ubuntu
