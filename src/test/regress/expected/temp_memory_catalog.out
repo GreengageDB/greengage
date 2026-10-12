@@ -1452,7 +1452,7 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 ERROR:  default privileges cannot be set for a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
-CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_357 GRANT SELECT ON TABLES TO PUBLIC"
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_34 GRANT SELECT ON TABLES TO PUBLIC"
 PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
@@ -2010,6 +2010,45 @@ RESET gp_temp_memory_catalog_disk_only;
 \c
 DROP FUNCTION tempcat_disk_rows_qd();
 DROP FUNCTION tempcat_disk_rows_segs();
+-- When a segment's area runs full, rows the transaction inserted and then
+-- deleted are freed early, but not while a cursor can still see them: its
+-- reader gang scans with a snapshot that the writer handed it, here declared
+-- between the creation and the drop of tc_cur_x1.  (The readers stop in the
+-- on-disk rows until fetched from, and come to the in-memory ones after the
+-- area was filled.)
+\c
+SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+CREATE FUNCTION pg_temp.tc_count_x1(c refcursor) RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+  r record;
+  n bigint := 0;
+BEGIN
+  LOOP
+    FETCH c INTO r;
+    EXIT WHEN NOT FOUND;
+    IF r.x1 THEN n := n + 1; END IF;
+  END LOOP;
+  RETURN n;
+END $$;
+BEGIN;
+CREATE TEMP TABLE tc_cur_x1 (a int, b int, c int) DISTRIBUTED BY (a);
+SELECT 'tc_cur_x1'::regclass::oid AS tc_cur_x1 \gset
+DECLARE tc_cur CURSOR FOR SELECT a.attrelid = :tc_cur_x1 AS x1, a.attname
+  FROM gp_dist_random('pg_attribute') a, generate_series(1, 3) g
+  WHERE a.attrelid = :tc_cur_x1 OR a.attrelid < 3000;
+DROP TABLE tc_cur_x1;
+DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_cur_fill%s (a int PRIMARY KEY, b text, c int, d int, e int) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+-- (10 attributes, 3 segments, 3 times)
+SELECT pg_temp.tc_count_x1('tc_cur') AS dropped_table_rows;
+ dropped_table_rows 
+--------------------
+                 90
+(1 row)
+
+COMMIT;
+\c
 -- Only superusers can change the size limit of the in-memory catalog: its
 -- memory is shared memory of the node, if charged to the session's vmem.
 CREATE ROLE tc_guc_user;

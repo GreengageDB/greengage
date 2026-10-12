@@ -151,6 +151,7 @@
 #include "access/distributedlog.h"
 #include "access/twophase.h"  /*max_prepared_xacts*/
 #include "access/xact.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "funcapi.h"
@@ -688,6 +689,9 @@ dumpSharedLocalSnapshot_forCursor(void)
 	pDump->segmateSync = src->segmateSync;
 	pDump->distributedXid = src->distributedXid;
 	pDump->localXid = src->fullXid;
+
+	/* GPDB: the cursor's readers scan in-memory catalog rows with it */
+	tempcat_note_cursor_snapshot(src->snapshot.curcid);
 
 	elog(LOG, "Dump syncmate : %u snapshot to slot %d", src->segmateSync, id);
 

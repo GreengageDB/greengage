@@ -2267,6 +2267,53 @@ tempcat_recompute_horizon(void)
 }
 
 /*
+ * Command IDs of the snapshots this process handed to cursors in the current
+ * transaction (dumpSharedLocalSnapshot_forCursor()).  The cursors' reader
+ * gangs scan with them in other processes, where SnapshotsSeeCommandRange()
+ * does not see them; they are kept for the rest of the transaction.
+ */
+static List *tc_cursor_cids = NIL;
+static LocalTransactionId tc_cursor_lxid = InvalidLocalTransactionId;
+
+void
+tempcat_note_cursor_snapshot(CommandId cid)
+{
+	MemoryContext oldcxt;
+
+	if (!IsTransactionState())
+		return;
+	if (tc_cursor_lxid != MyProc->lxid)
+	{
+		/* (the list of an earlier transaction went with its memory) */
+		tc_cursor_cids = NIL;
+		tc_cursor_lxid = MyProc->lxid;
+	}
+	if (list_member_int(tc_cursor_cids, (int) cid))
+		return;
+	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
+	tc_cursor_cids = lappend_int(tc_cursor_cids, (int) cid);
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/* Can a cursor's snapshot see a row of this command range? */
+static bool
+tempcat_cursors_see_command_range(CommandId cmin, CommandId cmax)
+{
+	ListCell   *lc;
+
+	if (tc_cursor_lxid != MyProc->lxid)
+		return false;
+	foreach(lc, tc_cursor_cids)
+	{
+		CommandId	cid = (CommandId) lfirst_int(lc);
+
+		if (cmin < cid && cid <= cmax)
+			return true;
+	}
+	return false;
+}
+
+/*
  * Free rows that the current transaction inserted and then deleted in an
  * earlier command, before the transaction ends.  Called when the area is
  * full, so that a transaction creating and dropping many temporary tables
@@ -2327,7 +2374,8 @@ tempcat_reclaim_dead(void)
 			!(e->flags & TCE_XMIN_COMMITTED) &&
 			TransactionIdIsCurrentTransactionId(e->xmin);
 		if (candidate &&
-			(e->cmax >= curcid || SnapshotsSeeCommandRange(e->cmin, e->cmax)))
+			(e->cmax >= curcid || SnapshotsSeeCommandRange(e->cmin, e->cmax) ||
+			 tempcat_cursors_see_command_range(e->cmin, e->cmax)))
 		{
 			waiting = true;
 			candidate = false;

@@ -147,5 +147,6 @@ extern void tempcat_idle(void);
 extern void tempcat_abort_subtransaction(void);
 extern void tempcat_check_prepare(void);
 extern bool tempcat_xact_changed(void);
+extern void tempcat_note_cursor_snapshot(CommandId cid);
 
 #endif							/* TEMPCAT_H */
