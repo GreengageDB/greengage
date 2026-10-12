@@ -669,16 +669,26 @@ DROP TYPE tc_perm_comp;
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 -- Foreign (external) tables, security labels, type encodings and the DDL
 -- tracking rows (pg_stat_last_operation) of temporary objects are kept in
--- memory too.
-LOAD 'dummy_seclabel';
+-- memory too.  (Security labels need a label provider: dummy_seclabel, from
+-- src/test/modules, which not every installation has; without it, that part
+-- is skipped.)
 CREATE TEMP TABLE tc_labeled (a int) DISTRIBUTED BY (a);
-SECURITY LABEL ON TABLE tc_labeled IS 'classified';
+DO $$
+BEGIN
+  EXECUTE 'LOAD ''dummy_seclabel''';
+  SECURITY LABEL ON TABLE tc_labeled IS 'classified';
+  IF (SELECT label FROM pg_seclabel WHERE objoid = 'tc_labeled'::regclass)
+     IS DISTINCT FROM 'classified' THEN
+    RAISE EXCEPTION 'security label of an in-memory table not found';
+  END IF;
+EXCEPTION WHEN undefined_file THEN
+  NULL;
+END $$;
 TRUNCATE tc_labeled;
 CREATE POLICY tc_labeled_pol ON tc_labeled USING (a > 0);
 CREATE DOMAIN pg_temp.tc_enc_dom AS int;
 ALTER TYPE pg_temp.tc_enc_dom SET DEFAULT ENCODING (compresstype = zlib);
 CREATE EXTERNAL WEB TEMP TABLE tc_ext (a int) EXECUTE 'echo 1' FORMAT 'text';
-SELECT label FROM pg_seclabel WHERE objoid = 'tc_labeled'::regclass;
 SELECT count(*) AS encodings FROM pg_type_encoding WHERE typid = 'pg_temp.tc_enc_dom'::regtype;
 SELECT count(*) AS ext_rows FROM tc_ext;
 SELECT classid::regclass, staactionname FROM pg_stat_last_operation
