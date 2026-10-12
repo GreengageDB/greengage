@@ -686,6 +686,29 @@ SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segme
 SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 DROP TABLE tc_lns_name;
 
+-- A sweep leaves a left temporary schema whose name a live session would
+-- take to that session, which removes it itself: removed in the sweep's
+-- transaction, which may last, the session would find it there until then
+-- and fail to create its own.  (Schemas made up with the names of sessions
+-- 1 and 2, as after a restart; session 1's sweeps both, in a transaction it
+-- keeps open.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+1: SET gp_enable_temp_memory_catalog = on;
+1: BEGIN;
+1: CREATE TEMP TABLE tc_lns_a (a int) DISTRIBUTED BY (a);
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_lns_b (a int) DISTRIBUTED BY (a);
+1: COMMIT;
+SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+1q:
+2q:
+DROP TABLE tc_lns_ids;
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each

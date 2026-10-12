@@ -136,6 +136,7 @@
 #include "storage/spin.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
+#include "storage/sinvaladt.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/dsa.h"
@@ -3815,6 +3816,8 @@ tempcat_unmark_count(void)
 static bool
 tempcat_mark_swept(Oid dbid, uint64 nunmarks)
 {
+	int			i;
+
 	/*
 	 * Not if someone asked for a sweep since 'nunmarks' was read, before the
 	 * sweep began: a session that leaves leftovers stops protecting them
@@ -3829,9 +3832,19 @@ tempcat_mark_swept(Oid dbid, uint64 nunmarks)
 	}
 
 	/*
-	 * If the list is full, replace the entries in turn: the databases they
-	 * named are swept again, which is cheap (see tempcat_sweep_catalog()).
+	 * Once only, even if forced to sweep again (tempcat_unmark_swept()
+	 * removes one entry).  If the list is full, replace the entries in turn:
+	 * the databases they named are swept again, which is cheap (see
+	 * tempcat_sweep_catalog()).
 	 */
+	for (i = 0; i < TempcatShared->nswept; i++)
+	{
+		if (TempcatShared->swept[i] == dbid)
+		{
+			SpinLockRelease(&TempcatShared->mutex);
+			return true;
+		}
+	}
 	if (TempcatShared->nswept < TEMPCAT_MAX_SWEPT_DBS)
 		TempcatShared->swept[TempcatShared->nswept++] = dbid;
 	else
@@ -4076,9 +4089,46 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 }
 
 /*
+ * Is 'nspname' the name of the temporary namespace that another live backend
+ * of the database would take (pg_temp_N or pg_toast_temp_N: N is the session
+ * ID, or the backend ID after a 0 in utility mode)?  That backend removes a
+ * left namespace of its name itself, in its own transaction, when it comes
+ * to create its own (InitTempTableNamespace()).  Were it removed by a sweep
+ * elsewhere, it would find the row still there until that sweep's
+ * transaction ended, and fail.
+ */
+static bool
+tempcat_namespace_name_claimed(const char *nspname)
+{
+	const char *digits;
+	char	   *end;
+	long		n;
+	PGPROC	   *proc;
+
+	if (strncmp(nspname, "pg_temp_", 8) == 0)
+		digits = nspname + 8;
+	else if (strncmp(nspname, "pg_toast_temp_", 14) == 0)
+		digits = nspname + 14;
+	else
+		return false;
+	if (!isdigit((unsigned char) digits[0]))
+		return false;
+	n = strtol(digits, &end, 10);
+	if (*end != '\0' || n <= 0 || n > INT_MAX)
+		return false;
+
+	if (digits[0] == '0')
+		proc = (n != MyBackendId) ? BackendIdGetProc((int) n) : NULL;
+	else
+		proc = FindProcByGpSessionId(n);
+	return proc != NULL && proc->databaseId == MyDatabaseId;
+}
+
+/*
  * Delete objects that went to disk when the in-memory area was full but
  * whose namespace did not: temporary namespaces with reserved OIDs, and
  * relations and types with reserved OIDs in a namespace that is gone.
+ * The namespaces that live backends would take are left to them.
  */
 static int
 tempcat_sweep_objects(void)
@@ -4104,6 +4154,7 @@ tempcat_sweep_objects(void)
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
 			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0) &&
+			!tempcat_namespace_name_claimed(NameStr(form->nspname)) &&
 			!tempcat_sweep_row_in_progress(&dirty))
 		{
 			if (tempcat_sweep_delete(rel, tup))
