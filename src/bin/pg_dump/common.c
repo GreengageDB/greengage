@@ -399,22 +399,23 @@ flagInhTables(Archive *fout, TableInfo *tblinfo, int numTables,
 }
 
 /*
- * hasExtensionAncestorIndex -
- *	 Is idx or one of its ancestors an undumped extension table's index?
+ * findExtensionAncestorIndex -
+ *	 Return idx or its nearest ancestor that is an undumped extension table's
+ *	 index, or NULL if there is none.
  */
-static bool
-hasExtensionAncestorIndex(const IndxInfo *idx)
+static const IndxInfo *
+findExtensionAncestorIndex(const IndxInfo *idx)
 {
 	while (idx != NULL)
 	{
 		if (idx->indextable->dobj.ext_member &&
 			!(idx->dobj.dump & DUMP_COMPONENT_DEFINITION))
-			return true;
+			return idx;
 		if (idx->parentidx == 0)
 			break;
 		idx = findIndexByOid(idx->parentidx);
 	}
-	return false;
+	return NULL;
 }
 
 /*
@@ -439,6 +440,7 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 		{
 			IndxInfo   *index = &(tblinfo[i].indexes[j]);
 			IndxInfo   *parentidx;
+			const IndxInfo *extidx;
 			IndexAttachInfo *attachinfo;
 
 			if (index->parentidx == 0)
@@ -449,14 +451,26 @@ flagInhIndexes(Archive *fout, TableInfo tblinfo[], int numTables)
 				continue;
 
 			/*
-			 * If an ancestor index belongs to an extension ATTACH PARTITION
-			 * recreates this index so don't dump it or its constraint.  This
+			 * If an ancestor index belongs to an extension, ATTACH PARTITION
+			 * recreates this index, so don't dump it or its constraint.  This
 			 * loses its custom properties and name (comments on a renamed
-			 * index fail to restore) and loses the index entirely if CREATE
-			 * EXTENSION does not recreate the ancestor
+			 * index fail to restore).  It also loses the index entirely if
+			 * CREATE EXTENSION does not recreate the ancestor, e.g. if the
+			 * user created it or the extension version differs.  We can't
+			 * tell these cases apart, so warn about it.
 			 */
-			if (hasExtensionAncestorIndex(parentidx))
+			extidx = findExtensionAncestorIndex(parentidx);
+			if (extidx != NULL)
 			{
+				if (index->dobj.dump & DUMP_COMPONENT_DEFINITION)
+					pg_log_warning("index \"%s.%s\" on partition \"%s\" is not dumped; "
+								   "it is restored only if CREATE EXTENSION creates index \"%s.%s\"",
+								   index->dobj.namespace->dobj.name,
+								   index->dobj.name,
+								   tblinfo[i].dobj.name,
+								   extidx->dobj.namespace->dobj.name,
+								   extidx->dobj.name);
+
 				index->dobj.dump &= ~DUMP_COMPONENT_DEFINITION;
 				if (index->indexconstraint != 0)
 				{

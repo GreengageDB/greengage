@@ -1,7 +1,9 @@
 # Test dumping partitions (direct, sub-partitions, primary key) of an
 # extension-owned partitioned table with an extension-owned index: the child
-# index must not be dumped separately, except in a binary upgrade dump.  Also
-# check that the comment of a renamed child index is lost on restore.
+# index must not be dumped separately, except in a binary upgrade dump, and
+# pg_dump must warn about it.  Also check that the comment of a renamed child
+# index is lost on restore, and that the child index of an index the user
+# added to the extension table is lost.
 
 use strict;
 use warnings;
@@ -63,9 +65,27 @@ my $attach_partition = qr/^
 #########################################
 # Regular dump
 
-$node->command_ok(
+# Expected pg_dump warning for a child index that is not dumped.
+sub skip_warning
+{
+	my ($index, $partition, $extindex) = @_;
+	return qr/\Qwarning: index "regress_pg_dump_schema.$index" on partition "$partition" is not dumped; it is restored only if CREATE EXTENSION creates index "regress_pg_dump_schema.$extindex"\E/;
+}
+
+$node->command_checks_all(
 	[ 'pg_dump', '--no-sync', "--file=$tempdir/defaults.sql", 'postgres' ],
-	'pg_dump runs');
+	0,
+	[qr/^$/],
+	[
+		skip_warning('parttab_1_col1_col2_idx', 'parttab_1',
+			'parttab_col1_col2_idx'),
+		skip_warning('parttab_2_col1_col2_idx', 'parttab_2',
+			'parttab_col1_col2_idx'),
+		skip_warning('parttab_2_1_col1_col2_idx', 'parttab_2_1',
+			'parttab_col1_col2_idx'),
+		skip_warning('parttab_pk_1_pkey', 'parttab_pk_1', 'parttab_pk_pkey'),
+	],
+	'pg_dump warns about the child indexes it does not dump');
 
 my $dump = slurp_file("$tempdir/defaults.sql");
 
@@ -121,12 +141,15 @@ is( $node->safe_psql(
 #########################################
 # Binary upgrade dump
 
-$node->command_ok(
+$node->command_checks_all(
 	[
 		'pg_dump', '--no-sync', "--file=$tempdir/binary_upgrade.sql",
 		'--schema-only', '--binary-upgrade', 'postgres'
 	],
-	'pg_dump --binary-upgrade runs');
+	0,
+	[qr/^$/],
+	[qr/^$/],
+	'pg_dump --binary-upgrade runs without warnings');
 
 $dump = slurp_file("$tempdir/binary_upgrade.sql");
 
@@ -215,6 +238,46 @@ is( $node->safe_psql(
 		'regress_pg_dump_schema.parttab_1_col1_col2_idx|',
 		'regress_pg_dump_schema.parttab_pk_1_pkey|'),
 	'restored child indexes get generated names and lose their comments');
+
+#########################################
+# An index the user added to the extension table is not dumped and not
+# recreated by CREATE EXTENSION, so the child index is lost on restore.
+# pg_dump can't tell this from an index created by the extension, so it
+# only warns about it.
+
+$node->safe_psql('postgres', 'CREATE DATABASE user_index');
+$node->safe_psql(
+	'user_index', q{
+	CREATE EXTENSION test_pg_dump;
+	CREATE INDEX parttab_user_idx ON regress_pg_dump_schema.parttab (col1);
+	CREATE TABLE regress_pg_dump_schema.parttab_1
+		PARTITION OF regress_pg_dump_schema.parttab
+		FOR VALUES FROM (1) TO (100);
+});
+
+$node->command_checks_all(
+	[ 'pg_dump', '--no-sync', "--file=$tempdir/user_index.sql", 'user_index' ],
+	0,
+	[qr/^$/],
+	[ skip_warning('parttab_1_col1_idx', 'parttab_1', 'parttab_user_idx') ],
+	'pg_dump warns about the child index of the user-created index');
+
+$node->safe_psql('postgres', 'CREATE DATABASE user_index_restored');
+$node->command_ok(
+	[
+		'psql', '--no-psqlrc', '--set=ON_ERROR_STOP=1', '--quiet',
+		"--file=$tempdir/user_index.sql", 'user_index_restored'
+	],
+	'dump with a user-created extension table index restores');
+
+is( $node->safe_psql(
+		'user_index_restored', q{
+		SELECT indexrelid::regclass FROM pg_index
+		WHERE indrelid = 'regress_pg_dump_schema.parttab_1'::regclass
+		ORDER BY 1::text;
+	}),
+	'regress_pg_dump_schema.parttab_1_col1_col2_idx',
+	'child index of the user-created index is lost on restore');
 
 $node->stop('fast');
 
