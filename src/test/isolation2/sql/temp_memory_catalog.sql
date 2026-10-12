@@ -947,7 +947,8 @@ SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_c
 -- A session's OIDs wrap around at the end of its slice (the fault puts the
 -- session near it) and go on from its start; the bounds it publishes cover
 -- both parts but not the slice in between.  The sweep leaves the on-disk
--- dependency rows of its tables on both sides alone.
+-- dependency rows of its tables on both sides alone, and removes a leftover
+-- in between (here a made-up dependency row of a table that is gone).
 CREATE TYPE tc_wrap_type AS (x int);
 SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: SET gp_enable_temp_memory_catalog = on;
@@ -955,6 +956,10 @@ SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_c
 1: CREATE TEMP TABLE tc_wrap2 (c tc_wrap_type) DISTRIBUTED RANDOMLY;
 1: SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped;
 SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SET allow_system_table_mods = on;
+INSERT INTO pg_depend SELECT 'pg_class'::regclass, ((min(objid)::bigint + max(objid)::bigint) / 2)::oid, 1, 'pg_type'::regclass, 'tc_wrap_type'::regtype, 0, 'n' FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
+RESET allow_system_table_mods;
+SELECT count(*) AS deps_before_sweep FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype AND objid >= 4026531840;
 SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 2: SET gp_enable_temp_memory_catalog = on;
 2: CREATE TEMP TABLE tc_wrap_sweeper (a int) DISTRIBUTED BY (a);
