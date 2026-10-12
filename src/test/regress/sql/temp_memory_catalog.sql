@@ -869,6 +869,8 @@ SELECT count(*) AS on_disk FROM pg_class WHERE oid = 'tc_dml'::regclass;
 RESET gp_temp_memory_catalog_disk_only;
 RESET allow_system_table_mods;
 DROP TABLE tc_dml;
+-- (the session's two temporary namespaces went to disk with its first row
+-- that did not fit, above, and stay there)
 SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
 RESET gp_temp_memory_catalog_disk_only;

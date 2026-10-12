@@ -797,6 +797,9 @@ static bool tc_horizon_dirty = false;
 /* The published roles may include roles no longer used. */
 static bool tc_roles_dirty = false;
 
+/* Our temporary namespaces may have gone to disk; see tempcat_row_to_disk() */
+static bool tc_namespaces_to_disk = false;
+
 static void tempcat_sweep_if_needed(bool allow_force);
 static void tempcat_publish_oid(Oid oid);
 static bool tempcat_bounds_cover(TempcatProcState *st, Oid oid);
@@ -838,8 +841,12 @@ tempcat_before_exit(int code, Datum arg)
 	TempcatProcState *st = tempcat_my_state();
 	bool		leftovers;
 
-	/* Without an area, rows went to disk only; assume the worst. */
-	leftovers = tc_area == NULL || tempcat_area_has_live_rows();
+	/*
+	 * Without an area, rows went to disk only; assume the worst.  So did our
+	 * namespaces if a row did not fit, and they stay when we leave.
+	 */
+	leftovers = tc_area == NULL || tc_namespaces_to_disk ||
+		tempcat_area_has_live_rows();
 
 	/* Stop protecting our rows from the sweep before asking for it. */
 	tempcat_clear_bounds(st);
@@ -1621,6 +1628,8 @@ tempcat_catalog_has_oid(int catidx)
  */
 static Oid	tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno);
 static void tempcat_recompute_roles(void);
+static TempcatEntry *tempcat_lookup_tid(Relation rel, ItemPointer tid,
+										dsa_pointer *ep);
 
 static void
 tempcat_note_disk_row(Relation rel, HeapTuple tup)
@@ -1648,6 +1657,68 @@ tempcat_note_disk_row(Relation rel, HeapTuple tup)
 	entry = hash_search(tc_owned, &key, HASH_FIND, NULL);
 	if (entry != NULL)
 		entry->on_disk = true;
+}
+
+/*
+ * Move the rows of our temporary namespaces from memory to disk, in the
+ * current transaction, as CatalogTupleUpdate() moves a row that no longer
+ * fits.  Unless done already: then the row in memory is one we deleted.
+ */
+static void
+tempcat_namespaces_to_disk(void)
+{
+	Oid			nsps[2];
+	int			i;
+
+	GetTempNamespaceState(&nsps[0], &nsps[1]);
+	for (i = 0; i < lengthof(nsps); i++)
+	{
+		HeapTuple	tup;
+		Relation	rel;
+		dsa_pointer ep;
+		TempcatEntry *e;
+
+		if (!IsTempcatOid(nsps[i]))
+			continue;
+		tup = SearchSysCacheCopy1(NAMESPACEOID, ObjectIdGetDatum(nsps[i]));
+		if (!HeapTupleIsValid(tup))
+			continue;
+		rel = table_open(NamespaceRelationId, RowExclusiveLock);
+		if (IsTempcatTid(&tup->t_self))
+		{
+			e = tempcat_lookup_tid(rel, &tup->t_self, &ep);
+			if (!TransactionIdIsValid(e->xmax) ||
+				!TransactionIdIsCurrentTransactionId(e->xmax))
+			{
+				tempcat_delete(rel, &tup->t_self);
+				CatalogTupleInsertOnDisk(rel, tup);
+				tempcat_note_disk_row(rel, tup);
+				tc_namespaces_to_disk = true;
+			}
+		}
+		table_close(rel, RowExclusiveLock);
+		heap_freetuple(tup);
+	}
+}
+
+/*
+ * A row of ours goes to disk because it does not fit in memory.  Other
+ * sessions see it there, so the namespace it is in must be on disk too:
+ * code that names objects (pg_identify_object(), pg_relation_filepath(),
+ * ALTER TABLE ALL IN TABLESPACE, ...) expects to find it.  Being temporary,
+ * the namespace still makes its objects missing for them
+ * (tempcat_object_missing()).  Move both namespaces at the first row, as
+ * which rows refer to which namespace is not worth working out.
+ * (pg_shdepend rows name no namespace, and go to disk when the published
+ * roles run out, too.)
+ */
+static void
+tempcat_row_to_disk(Relation rel, HeapTuple tup)
+{
+	tempcat_note_disk_row(rel, tup);
+	if (RelationGetRelid(rel) != NamespaceRelationId &&
+		RelationGetRelid(rel) != SharedDependRelationId)
+		tempcat_namespaces_to_disk();
 }
 
 /* Does the catalog still hold an entry (of any visibility) for 'oid'? */
@@ -2798,7 +2869,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	/* No area (DSM space is short): the row goes to disk. */
 	if (!tempcat_attach(true))
 	{
-		tempcat_note_disk_row(rel, tup);
+		tempcat_row_to_disk(rel, tup);
 		return false;
 	}
 
@@ -2816,7 +2887,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	if (!DsaPointerIsValid(ep))
 	{
-		tempcat_note_disk_row(rel, tup);
+		tempcat_row_to_disk(rel, tup);
 		return false;
 	}
 
@@ -2929,7 +3000,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	{
 		LWLockRelease(&tc_root->lock);
 		heap_freetuple(oldtup);
-		tempcat_note_disk_row(rel, newtup);
+		tempcat_row_to_disk(rel, newtup);
 		return false;
 	}
 	tempcat_mark_deleted(olde, oldep, xid, cid);

@@ -2097,6 +2097,20 @@ CREATE TYPE tc_hide_type AS (x int);
 CREATE TYPE
 CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_depend d LEFT JOIN pg_class c ON d.objid = c.oid WHERE d.classid = 'pg_class'::regclass AND c.oid IS NULL $$ LANGUAGE sql;
 CREATE FUNCTION
+CREATE ROLE tc_cluster_role;
+CREATE ROLE
+!\retcode rm -rf /tmp/tc_hide_ts;
+GP_IGNORE:-- start_ignore
+GP_IGNORE:
+GP_IGNORE:-- end_ignore
+(exited with code 0)
+!\retcode mkdir -p /tmp/tc_hide_ts;
+GP_IGNORE:-- start_ignore
+GP_IGNORE:
+GP_IGNORE:-- end_ignore
+(exited with code 0)
+CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
+CREATE TABLESPACE
 1: SET gp_enable_temp_memory_catalog = on;
 SET
 1: SET gp_temp_memory_catalog_max_size = 1024;
@@ -2105,8 +2119,18 @@ SET
 CREATE TABLE
 1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
 CREATE TABLE
+1: CREATE TEMP TABLE tc_clu (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: CREATE INDEX tc_clu_i ON tc_clu (a);
+CREATE INDEX
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 DO
+-- (more rows that do not fit: an index marked for CLUSTER, whose table did
+-- fit, and a table in a tablespace)
+1: ALTER TABLE tc_clu CLUSTER ON tc_clu_i;
+ALTER TABLE
+1: CREATE TEMP TABLE tc_in_ts (a int) TABLESPACE tc_hide_ts DISTRIBUTED BY (a);
+CREATE TABLE
 
 -- A relation can go to disk partly: here its pg_class row, updated while
 -- the area is full, but not the attributes it had.  Other sessions must not
@@ -2123,6 +2147,27 @@ ALTER TABLE
 ANALYZE
 2: VACUUM;
 VACUUM
+-- The session's namespaces went to disk with its first row that did not
+-- fit there, so that code naming the objects finds them (it crashed the
+-- server).  Temporary, they keep the objects missing for other sessions.
+2: SELECT bool_and(i.schema LIKE 'pg\_%temp\_%') AS named FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
+ named 
+-------
+ t     
+(1 row)
+2: SELECT bool_and(pg_relation_filepath(oid) IS NOT NULL) AS filepath FROM pg_class WHERE oid >= 4026531840 AND relkind = 'r';
+ filepath 
+----------
+ t        
+(1 row)
+2: ALTER TABLE ALL IN TABLESPACE tc_hide_ts SET TABLESPACE pg_default;
+ALTER TABLE
+2: SET ROLE tc_cluster_role;
+SET
+2: CLUSTER;
+CLUSTER
+2: RESET ROLE;
+RESET
 
 -- A column default of a temporary table depends on the function.
 2: SET client_min_messages = warning;
@@ -2288,6 +2333,10 @@ SELECT tc_retry('DROP TYPE tc_hide_type');
 (1 row)
 DROP FUNCTION tc_orphan_deps();
 DROP FUNCTION
+DROP ROLE tc_cluster_role;
+DROP ROLE
+DROP TABLESPACE tc_hide_ts;
+DROP TABLESPACE
 
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of

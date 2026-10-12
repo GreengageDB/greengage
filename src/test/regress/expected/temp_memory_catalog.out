@@ -1757,11 +1757,13 @@ SELECT count(*) AS on_disk FROM pg_class WHERE oid = 'tc_dml'::regclass;
 RESET gp_temp_memory_catalog_disk_only;
 RESET allow_system_table_mods;
 DROP TABLE tc_dml;
+-- (the session's two temporary namespaces went to disk with its first row
+-- that did not fit, above, and stay there)
 SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
  qd_disk_rows 
 --------------
-            0
+            2
 (1 row)
 
 RESET gp_temp_memory_catalog_disk_only;
@@ -1800,7 +1802,7 @@ SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows;
  qd_disk_rows 
 --------------
-            0
+            2
 (1 row)
 
 RESET gp_temp_memory_catalog_disk_only;
@@ -2003,7 +2005,7 @@ SET gp_temp_memory_catalog_disk_only = on;
 SELECT tempcat_disk_rows_qd() AS qd_disk_rows, tempcat_disk_rows_segs() AS seg_disk_rows;
  qd_disk_rows | seg_disk_rows 
 --------------+---------------
-            0 |             0
+            2 |             6
 (1 row)
 
 RESET gp_temp_memory_catalog_disk_only;
