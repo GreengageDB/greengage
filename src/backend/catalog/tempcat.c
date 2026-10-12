@@ -352,6 +352,14 @@ static dsa_pointer *tc_pending = NULL;
 static int	tc_npending = 0;
 static int	tc_maxpending = 0;
 
+/* Rows deleted so far, and the last walk of tempcat_reclaim_dead() */
+static uint64 tc_ndeletions = 0;
+static bool tc_reclaim_failed = false;	/* it freed nothing */
+static TransactionId tc_reclaim_xid = InvalidTransactionId;
+static CommandId tc_reclaim_cid = InvalidCommandId;
+static uint64 tc_reclaim_ndeletions = 0;
+static bool tc_reclaim_waiting = false;	/* rows left for a later command */
+
 struct TempcatScanData
 {
 	HeapTuple  *tuples;
@@ -2126,26 +2134,48 @@ tempcat_reclaim_dead(void)
 	TransactionId topxid = GetTopTransactionIdIfAny();
 	CommandId	curcid = GetCurrentCommandId(false);
 	int			nfreed = 0;
+	bool		waiting = false;
 	int			i = 0;
 
 	if (!TransactionIdIsValid(topxid))
+		return 0;
+
+	/*
+	 * The walk is linear in the pending rows, and once the area is full it
+	 * is tried for every row added.  Do not repeat one that freed nothing
+	 * unless something could have changed: rows deleted since, or, if rows
+	 * were left only because of the command or the snapshots in use, a new
+	 * command.  (A snapshot released within a command can only make rows
+	 * wait to be freed later.)
+	 */
+	if (tc_reclaim_failed &&
+		TransactionIdEquals(tc_reclaim_xid, topxid) &&
+		tc_reclaim_ndeletions == tc_ndeletions &&
+		(!tc_reclaim_waiting || tc_reclaim_cid == curcid))
 		return 0;
 
 	while (i < tc_npending)
 	{
 		dsa_pointer ep = tc_pending[i];
 		TempcatEntry *e = TC_ADDR(ep);
+		bool		candidate;
 
 		/* (a row freed already would fail this; see tempcat_pending_take()) */
 		Assert(e->catidx >= 0 && e->catidx < TEMPCAT_NCATALOGS &&
 			   (e->flags & TCE_PENDING));
 
-		if ((TransactionIdEquals(e->xmax, topxid) ||
-			 TransactionIdEquals(e->xmax, e->xmin)) &&
-			e->cmax < curcid &&
+		candidate = (TransactionIdEquals(e->xmax, topxid) ||
+					 TransactionIdEquals(e->xmax, e->xmin)) &&
 			!(e->flags & TCE_XMIN_COMMITTED) &&
-			TransactionIdIsCurrentTransactionId(e->xmin) &&
-			!SnapshotsSeeCommandRange(e->cmin, e->cmax))
+			TransactionIdIsCurrentTransactionId(e->xmin);
+		if (candidate &&
+			(e->cmax >= curcid || SnapshotsSeeCommandRange(e->cmin, e->cmax)))
+		{
+			waiting = true;
+			candidate = false;
+		}
+
+		if (candidate)
 		{
 			int			catidx = e->catidx;
 			Oid			objoid = tempcat_catalog_has_oid(catidx) ?
@@ -2159,6 +2189,12 @@ tempcat_reclaim_dead(void)
 		else
 			i++;
 	}
+
+	tc_reclaim_failed = (nfreed == 0);
+	tc_reclaim_xid = topxid;
+	tc_reclaim_cid = curcid;
+	tc_reclaim_ndeletions = tc_ndeletions;
+	tc_reclaim_waiting = waiting;
 
 	return nfreed;
 }
@@ -2570,6 +2606,7 @@ tempcat_mark_deleted(TempcatEntry *e, dsa_pointer ep,
 	e->xmax = xid;
 	e->cmax = cid;
 	tempcat_add_pending(ep);
+	tc_ndeletions++;
 }
 
 /*
