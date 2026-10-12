@@ -100,6 +100,7 @@ extern TempcatScan tempcat_begin_index_sql_scan(Relation rel, Relation irel,
 												ScanKey indexkeys, int nindexkeys);
 extern void tempcat_scan_filter(TempcatScan scan,
 								bool (*keep) (HeapTuple, void *), void *arg);
+extern bool tempcat_scan_is_empty(TempcatScan scan);
 extern HeapTuple tempcat_scan_peek(TempcatScan scan, bool forward);
 extern void tempcat_scan_advance(TempcatScan scan);
 extern int	tempcat_scan_getpos(TempcatScan scan);
@@ -112,7 +113,7 @@ extern int	tempcat_scan_compare_index(TempcatScan scan, HeapTuple a,
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_other_session_relation(HeapTuple tup);
 extern bool tempcat_relation_missing(Oid relid);
-extern void tempcat_check_type_user(Oid classId, Oid objectId,
+extern bool tempcat_check_type_user(Oid classId, Oid objectId,
 									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);

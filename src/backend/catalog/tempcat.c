@@ -2303,8 +2303,8 @@ tempcat_reclaim_dead(void)
 	 * is tried for every row added.  Do not repeat one that freed nothing
 	 * unless something could have changed: rows deleted since, or, if rows
 	 * were left only because of the command or the snapshots in use, a new
-	 * command.  (A snapshot released within a command can only make rows
-	 * wait to be freed later.)
+	 * command.  (A snapshot released within a command is noticed at the
+	 * next one: until then, the rows it could see only wait to be freed.)
 	 */
 	if (tc_reclaim_failed &&
 		TransactionIdEquals(tc_reclaim_xid, topxid) &&
@@ -3316,8 +3316,12 @@ tempcat_object_missing(const ObjectAddress *object)
  * it, to check them.  Another session's in-memory temporary relations and
  * types cannot be checked: only their on-disk dependency rows are visible
  * here, not what uses them in turn.  Fail rather than miss them.
+ *
+ * Unless the session is gone: then nothing uses them anymore, and their
+ * rows on disk are leftovers that the sweep removes.  Returns true for
+ * those, which the caller skips.
  */
-void
+bool
 tempcat_check_type_user(Oid classId, Oid objectId, const char *typeName)
 {
 	ObjectAddress object;
@@ -3325,11 +3329,15 @@ tempcat_check_type_user(Oid classId, Oid objectId, const char *typeName)
 	object.classId = classId;
 	object.objectId = objectId;
 	object.objectSubId = 0;
-	if (tempcat_object_missing(&object))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot alter type \"%s\" because a temporary object of another session uses it",
-						typeName)));
+	if (!tempcat_object_missing(&object))
+		return false;
+	if (!tempcat_oid_maybe_live(objectId, MyDatabaseId))
+		return true;
+	ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			 errmsg("cannot alter type \"%s\" because a temporary object of another session uses it",
+					typeName)));
+	return false;				/* keep compiler quiet */
 }
 
 /*
@@ -3989,9 +3997,9 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 		while (HeapTupleIsValid(tup = systable_getnext(scan)))
 		{
 			Oid			objid = tempcat_getoid(tup, desc, attr);
+			Oid			cls = classattr != 0 ? tempcat_getoid(tup, desc, classattr) : objclass;
 
 			CHECK_FOR_INTERRUPTS();
-			Oid			cls = classattr != 0 ? tempcat_getoid(tup, desc, classattr) : objclass;
 
 			if (!IsTempcatOid(objid))
 				continue;
@@ -4541,6 +4549,13 @@ tempcat_scan_filter(TempcatScan scan, bool (*keep) (HeapTuple, void *), void *ar
 			pfree(scan->tuples[i]);
 	}
 	scan->ntuples = n;
+}
+
+/* Has the scan no rows to return (left)? */
+bool
+tempcat_scan_is_empty(TempcatScan scan)
+{
+	return scan->next >= scan->ntuples;
 }
 
 /* Next row in the given direction without consuming it, or NULL. */

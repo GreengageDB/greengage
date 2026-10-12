@@ -112,6 +112,18 @@ IndexScanSetupTempcat(IndexScanState *node, ScanDirection direction)
 	tempcat_scan_filter(node->iss_TempScan, IndexTempcatQual, node);
 	ExecClearTuple(node->iss_DiskSlot);
 
+	/*
+	 * Nothing to merge in: scan the index alone, unless the on-disk rows are
+	 * to be filtered, which the merge does.
+	 */
+	if (tempcat_scan_is_empty(node->iss_TempScan) &&
+		!gp_temp_memory_catalog_hide_others)
+	{
+		tempcat_endscan(node->iss_TempScan);
+		node->iss_TempScan = NULL;
+		return;
+	}
+
 	node->iss_TempState = TEMPSCAN_MERGE;
 	node->iss_TempForward = ScanDirectionIsForward(direction);
 	node->iss_DiskPeeked = false;

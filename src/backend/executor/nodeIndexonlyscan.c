@@ -299,6 +299,14 @@ IndexOnlySetupTempcat(IndexOnlyScanState *node, ScanDirection direction)
 
 	tempcat_scan_filter(node->ioss_TempScan, IndexOnlyTempcatQual, node);
 
+	/* Nothing to merge in: scan the index alone. */
+	if (tempcat_scan_is_empty(node->ioss_TempScan))
+	{
+		tempcat_endscan(node->ioss_TempScan);
+		node->ioss_TempScan = NULL;
+		return;
+	}
+
 	node->ioss_TempState = TEMPSCAN_MERGE;
 	node->ioss_TempForward = ScanDirectionIsForward(direction);
 	node->ioss_DiskPeeked = false;

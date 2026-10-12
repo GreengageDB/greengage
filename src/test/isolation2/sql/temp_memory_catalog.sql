@@ -365,6 +365,9 @@ RESET gp_temp_memory_catalog_hide_others;
 !\retcode pg_dump --schema-only isolation2test > /dev/null;
 DO $$ BEGIN EXECUTE format('REVOKE TEMP ON DATABASE %I FROM tc_sw_role', current_database()); END $$;
 REVOKE USAGE ON TYPE tc_sw_type FROM tc_sw_role;
+-- Nor do they keep the types they point at from changing: nothing uses
+-- those anymore.
+ALTER TYPE tc_sw_type ALTER ATTRIBUTE x TYPE bigint;
 
 SELECT gp_inject_fault_infinite('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 2: SET gp_enable_temp_memory_catalog = on;
