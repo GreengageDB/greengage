@@ -28,6 +28,7 @@ To build a Debian package, you will also need the following tools:
   build-essential Debian/Ubuntu package for essential build tools
   devscripts      Debian/Ubuntu package for Debian packaging scripts
   debhelper       Debian/Ubuntu package for Debian package helper scripts
+  fakeroot        Debian/Ubuntu package to run the build as a fake root user
 
 To build the Greenplum Database, run GNU make with the following options:
 
