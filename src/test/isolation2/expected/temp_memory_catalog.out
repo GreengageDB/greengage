@@ -21,6 +21,8 @@ CREATE DOMAIN tc_dom AS int;
 CREATE DOMAIN
 CREATE DOMAIN tc_dom_base AS int;
 CREATE DOMAIN
+CREATE DOMAIN tc_dom_spill AS int;
+CREATE DOMAIN
 CREATE TYPE tc_comp_base AS (i int, j int);
 CREATE TYPE
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
@@ -52,6 +54,35 @@ CREATE DOMAIN
 CREATE TABLE
 1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
 INSERT 0 1
+-- (a domain whose pg_type row did not fit in memory, the fault pretends,
+-- used by a table that did)
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1: CREATE DOMAIN pg_temp.tc_spilldom AS tc_dom_spill;
+CREATE DOMAIN
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+1: CREATE TEMP TABLE tc_dep_spilldom (a int, d pg_temp.tc_spilldom) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_dep_spilldom VALUES (1, -5);
+INSERT 0 1
+SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
+ spilled_domain 
+----------------
+ 1              
+(1 row)
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 CREATE INDEX
 1: SET ROLE tc_role;
@@ -110,6 +141,15 @@ ALTER DOMAIN
 ERROR:  cannot alter type "tc_dom_base" because a temporary object of another session uses it
 2: ALTER TYPE tc_comp_base ALTER ATTRIBUTE j TYPE text;
 ERROR:  cannot alter type "tc_comp_base" because a temporary object of another session uses it
+-- Nor through their types whose rows are on disk, which are missing for
+-- other sessions like those in memory: what uses them may be in memory.
+2: ALTER DOMAIN tc_dom_spill ADD CONSTRAINT tc_dom_spill_pos CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom_spill" because a temporary object of another session uses it
+2: SELECT tc_try('DROP DOMAIN tc_dom_spill CASCADE');
+ tc_try  
+---------
+ refused 
+(1 row)
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
@@ -126,6 +166,11 @@ ERROR:  cannot alter type "tc_comp_base" because a temporary object of another s
  j 
 ---
  2 
+(1 row)
+1: SELECT d FROM tc_dep_spilldom;
+ d  
+----
+ -5 
 (1 row)
 1: SET enable_seqscan = off;
 SET
@@ -166,6 +211,11 @@ RESET
  done     
 (1 row)
 2: SELECT tc_retry('DROP TYPE tc_comp_base');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP DOMAIN tc_dom_spill');
  tc_retry 
 ----------
  done     

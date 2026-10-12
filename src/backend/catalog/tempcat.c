@@ -3219,17 +3219,46 @@ tempcat_object_lookup(Oid classId, Oid objectId)
  * (e.g. a temporary table column of a regular type).  Their catalog rows
  * live in the other session's memory, so callers that want to describe or
  * drop them must handle their absence.
+ *
+ * An object whose own row went to disk, because it did not fit in the other
+ * session's area, is missing too, like such a relation (see
+ * tempcat_other_session_relation()): what refers to it in turn, e.g. the
+ * session's later table using a domain, may be in memory.  It is told by
+ * its namespace: one with a reserved OID that is not ours, and that we
+ * cannot see (it is in the other session's memory) or that is temporary.
+ * Ordinary objects with reserved OIDs live in ordinary namespaces.  Readers
+ * serve their session, and see its objects.
  */
 bool
 tempcat_object_missing(const ObjectAddress *object)
 {
+	Oid			nspid;
+
 	if (!IsTempcatOid(object->objectId))
 		return false;
 
 	if (object->classId == RelationRelationId)
 		return tempcat_relation_missing(object->objectId);
 
-	return tempcat_object_lookup(object->classId, object->objectId) == TCO_MISSING;
+	switch (tempcat_object_lookup(object->classId, object->objectId))
+	{
+		case TCO_MISSING:
+			return true;
+		case TCO_UNKNOWN:
+			return false;
+		case TCO_FOUND:
+			break;
+	}
+
+	if (tempcat_is_reader() ||
+		tempcat_owns_oid(object->classId, object->objectId) ||
+		!is_objectclass_supported(object->classId))
+		return false;
+	nspid = get_object_namespace(object);
+	if (!IsTempcatOid(nspid) || tempcat_owns_oid(NamespaceRelationId, nspid))
+		return false;
+	return !SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(nspid)) ||
+		isAnyTempNamespace(nspid);
 }
 
 /*

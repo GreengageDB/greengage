@@ -15,6 +15,7 @@ CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP
 CREATE TYPE tc_type AS (x int);
 CREATE DOMAIN tc_dom AS int;
 CREATE DOMAIN tc_dom_base AS int;
+CREATE DOMAIN tc_dom_spill AS int;
 CREATE TYPE tc_comp_base AS (i int, j int);
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE ROLE tc_role;
@@ -31,6 +32,14 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 1: CREATE DOMAIN pg_temp.tc_compdom AS tc_comp_base;
 1: CREATE TEMP TABLE tc_dep_compdom (a int, c pg_temp.tc_compdom) DISTRIBUTED BY (a);
 1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
+-- (a domain whose pg_type row did not fit in memory, the fault pretends,
+-- used by a table that did)
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE DOMAIN pg_temp.tc_spilldom AS tc_dom_spill;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE TEMP TABLE tc_dep_spilldom (a int, d pg_temp.tc_spilldom) DISTRIBUTED BY (a);
+1: INSERT INTO tc_dep_spilldom VALUES (1, -5);
+SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
 1: CREATE INDEX tc_dep_i ON tc_dep (tc_func(a));
 1: SET ROLE tc_role;
 1: CREATE TEMP TABLE tc_dep_owned (a int) DISTRIBUTED BY (a);
@@ -56,11 +65,16 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 -- Nor through their own types: a sub-domain, a domain over a composite type.
 2: ALTER DOMAIN tc_dom_base ADD CONSTRAINT tc_dom_base_pos CHECK (VALUE > 0);
 2: ALTER TYPE tc_comp_base ALTER ATTRIBUTE j TYPE text;
+-- Nor through their types whose rows are on disk, which are missing for
+-- other sessions like those in memory: what uses them may be in memory.
+2: ALTER DOMAIN tc_dom_spill ADD CONSTRAINT tc_dom_spill_pos CHECK (VALUE > 0);
+2: SELECT tc_try('DROP DOMAIN tc_dom_spill CASCADE');
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
 1: SELECT d FROM tc_dep_subdom;
 1: SELECT (c).j FROM tc_dep_compdom;
+1: SELECT d FROM tc_dep_spilldom;
 1: SET enable_seqscan = off;
 1: SELECT a FROM tc_dep WHERE tc_func(a) = 2;
 1: RESET enable_seqscan;
@@ -74,6 +88,7 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 2: SELECT tc_retry('DROP DOMAIN tc_dom');
 2: SELECT tc_retry('DROP DOMAIN tc_dom_base');
 2: SELECT tc_retry('DROP TYPE tc_comp_base');
+2: SELECT tc_retry('DROP DOMAIN tc_dom_spill');
 2q:
 
 --
