@@ -830,6 +830,10 @@ static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   SubTransactionId parentSubid,
 										   void *arg);
 static void tempcat_sweep_exit(int code, Datum arg);
+static void tempcat_subxact_callback(SubXactEvent event,
+									 SubTransactionId mySubid,
+									 SubTransactionId parentSubid,
+									 void *arg);
 static bool tc_sweep_callbacks = false;
 
 /*
@@ -979,6 +983,7 @@ tempcat_activate(void)
 	st->databaseId = MyDatabaseId;
 	on_shmem_exit(tempcat_proc_exit, (Datum) 0);
 	before_shmem_exit(tempcat_before_exit, (Datum) 0);
+	RegisterSubXactCallback(tempcat_subxact_callback, NULL);
 
 	tempcat_sweep_if_needed(true);
 }
@@ -2142,6 +2147,12 @@ tempcat_set_caller_tuple(HeapTuple tup, Relation rel, TempcatEntry *e)
 /* The current transaction changed virtual rows; see tempcat_check_prepare(). */
 static bool tc_xact_changed = false;
 
+/*
+ * The deepest subtransaction level whose changes of virtual rows may be on
+ * the pending list; see tempcat_abort_subtransaction().
+ */
+static int	tc_change_level = 0;
+
 
 /*
  * Make room for 'n' more pending entries.  Called before creating or
@@ -2171,6 +2182,7 @@ tempcat_add_pending(dsa_pointer ep)
 	TempcatEntry *e = TC_ADDR(ep);
 
 	tc_xact_changed = true;
+	tc_change_level = Max(tc_change_level, GetCurrentTransactionNestLevel());
 
 	/*
 	 * Until the outcome of its transactions is applied to the row, when the
@@ -2312,6 +2324,11 @@ tempcat_resolve_pending(void)
 		return;
 
 	Assert(tc_area != NULL);
+
+#ifdef FAULT_INJECTOR
+	/* Test hook: count the walks; see tempcat_abort_subtransaction(). */
+	SIMPLE_FAULT_INJECTOR("tempcat_resolve_pending");
+#endif
 
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 
@@ -2690,6 +2707,7 @@ void
 tempcat_start_transaction(void)
 {
 	tc_xact_changed = false;
+	tc_change_level = 0;
 
 	/*
 	 * A retrieve connection can outlive the writer of the cursor session it
@@ -2820,12 +2838,34 @@ tempcat_xact_changed(void)
  * After a subtransaction abort, free the rows it inserted and undo its
  * deletions right away, so that loops with exception blocks do not keep
  * dead rows around until the end of the top-level transaction.  Rows of the
- * still-running transaction are left alone (they are "in progress").
+ * still-running transaction are left alone (they are "in progress").  Only
+ * if it, or a subtransaction committed into it, changed rows: the pending
+ * list holds those of the whole transaction, and a walk over it at every
+ * abort of an exception block made long transactions slow.
  */
 void
 tempcat_abort_subtransaction(void)
 {
+	int			level = GetCurrentTransactionNestLevel();
+
+	if (tc_change_level < level)
+		return;
 	tempcat_resolve_pending();
+	tc_change_level = level - 1;
+}
+
+/* A committed subtransaction's changes are its parent's now. */
+static void
+tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
+						 SubTransactionId parentSubid, void *arg)
+{
+	int			level;
+
+	if (event != SUBXACT_EVENT_COMMIT_SUB)
+		return;
+	level = GetCurrentTransactionNestLevel();
+	if (tc_change_level >= level)
+		tc_change_level = level - 1;
 }
 
 /* ----------------------------------------------------------------
