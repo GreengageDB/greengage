@@ -136,7 +136,6 @@
 #include "storage/spin.h"
 #include "storage/proc.h"
 #include "storage/procarray.h"
-#include "storage/sinvaladt.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/dsa.h"
@@ -4175,13 +4174,13 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 }
 
 /*
- * Is 'nspname' the name of the temporary namespace that another live backend
- * of the database would take (pg_temp_N or pg_toast_temp_N: N is the session
- * ID, or the backend ID after a 0 in utility mode)?  That backend removes a
- * left namespace of its name itself, in its own transaction, when it comes
- * to create its own (InitTempTableNamespace()).  Were it removed by a sweep
- * elsewhere, it would find the row still there until that sweep's
- * transaction ended, and fail.
+ * Is 'nspname' the name of the temporary namespace that another live session
+ * of the database would take (pg_temp_N or pg_toast_temp_N, N its session
+ * ID)?  The session removes a left namespace of its name itself, in its own
+ * transaction, when it comes to create its own (InitTempTableNamespace()).
+ * Were it removed by a sweep elsewhere, the session would find the row still
+ * there until that sweep's transaction ended, and fail.  (Not the names of
+ * utility mode, a 0 and a backend ID, which any backend may hold.)
  */
 static bool
 tempcat_namespace_name_claimed(const char *nspname)
@@ -4200,13 +4199,10 @@ tempcat_namespace_name_claimed(const char *nspname)
 	if (!isdigit((unsigned char) digits[0]))
 		return false;
 	n = strtol(digits, &end, 10);
-	if (*end != '\0' || n <= 0 || n > INT_MAX)
+	if (*end != '\0' || n <= 0 || n > INT_MAX || digits[0] == '0')
 		return false;
 
-	if (digits[0] == '0')
-		proc = (n != MyBackendId) ? BackendIdGetProc((int) n) : NULL;
-	else
-		proc = FindProcByGpSessionId(n);
+	proc = FindProcByGpSessionId(n);
 	return proc != NULL && proc->databaseId == MyDatabaseId;
 }
 
@@ -4239,11 +4235,17 @@ tempcat_sweep_objects(void)
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
-			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0) &&
-			!tempcat_namespace_name_claimed(NameStr(form->nspname)) &&
-			!tempcat_sweep_row_in_progress(&dirty))
+			 strncmp(NameStr(form->nspname), "pg_toast_temp_", 14) == 0))
 		{
-			if (tempcat_sweep_delete(rel, tup))
+			/*
+			 * Left to the live session that would take its name: sweep
+			 * again later, in case it never does (with its objects, which
+			 * stay as long as their namespace).
+			 */
+			if (tempcat_namespace_name_claimed(NameStr(form->nspname)))
+				tc_sweep_incomplete = true;
+			else if (!tempcat_sweep_row_in_progress(&dirty) &&
+					 tempcat_sweep_delete(rel, tup))
 				ndeleted++;
 		}
 	}
@@ -4425,7 +4427,13 @@ tempcat_sweep_db(bool force, bool wait)
 		if (tc_sweep_incomplete ||
 			!tempcat_mark_swept(MyDatabaseId, nunmarks))
 		{
-			/* (and leave the tracking of an earlier sweep as it is) */
+			/*
+			 * Not even marked by an earlier sweep, if forced to run again:
+			 * the next one finishes.  (And leave the tracking of the earlier
+			 * sweep as it is.)
+			 */
+			if (tc_sweep_incomplete)
+				tempcat_unmark_swept(MyDatabaseId);
 			UnlockDatabaseObject(DatabaseRelationId, MyDatabaseId,
 								 TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
 			return;

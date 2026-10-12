@@ -714,6 +714,28 @@ SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid IN (4294967001, 4294
 2q:
 DROP TABLE tc_lns_ids;
 
+-- Such a sweep leaves the database to be swept again, in case the session
+-- never takes the name: once it is gone, the next sweep (here before a DROP)
+-- removes the schema.  (Session 2 creates no temporary object; session 1's
+-- own left schema forces its sweep, though the database was swept.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+2: SET application_name = 'tc_lns_claimant';
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_lns_c (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+2q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_claimant'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+1q:
+DROP TABLE tc_lns_ids;
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
