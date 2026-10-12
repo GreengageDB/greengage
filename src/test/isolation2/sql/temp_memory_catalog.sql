@@ -16,6 +16,7 @@ CREATE TYPE tc_type AS (x int);
 CREATE DOMAIN tc_dom AS int;
 CREATE DOMAIN tc_dom_base AS int;
 CREATE DOMAIN tc_dom_spill AS int;
+CREATE FUNCTION tc_def_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
 CREATE TYPE tc_comp_base AS (i int, j int);
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
 CREATE ROLE tc_role;
@@ -33,9 +34,10 @@ GRANT USAGE ON TYPE tc_type TO tc_role;
 1: CREATE TEMP TABLE tc_dep_compdom (a int, c pg_temp.tc_compdom) DISTRIBUTED BY (a);
 1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
 -- (a domain whose pg_type row did not fit in memory, the fault pretends,
--- used by a table that did)
+-- used by a table that did; and a table that did not, with a default)
 SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1: CREATE DOMAIN pg_temp.tc_spilldom AS tc_dom_spill;
+1: CREATE TEMP TABLE tc_dep_spilldef (a int, b int DEFAULT tc_def_func()) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1: CREATE TEMP TABLE tc_dep_spilldom (a int, d pg_temp.tc_spilldom) DISTRIBUTED BY (a);
 1: INSERT INTO tc_dep_spilldom VALUES (1, -5);
@@ -69,6 +71,8 @@ SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
 -- other sessions like those in memory: what uses them may be in memory.
 2: ALTER DOMAIN tc_dom_spill ADD CONSTRAINT tc_dom_spill_pos CHECK (VALUE > 0);
 2: SELECT tc_try('DROP DOMAIN tc_dom_spill CASCADE');
+-- (also for objects that have no namespace, but a relation, as defaults)
+2: SELECT tc_try('DROP FUNCTION tc_def_func() CASCADE');
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
@@ -89,6 +93,7 @@ SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
 2: SELECT tc_retry('DROP DOMAIN tc_dom_base');
 2: SELECT tc_retry('DROP TYPE tc_comp_base');
 2: SELECT tc_retry('DROP DOMAIN tc_dom_spill');
+2: SELECT tc_retry('DROP FUNCTION tc_def_func()');
 2q:
 
 --

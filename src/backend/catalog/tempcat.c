@@ -3311,6 +3311,66 @@ tempcat_object_lookup(Oid classId, Oid objectId)
 }
 
 /*
+ * The relation an object without a namespace of its own belongs to (a
+ * default, trigger, rule or policy), or InvalidOid.
+ */
+static Oid
+tempcat_object_relation(Oid classId, Oid objectId)
+{
+	Oid			indexId;
+	AttrNumber	oidattr;
+	AttrNumber	relattr;
+	Relation	rel;
+	SysScanDesc scan;
+	ScanKeyData key;
+	HeapTuple	tup;
+	Oid			relid = InvalidOid;
+
+	switch (classId)
+	{
+		case AttrDefaultRelationId:
+			indexId = AttrDefaultOidIndexId;
+			oidattr = Anum_pg_attrdef_oid;
+			relattr = Anum_pg_attrdef_adrelid;
+			break;
+		case TriggerRelationId:
+			indexId = TriggerOidIndexId;
+			oidattr = Anum_pg_trigger_oid;
+			relattr = Anum_pg_trigger_tgrelid;
+			break;
+		case RewriteRelationId:
+			indexId = RewriteOidIndexId;
+			oidattr = Anum_pg_rewrite_oid;
+			relattr = Anum_pg_rewrite_ev_class;
+			break;
+		case PolicyRelationId:
+			indexId = PolicyOidIndexId;
+			oidattr = Anum_pg_policy_oid;
+			relattr = Anum_pg_policy_polrelid;
+			break;
+		default:
+			return InvalidOid;
+	}
+
+	rel = table_open(classId, AccessShareLock);
+	ScanKeyInit(&key, oidattr, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectId));
+	scan = systable_beginscan(rel, indexId, true, NULL, 1, &key);
+	tup = systable_getnext(scan);
+	if (HeapTupleIsValid(tup))
+	{
+		bool		isnull;
+		Datum		d = heap_getattr(tup, relattr, RelationGetDescr(rel), &isnull);
+
+		if (!isnull)
+			relid = DatumGetObjectId(d);
+	}
+	systable_endscan(scan);
+	table_close(rel, AccessShareLock);
+	return relid;
+}
+
+/*
  * Is this an in-memory temporary object we cannot see?
  *
  * On-disk dependency rows may point at temporary objects of other sessions
@@ -3324,12 +3384,14 @@ tempcat_object_lookup(Oid classId, Oid objectId)
  * session's later table using a domain, may be in memory.  It is told by
  * its namespace: one with a reserved OID that is not ours, and that we
  * cannot see (it is in the other session's memory) or that is temporary.
- * Ordinary objects with reserved OIDs live in ordinary namespaces.  Readers
- * serve their session, and see its objects.
+ * Ordinary objects with reserved OIDs live in ordinary namespaces.  Objects
+ * without a namespace (defaults, triggers, rules, policies) go with their
+ * relation.  Readers serve their session, and see its objects.
  */
 bool
 tempcat_object_missing(const ObjectAddress *object)
 {
+	Oid			relid;
 	Oid			nspid;
 
 	if (!IsTempcatOid(object->objectId))
@@ -3349,8 +3411,12 @@ tempcat_object_missing(const ObjectAddress *object)
 	}
 
 	if (tempcat_is_reader() ||
-		tempcat_owns_oid(object->classId, object->objectId) ||
-		!is_objectclass_supported(object->classId))
+		tempcat_owns_oid(object->classId, object->objectId))
+		return false;
+	relid = tempcat_object_relation(object->classId, object->objectId);
+	if (OidIsValid(relid))
+		return tempcat_relation_missing(relid);
+	if (!is_objectclass_supported(object->classId))
 		return false;
 	nspid = get_object_namespace(object);
 	if (!IsTempcatOid(nspid) || tempcat_owns_oid(NamespaceRelationId, nspid))

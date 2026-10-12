@@ -23,6 +23,8 @@ CREATE DOMAIN tc_dom_base AS int;
 CREATE DOMAIN
 CREATE DOMAIN tc_dom_spill AS int;
 CREATE DOMAIN
+CREATE FUNCTION tc_def_func() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION
 CREATE TYPE tc_comp_base AS (i int, j int);
 CREATE TYPE
 CREATE FUNCTION tc_func(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
@@ -55,7 +57,7 @@ CREATE TABLE
 1: INSERT INTO tc_dep_compdom VALUES (1, ROW(1, 2));
 INSERT 0 1
 -- (a domain whose pg_type row did not fit in memory, the fault pretends,
--- used by a table that did)
+-- used by a table that did; and a table that did not, with a default)
 SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
  gp_inject_fault_infinite 
 --------------------------
@@ -66,6 +68,8 @@ SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp
 (4 rows)
 1: CREATE DOMAIN pg_temp.tc_spilldom AS tc_dom_spill;
 CREATE DOMAIN
+1: CREATE TEMP TABLE tc_dep_spilldef (a int, b int DEFAULT tc_def_func()) DISTRIBUTED BY (a);
+CREATE TABLE
 SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
  gp_inject_fault 
 -----------------
@@ -150,6 +154,12 @@ ERROR:  cannot alter type "tc_dom_spill" because a temporary object of another s
 ---------
  refused 
 (1 row)
+-- (also for objects that have no namespace, but a relation, as defaults)
+2: SELECT tc_try('DROP FUNCTION tc_def_func() CASCADE');
+ tc_try  
+---------
+ refused 
+(1 row)
 
 -- The temporary objects are intact.
 1: SELECT (c).x, tc_func(a) FROM tc_dep;
@@ -216,6 +226,11 @@ RESET
  done     
 (1 row)
 2: SELECT tc_retry('DROP DOMAIN tc_dom_spill');
+ tc_retry 
+----------
+ done     
+(1 row)
+2: SELECT tc_retry('DROP FUNCTION tc_def_func()');
  tc_retry 
 ----------
  done     
