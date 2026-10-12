@@ -4187,6 +4187,14 @@ tempcat_begin_index_sql_scan(Relation rel, Relation irel, Snapshot snapshot,
 	if (gp_temp_memory_catalog_disk_only)
 		return gp_temp_memory_catalog_hide_others ? tempcat_empty_scan() : NULL;
 
+	/*
+	 * Nothing to merge in without an area (always, with the feature off).
+	 * Index scans begin again at every rescan, e.g. in each loop of a nested
+	 * loop join, in the query's memory context: allocate nothing then.
+	 */
+	if (!tempcat_attach(false))
+		return gp_temp_memory_catalog_hide_others ? tempcat_empty_scan() : NULL;
+
 	heapkeys = palloc(sizeof(ScanKeyData) * Max(nindexkeys, 1));
 	for (i = 0; i < nindexkeys; i++)
 	{
@@ -4204,6 +4212,7 @@ tempcat_begin_index_sql_scan(Relation rel, Relation irel, Snapshot snapshot,
 	}
 
 	scan = tempcat_beginscan(rel, irel, snapshot, nheapkeys, heapkeys);
+	pfree(heapkeys);			/* (the scan keeps no pointer to them) */
 	if (scan == NULL && gp_temp_memory_catalog_hide_others)
 		scan = tempcat_empty_scan();
 	return scan;
