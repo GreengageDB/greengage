@@ -453,8 +453,11 @@ class GGShrink:
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_TABLES_DONE(self) -> None:
         self.logger.info('Checking for tables that were not rebalanced...')
-        if self.are_not_rebalanced_tables_left(False):
-            self.logger.info('Found tables not yet rebalanced, rebuilding the list of tables to rebalance...')
+        not_rebalanced_tables = self.collect_not_rebalanced_tables(False)
+        if not_rebalanced_tables:
+            self.logger.info(f'Found {len(not_rebalanced_tables)} table(s) not yet rebalanced, rebuilding the list of tables to rebalance:')
+            for table in not_rebalanced_tables:
+                self.logger.info(f'    {table}')
             self.trigger('move_to_STATE_PREPARE_SHRINK_SCHEMA_STARTED')
         else:
             self.logger.info('Tables rebalance complete')
@@ -591,8 +594,11 @@ class GGShrink:
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE(self) -> None:
         self.logger.info('Checking for tables that were not rolled back after rebalance...')
-        if self.are_not_rebalanced_tables_left(True):
-            self.logger.info('Found tables not yet rolled back, rebuilding the list of tables to roll back...')
+        not_rolled_back_tables = self.collect_not_rebalanced_tables(True)
+        if not_rolled_back_tables:
+            self.logger.info(f'Found {len(not_rolled_back_tables)} table(s) not yet rolled back, rebuilding the list of tables to roll back:')
+            for table in not_rolled_back_tables:
+                self.logger.info(f'    {table}')
             self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START')
         else:
             self.logger.info('Tables rollback after rebalance complete')
@@ -896,14 +902,15 @@ class GGShrink:
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
-    def are_not_rebalanced_tables_left(self, is_rollback: bool) -> bool:
+    def collect_not_rebalanced_tables(self, is_rollback: bool) -> List[str]:
         cmp = '<=' if is_rollback else '>'
+        not_rebalanced_tables = []
         databases_to_process = self.collect_databases_to_process()
         for db in databases_to_process:
             dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
-                if 0 != int(dbconn.queryRow(conn,
-                    f'''SELECT count(1) AS cnt_not_rebalanced_tables
+                cursor = dbconn.query(conn,
+                    f'''SELECT n.nspname, c.relname
                     FROM pg_class c
                     JOIN pg_namespace n ON c.relnamespace = n.oid
                     JOIN gp_distribution_policy p ON c.oid = p.localoid
@@ -911,9 +918,11 @@ class GGShrink:
                     WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
                     c.relpersistence != 't' AND
                     p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
-                    n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')[0]):
-                    return True
-        return False
+                    n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')
+                    ORDER BY n.nspname, c.relname''')
+                for schema_name, rel_name in cursor:
+                    not_rebalanced_tables.append(f'"{db}"."{schema_name}"."{rel_name}"')
+        return not_rebalanced_tables
 
     def rebalance_tables(self, original_status: str, target_status: str, target_segment_count: int) -> None:
         cursor = self.rebalance_schema.getTablesToRebalanceWithStatus(original_status)
