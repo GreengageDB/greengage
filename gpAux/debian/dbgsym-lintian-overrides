@@ -1,0 +1,5 @@
+# lintian cannot read the program interpreter from a stripped .debug file
+elf-error In program headers: Unable to find program interpreter name [usr/lib/debug/.build-id/*]
+
+# the override file itself is the only non-debug file in the dbgsym package
+non-debug-file-in-debug-package usr/share/lintian/overrides/greengage8-dbgsym

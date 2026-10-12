@@ -4,5 +4,6 @@
 !/compat
 !/control
 !/copyright
+!/dbgsym-lintian-overrides
 !/lintian-overrides
 !/rules
