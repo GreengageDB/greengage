@@ -4567,6 +4567,30 @@ tempcat_sweep_before_drop(void)
 }
 
 /*
+ * The transaction in progress that deletes the namespace's row, if any.
+ */
+static TransactionId
+tempcat_namespace_deleter(Oid namespaceId)
+{
+	Relation	rel;
+	SysScanDesc scan;
+	ScanKeyData key;
+	SnapshotData dirty;
+	TransactionId deleter = InvalidTransactionId;
+
+	InitDirtySnapshot(dirty);
+	rel = table_open(NamespaceRelationId, AccessShareLock);
+	ScanKeyInit(&key, Anum_pg_namespace_oid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(namespaceId));
+	scan = systable_beginscan(rel, NamespaceOidIndexId, true, &dirty, 1, &key);
+	if (HeapTupleIsValid(systable_getnext(scan)))
+		deleter = dirty.xmax;
+	systable_endscan(scan);
+	table_close(rel, AccessShareLock);
+	return deleter;
+}
+
+/*
  * InitTempTableNamespace() found the temporary namespace 'namespaceName',
  * 'namespaceId', left on disk by a session that is gone (its area could not
  * be created, so the namespace went to disk), and is about to remove it.
@@ -4575,10 +4599,12 @@ tempcat_sweep_before_drop(void)
  * tempcat_object_missing()), and the sweep that performDeletion() runs
  * first would remove the namespace under it.  Sweep now, even if the
  * database was swept already, waiting for a sweep under way (after a
- * restart, many sessions may come for their namespaces at once).  Returns
- * the namespace's OID as found then, which the caller removes as usual if
- * valid: if it still has a reserved OID, e.g. while another transaction
- * deleting it has not committed yet, fail rather than try that.
+ * restart, many sessions may come for their namespaces at once).  If
+ * another transaction deletes it, e.g. a sweep that did not know this session
+ * yet (on a segment, before its writer started), wait for that transaction
+ * and look again.  Returns the namespace's OID as found then, which the
+ * caller removes as usual if valid: if it still has a reserved OID, e.g.
+ * inserted by a transaction in progress, fail rather than try that.
  */
 Oid
 tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
@@ -4587,17 +4613,30 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 		TempcatShared == NULL || IsBinaryUpgrade || !IsUnderPostmaster ||
 		RecoveryInProgress())
 		return namespaceId;
-	tempcat_sweep_db(true, true);
-	CommandCounterIncrement();
 
-	namespaceId = get_namespace_oid(namespaceName, true);
-	if (IsTempcatOid(namespaceId))
-		ereport(ERROR,
-				(errcode(ERRCODE_OBJECT_IN_USE),
-				 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
-						namespaceName),
-				 errhint("Try again.")));
-	return namespaceId;
+	for (;;)
+	{
+		TransactionId deleter;
+
+		tempcat_sweep_db(true, true);
+		CommandCounterIncrement();
+
+		namespaceId = get_namespace_oid(namespaceName, true);
+		if (!IsTempcatOid(namespaceId))
+			return namespaceId;
+
+		deleter = tempcat_namespace_deleter(namespaceId);
+		if (!TransactionIdIsValid(deleter))
+			ereport(ERROR,
+					(errcode(ERRCODE_OBJECT_IN_USE),
+					 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
+							namespaceName),
+					 errhint("Try again.")));
+
+		/* (if it aborts, the next round sweeps the namespace itself) */
+		XactLockTableWait(deleter, NULL, NULL, XLTW_None);
+		AcceptInvalidationMessages();
+	}
 }
 
 /* ----------------------------------------------------------------

@@ -736,6 +736,29 @@ SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294
 1q:
 DROP TABLE tc_lns_ids;
 
+-- If another transaction is removing the schema, e.g. a sweep on a segment
+-- where the session has no writer yet, the session waits for it rather than
+-- fail.  (Session 3 deletes the row itself, in a transaction it keeps open.)
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_late';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_late';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967003::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967003;
+2: SET gp_enable_temp_memory_catalog = on;
+2&: CREATE TEMP TABLE tc_lns_late (a int) DISTRIBUTED BY (a);
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NOT granted;
+3: COMMIT;
+2<:
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967003;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each
