@@ -128,6 +128,7 @@ extern void tempcat_check_dependency(const struct ObjectAddress *depender,
 /* VACUUM support */
 extern void tempcat_autovacuum_sweep(void);
 extern void tempcat_sweep_before_drop(void);
+extern void tempcat_sweep_leftover_namespace(Oid namespaceId);
 extern void tempcat_fold_frozen_horizon(TransactionId *frozenXid,
 										MultiXactId *minMulti);
 

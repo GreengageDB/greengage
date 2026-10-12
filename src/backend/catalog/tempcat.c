@@ -738,6 +738,7 @@ static bool tc_horizon_dirty = false;
 static bool tc_roles_dirty = false;
 
 static void tempcat_sweep_if_needed(bool allow_force);
+static void tempcat_sweep_db(bool force);
 static void tempcat_sweep_xact_callback(XactEvent event, void *arg);
 static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   SubTransactionId mySubid,
@@ -3965,6 +3966,13 @@ tempcat_sweep_if_needed(bool allow_force)
 		force = true;
 #endif
 
+	tempcat_sweep_db(force);
+}
+
+/* Sweep this database, unless swept already and not 'force'd to. */
+static void
+tempcat_sweep_db(bool force)
+{
 	if (!force && tempcat_db_swept(MyDatabaseId))
 		return;
 
@@ -4115,6 +4123,26 @@ tempcat_sweep_before_drop(void)
 		RecoveryInProgress())
 		return;
 	tempcat_sweep_if_needed(false);
+}
+
+/*
+ * InitTempTableNamespace() found a temporary namespace of its name left on
+ * disk by a session that is gone (its area could not be created, so the
+ * namespace went to disk), and is about to remove it.  With a reserved OID,
+ * that is the sweep's to do: RemoveTempRelations() would take its objects
+ * for another session's (see tempcat_object_missing()), and the sweep that
+ * performDeletion() runs first would remove the namespace under it.  Sweep
+ * now, even if the database was swept already; the caller looks again.
+ */
+void
+tempcat_sweep_leftover_namespace(Oid namespaceId)
+{
+	if (!IsTempcatOid(namespaceId) ||
+		TempcatShared == NULL || IsBinaryUpgrade || !IsUnderPostmaster ||
+		RecoveryInProgress())
+		return;
+	tempcat_sweep_db(true);
+	CommandCounterIncrement();
 }
 
 /* ----------------------------------------------------------------

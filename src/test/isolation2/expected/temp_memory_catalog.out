@@ -1593,6 +1593,96 @@ SELECT tc_retry('DROP TYPE tc_ord_type');
 DROP TABLE tc_ord;
 DROP TABLE
 
+-- A session whose temporary schema is to have the name of one left on disk,
+-- with a reserved OID, by a session that is gone (its area could not be
+-- created) has the sweep remove that first: dropping its objects as usual
+-- would take them for another session's.  (Session 1 leaves the schema;
+-- session 2 gives it its own name, as a session with the same ID would
+-- find it after a restart.)
+CREATE TABLE tc_lns_name (n name) DISTRIBUTED REPLICATED;
+CREATE TABLE
+SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET application_name = 'tc_lns_session';
+SET
+1: CREATE TEMP TABLE tc_lns (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+1: SELECT pg_my_temp_schema() >= 4026531840 AS reserved, (SELECT count(*) FROM pg_namespace WHERE oid = pg_my_temp_schema()) AS on_disk;
+ reserved | on_disk 
+----------+---------
+ t        | 1       
+(1 row)
+1: INSERT INTO tc_lns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
+INSERT 0 1
+SELECT gp_inject_fault_infinite('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+ Success:                 
+ Success:                 
+ Success:                 
+(4 rows)
+1q: ... <quitting>
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_session'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+2: SET allow_system_table_mods = on;
+SET
+2: DO $$ BEGIN EXECUTE format('UPDATE pg_namespace SET nspname = %L WHERE nspname = %L', 'pg_temp_' || current_setting('gp_session_id'), (SELECT n FROM tc_lns_name)); END $$;
+DO
+2: RESET allow_system_table_mods;
+RESET
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: CREATE TEMP TABLE tc_lns2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2: SELECT 'tc_lns2'::regclass::oid >= 4026531840 AS in_reserved_range;
+ in_reserved_range 
+-------------------
+ t                 
+(1 row)
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid >= 4026531840 AND nspname LIKE 'pg\_temp\_%' AND oid <> pg_my_temp_schema();
+ left_schemas 
+--------------
+ 0            
+(1 row)
+2q: ... <quitting>
+SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+DROP TABLE tc_lns_name;
+DROP TABLE
+
 -- The sweep does not wait for a transaction that deletes the same leftover
 -- (another sweep that has not committed yet): it leaves the row alone, and
 -- the database to be swept again.  (Sessions 3 and 4 leave leftovers, each

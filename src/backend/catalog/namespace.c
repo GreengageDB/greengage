@@ -46,6 +46,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
 #include "funcapi.h"
@@ -4171,6 +4172,16 @@ InitTempTableNamespace(void)
 			 "pg_temp_%s%d", session_infix, session_suffix);
 
 	namespaceId = get_namespace_oid(namespaceName, true);
+
+	/*
+	 * GPDB: one with a reserved OID was left by a session whose temporary
+	 * objects were kept in memory; let the sweep remove it (see tempcat.c).
+	 */
+	if (OidIsValid(namespaceId) && IsTempcatOid(namespaceId))
+	{
+		tempcat_sweep_leftover_namespace(namespaceId);
+		namespaceId = get_namespace_oid(namespaceName, true);
+	}
 
 	/*
 	 * GPDB: Delete old temp schema.
