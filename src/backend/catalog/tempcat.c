@@ -501,12 +501,24 @@ tempcat_max_area_bytes(void)
 static bool
 tempcat_attach(bool create)
 {
+	static bool tranche_registered = false;
+	static LocalTransactionId no_area_lxid = InvalidLocalTransactionId;
 	MemoryContext oldcxt;
 	dsa_pointer rootptr;
 	dsa_area   *area;
 
 	if (tc_area != NULL)
 		return true;
+
+	/*
+	 * Once per process, also where no area is to come: pg_stat_activity
+	 * names other processes' waits for the lock by this process's tranches.
+	 */
+	if (unlikely(!tranche_registered))
+	{
+		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
+		tranche_registered = true;
+	}
 
 	if (am_cursor_retrieve_handler)
 	{
@@ -519,12 +531,21 @@ tempcat_attach(bool create)
 		dsa_handle	handle;
 		int			sessionId = RetrieveSessionId();
 
-		/* (free slots have session ID -1, like an unauthenticated session) */
+		/*
+		 * (free slots have session ID -1, like an unauthenticated session;
+		 * and do not search the slots, under their lock, at every catalog
+		 * scan of a transaction that found no area: it sees committed rows
+		 * only, which the next transaction looks for again)
+		 */
+		if (no_area_lxid == MyProc->lxid && MyProc->lxid != InvalidLocalTransactionId)
+			return false;
 		if (sessionId < 0 ||
 			!SharedSnapshotGetTempcatArea(sessionId, &handle, &rootptr))
+		{
+			no_area_lxid = MyProc->lxid;
 			return false;
+		}
 
-		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		tc_area = dsa_attach(handle);
 		dsa_pin_mapping(tc_area);
@@ -546,7 +567,6 @@ tempcat_attach(bool create)
 		pg_read_barrier();
 		rootptr = SharedLocalSnapshotSlot->tempcat_root;
 
-		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		tc_area = dsa_attach(handle);
 		dsa_pin_mapping(tc_area);
@@ -579,7 +599,6 @@ tempcat_attach(bool create)
 	 */
 	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
 		return false;
-	LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	PG_TRY();
 	{
@@ -2286,10 +2305,12 @@ tempcat_recompute_horizon(void)
 }
 
 /*
- * Command IDs of the snapshots this process handed to cursors in the current
+ * Command IDs of the snapshots a QE writer handed to cursors in the current
  * transaction (dumpSharedLocalSnapshot_forCursor()).  The cursors' reader
  * gangs scan with them in other processes, where SnapshotsSeeCommandRange()
- * does not see them; they are kept for the rest of the transaction.
+ * does not see them; they are kept for the rest of the transaction, as the
+ * writer does not learn when the cursors close.  (The coordinator registers
+ * a cursor's snapshot itself, which its entry-db readers use.)
  */
 static List *tc_cursor_cids = NIL;
 static LocalTransactionId tc_cursor_lxid = InvalidLocalTransactionId;
@@ -2299,7 +2320,7 @@ tempcat_note_cursor_snapshot(CommandId cid)
 {
 	MemoryContext oldcxt;
 
-	if (!IsTransactionState())
+	if (Gp_role != GP_ROLE_EXECUTE || !IsTransactionState())
 		return;
 	if (tc_cursor_lxid != MyProc->lxid)
 	{
