@@ -762,7 +762,7 @@ static void tempcat_sweep_if_needed(bool allow_force);
 static void tempcat_publish_oid(Oid oid);
 static bool tempcat_bounds_cover(TempcatProcState *st, Oid oid);
 static void tempcat_clear_bounds(TempcatProcState *st);
-static void tempcat_sweep_db(bool force);
+static void tempcat_sweep_db(bool force, bool wait);
 static void tempcat_sweep_xact_callback(XactEvent event, void *arg);
 static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   SubTransactionId mySubid,
@@ -4188,12 +4188,15 @@ tempcat_sweep_if_needed(bool allow_force)
 		force = true;
 #endif
 
-	tempcat_sweep_db(force);
+	tempcat_sweep_db(force, false);
 }
 
-/* Sweep this database, unless swept already and not 'force'd to. */
+/*
+ * Sweep this database, unless swept already and not 'force'd to.  Unless
+ * told to 'wait', give up if another session is sweeping.
+ */
 static void
-tempcat_sweep_db(bool force)
+tempcat_sweep_db(bool force, bool wait)
 {
 	if (!force && tempcat_db_swept(MyDatabaseId))
 		return;
@@ -4204,9 +4207,15 @@ tempcat_sweep_db(bool force)
 	 * at worst makes a DROP fail like before).  Waiting, with the lock held
 	 * until commit, deadlocked distributed transactions that took it on the
 	 * segments in different orders; so release it right after the sweep.
+	 * Waiting for it is safe then: a sweeper holds it only while it sweeps,
+	 * and waits for no transaction meanwhile (see tempcat_sweep_catalog()).
 	 */
-	if (!ConditionalLockDatabaseObject(DatabaseRelationId, MyDatabaseId,
-									   TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock))
+	if (wait)
+		LockDatabaseObject(DatabaseRelationId, MyDatabaseId,
+						   TEMPCAT_SWEEP_LOCK_SUBID, ExclusiveLock);
+	else if (!ConditionalLockDatabaseObject(DatabaseRelationId, MyDatabaseId,
+											TEMPCAT_SWEEP_LOCK_SUBID,
+											ExclusiveLock))
 		return;
 
 	if (force || !tempcat_db_swept(MyDatabaseId))
@@ -4348,23 +4357,37 @@ tempcat_sweep_before_drop(void)
 }
 
 /*
- * InitTempTableNamespace() found a temporary namespace of its name left on
- * disk by a session that is gone (its area could not be created, so the
- * namespace went to disk), and is about to remove it.  With a reserved OID,
- * that is the sweep's to do: RemoveTempRelations() would take its objects
- * for another session's (see tempcat_object_missing()), and the sweep that
- * performDeletion() runs first would remove the namespace under it.  Sweep
- * now, even if the database was swept already; the caller looks again.
+ * InitTempTableNamespace() found the temporary namespace 'namespaceName',
+ * 'namespaceId', left on disk by a session that is gone (its area could not
+ * be created, so the namespace went to disk), and is about to remove it.
+ * With a reserved OID, that is the sweep's to do: RemoveTempRelations()
+ * would take its objects for another session's (see
+ * tempcat_object_missing()), and the sweep that performDeletion() runs
+ * first would remove the namespace under it.  Sweep now, even if the
+ * database was swept already, waiting for a sweep under way (after a
+ * restart, many sessions may come for their namespaces at once).  Returns
+ * the namespace's OID as found then, which the caller removes as usual if
+ * valid: if it still has a reserved OID, e.g. while another transaction
+ * deleting it has not committed yet, fail rather than try that.
  */
-void
-tempcat_sweep_leftover_namespace(Oid namespaceId)
+Oid
+tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 {
 	if (!IsTempcatOid(namespaceId) ||
 		TempcatShared == NULL || IsBinaryUpgrade || !IsUnderPostmaster ||
 		RecoveryInProgress())
-		return;
-	tempcat_sweep_db(true);
+		return namespaceId;
+	tempcat_sweep_db(true, true);
 	CommandCounterIncrement();
+
+	namespaceId = get_namespace_oid(namespaceName, true);
+	if (IsTempcatOid(namespaceId))
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_IN_USE),
+				 errmsg("temporary schema \"%s\" left by an earlier session is not removed yet",
+						namespaceName),
+				 errhint("Try again.")));
+	return namespaceId;
 }
 
 /* ----------------------------------------------------------------

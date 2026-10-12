@@ -644,9 +644,16 @@ DROP TABLE tc_ord;
 -- created) has the sweep remove that first: dropping its objects as usual
 -- would take them for another session's.  (Session 1 leaves the schema;
 -- session 2 gives it its own name, as a session with the same ID would
--- find it after a restart.)
+-- find it after a restart.)  It waits for a sweep under way, rather than
+-- go on without: here session 3's, which the fault holds up meanwhile.
 CREATE TABLE tc_lns_name (n name) DISTRIBUTED REPLICATED;
 SELECT gp_inject_fault_infinite('tempcat_skip_autovacuum_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3: SET gp_enable_temp_memory_catalog = on;
+3&: CREATE TEMP TABLE tc_lns3 (a int) DISTRIBUTED BY (a);
+SELECT gp_wait_until_triggered_fault('tempcat_sweep_before_mark', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 1: SET gp_enable_temp_memory_catalog = on;
 1: SET application_name = 'tc_lns_session';
@@ -662,7 +669,14 @@ SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_c
 2: DO $$ BEGIN EXECUTE format('UPDATE pg_namespace SET nspname = %L WHERE nspname = %L', 'pg_temp_' || current_setting('gp_session_id'), (SELECT n FROM tc_lns_name)); END $$;
 2: RESET allow_system_table_mods;
 2: SET gp_enable_temp_memory_catalog = on;
-2: CREATE TEMP TABLE tc_lns2 (a int) DISTRIBUTED BY (a);
+2&: CREATE TEMP TABLE tc_lns2 (a int) DISTRIBUTED BY (a);
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'object' AND classid = 'pg_database'::regclass AND objid = (SELECT oid FROM pg_database WHERE datname = current_database()) AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+SELECT count(*) AS waiting_for_sweep FROM pg_locks WHERE locktype = 'object' AND classid = 'pg_database'::regclass AND objid = (SELECT oid FROM pg_database WHERE datname = current_database()) AND NOT granted;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3<:
+3q:
+2<:
 2: SELECT 'tc_lns2'::regclass::oid >= 4026531840 AS in_reserved_range;
 2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid >= 4026531840 AND nspname LIKE 'pg\_temp\_%' AND oid <> pg_my_temp_schema();
 2q:

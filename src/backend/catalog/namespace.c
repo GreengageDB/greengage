@@ -4178,10 +4178,8 @@ InitTempTableNamespace(void)
 	 * objects were kept in memory; let the sweep remove it (see tempcat.c).
 	 */
 	if (OidIsValid(namespaceId) && IsTempcatOid(namespaceId))
-	{
-		tempcat_sweep_leftover_namespace(namespaceId);
-		namespaceId = get_namespace_oid(namespaceName, true);
-	}
+		namespaceId = tempcat_sweep_leftover_namespace(namespaceName,
+													   namespaceId);
 
 	/*
 	 * GPDB: Delete old temp schema.
