@@ -552,24 +552,30 @@ tempcat_attach(bool create)
 	 * The area's memory is the session's, though shared: charge it to the
 	 * session's vmem (gp_vmem_protect_limit, resource groups), its first
 	 * segment here and later ones as the area grows (dsa_set_vmem_tracked()).
-	 * Without vmem to spare, rows go to the on-disk catalog.  Charge it once
-	 * the area exists: dsa_try_create() can still fail with an error (e.g.
-	 * out of local memory), which must not leave vmem charged.  Until its
-	 * mapping is pinned, the area goes away on detach, or at the end of the
-	 * transaction if reserving fails with an error.
+	 * Without vmem to spare, rows go to the on-disk catalog.  Charge it before
+	 * creating the area, so that a refusal costs nothing; dsa_try_create()
+	 * can still fail with an error (e.g. out of local memory), which must
+	 * not leave vmem charged.
 	 */
+	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
+		return false;
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	area = dsa_try_create(tempcat_tranche_id());
+	PG_TRY();
+	{
+		area = dsa_try_create(tempcat_tranche_id());
+	}
+	PG_CATCH();
+	{
+		VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 	MemoryContextSwitchTo(oldcxt);
 	if (area == NULL)
 	{
 		/* (the space or the slots ran out since the check) */
+		VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
 		tc_dsm_low = true;
-		return false;
-	}
-	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
-	{
-		dsa_detach(area);
 		return false;
 	}
 	dsa_pin_mapping(area);
