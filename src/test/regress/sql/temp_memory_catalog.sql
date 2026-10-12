@@ -645,6 +645,7 @@ WHERE s.stxname = 'tc_stx';
 -- not supported
 CREATE STATISTICS tc_stx_public ON a, b FROM tc_fn_data;
 CREATE COLLATION pg_temp.tc_coll FROM "C";
+DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 -- nor ordinary objects that depend on temporary objects kept in memory
 CREATE TEMP SEQUENCE tc_dep_seq;

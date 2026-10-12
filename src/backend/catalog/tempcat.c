@@ -102,6 +102,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_database.h"
+#include "catalog/pg_default_acl.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_description.h"
 #include "catalog/pg_index.h"
@@ -1281,6 +1282,12 @@ tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
 	if (catalog == RelationRelationId || catalog == TypeRelationId ||
 		catalog == ProcedureRelationId || catalog == OperatorRelationId)
 		return;
+	if (catalog == DefaultAclRelationId &&
+		tempcat_owns_oid(NamespaceRelationId, namespaceOid))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("default privileges cannot be set for a temporary schema kept in memory"),
+				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
 	if (tempcat_owns_oid(NamespaceRelationId, namespaceOid))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1448,7 +1455,15 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		if (!collides)
 		{
 			tempcat_activate();
-			tempcat_remember_oid(RelationGetRelid(relation), oid);
+
+			/*
+			 * Enum labels are no objects of their own: their rows go with
+			 * their type (see tempcat_catalogs[]), and nothing looks for
+			 * their OIDs among ours; remembering them, which nothing would
+			 * forget, would only grow the set and our bounds.
+			 */
+			if (RelationGetRelid(relation) != EnumRelationId)
+				tempcat_remember_oid(RelationGetRelid(relation), oid);
 			return oid;
 		}
 	}
@@ -3920,6 +3935,8 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
 		while (HeapTupleIsValid(tup = systable_getnext(scan)))
 		{
 			Oid			objid = tempcat_getoid(tup, desc, attr);
+
+			CHECK_FOR_INTERRUPTS();
 			Oid			cls = classattr != 0 ? tempcat_getoid(tup, desc, classattr) : objclass;
 
 			if (!IsTempcatOid(objid))
@@ -3972,6 +3989,7 @@ tempcat_sweep_objects(void)
 	{
 		Form_pg_namespace form = (Form_pg_namespace) GETSTRUCT(tup);
 
+		CHECK_FOR_INTERRUPTS();
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			(strncmp(NameStr(form->nspname), "pg_temp_", 8) == 0 ||
@@ -3994,6 +4012,7 @@ tempcat_sweep_objects(void)
 	{
 		Form_pg_class form = (Form_pg_class) GETSTRUCT(tup);
 
+		CHECK_FOR_INTERRUPTS();
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			!tempcat_disk_object_exists(NamespaceRelationId, form->relnamespace) &&
@@ -4017,6 +4036,7 @@ tempcat_sweep_objects(void)
 	{
 		Form_pg_type form = (Form_pg_type) GETSTRUCT(tup);
 
+		CHECK_FOR_INTERRUPTS();
 		if (IsTempcatOid(form->oid) &&
 			!tempcat_oid_live_now(form->oid, MyDatabaseId) &&
 			!tempcat_disk_object_exists(NamespaceRelationId, form->typnamespace) &&

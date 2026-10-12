@@ -1218,6 +1218,11 @@ HINT:  Name it pg_temp.tc_stx_public.
 CREATE COLLATION pg_temp.tc_coll FROM "C";
 ERROR:  only relations, types, functions and operators can be created in a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
+ERROR:  default privileges cannot be set for a temporary schema kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_30 GRANT SELECT ON TABLES TO PUBLIC"
+PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
