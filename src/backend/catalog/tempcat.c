@@ -405,17 +405,35 @@ tempcat_is_reader(void)
 		am_cursor_retrieve_handler;
 }
 
+/*
+ * The index of each covered catalog in tempcat_catalogs[], plus one, by the
+ * catalog's OID (0 for others), built at the first lookup: catalog scans
+ * look it up all the time, also with the feature off.  Catalogs have OIDs
+ * below FirstGenbkiObjectId.
+ */
+static uint8 tc_catidx_by_relid[FirstGenbkiObjectId];
+static bool tc_catidx_ready = false;
+
+StaticAssertDecl(lengthof(tempcat_catalogs) < PG_UINT8_MAX,
+				 "too many catalogs for tc_catidx_by_relid");
+
 static int
 tempcat_catalog_index(Oid relid)
 {
-	int			i;
-
-	for (i = 0; i < TEMPCAT_NCATALOGS; i++)
+	if (unlikely(!tc_catidx_ready))
 	{
-		if (tempcat_catalogs[i].relid == relid)
-			return i;
+		int			i;
+
+		for (i = 0; i < TEMPCAT_NCATALOGS; i++)
+		{
+			Assert(tempcat_catalogs[i].relid < FirstGenbkiObjectId);
+			tc_catidx_by_relid[tempcat_catalogs[i].relid] = i + 1;
+		}
+		tc_catidx_ready = true;
 	}
-	return -1;
+	if (relid >= FirstGenbkiObjectId)
+		return -1;
+	return (int) tc_catidx_by_relid[relid] - 1;
 }
 
 /*
@@ -491,8 +509,6 @@ tempcat_attach(bool create)
 	if (tc_area != NULL)
 		return true;
 
-	LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
-
 	if (am_cursor_retrieve_handler)
 	{
 		/*
@@ -509,6 +525,7 @@ tempcat_attach(bool create)
 			!SharedSnapshotGetTempcatArea(sessionId, &handle, &rootptr))
 			return false;
 
+		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		tc_area = dsa_attach(handle);
 		dsa_pin_mapping(tc_area);
@@ -530,6 +547,7 @@ tempcat_attach(bool create)
 		pg_read_barrier();
 		rootptr = SharedLocalSnapshotSlot->tempcat_root;
 
+		LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 		oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 		tc_area = dsa_attach(handle);
 		dsa_pin_mapping(tc_area);
@@ -562,6 +580,7 @@ tempcat_attach(bool create)
 	 */
 	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
 		return false;
+	LWLockRegisterTranche(tempcat_tranche_id(), "tempcat");
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	PG_TRY();
 	{
@@ -3057,10 +3076,11 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	int			i;
 	int			maxtuples;
 
+	/* the area first: there is none with the feature off, most often */
+	if (!tempcat_attach(false))
+		return NULL;
 	catidx = tempcat_catalog_index(RelationGetRelid(rel));
 	if (catidx < 0)
-		return NULL;
-	if (!tempcat_attach(false))
 		return NULL;
 
 	cat = &tc_root->catalogs[catidx];
