@@ -2586,13 +2586,14 @@ tempcat_start_transaction(void)
 /*
  * The session goes idle, out of any transaction: apply the outcome of its
  * finished transactions to the pending rows now, rather than at the start
- * of its next transaction, and let the published horizon rise (see
- * tempcat_add_pending()).  The next transaction may be long in coming,
- * especially for a QE writer, which gets none while the session's queries
- * go to other segments or to the coordinator only: until then, the XIDs of
- * its last transaction (committed in two phases, after its last start)
- * held back datfrozenxid on its segment, even with all its temporary
- * objects dropped.
+ * of its next transaction, let the published horizon rise (see
+ * tempcat_add_pending()), and republish the roles its rows refer to.  The
+ * next transaction may be long in coming, especially for a QE writer, which
+ * gets none while the session's queries go to other segments or to the
+ * coordinator only: until then, the XIDs of its last transaction (committed
+ * in two phases, after its last start) held back datfrozenxid on its
+ * segment, even with all its temporary objects dropped, and roles it no
+ * longer used could not be dropped by other sessions.
  *
  * Out of a transaction, an error would not release the lock, and could
  * repeat at every return here: log it instead, and leave the rows to the
@@ -2604,14 +2605,21 @@ tempcat_idle(void)
 {
 	MemoryContext oldcxt = CurrentMemoryContext;
 
-	if (tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty))
+	if (!tc_roles_dirty &&
+		(tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty)))
 		return;
 
 	PG_TRY();
 	{
-		tempcat_resolve_pending();
-		if (tc_horizon_dirty)
-			tempcat_recompute_horizon();
+		if (tc_area != NULL)
+		{
+			tempcat_resolve_pending();
+			if (tc_horizon_dirty)
+				tempcat_recompute_horizon();
+		}
+		/* and the roles that DROP ROLE in other sessions sees us use */
+		if (tc_roles_dirty)
+			tempcat_recompute_roles();
 	}
 	PG_CATCH();
 	{

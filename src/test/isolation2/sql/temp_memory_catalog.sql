@@ -935,8 +935,9 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segm
 -- (pg_shdepend) of its in-memory objects refer to; the rows for further
 -- roles go to disk.  Either way, other sessions cannot drop those roles
 -- while the references exist, and can once they are gone: the published
--- list is recomputed at the session's next transaction.  gpcheckcat's
--- hiding covers pg_shdepend rows on disk too.
+-- list is recomputed when the session goes idle, also on the segments, which
+-- get no transaction while it runs statements on the coordinator only.
+-- gpcheckcat's hiding covers pg_shdepend rows on disk too.
 --
 DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP; END $$;
 1: SET gp_enable_temp_memory_catalog = on;
@@ -948,9 +949,9 @@ DO $$ BEGIN FOR i IN 1..9 LOOP EXECUTE format('CREATE ROLE tc_r%s', i); END LOOP
 2: SET gp_temp_memory_catalog_hide_others = on;
 2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE objid >= 4026531840;
 2: RESET gp_temp_memory_catalog_hide_others;
-1: REVOKE SELECT ON tc_acl FROM tc_r1;
 1: REVOKE SELECT ON tc_acl FROM tc_r9;
-1: SELECT count(*) FROM tc_acl;
+1: REVOKE SELECT ON tc_acl FROM tc_r1;
+1: SELECT 1 AS coordinator_only;
 2: SELECT tc_try('DROP ROLE tc_r1');
 2: SELECT tc_try('DROP ROLE tc_r9');
 2q:
