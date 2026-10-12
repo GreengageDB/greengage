@@ -60,7 +60,7 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_enum') WHERE enumtypid >= 4026531840)
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
--- Index-only and bitmap scans cannot return in-memory rows, so the planner
+-- Index-only scans cannot return in-memory rows, so the planner
 -- keeps away from them for the catalogs in sessions that keep temporary
 -- objects in memory, or hide other sessions' ones.  Plans made before live
 -- on where the plan cache does not hold them, e.g. the plans of a SQL
@@ -311,8 +311,8 @@ SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
 
 COMMIT;
 -- Catalog queries planned in reader gangs (e.g. in functions run there) do
--- not use index-only or bitmap scans, which would miss the in-memory rows;
--- nor does ORCA, which leaves queries on such catalogs to the planner.
+-- not use index-only scans, which would miss the in-memory rows; nor does
+-- ORCA, which leaves queries on such catalogs to the planner.
 CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
 $$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
 SET enable_seqscan = off;
@@ -709,9 +709,11 @@ SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relna
 
 \copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
 1
--- Plain index scans merge the in-memory rows in index order; index-only and
--- bitmap scans, which cannot return them, are not used for such catalogs.
+-- Plain index scans merge the in-memory rows in index order, bitmap scans
+-- return them after the on-disk rows; index-only scans, which cannot return
+-- them, are not used for such catalogs.
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
 EXPLAIN (costs off) SELECT relname FROM pg_class
 WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
                                  QUERY PLAN                                  
@@ -777,15 +779,47 @@ ORDER BY 1, 2;
 
 RESET enable_hashjoin;
 RESET enable_mergejoin;
+RESET enable_bitmapscan;
 SET enable_indexscan = off;
 EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
-                          QUERY PLAN                           
----------------------------------------------------------------
+                         QUERY PLAN                          
+-------------------------------------------------------------
  Aggregate
-   ->  Index Scan using pg_class_relname_nsp_index on pg_class
-         Index Cond: (relname = 'tc_basic'::name)
+   ->  Bitmap Heap Scan on pg_class
+         Recheck Cond: (relname = 'tc_basic'::name)
+         ->  Bitmap Index Scan on pg_class_relname_nsp_index
+               Index Cond: (relname = 'tc_basic'::name)
  Optimizer: Postgres-based planner
+(6 rows)
+
+SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+ count 
+-------
+     1
+(1 row)
+
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+ relname  
+----------
+ pg_am
+ pg_class
+ tc_basic
+ tc_view
 (4 rows)
+
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY 1, 2;
+ relname  |  attname  
+----------+-----------
+ pg_am    | amhandler
+ pg_am    | amname
+ pg_am    | amtype
+ pg_am    | oid
+ tc_basic | a
+ tc_basic | bb
+(6 rows)
 
 RESET enable_indexscan;
 RESET enable_seqscan;
@@ -1221,7 +1255,7 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 DO $$ BEGIN EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT ON TABLES TO PUBLIC', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 ERROR:  default privileges cannot be set for a temporary schema kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
-CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_30 GRANT SELECT ON TABLES TO PUBLIC"
+CONTEXT:  SQL statement "ALTER DEFAULT PRIVILEGES IN SCHEMA pg_temp_60 GRANT SELECT ON TABLES TO PUBLIC"
 PL/pgSQL function inline_code_block line 1 at EXECUTE
 CREATE CAST (pg_temp.tc_mood AS int) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory

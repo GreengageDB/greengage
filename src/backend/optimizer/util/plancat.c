@@ -337,15 +337,15 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 								  amroutine->amrestrpos != NULL);
 
 			/*
-			 * GPDB: only plain index scans merge in the virtual catalog rows
-			 * of in-memory temporary objects (see tempcat.c): no index-only
-			 * or bitmap scans, and no mark/restore, of such catalogs.
+			 * GPDB: index-only scans cannot return the virtual catalog rows
+			 * of in-memory temporary objects (see tempcat.c), which plain
+			 * and bitmap index scans do: no index-only scans, and no
+			 * mark/restore, of such catalogs.
 			 */
 			if (!tempcat_plan_catalog_index_scans(RelationGetRelid(relation)))
 			{
 				int			c;
 
-				info->amhasgetbitmap = false;
 				info->amcanmarkpos = false;
 				for (c = 0; c < ncolumns; c++)
 					info->canreturn[c] = false;

@@ -575,7 +575,7 @@ void IndexOpProperties(Oid opno, Oid opfamily, StrategyNumber *strategynumber,
 // check whether index column is returnable (for index-only scans)
 gpos::BOOL IndexCanReturn(Relation index, int attno);
 
-// GPDB: must index-only and bitmap scans of the catalog be avoided because
+// GPDB: must index-only scans of the catalog be avoided because
 // it holds, or may come to hold, rows of temporary objects kept in memory
 // (see tempcat.c)?
 gpos::BOOL TempcatRestrictsCatalogIndexScans(Oid relid);

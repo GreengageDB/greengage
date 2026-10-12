@@ -1959,7 +1959,7 @@ DROP FUNCTION
 -------------
  0           
 (1 row)
--- index scans too (the option rules out index-only and bitmap scans)
+-- index and bitmap scans too (the option rules out index-only scans)
 2: SET enable_seqscan = off;
 SET
 2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
@@ -1984,6 +1984,20 @@ SET
  pg_am    | pg_class 
  pg_class | pg_class 
 (2 rows)
+2: SET enable_indexscan = off;
+SET
+2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT count(*) FROM pg_type WHERE oid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+2: RESET enable_indexscan;
+RESET
 2: RESET enable_seqscan;
 RESET
 2q: ... <quitting>

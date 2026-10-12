@@ -731,13 +731,17 @@ CREATE FUNCTION tc_orphan_deps() RETURNS bigint AS $$ SELECT count(*) FROM pg_de
 2: SELECT count(*) FROM pg_depend WHERE objid >= 4026531840 OR refobjid >= 4026531840;
 2: SELECT count(*) FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840 OR refobjid >= 4026531840;
 2: SELECT tc_orphan_deps() AS orphan_deps;
--- index scans too (the option rules out index-only and bitmap scans)
+-- index and bitmap scans too (the option rules out index-only scans)
 2: SET enable_seqscan = off;
 2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
 2: SELECT count(*) FROM pg_type WHERE oid >= 4026531840;
 2: SELECT count(*) FROM gp_dist_random('pg_class') WHERE oid >= 4026531840;
 -- (pg_dump looks objects up by tableoid)
 2: SELECT relname, tableoid::regclass FROM pg_class WHERE oid IN ('pg_am'::regclass, 'pg_class'::regclass) ORDER BY 1;
+2: SET enable_indexscan = off;
+2: SELECT count(*) FROM pg_class WHERE oid >= 4026531840;
+2: SELECT count(*) FROM pg_type WHERE oid >= 4026531840;
+2: RESET enable_indexscan;
 2: RESET enable_seqscan;
 2q:
 

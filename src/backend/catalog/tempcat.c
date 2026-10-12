@@ -916,9 +916,9 @@ tempcat_activate(void)
 	before_shmem_exit(tempcat_before_exit, (Datum) 0);
 
 	/*
-	 * From now on catalog queries must not use index-only or bitmap scans of
-	 * catalog indexes (see tempcat_restrict_catalog_index_scans()); forget
-	 * plans made before.
+	 * From now on catalog queries must not use index-only scans of catalog
+	 * indexes (see tempcat_restrict_catalog_index_scans()); forget plans
+	 * made before.
 	 */
 	ResetPlanCache();
 
@@ -4317,14 +4317,14 @@ tempcat_sweep_leftover_namespace(Oid namespaceId)
 /* ----------------------------------------------------------------
  * SQL-level catalog scans
  *
- * Catalog queries see the virtual rows through sequential scans, which
- * return them after the on-disk rows (nodeSeqscan.c), and plain index scans,
- * which merge them in index order (nodeIndexscan.c).  Index-only and bitmap
- * scans cannot return them, so once a session keeps temporary objects in
- * memory, the planner does not use those for the catalogs that can hold
- * virtual rows, in the session's writer and in its readers (e.g. in
- * functions run in reader gangs).  ORCA leaves queries on such catalogs to
- * the planner.
+ * Catalog queries see the virtual rows through sequential and bitmap
+ * scans, which return them after the on-disk rows (nodeSeqscan.c,
+ * nodeBitmapHeapscan.c), and plain index scans, which merge them in index
+ * order (nodeIndexscan.c).  Index-only scans cannot return them, so once a
+ * session keeps temporary objects in memory, the planner does not use those
+ * (nor mark and restore index scans) for the catalogs that can hold virtual
+ * rows, in the session's writer and in its readers (e.g. in functions run in
+ * reader gangs).  ORCA leaves queries on such catalogs to the planner.
  *
  * Plans made before are made anew at activation (ResetPlanCache()) only if
  * the plan cache holds them; others live on, e.g. the plans of a SQL
@@ -4347,7 +4347,8 @@ tempcat_restrict_catalog_index_scans(Oid relid)
 }
 
 /*
- * May the planner use index-only and bitmap scans of catalog 'relid'?  Not
+ * May the planner use index-only scans of catalog 'relid', and mark and
+ * restore its index scans?  Not
  * if tempcat_restrict_catalog_index_scans() forbids them, nor while the
  * session could still start keeping temporary objects in memory: with the
  * setting on, before it creates its temporary schema.

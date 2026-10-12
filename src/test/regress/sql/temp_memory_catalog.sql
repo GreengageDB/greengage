@@ -63,7 +63,7 @@ CREATE FUNCTION tempcat_disk_rows_segs() RETURNS bigint LANGUAGE sql AS $$
        + (SELECT count(*) FROM gp_dist_random('pg_range') WHERE rngtypid >= 4026531840)
 $$;
 
--- Index-only and bitmap scans cannot return in-memory rows, so the planner
+-- Index-only scans cannot return in-memory rows, so the planner
 -- keeps away from them for the catalogs in sessions that keep temporary
 -- objects in memory, or hide other sessions' ones.  Plans made before live
 -- on where the plan cache does not hold them, e.g. the plans of a SQL
@@ -202,8 +202,8 @@ SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS class_ins,
 COMMIT;
 
 -- Catalog queries planned in reader gangs (e.g. in functions run there) do
--- not use index-only or bitmap scans, which would miss the in-memory rows;
--- nor does ORCA, which leaves queries on such catalogs to the planner.
+-- not use index-only scans, which would miss the in-memory rows; nor does
+-- ORCA, which leaves queries on such catalogs to the planner.
 CREATE FUNCTION pg_temp.tc_att_count(r oid) RETURNS bigint LANGUAGE plpgsql VOLATILE AS
 $$ BEGIN RETURN (SELECT count(*) FROM pg_attribute WHERE attrelid = r AND attnum > 0); END $$;
 SET enable_seqscan = off;
@@ -397,9 +397,11 @@ SELECT count(*) FROM pg_class TABLESAMPLE BERNOULLI (100) WHERE relname = 'tc_ba
 -- TID scans and COPY TO of a catalog see them too.
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_basic');
 \copy pg_class (relname) TO PROGRAM 'grep -c ^tc_basic$'
--- Plain index scans merge the in-memory rows in index order; index-only and
--- bitmap scans, which cannot return them, are not used for such catalogs.
+-- Plain index scans merge the in-memory rows in index order, bitmap scans
+-- return them after the on-disk rows; index-only scans, which cannot return
+-- them, are not used for such catalogs.
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
 EXPLAIN (costs off) SELECT relname FROM pg_class
 WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
 SELECT relname FROM pg_class
@@ -419,8 +421,15 @@ WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
 ORDER BY 1, 2;
 RESET enable_hashjoin;
 RESET enable_mergejoin;
+RESET enable_bitmapscan;
 SET enable_indexscan = off;
 EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SELECT count(*) FROM pg_class WHERE relname = 'tc_basic';
+SELECT relname FROM pg_class
+WHERE relname IN ('tc_basic', 'tc_view', 'pg_am', 'pg_class') ORDER BY relname;
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+WHERE c.relname IN ('tc_basic', 'pg_am') AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY 1, 2;
 RESET enable_indexscan;
 RESET enable_seqscan;
 

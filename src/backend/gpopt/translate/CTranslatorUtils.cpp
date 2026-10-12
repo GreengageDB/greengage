@@ -149,7 +149,7 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 			GPOS_WSZ_LIT("Queries on coordinator-only tables"));
 	}
 
-	// GPDB: index-only and bitmap scans miss the catalog rows of temporary
+	// GPDB: index-only scans miss the catalog rows of temporary
 	// objects kept in memory, and only the planner keeps away from them
 	// (see tempcat.c)
 	if (IMDRelation::EreldistrCoordinatorOnly == distribution_policy &&
