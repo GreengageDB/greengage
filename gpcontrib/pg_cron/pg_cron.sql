@@ -50,6 +50,6 @@ COMMENT ON FUNCTION cron.job_cache_invalidate()
     IS 'invalidate job cache';
 
 CREATE TRIGGER cron_job_cache_invalidate
-    AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+    AFTER INSERT OR UPDATE OR DELETE
     ON cron.job
-    FOR STATEMENT EXECUTE PROCEDURE cron.job_cache_invalidate();
+    FOR ROW EXECUTE PROCEDURE cron.job_cache_invalidate();

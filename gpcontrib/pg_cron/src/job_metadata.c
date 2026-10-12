@@ -1228,7 +1228,7 @@ UpdateJobRunDetail(int64 runId, int32 *job_pid, char *status, char *return_messa
 	querybuf.data[querybuf.len] = '\0';
 
 	/* and add the where clause */
-	appendStringInfo(&querybuf, " where runid = $%d", i);
+	appendStringInfo(&querybuf, " where runid OPERATOR(pg_catalog.=) $%d", i);
 
 	if(SPI_execute_with_args(querybuf.data,
 		i, argTypes, argValues, NULL, false, 1) != SPI_OK_UPDATE)
@@ -1382,7 +1382,7 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 	argValues[i] = Int64GetDatum(jobId);
 	i++;
 
-	appendStringInfo(&querybuf, " where jobid = $%d", i);
+	appendStringInfo(&querybuf, " where jobid OPERATOR(pg_catalog.=) $%d", i);
 
 	/* ensure the caller owns the row */
 	argTypes[i] = TEXTOID;
@@ -1390,7 +1390,7 @@ AlterJob(int64 jobId, text *scheduleText, text *commandText, text *databaseText,
 	i++;
 
 	if (!superuser())
-		appendStringInfo(&querybuf, " and username = $%d", i);
+		appendStringInfo(&querybuf, " and username OPERATOR(pg_catalog.=) $%d", i);
 
 	if (i <= 2)
 		ereport(ERROR, (errmsg("no updates specified"),
@@ -1442,7 +1442,7 @@ MarkPendingRunsAsFailed(void)
 
 
 	appendStringInfo(&querybuf,
-		"update %s.%s set status = '%s', return_message = 'server restarted' where status in ('%s','%s')"
+		"update %s.%s set status = '%s', return_message = 'server restarted' where status OPERATOR(pg_catalog.=) ANY(ARRAY['%s','%s'])"
 		, CRON_SCHEMA_NAME, JOB_RUN_DETAILS_TABLE_NAME, GetCronStatus(CRON_STATUS_FAILED), GetCronStatus(CRON_STATUS_STARTING), GetCronStatus(CRON_STATUS_RUNNING));
 
 

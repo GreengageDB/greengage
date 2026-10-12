@@ -1,20 +1,9 @@
-CREATE EXTENSION pg_cron VERSION '1.0';
-SELECT extversion FROM pg_extension WHERE extname='pg_cron';
--- Test binary compatibility with v1.3 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.3';
-SELECT cron.schedule('test', '* * * * *', 'SELECT 1');
-SELECT cron.unschedule('test');
--- Test binary compatibility with v1.4 function signature.
-ALTER EXTENSION pg_cron UPDATE TO '1.4';
-SELECT cron.unschedule(job_name := 'no_such_job');
-SELECT cron.schedule('testjob', '* * * * *', 'SELECT 1');
-SELECT cron.unschedule('testjob');
-
+-- start_matchsubs
+-- m/ \([a-zA-Z0-9_]+\.c:\d+\)/
+-- s/ \([a-zA-Z0-9_]+\.c:\d+\)//
+-- end_matchsubs
 -- Test cache invalidation
-DROP EXTENSION pg_cron;
-CREATE EXTENSION pg_cron VERSION '1.4';
-
-ALTER EXTENSION pg_cron UPDATE;
+CREATE EXTENSION pg_cron;
 
 -- Vacuum every day at 10:00am (GMT)
 SELECT cron.schedule('0 10 * * *', 'VACUUM');
@@ -151,7 +140,7 @@ RESET SESSION AUTHORIZATION;
 
 -- Override function
 DROP EXTENSION IF EXISTS pg_cron cascade;
-CREATE TABLE test (data text);
+CREATE TABLE test (data text) DISTRIBUTED BY (data);
 DROP TYPE IF EXISTS current_setting cascade;
 CREATE TYPE current_setting AS ENUM ('cron.database_name');
 
@@ -179,6 +168,79 @@ SELECT jobid, jobname, schedule, command FROM cron.job ORDER BY jobid;
 
 -- invalid last of day job
 SELECT cron.schedule('bad-last-dom-job1', '0 11 $foo * *', 'VACUUM FULL');
+
+-- Verify job execution and launcher health
+CREATE FUNCTION public.pg_cron_wait_for_job(p_jobid bigint) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status text;
+BEGIN
+    FOR i IN 1..30 LOOP
+        SELECT status INTO v_status FROM cron.job_run_details
+            WHERE jobid = p_jobid AND status IN ('succeeded', 'failed')
+        ORDER BY runid DESC LIMIT 1;
+        IF v_status IS NOT NULL THEN
+            RETURN v_status;
+        END IF;
+        PERFORM pg_sleep(1);
+    END LOOP;
+    RETURN 'timeout';
+END $$;
+
+SELECT cron.schedule('simple_exec_test', '1 seconds', 'SELECT 1') AS exec_jobid \gset
+SELECT public.pg_cron_wait_for_job(:exec_jobid);
+SELECT cron.unschedule('simple_exec_test');
+
+-- Job connection respects pg_hba.conf
+-- This test assumes that login is allowed only for gpadmin, thus job should fail.
+-- With a broader trust on a dev cluster job succeeds and test fails.
+CREATE ROLE cron_hba_test LOGIN;
+SELECT cron.schedule_in_database(
+    'hba-test-job',
+    '1 seconds',
+    'SELECT 1',
+    current_database(),
+    'cron_hba_test'
+) AS hba_job_id
+\gset
+
+SELECT public.pg_cron_wait_for_job(:hba_job_id);
+
+SELECT cron.unschedule(:hba_job_id);
+SELECT count(*) FILTER (WHERE status = 'succeeded') AS succeeded,
+       count(*) FILTER (WHERE return_message LIKE '%connection failed%') > 0 AS no_hba
+FROM cron.job_run_details
+WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
+
+DELETE FROM cron.job_run_details
+    WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
+DROP ROLE cron_hba_test;
+
+-- Verify cache invalidation using trigger
+INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, active, jobname)
+VALUES (
+    '1 seconds',
+    'SELECT 1',
+    'localhost',
+    (SELECT setting::integer FROM pg_settings WHERE name = 'port'),
+    current_database(),
+    current_user,
+    true,
+    'cache_test_job'
+)
+RETURNING jobid \gset cache_
+
+SELECT public.pg_cron_wait_for_job(:cache_jobid);
+SELECT count(*) > 0 FROM cron.job_run_details WHERE jobid = :cache_jobid;
+
+UPDATE cron.job SET command = 'SELECT 2' WHERE jobid = :cache_jobid;
+SELECT pg_sleep(2);
+SELECT DISTINCT command FROM cron.job_run_details WHERE jobid = :cache_jobid;
+
+SELECT cron.unschedule(:cache_jobid);
+DELETE FROM cron.job_run_details
+    WHERE jobid OPERATOR(pg_catalog.=) :cache_jobid;
+DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
 -- cleaning
 DROP EXTENSION pg_cron;

@@ -2,7 +2,7 @@
 
 # What is pg_cron?
 
-pg_cron is a simple cron-based job scheduler for PostgreSQL (10 or higher) that runs inside the database as an extension. 
+pg_cron is a simple cron-based job scheduler for Greengage (based on PostgreSQL 12.22 or higher) that runs inside the database as an extension. 
 
 ---
 
@@ -14,6 +14,7 @@ pg_cron is a simple cron-based job scheduler for PostgreSQL (10 or higher) that 
 	- [Creating a cron job in a different database](#creating-a-cron-job-in-a-different-database)
 	- [Removing a cron job](#removing-a-cron-job)
 	- [Altering a cron job](#altering-a-cron-job)
+	- [Manual cron job management](#manual-cron-job-management)
 - [Installing pg_cron](#installing-pg_cron)
 - [Setting up pg_cron](#setting-up-pg_cron)
 - [Monitoring jobs](#monitoring-jobs)
@@ -269,82 +270,58 @@ SELECT cron.alter_job(
 SELECT cron.alter_job(42, active := false);
 -- returns void
 ```
+### Manual cron job management
+Cron jobs can also be managed by using `INSERT`, `UPDATE`, `DELETE` and etc on `cron.job` table.
+
+> Directly modifying `cron.job` table, instead of using the functions, bypasses the security checks performed by the extension's job-management functions. Write access to `cron.job` must therefore be reserved for trusted roles, and is equivalent to the privileges of any role the scheduler can authenticate as (including superuser).
+
+```sql
+INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, active, jobname)
+VALUES (
+       '0 2 * * *',         -- Run at 2 AM daily
+       'VACUUM ANALYZE',    -- Command to execute
+       'localhost',         -- Node name (or host)
+       7000,                -- Node port 
+       'postgres',          -- Database
+       'postgres',          -- Username
+       true,                -- Active
+       'daily_vacuum'       -- Job name
+);
+```
 
 # Installing pg_cron
 
-Install on Red Hat, CentOS, Fedora, Amazon Linux with PostgreSQL 18 using [PGDG](https://yum.postgresql.org/repopackages/):
-
+You can build and install pg_cron by in-tree build flow from utmost top directory of Greengage (also refer to Greenage's README):
 ```bash
-# Install the pg_cron extension
-sudo yum install -y pg_cron_18
+./configure --with-libxml
+make -j8
+make -j8 install
 ```
 
-Install on Debian, Ubuntu with PostgreSQL 18 using [apt.postgresql.org](https://wiki.postgresql.org/wiki/Apt):
-
+Else, you can rebuild and install directly from `gpcontrib/pg_cron` (provided `./configure` was already issued before):
 ```bash
-# Install the pg_cron extension
-sudo apt-get -y install postgresql-18-cron
+make
+sudo make install
 ```
-
-You can also install pg_cron by building it from source:
-
-```bash
-git clone https://github.com/citusdata/pg_cron.git
-cd pg_cron
-# Ensure pg_config is in your path, e.g.
-export PATH=/usr/pgsql-18/bin:$PATH
-make && sudo PATH=$PATH make install
-```
-
-## Windows
-
-Ensure [C++ support in Visual Studio](https://learn.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-170#download-and-install-the-tools) is installed and run `x64 Native Tools Command Prompt for VS [version]` as administrator. Then use `nmake` to build:
-
-```cmd
-set "PGROOT=C:\Program Files\PostgreSQL\18"
-cd %TMP%
-git clone https://github.com/citusdata/pg_cron.git
-cd pg_cron
-nmake /F Makefile.win
-nmake /F Makefile.win install
-```
-
-### Installation Notes - Windows
-
-#### Missing Header
-
-If compilation fails with `Cannot open include file: 'postgres.h': No such file or directory`, make sure `PGROOT` is correct.
-
-#### Permissions
-
-If installation fails with `Access is denied`, re-run the installation instructions as an administrator.
 
 # Setting up pg_cron
 
-To start the pg_cron background worker, you need to add pg_cron to `shared_preload_libraries` in postgresql.conf. Note that pg_cron does not run any jobs as a long a server is in [hot standby](https://www.postgresql.org/docs/current/static/hot-standby.html) mode, but it automatically starts when the server is promoted.
+To start the pg_cron background worker, you need to add pg_cron to `shared_preload_libraries` of coordinator. Note that pg_cron does not run any jobs as a long a server is in [hot standby](https://www.postgresql.org/docs/current/static/hot-standby.html) mode, but it automatically starts when the server is promoted.
 
 ```
-# add to postgresql.conf
-
-# required to load pg_cron background worker on start-up
-shared_preload_libraries = 'pg_cron'
+# required to load pg_cron background worker on start-up (rewrites shared_preload_libraries)
+gpconfig -c shared_preload_libraries -v 'pg_cron' --coordinatoronly
 ```
 
-By default, the pg_cron background worker expects its metadata tables to be created in the "postgres" database. However, you can configure this by setting the `cron.database_name` configuration parameter in postgresql.conf.
+By default, the pg_cron background worker expects its metadata tables to be created in the "postgres" database. However, you can configure this by setting the `cron.database_name` configuration parameter.
 ```
-# add to postgresql.conf
-
-# optionally, specify the database in which the pg_cron background worker should run (defaults to postgres)
-cron.database_name = 'postgres'
+gpconfig -c cron.database_name -v 'postgres' --coordinatoronly --skipvalidation
 ```
 `pg_cron` may only be installed to one database in a cluster. If you need to run jobs in multiple databases, use `cron.schedule_in_database()`.
 
-Previously pg_cron could only use GMT time, but now you can adapt your time by setting `cron.timezone` in postgresql.conf.
+Previously pg_cron could only use GMT time, but now you can adapt your time by setting `cron.timezone`.
 ```
-# add to postgresql.conf
-
-# optionally, specify the timezone in which the pg_cron background worker should run (defaults to GMT). E.g:
-cron.timezone = 'PRC'
+gpconfig -c cron.timezone -v 'PRC' --coordinatoronly --skipvalidation
 ```
 
 After restarting PostgreSQL, you can create the pg_cron functions and metadata tables using `CREATE EXTENSION pg_cron`.
@@ -375,9 +352,9 @@ Alternatively, pg_cron can be configured to use background workers. In that case
 
 ```
 # Schedule jobs via background workers instead of localhost connections
-cron.use_background_workers = on
+gpconfig -c cron.use_background_workers -v 'on' --coordinatoronly --skipvalidation
 # Increase the number of available background workers from the default of 8
-max_worker_processes = 20
+gpconfig -c max_worker_processes -v '20' --coordinatoronly --skipvalidation
 ```
 
 For security, jobs are executed in the database in which the `cron.schedule` function is called with the same permissions as the current user. In addition, users are only able to see their own jobs in the `cron.job` table.
@@ -412,10 +389,10 @@ To view setting configurations, run:
 SELECT * FROM pg_settings WHERE name LIKE 'cron.%';
 ```
 
-Setting can be changed in the postgresql.conf file or with the below command:
+Setting can be changed by using `gpconfig` utility with `--coordinatoronly` and `--skipvalidation` options.
 
-```sql
-ALTER SYSTEM SET cron.<parameter> TO '<value>';
+```bash
+gpconfig -c cron.<parameter> -v '<value>' --coordinatoronly --skipvalidation
 ```
 
 `cron.log_min_messages` and `cron.launch_active_jobs` have a [setting context](https://www.postgresql.org/docs/current/view-pg-settings.html#VIEW-PG-SETTINGS) of `sighup`. They can be finalized by executing `SELECT pg_reload_conf();`.
@@ -451,7 +428,7 @@ Especially when you have jobs that run every few seconds, it can be a good idea 
 SELECT  cron.schedule('delete-job-run-details', '0 12 * * *', $$DELETE FROM cron.job_run_details WHERE end_time < now() - interval '7 days'$$);
 ```
 
-If you do not want to use `cron.job_run_details` at all, then you can add `cron.log_run = off` to `postgresql.conf`.
+If you do not want to use `cron.job_run_details` at all, then you can add `cron.log_run = off` using `gpconfig`.
 
 ### Other cron logging settings
 

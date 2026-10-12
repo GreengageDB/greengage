@@ -117,6 +117,8 @@
 #include "libpq/pqformat.h"
 #include "utils/builtins.h"
 
+/* GG includes: */
+#include "cdb/cdbvars.h"
 
 PG_MODULE_MAGIC;
 
@@ -220,6 +222,11 @@ void
 _PG_init(void)
 {
 	BackgroundWorker worker = {0,};
+
+	if (!IS_QUERY_DISPATCHER())
+	{
+		return;
+	}
 
 	if (IsBinaryUpgrade)
 	{
@@ -2306,8 +2313,13 @@ ExecuteSqlString(const char *sql)
 		portal = CreatePortal("", true, true);
 		/* Don't display the portal in pg_cursors */
 		portal->visible = false;
+#if 0
 		PortalDefineQuery(portal, NULL, sql, commandTag, plantree_list, NULL);
 		PortalStart(portal, NULL, 0, InvalidSnapshot);
+#else
+		PortalDefineQuery(portal, NULL, sql, nodeTag(parsetree->stmt), commandTag, plantree_list, NULL);
+		PortalStart(portal, NULL, 0, InvalidSnapshot, NULL);
+#endif
 		PortalSetResultFormat(portal, 1, &format);		/* binary format */
 
 		--commands_remaining;
