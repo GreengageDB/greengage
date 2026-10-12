@@ -903,6 +903,21 @@ tempcat_activate(void)
 	tempcat_sweep_if_needed(true);
 }
 
+/* Lower the published horizon to cover 'xid'.  Lowering is always safe. */
+static void
+tempcat_cover_xid(TransactionId xid)
+{
+	TempcatProcState *st;
+	TransactionId cur;
+
+	if (!TransactionIdIsNormal(xid))
+		return;
+	st = tempcat_my_state();
+	cur = pg_atomic_read_u32(&st->frozenXid);
+	if (!TransactionIdIsValid(cur) || TransactionIdPrecedes(xid, cur))
+		pg_atomic_write_u32(&st->frozenXid, xid);
+}
+
 /*
  * Lower the published horizon to cover a pg_class row of ours.  Lowering is
  * always safe; raising waits for tempcat_recompute_horizon().
@@ -912,16 +927,9 @@ tempcat_cover_pg_class_row(HeapTupleHeader hdr)
 {
 	Form_pg_class form = (Form_pg_class) ((char *) hdr + hdr->t_hoff);
 	TempcatProcState *st = tempcat_my_state();
-	TransactionId xid = form->relfrozenxid;
 	MultiXactId mxid = form->relminmxid;
 
-	if (TransactionIdIsNormal(xid))
-	{
-		TransactionId cur = pg_atomic_read_u32(&st->frozenXid);
-
-		if (!TransactionIdIsValid(cur) || TransactionIdPrecedes(xid, cur))
-			pg_atomic_write_u32(&st->frozenXid, xid);
-	}
+	tempcat_cover_xid(form->relfrozenxid);
 	if (MultiXactIdIsValid(mxid))
 	{
 		MultiXactId cur = pg_atomic_read_u32(&st->minMulti);
@@ -1881,6 +1889,16 @@ tempcat_add_pending(dsa_pointer ep)
 
 	tc_xact_changed = true;
 
+	/*
+	 * Until the outcome of its transactions is applied to the row, at the
+	 * start of the session's next transaction (which may be long in coming),
+	 * its xids are looked up in the clog: keep vac_update_datfrozenxid(), and
+	 * so clog truncation, from passing them.
+	 */
+	if (!(e->flags & TCE_XMIN_COMMITTED))
+		tempcat_cover_xid(e->xmin);
+	tempcat_cover_xid(e->xmax);
+
 	if (e->flags & TCE_PENDING)
 		return;
 
@@ -2004,6 +2022,7 @@ static void
 tempcat_resolve_pending(void)
 {
 	int			i = 0;
+	int			npending = tc_npending;
 
 	if (tc_npending == 0)
 		return;
@@ -2071,6 +2090,10 @@ tempcat_resolve_pending(void)
 	}
 
 	LWLockRelease(&tc_root->lock);
+
+	/* Their xids need no cover any more; see tempcat_add_pending(). */
+	if (tc_npending < npending)
+		tc_horizon_dirty = true;
 }
 
 /*
@@ -2085,8 +2108,22 @@ tempcat_recompute_horizon(void)
 	TransactionId minxid = InvalidTransactionId;
 	MultiXactId minmxid = InvalidMultiXactId;
 	dsa_pointer ep;
+	int			i;
 
 	tc_horizon_dirty = false;
+
+	/* the xids of rows still pending; see tempcat_add_pending() */
+	for (i = 0; i < tc_npending; i++)
+	{
+		TempcatEntry *e = TC_ADDR(tc_pending[i]);
+
+		if (!(e->flags & TCE_XMIN_COMMITTED) && TransactionIdIsNormal(e->xmin) &&
+			(!TransactionIdIsValid(minxid) || TransactionIdPrecedes(e->xmin, minxid)))
+			minxid = e->xmin;
+		if (TransactionIdIsNormal(e->xmax) &&
+			(!TransactionIdIsValid(minxid) || TransactionIdPrecedes(e->xmax, minxid)))
+			minxid = e->xmax;
+	}
 
 	for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
 	{

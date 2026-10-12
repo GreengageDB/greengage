@@ -279,6 +279,21 @@ CREATE DATABASE tc_frozen_db;
 2: DO $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 2: VACUUM FREEZE;
 2: SELECT datfrozenxid::text::bigint > (SELECT x FROM tc_xid) AS advanced FROM pg_database WHERE datname = current_database();
+-- Nor past the XIDs of rows whose transaction's outcome the session has not
+-- applied yet (at the start of its next transaction), which it looks up in
+-- the clog then: here those of a temporary view, which has no relfrozenxid.
+3:@db_name tc_frozen_db: SET gp_enable_temp_memory_catalog = on;
+3: SET application_name = 'tc_frozen_view_session';
+3: BEGIN;
+3: CREATE TEMP VIEW tc_frozen_v AS SELECT 1 AS a;
+3: DELETE FROM tc_xid;
+3: INSERT INTO tc_xid SELECT txid_current() % 4294967296;
+3: COMMIT;
+2: DO $$ BEGIN FOR i IN 1..100 LOOP PERFORM txid_current(); COMMIT; END LOOP; END $$;
+2: VACUUM FREEZE;
+2: SELECT datfrozenxid::text::bigint <= (SELECT x FROM tc_xid) AS held_back FROM pg_database WHERE datname = current_database();
+3q:
+2: DO $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_frozen_view_session') THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; END $$;
 2q:
 DROP DATABASE tc_frozen_db;
 
