@@ -22,6 +22,8 @@ teardown
 session s1
 setup
 {
+  -- GPDB: a temporary table kept in memory cannot inherit from an ordinary one
+  SET gp_enable_temp_memory_catalog = off;
   CREATE TEMPORARY TABLE inh_temp_child_s1 () INHERITS (inh_parent);
 }
 step s1_begin { BEGIN; }
@@ -44,6 +46,8 @@ teardown
 session s2
 setup
 {
+  -- GPDB: a temporary table kept in memory cannot inherit from an ordinary one
+  SET gp_enable_temp_memory_catalog = off;
   CREATE TEMPORARY TABLE inh_temp_child_s2 () INHERITS (inh_parent);
 }
 step s2_truncate_p { TRUNCATE inh_parent; }

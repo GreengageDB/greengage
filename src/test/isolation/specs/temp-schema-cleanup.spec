@@ -13,6 +13,9 @@ teardown {
 
 session "s1"
 setup {
+    -- GPDB: an ordinary function below uses a temporary type, which cannot
+    -- depend on temporary objects kept in memory
+    SET gp_enable_temp_memory_catalog = off;
     CREATE TEMPORARY TABLE just_to_create_temp_schema();
     DROP TABLE just_to_create_temp_schema;
     INSERT INTO s1_temp_schema SELECT pg_my_temp_schema();

@@ -872,6 +872,8 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 -- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
 -- to them it does not exist, like the relations kept in memory.
 1: ALTER TABLE tc_half ADD COLUMN z int;
+-- (session 2 stands for gpcheckcat: its own objects stay on disk)
+2: SET gp_enable_temp_memory_catalog = off;
 2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
 2: ANALYZE;
 2: VACUUM;
@@ -944,6 +946,9 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 1: CREATE TEMP TABLE tc_cnt (n bigint) DISTRIBUTED RANDOMLY;
 1: INSERT INTO tc_cnt SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
 1: SELECT n FROM tc_cnt;
+-- (dropped here, as the files of the session's tables go asynchronously
+-- at its exit, and the tablespace must be empty to be dropped below)
+1: DROP TABLE tc_in_ts;
 1q:
 
 SELECT tc_retry('DROP FUNCTION tc_def()');
