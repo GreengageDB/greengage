@@ -442,3 +442,18 @@ create function func_fail_14465(int) returns int
 			  end$$;
 create materialized view mv_14465 as select 1 as c;
 create index on mv_14465 (c) where func_fail_14465(1) > 0;
+
+--
+-- pg_constraint: connoinherit (NO INHERIT flag)
+--
+create or replace function verify_connoinherit(varchar) returns bigint as
+$$
+select count(distinct(foo.connoinherit)) from (
+      (select connoinherit from pg_constraint where conrelid = $1::regclass)
+      union
+      (select connoinherit from gp_dist_random('pg_constraint') where conrelid = $1::regclass)
+) foo;
+$$ language sql;
+
+CREATE TABLE constraint_no_inherit (a float, b float, CONSTRAINT bnoinherit CHECK (b > 100) NO INHERIT);
+select verify_connoinherit('constraint_no_inherit');
