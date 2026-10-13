@@ -65,27 +65,61 @@ my $attach_partition = qr/^
 #########################################
 # Regular dump
 
-# Expected pg_dump warning for a child index that is not dumped.
+# Expected pg_dump warning, once per extension index, for the child indexes
+# that are not dumped.
 sub skip_warning
 {
-	my ($index, $partition, $extindex) = @_;
-	return qr/\Qwarning: index "regress_pg_dump_schema.$index" on partition "$partition" is not dumped; it is restored only if CREATE EXTENSION creates index "regress_pg_dump_schema.$extindex"\E/;
+	my ($count, $table, $extindex) = @_;
+	my $what =
+	  $count == 1
+	  ? "1 index on partitions of extension table \"regress_pg_dump_schema.$table\" is not dumped; it is"
+	  : "$count indexes on partitions of extension table \"regress_pg_dump_schema.$table\" are not dumped; they are";
+	return qr/\Qwarning: $what restored only if CREATE EXTENSION creates index "regress_pg_dump_schema.$extindex"\E/;
 }
 
-$node->command_checks_all(
-	[ 'pg_dump', '--no-sync', "--file=$tempdir/defaults.sql", 'postgres' ],
-	0,
-	[qr/^$/],
+# Expected pg_dump --verbose line for a child index that is not dumped.
+sub skip_info
+{
+	my ($index, $partition, $extindex, $constraint) = @_;
+	my $of = defined $constraint ? " of constraint \"$constraint\"" : '';
+	return qr/\Qnot dumping index "regress_pg_dump_schema.$index"$of on partition "regress_pg_dump_schema.$partition", attached to index "regress_pg_dump_schema.$extindex" of an extension table\E/;
+}
+
+my ($stdout, $stderr) = run_command(
 	[
-		skip_warning('parttab_1_col1_col2_idx', 'parttab_1',
-			'parttab_col1_col2_idx'),
-		skip_warning('parttab_2_col1_col2_idx', 'parttab_2',
-			'parttab_col1_col2_idx'),
-		skip_warning('parttab_2_1_col1_col2_idx', 'parttab_2_1',
-			'parttab_col1_col2_idx'),
-		skip_warning('parttab_pk_1_pkey', 'parttab_pk_1', 'parttab_pk_pkey'),
-	],
-	'pg_dump warns about the child indexes it does not dump');
+		'pg_dump', '--no-sync', "--file=$tempdir/defaults.sql",
+		'--dbname=' . $node->connstr('postgres')
+	]);
+like($stderr, skip_warning(3, 'parttab', 'parttab_col1_col2_idx'),
+	'pg_dump warns once about the child indexes of the extension index');
+like($stderr, skip_warning(1, 'parttab_pk', 'parttab_pk_pkey'),
+	'pg_dump warns once about the child primary key of the extension table');
+is(scalar(() = $stderr =~ /warning:/g),
+	2, 'pg_dump warns once per extension index');
+unlike($stderr, qr/not dumping index/,
+	'pg_dump lists the child indexes only in verbose mode');
+
+($stdout, $stderr) = run_command(
+	[
+		'pg_dump', '--no-sync', '--schema-only', '--verbose',
+		'--dbname=' . $node->connstr('postgres')
+	]);
+like(
+	$stderr,
+	skip_info(
+		'parttab_1_col1_col2_idx', 'parttab_1', 'parttab_col1_col2_idx'),
+	'pg_dump --verbose lists the child index');
+like(
+	$stderr,
+	skip_info(
+		'parttab_2_1_col1_col2_idx', 'parttab_2_1', 'parttab_col1_col2_idx'),
+	'pg_dump --verbose lists the grandchild index');
+like(
+	$stderr,
+	skip_info(
+		'parttab_pk_1_pkey', 'parttab_pk_1',
+		'parttab_pk_pkey', 'parttab_pk_1_pkey'),
+	'pg_dump --verbose lists the child primary key with its constraint');
 
 my $dump = slurp_file("$tempdir/defaults.sql");
 
@@ -276,7 +310,7 @@ $node->command_checks_all(
 	[ 'pg_dump', '--no-sync', "--file=$tempdir/user_index.sql", 'user_index' ],
 	0,
 	[qr/^$/],
-	[ skip_warning('parttab_1_col1_idx', 'parttab_1', 'parttab_user_idx') ],
+	[ skip_warning(1, 'parttab', 'parttab_user_idx') ],
 	'pg_dump warns about the child index of the user-created index');
 
 $node->safe_psql('postgres', 'CREATE DATABASE user_index_restored');
