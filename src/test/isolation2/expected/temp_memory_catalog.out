@@ -2093,6 +2093,67 @@ DROP TABLE tc_lns_ids;
 DROP TABLE
 DROP TABLE tc_dl_bar;
 DROP TABLE
+
+-- On the coordinator too, once the session's transaction has a part on a
+-- segment: the transaction removing the schema may be waiting there for
+-- the session's, e.g. for a key it inserted, and the coordinator's detector
+-- does not see that.  (Session 3 deletes the row, then inserts a key that
+-- session 2 inserted first.)
+CREATE TABLE tc_dl_key (a int PRIMARY KEY) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+2: SET application_name = 'tc_lns_key';
+SET
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_key';
+INSERT 0 1
+SET allow_system_table_mods = on;
+SET
+INSERT INTO pg_namespace SELECT 4294967006::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+INSERT 0 1
+RESET allow_system_table_mods;
+RESET
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2: SET statement_timeout = '20s';
+SET
+2: BEGIN;
+BEGIN
+2: INSERT INTO tc_dl_key VALUES (1);
+INSERT 0 1
+3: BEGIN;
+BEGIN
+3: SET allow_system_table_mods = on;
+SET
+3: DELETE FROM pg_namespace WHERE oid = 4294967006;
+DELETE 1
+3&: INSERT INTO tc_dl_key VALUES (1);  <waiting ...>
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM gp_dist_random('pg_locks') WHERE locktype = 'transactionid' AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+DO
+2: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a)');
+ tc_try_again 
+------------
+ try again    
+(1 row)
+2: ROLLBACK;
+ROLLBACK
+3<:  <... completed>
+INSERT 0 1
+3: ROLLBACK;
+ROLLBACK
+2: CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967006;
+ left_schemas 
+------------
+ 0            
+(1 row)
+2q: ... <quitting>
+3q: ... <quitting>
+DROP TABLE tc_lns_ids;
+DROP TABLE
+DROP TABLE tc_dl_key;
+DROP TABLE
 DROP FUNCTION tc_try_again(text);
 DROP FUNCTION
 

@@ -123,6 +123,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/tempcat.h"
 #include "cdb/cdbendpoint.h"
+#include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "executor/tuptable.h"
 #include "miscadmin.h"
@@ -5533,14 +5534,16 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
  * transaction may itself be waiting for ours, on another node (e.g. on the
  * coordinator for a lock we took earlier in our transaction), and no
  * deadlock detector sees such a cycle.  (Locks are waited for on the
- * coordinator, whose detector sees the waits there.)
+ * coordinator, whose detector sees the waits there.)  So on the coordinator
+ * too, once our transaction has a part on a segment: that transaction may
+ * be waiting there for ours, e.g. for a key we inserted.
  */
 static bool
 tempcat_wait_for_deleter(TransactionId xid)
 {
 	TimestampTz start;
 
-	if (Gp_role != GP_ROLE_EXECUTE)
+	if (Gp_role != GP_ROLE_EXECUTE && MyTmGxactLocal->dtxSegments == NIL)
 	{
 		XactLockTableWait(xid, NULL, NULL, XLTW_None);
 		return true;

@@ -812,6 +812,38 @@ SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_con
 0Uq:
 DROP TABLE tc_lns_ids;
 DROP TABLE tc_dl_bar;
+
+-- On the coordinator too, once the session's transaction has a part on a
+-- segment: the transaction removing the schema may be waiting there for
+-- the session's, e.g. for a key it inserted, and the coordinator's detector
+-- does not see that.  (Session 3 deletes the row, then inserts a key that
+-- session 2 inserted first.)
+CREATE TABLE tc_dl_key (a int PRIMARY KEY) DISTRIBUTED BY (a);
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_key';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_key';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967006::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+2: SET gp_enable_temp_memory_catalog = on;
+2: SET statement_timeout = '20s';
+2: BEGIN;
+2: INSERT INTO tc_dl_key VALUES (1);
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967006;
+3&: INSERT INTO tc_dl_key VALUES (1);
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM gp_dist_random('pg_locks') WHERE locktype = 'transactionid' AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+2: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a)');
+2: ROLLBACK;
+3<:
+3: ROLLBACK;
+2: CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a);
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967006;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+DROP TABLE tc_dl_key;
 DROP FUNCTION tc_try_again(text);
 
 -- The sweep does not wait for a transaction that deletes the same leftover
