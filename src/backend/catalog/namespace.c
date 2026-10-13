@@ -4337,6 +4337,9 @@ DropTempTableNamespaceEntryForResetSession(Oid namespaceOid, Oid toastNamespaceO
 	}
 
 	CommitTransactionCommand();
+
+	/* GPDB: wherever their rows were (see tempcat.c) */
+	tempcat_namespaces_removed();
 }
 
 /*

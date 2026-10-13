@@ -817,7 +817,10 @@ static bool tc_horizon_dirty = false;
 /* The published roles may include roles no longer used. */
 static bool tc_roles_dirty = false;
 
-/* Our temporary namespaces may have gone to disk; see tempcat_row_to_disk() */
+/*
+ * Our temporary namespaces may have gone to disk (see tempcat_row_to_disk()),
+ * and not been removed since (tempcat_namespaces_removed()).
+ */
 static bool tc_namespaces_to_disk = false;
 
 static void tempcat_sweep_if_needed(bool allow_force);
@@ -868,7 +871,8 @@ tempcat_before_exit(int code, Datum arg)
 
 	/*
 	 * Without an area, rows went to disk only; assume the worst.  So did our
-	 * namespaces if a row did not fit, and they stay when we leave.
+	 * namespaces if a row did not fit; the cleanup removes them (and their
+	 * objects), unless it failed.
 	 */
 	leftovers = tc_area == NULL || tc_namespaces_to_disk ||
 		tempcat_area_has_live_rows();
@@ -883,6 +887,17 @@ tempcat_before_exit(int code, Datum arg)
 		if (tc_area != NULL)
 			tempcat_unlink_live_relations();
 	}
+}
+
+/*
+ * Our temporary namespaces were removed, in a transaction that committed:
+ * by the cleanup at exit or session reset (GpDropTempTables()), after their
+ * objects.  If they went to disk, nothing is left there now.
+ */
+void
+tempcat_namespaces_removed(void)
+{
+	tc_namespaces_to_disk = false;
 }
 
 static void

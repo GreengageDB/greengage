@@ -1078,6 +1078,29 @@ DROP ROLE tc_ns_role;
 DROP TABLE tc_ns_name;
 DROP FUNCTION tc_state(text);
 
+-- The session's cleanup at exit removes its namespaces that went to disk,
+-- with their objects: nothing is left there, and the database is not swept
+-- again for it.  (The fault makes the area look full.)
+1: SET application_name = 'tc_ns_exit';
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_ns_exit1 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE TEMP TABLE tc_ns_exit2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SET gp_temp_memory_catalog_disk_only = on;
+1: SELECT count(*) AS namespaces_on_disk FROM pg_namespace WHERE oid = pg_my_temp_schema();
+1: RESET gp_temp_memory_catalog_disk_only;
+CREATE TABLE tc_ns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_ns_drop;
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ns_exit'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_ns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_ns_drop;
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS left_rows FROM pg_class WHERE relname IN ('tc_ns_exit1', 'tc_ns_exit2');
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types
