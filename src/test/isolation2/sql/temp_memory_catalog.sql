@@ -855,6 +855,9 @@ CREATE ROLE tc_cluster_role;
 !\retcode rm -rf /tmp/tc_hide_ts;
 !\retcode mkdir -p /tmp/tc_hide_ts;
 CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
+CREATE ROLE tc_ns_role;
+CREATE TABLE tc_ns_name (n name) DISTRIBUTED REPLICATED;
+CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN RETURN SQLSTATE; END $$ LANGUAGE plpgsql;
 1: SET gp_enable_temp_memory_catalog = on;
 1: SET gp_temp_memory_catalog_max_size = 1024;
 1: CREATE TEMP TABLE tc_hide (a int DEFAULT tc_def(), c tc_hide_type) DISTRIBUTED BY (a);
@@ -892,6 +895,22 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 2: CREATE TEMP TABLE tc_sink (n int) DISTRIBUTED RANDOMLY;
 2: INSERT INTO tc_sink SELECT pg_relation_is_updatable(oid::regclass, false) FROM pg_class WHERE relname = 'tc_half';
 2: SELECT n FROM tc_sink;
+-- On disk, the session's temporary namespaces are still its own: other
+-- sessions do not find them by name (3F000) to drop or change them, which
+-- would leave the session's objects in memory behind, nor revoke privileges
+-- on them with DROP OWNED.
+1: INSERT INTO tc_ns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
+1: DO $$ BEGIN EXECUTE format('GRANT USAGE ON SCHEMA %I TO tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
+2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE refobjid = 'tc_ns_role'::regrole;
+2: DROP OWNED BY tc_ns_role;
+2: SELECT (SELECT nspacl::text LIKE '%tc_ns_role=U/%' FROM pg_namespace WHERE nspname = (SELECT n FROM tc_ns_name)) AS granted, (SELECT count(*) FROM gp_dist_random('pg_namespace') WHERE nspname = (SELECT n FROM tc_ns_name) AND nspacl::text LIKE '%tc_ns_role=U/%') AS granted_on_segments;
+-- (without the protection of the pg_ names, which a superuser can lift)
+2: SET allow_system_table_mods = on;
+2: SELECT tc_state(format('DROP SCHEMA %I', n)) AS drop_schema, tc_state(format('ALTER SCHEMA %I RENAME TO tc_renamed', n)) AS rename_schema, tc_state(format('ALTER SCHEMA %I OWNER TO tc_ns_role', n)) AS owner_schema, tc_state(format('GRANT CREATE ON SCHEMA %I TO tc_ns_role', n)) AS grant_on_schema FROM (SELECT (SELECT n FROM tc_ns_name) AS n) s;
+2: RESET allow_system_table_mods;
+1: CREATE TEMP TABLE tc_ns_after (a int) DISTRIBUTED BY (a);
+1: SELECT count(*) FROM tc_half;
+1: DO $$ BEGIN EXECUTE format('REVOKE USAGE ON SCHEMA %I FROM tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
 
 -- A column default of a temporary table depends on the function.
 2: SET client_min_messages = warning;
@@ -952,6 +971,9 @@ SELECT tc_retry('DROP TYPE tc_hide_type');
 DROP FUNCTION tc_orphan_deps();
 DROP ROLE tc_cluster_role;
 DROP TABLESPACE tc_hide_ts;
+DROP ROLE tc_ns_role;
+DROP TABLE tc_ns_name;
+DROP FUNCTION tc_state(text);
 
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of

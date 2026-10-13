@@ -113,6 +113,7 @@ extern int	tempcat_scan_compare_index(TempcatScan scan, HeapTuple a,
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_other_session_relation(HeapTuple tup);
 extern bool tempcat_relation_missing(Oid relid);
+extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
 extern bool tempcat_check_type_user(Oid classId, Oid objectId,
 									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);

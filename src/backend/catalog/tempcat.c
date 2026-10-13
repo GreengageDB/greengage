@@ -3627,6 +3627,17 @@ tempcat_object_missing(const ObjectAddress *object)
 
 	if (tempcat_session_owns_oid(object->classId, object->objectId))
 		return false;
+	if (object->classId == NamespaceRelationId)
+	{
+		char	   *nspname = get_namespace_name(object->objectId);
+		bool		other;
+
+		other = nspname != NULL &&
+			tempcat_namespace_of_other_session(object->objectId, nspname);
+		if (nspname != NULL)
+			pfree(nspname);
+		return other;
+	}
 	relid = tempcat_object_relation(object->classId, object->objectId);
 	if (OidIsValid(relid))
 		return tempcat_relation_missing(relid);
@@ -3638,6 +3649,31 @@ tempcat_object_missing(const ObjectAddress *object)
 		return false;
 	return !SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(nspid)) ||
 		isAnyTempNamespace(nspid);
+}
+
+/*
+ * Is 'nspid', named 'nspname', the temporary namespace of another live
+ * session, which went to disk with the first row of the session that did
+ * not fit (tempcat_row_to_disk())?  To other sessions it does not exist, as
+ * when it was in memory: the objects in it that are in memory are missing
+ * for them, and they must not find it by name (get_namespace_oid()), nor
+ * drop or change it, which would leave those objects behind.  (Namespaces
+ * left by sessions that are gone are the sweep's; ordinary namespaces with
+ * reserved OIDs have other names.)
+ */
+static bool tempcat_oid_live_now(Oid oid, Oid dbid);
+
+bool
+tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
+{
+	if (!IsTempcatOid(nspid) || TempcatShared == NULL)
+		return false;
+	if (strncmp(nspname, "pg_temp_", 8) != 0 &&
+		strncmp(nspname, "pg_toast_temp_", 14) != 0)
+		return false;
+	if (tempcat_session_owns_oid(NamespaceRelationId, nspid))
+		return false;
+	return tempcat_oid_live_now(nspid, MyDatabaseId);
 }
 
 /*

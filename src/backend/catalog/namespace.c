@@ -3080,6 +3080,11 @@ get_namespace_oid(const char *nspname, bool missing_ok)
 
 	oid = GetSysCacheOid1(NAMESPACENAME, Anum_pg_namespace_oid,
 						  CStringGetDatum(nspname));
+
+	/* GPDB: another session's temporary namespace (see tempcat.c) */
+	if (OidIsValid(oid) && tempcat_namespace_of_other_session(oid, nspname))
+		oid = InvalidOid;
+
 	if (!OidIsValid(oid) && !missing_ok)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),
