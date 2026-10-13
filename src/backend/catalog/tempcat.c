@@ -5517,9 +5517,10 @@ tempcat_sweep_before_drop(void)
 
 /*
  * The transaction in progress that deletes the namespace's row, if any.
+ * '*found' says whether the row is there at all (else a deletion committed).
  */
 static TransactionId
-tempcat_namespace_deleter(Oid namespaceId)
+tempcat_namespace_deleter(Oid namespaceId, bool *found)
 {
 	Relation	rel;
 	SysScanDesc scan;
@@ -5532,7 +5533,8 @@ tempcat_namespace_deleter(Oid namespaceId)
 	ScanKeyInit(&key, Anum_pg_namespace_oid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(namespaceId));
 	scan = systable_beginscan(rel, NamespaceOidIndexId, true, &dirty, 1, &key);
-	if (HeapTupleIsValid(systable_getnext(scan)))
+	*found = HeapTupleIsValid(systable_getnext(scan));
+	if (*found)
 		deleter = dirty.xmax;
 	systable_endscan(scan);
 	table_close(rel, AccessShareLock);
@@ -5569,6 +5571,7 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 	for (;;)
 	{
 		TransactionId deleter;
+		bool		found;
 
 		tempcat_sweep_db(true, true);
 		CommandCounterIncrement();
@@ -5577,8 +5580,23 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 		if (!IsTempcatOid(namespaceId))
 			return namespaceId;
 
+#ifdef FAULT_INJECTOR
+		/* Test hook: let another transaction remove it before we look on. */
+		SIMPLE_FAULT_INJECTOR("tempcat_before_namespace_deleter");
+#endif
+
+		/*
+		 * Gone already, though the catalog cache still had it: its deletion
+		 * committed since we last took invalidations.  Look again.
+		 */
+		deleter = tempcat_namespace_deleter(namespaceId, &found);
+		if (!found)
+		{
+			AcceptInvalidationMessages();
+			continue;
+		}
+
 		/* (if the deleter aborts, the next round sweeps the namespace) */
-		deleter = tempcat_namespace_deleter(namespaceId);
 		if (!TransactionIdIsValid(deleter) ||
 			!tempcat_wait_for_deleter(deleter))
 			ereport(ERROR,

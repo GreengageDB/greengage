@@ -2077,6 +2077,64 @@ CREATE TABLE
 DROP TABLE tc_lns_ids;
 DROP TABLE
 
+-- If that transaction commits after the session found the schema, but
+-- before it looks for the transaction, the session looks again rather than
+-- fail.  (The fault stops session 2 in between, until session 3 commits.)
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+2: SET application_name = 'tc_lns_gone';
+SET
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_gone';
+INSERT 0 1
+SET allow_system_table_mods = on;
+SET
+INSERT INTO pg_namespace SELECT 4294967007::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+INSERT 0 1
+RESET allow_system_table_mods;
+RESET
+3: BEGIN;
+BEGIN
+3: SET allow_system_table_mods = on;
+SET
+3: DELETE FROM pg_namespace WHERE oid = 4294967007;
+DELETE 1
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+2: SET gp_enable_temp_memory_catalog = on;
+SET
+2&: CREATE TEMP TABLE tc_lns_gone (a int) DISTRIBUTED BY (a);  <waiting ...>
+SELECT gp_wait_until_triggered_fault('tempcat_before_namespace_deleter', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+------------
+ Success:                      
+(1 row)
+3: COMMIT;
+COMMIT
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+2<:  <... completed>
+CREATE TABLE
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967007;
+ left_schemas 
+------------
+ 0            
+(1 row)
+2q: ... <quitting>
+3q: ... <quitting>
+DROP TABLE tc_lns_ids;
+DROP TABLE
+
 -- On a segment it waits only as long as deadlock_timeout, then fails as
 -- before: the transaction may be waiting for the session's own, e.g. on the
 -- coordinator for a lock, where no deadlock detector sees the cycle.

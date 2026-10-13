@@ -802,6 +802,31 @@ SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NO
 3q:
 DROP TABLE tc_lns_ids;
 
+-- If that transaction commits after the session found the schema, but
+-- before it looks for the transaction, the session looks again rather than
+-- fail.  (The fault stops session 2 in between, until session 3 commits.)
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_gone';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_gone';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967007::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967007;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: SET gp_enable_temp_memory_catalog = on;
+2&: CREATE TEMP TABLE tc_lns_gone (a int) DISTRIBUTED BY (a);
+SELECT gp_wait_until_triggered_fault('tempcat_before_namespace_deleter', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3: COMMIT;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2<:
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967007;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+
 -- On a segment it waits only as long as deadlock_timeout, then fails as
 -- before: the transaction may be waiting for the session's own, e.g. on the
 -- coordinator for a lock, where no deadlock detector sees the cycle.
