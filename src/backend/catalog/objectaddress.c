@@ -3916,7 +3916,9 @@ pg_identify_object(PG_FUNCTION_ARGS)
 
 	tupdesc = BlessTupleDesc(tupdesc);
 
-	if (is_objectclass_supported(address.classId))
+	/* GPDB: not for an in-memory temporary object of another session */
+	if (is_objectclass_supported(address.classId) &&
+		!tempcat_object_missing(&address))
 	{
 		HeapTuple	objtup;
 		Relation	catalog = table_open(address.classId, AccessShareLock);
@@ -4072,6 +4074,13 @@ getObjectTypeDescription(const ObjectAddress *object)
 	StringInfoData buffer;
 
 	initStringInfo(&buffer);
+
+	/* GPDB: an in-memory temporary object of another session */
+	if (tempcat_object_missing(object))
+	{
+		appendStringInfoString(&buffer, "temporary object");
+		return buffer.data;
+	}
 
 	switch (getObjectClass(object))
 	{
@@ -4388,6 +4397,16 @@ getObjectIdentityParts(const ObjectAddress *object,
 	{
 		*objname = NIL;
 		*objargs = NIL;
+	}
+
+	/* GPDB: an in-memory temporary object of another session */
+	if (tempcat_object_missing(object))
+	{
+		appendStringInfo(&buffer, "temporary object %u of another session",
+						 object->objectId);
+		if (objname)
+			*objname = list_make1(psprintf("%u", object->objectId));
+		return buffer.data;
 	}
 
 	switch (getObjectClass(object))

@@ -50,6 +50,12 @@ SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
 -- No pg_shdepend rows on disk either: the session publishes the roles its
 -- in-memory objects refer to (owner, grantees) for DROP ROLE to see.
 2: SELECT count(*) AS disk_shdepend FROM pg_shdepend WHERE objid >= 4026531840;
+-- Their dependency rows on ordinary objects are on disk: other sessions can
+-- identify the objects they point at, as temporary objects of another
+-- session (also on the segments).
+2: SELECT DISTINCT i.type, i.schema IS NULL AND i.name IS NULL AS anonymous, i.identity LIKE 'temporary object % of another session' AS identity FROM pg_depend d, pg_identify_object(d.classid, d.objid, d.objsubid) i WHERE d.objid >= 4026531840;
+2: SELECT DISTINCT a.type, cardinality(a.object_names) AS names FROM pg_depend d, pg_identify_object_as_address(d.classid, d.objid, d.objsubid) a WHERE d.objid >= 4026531840;
+2: SELECT DISTINCT (pg_identify_object(d.classid, d.objid, d.objsubid)).type FROM gp_dist_random('pg_depend') d WHERE d.objid >= 4026531840;
 -- (CASCADE reports the dependent objects by OID in a NOTICE)
 2: SET client_min_messages = warning;
 2: SELECT tc_try('DROP TYPE tc_type');
@@ -881,7 +887,7 @@ CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 
 -- The session's namespaces went to disk with its first row that did not
 -- fit there, so that code naming the objects finds them (it crashed the
 -- server).  Temporary, they keep the objects missing for other sessions.
-2: SELECT bool_and(i.schema LIKE 'pg\_%temp\_%') AS named FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
+2: SELECT bool_and(i.type = 'temporary object') AS identified FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
 2: SELECT bool_and(pg_relation_filepath(oid) IS NOT NULL) AS filepath FROM pg_class WHERE oid >= 4026531840 AND relkind = 'r';
 2: ALTER TABLE ALL IN TABLESPACE tc_hide_ts SET TABLESPACE pg_default;
 2: SET ROLE tc_cluster_role;
