@@ -3073,8 +3073,12 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 	TM_Result	result;
 	TM_FailureData tmfd;
 
-	/* Virtual catalog row of a temporary object */
-	if (IsTempcatTid(tid))
+	ItemPointerData dtid;
+
+	/* Virtual catalog row of a temporary object, perhaps moved to disk */
+	if (tempcat_moved_tid(relation, tid, &dtid))
+		tid = &dtid;
+	else if (IsTempcatTid(tid))
 	{
 		tempcat_delete(relation, tid);
 		return;
@@ -4327,15 +4331,21 @@ simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
 	TM_FailureData tmfd;
 	LockTupleMode lockmode;
 
-	/* Virtual catalog row of a temporary object */
-	if (IsTempcatTid(otid))
+	ItemPointerData dtid;
+
+	/* Virtual catalog row of a temporary object, perhaps moved to disk */
+	if (tempcat_moved_tid(relation, otid, &dtid))
+		otid = &dtid;
+	else if (IsTempcatTid(otid))
 	{
-		if (!tempcat_update(relation, otid, tup))
+		if (tempcat_update(relation, otid, tup))
+			return;
+		if (!tempcat_moved_tid(relation, otid, &dtid))
 			ereport(ERROR,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
 					 errmsg("in-memory temporary catalog is full"),
 					 errhint("Increase gp_temp_memory_catalog_max_size.")));
-		return;
+		otid = &dtid;
 	}
 
 	result = heap_update_internal(relation, otid, tup,
@@ -6428,8 +6438,9 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	uint32		oldlen;
 	uint32		newlen;
 
-	/* Virtual catalog row of a temporary object */
-	if (IsTempcatTid(&tuple->t_self))
+	/* Virtual catalog row of a temporary object, perhaps moved to disk */
+	if (!tempcat_moved_tid(relation, &tuple->t_self, &tuple->t_self) &&
+		IsTempcatTid(&tuple->t_self))
 	{
 		tempcat_inplace_update(relation, tuple);
 		return;

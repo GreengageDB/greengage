@@ -848,11 +848,12 @@ SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_s
 SELECT tc_retry('DROP TYPE tc_w_type');
 
 --
--- 10. Some rows of in-memory temporary objects are on disk: dependencies on
--- ordinary objects, and rows that did not fit in memory.  To other sessions
--- they point at objects that do not exist, which gpcheckcat would report as
--- catalog corruption, so it sets gp_temp_memory_catalog_hide_others: SQL
--- scans then skip on-disk rows of other live sessions' temporary objects.
+-- 10. Some rows of temporary objects are on disk: dependencies of objects in
+-- memory on ordinary objects, and whole objects that did not fit in memory.
+-- To other sessions the dependencies point at objects that do not exist,
+-- which gpcheckcat would report as catalog corruption, so it sets
+-- gp_temp_memory_catalog_hide_others: SQL scans then skip on-disk rows of
+-- other live sessions' temporary objects.
 --
 CREATE FUNCTION tc_def() RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT 1';
 CREATE TYPE tc_hide_type AS (x int);
@@ -870,18 +871,29 @@ CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 
 1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
 1: CREATE TEMP TABLE tc_clu (a int) DISTRIBUTED BY (a);
 1: CREATE INDEX tc_clu_i ON tc_clu (a);
+1: INSERT INTO tc_ns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 -- (more rows that do not fit: an index marked for CLUSTER, whose table did
--- fit, and a table in a tablespace)
+-- fit, a table in a tablespace, a change of tc_half and a privilege on the
+-- session's namespace; with the area made to look full, as the room left
+-- by the objects that went to disk would take them)
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1: ALTER TABLE tc_clu CLUSTER ON tc_clu_i;
 1: CREATE TEMP TABLE tc_in_ts (a int) TABLESPACE tc_hide_ts DISTRIBUTED BY (a);
-
--- A relation can go to disk partly: here its pg_class row, updated while
--- the area is full, but not the attributes it had.  Other sessions must not
--- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
--- to them it does not exist, like the relations kept in memory.
 1: ALTER TABLE tc_half ADD COLUMN z int;
-2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
+1: DO $$ BEGIN EXECUTE format('GRANT USAGE ON SCHEMA %I TO tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+
+-- An object goes to disk whole: here tc_half's pg_class row, updated while
+-- the area is full, takes the attributes the relation had, its row type,
+-- ..., with it.  What other sessions see on disk is complete: they can
+-- open the relations (database-wide VACUUM and ANALYZE, functions on
+-- pg_class rows) and describe them, as an ordinary temporary table.
+2: SELECT count(*) > 0 AS on_disk, bool_and(pg_total_relation_size(oid) IS NOT NULL) AS opened FROM pg_class WHERE oid >= 4026531840;
+2: SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = (SELECT oid FROM pg_class WHERE relname = 'tc_half') AND attnum > 0 ORDER BY attnum;
+2: SELECT bool_and(c.relnatts = (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0)) AS attributes, bool_and(c.reltype = 0 OR EXISTS (SELECT FROM pg_type t WHERE t.oid = c.reltype)) AS row_types FROM pg_class c WHERE c.oid >= 4026531840;
+2: SELECT count(*) > 0 AS deparsed FROM (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE oid >= 4026531840 UNION ALL SELECT indexdef FROM pg_indexes WHERE tablename LIKE 'tc\_hide\_%') s;
+2: SELECT count(*) > 0 AS check_constraints FROM information_schema.check_constraints WHERE constraint_schema = (SELECT n FROM tc_ns_name);
 2: ANALYZE;
 2: VACUUM;
 -- The session's namespaces went to disk with its first row that did not
@@ -893,11 +905,9 @@ CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 
 2: SET ROLE tc_cluster_role;
 2: CLUSTER;
 2: RESET ROLE;
--- Readers tell their session's objects by the OID bounds its writer
--- publishes: here a reader gang (one of the two scans that the join needs
--- moved) and an entry-db reader find the relation missing, as the writer
--- does.
-2: SELECT count(*) AS missing FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NULL;
+-- Readers open the relations too, as the writer does: here a reader gang
+-- (one of the two scans that the join needs moved) and an entry-db reader.
+2: SELECT count(*) AS opened FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NOT NULL;
 2: CREATE TEMP TABLE tc_sink (n int) DISTRIBUTED RANDOMLY;
 2: INSERT INTO tc_sink SELECT pg_relation_is_updatable(oid::regclass, false) FROM pg_class WHERE relname = 'tc_half';
 2: SELECT n FROM tc_sink;
@@ -905,8 +915,6 @@ CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 
 -- sessions do not find them by name (3F000) to drop or change them, which
 -- would leave the session's objects in memory behind, nor revoke privileges
 -- on them with DROP OWNED.
-1: INSERT INTO tc_ns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
-1: DO $$ BEGIN EXECUTE format('GRANT USAGE ON SCHEMA %I TO tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
 2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE refobjid = 'tc_ns_role'::regrole;
 2: DROP OWNED BY tc_ns_role;
 2: SELECT (SELECT nspacl::text LIKE '%tc_ns_role=U/%' FROM pg_namespace WHERE nspname = (SELECT n FROM tc_ns_name)) AS granted, (SELECT count(*) FROM gp_dist_random('pg_namespace') WHERE nspname = (SELECT n FROM tc_ns_name) AND nspacl::text LIKE '%tc_ns_role=U/%') AS granted_on_segments;
