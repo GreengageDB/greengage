@@ -15,12 +15,6 @@ concurrency:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target_os: rockylinux
-            target_os_version: "9"
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -28,20 +22,14 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-build.yml@v51
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
+      target_os: rockylinux
+      target_os_version: 9
+      test_install: false
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
   package:
     needs: build
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target_os: rockylinux
-            target_os_version: "9"
-            test_install: false
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -49,8 +37,8 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v47
     with:
       version: 7
-      target_os: ${{ matrix.target_os }}
-      target_os_version: ${{ matrix.target_os_version }}
-      test_install: ${{ matrix.test_install }}
+      target_os: rockylinux
+      target_os_version: 9
+      test_install: false
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
