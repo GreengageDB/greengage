@@ -5020,8 +5020,10 @@ _copyCookedConstraint(const CookedConstraint *from)
 	COPY_STRING_FIELD(name);
 	COPY_SCALAR_FIELD(attnum);
 	COPY_NODE_FIELD(expr);
+	COPY_SCALAR_FIELD(skip_validation);
 	COPY_SCALAR_FIELD(is_local);
 	COPY_SCALAR_FIELD(inhcount);
+	COPY_SCALAR_FIELD(is_no_inherit);
 
 	return newnode;
 }
