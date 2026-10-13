@@ -942,6 +942,9 @@ CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
 1: CREATE TEMP TABLE tc_cnt (n bigint) DISTRIBUTED RANDOMLY;
 1: INSERT INTO tc_cnt SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_hide%' AND relkind = 'r';
 1: SELECT n FROM tc_cnt;
+-- (dropped here, as the files of the session's tables go asynchronously
+-- at its exit, and the tablespace must be empty to be dropped below)
+1: DROP TABLE tc_in_ts;
 1q:
 
 SELECT tc_retry('DROP FUNCTION tc_def()');

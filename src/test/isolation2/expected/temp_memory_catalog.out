@@ -2459,6 +2459,10 @@ INSERT 0 1
 -----
  151 
 (1 row)
+-- (dropped here, as the files of the session's tables go asynchronously
+-- at its exit, and the tablespace must be empty to be dropped below)
+1: DROP TABLE tc_in_ts;
+DROP TABLE
 1q: ... <quitting>
 
 SELECT tc_retry('DROP FUNCTION tc_def()');
