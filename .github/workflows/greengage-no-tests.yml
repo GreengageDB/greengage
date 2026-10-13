@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   build:
+    name: Rocky Linux 9 (Docker)
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
@@ -29,6 +30,7 @@ jobs:
 
   package:
     needs: build
+    name: Rocky Linux 9 (RPM)
     permissions:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
