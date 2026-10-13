@@ -169,6 +169,7 @@ static PartitionNode *selectListPartition(PartitionNode *partnode, Datum *values
 					TupleDesc tupdesc, PartitionAccessMethods *accessMethods,
 					Oid *foundOid, PartitionRule **prule);
 static Oid cdb_retrieve_btree_op(Oid opclass, Oid lhstypid, Oid rhstypid, int16 strategy);
+static Oid *get_partition_key_collations(Partition *part);
 static FmgrInfo *get_less_than_comparator(int keyno, PartitionRangeState *rs, Oid opclass, Oid ruleTypeOid, Oid exprTypeOid, bool strictlyless, bool is_direct);
 static int range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 					  PartitionRule *rule, Oid opclass);
@@ -4064,6 +4065,36 @@ compare_partn_opfuncid(PartitionNode *partnode,
 }								/* end compare_partn_opfuncid */
 
 /*
+ * get_partition_key_collations
+ *   Returns a palloc'd array with the collation of each partitioning key
+ *   column of the given partitioning level.
+ *
+ * Tuples must be routed using the same collation as the partition CHECK
+ * constraints, which is the collation of the key column.  Neither the
+ * collation of the boundary Consts (always the type's default collation)
+ * nor the one in the caller's tuple descriptor (which may come from a
+ * target list expression) can be relied on, so look it up in the catalog
+ * of the top-level partitioned relation, which paratts refers to.
+ */
+static Oid *
+get_partition_key_collations(Partition *part)
+{
+	Oid		   *collations = palloc(sizeof(Oid) * part->parnatts);
+	int			i;
+
+	for (i = 0; i < part->parnatts; i++)
+	{
+		Oid			typid;
+		int32		typmod;
+
+		get_atttypetypmodcoll(part->parrelid, part->paratts[i],
+							  &typid, &typmod, &collations[i]);
+	}
+
+	return collations;
+}
+
+/*
  *	Given a partition-by-list PartitionNode, search for
  *	a part that matches the given datum value.
  *
@@ -4103,6 +4134,7 @@ selectListPartition(PartitionNode *partnode, Datum *values, bool *isnull,
 
 		ls->eqfuncs = palloc(sizeof(FmgrInfo) * natts);
 		ls->eqinit = palloc0(sizeof(bool) * natts);
+		ls->collations = get_partition_key_collations(partnode->part);
 
 		if (accessMethods)
 			accessMethods->amstate[partnode->part->parlevel] = (void *) ls;
@@ -4194,7 +4226,7 @@ selectListPartition(PartitionNode *partnode, Datum *values, bool *isnull,
 					}
 
 					finfo = &(ls->eqfuncs[i]);
-					res = FunctionCall2Coll(finfo, c->constcollid, d, c->constvalue);
+					res = FunctionCall2Coll(finfo, ls->collations[i], d, c->constvalue);
 
 					if (!DatumGetBool(res))
 					{
@@ -4385,7 +4417,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangestartincl /* strictly_less */ , false /* is_direct */ );
-		res = FunctionCall2Coll(finfo, c->constcollid, c->constvalue, tupval);
+		res = FunctionCall2Coll(finfo, rs->collations[keyno], c->constvalue, tupval);
 
 		if (!DatumGetBool(res))
 			return -1;
@@ -4407,7 +4439,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangeendincl /* strictly_less */ , true /* is_direct */ );
-		res = FunctionCall2Coll(finfo, c->constcollid, tupval, c->constvalue);
+		res = FunctionCall2Coll(finfo, rs->collations[keyno], tupval, c->constvalue);
 
 		if (!DatumGetBool(res))
 		{
@@ -4455,6 +4487,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		rs->ltfuncs_direct = palloc0(sizeof(FmgrInfo) * natts);
 		rs->lefuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
 		rs->ltfuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
+		rs->collations = get_partition_key_collations(partnode->part);
 
 		/*
 		 * Unrolling the rules into an array currently works for the top level

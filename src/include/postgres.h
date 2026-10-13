@@ -440,7 +440,7 @@ static inline Datum CommandIdGetDatum(CommandId cid) { return (Datum) cid; }
  *		Returns pointer value of a datum.
  */
 
-#define DatumGetPointer(X) ((Pointer) (X))
+#define 	DatumGetPointer(X) ((Pointer) (X))
 
 /*
  * PointerGetDatum

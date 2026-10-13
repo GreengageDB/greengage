@@ -42,6 +42,7 @@ typedef struct PartitionRangeState
 	FmgrInfo *lefuncs_inverse; /* comparator partRule <= expr */
 	int last_rule; /* cache offset to the last rule and test if it matches */
 	PartitionRule **rules;
+	Oid *collations; /* collation of each partitioning key column */
 } PartitionRangeState;
 
 /* likewise, for list */
@@ -49,6 +50,7 @@ typedef struct PartitionListState
 {
 	FmgrInfo *eqfuncs;
 	bool *eqinit;
+	Oid *collations; /* collation of each partitioning key column */
 } PartitionListState;
 
 /* likewise, for hash */
