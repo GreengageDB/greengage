@@ -17,6 +17,8 @@ Summary: Greengage MPP database engine
 License: ASL 2.0
 URL:     https://greengagedb.org
 
+BuildRequires: rpmlint
+
 Requires: findutils
 Requires: glibc-langpack-en
 Requires: iproute
@@ -69,3 +71,7 @@ find %{buildroot}%{prefix} -type f -name "*.so" -exec strip --strip-debug {} \;
 %{prefix}
 
 %changelog
+
+%check
+# Run rpmlint on the resulting binary RPM(s).
+rpmlint %{_rpmdir}/*.rpm
