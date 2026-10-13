@@ -1466,6 +1466,8 @@ tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid)
 				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
 }
 
+static bool tempcat_found_object_of_other_session(const ObjectAddress *object);
+
 /*
  * An ordinary object cannot depend on a temporary object kept in memory
  * (e.g. a column of an ordinary table of a temporary table's row type):
@@ -1484,6 +1486,21 @@ tempcat_check_dependency(const ObjectAddress *depender,
 				 errdetail("The new object would depend on %s.",
 						   getObjectDescription(referenced)),
 				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+
+	/*
+	 * Nor can anything depend on a temporary object of another session that
+	 * keeps them in memory, which went to disk (other sessions can still
+	 * find it by OID, e.g. a regclass or regtype constant of a view): that
+	 * session could not drop the dependent object, which may be invisible
+	 * to it, and the sweep would remove the object from under it.  Such an
+	 * object is missing for us like those in memory.
+	 */
+	if (tempcat_found_object_of_other_session(referenced))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot depend on temporary objects of another session"),
+				 errdetail("The new object would depend on %s.",
+						   getObjectDescription(referenced))));
 }
 
 /*
@@ -3744,6 +3761,34 @@ tempcat_other_session_relation(HeapTuple tup)
 		!IsTempcatOid(form->oid))
 		return false;
 	return !tempcat_session_owns_oid(RelationRelationId, form->oid);
+}
+
+/*
+ * Is the object a temporary object of another session that we can find,
+ * its rows having gone to disk?  (Not one that we cannot find, e.g. made by
+ * this very command, which may be ours or ordinary.)
+ */
+static bool
+tempcat_found_object_of_other_session(const ObjectAddress *object)
+{
+	HeapTuple	tup;
+	bool		other;
+
+	if (!IsTempcatOid(object->objectId) ||
+		tempcat_session_owns_oid(object->classId, object->objectId))
+		return false;
+	if (object->classId == RelationRelationId)
+	{
+		tup = SearchSysCache1(RELOID, ObjectIdGetDatum(object->objectId));
+		if (!HeapTupleIsValid(tup))
+			return false;
+		other = tempcat_other_session_relation(tup);
+		ReleaseSysCache(tup);
+		return other;
+	}
+	return tempcat_object_lookup(object->classId,
+								 object->objectId) == TCO_FOUND &&
+		tempcat_object_missing(object);
 }
 
 /*

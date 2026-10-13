@@ -908,6 +908,11 @@ CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 
 2: SET allow_system_table_mods = on;
 2: SELECT tc_state(format('DROP SCHEMA %I', n)) AS drop_schema, tc_state(format('ALTER SCHEMA %I RENAME TO tc_renamed', n)) AS rename_schema, tc_state(format('ALTER SCHEMA %I OWNER TO tc_ns_role', n)) AS owner_schema, tc_state(format('GRANT CREATE ON SCHEMA %I TO tc_ns_role', n)) AS grant_on_schema FROM (SELECT (SELECT n FROM tc_ns_name) AS n) s;
 2: RESET allow_system_table_mods;
+-- Nor can they make their objects depend on the session's objects that
+-- went to disk, which they still find by OID (0A000): the session could
+-- not drop them at exit, and the sweep would remove the objects from under
+-- them.  (Views with regtype and regclass constants depend on the objects.)
+2: SELECT tc_state(format('CREATE VIEW tc_dep_other_t AS SELECT %L::regtype AS t', (SELECT min(oid) FROM pg_type WHERE typname LIKE 'tc\_hide\_%' AND oid >= 4026531840))) AS on_type, tc_state(format('CREATE VIEW tc_dep_other_r AS SELECT %L::regclass AS r', (SELECT min(oid) FROM pg_class WHERE relname LIKE 'tc\_hide\_%' AND oid >= 4026531840))) AS on_relation;
 1: CREATE TEMP TABLE tc_ns_after (a int) DISTRIBUTED BY (a);
 1: SELECT count(*) FROM tc_half;
 1: DO $$ BEGIN EXECUTE format('REVOKE USAGE ON SCHEMA %I FROM tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
