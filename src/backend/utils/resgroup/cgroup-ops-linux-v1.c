@@ -949,11 +949,13 @@ detachcgroup_v1(Oid group, CGroupComponentType component, int fd_dir)
 			elog(LOG, "failed to migrate pid to gpdb root cgroup: pid=%ld: %m",
 				 pid);
 		}
-		else
+		else if (n != strlen(str))
 		{
-			__CHECK(n == strlen(str),
-					( close(fdw), close(fd_dir) ),
-					"can't write to file");
+			/* a short write doesn't set errno, so don't use __CHECK */
+			close(fdw);
+			close(fd_dir);
+			CGROUP_ERROR("can't write to file: %s: wrote %d of %zu",
+						 path, n, strlen(str));
 		}
 
 		ptr = end;
