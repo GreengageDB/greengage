@@ -178,9 +178,12 @@ DROP FUNCTION tc_make_early(int);
 DROP FUNCTION tc_count_rel(name);
 -- Also for queries that need no column of the catalog, which any of its
 -- indexes covers; but not while hiding other sessions' objects, even then.
--- (Explained for a catalog with one index, as which one is cheapest varies.)
+-- (Explained for a catalog with one index, as which one is cheapest varies,
+-- and without bitmap scans, which can be cheaper once the catalog grew.)
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
 EXPLAIN (costs off) SELECT count(*) FROM pg_statistic;
+RESET enable_bitmapscan;
 SELECT count(*) > 0 AS some_rows FROM pg_class;
 SELECT EXISTS (SELECT FROM pg_type) AS some_types;
 SET gp_temp_memory_catalog_hide_others = on;
