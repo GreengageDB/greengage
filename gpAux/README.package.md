@@ -166,7 +166,7 @@ To get a complete environment with all dependencies installed, use the
 provided Docker images instead of installing dependencies manually:
 
 - `ci/Dockerfile.ubuntu` - Ubuntu 22.04
-- `ci/Dockerfile.rockylinux` - Rocky Linux 8/9
+- `ci/Dockerfile.rockylinux` - Rocky Linux 9
 
 See [ci/readme.md](../ci/readme.md) for instructions on building and
 using these images. To install dependencies directly on a host without
