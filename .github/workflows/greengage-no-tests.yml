@@ -24,7 +24,6 @@ jobs:
       version: 7
       target_os: rockylinux
       target_os_version: 9
-      test_install: false
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -34,11 +33,11 @@ jobs:
       contents: read  # Explicit for default behavior
       packages: write # Required for GHCR access
       actions:  write # Required for artifact upload
-    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@v58
+    uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-package.yml@CI-5655
     with:
       version: 7
       target_os: rockylinux
       target_os_version: 9
-      test_install: false
+      test_install: true
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
