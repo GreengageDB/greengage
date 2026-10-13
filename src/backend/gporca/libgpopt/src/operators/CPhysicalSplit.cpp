@@ -34,7 +34,7 @@ using namespace gpopt;
 CPhysicalSplit::CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 							   CColRefArray *pdrgpcrInsert, CColRef *pcrCtid,
 							   CColRef *pcrSegmentId, CColRef *pcrAction,
-							   CColRef *pcrTupleOid)
+							   CColRef *pcrTupleOid, BOOL needsResJunk)
 	: CPhysical(mp),
 	  m_pdrgpcrDelete(pdrgpcrDelete),
 	  m_pdrgpcrInsert(pdrgpcrInsert),
@@ -42,7 +42,8 @@ CPhysicalSplit::CPhysicalSplit(CMemoryPool *mp, CColRefArray *pdrgpcrDelete,
 	  m_pcrSegmentId(pcrSegmentId),
 	  m_pcrAction(pcrAction),
 	  m_pcrTupleOid(pcrTupleOid),
-	  m_pcrsRequiredLocal(NULL)
+	  m_pcrsRequiredLocal(NULL),
+	  m_needsResJunk(needsResJunk)
 {
 	GPOS_ASSERT(NULL != pdrgpcrDelete);
 	GPOS_ASSERT(NULL != pdrgpcrInsert);
@@ -449,7 +450,8 @@ CPhysicalSplit::Matches(COperator *pop) const
 			   m_pcrAction == popSplit->PcrAction() &&
 			   m_pcrTupleOid == popSplit->PcrTupleOid() &&
 			   m_pdrgpcrDelete->Equals(popSplit->PdrgpcrDelete()) &&
-			   m_pdrgpcrInsert->Equals(popSplit->PdrgpcrInsert());
+			   m_pdrgpcrInsert->Equals(popSplit->PdrgpcrInsert()) &&
+			   m_needsResJunk == popSplit->NeedsResJunk();
 	}
 
 	return false;
@@ -506,6 +508,8 @@ CPhysicalSplit::OsPrint(IOstream &os) const
 	m_pcrSegmentId->OsPrint(os);
 	os << ", Action: ";
 	m_pcrAction->OsPrint(os);
+	os << ", ";
+	os << "NeedsResJunk: " << m_needsResJunk;
 
 	return os;
 }
