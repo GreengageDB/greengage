@@ -399,12 +399,6 @@ GetPreassignedOid(OidAssignment *searchkey)
 			oid = p->oid;
 			preassigned_oids = list_delete_cell(preassigned_oids, cur_item, prev_item);
 			pfree(p);
-
-			/* A temporary object of this session in the in-memory catalog? */
-			tempcat_note_preassigned_oid(searchkey->catalog, searchkey->objname,
-										 searchkey->namespaceOid,
-										 searchkey->keyOid1, searchkey->keyOid2,
-										 oid);
 			return oid;
 		}
 		prev_item = cur_item;
@@ -450,11 +444,14 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 	if (Gp_role == GP_ROLE_EXECUTE || IsBinaryUpgrade)
 	{
 		oid = GetPreassignedOid(searchkey);
-		if (temp && !IsBinaryUpgrade && IsTempcatOid(oid))
-			tempcat_note_temp_oid(searchkey->catalog, oid);
-		if (!IsBinaryUpgrade && IsTempcatOid(oid) &&
-			tempcat_owns_oid(searchkey->catalog, oid))
-			tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
+
+		/* A temporary object of this session in the in-memory catalog? */
+		if (!IsBinaryUpgrade && IsTempcatOid(oid))
+			tempcat_note_preassigned_oid(relation, indexId, oidcolumn,
+										 searchkey->objname,
+										 searchkey->namespaceOid,
+										 searchkey->keyOid1, searchkey->keyOid2,
+										 temp, oid);
 
 		/*
 		 * During normal operation, all OIDs are preassigned unless the object

@@ -27,6 +27,7 @@
 #include "catalog/objectaccess.h"
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
 #include "commands/schemacmds.h"
@@ -355,6 +356,11 @@ RenameSchema(const char *oldname, const char *newname)
 	rel = table_open(NamespaceRelationId, RowExclusiveLock);
 
 	tup = SearchSysCacheCopy1(NAMESPACENAME, CStringGetDatum(oldname));
+	/* GPDB: another session's temporary namespace (see tempcat.c) */
+	if (HeapTupleIsValid(tup) &&
+		tempcat_namespace_of_other_session(((Form_pg_namespace) GETSTRUCT(tup))->oid,
+										   oldname))
+		tup = NULL;
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),
@@ -454,6 +460,14 @@ AlterSchemaOwner(const char *name, Oid newOwnerId)
 	rel = table_open(NamespaceRelationId, RowExclusiveLock);
 
 	tup = SearchSysCache1(NAMESPACENAME, CStringGetDatum(name));
+	/* GPDB: another session's temporary namespace (see tempcat.c) */
+	if (HeapTupleIsValid(tup) &&
+		tempcat_namespace_of_other_session(((Form_pg_namespace) GETSTRUCT(tup))->oid,
+										   name))
+	{
+		ReleaseSysCache(tup);
+		tup = NULL;
+	}
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),

@@ -61,13 +61,12 @@ extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
 								  Oid namespaceOid, Oid keyOid1, Oid keyOid2);
 extern Oid	tempcat_allocate_oid(Relation relation, Oid indexId,
 								 AttrNumber oidcolumn);
-extern void tempcat_check_preassigned_oid(Relation relation, Oid indexId,
-										  AttrNumber oidcolumn, Oid oid);
-extern void tempcat_note_preassigned_oid(Oid catalog, const char *objname,
+extern void tempcat_note_preassigned_oid(Relation relation, Oid indexId,
+										 AttrNumber oidcolumn,
+										 const char *objname,
 										 Oid namespaceOid, Oid keyOid1,
-										 Oid keyOid2, Oid oid);
+										 Oid keyOid2, bool temp, Oid oid);
 extern bool tempcat_owns_oid(Oid catalog, Oid oid);
-extern void tempcat_note_temp_oid(Oid catalog, Oid oid);
 
 /* Catalog DML */
 extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
@@ -113,6 +112,10 @@ extern int	tempcat_scan_compare_index(TempcatScan scan, HeapTuple a,
 extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_other_session_relation(HeapTuple tup);
 extern bool tempcat_relation_missing(Oid relid);
+extern bool tempcat_moved_tid(Relation rel, ItemPointer tid, ItemPointer dtid);
+extern void tempcat_materialize_moves(void);
+extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
+extern void tempcat_namespaces_removed(void);
 extern bool tempcat_check_type_user(Oid classId, Oid objectId,
 									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);

@@ -50,6 +50,12 @@ SELECT count(*) AS spilled_domain FROM pg_type WHERE typname = 'tc_spilldom';
 -- No pg_shdepend rows on disk either: the session publishes the roles its
 -- in-memory objects refer to (owner, grantees) for DROP ROLE to see.
 2: SELECT count(*) AS disk_shdepend FROM pg_shdepend WHERE objid >= 4026531840;
+-- Their dependency rows on ordinary objects are on disk: other sessions can
+-- identify the objects they point at, as temporary objects of another
+-- session (also on the segments).
+2: SELECT DISTINCT i.type, i.schema IS NULL AND i.name IS NULL AS anonymous, i.identity LIKE 'temporary object % of another session' AS identity FROM pg_depend d, pg_identify_object(d.classid, d.objid, d.objsubid) i WHERE d.objid >= 4026531840;
+2: SELECT DISTINCT a.type, cardinality(a.object_names) AS names FROM pg_depend d, pg_identify_object_as_address(d.classid, d.objid, d.objsubid) a WHERE d.objid >= 4026531840;
+2: SELECT DISTINCT (pg_identify_object(d.classid, d.objid, d.objsubid)).type FROM gp_dist_random('pg_depend') d WHERE d.objid >= 4026531840;
 -- (CASCADE reports the dependent objects by OID in a NOTICE)
 2: SET client_min_messages = warning;
 2: SELECT tc_try('DROP TYPE tc_type');
@@ -746,6 +752,33 @@ SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294
 1q:
 DROP TABLE tc_lns_ids;
 
+-- Once the session took the name (and removed the schema), its claim goes:
+-- the database is not swept again when the session is gone.  (As above,
+-- but session 2 creates a temporary object.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+2: SET application_name = 'tc_lns_taker';
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_lns_e (a int) DISTRIBUTED BY (a);
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_lns_f (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+2q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_taker'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+DROP TABLE tc_lns_ids;
+
 -- If another transaction is removing the schema, e.g. a sweep on a segment
 -- where the session has no writer yet, the session waits for it rather than
 -- fail.  (Session 3 deletes the row itself, in a transaction it keeps open.)
@@ -765,6 +798,31 @@ SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'transactionid' AND NO
 3: COMMIT;
 2<:
 2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967003;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+
+-- If that transaction commits after the session found the schema, but
+-- before it looks for the transaction, the session looks again rather than
+-- fail.  (The fault stops session 2 in between, until session 3 commits.)
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_gone';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_gone';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967007::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967007;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2: SET gp_enable_temp_memory_catalog = on;
+2&: CREATE TEMP TABLE tc_lns_gone (a int) DISTRIBUTED BY (a);
+SELECT gp_wait_until_triggered_fault('tempcat_before_namespace_deleter', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+3: COMMIT;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'resume', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_before_namespace_deleter', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+2<:
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967007;
 2q:
 3q:
 DROP TABLE tc_lns_ids;
@@ -806,6 +864,38 @@ SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_con
 0Uq:
 DROP TABLE tc_lns_ids;
 DROP TABLE tc_dl_bar;
+
+-- On the coordinator too, once the session's transaction has a part on a
+-- segment: the transaction removing the schema may be waiting there for
+-- the session's, e.g. for a key it inserted, and the coordinator's detector
+-- does not see that.  (Session 3 deletes the row, then inserts a key that
+-- session 2 inserted first.)
+CREATE TABLE tc_dl_key (a int PRIMARY KEY) DISTRIBUTED BY (a);
+CREATE TABLE tc_lns_ids (id int) DISTRIBUTED REPLICATED;
+2: SET application_name = 'tc_lns_key';
+INSERT INTO tc_lns_ids SELECT sess_id FROM pg_stat_activity WHERE application_name = 'tc_lns_key';
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT 4294967006::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+2: SET gp_enable_temp_memory_catalog = on;
+2: SET statement_timeout = '20s';
+2: BEGIN;
+2: INSERT INTO tc_dl_key VALUES (1);
+3: BEGIN;
+3: SET allow_system_table_mods = on;
+3: DELETE FROM pg_namespace WHERE oid = 4294967006;
+3&: INSERT INTO tc_dl_key VALUES (1);
+DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN EXISTS (SELECT 1 FROM gp_dist_random('pg_locks') WHERE locktype = 'transactionid' AND NOT granted); PERFORM pg_sleep(0.1); END LOOP; END $$;
+2: SELECT tc_try_again('CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a)');
+2: ROLLBACK;
+3<:
+3: ROLLBACK;
+2: CREATE TEMP TABLE tc_dl_k (a int) DISTRIBUTED BY (a);
+2: SELECT count(*) AS left_schemas FROM pg_namespace WHERE oid = 4294967006;
+2q:
+3q:
+DROP TABLE tc_lns_ids;
+DROP TABLE tc_dl_key;
 DROP FUNCTION tc_try_again(text);
 
 -- The sweep does not wait for a transaction that deletes the same leftover
@@ -842,11 +932,12 @@ SELECT gp_inject_fault('tempcat_skip_autovacuum_sweep', 'reset', dbid) FROM gp_s
 SELECT tc_retry('DROP TYPE tc_w_type');
 
 --
--- 10. Some rows of in-memory temporary objects are on disk: dependencies on
--- ordinary objects, and rows that did not fit in memory.  To other sessions
--- they point at objects that do not exist, which gpcheckcat would report as
--- catalog corruption, so it sets gp_temp_memory_catalog_hide_others: SQL
--- scans then skip on-disk rows of other live sessions' temporary objects.
+-- 10. Some rows of temporary objects are on disk: dependencies of objects in
+-- memory on ordinary objects, and whole objects that did not fit in memory.
+-- To other sessions the dependencies point at objects that do not exist,
+-- which gpcheckcat would report as catalog corruption, so it sets
+-- gp_temp_memory_catalog_hide_others: SQL scans then skip on-disk rows of
+-- other live sessions' temporary objects.
 --
 CREATE FUNCTION tc_def() RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT 1';
 CREATE TYPE tc_hide_type AS (x int);
@@ -855,45 +946,76 @@ CREATE ROLE tc_cluster_role;
 !\retcode rm -rf /tmp/tc_hide_ts;
 !\retcode mkdir -p /tmp/tc_hide_ts;
 CREATE TABLESPACE tc_hide_ts LOCATION '/tmp/tc_hide_ts';
+CREATE ROLE tc_ns_role;
+CREATE TABLE tc_ns_name (n name) DISTRIBUTED REPLICATED;
+CREATE FUNCTION tc_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN RETURN SQLSTATE; END $$ LANGUAGE plpgsql;
 1: SET gp_enable_temp_memory_catalog = on;
 1: SET gp_temp_memory_catalog_max_size = 1024;
 1: CREATE TEMP TABLE tc_hide (a int DEFAULT tc_def(), c tc_hide_type) DISTRIBUTED BY (a);
 1: CREATE TEMP TABLE tc_half (a int, b text) DISTRIBUTED BY (a);
 1: CREATE TEMP TABLE tc_clu (a int) DISTRIBUTED BY (a);
 1: CREATE INDEX tc_clu_i ON tc_clu (a);
+1: INSERT INTO tc_ns_name SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
 1: DO $$ BEGIN FOR i IN 1..150 LOOP EXECUTE format('CREATE TEMP TABLE tc_hide_%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
 -- (more rows that do not fit: an index marked for CLUSTER, whose table did
--- fit, and a table in a tablespace)
+-- fit, a table in a tablespace, a change of tc_half and a privilege on the
+-- session's namespace; with the area made to look full, as the room left
+-- by the objects that went to disk would take them)
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
 1: ALTER TABLE tc_clu CLUSTER ON tc_clu_i;
 1: CREATE TEMP TABLE tc_in_ts (a int) TABLESPACE tc_hide_ts DISTRIBUTED BY (a);
-
--- A relation can go to disk partly: here its pg_class row, updated while
--- the area is full, but not the attributes it had.  Other sessions must not
--- open it (database-wide VACUUM and ANALYZE, functions on pg_class rows):
--- to them it does not exist, like the relations kept in memory.
 1: ALTER TABLE tc_half ADD COLUMN z int;
+1: DO $$ BEGIN EXECUTE format('GRANT USAGE ON SCHEMA %I TO tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+
+-- An object goes to disk whole: here tc_half's pg_class row, updated while
+-- the area is full, takes the attributes the relation had, its row type,
+-- ..., with it.  What other sessions see on disk is complete: they can
+-- open the relations (database-wide VACUUM and ANALYZE, functions on
+-- pg_class rows) and describe them, as an ordinary temporary table.
 -- (session 2 stands for gpcheckcat: its own objects stay on disk)
 2: SET gp_enable_temp_memory_catalog = off;
-2: SELECT count(*) AS opened FROM pg_class WHERE oid >= 4026531840 AND pg_total_relation_size(oid) IS NOT NULL;
+2: SELECT count(*) > 0 AS on_disk, bool_and(pg_total_relation_size(oid) IS NOT NULL) AS opened FROM pg_class WHERE oid >= 4026531840;
+2: SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = (SELECT oid FROM pg_class WHERE relname = 'tc_half') AND attnum > 0 ORDER BY attnum;
+2: SELECT bool_and(c.relnatts = (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0)) AS attributes, bool_and(c.reltype = 0 OR EXISTS (SELECT FROM pg_type t WHERE t.oid = c.reltype)) AS row_types FROM pg_class c WHERE c.oid >= 4026531840;
+2: SELECT count(*) > 0 AS deparsed FROM (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE oid >= 4026531840 UNION ALL SELECT indexdef FROM pg_indexes WHERE tablename LIKE 'tc\_hide\_%') s;
+2: SELECT count(*) > 0 AS check_constraints FROM information_schema.check_constraints WHERE constraint_schema = (SELECT n FROM tc_ns_name);
 2: ANALYZE;
 2: VACUUM;
 -- The session's namespaces went to disk with its first row that did not
 -- fit there, so that code naming the objects finds them (it crashed the
 -- server).  Temporary, they keep the objects missing for other sessions.
-2: SELECT bool_and(i.schema LIKE 'pg\_%temp\_%') AS named FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
+2: SELECT bool_and(i.type = 'temporary object') AS identified FROM pg_class c, pg_identify_object('pg_class'::regclass, c.oid, 0) i WHERE c.oid >= 4026531840;
 2: SELECT bool_and(pg_relation_filepath(oid) IS NOT NULL) AS filepath FROM pg_class WHERE oid >= 4026531840 AND relkind = 'r';
 2: ALTER TABLE ALL IN TABLESPACE tc_hide_ts SET TABLESPACE pg_default;
 2: SET ROLE tc_cluster_role;
 2: CLUSTER;
 2: RESET ROLE;
--- Readers tell their session's objects by the OID bounds its writer
--- publishes: here a reader gang (one of the two scans that the join needs
--- moved) and an entry-db reader find the relation missing, as the writer
--- does.
-2: SELECT count(*) AS missing FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NULL;
+-- Readers open the relations too, as the writer does: here a reader gang
+-- (one of the two scans that the join needs moved) and an entry-db reader.
+2: SELECT count(*) AS opened FROM (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') a JOIN (SELECT pg_relation_size(oid) s FROM gp_dist_random('pg_class') WHERE relname = 'tc_half') b ON (a.s IS NULL) = (b.s IS NULL) WHERE a.s IS NOT NULL;
 2: CREATE TEMP TABLE tc_sink (n int) DISTRIBUTED RANDOMLY;
 2: INSERT INTO tc_sink SELECT pg_relation_is_updatable(oid::regclass, false) FROM pg_class WHERE relname = 'tc_half';
 2: SELECT n FROM tc_sink;
+-- On disk, the session's temporary namespaces are still its own: other
+-- sessions do not find them by name (3F000) to drop or change them, which
+-- would leave the session's objects in memory behind, nor revoke privileges
+-- on them with DROP OWNED.
+2: SELECT count(*) AS shdepend_on_disk FROM pg_shdepend WHERE refobjid = 'tc_ns_role'::regrole;
+2: DROP OWNED BY tc_ns_role;
+2: SELECT (SELECT nspacl::text LIKE '%tc_ns_role=U/%' FROM pg_namespace WHERE nspname = (SELECT n FROM tc_ns_name)) AS granted, (SELECT count(*) FROM gp_dist_random('pg_namespace') WHERE nspname = (SELECT n FROM tc_ns_name) AND nspacl::text LIKE '%tc_ns_role=U/%') AS granted_on_segments;
+-- (without the protection of the pg_ names, which a superuser can lift)
+2: SET allow_system_table_mods = on;
+2: SELECT tc_state(format('DROP SCHEMA %I', n)) AS drop_schema, tc_state(format('ALTER SCHEMA %I RENAME TO tc_renamed', n)) AS rename_schema, tc_state(format('ALTER SCHEMA %I OWNER TO tc_ns_role', n)) AS owner_schema, tc_state(format('GRANT CREATE ON SCHEMA %I TO tc_ns_role', n)) AS grant_on_schema FROM (SELECT (SELECT n FROM tc_ns_name) AS n) s;
+2: RESET allow_system_table_mods;
+-- Nor can they make their objects depend on the session's objects that
+-- went to disk, which they still find by OID (0A000): the session could
+-- not drop them at exit, and the sweep would remove the objects from under
+-- them.  (Views with regtype and regclass constants depend on the objects.)
+2: SELECT tc_state(format('CREATE VIEW tc_dep_other_t AS SELECT %L::regtype AS t', (SELECT min(oid) FROM pg_type WHERE typname LIKE 'tc\_hide\_%' AND oid >= 4026531840))) AS on_type, tc_state(format('CREATE VIEW tc_dep_other_r AS SELECT %L::regclass AS r', (SELECT min(oid) FROM pg_class WHERE relname LIKE 'tc\_hide\_%' AND oid >= 4026531840))) AS on_relation;
+1: CREATE TEMP TABLE tc_ns_after (a int) DISTRIBUTED BY (a);
+1: SELECT count(*) FROM tc_half;
+1: DO $$ BEGIN EXECUTE format('REVOKE USAGE ON SCHEMA %I FROM tc_ns_role', (SELECT n FROM tc_ns_name)); END $$;
 
 -- A column default of a temporary table depends on the function.
 -- (session 2 stands for gpcheckcat: its own objects stay on disk)
@@ -956,6 +1078,32 @@ SELECT tc_retry('DROP TYPE tc_hide_type');
 DROP FUNCTION tc_orphan_deps();
 DROP ROLE tc_cluster_role;
 DROP TABLESPACE tc_hide_ts;
+DROP ROLE tc_ns_role;
+DROP TABLE tc_ns_name;
+DROP FUNCTION tc_state(text);
+
+-- The session's cleanup at exit removes its namespaces that went to disk,
+-- with their objects: nothing is left there, and the database is not swept
+-- again for it.  (The fault makes the area look full.)
+1: SET application_name = 'tc_ns_exit';
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_ns_exit1 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE TEMP TABLE tc_ns_exit2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SET gp_temp_memory_catalog_disk_only = on;
+1: SELECT count(*) AS namespaces_on_disk FROM pg_namespace WHERE oid = pg_my_temp_schema();
+1: RESET gp_temp_memory_catalog_disk_only;
+CREATE TABLE tc_ns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_ns_drop;
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_ns_exit'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_ns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_ns_drop;
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS left_rows FROM pg_class WHERE relname IN ('tc_ns_exit1', 'tc_ns_exit2');
 
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
@@ -1158,6 +1306,34 @@ SELECT count(*) AS deps FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype 
 1q:
 2q:
 SELECT tc_retry('DROP TYPE tc_wrap_type');
+
+-- A segment refuses a reserved OID that a row of its own already has (here
+-- a made-up pg_class row, of a transaction in progress in utility mode).
+-- The OID does not become the session's there: its bounds do not cover it,
+-- and the sweep removes a leftover with it (a made-up dependency row of a
+-- table that is gone).  (The session's OIDs follow one another: the next
+-- one goes to the next table.)
+CREATE TABLE tc_ref_oid (x oid) DISTRIBUTED REPLICATED;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_ref1 (a int) DISTRIBUTED BY (a);
+1: INSERT INTO tc_ref_oid SELECT (max(oid)::bigint + 1)::oid FROM (SELECT oid FROM pg_class WHERE relnamespace = pg_my_temp_schema() UNION ALL SELECT oid FROM pg_type WHERE typnamespace = pg_my_temp_schema()) s;
+0U: BEGIN;
+0U: SET allow_system_table_mods = on;
+0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
+1: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+0U: ROLLBACK;
+0U: SET allow_system_table_mods = on;
+0U: INSERT INTO pg_depend SELECT 'pg_class'::regclass, x, 0, 'pg_type'::regclass, 'int4'::regtype, 0, 'n' FROM tc_ref_oid;
+0Uq:
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_ref_sweeper (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid = (SELECT x FROM tc_ref_oid);
+1: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+1q:
+2q:
+DROP TABLE tc_ref_oid;
 
 -- Whether a row with a reserved OID belongs to an ordinary object is judged
 -- as of the query's snapshot: pg_dump's sees an ordinary object dropped

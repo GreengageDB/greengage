@@ -213,6 +213,7 @@ static void recomputeNamespacePath(void);
 static void AccessTempTableNamespace(bool force);
 static void RemoveTempRelations(Oid tempNamespaceId);
 static void RemoveTempRelationsCallback(int code, Datum arg);
+static void RemoveTempSchemaById(Oid namespaceId);
 static void NamespaceCallback(Datum arg, int cacheid, uint32 hashvalue);
 static bool MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
 						   int **argnumbers);
@@ -3080,6 +3081,11 @@ get_namespace_oid(const char *nspname, bool missing_ok)
 
 	oid = GetSysCacheOid1(NAMESPACENAME, Anum_pg_namespace_oid,
 						  CStringGetDatum(nspname));
+
+	/* GPDB: another session's temporary namespace (see tempcat.c) */
+	if (OidIsValid(oid) && tempcat_namespace_of_other_session(oid, nspname))
+		oid = InvalidOid;
+
 	if (!OidIsValid(oid) && !missing_ok)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),
@@ -4197,7 +4203,7 @@ InitTempTableNamespace(void)
 	if (OidIsValid(namespaceId))
 	{
 		RemoveTempRelations(namespaceId);
-		RemoveSchemaById(namespaceId);
+		RemoveTempSchemaById(namespaceId);
 		elog(DEBUG1, "Remove schema entry %u from pg_namespace",
 			 namespaceId);
 		namespaceId = InvalidOid;
@@ -4230,7 +4236,7 @@ InitTempTableNamespace(void)
 	toastspaceId = get_namespace_oid(namespaceName, true);
 	if (OidIsValid(toastspaceId))
 	{
-		RemoveSchemaById(toastspaceId);
+		RemoveTempSchemaById(toastspaceId);
 		elog(DEBUG1, "Remove schema entry %u from pg_namespace",
 			 namespaceId);
 		toastspaceId = InvalidOid;
@@ -4297,6 +4303,19 @@ InitTempTableNamespace(void)
 }
 
 /*
+ * GPDB: remove a temporary namespace, whose objects are gone, directly rather
+ * than by performDeletion(): with its shared dependencies too, as that would,
+ * i.e. the roles granted privileges on it.  Left behind, they would make
+ * DROP ROLE fail ("cache lookup failed for namespace").
+ */
+static void
+RemoveTempSchemaById(Oid namespaceId)
+{
+	deleteSharedDependencyRecordsFor(NamespaceRelationId, namespaceId, 0);
+	RemoveSchemaById(namespaceId);
+}
+
+/*
  * Drop temp relations for session reset.
  */
 void
@@ -4327,11 +4346,14 @@ DropTempTableNamespaceEntryForResetSession(Oid namespaceOid, Oid toastNamespaceO
 	if (SearchSysCacheExists1(NAMESPACEOID,
 							  ObjectIdGetDatum(namespaceOid)))
 	{
-		RemoveSchemaById(namespaceOid);
-		RemoveSchemaById(toastNamespaceOid);
+		RemoveTempSchemaById(namespaceOid);
+		RemoveTempSchemaById(toastNamespaceOid);
 	}
 
 	CommitTransactionCommand();
+
+	/* GPDB: wherever their rows were (see tempcat.c) */
+	tempcat_namespaces_removed();
 }
 
 /*

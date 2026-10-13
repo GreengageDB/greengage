@@ -304,10 +304,14 @@ void
 CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 {
 	CatalogIndexState indstate;
+	ItemPointerData dtid;
 
 	CatalogTupleCheckConstraints(heapRel, tup);
 
-	if (IsTempcatTid(otid))
+	/* (a row moved to disk with its object, see tempcat.c) */
+	if (tempcat_moved_tid(heapRel, otid, &dtid))
+		otid = &dtid;
+	else if (IsTempcatTid(otid))
 	{
 		if (tempcat_route_insert(heapRel, tup) &&
 			tempcat_update(heapRel, otid, tup))
@@ -316,14 +320,21 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 		/*
 		 * The new version references an ordinary object (e.g. a pg_depend
 		 * row now pointing at a regular type), so it must be visible to
-		 * other sessions; or the in-memory area is full.  Move it to disk.
+		 * other sessions; or its object lives on disk, perhaps taken there
+		 * with this very row as it did not fit (then update it there).
+		 * Move it to disk.
 		 */
-		tempcat_delete(heapRel, otid);
-		indstate = CatalogOpenIndexes(heapRel);
-		simple_heap_insert(heapRel, tup);
-		CatalogIndexInsert(indstate, tup);
-		CatalogCloseIndexes(indstate);
-		return;
+		if (tempcat_moved_tid(heapRel, otid, &dtid))
+			otid = &dtid;
+		else
+		{
+			tempcat_delete(heapRel, otid);
+			indstate = CatalogOpenIndexes(heapRel);
+			simple_heap_insert(heapRel, tup);
+			CatalogIndexInsert(indstate, tup);
+			CatalogCloseIndexes(indstate);
+			return;
+		}
 	}
 
 	indstate = CatalogOpenIndexes(heapRel);
@@ -346,19 +357,27 @@ void
 CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
+	ItemPointerData dtid;
+
 	CatalogTupleCheckConstraints(heapRel, tup);
 
-	if (IsTempcatTid(otid))
+	/* see CatalogTupleUpdate */
+	if (tempcat_moved_tid(heapRel, otid, &dtid))
+		otid = &dtid;
+	else if (IsTempcatTid(otid))
 	{
-		if (!tempcat_route_insert(heapRel, tup) ||
-			!tempcat_update(heapRel, otid, tup))
+		if (tempcat_route_insert(heapRel, tup) &&
+			tempcat_update(heapRel, otid, tup))
+			return;
+		if (tempcat_moved_tid(heapRel, otid, &dtid))
+			otid = &dtid;
+		else
 		{
-			/* see CatalogTupleUpdate */
 			tempcat_delete(heapRel, otid);
 			simple_heap_insert(heapRel, tup);
 			CatalogIndexInsert(indstate, tup);
+			return;
 		}
-		return;
 	}
 
 	simple_heap_update(heapRel, otid, tup);

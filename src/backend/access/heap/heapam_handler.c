@@ -390,6 +390,8 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	/* GPDB: see heapam_tuple_delete() and CatalogTupleUpdate() */
 	if (IsTempcatTid(otid))
 	{
+		ItemPointerData dtid;
+
 		result = tempcat_self_modified(relation, otid, tmfd);
 		if (result == TM_Invisible)
 			ereport(ERROR,
@@ -404,6 +406,12 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		if (tempcat_route_insert(relation, tuple) &&
 			tempcat_update(relation, otid, tuple))
 			*update_indexes = false;	/* not in the catalog's indexes */
+		else if (tempcat_moved_tid(relation, otid, &dtid))
+		{
+			/* moved to disk with its object, as the new version did not fit */
+			simple_heap_update(relation, &dtid, tuple);
+			*update_indexes = true;
+		}
 		else
 		{
 			/* the new version must go to disk */

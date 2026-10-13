@@ -1314,6 +1314,9 @@ IsInParallelMode(void)
 void
 CommandCounterIncrement(void)
 {
+	/* GPDB: objects to take to disk go at the end of the command (tempcat.c) */
+	tempcat_materialize_moves();
+
 	/*
 	 * If the current value of the command counter hasn't been "used" to mark
 	 * tuples, we need not increment it, since there's no need to distinguish

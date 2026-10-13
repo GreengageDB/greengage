@@ -123,6 +123,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/tempcat.h"
 #include "cdb/cdbendpoint.h"
+#include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
 #include "executor/tuptable.h"
 #include "miscadmin.h"
@@ -816,7 +817,10 @@ static bool tc_horizon_dirty = false;
 /* The published roles may include roles no longer used. */
 static bool tc_roles_dirty = false;
 
-/* Our temporary namespaces may have gone to disk; see tempcat_row_to_disk() */
+/*
+ * Our temporary namespaces may have gone to disk (see tempcat_row_to_disk()),
+ * and not been removed since (tempcat_namespaces_removed()).
+ */
 static bool tc_namespaces_to_disk = false;
 
 static void tempcat_sweep_if_needed(bool allow_force);
@@ -830,6 +834,7 @@ static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   SubTransactionId parentSubid,
 										   void *arg);
 static void tempcat_sweep_exit(int code, Datum arg);
+static void tempcat_xact_callback(XactEvent event, void *arg);
 static void tempcat_subxact_callback(SubXactEvent event,
 									 SubTransactionId mySubid,
 									 SubTransactionId parentSubid,
@@ -866,7 +871,8 @@ tempcat_before_exit(int code, Datum arg)
 
 	/*
 	 * Without an area, rows went to disk only; assume the worst.  So did our
-	 * namespaces if a row did not fit, and they stay when we leave.
+	 * namespaces if a row did not fit; the cleanup removes them (and their
+	 * objects), unless it failed.
 	 */
 	leftovers = tc_area == NULL || tc_namespaces_to_disk ||
 		tempcat_area_has_live_rows();
@@ -881,6 +887,17 @@ tempcat_before_exit(int code, Datum arg)
 		if (tc_area != NULL)
 			tempcat_unlink_live_relations();
 	}
+}
+
+/*
+ * Our temporary namespaces were removed, in a transaction that committed:
+ * by the cleanup at exit or session reset (GpDropTempTables()), after their
+ * objects.  If they went to disk, nothing is left there now.
+ */
+void
+tempcat_namespaces_removed(void)
+{
+	tc_namespaces_to_disk = false;
 }
 
 static void
@@ -984,6 +1001,7 @@ tempcat_activate(void)
 	on_shmem_exit(tempcat_proc_exit, (Datum) 0);
 	before_shmem_exit(tempcat_before_exit, (Datum) 0);
 	RegisterSubXactCallback(tempcat_subxact_callback, NULL);
+	RegisterXactCallback(tempcat_xact_callback, NULL);
 
 	tempcat_sweep_if_needed(true);
 }
@@ -1070,7 +1088,7 @@ typedef struct TempcatOwnedKey
 typedef struct TempcatOwnedEntry
 {
 	TempcatOwnedKey key;
-	bool		on_disk;		/* some of its rows went to disk */
+	bool		on_disk;		/* it lives, or lived, on disk */
 } TempcatOwnedEntry;
 
 static HTAB *tc_owned = NULL;
@@ -1340,32 +1358,37 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 							   gp_enable_temp_memory_catalog);
 }
 
+static void tempcat_check_preassigned_oid(Relation relation, Oid indexId,
+										  AttrNumber oidcolumn, Oid oid);
+
 /*
  * A QE received a pre-assigned OID from the QD.  If the QD gave a temporary
- * object of this session a reserved OID, remember that we own it.
+ * object of this session a reserved OID ('temp' says that the object is one
+ * even if the key does not tell), check that the OID is free on this node
+ * (after the sweep that activating may run), then remember that we own it.
+ * In this order: an OID refused here must not become ours, as our published
+ * bounds would cover it for the rest of the session, and with it rows of
+ * whatever has it.
  */
 void
-tempcat_note_preassigned_oid(Oid catalog, const char *objname,
+tempcat_note_preassigned_oid(Relation relation, Oid indexId,
+							 AttrNumber oidcolumn, const char *objname,
 							 Oid namespaceOid, Oid keyOid1, Oid keyOid2,
-							 Oid oid)
+							 bool temp, Oid oid)
 {
+	Oid			catalog = RelationGetRelid(relation);
+
 	if (IsBinaryUpgrade || !IsTempcatOid(oid))
 		return;
 
-	if (tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
+	if (temp ||
+		tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
 							true))
 	{
 		tempcat_activate();
+		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 		tempcat_remember_oid(catalog, oid);
 	}
-}
-
-/* The object is known to be a temporary object of this session. */
-void
-tempcat_note_temp_oid(Oid catalog, Oid oid)
-{
-	tempcat_activate();
-	tempcat_remember_oid(catalog, oid);
 }
 
 /*
@@ -1466,6 +1489,8 @@ tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid)
 				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
 }
 
+static bool tempcat_found_object_of_other_session(const ObjectAddress *object);
+
 /*
  * An ordinary object cannot depend on a temporary object kept in memory
  * (e.g. a column of an ordinary table of a temporary table's row type):
@@ -1484,6 +1509,21 @@ tempcat_check_dependency(const ObjectAddress *depender,
 				 errdetail("The new object would depend on %s.",
 						   getObjectDescription(referenced)),
 				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+
+	/*
+	 * Nor can anything depend on a temporary object of another session that
+	 * keeps them in memory, which went to disk (other sessions can still
+	 * find it by OID, e.g. a regclass or regtype constant of a view): that
+	 * session could not drop the dependent object, which may be invisible
+	 * to it, and the sweep would remove the object from under it.  Such an
+	 * object is missing for us like those in memory.
+	 */
+	if (tempcat_found_object_of_other_session(referenced))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot depend on temporary objects of another session"),
+				 errdetail("The new object would depend on %s.",
+						   getObjectDescription(referenced))));
 }
 
 /*
@@ -1601,7 +1641,7 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
  * e.g. removed by the sweep but not vacuumed yet, which the QD may not have
  * (or no longer have), would make the OID unusable here until a VACUUM.
  */
-void
+static void
 tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 							  AttrNumber oidcolumn, Oid oid)
 {
@@ -1772,13 +1812,39 @@ tempcat_namespaces_to_disk(void)
  * (pg_shdepend rows name no namespace, and go to disk when the published
  * roles run out, too.)
  */
+typedef struct TempcatObject
+{
+	Oid			classId;
+	Oid			objectId;
+} TempcatObject;
+
+static TempcatObject tempcat_row_object(int catidx, HeapTuple tup,
+										TupleDesc desc);
+static void tempcat_schedule_move(Oid classId, Oid objectId);
+static bool tempcat_move_pending(Oid classId, Oid objectId);
+static bool tempcat_object_in_memory(Oid classId, Oid objectId);
+static void tempcat_mark_on_disk(Oid classId, Oid objectId);
+
 static void
 tempcat_row_to_disk(Relation rel, HeapTuple tup)
 {
+	Oid			relid = RelationGetRelid(rel);
+	int			catidx = tempcat_catalog_index(relid);
+	TupleDesc	desc = RelationGetDescr(rel);
+	TempcatObject obj;
+
 	tempcat_note_disk_row(rel, tup);
-	if (RelationGetRelid(rel) != NamespaceRelationId &&
-		RelationGetRelid(rel) != SharedDependRelationId)
-		tempcat_namespaces_to_disk();
+	if (relid == NamespaceRelationId || relid == SharedDependRelationId)
+		return;
+	tempcat_namespaces_to_disk();
+
+	/* its whole object, see tempcat_materialize_moves() */
+	obj = tempcat_row_object(catidx, tup, desc);
+	tempcat_mark_on_disk(obj.classId, obj.objectId);
+	tempcat_schedule_move(obj.classId, obj.objectId);
+	if (relid == DependRelationId)
+		tempcat_schedule_move(tempcat_getoid(tup, desc, Anum_pg_depend_refclassid),
+							  tempcat_getoid(tup, desc, Anum_pg_depend_refobjid));
 }
 
 /* Does the catalog still hold an entry (of any visibility) for 'oid'? */
@@ -1810,6 +1876,464 @@ tempcat_memory_has_oid(int catidx, Oid oid)
 		}
 	}
 	return false;
+}
+
+/* ----------------------------------------------------------------
+ * Whole objects on disk
+ *
+ * A row that does not fit in memory takes its whole object to disk: the
+ * object's rows, its parts (the objects that depend on it internally or
+ * automatically: indexes, TOAST tables, row types, defaults, constraints,
+ * triggers, rules, policies, partitions), and the session's objects in
+ * memory that those refer to (column types, functions of defaults and
+ * triggers, ...), as pg_depend tells; and the object's later rows go to
+ * disk too.  So the session's rows on disk never refer to its objects in
+ * memory, but for dependencies on ordinary objects and owner and ACL rows
+ * (see tempcat_route_insert()): what other sessions see on disk is whole,
+ * and they can use it as without the in-memory catalog (the relcache,
+ * pg_get_constraintdef(), information_schema, ...).  Whether an object is
+ * in memory follows from its rows, so a rollback, also of a prepared
+ * transaction, needs no undoing.
+ * ----------------------------------------------------------------
+ */
+
+static TempcatXidStatus tempcat_xid_status(TransactionId xid);
+static void tempcat_delete_entry_moved(Relation rel, dsa_pointer ep);
+static HeapTuple tempcat_entry_copy(TempcatEntry *e, Oid relid);
+
+/* Is the entry's row alive: not inserted or deleted by an aborted transaction? */
+static bool
+tempcat_entry_alive(TempcatEntry *e)
+{
+	if (!(e->flags & TCE_XMIN_COMMITTED) &&
+		tempcat_xid_status(e->xmin) == TCX_ABORTED)
+		return false;
+	return !TransactionIdIsValid(e->xmax) ||
+		tempcat_xid_status(e->xmax) == TCX_ABORTED;
+}
+
+/* The object a row belongs to: its owner, or its own for functions and operators. */
+static TempcatObject
+tempcat_row_object(int catidx, HeapTuple tup, TupleDesc desc)
+{
+	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+	TempcatObject obj;
+
+	if (def->ownerclass == NamespaceRelationId &&
+		def->relid != NamespaceRelationId)
+	{
+		obj.classId = def->relid;
+		obj.objectId = tempcat_getoid(tup, desc, 1);
+	}
+	else if (def->relid == ConstraintRelationId &&
+			 !OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)))
+	{
+		/* domain constraint */
+		obj.classId = TypeRelationId;
+		obj.objectId = tempcat_getoid(tup, desc, Anum_pg_constraint_contypid);
+	}
+	else
+	{
+		obj.classId = def->ownerclassattr != 0 ?
+			tempcat_getoid(tup, desc, def->ownerclassattr) : def->ownerclass;
+		obj.objectId = tempcat_getoid(tup, desc, def->owner);
+	}
+	return obj;
+}
+
+static TempcatOwnedEntry *
+tempcat_owned_entry(Oid catalog, Oid oid)
+{
+	TempcatOwnedKey key;
+
+	if (tc_owned == NULL || !IsTempcatOid(oid))
+		return NULL;
+	key.catalog = catalog;
+	key.oid = oid;
+	return hash_search(tc_owned, &key, HASH_FIND, NULL);
+}
+
+/*
+ * Does our object live in memory?  Yes if its own row (pg_class, pg_type,
+ * pg_proc, ...) is in memory and alive; no if this transaction deleted it,
+ * e.g. moving it to disk; otherwise, if its own row is not in memory at
+ * all, unless rows of it went to disk (a new object has none yet).  Objects
+ * not ours count as in memory: nothing of theirs is routed.
+ */
+static bool
+tempcat_object_in_memory(Oid classId, Oid objectId)
+{
+	TempcatOwnedEntry *owned = tempcat_owned_entry(classId, objectId);
+	int			catidx;
+	bool		deleted = false;
+
+	if (owned == NULL)
+		return true;
+	if (tempcat_move_pending(classId, objectId))
+		return false;
+	/* (no area yet, as at the first row, or none to be had: see below) */
+	if (tc_area == NULL)
+		return !owned->on_disk;
+
+	catidx = tempcat_catalog_index(classId);
+	if (catidx >= 0 && tempcat_catalog_has_oid(catidx))
+	{
+		const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+		uint32		hash = DatumGetUInt32(hash_uint32(objectId));
+		int			k;
+
+		for (k = 0; k < TEMPCAT_NKEYS; k++)
+		{
+			TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
+			dsa_pointer np;
+
+			/* the oid column is always attribute 1 */
+			if (def->keyattr[k] != 1 || h->nbuckets == 0)
+				continue;
+			np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
+			while (DsaPointerIsValid(np))
+			{
+				TempcatHashNode *node = TC_ADDR(np);
+				TempcatEntry *e = TC_ADDR(node->entry);
+
+				if (node->hash == hash && tempcat_entry_oid(e) == objectId)
+				{
+					if (tempcat_entry_alive(e))
+						return true;
+					if (TransactionIdIsValid(e->xmax) &&
+						TransactionIdIsCurrentTransactionId(e->xmax))
+						deleted = true;
+				}
+				np = node->next;
+			}
+			break;
+		}
+	}
+	return !deleted && !owned->on_disk;
+}
+
+/*
+ * Objects to move to disk at the end of the command (or before commit or
+ * PREPARE), with the subtransaction level that asked; see
+ * tempcat_materialize_moves().
+ */
+typedef struct TempcatPendingMove
+{
+	TempcatObject obj;
+	int			level;
+} TempcatPendingMove;
+
+static HTAB *tc_pending_moves = NULL;	/* in TopTransactionContext */
+static LocalTransactionId tc_pending_moves_lxid = InvalidLocalTransactionId;
+
+static bool
+tempcat_move_pending(Oid classId, Oid objectId)
+{
+	TempcatObject obj;
+
+	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
+		return false;
+	obj.classId = classId;
+	obj.objectId = objectId;
+	return hash_search(tc_pending_moves, &obj, HASH_FIND, NULL) != NULL;
+}
+
+/*
+ * From now on, our object lives on disk: its new rows and new versions go
+ * there, and its other rows follow at the end of the command, with its
+ * parts and what it refers to (tempcat_materialize_moves()).  Not right
+ * away: the command may still be making the object, e.g. an index whose
+ * pg_index row is to come, and the rows it refers to by TID would move
+ * under it.
+ */
+static void
+tempcat_schedule_move(Oid classId, Oid objectId)
+{
+	TempcatPendingMove *entry;
+	TempcatObject obj;
+
+	if (tempcat_owned_entry(classId, objectId) == NULL)
+		return;
+	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
+	{
+		HASHCTL		ctl;
+
+		memset(&ctl, 0, sizeof(ctl));
+		ctl.keysize = sizeof(TempcatObject);
+		ctl.entrysize = sizeof(TempcatPendingMove);
+		ctl.hcxt = TopTransactionContext;
+		tc_pending_moves = hash_create("tempcat objects to move", 64, &ctl,
+									   HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+		tc_pending_moves_lxid = MyProc->lxid;
+	}
+	obj.classId = classId;
+	obj.objectId = objectId;
+	entry = hash_search(tc_pending_moves, &obj, HASH_ENTER, NULL);
+	entry->level = GetCurrentTransactionNestLevel();
+}
+
+static void
+tempcat_mark_on_disk(Oid classId, Oid objectId)
+{
+	TempcatOwnedEntry *owned = tempcat_owned_entry(classId, objectId);
+
+	if (owned != NULL)
+		owned->on_disk = true;
+}
+
+/*
+ * Virtual TIDs of rows moved to disk in the current transaction, and the
+ * TIDs of their copies there: callers may still hold a row's virtual TID,
+ * found in this command before the move, to update or delete it
+ * (tempcat_moved_tid()).
+ */
+typedef struct TempcatMovedKey
+{
+	Oid			relid;
+	ItemPointerData vtid;
+} TempcatMovedKey;
+
+typedef struct TempcatMovedEntry
+{
+	TempcatMovedKey key;
+	ItemPointerData dtid;
+	int			level;			/* subtransaction nesting level of the move */
+} TempcatMovedEntry;
+
+static HTAB *tc_moved = NULL;	/* in TopTransactionContext */
+static LocalTransactionId tc_moved_lxid = InvalidLocalTransactionId;
+
+static void
+tempcat_note_moved(Oid relid, ItemPointer vtid, ItemPointer dtid)
+{
+	TempcatMovedKey key;
+	TempcatMovedEntry *entry;
+
+	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid)
+	{
+		HASHCTL		ctl;
+
+		memset(&ctl, 0, sizeof(ctl));
+		ctl.keysize = sizeof(TempcatMovedKey);
+		ctl.entrysize = sizeof(TempcatMovedEntry);
+		ctl.hcxt = TopTransactionContext;
+		tc_moved = hash_create("tempcat moved rows", 64, &ctl,
+							   HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+		tc_moved_lxid = MyProc->lxid;
+	}
+	memset(&key, 0, sizeof(key));
+	key.relid = relid;
+	key.vtid = *vtid;
+	entry = hash_search(tc_moved, &key, HASH_ENTER, NULL);
+	entry->dtid = *dtid;
+	entry->level = GetCurrentTransactionNestLevel();
+}
+
+/*
+ * Was the virtual row 'tid' of 'rel' moved to disk in this transaction?
+ * If so, set '*dtid' to its copy there, for the caller to update or delete
+ * that instead.
+ */
+bool
+tempcat_moved_tid(Relation rel, ItemPointer tid, ItemPointer dtid)
+{
+	TempcatMovedKey key;
+	TempcatMovedEntry *entry;
+
+	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid || !IsTempcatTid(tid))
+		return false;
+	memset(&key, 0, sizeof(key));
+	key.relid = RelationGetRelid(rel);
+	key.vtid = *tid;
+	entry = hash_search(tc_moved, &key, HASH_FIND, NULL);
+	if (entry == NULL)
+		return false;
+	*dtid = entry->dtid;
+	return true;
+}
+
+/* Forget the moves of an aborted subtransaction, or hand them to its parent. */
+static void
+tempcat_moved_end_subxact(bool commit)
+{
+	int			level = GetCurrentTransactionNestLevel();
+	HASH_SEQ_STATUS status;
+	TempcatMovedEntry *entry;
+	TempcatPendingMove *pending;
+
+	if (tc_pending_moves != NULL && tc_pending_moves_lxid == MyProc->lxid)
+	{
+		hash_seq_init(&status, tc_pending_moves);
+		while ((pending = hash_seq_search(&status)) != NULL)
+		{
+			if (pending->level < level)
+				continue;
+			if (commit)
+				pending->level = level - 1;
+			else
+				(void) hash_search(tc_pending_moves, &pending->obj,
+								   HASH_REMOVE, NULL);
+		}
+	}
+
+	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid)
+		return;
+	hash_seq_init(&status, tc_moved);
+	while ((entry = hash_seq_search(&status)) != NULL)
+	{
+		if (entry->level < level)
+			continue;
+		if (commit)
+			entry->level = level - 1;
+		else
+			(void) hash_search(tc_moved, &entry->key, HASH_REMOVE, NULL);
+	}
+}
+
+/* Move one virtual row to disk, in the current transaction. */
+static void
+tempcat_delete_entry_moved(Relation rel, dsa_pointer ep)
+{
+	TempcatEntry *e = TC_ADDR(ep);
+	HeapTuple	tup = tempcat_entry_copy(e, RelationGetRelid(rel));
+	ItemPointerData vtid = e->tid;
+
+	tempcat_delete(rel, &vtid);
+	CatalogTupleInsertOnDisk(rel, tup);
+	tempcat_note_moved(RelationGetRelid(rel), &vtid, &tup->t_self);
+	tempcat_note_disk_row(rel, tup);
+	heap_freetuple(tup);
+}
+
+/*
+ * Move the objects whose moves are pending to disk, with their parts and
+ * the objects in memory that they refer to (see above), in the current
+ * command.  Called at the end of a command, before CommandCounterIncrement()
+ * makes the copies visible, and before commit and PREPARE.
+ */
+void
+tempcat_materialize_moves(void)
+{
+	int			dcat = tempcat_catalog_index(DependRelationId);
+	HTAB	   *set;
+	HASHCTL		ctl;
+	HASH_SEQ_STATUS status;
+	TempcatPendingMove *pending;
+	TempcatObject *member;
+	bool		added;
+	int			catidx;
+
+	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid ||
+		hash_get_num_entries(tc_pending_moves) == 0)
+		return;
+
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.keysize = sizeof(TempcatObject);
+	ctl.entrysize = sizeof(TempcatObject);
+	ctl.hcxt = CurrentMemoryContext;
+	set = hash_create("tempcat objects to move", 64, &ctl,
+					  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	hash_seq_init(&status, tc_pending_moves);
+	while ((pending = hash_seq_search(&status)) != NULL)
+		(void) hash_search(set, &pending->obj, HASH_ENTER, NULL);
+	hash_destroy(tc_pending_moves);
+	tc_pending_moves = NULL;
+
+	tempcat_namespaces_to_disk();
+	if (tc_area == NULL)
+	{
+		hash_seq_init(&status, set);
+		while ((member = hash_seq_search(&status)) != NULL)
+			tempcat_mark_on_disk(member->classId, member->objectId);
+		hash_destroy(set);
+		return;
+	}
+
+	/* the closure, over our dependency rows in memory */
+	do
+	{
+		dsa_pointer ep;
+
+		added = false;
+		for (ep = tc_root->catalogs[dcat].head; DsaPointerIsValid(ep);)
+		{
+			TempcatEntry *e = TC_ADDR(ep);
+			HeapTupleHeader hdr = TCE_DATA(e);
+			Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
+			TempcatObject dep;
+			TempcatObject ref;
+			bool		depin;
+			bool		refin;
+
+			ep = e->next;
+			if (!tempcat_entry_alive(e))
+				continue;
+			dep.classId = form->classid;
+			dep.objectId = form->objid;
+			ref.classId = form->refclassid;
+			ref.objectId = form->refobjid;
+			depin = hash_search(set, &dep, HASH_FIND, NULL) != NULL;
+			refin = hash_search(set, &ref, HASH_FIND, NULL) != NULL;
+			if (depin && !refin &&
+				tempcat_owned_entry(ref.classId, ref.objectId) != NULL &&
+				tempcat_object_in_memory(ref.classId, ref.objectId))
+			{
+				(void) hash_search(set, &ref, HASH_ENTER, NULL);
+				added = true;
+			}
+			else if (refin && !depin &&
+					 (form->deptype == DEPENDENCY_INTERNAL ||
+					  form->deptype == DEPENDENCY_AUTO) &&
+					 tempcat_owned_entry(dep.classId, dep.objectId) != NULL)
+			{
+				(void) hash_search(set, &dep, HASH_ENTER, NULL);
+				added = true;
+			}
+		}
+	} while (added);
+
+	hash_seq_init(&status, set);
+	while ((member = hash_seq_search(&status)) != NULL)
+		tempcat_mark_on_disk(member->classId, member->objectId);
+
+	/* the rows of these objects */
+	for (catidx = 0; catidx < TEMPCAT_NCATALOGS; catidx++)
+	{
+		Relation	rel;
+		TupleDesc	desc;
+		List	   *rows = NIL;
+		ListCell   *lc;
+		dsa_pointer ep;
+
+		if (!DsaPointerIsValid(tc_root->catalogs[catidx].head))
+			continue;
+		rel = table_open(tempcat_catalogs[catidx].relid, RowExclusiveLock);
+		desc = RelationGetDescr(rel);
+		for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
+		{
+			TempcatEntry *e = TC_ADDR(ep);
+			HeapTupleData tup;
+			TempcatObject obj;
+
+			if (tempcat_entry_alive(e))
+			{
+				tup.t_len = e->len;
+				tup.t_data = TCE_DATA(e);
+				tup.t_tableOid = tempcat_catalogs[catidx].relid;
+				ItemPointerSetInvalid(&tup.t_self);
+				obj = tempcat_row_object(catidx, &tup, desc);
+				if (hash_search(set, &obj, HASH_FIND, NULL) != NULL)
+					rows = lappend(rows, (void *) ep);
+			}
+			ep = e->next;
+		}
+		foreach(lc, rows)
+			tempcat_delete_entry_moved(rel, (dsa_pointer) lfirst(lc));
+		list_free(rows);
+		table_close(rel, RowExclusiveLock);
+	}
+
+	hash_destroy(set);
 }
 
 /* ----------------------------------------------------------------
@@ -2854,6 +3378,14 @@ tempcat_abort_subtransaction(void)
 	tc_change_level = level - 1;
 }
 
+/* Objects to move to disk move before the transaction commits or prepares. */
+static void
+tempcat_xact_callback(XactEvent event, void *arg)
+{
+	if (event == XACT_EVENT_PRE_COMMIT || event == XACT_EVENT_PRE_PREPARE)
+		tempcat_materialize_moves();
+}
+
 /* A committed subtransaction's changes are its parent's now. */
 static void
 tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
@@ -2861,8 +3393,11 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 {
 	int			level;
 
+	if (event == SUBXACT_EVENT_ABORT_SUB)
+		tempcat_moved_end_subxact(false);
 	if (event != SUBXACT_EVENT_COMMIT_SUB)
 		return;
+	tempcat_moved_end_subxact(true);
 	level = GetCurrentTransactionNestLevel();
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
@@ -2942,7 +3477,43 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 							   def->owner2class, def->owner2classattr))
 		return false;
 
-	return true;
+	/*
+	 * Rows of objects that live on disk go there too, and no row on disk
+	 * may refer to an object of ours in memory (see tempcat_materialize_moves()):
+	 * a dependency of an object on disk takes what it refers to to disk,
+	 * and a part goes where its object is.
+	 */
+	if (relid == DependRelationId)
+	{
+		Oid			depclass = tempcat_getoid(tup, desc, Anum_pg_depend_classid);
+		Oid			depobj = tempcat_getoid(tup, desc, Anum_pg_depend_objid);
+		Oid			refclass = tempcat_getoid(tup, desc, Anum_pg_depend_refclassid);
+		Oid			refobj = tempcat_getoid(tup, desc, Anum_pg_depend_refobjid);
+		bool		depmem = tempcat_object_in_memory(depclass, depobj);
+		bool		refmem = tempcat_object_in_memory(refclass, refobj);
+		bool		isnull;
+		char		deptype = DatumGetChar(heap_getattr(tup, Anum_pg_depend_deptype,
+														desc, &isnull));
+
+		if (!depmem && refmem)
+		{
+			tempcat_schedule_move(refclass, refobj);
+			return false;
+		}
+		if (depmem && !refmem &&
+			(deptype == DEPENDENCY_INTERNAL || deptype == DEPENDENCY_AUTO))
+		{
+			tempcat_schedule_move(depclass, depobj);
+			return false;
+		}
+		return depmem;
+	}
+	else
+	{
+		TempcatObject obj = tempcat_row_object(catidx, tup, desc);
+
+		return tempcat_object_in_memory(obj.classId, obj.objectId);
+	}
 }
 
 /*
@@ -3592,10 +4163,11 @@ tempcat_object_relation(Oid classId, Oid objectId)
  * live in the other session's memory, so callers that want to describe or
  * drop them must handle their absence.
  *
- * An object whose own row went to disk, because it did not fit in the other
- * session's area, is missing too, like such a relation (see
- * tempcat_other_session_relation()): what refers to it in turn, e.g. the
- * session's later table using a domain, may be in memory.  It is told by
+ * An object that went to disk, because it did not fit in the other
+ * session's area, is missing too for anything but reading, like such a
+ * relation (see tempcat_other_session_relation()): what refers to it in
+ * turn, e.g. the session's later table using a domain, may be in memory,
+ * where dropping or changing it could not follow.  It is told by
  * its namespace: one with a reserved OID that is not ours, and that we
  * cannot see (it is in the other session's memory) or that is temporary.
  * Ordinary objects with reserved OIDs live in ordinary namespaces.  Objects
@@ -3627,6 +4199,17 @@ tempcat_object_missing(const ObjectAddress *object)
 
 	if (tempcat_session_owns_oid(object->classId, object->objectId))
 		return false;
+	if (object->classId == NamespaceRelationId)
+	{
+		char	   *nspname = get_namespace_name(object->objectId);
+		bool		other;
+
+		other = nspname != NULL &&
+			tempcat_namespace_of_other_session(object->objectId, nspname);
+		if (nspname != NULL)
+			pfree(nspname);
+		return other;
+	}
 	relid = tempcat_object_relation(object->classId, object->objectId);
 	if (OidIsValid(relid))
 		return tempcat_relation_missing(relid);
@@ -3638,6 +4221,31 @@ tempcat_object_missing(const ObjectAddress *object)
 		return false;
 	return !SearchSysCacheExists1(NAMESPACEOID, ObjectIdGetDatum(nspid)) ||
 		isAnyTempNamespace(nspid);
+}
+
+/*
+ * Is 'nspid', named 'nspname', the temporary namespace of another live
+ * session, which went to disk with the first row of the session that did
+ * not fit (tempcat_row_to_disk())?  To other sessions it does not exist, as
+ * when it was in memory: the objects in it that are in memory are missing
+ * for them, and they must not find it by name (get_namespace_oid()), nor
+ * drop or change it, which would leave those objects behind.  (Namespaces
+ * left by sessions that are gone are the sweep's; ordinary namespaces with
+ * reserved OIDs have other names.)
+ */
+static bool tempcat_oid_live_now(Oid oid, Oid dbid);
+
+bool
+tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
+{
+	if (!IsTempcatOid(nspid) || TempcatShared == NULL)
+		return false;
+	if (strncmp(nspname, "pg_temp_", 8) != 0 &&
+		strncmp(nspname, "pg_toast_temp_", 14) != 0)
+		return false;
+	if (tempcat_session_owns_oid(NamespaceRelationId, nspid))
+		return false;
+	return tempcat_oid_live_now(nspid, MyDatabaseId);
 }
 
 /*
@@ -3671,8 +4279,8 @@ tempcat_check_type_user(Oid classId, Oid objectId, const char *typeName)
 }
 
 /*
- * Is the relation missing for us, though perhaps its pg_class row is not?
- * See tempcat_other_session_relation().  For try_relation_open().
+ * Is the relation missing for us, or another session's, though perhaps its
+ * pg_class row is not?  See tempcat_other_session_relation().
  */
 bool
 tempcat_relation_missing(Oid relid)
@@ -3690,13 +4298,13 @@ tempcat_relation_missing(Oid relid)
 }
 
 /*
- * Is this pg_class row that of a temporary relation that another session
- * keeps in memory (or kept, if it crashed and the row is a leftover)?
- * Such a row is on disk because it did not fit in the session's area, and
- * the relation's other rows (attributes, ...) may not have: the relcache
- * must not build an entry from it ("catalog is missing N attribute(s)")
- * but treat the relation as missing, as for those kept in memory entirely
- * (ScanPgRelation(), try_relation_open()).  Readers tell their session's
+ * Is this pg_class row that of a temporary relation of another session that
+ * keeps them in memory (or kept, if it crashed and the row is a leftover)?
+ * Such a row is on disk with the whole relation, as it did not fit in the
+ * session's area (see tempcat_materialize_moves()), so other sessions can
+ * build a relcache entry from it, as without the in-memory catalog; but
+ * the relation is not theirs to drop, change or depend on, as what refers
+ * to it may be in that session's memory.  Readers tell their session's
  * relations by its writer's bounds (tempcat_session_owns_oid()).
  */
 bool
@@ -3708,6 +4316,34 @@ tempcat_other_session_relation(HeapTuple tup)
 		!IsTempcatOid(form->oid))
 		return false;
 	return !tempcat_session_owns_oid(RelationRelationId, form->oid);
+}
+
+/*
+ * Is the object a temporary object of another session that we can find,
+ * its rows having gone to disk?  (Not one that we cannot find, e.g. made by
+ * this very command, which may be ours or ordinary.)
+ */
+static bool
+tempcat_found_object_of_other_session(const ObjectAddress *object)
+{
+	HeapTuple	tup;
+	bool		other;
+
+	if (!IsTempcatOid(object->objectId) ||
+		tempcat_session_owns_oid(object->classId, object->objectId))
+		return false;
+	if (object->classId == RelationRelationId)
+	{
+		tup = SearchSysCache1(RELOID, ObjectIdGetDatum(object->objectId));
+		if (!HeapTupleIsValid(tup))
+			return false;
+		other = tempcat_other_session_relation(tup);
+		ReleaseSysCache(tup);
+		return other;
+	}
+	return tempcat_object_lookup(object->classId,
+								 object->objectId) == TCO_FOUND &&
+		tempcat_object_missing(object);
 }
 
 /*
@@ -4380,7 +5016,7 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
  * which any backend may hold.)
  */
 static PGPROC *
-tempcat_namespace_claimant(const char *nspname)
+tempcat_namespace_claimant(const char *nspname, int *sessionId)
 {
 	const char *digits;
 	char	   *end;
@@ -4400,19 +5036,23 @@ tempcat_namespace_claimant(const char *nspname)
 		return NULL;
 
 	proc = FindProcByGpSessionId(n);
+	*sessionId = (int) n;
 	return proc != NULL && proc->databaseId == MyDatabaseId ? proc : NULL;
 }
 
 /*
- * A sweep leaves a left temporary namespace to the live session 'proc' that
- * would take its name (tempcat_namespace_claimant()).  Remember the session,
- * so that the database is swept again once it is gone, in case it never
- * took the name (tempcat_check_claims()); asking for another sweep right
- * away would make every DROP sweep while the session lives.  Returns false
- * if there is no room: then the database must not count as swept.
+ * A sweep leaves a left temporary namespace to the live session
+ * 'sessionId', in 'proc', that would take its name
+ * (tempcat_namespace_claimant()).  Remember the session, so that the
+ * database is swept again once it is gone, in case it never took the name
+ * (tempcat_check_claims()); asking for another sweep right away would make
+ * every DROP sweep while the session lives.  The session is the one of the
+ * name: 'proc' may have been taken by another one since it was found, and
+ * then the claim counts as gone.  Returns false if there is no room: then
+ * the database must not count as swept.
  */
 static bool
-tempcat_note_claim(PGPROC *proc)
+tempcat_note_claim(PGPROC *proc, int sessionId)
 {
 	bool		noted = false;
 	int			i;
@@ -4423,7 +5063,7 @@ tempcat_note_claim(PGPROC *proc)
 		TempcatClaim *c = &TempcatShared->claims[i];
 
 		if (c->databaseId == MyDatabaseId && c->pgprocno == proc->pgprocno &&
-			c->sessionId == proc->mppSessionId)
+			c->sessionId == sessionId)
 		{
 			noted = true;
 			break;
@@ -4435,7 +5075,7 @@ tempcat_note_claim(PGPROC *proc)
 
 		c->databaseId = MyDatabaseId;
 		c->pgprocno = proc->pgprocno;
-		c->sessionId = proc->mppSessionId;
+		c->sessionId = sessionId;
 		noted = true;
 	}
 	SpinLockRelease(&TempcatShared->mutex);
@@ -4443,13 +5083,33 @@ tempcat_note_claim(PGPROC *proc)
 }
 
 /*
+ * Is a namespace named 'nspname' left, for a sweep: one with a reserved OID
+ * that no live session publishes?  (A session's own namespace has an
+ * ordinary OID, or one within its bounds.)
+ */
+static bool
+tempcat_namespace_left(const char *nspname)
+{
+	Oid			nspid = GetSysCacheOid1(NAMESPACENAME, Anum_pg_namespace_oid,
+										CStringGetDatum(nspname));
+
+	return OidIsValid(nspid) && IsTempcatOid(nspid) &&
+		!tempcat_oid_live_now(nspid, MyDatabaseId);
+}
+
+/*
  * Ask for another sweep of this database if a session that a sweep left a
  * namespace to is gone (see tempcat_note_claim()).  Its PGPROC has been
- * given up, or taken by another session, then.
+ * given up, or taken by another session, then.  Forget the claims of
+ * sessions that took their names (their transactions that removed the left
+ * namespaces committed), which need no sweep, and would keep others from
+ * being noted.
  */
 static void
 tempcat_check_claims(void)
 {
+	TempcatClaim live[TEMPCAT_MAX_CLAIMS];
+	int			nlive = 0;
 	bool		gone = false;
 	int			i;
 
@@ -4467,12 +5127,43 @@ tempcat_check_claims(void)
 			continue;
 		if (proc->pid != 0 && proc->mppSessionId == c->sessionId &&
 			proc->databaseId == c->databaseId)
+		{
+			live[nlive++] = *c;
 			continue;
+		}
 		*c = TempcatShared->claims[--TempcatShared->nclaims];
 		i--;
 		gone = true;
 	}
 	SpinLockRelease(&TempcatShared->mutex);
+
+	for (i = 0; i < nlive; i++)
+	{
+		char		nspname[NAMEDATALEN];
+		char		toastname[NAMEDATALEN];
+		int			j;
+
+		snprintf(nspname, sizeof(nspname), "pg_temp_%d", live[i].sessionId);
+		snprintf(toastname, sizeof(toastname), "pg_toast_temp_%d",
+				 live[i].sessionId);
+		if (tempcat_namespace_left(nspname) || tempcat_namespace_left(toastname))
+			continue;
+
+		SpinLockAcquire(&TempcatShared->mutex);
+		for (j = 0; j < TempcatShared->nclaims; j++)
+		{
+			TempcatClaim *c = &TempcatShared->claims[j];
+
+			if (c->databaseId == live[i].databaseId &&
+				c->pgprocno == live[i].pgprocno &&
+				c->sessionId == live[i].sessionId)
+			{
+				*c = TempcatShared->claims[--TempcatShared->nclaims];
+				break;
+			}
+		}
+		SpinLockRelease(&TempcatShared->mutex);
+	}
 
 	if (gone)
 		tempcat_unmark_swept(MyDatabaseId);
@@ -4515,11 +5206,13 @@ tempcat_sweep_objects(void)
 			 * objects, which stay as long as their namespace).
 			 */
 			PGPROC	   *claimant;
+			int			sessionId;
 
-			claimant = tempcat_namespace_claimant(NameStr(form->nspname));
+			claimant = tempcat_namespace_claimant(NameStr(form->nspname),
+												  &sessionId);
 			if (claimant != NULL)
 			{
-				if (!tempcat_note_claim(claimant))
+				if (!tempcat_note_claim(claimant, sessionId))
 					tc_sweep_incomplete = true;
 			}
 			else if (!tempcat_sweep_row_in_progress(&dirty) &&
@@ -4839,9 +5532,10 @@ tempcat_sweep_before_drop(void)
 
 /*
  * The transaction in progress that deletes the namespace's row, if any.
+ * '*found' says whether the row is there at all (else a deletion committed).
  */
 static TransactionId
-tempcat_namespace_deleter(Oid namespaceId)
+tempcat_namespace_deleter(Oid namespaceId, bool *found)
 {
 	Relation	rel;
 	SysScanDesc scan;
@@ -4854,7 +5548,8 @@ tempcat_namespace_deleter(Oid namespaceId)
 	ScanKeyInit(&key, Anum_pg_namespace_oid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(namespaceId));
 	scan = systable_beginscan(rel, NamespaceOidIndexId, true, &dirty, 1, &key);
-	if (HeapTupleIsValid(systable_getnext(scan)))
+	*found = HeapTupleIsValid(systable_getnext(scan));
+	if (*found)
 		deleter = dirty.xmax;
 	systable_endscan(scan);
 	table_close(rel, AccessShareLock);
@@ -4891,6 +5586,7 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 	for (;;)
 	{
 		TransactionId deleter;
+		bool		found;
 
 		tempcat_sweep_db(true, true);
 		CommandCounterIncrement();
@@ -4899,8 +5595,23 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
 		if (!IsTempcatOid(namespaceId))
 			return namespaceId;
 
+#ifdef FAULT_INJECTOR
+		/* Test hook: let another transaction remove it before we look on. */
+		SIMPLE_FAULT_INJECTOR("tempcat_before_namespace_deleter");
+#endif
+
+		/*
+		 * Gone already, though the catalog cache still had it: its deletion
+		 * committed since we last took invalidations.  Look again.
+		 */
+		deleter = tempcat_namespace_deleter(namespaceId, &found);
+		if (!found)
+		{
+			AcceptInvalidationMessages();
+			continue;
+		}
+
 		/* (if the deleter aborts, the next round sweeps the namespace) */
-		deleter = tempcat_namespace_deleter(namespaceId);
 		if (!TransactionIdIsValid(deleter) ||
 			!tempcat_wait_for_deleter(deleter))
 			ereport(ERROR,
@@ -4918,14 +5629,16 @@ tempcat_sweep_leftover_namespace(const char *namespaceName, Oid namespaceId)
  * transaction may itself be waiting for ours, on another node (e.g. on the
  * coordinator for a lock we took earlier in our transaction), and no
  * deadlock detector sees such a cycle.  (Locks are waited for on the
- * coordinator, whose detector sees the waits there.)
+ * coordinator, whose detector sees the waits there.)  So on the coordinator
+ * too, once our transaction has a part on a segment: that transaction may
+ * be waiting there for ours, e.g. for a key we inserted.
  */
 static bool
 tempcat_wait_for_deleter(TransactionId xid)
 {
 	TimestampTz start;
 
-	if (Gp_role != GP_ROLE_EXECUTE)
+	if (Gp_role != GP_ROLE_EXECUTE && MyTmGxactLocal->dtxSegments == NIL)
 	{
 		XactLockTableWait(xid, NULL, NULL, XLTW_None);
 		return true;
