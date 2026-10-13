@@ -1343,32 +1343,37 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 							   gp_enable_temp_memory_catalog);
 }
 
+static void tempcat_check_preassigned_oid(Relation relation, Oid indexId,
+										  AttrNumber oidcolumn, Oid oid);
+
 /*
  * A QE received a pre-assigned OID from the QD.  If the QD gave a temporary
- * object of this session a reserved OID, remember that we own it.
+ * object of this session a reserved OID ('temp' says that the object is one
+ * even if the key does not tell), check that the OID is free on this node
+ * (after the sweep that activating may run), then remember that we own it.
+ * In this order: an OID refused here must not become ours, as our published
+ * bounds would cover it for the rest of the session, and with it rows of
+ * whatever has it.
  */
 void
-tempcat_note_preassigned_oid(Oid catalog, const char *objname,
+tempcat_note_preassigned_oid(Relation relation, Oid indexId,
+							 AttrNumber oidcolumn, const char *objname,
 							 Oid namespaceOid, Oid keyOid1, Oid keyOid2,
-							 Oid oid)
+							 bool temp, Oid oid)
 {
+	Oid			catalog = RelationGetRelid(relation);
+
 	if (IsBinaryUpgrade || !IsTempcatOid(oid))
 		return;
 
-	if (tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
+	if (temp ||
+		tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
 							true))
 	{
 		tempcat_activate();
+		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 		tempcat_remember_oid(catalog, oid);
 	}
-}
-
-/* The object is known to be a temporary object of this session. */
-void
-tempcat_note_temp_oid(Oid catalog, Oid oid)
-{
-	tempcat_activate();
-	tempcat_remember_oid(catalog, oid);
 }
 
 /*
@@ -1621,7 +1626,7 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
  * e.g. removed by the sweep but not vacuumed yet, which the QD may not have
  * (or no longer have), would make the OID unusable here until a VACUUM.
  */
-void
+static void
 tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 							  AttrNumber oidcolumn, Oid oid)
 {

@@ -1228,6 +1228,34 @@ SELECT count(*) AS deps FROM pg_depend WHERE refobjid = 'tc_wrap_type'::regtype 
 2q:
 SELECT tc_retry('DROP TYPE tc_wrap_type');
 
+-- A segment refuses a reserved OID that a row of its own already has (here
+-- a made-up pg_class row, of a transaction in progress in utility mode).
+-- The OID does not become the session's there: its bounds do not cover it,
+-- and the sweep removes a leftover with it (a made-up dependency row of a
+-- table that is gone).  (The session's OIDs follow one another: the next
+-- one goes to the next table.)
+CREATE TABLE tc_ref_oid (x oid) DISTRIBUTED REPLICATED;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_ref1 (a int) DISTRIBUTED BY (a);
+1: INSERT INTO tc_ref_oid SELECT (max(oid)::bigint + 1)::oid FROM (SELECT oid FROM pg_class WHERE relnamespace = pg_my_temp_schema() UNION ALL SELECT oid FROM pg_type WHERE typnamespace = pg_my_temp_schema()) s;
+0U: BEGIN;
+0U: SET allow_system_table_mods = on;
+0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
+1: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+0U: ROLLBACK;
+0U: SET allow_system_table_mods = on;
+0U: INSERT INTO pg_depend SELECT 'pg_class'::regclass, x, 0, 'pg_type'::regclass, 'int4'::regtype, 0, 'n' FROM tc_ref_oid;
+0Uq:
+SELECT gp_inject_fault('tempcat_force_sweep', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_ref_sweeper (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_force_sweep', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid = (SELECT x FROM tc_ref_oid);
+1: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+1q:
+2q:
+DROP TABLE tc_ref_oid;
+
 -- Whether a row with a reserved OID belongs to an ordinary object is judged
 -- as of the query's snapshot: pg_dump's sees an ordinary object dropped
 -- after it started, and must dump it.

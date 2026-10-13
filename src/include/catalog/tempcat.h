@@ -61,13 +61,12 @@ extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
 								  Oid namespaceOid, Oid keyOid1, Oid keyOid2);
 extern Oid	tempcat_allocate_oid(Relation relation, Oid indexId,
 								 AttrNumber oidcolumn);
-extern void tempcat_check_preassigned_oid(Relation relation, Oid indexId,
-										  AttrNumber oidcolumn, Oid oid);
-extern void tempcat_note_preassigned_oid(Oid catalog, const char *objname,
+extern void tempcat_note_preassigned_oid(Relation relation, Oid indexId,
+										 AttrNumber oidcolumn,
+										 const char *objname,
 										 Oid namespaceOid, Oid keyOid1,
-										 Oid keyOid2, Oid oid);
+										 Oid keyOid2, bool temp, Oid oid);
 extern bool tempcat_owns_oid(Oid catalog, Oid oid);
-extern void tempcat_note_temp_oid(Oid catalog, Oid oid);
 
 /* Catalog DML */
 extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
