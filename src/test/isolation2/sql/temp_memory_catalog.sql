@@ -752,6 +752,33 @@ SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294
 1q:
 DROP TABLE tc_lns_ids;
 
+-- Once the session took the name (and removed the schema), its claim goes:
+-- the database is not swept again when the session is gone.  (As above,
+-- but session 2 creates a temporary object.)
+CREATE TABLE tc_lns_ids (s int, id int) DISTRIBUTED REPLICATED;
+1: INSERT INTO tc_lns_ids SELECT 1, current_setting('gp_session_id')::int;
+2: SET application_name = 'tc_lns_taker';
+2: INSERT INTO tc_lns_ids SELECT 2, current_setting('gp_session_id')::int;
+SET allow_system_table_mods = on;
+INSERT INTO pg_namespace SELECT (4294967000 + s)::oid, 'pg_temp_' || id, 10, NULL FROM tc_lns_ids;
+RESET allow_system_table_mods;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_lns_e (a int) DISTRIBUTED BY (a);
+2: SET gp_enable_temp_memory_catalog = on;
+2: CREATE TEMP TABLE tc_lns_f (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS claimed_left FROM pg_namespace WHERE oid IN (4294967001, 4294967002);
+SELECT gp_inject_fault_infinite('tempcat_sweep_before_mark', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+2q:
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE application_name = 'tc_lns_taker'); PERFORM pg_sleep(0.1); END LOOP; END $$;
+CREATE TABLE tc_lns_drop (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_lns_drop;
+SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) from 'num times hit:''(\d+)''') AS sweeps FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1q:
+DROP TABLE tc_lns_ids;
+
 -- If another transaction is removing the schema, e.g. a sweep on a segment
 -- where the session has no writer yet, the session waits for it rather than
 -- fail.  (Session 3 deletes the row itself, in a transaction it keeps open.)

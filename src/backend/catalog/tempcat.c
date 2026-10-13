@@ -5001,7 +5001,7 @@ tempcat_sweep_catalog(Oid catalog, AttrNumber attr, Oid objclass,
  * which any backend may hold.)
  */
 static PGPROC *
-tempcat_namespace_claimant(const char *nspname)
+tempcat_namespace_claimant(const char *nspname, int *sessionId)
 {
 	const char *digits;
 	char	   *end;
@@ -5021,19 +5021,23 @@ tempcat_namespace_claimant(const char *nspname)
 		return NULL;
 
 	proc = FindProcByGpSessionId(n);
+	*sessionId = (int) n;
 	return proc != NULL && proc->databaseId == MyDatabaseId ? proc : NULL;
 }
 
 /*
- * A sweep leaves a left temporary namespace to the live session 'proc' that
- * would take its name (tempcat_namespace_claimant()).  Remember the session,
- * so that the database is swept again once it is gone, in case it never
- * took the name (tempcat_check_claims()); asking for another sweep right
- * away would make every DROP sweep while the session lives.  Returns false
- * if there is no room: then the database must not count as swept.
+ * A sweep leaves a left temporary namespace to the live session
+ * 'sessionId', in 'proc', that would take its name
+ * (tempcat_namespace_claimant()).  Remember the session, so that the
+ * database is swept again once it is gone, in case it never took the name
+ * (tempcat_check_claims()); asking for another sweep right away would make
+ * every DROP sweep while the session lives.  The session is the one of the
+ * name: 'proc' may have been taken by another one since it was found, and
+ * then the claim counts as gone.  Returns false if there is no room: then
+ * the database must not count as swept.
  */
 static bool
-tempcat_note_claim(PGPROC *proc)
+tempcat_note_claim(PGPROC *proc, int sessionId)
 {
 	bool		noted = false;
 	int			i;
@@ -5044,7 +5048,7 @@ tempcat_note_claim(PGPROC *proc)
 		TempcatClaim *c = &TempcatShared->claims[i];
 
 		if (c->databaseId == MyDatabaseId && c->pgprocno == proc->pgprocno &&
-			c->sessionId == proc->mppSessionId)
+			c->sessionId == sessionId)
 		{
 			noted = true;
 			break;
@@ -5056,7 +5060,7 @@ tempcat_note_claim(PGPROC *proc)
 
 		c->databaseId = MyDatabaseId;
 		c->pgprocno = proc->pgprocno;
-		c->sessionId = proc->mppSessionId;
+		c->sessionId = sessionId;
 		noted = true;
 	}
 	SpinLockRelease(&TempcatShared->mutex);
@@ -5064,13 +5068,33 @@ tempcat_note_claim(PGPROC *proc)
 }
 
 /*
+ * Is a namespace named 'nspname' left, for a sweep: one with a reserved OID
+ * that no live session publishes?  (A session's own namespace has an
+ * ordinary OID, or one within its bounds.)
+ */
+static bool
+tempcat_namespace_left(const char *nspname)
+{
+	Oid			nspid = GetSysCacheOid1(NAMESPACENAME, Anum_pg_namespace_oid,
+										CStringGetDatum(nspname));
+
+	return OidIsValid(nspid) && IsTempcatOid(nspid) &&
+		!tempcat_oid_live_now(nspid, MyDatabaseId);
+}
+
+/*
  * Ask for another sweep of this database if a session that a sweep left a
  * namespace to is gone (see tempcat_note_claim()).  Its PGPROC has been
- * given up, or taken by another session, then.
+ * given up, or taken by another session, then.  Forget the claims of
+ * sessions that took their names (their transactions that removed the left
+ * namespaces committed), which need no sweep, and would keep others from
+ * being noted.
  */
 static void
 tempcat_check_claims(void)
 {
+	TempcatClaim live[TEMPCAT_MAX_CLAIMS];
+	int			nlive = 0;
 	bool		gone = false;
 	int			i;
 
@@ -5088,12 +5112,43 @@ tempcat_check_claims(void)
 			continue;
 		if (proc->pid != 0 && proc->mppSessionId == c->sessionId &&
 			proc->databaseId == c->databaseId)
+		{
+			live[nlive++] = *c;
 			continue;
+		}
 		*c = TempcatShared->claims[--TempcatShared->nclaims];
 		i--;
 		gone = true;
 	}
 	SpinLockRelease(&TempcatShared->mutex);
+
+	for (i = 0; i < nlive; i++)
+	{
+		char		nspname[NAMEDATALEN];
+		char		toastname[NAMEDATALEN];
+		int			j;
+
+		snprintf(nspname, sizeof(nspname), "pg_temp_%d", live[i].sessionId);
+		snprintf(toastname, sizeof(toastname), "pg_toast_temp_%d",
+				 live[i].sessionId);
+		if (tempcat_namespace_left(nspname) || tempcat_namespace_left(toastname))
+			continue;
+
+		SpinLockAcquire(&TempcatShared->mutex);
+		for (j = 0; j < TempcatShared->nclaims; j++)
+		{
+			TempcatClaim *c = &TempcatShared->claims[j];
+
+			if (c->databaseId == live[i].databaseId &&
+				c->pgprocno == live[i].pgprocno &&
+				c->sessionId == live[i].sessionId)
+			{
+				*c = TempcatShared->claims[--TempcatShared->nclaims];
+				break;
+			}
+		}
+		SpinLockRelease(&TempcatShared->mutex);
+	}
 
 	if (gone)
 		tempcat_unmark_swept(MyDatabaseId);
@@ -5136,11 +5191,13 @@ tempcat_sweep_objects(void)
 			 * objects, which stay as long as their namespace).
 			 */
 			PGPROC	   *claimant;
+			int			sessionId;
 
-			claimant = tempcat_namespace_claimant(NameStr(form->nspname));
+			claimant = tempcat_namespace_claimant(NameStr(form->nspname),
+												  &sessionId);
 			if (claimant != NULL)
 			{
-				if (!tempcat_note_claim(claimant))
+				if (!tempcat_note_claim(claimant, sessionId))
 					tc_sweep_incomplete = true;
 			}
 			else if (!tempcat_sweep_row_in_progress(&dirty) &&
