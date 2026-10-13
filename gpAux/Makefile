@@ -413,6 +413,7 @@ pkg-rpm : version-vars
 	@mkdir -p $(ARTIFACTS_DIR)
 	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
 		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
+	@rpmlint $(ARTIFACTS_DIR)/*.rpm
 
 .PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 
