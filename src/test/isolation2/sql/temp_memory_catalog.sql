@@ -1280,6 +1280,16 @@ CREATE AGGREGATE public.sum(int8) (sfunc = tc_mon_sum, stype = int8, finalfunc =
 DROP AGGREGATE public.sum(int8);
 DROP FUNCTION tc_mon_final(int8);
 DROP FUNCTION tc_mon_sum(int8, int8);
+-- On a segment that keeps such a relation in memory, while the coordinator
+-- moved it to disk, these functions cannot open it, and say why.
+1: CREATE TEMP TABLE tc_mon_qd (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+1: INSERT INTO tc_mon_qd SELECT g, g FROM generate_series(1, 100) g;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: COMMENT ON TABLE tc_mon_qd IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE FUNCTION tc_mon_detail(cmd text) RETURNS text AS $$ DECLARE d text; BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN GET STACKED DIAGNOSTICS d = PG_EXCEPTION_DETAIL; RETURN d; END $$ LANGUAGE plpgsql;
+2: SELECT tc_mon_detail(format('SELECT get_ao_distribution(%s)', (SELECT oid FROM pg_class WHERE relname = 'tc_mon_qd' AND oid >= 4026531840))) AS detail;
+DROP FUNCTION tc_mon_detail(text);
 1q:
 2q:
 DROP FUNCTION tc_mon_state(text);

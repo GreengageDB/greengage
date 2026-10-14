@@ -4873,6 +4873,23 @@ tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 }
 
 /*
+ * Is 'relid', which this process cannot open, a relation of another live
+ * session that it keeps in memory here, perhaps on disk on another node?
+ * For the message of relation_open(): queries that other sessions run on
+ * it from the coordinator, where it went to disk (e.g. the AO functions over
+ * its aux relations), fail on such a segment.
+ */
+bool
+tempcat_other_session_relation_oid(Oid relid)
+{
+	if (!IsTempcatOid(relid) || TempcatShared == NULL)
+		return false;
+	if (tempcat_session_owns_oid(RelationRelationId, relid))
+		return false;
+	return tempcat_oid_live_now(relid, MyDatabaseId);
+}
+
+/*
  * SPI_execute() a query that names an AO table's aux relation, which may be
  * in another session's temporary namespace (see tc_name_other_namespaces).
  * With search_path set to pg_catalog meanwhile, so that no function,

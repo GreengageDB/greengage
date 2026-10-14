@@ -119,6 +119,7 @@ extern uint32 tempcat_fixed_part_len(Relation rel, HeapTupleHeader dst,
 extern void tempcat_disk_row_updated(Relation rel, HeapTuple tup);
 extern bool tempcat_materialize_moves(void);
 extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
+extern bool tempcat_other_session_relation_oid(Oid relid);
 extern int	tempcat_spi_execute_aux(const char *src, bool read_only, long tcount);
 extern void tempcat_namespaces_removed(void);
 extern void tempcat_note_drop(const struct ObjectAddress *object);

@@ -3335,6 +3335,33 @@ DROP FUNCTION tc_mon_final(int8);
 DROP FUNCTION
 DROP FUNCTION tc_mon_sum(int8, int8);
 DROP FUNCTION
+-- On a segment that keeps such a relation in memory, while the coordinator
+-- moved it to disk, these functions cannot open it, and say why.
+1: CREATE TEMP TABLE tc_mon_qd (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+CREATE TABLE
+1: INSERT INTO tc_mon_qd SELECT g, g FROM generate_series(1, 100) g;
+INSERT 0 100
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+------------
+ Success:                 
+(1 row)
+1: COMMENT ON TABLE tc_mon_qd IS 'moved';
+COMMENT
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:        
+(1 row)
+CREATE FUNCTION tc_mon_detail(cmd text) RETURNS text AS $$ DECLARE d text; BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN GET STACKED DIAGNOSTICS d = PG_EXCEPTION_DETAIL; RETURN d; END $$ LANGUAGE plpgsql;
+CREATE FUNCTION
+2: SELECT tc_mon_detail(format('SELECT get_ao_distribution(%s)', (SELECT oid FROM pg_class WHERE relname = 'tc_mon_qd' AND oid >= 4026531840))) AS detail;
+ detail                                                                                
+------------
+ It is a temporary relation of another session, which keeps it in memory on this node. 
+(1 row)
+DROP FUNCTION tc_mon_detail(text);
+DROP FUNCTION
 1q: ... <quitting>
 2q: ... <quitting>
 DROP FUNCTION tc_mon_state(text);

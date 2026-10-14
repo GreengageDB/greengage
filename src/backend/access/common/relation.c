@@ -23,6 +23,7 @@
 #include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "storage/lmgr.h"
@@ -57,6 +58,13 @@ relation_open(Oid relationId, LOCKMODE lockmode)
 
 	/* The relcache does all the real work... */
 	r = RelationIdGetRelation(relationId);
+
+	/* GPDB: one of another session's temporary relations, see tempcat.c */
+	if (!RelationIsValid(r) && tempcat_other_session_relation_oid(relationId))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_TABLE),
+				 errmsg("could not open relation with OID %u", relationId),
+				 errdetail("It is a temporary relation of another session, which keeps it in memory on this node.")));
 
 	if (!RelationIsValid(r))
 		ereport(ERROR,
