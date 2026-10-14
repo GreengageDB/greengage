@@ -40,8 +40,8 @@ The main components are:
    - `pkg`: Default target (aliases to `pkg-deb`)
    - `pkg-deb`: Builds Debian package, preserves environment variables, and
      collects artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`, `.changes`)
-   - `pkg-rpm`: Builds RPM package via `rpmbuild` and collects the
-     resulting `.rpm` artifact
+   - `pkg-rpm`: Builds RPM package via `rpmbuild`, collects the resulting
+     `.rpm` artifact, and checks it with `rpmlint`
    - `changelog`: Generates `debian/changelog` (not stored in repo)
    - `debian/install`: Creates installation manifest (not stored in repo)
 
@@ -66,7 +66,8 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
 The `rpm/greengage7.spec` file defines the RPM build:
 
 1. **Dependencies**:
-   - `python3` and `python3-pip` required
+   - System utilities (e.g., `openssh-server`, `rsync`, `zip`), `python3`
+     and `python3-pip` required
 
 2. **Build Process**:
    - `%install` invokes the project's `make dist` target with `DESTDIR`
@@ -75,9 +76,10 @@ The `rpm/greengage7.spec` file defines the RPM build:
      `__brp_mangle_shebangs_exclude_from` — scripts intentionally use
      `#!/usr/bin/env python` and `#!/usr/bin/env perl`; rewriting shebangs
      would diverge package contents from the source and mask issues
-   - Strips debug info from `*.so` files via `strip --strip-debug` to
-     remove BUILDROOT paths embedded by the compiler (e.g., PyGreSQL's
-     `_pg.so`), which would otherwise fail `check-buildroot` validation
+   - Strips symbols and debug info from ELF files (executables and
+     `*.so*`) via `strip --strip-unneeded`, which also removes BUILDROOT
+     paths embedded by the compiler (e.g., PyGreSQL's `_pg.so`) that would
+     otherwise fail `check-buildroot` validation
    - Removes the executable bit from Python/Perl/Bash files without a
      shebang and from `*.md` files, mirroring `debian/rules` `dh_fixperms`
 
@@ -151,6 +153,8 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
    - Runs `rpmbuild -bb rpm/greengage7.spec` with `gproot`, `gpdir`, and
      `sourcedir` passed via `--define`
    - Collects the resulting `.rpm` into `ARTIFACTS_DIR`
+   - Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the collected
+     `.rpm` and fails the build if `rpmlint` reports errors
 
 3. **Installation**:
    - Uses `make dist` inside `%install`, installing into `%{buildroot}`
@@ -181,19 +185,29 @@ Package dependencies and conflicts for the Debian package are defined in
 Package dependencies for the RPM package are defined directly in
 `rpm/greengage7.spec` via `Requires:`/`Conflicts:` tags.
 
+The RPM package also requires the library `libxerces-c-3.2.so` (package
+`xerces-c`), which comes from EPEL on Rocky Linux 9. Enable EPEL before
+installing the package:
+
+```bash
+dnf -y install epel-release
+```
+
 ## Maintenance
 
 ### Updating Package Metadata
 
-Edit `debian/control` to update:
+Edit to update:
 
-- Package description
-- Maintainer information
-- General dependencies
-
-Edit `rpm/greengage7.spec` to update the equivalent metadata for the
-RPM package (`Summary`, `License`, `URL`, `Requires`, `Conflicts`,
-`%description`).
+| Metadata | DEB (`debian/control`) | RPM (`rpm/greengage7.spec`) |
+| --- | --- | --- |
+| Package description | `Description` | `Summary`, `%description` |
+| Maintainer information | `Maintainer` | `Packager` |
+| Dependencies | `Depends` | `Requires` |
+| Group | `Section`, `Priority` | `Group` |
+| License | `debian/copyright` (not in `control`) | `License` |
+| URL | `Homepage` | `URL` |
+| Conflicts | `Conflicts` | `Conflicts` |
 
 ## Notes
 
@@ -213,9 +227,13 @@ RPM package (`Summary`, `License`, `URL`, `Requires`, `Conflicts`,
 ### RPM
 
 - Builds without signing for development convenience
-- Strips debug info from `*.so` files to remove BUILDROOT paths embedded
-  by the compiler, which would otherwise fail `check-buildroot` validation
+- Strips symbols and debug info from ELF files to remove BUILDROOT paths
+  embedded by the compiler, which would otherwise fail `check-buildroot`
+  validation
 - Excludes the entire install prefix from shebang mangling via
   `__brp_mangle_shebangs_exclude_from`
 - Collects only the resulting `.rpm` into `$(CURDIR)/../Package`
+- Runs `rpmlint` on the collected `.rpm`; `rpmlint` is installed by
+  `README.Rhel-Rocky.bash`
+- Sets the date of the `%changelog` entry at build time
 - `RPM_TOPDIR` is kept after the build for inspection

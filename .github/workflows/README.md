@@ -52,8 +52,8 @@ required, but the test pipeline is not required.
 
 ### Key Features
 
-- **Same Build Process:** Uses the same build workflow and matrix-based
-  configuration as `Greengage CI`.
+- **Same Build Process:** Uses the same build workflow as `Greengage CI`,
+  with a fixed target operating system instead of a matrix.
 
 - **No Tests:** Does not run any test suites.
 
@@ -69,7 +69,11 @@ required, but the test pipeline is not required.
 1. **Build:** Builds Docker images for the configured target operating
    systems.
 
-2. **Tests:** No test jobs are executed.
+2. **Package:** Builds the RPM package for Rocky Linux 9 in the image from
+   the Build job, checks it with `rpmlint`, and installs it in a clean
+   container.
+
+3. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 
