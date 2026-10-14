@@ -425,6 +425,10 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		return TM_Ok;
 	}
 
+	/* GPDB: a row on disk of a temporary object, perhaps (see tempcat.c) */
+	if (IsCatalogRelation(relation))
+		tempcat_disk_row_updated(relation, tuple);
+
 	result = heap_update(relation, otid, tuple, cid, crosscheck, wait,
 						 tmfd, lockmode);
 	ItemPointerCopy(&tuple->t_self, &slot->tts_tid);

@@ -2044,6 +2044,36 @@ DROP OPERATOR pg_temp.>%> (int, int);
 DROP OPERATOR pg_temp.<%< (int, int);
 DROP OPERATOR pg_temp.%<> (int, int);
 DROP OPERATOR pg_temp.<%> (int, int);
+-- (and an operator on disk that a superuser's UPDATE links to one)
+CREATE OPERATOR pg_temp.<&< (leftarg = int, rightarg = int, procedure = int4lt);
+CREATE OPERATOR pg_temp.>&> (leftarg = int, rightarg = int, procedure = int4gt);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+COMMENT ON OPERATOR pg_temp.>&> (int, int) IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+SET allow_system_table_mods = on;
+UPDATE pg_operator SET oprcom = 'pg_temp.<&<(int, int)'::regoperator WHERE oid = 'pg_temp.>&>(int, int)'::regoperator;
+RESET allow_system_table_mods;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT o.oprname, c.oprname AS commutator FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom WHERE o.oprname IN ('<&<', '>&>') ORDER BY 1;
+ oprname | commutator 
+---------+------------
+ <&<     | 
+ >&>     | <&<
+(2 rows)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP OPERATOR pg_temp.>&> (int, int);
+DROP OPERATOR pg_temp.<&< (int, int);
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog
