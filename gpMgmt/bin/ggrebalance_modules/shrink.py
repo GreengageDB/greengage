@@ -816,8 +816,8 @@ class GGShrink:
                 # and multiply by the number of original segments (as here CTAS is used as well - we will re-create data on each segment).
                 str_data_move_size = f'''
                     CASE
-                        WHEN p.policytype = 'r' THEN (__ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments) / p.numsegments) * {self.gparray.get_segment_count()}
-                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments)
+                        WHEN p.policytype = 'r' THEN (pg_temp.ggrebalance_get_data_move_size(c.oid, p.numsegments) / p.numsegments) * {self.gparray.get_segment_count()}
+                        ELSE pg_temp.ggrebalance_get_data_move_size(c.oid, p.numsegments)
                     END AS data_move_size'''
             else:
                 # In case of normal shrink operation, function 'ggrebalance_get_data_move_size()'
@@ -827,7 +827,7 @@ class GGShrink:
                 str_data_move_size = f'''
                     CASE
                         WHEN p.policytype = 'r' THEN 0
-                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, {self.shrink_plan.getTargetSegmentCount()})
+                        ELSE pg_temp.ggrebalance_get_data_move_size(c.oid, {self.shrink_plan.getTargetSegmentCount()})
                     END AS data_move_size'''
         else:
             str_data_move_size = '0 as data_move_size'
@@ -836,10 +836,8 @@ class GGShrink:
             dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                 if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
-                    # 'public' schema may be missing, so create our own temp schema to carry the function
-                    dbconn.execSQL(conn, 'CREATE SCHEMA __ggrebalance_temp_schema');
                     dbconn.execSQL(conn, f'''
-                        CREATE OR REPLACE FUNCTION __ggrebalance_temp_schema.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
+                        CREATE OR REPLACE FUNCTION pg_temp.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
                         RETURNS NUMERIC
                         AS $$
                         WITH cte AS MATERIALIZED (
@@ -862,9 +860,6 @@ class GGShrink:
                     if rel_kind == 'f' and not external_writable:
                         continue
                     self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, data_move_size)
-
-                if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
-                    dbconn.execSQL(conn, 'DROP SCHEMA __ggrebalance_temp_schema CASCADE')
 
         dbconn.execSQL(self.conn, 'COMMIT')
 
