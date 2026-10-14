@@ -1962,16 +1962,97 @@ tempcat_owned_entry(Oid catalog, Oid oid)
 }
 
 /*
+ * The alive row in memory of the object 'oid' of catalog 'catidx', whose
+ * oid column is its first, or NULL.  '*deleted' says whether this
+ * transaction deleted one, e.g. moving it to disk.
+ */
+static TempcatEntry *
+tempcat_object_entry(int catidx, Oid oid, bool *deleted)
+{
+	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+	uint32		hash = DatumGetUInt32(hash_uint32(oid));
+	int			k;
+
+	*deleted = false;
+	for (k = 0; k < TEMPCAT_NKEYS; k++)
+	{
+		TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
+		dsa_pointer np;
+
+		/* the oid column is always attribute 1 */
+		if (def->keyattr[k] != 1 || h->nbuckets == 0)
+			continue;
+		np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
+		while (DsaPointerIsValid(np))
+		{
+			TempcatHashNode *node = TC_ADDR(np);
+			TempcatEntry *e = TC_ADDR(node->entry);
+
+			if (node->hash == hash && tempcat_entry_oid(e) == oid)
+			{
+				if (tempcat_entry_alive(e))
+					return e;
+				if (TransactionIdIsValid(e->xmax) &&
+					TransactionIdIsCurrentTransactionId(e->xmax))
+					*deleted = true;
+			}
+			np = node->next;
+		}
+		break;
+	}
+	return NULL;
+}
+
+/*
+ * Triggers, constraints, defaults, rules, policies and statistics objects
+ * have OIDs of their own, but their rows go with those of their relation
+ * (or domain), see tempcat_row_object().  Is our object such a part, with
+ * its row in memory?  Then set '*owner' to the object its rows go with.
+ * They need not depend on it (the RI triggers of a referenced table depend
+ * on their constraint only, which is the referencing table's).
+ */
+static bool
+tempcat_part_owner(Oid classId, Oid objectId, TempcatObject *owner)
+{
+	int			catidx = tempcat_catalog_index(classId);
+	const TempcatCatalogDef *def;
+	TempcatEntry *e;
+	HeapTupleData tup;
+	Relation	rel;
+	bool		deleted;
+
+	if (catidx < 0 || !tempcat_catalog_has_oid(catidx) || tc_area == NULL)
+		return false;
+	def = &tempcat_catalogs[catidx];
+	if (def->owner == 1 || def->ownerclass == NamespaceRelationId)
+		return false;			/* its rows are its own */
+	e = tempcat_object_entry(catidx, objectId, &deleted);
+	if (e == NULL)
+		return false;
+
+	tup.t_len = e->len;
+	tup.t_data = TCE_DATA(e);
+	tup.t_tableOid = classId;
+	ItemPointerSetInvalid(&tup.t_self);
+	rel = table_open(classId, AccessShareLock);
+	*owner = tempcat_row_object(catidx, &tup, RelationGetDescr(rel));
+	table_close(rel, AccessShareLock);
+	return true;
+}
+
+/*
  * Does our object live in memory?  Yes if its own row (pg_class, pg_type,
- * pg_proc, ...) is in memory and alive; no if this transaction deleted it,
- * e.g. moving it to disk; otherwise, if its own row is not in memory at
- * all, unless rows of it went to disk (a new object has none yet).  Objects
- * not ours count as in memory: nothing of theirs is routed.
+ * pg_proc, ...) is in memory and alive, and for a part (see above) if its
+ * relation does; no if this transaction deleted the row, e.g. moving it to
+ * disk; otherwise, if its own row is not in memory at all, unless rows of it
+ * went to disk (a new object has none yet).  Objects not ours count as in
+ * memory: nothing of theirs is routed.
  */
 static bool
 tempcat_object_in_memory(Oid classId, Oid objectId)
 {
 	TempcatOwnedEntry *owned = tempcat_owned_entry(classId, objectId);
+	TempcatObject owner;
 	int			catidx;
 	bool		deleted = false;
 
@@ -1983,40 +2064,13 @@ tempcat_object_in_memory(Oid classId, Oid objectId)
 	if (tc_area == NULL)
 		return !owned->on_disk;
 
+	if (tempcat_part_owner(classId, objectId, &owner))
+		return tempcat_object_in_memory(owner.classId, owner.objectId);
+
 	catidx = tempcat_catalog_index(classId);
-	if (catidx >= 0 && tempcat_catalog_has_oid(catidx))
-	{
-		const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
-		uint32		hash = DatumGetUInt32(hash_uint32(objectId));
-		int			k;
-
-		for (k = 0; k < TEMPCAT_NKEYS; k++)
-		{
-			TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
-			dsa_pointer np;
-
-			/* the oid column is always attribute 1 */
-			if (def->keyattr[k] != 1 || h->nbuckets == 0)
-				continue;
-			np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
-			while (DsaPointerIsValid(np))
-			{
-				TempcatHashNode *node = TC_ADDR(np);
-				TempcatEntry *e = TC_ADDR(node->entry);
-
-				if (node->hash == hash && tempcat_entry_oid(e) == objectId)
-				{
-					if (tempcat_entry_alive(e))
-						return true;
-					if (TransactionIdIsValid(e->xmax) &&
-						TransactionIdIsCurrentTransactionId(e->xmax))
-						deleted = true;
-				}
-				np = node->next;
-			}
-			break;
-		}
-	}
+	if (catidx >= 0 && tempcat_catalog_has_oid(catidx) &&
+		tempcat_object_entry(catidx, objectId, &deleted) != NULL)
+		return true;
 	return !deleted && !owned->on_disk;
 }
 
@@ -2290,6 +2344,7 @@ tempcat_materialize_moves(void)
 	HASH_SEQ_STATUS status;
 	TempcatPendingMove *pending;
 	TempcatSetMember *member;
+	TempcatObject owner;
 	bool		added;
 	int			catidx;
 	int			level = GetCurrentTransactionNestLevel();
@@ -2352,6 +2407,15 @@ tempcat_materialize_moves(void)
 			ref.objectId = form->refobjid;
 			depin = hash_search(set, &dep, HASH_FIND, NULL) != NULL;
 			refin = hash_search(set, &ref, HASH_FIND, NULL) != NULL;
+
+			/* a part whose rows go with an object that moves moves too */
+			if (!depin && tempcat_part_owner(dep.classId, dep.objectId, &owner) &&
+				hash_search(set, &owner, HASH_FIND, NULL) != NULL)
+			{
+				member = hash_search(set, &dep, HASH_ENTER, NULL);
+				member->moved = false;
+				depin = added = true;
+			}
 			if (depin && !refin &&
 				tempcat_owned_entry(ref.classId, ref.objectId) != NULL &&
 				tempcat_object_in_memory(ref.classId, ref.objectId))
@@ -3600,7 +3664,11 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 	{
 		TempcatObject obj = tempcat_row_object(catidx, tup, desc);
 
-		return tempcat_object_in_memory(obj.classId, obj.objectId);
+		if (tempcat_object_in_memory(obj.classId, obj.objectId))
+			return true;
+		/* a part (trigger, constraint, ...) of an object on disk is there */
+		tempcat_note_disk_row(rel, tup);
+		return false;
 	}
 }
 

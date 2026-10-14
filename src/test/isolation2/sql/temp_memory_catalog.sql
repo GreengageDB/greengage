@@ -1151,6 +1151,28 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1q:
 DROP FUNCTION tc_subxact(int);
 
+-- A move also takes the parts of an object that do not depend on it, and
+-- what they refer to: the RI triggers of a referenced table depend on
+-- their constraint only, which is the referencing table's, so that table
+-- goes too, as when it references a table already on disk.  Other sessions
+-- describe the triggers then.  (The fault makes the area look full, so
+-- COMMENT moves the referenced tables.)
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_pk (a int PRIMARY KEY) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_fk (a int REFERENCES tc_pk) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_pk2 (a int PRIMARY KEY) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_pk IS 'moved';
+1: COMMENT ON TABLE tc_pk2 IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE TEMP TABLE tc_fk2 (a int REFERENCES tc_pk2) DISTRIBUTED BY (a);
+2: SELECT relname FROM pg_class WHERE oid >= 4026531840 AND relname IN ('tc_pk', 'tc_fk', 'tc_pk2', 'tc_fk2') ORDER BY 1;
+2: SELECT count(pg_get_triggerdef(oid)) AS triggers FROM pg_trigger WHERE tgname LIKE 'RI\_ConstraintTrigger%' AND oid >= 4026531840;
+2: SELECT count(pg_get_constraintdef(oid)) AS constraints FROM pg_constraint WHERE contype = 'f' AND oid >= 4026531840;
+2: SELECT count(*) AS dangling FROM gp_dist_random('pg_trigger') t LEFT JOIN gp_dist_random('pg_class') c ON c.oid = t.tgconstrrelid AND c.gp_segment_id = t.gp_segment_id WHERE t.oid >= 4026531840 AND t.tgconstrrelid <> 0 AND c.oid IS NULL;
+1q:
+2q:
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types
