@@ -7698,6 +7698,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 		 * will lose the filter of MultiDQA.
 		 */
 		PathTarget *final_target = (PathTarget *)copyObject(grouped_rel->reltarget);
+		List	   *final_havingQual = (List *) copyObject(havingQual);
 
 		if (gp_eager_two_phase_agg)
 		{
@@ -7737,7 +7738,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 				get_agg_clause_costs(root, (Node *) final_target_exprs,
 									 AGGSPLIT_FINAL_DESERIAL,
 									 agg_final_costs);
-				get_agg_clause_costs(root, extra->havingQual,
+				get_agg_clause_costs(root, (Node *) final_havingQual,
 									 AGGSPLIT_FINAL_DESERIAL,
 									 agg_final_costs);
 			}
@@ -7766,7 +7767,7 @@ add_paths_to_grouping_rel(PlannerInfo *root, RelOptInfo *input_rel,
 										   grouped_rel,
 										   final_target,
 										   partially_grouped_target,
-										   havingQual,
+										   final_havingQual,
 										   dNumGroupsTotal,
 										   agg_costs,
 										   &extra->agg_partial_costs,
