@@ -641,21 +641,21 @@ compute_common_attribute(ParseState *pstate,
 	else if (strcmp(defel->defname, "describe") == 0)
 	{
 		if (*describe_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*describe_item = defel;
 	}
 	else if (strcmp(defel->defname, "data_access") == 0)
 	{
 		if (*data_access_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*data_access_item = defel;
 	}
 	else if (strcmp(defel->defname, "exec_location") == 0)
 	{
 		if (*exec_location_item)
-			goto duplicate_error;
+			errorConflictingDefElem(defel, pstate);
 
 		*exec_location_item = defel;
 	}
