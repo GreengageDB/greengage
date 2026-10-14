@@ -59,6 +59,7 @@ static int64 calculate_total_relation_size(Relation rel);
 static int64 calculate_ao_relation_physical_size(Relation rel, ForkNumber forknum,
 												 bool include_ao_aux, int stat_error_level);
 static bool stat_ao_callback(const int segno, void *ctx);
+static int64 get_size_from_segDBs_nullable(const char *cmd, bool *isnull);
 
 #define SEGNO_SUFFIX_LENGTH 12
 
@@ -81,6 +82,19 @@ static bool stat_ao_callback(const int segno, void *ctx);
 int64
 get_size_from_segDBs(const char *cmd)
 {
+	bool		isnull;
+
+	return get_size_from_segDBs_nullable(cmd, &isnull);
+}
+
+/*
+ * As above, but set '*isnull' if a segment returned NULL, e.g. for a relation
+ * it cannot open (a temporary relation of another session that is kept in
+ * memory there, see tempcat.c); NULLs count as 0 in the sum.
+ */
+static int64
+get_size_from_segDBs_nullable(const char *cmd, bool *isnull)
+{
 	int64		result;
 	CdbPgResults cdb_pgresults = {NULL, 0};
 	int			i;
@@ -89,6 +103,7 @@ get_size_from_segDBs(const char *cmd)
 
 	CdbDispatchCommand(cmd, DF_WITH_SNAPSHOT, &cdb_pgresults);
 
+	*isnull = false;
 	result = 0;
 	for (i = 0; i < cdb_pgresults.numResults; i++)
 	{
@@ -110,7 +125,10 @@ get_size_from_segDBs(const char *cmd)
 							PQntuples(pgresult), PQnfields(pgresult))));
 		}
 		if (PQgetisnull(pgresult, 0, 0))
+		{
 			value = 0;
+			*isnull = true;
+		}
 		else
 			value = DirectFunctionCall1(int8in,
 										CStringGetDatum(PQgetvalue(pgresult, 0, 0)));
@@ -607,6 +625,7 @@ pg_relation_size(PG_FUNCTION_ARGS)
 	text		*forkName;
 	Relation	rel;
 	int64		size = 0;
+	bool		segnull = false;
 	bool		include_ao_aux;
 	bool		physical_ao_size;
 	bool        with_bool_ao_args = false;
@@ -687,11 +706,14 @@ pg_relation_size(PG_FUNCTION_ARGS)
 			sql = psprintf("select pg_catalog.pg_relation_size(%u, '%s')", relOid,
 						   forkNames[forkNumber]);
 
-		size += get_size_from_segDBs(sql);
+		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
 	relation_close(rel, AccessShareLock);
 
+	/* (missing on a segment, see get_size_from_segDBs_nullable()) */
+	if (segnull)
+		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
 
@@ -834,6 +856,7 @@ pg_table_size(PG_FUNCTION_ARGS)
 	Oid			relOid = PG_GETARG_OID(0);
 	Relation	rel;
 	int64		size;
+	bool		segnull = false;
 
 	ERROR_ON_ENTRY_DB();
 
@@ -850,11 +873,13 @@ pg_table_size(PG_FUNCTION_ARGS)
 
 		sql = psprintf("select pg_catalog.pg_table_size(%u)", relOid);
 
-		size += get_size_from_segDBs(sql);
+		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
 	relation_close(rel, AccessShareLock);
 
+	if (segnull)
+		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
 
@@ -864,6 +889,7 @@ pg_indexes_size(PG_FUNCTION_ARGS)
 	Oid			relOid = PG_GETARG_OID(0);
 	Relation	rel;
 	int64		size;
+	bool		segnull = false;
 
 	ERROR_ON_ENTRY_DB();
 
@@ -880,11 +906,13 @@ pg_indexes_size(PG_FUNCTION_ARGS)
 
 		sql = psprintf("select pg_catalog.pg_indexes_size(%u)", relOid);
 
-		size += get_size_from_segDBs(sql);
+		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
 	relation_close(rel, AccessShareLock);
 
+	if (segnull)
+		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
 
@@ -917,6 +945,7 @@ pg_total_relation_size(PG_FUNCTION_ARGS)
 	Oid			relOid = PG_GETARG_OID(0);
 	Relation	rel;
 	int64		size;
+	bool		segnull = false;
 
 	ERROR_ON_ENTRY_DB();
 
@@ -942,11 +971,13 @@ pg_total_relation_size(PG_FUNCTION_ARGS)
 		sql = psprintf("select pg_catalog.pg_total_relation_size(%u)",
 					   relOid);
 
-		size += get_size_from_segDBs(sql);
+		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
 	relation_close(rel, AccessShareLock);
 
+	if (segnull)
+		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
 

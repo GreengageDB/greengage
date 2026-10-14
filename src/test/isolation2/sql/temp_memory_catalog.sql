@@ -1198,6 +1198,26 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1q:
 2q:
 
+-- Each node moves objects to disk on its own: here a table moved on the
+-- coordinator only, where other sessions find it, while the segments keep
+-- it in memory and cannot open it.  Size functions then return NULL, as
+-- for a relation not found at all, rather than count the segments as
+-- empty.  A table moved on every node has its size.
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_sz_qd (a int) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_sz_all (a int) DISTRIBUTED BY (a);
+1: INSERT INTO tc_sz_qd SELECT generate_series(1, 1000);
+1: INSERT INTO tc_sz_all SELECT generate_series(1, 1000);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+1: COMMENT ON TABLE tc_sz_qd IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_sz_all IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+2: SELECT relname, pg_relation_size(oid) > 0 AS relation, pg_table_size(oid) > 0 AS table, pg_indexes_size(oid) AS indexes, pg_total_relation_size(oid) > 0 AS total FROM pg_class WHERE relname IN ('tc_sz_qd', 'tc_sz_all') AND oid >= 4026531840 ORDER BY 1;
+1q:
+2q:
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types
