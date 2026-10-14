@@ -3576,6 +3576,39 @@ rewriteTargetView(Query *parsetree, Relation view)
 		}
 
 		/*
+		 * To prevent possible modification of distribution columns through
+		 * a view, check here after attrs rewriting.
+		 */
+		{
+			List *onconflict_set = parsetree->onConflict->onConflictSet;
+			GpPolicy  *policy = GpPolicyFetch(base_rel->rd_id);
+
+			if(policy->ptype == POLICYTYPE_PARTITIONED)
+			{
+				ListCell  *lc;
+				Bitmapset *dist_cols = NULL;
+				Bitmapset *conflict_update_cols = NULL;
+
+				for (int i = 0; i < policy->nattrs; i++)
+					dist_cols = bms_add_member(dist_cols, policy->attrs[i]);
+
+				foreach(lc, onconflict_set)
+				{
+					TargetEntry *te = lfirst(lc);
+					conflict_update_cols = bms_add_member(conflict_update_cols,
+														te->resno);
+				}
+
+				if (!bms_is_empty(bms_intersect(dist_cols, conflict_update_cols)))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("modification of distribution columns in OnConflictUpdate is not supported (rewriteView)")));
+				}
+			}
+		}
+
+		/*
 		 * Also, create a new RTE for the EXCLUDED pseudo-relation, using the
 		 * query's new base rel (which may well have a different column list
 		 * from the view, hence we need a new column alias list).  This should
