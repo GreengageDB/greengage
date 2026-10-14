@@ -11,7 +11,9 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 -- report whether a drop was refused.
 --
 CREATE FUNCTION tc_try(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN dependent_objects_still_exist THEN RETURN 'refused'; END $$ LANGUAGE plpgsql;
-CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP IF tc_try(cmd) = 'done' THEN RETURN 'done'; END IF; PERFORM pg_sleep(0.1); END LOOP; RETURN 'refused'; END $$ LANGUAGE plpgsql;
+-- (tc_retry() waits for sessions that exit: their cleanup may also deadlock
+-- with the drop, which is then tried again)
+CREATE FUNCTION tc_retry(cmd text) RETURNS text AS $$ BEGIN FOR i IN 1..600 LOOP BEGIN IF tc_try(cmd) = 'done' THEN RETURN 'done'; END IF; EXCEPTION WHEN deadlock_detected THEN NULL; END; PERFORM pg_sleep(0.1); END LOOP; RETURN 'refused'; END $$ LANGUAGE plpgsql;
 CREATE TYPE tc_type AS (x int);
 CREATE DOMAIN tc_dom AS int;
 CREATE DOMAIN tc_dom_base AS int;
