@@ -3312,6 +3312,29 @@ INSERT 0 1
 ------------
  3F000       
 (1 row)
+-- (and no user code runs in those queries meanwhile, as an aggregate that
+-- the search path would pick for their sum())
+CREATE FUNCTION tc_mon_sum(int8, int8) RETURNS int8 LANGUAGE sql AS 'SELECT coalesce($1, 0) + $2';
+CREATE FUNCTION
+CREATE FUNCTION tc_mon_final(int8) RETURNS numeric LANGUAGE sql AS 'SELECT ($1 * 1000)::numeric';
+CREATE FUNCTION
+CREATE AGGREGATE public.sum(int8) (sfunc = tc_mon_sum, stype = int8, finalfunc = tc_mon_final);
+CREATE AGGREGATE
+2: SET search_path = public, pg_catalog;
+SET
+2: SELECT pg_catalog.sum(tupcount) AS tuples FROM get_ao_distribution((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840));
+ tuples 
+--------
+ 1000   
+(1 row)
+2: RESET search_path;
+RESET
+DROP AGGREGATE public.sum(int8);
+DROP AGGREGATE
+DROP FUNCTION tc_mon_final(int8);
+DROP FUNCTION
+DROP FUNCTION tc_mon_sum(int8, int8);
+DROP FUNCTION
 1q: ... <quitting>
 2q: ... <quitting>
 DROP FUNCTION tc_mon_state(text);

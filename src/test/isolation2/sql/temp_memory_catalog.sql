@@ -1269,6 +1269,17 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 2: SELECT sum(tupcount) AS tuples FROM get_ao_distribution((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840));
 2: SELECT get_ao_compression_ratio((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840)) AS ao_ratio, get_ao_compression_ratio((SELECT oid FROM pg_class WHERE relname = 'tc_mon_co' AND oid >= 4026531840)) > 1 AS co_compressed;
 2: SELECT tc_mon_state(format('DROP SCHEMA %I', (SELECT n FROM tc_mon_ns))) AS drop_schema;
+-- (and no user code runs in those queries meanwhile, as an aggregate that
+-- the search path would pick for their sum())
+CREATE FUNCTION tc_mon_sum(int8, int8) RETURNS int8 LANGUAGE sql AS 'SELECT coalesce($1, 0) + $2';
+CREATE FUNCTION tc_mon_final(int8) RETURNS numeric LANGUAGE sql AS 'SELECT ($1 * 1000)::numeric';
+CREATE AGGREGATE public.sum(int8) (sfunc = tc_mon_sum, stype = int8, finalfunc = tc_mon_final);
+2: SET search_path = public, pg_catalog;
+2: SELECT pg_catalog.sum(tupcount) AS tuples FROM get_ao_distribution((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840));
+2: RESET search_path;
+DROP AGGREGATE public.sum(int8);
+DROP FUNCTION tc_mon_final(int8);
+DROP FUNCTION tc_mon_sum(int8, int8);
 1q:
 2q:
 DROP FUNCTION tc_mon_state(text);

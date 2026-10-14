@@ -143,6 +143,7 @@
 #include "utils/builtins.h"
 #include "utils/dsa.h"
 #include "utils/fmgroids.h"
+#include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -4874,13 +4875,21 @@ tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 /*
  * SPI_execute() a query that names an AO table's aux relation, which may be
  * in another session's temporary namespace (see tc_name_other_namespaces).
+ * With search_path set to pg_catalog meanwhile, so that no function,
+ * operator or type of the user's (e.g. an aggregate named like the query's
+ * sum()) runs while that namespace may be found by name.
  */
 int
 tempcat_spi_execute_aux(const char *src, bool read_only, long tcount)
 {
 	bool		save = tc_name_other_namespaces;
+	int			save_nestlevel;
 	int			ret;
 
+	save_nestlevel = NewGUCNestLevel();
+	(void) set_config_option("search_path", "pg_catalog",
+							 PGC_USERSET, PGC_S_SESSION,
+							 GUC_ACTION_SAVE, true, 0, false);
 	tc_name_other_namespaces = true;
 	PG_TRY();
 	{
@@ -4893,6 +4902,7 @@ tempcat_spi_execute_aux(const char *src, bool read_only, long tcount)
 	}
 	PG_END_TRY();
 	tc_name_other_namespaces = save;
+	AtEOXact_GUC(false, save_nestlevel);
 	return ret;
 }
 
