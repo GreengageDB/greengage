@@ -337,6 +337,9 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 		}
 	}
 
+	/* (a row of a temporary object on disk, perhaps, see tempcat.c) */
+	tempcat_disk_row_updated(heapRel, tup);
+
 	indstate = CatalogOpenIndexes(heapRel);
 
 	simple_heap_update(heapRel, otid, tup);
@@ -379,6 +382,9 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 			return;
 		}
 	}
+
+	/* see CatalogTupleUpdate */
+	tempcat_disk_row_updated(heapRel, tup);
 
 	simple_heap_update(heapRel, otid, tup);
 

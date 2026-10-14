@@ -1173,6 +1173,31 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1q:
 2q:
 
+-- So do an operator's commutator and negator, which have no pg_depend
+-- rows: moving the operator takes them along, and so does linking one to
+-- an operator already on disk (CREATE OPERATOR updates that one's row).
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE FUNCTION pg_temp.tc_lt(int, bigint) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 < $2';
+1: CREATE FUNCTION pg_temp.tc_gt(bigint, int) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 > $2';
+1: CREATE FUNCTION pg_temp.tc_ge(int, bigint) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 >= $2';
+1: CREATE OPERATOR pg_temp.<<< (leftarg = int, rightarg = bigint, procedure = pg_temp.tc_lt, commutator = OPERATOR(pg_temp.>>>), negator = OPERATOR(pg_temp.>>=));
+1: CREATE OPERATOR pg_temp.>>> (leftarg = bigint, rightarg = int, procedure = pg_temp.tc_gt);
+1: CREATE OPERATOR pg_temp.>>= (leftarg = int, rightarg = bigint, procedure = pg_temp.tc_ge);
+1: CREATE FUNCTION pg_temp.tc_lt2(int, int) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 < $2';
+1: CREATE FUNCTION pg_temp.tc_gt2(int, int) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 > $2';
+1: CREATE OPERATOR pg_temp.<<<< (leftarg = int, rightarg = int, procedure = pg_temp.tc_lt2);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON OPERATOR pg_temp.<<< (int, bigint) IS 'moved';
+1: COMMENT ON OPERATOR pg_temp.<<<< (int, int) IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: CREATE OPERATOR pg_temp.>>>> (leftarg = int, rightarg = int, procedure = pg_temp.tc_gt2, commutator = OPERATOR(pg_temp.<<<<));
+1: SELECT 1 OPERATOR(pg_temp.<<<) 2::bigint AS lt, 2 OPERATOR(pg_temp.>>>>) 1 AS gt;
+2: SELECT oprname FROM pg_operator WHERE oid >= 4026531840 ORDER BY 1;
+2: SELECT count(*) AS dangling FROM gp_dist_random('pg_operator') o LEFT JOIN gp_dist_random('pg_operator') c ON c.oid = o.oprcom AND c.gp_segment_id = o.gp_segment_id LEFT JOIN gp_dist_random('pg_operator') n ON n.oid = o.oprnegate AND n.gp_segment_id = o.gp_segment_id WHERE o.oid >= 4026531840 AND ((o.oprcom <> 0 AND c.oid IS NULL) OR (o.oprnegate <> 0 AND n.oid IS NULL));
+2: SELECT count(*) AS dangling FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom LEFT JOIN pg_operator n ON n.oid = o.oprnegate WHERE o.oid >= 4026531840 AND ((o.oprcom <> 0 AND c.oid IS NULL) OR (o.oprnegate <> 0 AND n.oid IS NULL));
+1q:
+2q:
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types

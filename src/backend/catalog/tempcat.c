@@ -2075,6 +2075,74 @@ tempcat_object_in_memory(Oid classId, Oid objectId)
 }
 
 /*
+ * Links between our objects that pg_depend does not record: an operator's
+ * commutator and negator.  Report those of the row 'tup' of catalog
+ * 'relid' that lead to objects of ours in memory, at most two.
+ */
+static int
+tempcat_row_links(Oid relid, HeapTuple tup, TempcatObject *links)
+{
+	int			n = 0;
+
+	if (relid == OperatorRelationId)
+	{
+		Form_pg_operator op = (Form_pg_operator) GETSTRUCT(tup);
+		Oid			oids[2];
+		int			i;
+
+		oids[0] = op->oprcom;
+		oids[1] = op->oprnegate;
+		for (i = 0; i < lengthof(oids); i++)
+		{
+			if (tempcat_owned_entry(OperatorRelationId, oids[i]) != NULL &&
+				tempcat_object_in_memory(OperatorRelationId, oids[i]))
+			{
+				links[n].classId = OperatorRelationId;
+				links[n].objectId = oids[i];
+				n++;
+			}
+		}
+	}
+	return n;
+}
+
+/*
+ * Our row 'tup' of 'rel' goes to disk, its object living there: take the
+ * objects of ours that it links to there too (see above), as pg_depend
+ * rows would.
+ */
+static void
+tempcat_schedule_links(Relation rel, HeapTuple tup)
+{
+	TempcatObject links[2];
+	int			n;
+	int			i;
+
+	if (tc_owned == NULL)
+		return;
+	n = tempcat_row_links(RelationGetRelid(rel), tup, links);
+	for (i = 0; i < n; i++)
+		tempcat_schedule_move(links[i].classId, links[i].objectId);
+}
+
+/* A row on disk is updated: perhaps one of ours, now linking to others. */
+void
+tempcat_disk_row_updated(Relation rel, HeapTuple tup)
+{
+	TempcatObject obj;
+	int			catidx;
+
+	if (tc_owned == NULL)
+		return;
+	catidx = tempcat_catalog_index(RelationGetRelid(rel));
+	if (catidx < 0)
+		return;
+	obj = tempcat_row_object(catidx, tup, RelationGetDescr(rel));
+	if (tempcat_owned_entry(obj.classId, obj.objectId) != NULL)
+		tempcat_schedule_links(rel, tup);
+}
+
+/*
  * Objects to move to disk at the end of the command (or before commit or
  * PREPARE), see tempcat_materialize_moves(), and those moved so far in the
  * transaction, with the subtransaction level that moved them.  A move that
@@ -2433,6 +2501,45 @@ tempcat_materialize_moves(void)
 				member->moved = false;
 				added = true;
 			}
+		}
+		/* and the links pg_depend does not record (from rows in memory) */
+		if (!added)
+		{
+			List	   *operators = NIL;
+			ListCell   *lc;
+			int			ocat = tempcat_catalog_index(OperatorRelationId);
+
+			hash_seq_init(&status, set);
+			while ((member = hash_seq_search(&status)) != NULL)
+			{
+				if (member->obj.classId == OperatorRelationId)
+					operators = lappend_oid(operators, member->obj.objectId);
+			}
+			foreach(lc, operators)
+			{
+				TempcatEntry *e;
+				HeapTupleData tup;
+				TempcatObject links[2];
+				bool		deleted;
+				int			n;
+				int			i;
+
+				e = tempcat_object_entry(ocat, lfirst_oid(lc), &deleted);
+				if (e == NULL)
+					continue;
+				tup.t_len = e->len;
+				tup.t_data = TCE_DATA(e);
+				n = tempcat_row_links(OperatorRelationId, &tup, links);
+				for (i = 0; i < n; i++)
+				{
+					if (hash_search(set, &links[i], HASH_FIND, NULL) != NULL)
+						continue;
+					member = hash_search(set, &links[i], HASH_ENTER, NULL);
+					member->moved = false;
+					added = true;
+				}
+			}
+			list_free(operators);
 		}
 	} while (added);
 
@@ -3668,6 +3775,7 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 			return true;
 		/* a part (trigger, constraint, ...) of an object on disk is there */
 		tempcat_note_disk_row(rel, tup);
+		tempcat_schedule_links(rel, tup);
 		return false;
 	}
 }
