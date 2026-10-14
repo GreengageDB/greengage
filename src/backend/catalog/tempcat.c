@@ -1899,6 +1899,7 @@ tempcat_memory_has_oid(int catidx, Oid oid)
 
 static TempcatXidStatus tempcat_xid_status(TransactionId xid);
 static void tempcat_delete_entry_moved(Relation rel, dsa_pointer ep);
+static dsa_pointer tempcat_find_tid(ItemPointer tid);
 static HeapTuple tempcat_entry_copy(TempcatEntry *e, Oid relid);
 
 /* Is the entry's row alive: not inserted or deleted by an aborted transaction? */
@@ -2085,30 +2086,44 @@ tempcat_mark_on_disk(Oid classId, Oid objectId)
  * Virtual TIDs of rows moved to disk in the current transaction, and the
  * TIDs of their copies there: callers may still hold a row's virtual TID,
  * found in this command before the move, to update or delete it
- * (tempcat_moved_tid()).
+ * (tempcat_moved_tid()).  And the other way round, for in-place updates of
+ * the copies (tempcat_inplace_update_moved()).
  */
 typedef struct TempcatMovedKey
 {
 	Oid			relid;
-	ItemPointerData vtid;
+	ItemPointerData tid;
 } TempcatMovedKey;
 
 typedef struct TempcatMovedEntry
 {
 	TempcatMovedKey key;
-	ItemPointerData dtid;
+	ItemPointerData other;		/* the copy on disk, or the virtual row */
 	int			level;			/* subtransaction nesting level of the move */
 } TempcatMovedEntry;
 
-static HTAB *tc_moved = NULL;	/* in TopTransactionContext */
+/* in TopTransactionContext */
+static HTAB *tc_moved = NULL;	/* by virtual TID */
+static HTAB *tc_moved_back = NULL;	/* by the TID of the copy */
 static LocalTransactionId tc_moved_lxid = InvalidLocalTransactionId;
 
 static void
-tempcat_note_moved(Oid relid, ItemPointer vtid, ItemPointer dtid)
+tempcat_moved_enter(HTAB *map, Oid relid, ItemPointer tid, ItemPointer other)
 {
 	TempcatMovedKey key;
 	TempcatMovedEntry *entry;
 
+	memset(&key, 0, sizeof(key));
+	key.relid = relid;
+	key.tid = *tid;
+	entry = hash_search(map, &key, HASH_ENTER, NULL);
+	entry->other = *other;
+	entry->level = GetCurrentTransactionNestLevel();
+}
+
+static void
+tempcat_note_moved(Oid relid, ItemPointer vtid, ItemPointer dtid)
+{
 	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid)
 	{
 		HASHCTL		ctl;
@@ -2119,14 +2134,30 @@ tempcat_note_moved(Oid relid, ItemPointer vtid, ItemPointer dtid)
 		ctl.hcxt = TopTransactionContext;
 		tc_moved = hash_create("tempcat moved rows", 64, &ctl,
 							   HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+		tc_moved_back = hash_create("tempcat moved rows by copy", 64, &ctl,
+									HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 		tc_moved_lxid = MyProc->lxid;
 	}
+	tempcat_moved_enter(tc_moved, relid, vtid, dtid);
+	tempcat_moved_enter(tc_moved_back, relid, dtid, vtid);
+}
+
+static bool
+tempcat_moved_find(HTAB *map, Relation rel, ItemPointer tid, ItemPointer other)
+{
+	TempcatMovedKey key;
+	TempcatMovedEntry *entry;
+
+	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid)
+		return false;
 	memset(&key, 0, sizeof(key));
-	key.relid = relid;
-	key.vtid = *vtid;
-	entry = hash_search(tc_moved, &key, HASH_ENTER, NULL);
-	entry->dtid = *dtid;
-	entry->level = GetCurrentTransactionNestLevel();
+	key.relid = RelationGetRelid(rel);
+	key.tid = *tid;
+	entry = hash_search(map, &key, HASH_FIND, NULL);
+	if (entry == NULL)
+		return false;
+	*other = entry->other;
+	return true;
 }
 
 /*
@@ -2137,19 +2168,50 @@ tempcat_note_moved(Oid relid, ItemPointer vtid, ItemPointer dtid)
 bool
 tempcat_moved_tid(Relation rel, ItemPointer tid, ItemPointer dtid)
 {
-	TempcatMovedKey key;
+	return IsTempcatTid(tid) && tempcat_moved_find(tc_moved, rel, tid, dtid);
+}
+
+/*
+ * An in-place update overwrote 'tup' on disk.  If that is the copy of a row
+ * we moved there in this transaction, overwrite the row in memory too: it
+ * comes back if the move rolls back, and in-place updates must outlive that,
+ * as they outlive aborts (the AO row numbers in gp_fastsequence, which must
+ * never be handed out again, relpages, ...).  Unless the row is gone, freed
+ * as it was inserted in this transaction too, which then takes it back
+ * anyway.
+ */
+void
+tempcat_inplace_update_moved(Relation rel, HeapTuple tup)
+{
+	HeapTupleData vtup;
+
+	if (IsTempcatTid(&tup->t_self) ||
+		!tempcat_moved_find(tc_moved_back, rel, &tup->t_self, &vtup.t_self) ||
+		!tempcat_attach(false) ||
+		!DsaPointerIsValid(tempcat_find_tid(&vtup.t_self)))
+		return;
+	vtup.t_len = tup->t_len;
+	vtup.t_data = tup->t_data;
+	vtup.t_tableOid = tup->t_tableOid;
+	tempcat_inplace_update(rel, &vtup);
+}
+
+static void
+tempcat_moved_end_level(HTAB *map, int level, bool commit)
+{
+	HASH_SEQ_STATUS status;
 	TempcatMovedEntry *entry;
 
-	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid || !IsTempcatTid(tid))
-		return false;
-	memset(&key, 0, sizeof(key));
-	key.relid = RelationGetRelid(rel);
-	key.vtid = *tid;
-	entry = hash_search(tc_moved, &key, HASH_FIND, NULL);
-	if (entry == NULL)
-		return false;
-	*dtid = entry->dtid;
-	return true;
+	hash_seq_init(&status, map);
+	while ((entry = hash_seq_search(&status)) != NULL)
+	{
+		if (entry->level < level)
+			continue;
+		if (commit)
+			entry->level = level - 1;
+		else
+			(void) hash_search(map, &entry->key, HASH_REMOVE, NULL);
+	}
 }
 
 /* Forget the moves of an aborted subtransaction, or hand them to its parent. */
@@ -2158,7 +2220,6 @@ tempcat_moved_end_subxact(bool commit)
 {
 	int			level = GetCurrentTransactionNestLevel();
 	HASH_SEQ_STATUS status;
-	TempcatMovedEntry *entry;
 	TempcatPendingMove *pending;
 
 	if (tc_pending_moves != NULL && tc_pending_moves_lxid == MyProc->lxid)
@@ -2178,16 +2239,8 @@ tempcat_moved_end_subxact(bool commit)
 
 	if (tc_moved == NULL || tc_moved_lxid != MyProc->lxid)
 		return;
-	hash_seq_init(&status, tc_moved);
-	while ((entry = hash_seq_search(&status)) != NULL)
-	{
-		if (entry->level < level)
-			continue;
-		if (commit)
-			entry->level = level - 1;
-		else
-			(void) hash_search(tc_moved, &entry->key, HASH_REMOVE, NULL);
-	}
+	tempcat_moved_end_level(tc_moved, level, commit);
+	tempcat_moved_end_level(tc_moved_back, level, commit);
 }
 
 /* Move one virtual row to disk, in the current transaction. */

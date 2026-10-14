@@ -6398,6 +6398,9 @@ heap_inplace_update_and_unlock(Relation relation,
 
 	heap_inplace_unlock(relation, oldtup, buffer);
 
+	/* GPDB: and the row in memory that it is a copy of (see tempcat.c) */
+	tempcat_inplace_update_moved(relation, tuple);
+
 	/*
 	 * Send out shared cache inval if necessary.  Note that because we only
 	 * pass the new version of the tuple, this mustn't be used for any
@@ -6508,6 +6511,9 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	END_CRIT_SECTION();
 
 	UnlockReleaseBuffer(buffer);
+
+	/* GPDB: and the row in memory that it is a copy of (see tempcat.c) */
+	tempcat_inplace_update_moved(relation, tuple);
 
 	/*
 	 * Send out shared cache inval if necessary.  Note that because we only

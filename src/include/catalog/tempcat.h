@@ -113,6 +113,7 @@ extern bool tempcat_object_missing(const struct ObjectAddress *object);
 extern bool tempcat_other_session_relation(HeapTuple tup);
 extern bool tempcat_relation_missing(Oid relid);
 extern bool tempcat_moved_tid(Relation rel, ItemPointer tid, ItemPointer dtid);
+extern void tempcat_inplace_update_moved(Relation rel, HeapTuple tup);
 extern void tempcat_materialize_moves(void);
 extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
 extern void tempcat_namespaces_removed(void);

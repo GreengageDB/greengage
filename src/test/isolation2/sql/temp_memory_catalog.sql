@@ -1101,6 +1101,34 @@ SELECT substring(gp_inject_fault('tempcat_sweep_before_mark', 'status', dbid) fr
 SELECT gp_inject_fault('tempcat_sweep_before_mark', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT count(*) AS left_rows FROM pg_class WHERE relname IN ('tc_ns_exit1', 'tc_ns_exit2');
 
+-- In-place updates of a row moved to disk outlive a rollback of the move,
+-- as they outlive any: the row that comes back in memory gets them too.
+-- Here the AO row numbers in gp_fastsequence, which must never be handed
+-- out twice: rows of the rolled-back insert must not turn up through the
+-- index as those inserted after.  (The fault makes the area look full, so
+-- COMMENT moves the table.)
+1: SET gp_enable_temp_memory_catalog = on;
+1: SET optimizer = off;
+1: CREATE TEMP TABLE tc_ao (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+1: CREATE INDEX tc_ao_b ON tc_ao (b);
+1: INSERT INTO tc_ao SELECT g, g FROM generate_series(1, 30) g;
+1: BEGIN;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_ao IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: INSERT INTO tc_ao SELECT g, 1000 + g FROM generate_series(1, 30) g;
+1: ROLLBACK;
+1: BEGIN;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_ao IS 'moved again';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: INSERT INTO tc_ao SELECT g, 2000 + g FROM generate_series(1, 30) g;
+1: COMMIT;
+1: SET enable_seqscan = off;
+1: SELECT count(*) AS rolled_back FROM tc_ao WHERE b BETWEEN 1001 AND 1030;
+1: SELECT count(*) AS inserted FROM tc_ao WHERE b BETWEEN 2001 AND 2030;
+1q:
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types
