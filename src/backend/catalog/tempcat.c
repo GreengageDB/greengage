@@ -2252,6 +2252,28 @@ static HTAB *tc_moved = NULL;	/* by virtual TID */
 static HTAB *tc_moved_back = NULL;	/* by the TID of the copy */
 static LocalTransactionId tc_moved_lxid = InvalidLocalTransactionId;
 
+/*
+ * The deepest subtransaction level that moves were carried out at, or rows
+ * noted as moved, in the transaction 'tc_moves_top_lxid': subtransactions
+ * ending above it need not look at either (tempcat_moved_end_subxact()),
+ * which spares a long run of them, e.g. PL/pgSQL exception blocks, a walk
+ * over everything moved so far each.
+ */
+static int	tc_moves_top = 0;
+static LocalTransactionId tc_moves_top_lxid = InvalidLocalTransactionId;
+
+static void
+tempcat_note_moves_level(int level)
+{
+	if (tc_moves_top_lxid != MyProc->lxid)
+	{
+		tc_moves_top_lxid = MyProc->lxid;
+		tc_moves_top = 0;
+	}
+	if (level > tc_moves_top)
+		tc_moves_top = level;
+}
+
 static void
 tempcat_moved_enter(HTAB *map, Oid relid, ItemPointer tid, ItemPointer other)
 {
@@ -2264,6 +2286,7 @@ tempcat_moved_enter(HTAB *map, Oid relid, ItemPointer tid, ItemPointer other)
 	entry = hash_search(map, &key, HASH_ENTER, NULL);
 	entry->other = *other;
 	entry->level = GetCurrentTransactionNestLevel();
+	tempcat_note_moves_level(entry->level);
 }
 
 static void
@@ -2369,6 +2392,12 @@ tempcat_moved_end_subxact(bool commit)
 	int			level = GetCurrentTransactionNestLevel();
 	HASH_SEQ_STATUS status;
 	TempcatPendingMove *pending;
+
+	/* (nothing done at this level or below; see tc_moves_top) */
+	if (tc_moves_top_lxid != MyProc->lxid || tc_moves_top < level)
+		return;
+	/* (and after it, nothing is deeper than the parent) */
+	tc_moves_top = level - 1;
 
 	if (tc_pending_moves != NULL && tc_pending_moves_lxid == MyProc->lxid)
 	{
@@ -2652,6 +2681,7 @@ tempcat_materialize_moves(void)
 							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 		tempcat_add_to_move(set, &todo, pending->obj);
 		pending->done = level;
+		tempcat_note_moves_level(level);
 	}
 	if (set == NULL)
 		return false;
