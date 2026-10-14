@@ -2082,8 +2082,11 @@ tempcat_object_in_memory(Oid classId, Oid objectId)
 
 /*
  * Links between our objects that pg_depend does not record: an operator's
- * commutator and negator.  Report those of the row 'tup' of catalog
- * 'relid' that lead to objects of ours in memory, at most two.
+ * commutator and negator; and that of a pg_depend row itself, which routing
+ * follows when the row is inserted (tempcat_route_insert()), but not when it
+ * is changed on disk (changeDependencyFor(), e.g. ALTER FUNCTION ...
+ * SUPPORT).  Report those of the row 'tup' of catalog 'relid' that lead to
+ * objects of ours in memory, at most two.
  */
 static int
 tempcat_row_links(Oid relid, HeapTuple tup, TempcatObject *links)
@@ -2107,6 +2110,18 @@ tempcat_row_links(Oid relid, HeapTuple tup, TempcatObject *links)
 				links[n].objectId = oids[i];
 				n++;
 			}
+		}
+	}
+	else if (relid == DependRelationId)
+	{
+		Form_pg_depend dep = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (tempcat_owned_entry(dep->refclassid, dep->refobjid) != NULL &&
+			tempcat_object_in_memory(dep->refclassid, dep->refobjid))
+		{
+			links[n].classId = dep->refclassid;
+			links[n].objectId = dep->refobjid;
+			n++;
 		}
 	}
 	return n;

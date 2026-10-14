@@ -2074,6 +2074,37 @@ SELECT o.oprname, c.oprname AS commutator FROM pg_operator o LEFT JOIN pg_operat
 RESET gp_temp_memory_catalog_disk_only;
 DROP OPERATOR pg_temp.>&> (int, int);
 DROP OPERATOR pg_temp.<&< (int, int);
+-- (and a dependency row on disk that an update makes refer to an object
+-- in memory: ALTER FUNCTION ... SUPPORT of a function on disk)
+CREATE FUNCTION tc_sup_ord(internal) RETURNS internal LANGUAGE internal AS 'numeric_support';
+CREATE FUNCTION pg_temp.tc_sup_f(int) RETURNS int LANGUAGE sql SUPPORT tc_sup_ord AS 'SELECT $1';
+CREATE FUNCTION pg_temp.tc_sup_s(internal) RETURNS internal LANGUAGE internal AS 'numeric_support';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+COMMENT ON FUNCTION pg_temp.tc_sup_f(int) IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+ALTER FUNCTION pg_temp.tc_sup_f(int) SUPPORT pg_temp.tc_sup_s;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT p.proname, s.proname AS support FROM pg_proc p LEFT JOIN pg_proc s ON s.oid = p.prosupport WHERE p.proname IN ('tc_sup_f', 'tc_sup_s') ORDER BY 1;
+ proname  | support  
+----------+----------
+ tc_sup_f | tc_sup_s
+ tc_sup_s | 
+(2 rows)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP FUNCTION pg_temp.tc_sup_f(int);
+DROP FUNCTION pg_temp.tc_sup_s(internal);
+DROP FUNCTION tc_sup_ord(internal);
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog
