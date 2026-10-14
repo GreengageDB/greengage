@@ -47,8 +47,10 @@
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "catalog/tempcat.h"
+#include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "commands/seclabel.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -4304,14 +4306,20 @@ InitTempTableNamespace(void)
 
 /*
  * GPDB: remove a temporary namespace, whose objects are gone, directly rather
- * than by performDeletion(): with its shared dependencies too, as that would,
- * i.e. the roles granted privileges on it.  Left behind, they would make
+ * than by performDeletion(): with its shared dependencies, comment and
+ * security labels too, as that would (deleteOneObject()).  Shared
+ * dependencies left behind, of roles granted privileges on it, would make
  * DROP ROLE fail ("cache lookup failed for namespace").
  */
 static void
 RemoveTempSchemaById(Oid namespaceId)
 {
+	ObjectAddress object;
+
+	ObjectAddressSet(object, NamespaceRelationId, namespaceId);
 	deleteSharedDependencyRecordsFor(NamespaceRelationId, namespaceId, 0);
+	DeleteComments(namespaceId, NamespaceRelationId, 0);
+	DeleteSecurityLabel(&object);
 	RemoveSchemaById(namespaceId);
 }
 

@@ -41,10 +41,18 @@ CREATE ROLE temp_schema_grantee;
 6: CREATE TEMP TABLE test_temp_schema_grant(a int);
 6: DO $$ BEGIN EXECUTE format('GRANT USAGE ON SCHEMA %I TO temp_schema_grantee', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema())); END $$;
 6: SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'temp_schema_grantee'::regrole;
+-- (nor does a comment on it stay)
+CREATE TABLE temp_schema_oid (o oid) DISTRIBUTED REPLICATED;
+6: INSERT INTO temp_schema_oid SELECT pg_my_temp_schema();
+6: DO $$ BEGIN EXECUTE format('COMMENT ON SCHEMA %I IS %L', (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema()), 'temporary'); END $$;
+6: SELECT count(*) FROM gp_dist_random('pg_description') WHERE objoid = pg_my_temp_schema();
 6q:
 DO $$ BEGIN FOR i IN 1..600 LOOP EXIT WHEN (SELECT count(*) FROM pg_shdepend WHERE refobjid = 'temp_schema_grantee'::regrole) + (SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'temp_schema_grantee'::regrole) = 0; PERFORM pg_sleep(0.1); END LOOP; END $$;
 SELECT count(*) FROM pg_shdepend WHERE refobjid = 'temp_schema_grantee'::regrole;
 SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'temp_schema_grantee'::regrole;
+SELECT count(*) FROM pg_description WHERE objoid = (SELECT o FROM temp_schema_oid);
+SELECT count(*) FROM gp_dist_random('pg_description') WHERE objoid = (SELECT o FROM temp_schema_oid);
+DROP TABLE temp_schema_oid;
 DROP ROLE temp_schema_grantee;
 
 -- Nor once a session removed a temp namespace of its name left by an earlier
