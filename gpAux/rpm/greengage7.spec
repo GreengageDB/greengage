@@ -18,8 +18,6 @@ Group:   Applications/Databases
 License: ASL 2.0
 URL:     https://greengagedb.org
 
-BuildRequires: rpmlint
-
 Requires: findutils
 Requires: glibc-langpack-en
 Requires: iproute
