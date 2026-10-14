@@ -949,6 +949,17 @@ CREATE CAST (pg_temp.tc_cast_t AS text) WITH INOUT;
 CREATE TRANSFORM FOR pg_temp.tc_cast_t LANGUAGE plpgsql (FROM SQL WITH FUNCTION abs(int));
 DROP TYPE pg_temp.tc_cast_t;
 
+-- Rows that would not fit on disk are refused, as they are there: in a
+-- catalog without a TOAST table, such as a long column default in
+-- pg_attribute.  Kept in memory, they would fail every move of their
+-- object to disk later.  (Compression counts, as there.)
+CREATE TEMP TABLE tc_big (a int) DISTRIBUTED BY (a);
+SELECT string_agg(md5(i::text), '') AS tc_big_default FROM generate_series(1, 1300) i \gset
+ALTER TABLE tc_big ADD COLUMN z text DEFAULT :'tc_big_default';
+ALTER TABLE tc_big ADD COLUMN z text DEFAULT repeat('x', 40000);
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_big'::regclass AND attnum > 0 ORDER BY attnum;
+DROP TABLE tc_big;
+
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog

@@ -70,6 +70,7 @@
 #include "access/heapam.h"
 #include "access/nbtree.h"
 #include "access/htup_details.h"
+#include "access/tuptoaster.h"
 #include "access/multixact.h"
 #include "access/stratnum.h"
 #include "access/table.h"
@@ -3781,6 +3782,35 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 }
 
 /*
+ * Refuse a row that would not fit on disk, as heap_insert() and
+ * heap_update() would: in a catalog without a TOAST table, one that
+ * compression does not bring under MaxHeapTupleSize (e.g. a long column
+ * default in pg_attribute, long options in pg_class).  Kept in memory, it
+ * would fail every move of its object to disk, and with that every row of
+ * the object that did not fit.
+ */
+static void
+tempcat_check_row_size(Relation rel, HeapTuple tup)
+{
+	HeapTuple	compressed;
+	Size		len;
+
+	if (tup->t_len <= MaxHeapTupleSize ||
+		OidIsValid(rel->rd_rel->reltoastrelid))
+		return;
+	/* (without a TOAST table, this only compresses values in place) */
+	compressed = toast_insert_or_update(rel, tup, NULL, TOAST_TUPLE_TARGET, 0);
+	len = MAXALIGN(compressed->t_len);
+	if (compressed != tup)
+		heap_freetuple(compressed);
+	if (len > MaxHeapTupleSize)
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("row is too big: size %zu, maximum size %zu",
+						len, MaxHeapTupleSize)));
+}
+
+/*
  * Insert a virtual row.  Returns false, changing nothing, if the session's
  * area is full; the caller then stores the row on disk.  Scans merge both
  * sources, so where a row lives does not affect what anybody sees.
@@ -3795,6 +3825,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	Assert(catidx >= 0);
 	Assert(!tempcat_is_reader());
+	tempcat_check_row_size(rel, tup);
 
 	/* No area (DSM space is short): the row goes to disk. */
 	if (!tempcat_attach(true))
@@ -3913,6 +3944,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 
 	Assert(catidx >= 0);
 	Assert(!tempcat_is_reader());
+	tempcat_check_row_size(rel, newtup);
 
 	olde = tempcat_lookup_tid(rel, otid, &oldep);
 	tempcat_check_deletable(olde);
