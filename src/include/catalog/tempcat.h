@@ -121,6 +121,7 @@ extern bool tempcat_materialize_moves(void);
 extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
 extern int	tempcat_spi_execute_aux(const char *src, bool read_only, long tcount);
 extern void tempcat_namespaces_removed(void);
+extern void tempcat_note_drop(const struct ObjectAddress *object);
 extern bool tempcat_check_type_user(Oid classId, Oid objectId,
 									const char *typeName);
 extern bool tempcat_role_used_elsewhere(Oid roleid);

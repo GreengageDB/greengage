@@ -1314,6 +1314,9 @@ deleteOneObject(const ObjectAddress *object, Relation *depRel, int flags)
 	InvokeObjectDropHookArg(object->classId, object->objectId,
 							object->objectSubId, flags);
 
+	/* GPDB: an in-memory temporary object of ours that lived on disk */
+	tempcat_note_drop(object);
+
 	/*
 	 * Close depRel if we are doing a drop concurrently.  The object deletion
 	 * subroutine will commit the current transaction, so we can't keep the

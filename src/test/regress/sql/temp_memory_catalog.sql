@@ -1029,6 +1029,52 @@ RESET gp_temp_memory_catalog_disk_only;
 DROP FUNCTION pg_temp.tc_sup_f(int);
 DROP FUNCTION pg_temp.tc_sup_s(internal);
 DROP FUNCTION tc_sup_ord(internal);
+-- The statistics of dropped tables and functions that lived on disk, whose
+-- rows were never freed in memory, are purged too.  (The fault fails an
+-- allocation, so COMMENT moves the object to disk.)
+CREATE FUNCTION pg_temp.tc_wait_analyze_count(r oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_analyze_count(r) = n;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_analyze_count(r);
+END $$;
+CREATE FUNCTION pg_temp.tc_wait_function_calls(f oid, n bigint) RETURNS bigint LANGUAGE plpgsql AS $$
+BEGIN
+  FOR i IN 1..100 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    EXIT WHEN pg_stat_get_function_calls(f) IS NOT DISTINCT FROM n;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RETURN pg_stat_get_function_calls(f);
+END $$;
+CREATE TEMP TABLE tc_stat_disk (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+COMMENT ON TABLE tc_stat_disk IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ANALYZE tc_stat_disk;
+SELECT 'tc_stat_disk'::regclass::oid AS tc_stat_disk_oid \gset
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_disk_oid, 1) AS analyze_count;
+DROP TABLE tc_stat_disk;
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_disk_oid, 0) AS analyze_count;
+SET track_functions = 'pl';
+CREATE FUNCTION pg_temp.tc_stat_disk_fn() RETURNS int LANGUAGE plpgsql AS 'BEGIN RETURN 1; END';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+COMMENT ON FUNCTION pg_temp.tc_stat_disk_fn() IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT pg_temp.tc_stat_disk_fn();
+SELECT pg_sleep(0.6);
+SELECT 'pg_temp.tc_stat_disk_fn'::regproc::oid AS tc_stat_disk_fn_oid \gset
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_disk_fn_oid, 1) AS calls;
+DROP FUNCTION pg_temp.tc_stat_disk_fn();
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_function_calls(:tc_stat_disk_fn_oid, NULL) AS calls;
+RESET track_functions;
+DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
+DROP FUNCTION pg_temp.tc_wait_function_calls(oid, bigint);
 
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the

@@ -3809,6 +3809,100 @@ tempcat_abort_subtransaction(void)
 }
 
 /*
+ * Our relations and functions dropped in this transaction that lived on
+ * disk, with the subtransaction level that dropped them: their statistics
+ * are purged when it commits or prepares.  Those of objects in memory are
+ * purged as their last row is freed (tempcat_forget_if_gone()), but nothing
+ * frees rows on disk so, and pgstat_vacuum_stat() keeps the statistics of
+ * all OIDs within our bounds.
+ */
+typedef struct TempcatDropped
+{
+	TempcatObject obj;
+	int			level;
+} TempcatDropped;
+
+static List *tc_dropped = NIL;	/* in TopTransactionContext */
+static LocalTransactionId tc_dropped_lxid = InvalidLocalTransactionId;
+
+void
+tempcat_note_drop(const ObjectAddress *object)
+{
+	TempcatOwnedEntry *owned;
+	TempcatDropped *d;
+	MemoryContext oldcxt;
+
+	if (object->objectSubId != 0 ||
+		(object->classId != RelationRelationId &&
+		 object->classId != ProcedureRelationId))
+		return;
+	owned = tempcat_owned_entry(object->classId, object->objectId);
+	if (owned == NULL || !owned->on_disk)
+		return;
+	if (tc_dropped_lxid != MyProc->lxid)
+	{
+		tc_dropped = NIL;
+		tc_dropped_lxid = MyProc->lxid;
+	}
+	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
+	d = palloc(sizeof(TempcatDropped));
+	d->obj.classId = object->classId;
+	d->obj.objectId = object->objectId;
+	d->level = GetCurrentTransactionNestLevel();
+	tc_dropped = lappend(tc_dropped, d);
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/* Forget the drops of an aborted subtransaction, or hand them to its parent. */
+static void
+tempcat_dropped_end_subxact(bool commit)
+{
+	int			level = GetCurrentTransactionNestLevel();
+	List	   *kept = NIL;
+	ListCell   *lc;
+	MemoryContext oldcxt;
+
+	if (tc_dropped_lxid != MyProc->lxid || tc_dropped == NIL)
+		return;
+	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
+	foreach(lc, tc_dropped)
+	{
+		TempcatDropped *d = (TempcatDropped *) lfirst(lc);
+
+		if (d->level >= level)
+		{
+			if (!commit)
+				continue;
+			d->level = level - 1;
+		}
+		kept = lappend(kept, d);
+	}
+	list_free(tc_dropped);
+	tc_dropped = kept;
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/* The transaction is about to commit or prepare: purge their statistics. */
+static void
+tempcat_purge_dropped(void)
+{
+	ListCell   *lc;
+
+	if (tc_dropped_lxid != MyProc->lxid)
+		return;
+	foreach(lc, tc_dropped)
+	{
+		TempcatDropped *d = (TempcatDropped *) lfirst(lc);
+
+		if (d->obj.classId == RelationRelationId)
+			pgstat_purge_relation(d->obj.objectId);
+		else
+			pgstat_purge_function(d->obj.objectId);
+	}
+	tc_dropped = NIL;
+}
+
+/*
  * Objects to move to disk move before the transaction commits or prepares,
  * and the copies become visible, for what runs before the end (ON COMMIT
  * actions), as at the end of a command.
@@ -3816,9 +3910,11 @@ tempcat_abort_subtransaction(void)
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
 {
-	if ((event == XACT_EVENT_PRE_COMMIT || event == XACT_EVENT_PRE_PREPARE) &&
-		tempcat_materialize_moves())
+	if (event != XACT_EVENT_PRE_COMMIT && event != XACT_EVENT_PRE_PREPARE)
+		return;
+	if (tempcat_materialize_moves())
 		CommandCounterIncrement();
+	tempcat_purge_dropped();
 }
 
 /* A committed subtransaction's changes are its parent's now. */
@@ -3829,10 +3925,14 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 	int			level;
 
 	if (event == SUBXACT_EVENT_ABORT_SUB)
+	{
 		tempcat_moved_end_subxact(false);
+		tempcat_dropped_end_subxact(false);
+	}
 	if (event != SUBXACT_EVENT_COMMIT_SUB)
 		return;
 	tempcat_moved_end_subxact(true);
+	tempcat_dropped_end_subxact(true);
 	level = GetCurrentTransactionNestLevel();
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
