@@ -1908,6 +1908,7 @@ tempcat_memory_has_oid(int catidx, Oid oid)
 static TempcatXidStatus tempcat_xid_status(TransactionId xid);
 static void tempcat_delete_entry_moved(Relation rel, dsa_pointer ep);
 static dsa_pointer tempcat_find_tid(ItemPointer tid);
+static uint32 tempcat_key_hash(TempcatKeyType type, Datum value);
 static HeapTuple tempcat_entry_copy(TempcatEntry *e, Oid relid);
 
 /* Is the entry's row alive: not inserted or deleted by an aborted transaction? */
@@ -2399,23 +2400,222 @@ tempcat_delete_entry_moved(Relation rel, dsa_pointer ep)
 }
 
 /*
+ * Alive entries of catalog 'catidx' whose key 'k' (an OID column) may hold
+ * 'oid': those in its hash chain, which the caller checks.
+ */
+static List *
+tempcat_key_entries(int catidx, int k, Oid oid)
+{
+	TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
+	List	   *entries = NIL;
+	uint32		hash;
+	dsa_pointer np;
+
+	if (tempcat_catalogs[catidx].keytype[k] != TCK_OID || h->nbuckets == 0)
+		return NIL;
+	hash = tempcat_key_hash(TCK_OID, ObjectIdGetDatum(oid));
+	np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
+	while (DsaPointerIsValid(np))
+	{
+		TempcatHashNode *node = TC_ADDR(np);
+
+		if (node->hash == hash && tempcat_entry_alive(TC_ADDR(node->entry)))
+			entries = lappend(entries, (void *) node->entry);
+		np = node->next;
+	}
+	return entries;
+}
+
+/*
+ * The rows in memory of our object 'obj' in catalog 'catidx': found through
+ * the catalog's first key, which is the column tempcat_row_object() takes
+ * the object from (the owner, or the row's own OID), but for domain
+ * constraints, whose conrelid is 0.
+ */
+static List *
+tempcat_object_rows(int catidx, Relation rel, TempcatObject obj)
+{
+	List	   *rows = NIL;
+	int			pass;
+
+	for (pass = 0; pass < 2; pass++)
+	{
+		Oid			key = obj.objectId;
+		List	   *entries;
+		ListCell   *lc;
+
+		if (pass == 1)
+		{
+			if (tempcat_catalogs[catidx].relid != ConstraintRelationId ||
+				obj.classId != TypeRelationId)
+				break;
+			key = InvalidOid;
+		}
+		entries = tempcat_key_entries(catidx, 0, key);
+		foreach(lc, entries)
+		{
+			dsa_pointer ep = (dsa_pointer) lfirst(lc);
+			TempcatEntry *e = TC_ADDR(ep);
+			HeapTupleData tup;
+			TempcatObject owner;
+
+			tup.t_len = e->len;
+			tup.t_data = TCE_DATA(e);
+			tup.t_tableOid = tempcat_catalogs[catidx].relid;
+			ItemPointerSetInvalid(&tup.t_self);
+			owner = tempcat_row_object(catidx, &tup, RelationGetDescr(rel));
+			if (owner.classId == obj.classId && owner.objectId == obj.objectId)
+				rows = lappend(rows, (void *) ep);
+		}
+		list_free(entries);
+	}
+	return rows;
+}
+
+/* The catalogs of tempcat_materialize_moves(), opened as needed. */
+static Relation
+tempcat_moves_rel(Relation *rels, int catidx)
+{
+	if (rels[catidx] == NULL)
+		rels[catidx] = table_open(tempcat_catalogs[catidx].relid,
+								  RowExclusiveLock);
+	return rels[catidx];
+}
+
+/* Add 'obj' to the objects to move, and to those to look at, if new. */
+static void
+tempcat_add_to_move(HTAB *set, List **todo, TempcatObject obj)
+{
+	TempcatSetMember *member;
+	bool		found;
+
+	member = hash_search(set, &obj, HASH_ENTER, &found);
+	if (!found)
+	{
+		member->moved = false;
+		*todo = lappend(*todo, &member->obj);
+	}
+}
+
+/*
+ * Add to 'set' what moves with our object 'm' (see above): the objects of
+ * ours in memory it refers to, those depending on it internally or
+ * automatically, its parts, and the operators it links to.
+ */
+static void
+tempcat_add_closure(HTAB *set, List **todo, TempcatObject m, Relation *rels)
+{
+	int			dcat = tempcat_catalog_index(DependRelationId);
+	List	   *entries;
+	ListCell   *lc;
+	int			catidx;
+
+	/* pg_depend rows of it, by objid, and of its dependents, by refobjid */
+	entries = tempcat_key_entries(dcat, 0, m.objectId);
+	foreach(lc, entries)
+	{
+		TempcatEntry *e = TC_ADDR((dsa_pointer) lfirst(lc));
+		HeapTupleHeader hdr = TCE_DATA(e);
+		Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
+		TempcatObject ref;
+
+		if (form->classid != m.classId || form->objid != m.objectId)
+			continue;
+		ref.classId = form->refclassid;
+		ref.objectId = form->refobjid;
+		if (hash_search(set, &ref, HASH_FIND, NULL) == NULL &&
+			tempcat_owned_entry(ref.classId, ref.objectId) != NULL &&
+			tempcat_object_in_memory(ref.classId, ref.objectId))
+			tempcat_add_to_move(set, todo, ref);
+	}
+	list_free(entries);
+
+	entries = tempcat_key_entries(dcat, 1, m.objectId);
+	foreach(lc, entries)
+	{
+		TempcatEntry *e = TC_ADDR((dsa_pointer) lfirst(lc));
+		HeapTupleHeader hdr = TCE_DATA(e);
+		Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
+		TempcatObject dep;
+
+		if (form->refclassid != m.classId || form->refobjid != m.objectId ||
+			(form->deptype != DEPENDENCY_INTERNAL &&
+			 form->deptype != DEPENDENCY_AUTO))
+			continue;
+		dep.classId = form->classid;
+		dep.objectId = form->objid;
+		if (tempcat_owned_entry(dep.classId, dep.objectId) != NULL)
+			tempcat_add_to_move(set, todo, dep);
+	}
+	list_free(entries);
+
+	/*
+	 * Its parts, whose rows go with it (tempcat_part_owner()), though they
+	 * need not depend on it.
+	 */
+	for (catidx = 0; catidx < TEMPCAT_NCATALOGS; catidx++)
+	{
+		const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+		List	   *rows;
+
+		if (!tempcat_catalog_has_oid(catidx) || def->owner == 1 ||
+			def->ownerclass == NamespaceRelationId)
+			continue;
+		rows = tempcat_object_rows(catidx, tempcat_moves_rel(rels, catidx), m);
+		foreach(lc, rows)
+		{
+			TempcatObject part;
+
+			part.classId = def->relid;
+			part.objectId = tempcat_entry_oid(TC_ADDR((dsa_pointer) lfirst(lc)));
+			tempcat_add_to_move(set, todo, part);
+		}
+		list_free(rows);
+	}
+
+	/* and the links pg_depend does not record */
+	if (m.classId == OperatorRelationId)
+	{
+		TempcatEntry *e;
+		bool		deleted;
+
+		e = tempcat_object_entry(tempcat_catalog_index(OperatorRelationId),
+								 m.objectId, &deleted);
+		if (e != NULL)
+		{
+			HeapTupleData tup;
+			TempcatObject links[2];
+			int			n;
+			int			i;
+
+			tup.t_len = e->len;
+			tup.t_data = TCE_DATA(e);
+			n = tempcat_row_links(OperatorRelationId, &tup, links);
+			for (i = 0; i < n; i++)
+				tempcat_add_to_move(set, todo, links[i]);
+		}
+	}
+}
+
+/*
  * Move the objects whose moves are pending to disk, with their parts and
  * the objects in memory that they refer to (see above), in the current
  * command.  Called at the end of a command, before CommandCounterIncrement()
  * makes the copies visible, and before commit and PREPARE.  Returns whether
- * rows moved.
+ * rows moved.  The cost follows the objects that move, not all the rows in
+ * memory: their rows are found through the hash tables.
  */
 bool
 tempcat_materialize_moves(void)
 {
-	int			dcat = tempcat_catalog_index(DependRelationId);
 	HTAB	   *set;
 	HASHCTL		ctl;
 	HASH_SEQ_STATUS status;
 	TempcatPendingMove *pending;
 	TempcatSetMember *member;
-	TempcatObject owner;
-	bool		added;
+	Relation	rels[TEMPCAT_NCATALOGS];
+	List	   *todo = NIL;
+	List	   *rows[TEMPCAT_NCATALOGS];
 	int			catidx;
 	int			level = GetCurrentTransactionNestLevel();
 	bool		moved = false;
@@ -2436,8 +2636,7 @@ tempcat_materialize_moves(void)
 		if (set == NULL)
 			set = hash_create("tempcat objects to move", 64, &ctl,
 							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
-		member = hash_search(set, &pending->obj, HASH_ENTER, NULL);
-		member->moved = false;
+		tempcat_add_to_move(set, &todo, pending->obj);
 		pending->done = level;
 	}
 	if (set == NULL)
@@ -2450,141 +2649,46 @@ tempcat_materialize_moves(void)
 		while ((member = hash_seq_search(&status)) != NULL)
 			tempcat_mark_on_disk(member->obj.classId, member->obj.objectId);
 		hash_destroy(set);
+		list_free(todo);
 		return false;
 	}
 
-	/* the closure, over our dependency rows in memory */
-	do
+	memset(rels, 0, sizeof(rels));
+	memset(rows, 0, sizeof(rows));
+
+	/* the closure */
+	while (todo != NIL)
 	{
-		dsa_pointer ep;
+		TempcatObject m = *(TempcatObject *) linitial(todo);
 
-		added = false;
-		for (ep = tc_root->catalogs[dcat].head; DsaPointerIsValid(ep);)
-		{
-			TempcatEntry *e = TC_ADDR(ep);
-			HeapTupleHeader hdr = TCE_DATA(e);
-			Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
-			TempcatObject dep;
-			TempcatObject ref;
-			bool		depin;
-			bool		refin;
-
-			ep = e->next;
-			if (!tempcat_entry_alive(e))
-				continue;
-			dep.classId = form->classid;
-			dep.objectId = form->objid;
-			ref.classId = form->refclassid;
-			ref.objectId = form->refobjid;
-			depin = hash_search(set, &dep, HASH_FIND, NULL) != NULL;
-			refin = hash_search(set, &ref, HASH_FIND, NULL) != NULL;
-
-			/* a part whose rows go with an object that moves moves too */
-			if (!depin && tempcat_part_owner(dep.classId, dep.objectId, &owner) &&
-				hash_search(set, &owner, HASH_FIND, NULL) != NULL)
-			{
-				member = hash_search(set, &dep, HASH_ENTER, NULL);
-				member->moved = false;
-				depin = added = true;
-			}
-			if (depin && !refin &&
-				tempcat_owned_entry(ref.classId, ref.objectId) != NULL &&
-				tempcat_object_in_memory(ref.classId, ref.objectId))
-			{
-				member = hash_search(set, &ref, HASH_ENTER, NULL);
-				member->moved = false;
-				added = true;
-			}
-			else if (refin && !depin &&
-					 (form->deptype == DEPENDENCY_INTERNAL ||
-					  form->deptype == DEPENDENCY_AUTO) &&
-					 tempcat_owned_entry(dep.classId, dep.objectId) != NULL)
-			{
-				member = hash_search(set, &dep, HASH_ENTER, NULL);
-				member->moved = false;
-				added = true;
-			}
-		}
-		/* and the links pg_depend does not record (from rows in memory) */
-		if (!added)
-		{
-			List	   *operators = NIL;
-			ListCell   *lc;
-			int			ocat = tempcat_catalog_index(OperatorRelationId);
-
-			hash_seq_init(&status, set);
-			while ((member = hash_seq_search(&status)) != NULL)
-			{
-				if (member->obj.classId == OperatorRelationId)
-					operators = lappend_oid(operators, member->obj.objectId);
-			}
-			foreach(lc, operators)
-			{
-				TempcatEntry *e;
-				HeapTupleData tup;
-				TempcatObject links[2];
-				bool		deleted;
-				int			n;
-				int			i;
-
-				e = tempcat_object_entry(ocat, lfirst_oid(lc), &deleted);
-				if (e == NULL)
-					continue;
-				tup.t_len = e->len;
-				tup.t_data = TCE_DATA(e);
-				n = tempcat_row_links(OperatorRelationId, &tup, links);
-				for (i = 0; i < n; i++)
-				{
-					if (hash_search(set, &links[i], HASH_FIND, NULL) != NULL)
-						continue;
-					member = hash_search(set, &links[i], HASH_ENTER, NULL);
-					member->moved = false;
-					added = true;
-				}
-			}
-			list_free(operators);
-		}
-	} while (added);
+		todo = list_delete_first(todo);
+		tempcat_add_closure(set, &todo, m, rels);
+	}
 
 	/* the rows of these objects */
+	hash_seq_init(&status, set);
+	while ((member = hash_seq_search(&status)) != NULL)
+	{
+		for (catidx = 0; catidx < TEMPCAT_NCATALOGS; catidx++)
+		{
+			List	   *found;
+
+			found = tempcat_object_rows(catidx, tempcat_moves_rel(rels, catidx),
+										member->obj);
+			if (found != NIL)
+				member->moved = true;
+			rows[catidx] = list_concat(rows[catidx], found);
+		}
+	}
 	for (catidx = 0; catidx < TEMPCAT_NCATALOGS; catidx++)
 	{
-		Relation	rel;
-		TupleDesc	desc;
-		List	   *rows = NIL;
 		ListCell   *lc;
-		dsa_pointer ep;
 
-		if (!DsaPointerIsValid(tc_root->catalogs[catidx].head))
-			continue;
-		rel = table_open(tempcat_catalogs[catidx].relid, RowExclusiveLock);
-		desc = RelationGetDescr(rel);
-		for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
-		{
-			TempcatEntry *e = TC_ADDR(ep);
-			HeapTupleData tup;
-			TempcatObject obj;
-
-			if (tempcat_entry_alive(e))
-			{
-				tup.t_len = e->len;
-				tup.t_data = TCE_DATA(e);
-				tup.t_tableOid = tempcat_catalogs[catidx].relid;
-				ItemPointerSetInvalid(&tup.t_self);
-				obj = tempcat_row_object(catidx, &tup, desc);
-				member = hash_search(set, &obj, HASH_FIND, NULL);
-				if (member != NULL)
-				{
-					rows = lappend(rows, (void *) ep);
-					member->moved = true;
-				}
-			}
-			ep = e->next;
-		}
-		foreach(lc, rows)
-			tempcat_delete_entry_moved(rel, (dsa_pointer) lfirst(lc));
-		list_free(rows);
-		table_close(rel, RowExclusiveLock);
+		foreach(lc, rows[catidx])
+			tempcat_delete_entry_moved(rels[catidx], (dsa_pointer) lfirst(lc));
+		list_free(rows[catidx]);
+		if (rels[catidx] != NULL)
+			table_close(rels[catidx], RowExclusiveLock);
 	}
 
 	/* (not those gone, e.g. with a subtransaction that asked for them) */
