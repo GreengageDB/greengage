@@ -2231,6 +2231,65 @@ select count(distinct a), sum(b), sum(c) from dqa_f1;
     17 | 2000 | 1000
 (1 row)
 
+-- MultiDQA with filter in HAVING. Building the multi-stage paths must not
+-- strip the filter from the HAVING qual shared with the single-stage paths.
+-- The filtered DQA is 1, so no rows are expected.
+set optimizer = off;
+set enable_hashagg = off;
+set enable_groupagg = on;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+ count 
+-------
+(0 rows)
+
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+                                    QUERY PLAN                                     
+-----------------------------------------------------------------------------------
+ Aggregate
+   Output: count(DISTINCT b)
+   Filter: (count(DISTINCT dqa_f1.a) FILTER (WHERE (dqa_f1.a > 15)) > 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: b, a
+         ->  Seq Scan on public.dqa_f1
+               Output: b, a
+ Optimizer: Postgres query optimizer
+ Settings: enable_hashagg = 'off', gp_motion_cost_per_row = '1', optimizer = 'off'
+(9 rows)
+
+-- Same with the multi-stage plan, the filter is evaluated in TupleSplit
+set enable_hashagg = on;
+set enable_groupagg = off;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+ count 
+-------
+(0 rows)
+
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Finalize Aggregate
+   Output: count(DISTINCT b)
+   Filter: (count(DISTINCT dqa_f1.a) > 1)
+   ->  Gather Motion 3:1  (slice1; segments: 3)
+         Output: (PARTIAL count(DISTINCT b)), (PARTIAL count(DISTINCT a))
+         ->  Partial Aggregate
+               Output: PARTIAL count(DISTINCT b), PARTIAL count(DISTINCT a)
+               ->  Redistribute Motion 3:3  (slice2; segments: 3)
+                     Output: b, a, (AggExprId)
+                     Hash Key: b, a, (AggExprId)
+                     ->  Streaming HashAggregate
+                           Output: b, a, (AggExprId)
+                           Group Key: AggExprId, dqa_f1.b, dqa_f1.a
+                           ->  TupleSplit
+                                 Output: b, a, AggExprId
+                                 Split by Col: (dqa_f1.b), (dqa_f1.a) FILTER (WHERE (dqa_f1.a > 15))
+                                 ->  Seq Scan on public.dqa_f1
+                                       Output: a, b, c
+ Optimizer: Postgres query optimizer
+ Settings: enable_groupagg = 'off', gp_motion_cost_per_row = '1', optimizer = 'off'
+(20 rows)
+
+reset optimizer;
 -- multi DQA with primary key
 create table dqa_unique(a int, b int, c int, d int, primary key(a, b));
 insert into dqa_unique select i%3, i%5, i%7, i%9 from generate_series(1, 10) i;

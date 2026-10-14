@@ -382,6 +382,22 @@ set enable_groupagg = off;
 explain select count(distinct a), sum(b), sum(c) from dqa_f1;
 select count(distinct a), sum(b), sum(c) from dqa_f1;
 
+-- MultiDQA with filter in HAVING. Building the multi-stage paths must not
+-- strip the filter from the HAVING qual shared with the single-stage paths.
+-- The filtered DQA is 1, so no rows are expected.
+set optimizer = off;
+set enable_hashagg = off;
+set enable_groupagg = on;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+
+-- Same with the multi-stage plan, the filter is evaluated in TupleSplit
+set enable_hashagg = on;
+set enable_groupagg = off;
+select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+explain (verbose, costs off) select count(distinct b) from dqa_f1 having count(distinct a) filter (where a > 15) > 1;
+reset optimizer;
+
 -- multi DQA with primary key
 create table dqa_unique(a int, b int, c int, d int, primary key(a, b));
 insert into dqa_unique select i%3, i%5, i%7, i%9 from generate_series(1, 10) i;
