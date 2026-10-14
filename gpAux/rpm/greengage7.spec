@@ -14,6 +14,7 @@ Name:    greengage7
 Version: %{gpdb_version}
 Release: %{gpdb_release}%{?dist}
 Summary: Greengage MPP database engine
+Group:   Applications/Databases
 License: ASL 2.0
 URL:     https://greengagedb.org
 
