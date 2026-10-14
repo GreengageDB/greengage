@@ -1832,6 +1832,7 @@ static void tempcat_schedule_move(Oid classId, Oid objectId);
 static bool tempcat_move_pending(Oid classId, Oid objectId);
 static bool tempcat_object_in_memory(Oid classId, Oid objectId);
 static void tempcat_mark_on_disk(Oid classId, Oid objectId);
+static void tempcat_schedule_links(Relation rel, HeapTuple tup);
 
 static void
 tempcat_row_to_disk(Relation rel, HeapTuple tup)
@@ -1850,6 +1851,8 @@ tempcat_row_to_disk(Relation rel, HeapTuple tup)
 	obj = tempcat_row_object(catidx, tup, desc);
 	tempcat_mark_on_disk(obj.classId, obj.objectId);
 	tempcat_schedule_move(obj.classId, obj.objectId);
+	/* and what the row links to (an operator's commutator, ...) */
+	tempcat_schedule_links(rel, tup);
 	if (relid == DependRelationId)
 		tempcat_schedule_move(tempcat_getoid(tup, desc, Anum_pg_depend_refclassid),
 							  tempcat_getoid(tup, desc, Anum_pg_depend_refobjid));

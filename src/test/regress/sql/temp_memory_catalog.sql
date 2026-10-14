@@ -982,6 +982,25 @@ ROLLBACK;
 SELECT relpages > 0 AS relpages, reltuples FROM pg_class WHERE oid = 'tc_inpl_1'::regclass;
 DROP TABLE tc_inpl;
 
+-- An operator whose row goes to disk as it does not fit takes the operators
+-- it links to there too, as pg_depend rows would: a new one (here >%>, its
+-- commutator <%< in memory), and one whose shell gets filled (%<>).
+CREATE OPERATOR pg_temp.<%< (leftarg = int, rightarg = int, procedure = int4lt);
+CREATE OPERATOR pg_temp.<%> (leftarg = int, rightarg = int, procedure = int4ne, commutator = OPERATOR(pg_temp.%<>));
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE OPERATOR pg_temp.>%> (leftarg = int, rightarg = int, procedure = int4gt, commutator = OPERATOR(pg_temp.<%<));
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE OPERATOR pg_temp.%<> (leftarg = int, rightarg = int, procedure = int4ne, commutator = OPERATOR(pg_temp.<%>));
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT o.oprname, c.oprname AS commutator FROM pg_operator o LEFT JOIN pg_operator c ON c.oid = o.oprcom WHERE o.oprname IN ('<%<', '>%>', '<%>', '%<>') ORDER BY 1;
+RESET gp_temp_memory_catalog_disk_only;
+DROP OPERATOR pg_temp.>%> (int, int);
+DROP OPERATOR pg_temp.<%< (int, int);
+DROP OPERATOR pg_temp.%<> (int, int);
+DROP OPERATOR pg_temp.<%> (int, int);
+
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog
