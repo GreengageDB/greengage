@@ -1129,6 +1129,28 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1: SELECT count(*) AS inserted FROM tc_ao WHERE b BETWEEN 2001 AND 2030;
 1q:
 
+-- A move asked for outside a subtransaction that carried it out and rolled
+-- back is done again: the row that asked for it (here the frozen
+-- gp_fastsequence row of a new AO segment file, which did not fit on
+-- segment 0) stays on disk, and so must the rest of its object.  (The
+-- function's exception block makes a subtransaction on the segments, whose
+-- end moves the objects.)
+CREATE FUNCTION tc_subxact(x int) RETURNS int VOLATILE LANGUAGE plpgsql AS $$ BEGIN BEGIN PERFORM 1; RAISE EXCEPTION 'undone'; EXCEPTION WHEN others THEN NULL; END; RETURN x; END $$;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_sub_src (a int, b int) DISTRIBUTED BY (a);
+1: INSERT INTO tc_sub_src SELECT g, g FROM generate_series(1, 30) g;
+1: CREATE TEMP TABLE tc_sub_ao (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+1: INSERT INTO tc_sub_ao SELECT a, tc_subxact(b) FROM tc_sub_src;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+1: SET gp_temp_memory_catalog_disk_only = on;
+1: SELECT count(*) AS fastsequence_on_disk FROM gp_dist_random('gp_fastsequence') WHERE objid >= 4026531840;
+1: SELECT count(*) AS without_relation FROM gp_dist_random('gp_fastsequence') f LEFT JOIN gp_dist_random('pg_class') c ON c.oid = f.objid AND c.gp_segment_id = f.gp_segment_id WHERE f.objid >= 4026531840 AND c.oid IS NULL;
+1: RESET gp_temp_memory_catalog_disk_only;
+1: SELECT count(*) FROM tc_sub_ao;
+1q:
+DROP FUNCTION tc_subxact(int);
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types

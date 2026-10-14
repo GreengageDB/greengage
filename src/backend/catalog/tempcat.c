@@ -1818,6 +1818,13 @@ typedef struct TempcatObject
 	Oid			objectId;
 } TempcatObject;
 
+/* An object to move, in tempcat_materialize_moves() */
+typedef struct TempcatSetMember
+{
+	TempcatObject obj;
+	bool		moved;			/* some of its rows were in memory */
+} TempcatSetMember;
+
 static TempcatObject tempcat_row_object(int catidx, HeapTuple tup,
 										TupleDesc desc);
 static void tempcat_schedule_move(Oid classId, Oid objectId);
@@ -2015,13 +2022,19 @@ tempcat_object_in_memory(Oid classId, Oid objectId)
 
 /*
  * Objects to move to disk at the end of the command (or before commit or
- * PREPARE), with the subtransaction level that asked; see
- * tempcat_materialize_moves().
+ * PREPARE), see tempcat_materialize_moves(), and those moved so far in the
+ * transaction, with the subtransaction level that moved them.  A move that
+ * a subtransaction carried out is to be done again if it rolls back, even
+ * if asked for outside: the reason for it, a row of the object that went to
+ * disk, may well outlive the rollback.  So may a row that went to disk in
+ * the subtransaction (e.g. a frozen one), so a move asked for there stays
+ * pending too; if the object is gone with the rollback, there is nothing to
+ * move.
  */
 typedef struct TempcatPendingMove
 {
 	TempcatObject obj;
-	int			level;
+	int			done;			/* nesting level that moved it, or 0 */
 } TempcatPendingMove;
 
 static HTAB *tc_pending_moves = NULL;	/* in TopTransactionContext */
@@ -2030,13 +2043,15 @@ static LocalTransactionId tc_pending_moves_lxid = InvalidLocalTransactionId;
 static bool
 tempcat_move_pending(Oid classId, Oid objectId)
 {
+	TempcatPendingMove *entry;
 	TempcatObject obj;
 
 	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
 		return false;
 	obj.classId = classId;
 	obj.objectId = objectId;
-	return hash_search(tc_pending_moves, &obj, HASH_FIND, NULL) != NULL;
+	entry = hash_search(tc_pending_moves, &obj, HASH_FIND, NULL);
+	return entry != NULL && entry->done == 0;
 }
 
 /*
@@ -2052,6 +2067,7 @@ tempcat_schedule_move(Oid classId, Oid objectId)
 {
 	TempcatPendingMove *entry;
 	TempcatObject obj;
+	bool		found;
 
 	if (tempcat_owned_entry(classId, objectId) == NULL)
 		return;
@@ -2069,8 +2085,10 @@ tempcat_schedule_move(Oid classId, Oid objectId)
 	}
 	obj.classId = classId;
 	obj.objectId = objectId;
-	entry = hash_search(tc_pending_moves, &obj, HASH_ENTER, NULL);
-	entry->level = GetCurrentTransactionNestLevel();
+	entry = hash_search(tc_pending_moves, &obj, HASH_ENTER, &found);
+	/* (once moved, its rows go to disk anyway) */
+	if (!found)
+		entry->done = 0;
 }
 
 static void
@@ -2214,7 +2232,10 @@ tempcat_moved_end_level(HTAB *map, int level, bool commit)
 	}
 }
 
-/* Forget the moves of an aborted subtransaction, or hand them to its parent. */
+/*
+ * Forget the moves of an aborted subtransaction, making them pending again,
+ * or hand them to its parent.
+ */
 static void
 tempcat_moved_end_subxact(bool commit)
 {
@@ -2227,13 +2248,9 @@ tempcat_moved_end_subxact(bool commit)
 		hash_seq_init(&status, tc_pending_moves);
 		while ((pending = hash_seq_search(&status)) != NULL)
 		{
-			if (pending->level < level)
+			if (pending->done < level)
 				continue;
-			if (commit)
-				pending->level = level - 1;
-			else
-				(void) hash_search(tc_pending_moves, &pending->obj,
-								   HASH_REMOVE, NULL);
+			pending->done = commit ? level - 1 : 0;
 		}
 	}
 
@@ -2272,32 +2289,40 @@ tempcat_materialize_moves(void)
 	HASHCTL		ctl;
 	HASH_SEQ_STATUS status;
 	TempcatPendingMove *pending;
-	TempcatObject *member;
+	TempcatSetMember *member;
 	bool		added;
 	int			catidx;
+	int			level = GetCurrentTransactionNestLevel();
 
-	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid ||
-		hash_get_num_entries(tc_pending_moves) == 0)
+	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
 		return;
 
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(TempcatObject);
-	ctl.entrysize = sizeof(TempcatObject);
+	ctl.entrysize = sizeof(TempcatSetMember);
 	ctl.hcxt = CurrentMemoryContext;
-	set = hash_create("tempcat objects to move", 64, &ctl,
-					  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	set = NULL;
 	hash_seq_init(&status, tc_pending_moves);
 	while ((pending = hash_seq_search(&status)) != NULL)
-		(void) hash_search(set, &pending->obj, HASH_ENTER, NULL);
-	hash_destroy(tc_pending_moves);
-	tc_pending_moves = NULL;
+	{
+		if (pending->done != 0)
+			continue;
+		if (set == NULL)
+			set = hash_create("tempcat objects to move", 64, &ctl,
+							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+		member = hash_search(set, &pending->obj, HASH_ENTER, NULL);
+		member->moved = false;
+		pending->done = level;
+	}
+	if (set == NULL)
+		return;
 
 	tempcat_namespaces_to_disk();
 	if (tc_area == NULL)
 	{
 		hash_seq_init(&status, set);
 		while ((member = hash_seq_search(&status)) != NULL)
-			tempcat_mark_on_disk(member->classId, member->objectId);
+			tempcat_mark_on_disk(member->obj.classId, member->obj.objectId);
 		hash_destroy(set);
 		return;
 	}
@@ -2331,7 +2356,8 @@ tempcat_materialize_moves(void)
 				tempcat_owned_entry(ref.classId, ref.objectId) != NULL &&
 				tempcat_object_in_memory(ref.classId, ref.objectId))
 			{
-				(void) hash_search(set, &ref, HASH_ENTER, NULL);
+				member = hash_search(set, &ref, HASH_ENTER, NULL);
+				member->moved = false;
 				added = true;
 			}
 			else if (refin && !depin &&
@@ -2339,15 +2365,12 @@ tempcat_materialize_moves(void)
 					  form->deptype == DEPENDENCY_AUTO) &&
 					 tempcat_owned_entry(dep.classId, dep.objectId) != NULL)
 			{
-				(void) hash_search(set, &dep, HASH_ENTER, NULL);
+				member = hash_search(set, &dep, HASH_ENTER, NULL);
+				member->moved = false;
 				added = true;
 			}
 		}
 	} while (added);
-
-	hash_seq_init(&status, set);
-	while ((member = hash_seq_search(&status)) != NULL)
-		tempcat_mark_on_disk(member->classId, member->objectId);
 
 	/* the rows of these objects */
 	for (catidx = 0; catidx < TEMPCAT_NCATALOGS; catidx++)
@@ -2375,8 +2398,12 @@ tempcat_materialize_moves(void)
 				tup.t_tableOid = tempcat_catalogs[catidx].relid;
 				ItemPointerSetInvalid(&tup.t_self);
 				obj = tempcat_row_object(catidx, &tup, desc);
-				if (hash_search(set, &obj, HASH_FIND, NULL) != NULL)
+				member = hash_search(set, &obj, HASH_FIND, NULL);
+				if (member != NULL)
+				{
 					rows = lappend(rows, (void *) ep);
+					member->moved = true;
+				}
 			}
 			ep = e->next;
 		}
@@ -2384,6 +2411,14 @@ tempcat_materialize_moves(void)
 			tempcat_delete_entry_moved(rel, (dsa_pointer) lfirst(lc));
 		list_free(rows);
 		table_close(rel, RowExclusiveLock);
+	}
+
+	/* (not those gone, e.g. with a subtransaction that asked for them) */
+	hash_seq_init(&status, set);
+	while ((member = hash_seq_search(&status)) != NULL)
+	{
+		if (member->moved)
+			tempcat_mark_on_disk(member->obj.classId, member->obj.objectId);
 	}
 
 	hash_destroy(set);
