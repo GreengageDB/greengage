@@ -1,9 +1,9 @@
-# Greengage CI Workflow
+# CI Workflows
 
-This directory contains the CI pipelines for the Greengage project,
+This directory contains the CI workflows for the Greengage project,
 orchestrating the build, test, and upload stages for containerized
-environments. The pipeline is designed to be flexible, with parameterized
-inputs for version and target operating systems, allowing it to adapt to
+environments. The workflows are designed to be flexible, with parameterized
+inputs for version and target operating systems, allowing them to adapt to
 different branches and configurations.
 
 ## ⚠️ Important Notice
@@ -14,7 +14,7 @@ repository administrator to update the **Branch Protection Rules** accordingly.
 Without this, new, deleted, or renamed jobs will not be recognized as required
 when checking Pull Requests.
 
-## Overview
+## Greengage CI
 
 The `Greengage CI` workflow triggers on:
 
@@ -41,6 +41,35 @@ operating systems:
   after build.
 - **Package**: Builds Debian packages and optionally tests deployment.
   Currently supported for version 6.x only.
+
+## Greengage CI (No Tests)
+
+The `Greengage CI (No Tests)` workflow follows the same build process as
+`Greengage CI`, but does not run test jobs.
+
+It is used for target operating systems where build and package validation is
+required, but the test pipeline is not required.
+
+### Key Features
+
+- **Same Build Process:** Uses the same build workflow and matrix-based
+  configuration as `Greengage CI`.
+
+- **No Tests:** Does not run any test suites.
+
+- **Non-Required Workflow:** Is not configured as a required check for pull
+  requests. Failures do not block pull request merges, but remain visible in
+  GitHub Actions for investigation.
+
+- **Additional OS Targets:** Can be used for operating systems that are not
+  included in the main CI test matrix.
+
+### Behavior
+
+1. **Build:** Builds Docker images for the configured target operating
+   systems.
+
+2. **Tests:** No test jobs are executed.
 
 ## Release Workflow
 

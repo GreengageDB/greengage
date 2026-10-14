@@ -1,38 +1,115 @@
 #!/bin/bash
+# FILE:    README.Rhel-Rocky.bash
+# CONTEXT: Called from ci/Dockerfile.rockylinux for Greengage build,
+#          or run directly on a bare-metal host
+# PURPOSE: Install build dependencies, compile zstd static library,
+#          configure system for Greengage (bare-metal only)
 
-# Install needed packages. Please add to this list if you discover additional prerequisites
-sudo yum group install -y "Development Tools"
-# Install epel-release
-sudo yum install -y epel-release
+set -euxo pipefail
 
-INSTALL_PKGS="apr-devel bison bzip2-devel cmake3 flex gcc gcc-c++ krb5-devel libcurl-devel libevent-devel libkadm5 libxml2-devel libzstd-devel openssl-devel python3.11 python3-devel python3.11-devel python3-psutil python3.11-pip perl-ExtUtils-MakeMaker.noarch perl-ExtUtils-Embed.noarch readline-devel rsync xerces-c-devel zlib-devel python3-psutil python3-pyyaml python3-psycopg2"
+dnf -y install epel-release
+dnf config-manager --set-enabled crb
 
-sudo yum install -y $INSTALL_PKGS
+dnf -y install \
+    apr-devel \
+    apr-util-devel \
+    autoconf \
+    bison \
+    bzip2-devel \
+    cmake \
+    clang \
+    expat-devel \
+    flex \
+    gcc-c++ \
+    git \
+    glibc-langpack-en \
+    gperf \
+    indent \
+    iproute \
+    iputils \
+    jq \
+    krb5-devel \
+    krb5-server \
+    krb5-workstation \
+    libcurl-devel \
+    libevent-devel \
+    libicu \
+    libicu-devel \
+    libkadm5 \
+    libtool \
+    libuuid-devel \
+    libuv-devel \
+    libxml2-devel \
+    libxslt-devel \
+    libyaml-devel \
+    libzstd-devel \
+    llvm-devel \
+    lsof \
+    net-tools \
+    openldap-devel \
+    openssh-server \
+    openssl-devel \
+    pam-devel \
+    perl-devel \
+    perl-Env \
+    perl-ExtUtils-Embed \
+    perl-FindBin \
+    perl-IPC-Run \
+    perl-JSON \
+    perl-Opcode \
+    perl-Test-Base \
+    perl-Test-Simple \
+    perl-Thread-Queue \
+    procps-ng \
+    python3 \
+    python3-devel \
+    python3-pip \
+    python3-psutil \
+    python3-pyyaml \
+    python3-psycopg2 \
+    python3-setuptools \
+    readline-devel \
+    rpm-build \
+    rsync \
+    snappy-devel \
+    sudo \
+    systemd-devel \
+    tcl-devel \
+    time \
+    unzip \
+    vim \
+    wget \
+    xerces-c-devel \
+    zlib-devel
 
-sudo yum --enablerepo=powertools install -y libyaml-devel
+# Build zstd with static library (not available as a package on Rocky)
+curl -Ls https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz | tar -xzf -
+make -j"$(nproc)" -C zstd-1.4.4
+make install PREFIX=/usr/local -C zstd-1.4.4
+rm -rf zstd-1.4.4
 
-sudo yum install -y postgresql 
-sudo yum install -y postgresql-devel
-sudo yum install -y python3-pip
+#---------------------------------------------------------------------
+# Bare-metal only configuration
+#---------------------------------------------------------------------
+if [[ ! -f /.dockerenv && -z "${IS_DOCKER_BUILD:-}" ]]; then
 
-# These dependencies are installed by `yum install`
-# pip3 install -r python-dependencies.txt
+    # Disable SELinux
+    setenforce 0 || true
+    if [ -f /etc/selinux/config ]; then
+        sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+    fi
 
-#For all Greengage Database host systems running RHEL, CentOs or Rocky8, SELinux must either be Disabled or configured to allow unconfined access to Greengage processes, directories, and the gpadmin user.
-setenforce 0
-sudo tee -a /etc/selinux/config << EOF
-SELINUX=disabled
-EOF
+    # Disable sssd SELinux provider
+    if [ -f /etc/sssd/sssd.conf ]; then
+        echo 'selinux_provider=none' >> /etc/sssd/sssd.conf
+    fi
 
-#To prevent SELinux-related SSH authentication denials that could occur even with SELinux deactivated
-sudo tee -a /etc/sssd/sssd.conf << EOF
-selinux_provider=none
-EOF
+    # Stop firewall
+    systemctl stop firewalld.service || true
+    systemctl disable --now firewalld.service || true
 
-sudo systemctl stop firewalld.service
-
-#Configure kernel settings so the system is optimized for Greengage Database.
-sudo tee -a /etc/sysctl.d/10-gpdb.conf << EOF
+    # Configure kernel parameters
+    cat > /etc/sysctl.d/10-gpdb.conf << EOF
 kernel.msgmax = 65536
 kernel.msgmnb = 65536
 kernel.msgmni = 2048
@@ -72,24 +149,27 @@ vm.dirty_writeback_centisecs = 100
 vm.zone_reclaim_mode = 0
 EOF
 
-RAM_IN_KB=`cat /proc/meminfo | grep MemTotal | awk '{print $2}'`
-RAM_IN_BYTES=$(($RAM_IN_KB*1024))
-echo "vm.min_free_kbytes = $(($RAM_IN_BYTES*3/100/1024))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-echo "kernel.shmall = $(($RAM_IN_BYTES/2/4096))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-echo "kernel.shmmax = $(($RAM_IN_BYTES/2))" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-if [ $RAM_IN_BYTES -le $((64*1024*1024*1024)) ]; then
-    echo "vm.dirty_background_ratio = 3" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_ratio = 10" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-else
-    echo "vm.dirty_background_ratio = 0" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_ratio = 0" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_background_bytes = 1610612736 # 1.5GB" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-    echo "vm.dirty_bytes = 4294967296 # 4GB" | sudo tee -a /etc/sysctl.d/10-gpdb.conf > /dev/null
-fi
+    RAM_IN_KB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+    RAM_IN_BYTES=$((RAM_IN_KB * 1024))
+    {
+        echo "vm.min_free_kbytes = $((RAM_IN_BYTES * 3 / 100 / 1024))"
+        echo "kernel.shmall = $((RAM_IN_BYTES / 2 / 4096))"
+        echo "kernel.shmmax = $((RAM_IN_BYTES / 2))"
+        if [ "$RAM_IN_BYTES" -le $((64 * 1024 * 1024 * 1024)) ]; then
+            echo "vm.dirty_background_ratio = 3"
+            echo "vm.dirty_ratio = 10"
+        else
+            echo "vm.dirty_background_ratio = 0"
+            echo "vm.dirty_ratio = 0"
+            echo "vm.dirty_background_bytes = 1610612736 # 1.5GB"
+            echo "vm.dirty_bytes = 4294967296 # 4GB"
+        fi
+    } >> /etc/sysctl.d/10-gpdb.conf
 
-sudo sysctl -p
+    sysctl -p /etc/sysctl.d/10-gpdb.conf
 
-sudo tee -a /etc/security/limits.d/10-nproc.conf << EOF
+    # Configure system limits
+    cat > /etc/security/limits.d/10-nproc.conf << EOF
 * soft nofile 524288
 * hard nofile 524288
 * soft nproc 131072
@@ -97,6 +177,4 @@ sudo tee -a /etc/security/limits.d/10-nproc.conf << EOF
 * soft core unlimited
 EOF
 
-
-ulimit -n 65536 65536
-
+fi

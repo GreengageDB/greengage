@@ -380,6 +380,7 @@ enum Edxltoken
 	EdxltokenGpSegmentIdColId,
 	EdxltokenTupleOidColId,
 	EdxltokenSplitUpdate,
+	EdxltokenNeedsResJunk,
 
 	EdxltokenInputSegments,
 	EdxltokenOutputSegments,
