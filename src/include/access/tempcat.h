@@ -65,6 +65,8 @@ extern bool      tempcat_relation_has_entries(Relation rel);
 extern void      tempcat_begin_transaction(void);
 extern void      tempcat_end_transaction(void);
 extern void      tempcat_abort_transaction(void);
+extern void      tempcat_prepare_transaction(void);
+extern void      tempcat_finish_prepared_transaction(bool isCommit);
 extern void      tempcat_begin_subtransaction(void);
 extern void      tempcat_commit_subtransaction(void);
 extern void      tempcat_abort_subtransaction(void);

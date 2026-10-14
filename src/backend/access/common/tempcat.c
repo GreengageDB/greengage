@@ -136,6 +136,14 @@ static uint16 CurrentTempcatOffset = 1; /* NB: 0 is considered invalid */
 /* Current snapshot */
 static TempcatSnapshot CurrentTempcatSnapshotPrivate = NULL;
 
+/*
+ * Snapshot parked by PrepareTransaction() until COMMIT/ROLLBACK PREPARED
+ * finishes the transaction in this backend.  An outcome delivered to a
+ * different backend (gang reset, crash recovery) finds nothing parked: the
+ * parked changes die with this session, like all tempcat state.
+ */
+static TempcatSnapshot PendingPreparedSnapshot = NULL;
+
 /* Dirty flag: set when tempcat content changes, cleared after serialization */
 static bool TempcatDirtyFlag = false;
 
@@ -463,6 +471,67 @@ tempcat_abort_transaction(void)
 #endif
 
 	TempcatSnapshotUnwind();
+}
+
+/*
+ * Perform actions related to virtual catalog on transaction prepare.
+ *
+ * The changes are neither committed nor discarded yet: the distributed
+ * transaction's outcome is still open.  Park them, leaving the root
+ * (pre-transaction state) visible, until the matching COMMIT/ROLLBACK
+ * PREPARED decides via tempcat_finish_prepared_transaction().
+ */
+void
+tempcat_prepare_transaction(void)
+{
+	TempcatSnapshot snapshot;
+
+	Assert(TempcatTransactionInProgress());
+	snapshot = TempcatSnapshotPopBack();
+
+	/* PrepareTransaction() asserts s->parent == NULL: no subtransaction
+	 * snapshots may remain below the parked one. */
+	Assert(!TempcatTransactionInProgress());
+
+	/* Only possible when the outcome of a previous prepare never reached
+	 * this backend; its changes are then undecidable here. */
+	if (PendingPreparedSnapshot != NULL)
+		TempcatSnapshotFree(PendingPreparedSnapshot);
+	PendingPreparedSnapshot = snapshot;
+}
+
+/*
+ * Perform actions related to virtual catalog when a prepared transaction is
+ * finished in this backend: publish the parked changes on COMMIT PREPARED,
+ * discard them on ROLLBACK PREPARED.
+ */
+void
+tempcat_finish_prepared_transaction(bool isCommit)
+{
+	TempcatSnapshot pending = PendingPreparedSnapshot;
+	TempcatSnapshot wrapper;
+
+	PendingPreparedSnapshot = NULL;
+
+	if (pending == NULL)
+		return;
+
+	if (!isCommit)
+	{
+		TempcatSnapshotFree(pending);
+		return;
+	}
+
+	/*
+	 * Give the parked snapshot to the transaction wrapping this statement
+	 * (it began before FinishPreparedTransaction() ran), so its commit
+	 * publishes the prepared state through tempcat_end_transaction().
+	 */
+	wrapper = TempcatSnapshotPopBack();
+	Assert(PointerIsValid(wrapper));
+	TempcatSnapshotFree(wrapper);
+
+	TempcatSnapshotPushBack(pending);
 }
 
 /*

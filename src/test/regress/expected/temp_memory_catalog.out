@@ -661,3 +661,55 @@ SHOW gp_enable_temp_memory_catalog;
  off
 (1 row)
 
+-- ============================================================
+-- Two-phase abort must roll back temp DDL on prepared segments
+-- ============================================================
+-- A transaction mixing temp DDL with a write to a permanent table is
+-- resolved by 2PC.  When one segment fails during PREPARE, the segments
+-- that already prepared are rolled back by an abort-prepared broadcast;
+-- that rollback must also discard their in-memory catalog changes.  The
+-- permanent write is required to reproduce: temp-only DDL writes no WAL,
+-- so no segment enters the two-phase protocol at all.
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tempcat_abort_prepared (a int) DISTRIBUTED BY (a);
+INSERT INTO tempcat_abort_prepared SELECT generate_series(1, 30);
+CREATE TABLE tempcat_abort_src (a int) DISTRIBUTED BY (a);
+-- Fail PREPARE on the content 1 primary; the other primaries prepare.
+SELECT gp_inject_fault('start_prepare', 'error', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+BEGIN;
+DROP TABLE tempcat_abort_prepared;
+INSERT INTO tempcat_abort_src SELECT generate_series(1, 10);
+COMMIT;
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'
+SELECT gp_inject_fault('start_prepare', 'reset', dbid)
+FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+-- The aborted DROP must leave the temp table usable on every segment.
+SELECT count(*) FROM tempcat_abort_prepared;
+ count 
+-------
+    30
+(1 row)
+
+INSERT INTO tempcat_abort_prepared VALUES (100);
+SELECT count(*) FROM tempcat_abort_prepared;
+ count 
+-------
+    31
+(1 row)
+
+DROP TABLE tempcat_abort_prepared;
+DROP TABLE tempcat_abort_src;
+RESET gp_enable_temp_memory_catalog;
+DROP EXTENSION gp_inject_fault;

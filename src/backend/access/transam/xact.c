@@ -3301,6 +3301,12 @@ PrepareTransaction(void)
 	EndPrepare(gxact);
 
 	/*
+	 * Park the tempcat snapshot only now: until EndPrepare() succeeds, an
+	 * error still unwinds the live snapshot stack through AbortTransaction().
+	 */
+	tempcat_prepare_transaction();
+
+	/*
 	 * Now we clean up backend-internal state and release internal resources.
 	 */
 
