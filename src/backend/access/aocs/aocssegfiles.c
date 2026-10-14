@@ -34,6 +34,7 @@
 #include "catalog/indexing.h"
 #include "catalog/gp_fastsequence.h"
 #include "cdb/cdbvars.h"
+#include "catalog/tempcat.h"
 #include "executor/spi.h"
 #include "nodes/altertablenodes.h"
 #include "nodes/makefuncs.h"
@@ -616,7 +617,7 @@ GetAOCSSegFilesTotalsCluster(Relation parentrel,
 
 		connected = true;
 
-		if ((SPI_execute(sqlstmt.data, false, 0) <= 0) ||
+		if ((tempcat_spi_execute_aux(sqlstmt.data, false, 0) <= 0) ||
 			(SPI_tuptable == NULL))
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
@@ -1781,7 +1782,7 @@ aocol_compression_ratio_internal(Relation parentrel)
 		connected = true;
 
 		/* Do the query. */
-		ret = SPI_execute(sqlstmt.data, false, 0);
+		ret = tempcat_spi_execute_aux(sqlstmt.data, false, 0);
 		proc = (int) SPI_processed;
 
 		if (ret > 0 && SPI_tuptable != NULL)

@@ -1251,6 +1251,29 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1q:
 2q:
 
+-- The AO functions that query an AO table's aux relations by name, with
+-- the session's temporary namespace, may find that namespace (as they
+-- did before it was hidden from other sessions), but nothing else does.
+CREATE TABLE tc_mon_ns (n name) DISTRIBUTED REPLICATED;
+CREATE FUNCTION tc_mon_state(cmd text) RETURNS text AS $$ BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN RETURN SQLSTATE; END $$ LANGUAGE plpgsql;
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_mon_ao (a int, b int) WITH (appendonly=true) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_mon_co (a int, b int) WITH (appendonly=true, orientation=column, compresstype=zlib) DISTRIBUTED BY (a);
+1: INSERT INTO tc_mon_ao SELECT g, g FROM generate_series(1, 1000) g;
+1: INSERT INTO tc_mon_co SELECT g, g FROM generate_series(1, 1000) g;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_mon_ao IS 'moved';
+1: COMMENT ON TABLE tc_mon_co IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: INSERT INTO tc_mon_ns SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema();
+2: SELECT sum(tupcount) AS tuples FROM get_ao_distribution((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840));
+2: SELECT get_ao_compression_ratio((SELECT oid FROM pg_class WHERE relname = 'tc_mon_ao' AND oid >= 4026531840)) AS ao_ratio, get_ao_compression_ratio((SELECT oid FROM pg_class WHERE relname = 'tc_mon_co' AND oid >= 4026531840)) > 1 AS co_compressed;
+2: SELECT tc_mon_state(format('DROP SCHEMA %I', (SELECT n FROM tc_mon_ns))) AS drop_schema;
+1q:
+2q:
+DROP FUNCTION tc_mon_state(text);
+DROP TABLE tc_mon_ns;
+
 --
 -- 11. Parallel retrieve cursors.  The retrieve connections are sessions of
 -- their own, yet output values of the cursor session's temporary types

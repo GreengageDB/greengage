@@ -126,6 +126,7 @@
 #include "cdb/cdbendpoint.h"
 #include "cdb/cdbtm.h"
 #include "cdb/cdbvars.h"
+#include "executor/spi.h"
 #include "executor/tuptable.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -4733,10 +4734,19 @@ tempcat_object_missing(const ObjectAddress *object)
  */
 static bool tempcat_oid_live_now(Oid oid, Oid dbid);
 
+/*
+ * Set while running a query that GPDB builds with the name of an AO table's
+ * aux relation (get_ao_distribution(), the compression ratio functions,
+ * ...), see tempcat_spi_execute_aux(): such a namespace may be found by name
+ * then, as these only read the relation, which other sessions may open.
+ */
+static bool tc_name_other_namespaces = false;
+
 bool
 tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 {
-	if (!IsTempcatOid(nspid) || TempcatShared == NULL)
+	if (!IsTempcatOid(nspid) || TempcatShared == NULL ||
+		tc_name_other_namespaces)
 		return false;
 	if (strncmp(nspname, "pg_temp_", 8) != 0 &&
 		strncmp(nspname, "pg_toast_temp_", 14) != 0)
@@ -4744,6 +4754,31 @@ tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 	if (tempcat_session_owns_oid(NamespaceRelationId, nspid))
 		return false;
 	return tempcat_oid_live_now(nspid, MyDatabaseId);
+}
+
+/*
+ * SPI_execute() a query that names an AO table's aux relation, which may be
+ * in another session's temporary namespace (see tc_name_other_namespaces).
+ */
+int
+tempcat_spi_execute_aux(const char *src, bool read_only, long tcount)
+{
+	bool		save = tc_name_other_namespaces;
+	int			ret;
+
+	tc_name_other_namespaces = true;
+	PG_TRY();
+	{
+		ret = SPI_execute(src, read_only, tcount);
+	}
+	PG_CATCH();
+	{
+		tc_name_other_namespaces = save;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	tc_name_other_namespaces = save;
+	return ret;
 }
 
 /*

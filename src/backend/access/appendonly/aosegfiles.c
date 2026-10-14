@@ -39,6 +39,7 @@
 #include "catalog/namespace.h"
 #include "catalog/gp_fastsequence.h"
 #include "cdb/cdbvars.h"
+#include "catalog/tempcat.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "storage/bufmgr.h"
@@ -1070,7 +1071,7 @@ GetSegFilesTotalsCluster(Relation parentrel, FileSegTotals * totals)
 
 		connected = true;
 
-		if ((SPI_execute(sqlstmt.data, false, 0) <= 0) ||
+		if ((tempcat_spi_execute_aux(sqlstmt.data, false, 0) <= 0) ||
 			(SPI_tuptable == NULL))
 			ereport(ERROR,
 					(errcode(ERRCODE_INTERNAL_ERROR),
@@ -1551,7 +1552,7 @@ get_ao_distribution(PG_FUNCTION_ARGS)
 			connected = true;
 
 			/* Do the query. */
-			ret = SPI_execute(sqlstmt, false, 0);
+			ret = tempcat_spi_execute_aux(sqlstmt, false, 0);
 
 			if (ret > 0 && SPI_tuptable != NULL)
 			{
@@ -1727,7 +1728,7 @@ aorow_compression_ratio_internal(Relation parentrel)
 		connected = true;
 
 		/* Do the query. */
-		ret = SPI_execute(sqlstmt.data, false, 0);
+		ret = tempcat_spi_execute_aux(sqlstmt.data, false, 0);
 
 		if (ret > 0 && SPI_tuptable != NULL)
 		{
