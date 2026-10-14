@@ -115,7 +115,7 @@ extern bool tempcat_relation_missing(Oid relid);
 extern bool tempcat_moved_tid(Relation rel, ItemPointer tid, ItemPointer dtid);
 extern void tempcat_inplace_update_moved(Relation rel, HeapTuple tup);
 extern void tempcat_disk_row_updated(Relation rel, HeapTuple tup);
-extern void tempcat_materialize_moves(void);
+extern bool tempcat_materialize_moves(void);
 extern bool tempcat_namespace_of_other_session(Oid nspid, const char *nspname);
 extern void tempcat_namespaces_removed(void);
 extern bool tempcat_check_type_user(Oid classId, Oid objectId,

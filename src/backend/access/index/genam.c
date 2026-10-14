@@ -842,9 +842,10 @@ systable_inplace_update_finish(void *state, HeapTuple tuple)
 	HeapTuple	oldtup;
 	Buffer		buffer;
 
+	/* (or its copy on disk, if it moved there, see heap_inplace_update()) */
 	if (IsTempcatTid(&tuple->t_self))
 	{
-		tempcat_inplace_update(relation, tuple);
+		heap_inplace_update(relation, tuple);
 		systable_endscan(scan);
 		return;
 	}

@@ -2402,9 +2402,10 @@ tempcat_delete_entry_moved(Relation rel, dsa_pointer ep)
  * Move the objects whose moves are pending to disk, with their parts and
  * the objects in memory that they refer to (see above), in the current
  * command.  Called at the end of a command, before CommandCounterIncrement()
- * makes the copies visible, and before commit and PREPARE.
+ * makes the copies visible, and before commit and PREPARE.  Returns whether
+ * rows moved.
  */
-void
+bool
 tempcat_materialize_moves(void)
 {
 	int			dcat = tempcat_catalog_index(DependRelationId);
@@ -2417,9 +2418,10 @@ tempcat_materialize_moves(void)
 	bool		added;
 	int			catidx;
 	int			level = GetCurrentTransactionNestLevel();
+	bool		moved = false;
 
 	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
-		return;
+		return false;
 
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(TempcatObject);
@@ -2439,7 +2441,7 @@ tempcat_materialize_moves(void)
 		pending->done = level;
 	}
 	if (set == NULL)
-		return;
+		return false;
 
 	tempcat_namespaces_to_disk();
 	if (tc_area == NULL)
@@ -2448,7 +2450,7 @@ tempcat_materialize_moves(void)
 		while ((member = hash_seq_search(&status)) != NULL)
 			tempcat_mark_on_disk(member->obj.classId, member->obj.objectId);
 		hash_destroy(set);
-		return;
+		return false;
 	}
 
 	/* the closure, over our dependency rows in memory */
@@ -2590,10 +2592,14 @@ tempcat_materialize_moves(void)
 	while ((member = hash_seq_search(&status)) != NULL)
 	{
 		if (member->moved)
+		{
 			tempcat_mark_on_disk(member->obj.classId, member->obj.objectId);
+			moved = true;
+		}
 	}
 
 	hash_destroy(set);
+	return moved;
 }
 
 /* ----------------------------------------------------------------
@@ -3638,12 +3644,17 @@ tempcat_abort_subtransaction(void)
 	tc_change_level = level - 1;
 }
 
-/* Objects to move to disk move before the transaction commits or prepares. */
+/*
+ * Objects to move to disk move before the transaction commits or prepares,
+ * and the copies become visible, for what runs before the end (ON COMMIT
+ * actions), as at the end of a command.
+ */
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
 {
-	if (event == XACT_EVENT_PRE_COMMIT || event == XACT_EVENT_PRE_PREPARE)
-		tempcat_materialize_moves();
+	if ((event == XACT_EVENT_PRE_COMMIT || event == XACT_EVENT_PRE_PREPARE) &&
+		tempcat_materialize_moves())
+		CommandCounterIncrement();
 }
 
 /* A committed subtransaction's changes are its parent's now. */
