@@ -1029,6 +1029,31 @@ RESET gp_temp_memory_catalog_disk_only;
 DROP FUNCTION pg_temp.tc_sup_f(int);
 DROP FUNCTION pg_temp.tc_sup_s(internal);
 DROP FUNCTION tc_sup_ord(internal);
+-- SQL DML on a catalog row that went to disk with its object during the
+-- command (here moved by a function in the WHERE clause) changes its copy
+-- there.  (The fault makes the area look full while COMMENT runs.)
+CREATE FUNCTION pg_temp.tc_dml_move(r regclass) RETURNS bool LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+  EXECUTE format('COMMENT ON COLUMN %s.a IS %L', r, 'column');
+  PERFORM gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+  RETURN true;
+END $$;
+CREATE TEMP TABLE tc_dml_del (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_dml_upd (a int) DISTRIBUTED BY (a);
+COMMENT ON TABLE tc_dml_del IS 'table';
+COMMENT ON TABLE tc_dml_upd IS 'table';
+SET allow_system_table_mods = on;
+SET optimizer = off;
+DELETE FROM pg_description WHERE objoid = 'tc_dml_del'::regclass AND objsubid = 0 AND pg_temp.tc_dml_move('tc_dml_del');
+UPDATE pg_description SET description = 'changed' WHERE objoid = 'tc_dml_upd'::regclass AND objsubid = 0 AND pg_temp.tc_dml_move('tc_dml_upd');
+RESET optimizer;
+RESET allow_system_table_mods;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT objoid::regclass, objsubid, description FROM pg_description WHERE objoid IN ('tc_dml_del'::regclass, 'tc_dml_upd'::regclass) ORDER BY 1, 2;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_dml_del, tc_dml_upd;
+DROP FUNCTION pg_temp.tc_dml_move(regclass);
 -- The statistics of dropped tables and functions that lived on disk, whose
 -- rows were never freed in memory, are purged too.  (The fault fails an
 -- allocation, so COMMENT moves the object to disk.)

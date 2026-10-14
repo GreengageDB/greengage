@@ -345,6 +345,20 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
 					TM_FailureData *tmfd, bool changingPart)
 {
+	ItemPointerData dtid;
+
+	/*
+	 * GPDB: a row moved to disk with its object during this very command, by
+	 * a later one (a function in the WHERE clause): its copy there, which the
+	 * command's own ID does not see yet, as CatalogTupleUpdate() and
+	 * simple_heap_delete() would (see tempcat.c).
+	 */
+	if (tempcat_moved_tid(relation, tid, &dtid))
+	{
+		tid = &dtid;
+		cid = GetCurrentCommandId(true);
+	}
+
 	/*
 	 * GPDB: SQL DML on a catalog (allow_system_table_mods) can reach catalog
 	 * rows of in-memory temporary objects, which have no place in the heap.
@@ -382,16 +396,20 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	bool		shouldFree = true;
 	HeapTuple	tuple = ExecFetchSlotHeapTuple(slot, true, &shouldFree);
 	TM_Result	result;
+	ItemPointerData dtid;
 
 	/* Update the tuple with table oid */
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
 
 	/* GPDB: see heapam_tuple_delete() and CatalogTupleUpdate() */
+	if (tempcat_moved_tid(relation, otid, &dtid))
+	{
+		otid = &dtid;
+		cid = GetCurrentCommandId(true);
+	}
 	if (IsTempcatTid(otid))
 	{
-		ItemPointerData dtid;
-
 		result = tempcat_self_modified(relation, otid, tmfd);
 		if (result == TM_Invisible)
 			ereport(ERROR,
@@ -406,12 +424,6 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		if (tempcat_route_insert(relation, tuple) &&
 			tempcat_update(relation, otid, tuple))
 			*update_indexes = false;	/* not in the catalog's indexes */
-		else if (tempcat_moved_tid(relation, otid, &dtid))
-		{
-			/* moved to disk with its object, as the new version did not fit */
-			simple_heap_update(relation, &dtid, tuple);
-			*update_indexes = true;
-		}
 		else
 		{
 			/* the new version must go to disk */
@@ -468,8 +480,18 @@ heapam_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 
 	/*
 	 * GPDB: rows of in-memory temporary objects are private to the session;
-	 * there is nothing to lock.  See heapam_tuple_delete().
+	 * there is nothing to lock.  See heapam_tuple_delete(), also for a row
+	 * moved to disk during this command.
 	 */
+	{
+		ItemPointerData dtid;
+
+		if (tempcat_moved_tid(relation, tid, &dtid))
+		{
+			*tid = dtid;
+			cid = GetCurrentCommandId(true);
+		}
+	}
 	if (IsTempcatTid(tid))
 		return heapam_fetch_tempcat_row(relation, tid, snapshot, slot) ?
 			TM_Ok : TM_Invisible;
