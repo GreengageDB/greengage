@@ -6440,10 +6440,12 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	HeapTupleHeader htup;
 	uint32		oldlen;
 	uint32		newlen;
+	ItemPointerData vtid = tuple->t_self;
+	bool		moved;
 
 	/* Virtual catalog row of a temporary object, perhaps moved to disk */
-	if (!tempcat_moved_tid(relation, &tuple->t_self, &tuple->t_self) &&
-		IsTempcatTid(&tuple->t_self))
+	moved = tempcat_moved_tid(relation, &vtid, &tuple->t_self);
+	if (!moved && IsTempcatTid(&tuple->t_self))
 	{
 		tempcat_inplace_update(relation, tuple);
 		return;
@@ -6475,6 +6477,29 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 
 	oldlen = ItemIdGetLength(lp) - htup->t_hoff;
 	newlen = tuple->t_len - tuple->t_data->t_hoff;
+
+	/*
+	 * GPDB: the copy on disk of a row moved there from memory may be stored
+	 * compressed, unlike the row from memory given: overwrite its leading
+	 * fixed-width columns, which in-place updates change, in a copy of it,
+	 * and write that (see tempcat_fixed_part_len()).
+	 */
+	if (moved && (oldlen != newlen || htup->t_hoff != tuple->t_data->t_hoff))
+	{
+		HeapTupleData disk;
+		HeapTuple	given = tuple;
+
+		disk.t_len = ItemIdGetLength(lp);
+		disk.t_data = htup;
+		disk.t_self = given->t_self;
+		disk.t_tableOid = RelationGetRelid(relation);
+		tuple = heap_copytuple(&disk);
+		memcpy((char *) tuple->t_data + tuple->t_data->t_hoff,
+			   (char *) given->t_data + given->t_data->t_hoff,
+			   tempcat_fixed_part_len(relation, tuple->t_data, given->t_data));
+		newlen = tuple->t_len - tuple->t_data->t_hoff;
+	}
+
 	if (oldlen != newlen || htup->t_hoff != tuple->t_data->t_hoff)
 		elog(ERROR, "wrong tuple length");
 

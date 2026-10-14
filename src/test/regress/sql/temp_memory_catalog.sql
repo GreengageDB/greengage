@@ -960,6 +960,28 @@ ALTER TABLE tc_big ADD COLUMN z text DEFAULT repeat('x', 40000);
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_big'::regclass AND attnum > 0 ORDER BY attnum;
 DROP TABLE tc_big;
 
+-- In-place updates of a row moved to disk reach its copy there, and the
+-- row in memory that comes back if the move rolls back (ANALYZE's
+-- statistics outlive the rollback, as on disk), though the copy is stored
+-- compressed: pg_class has no TOAST table, and a long partition bound is
+-- compressed within the row on disk.  (The fault fails the first
+-- allocation, so CREATE INDEX, or COMMENT, moves the partition.)
+CREATE TEMP TABLE tc_inpl (a int) PARTITION BY LIST (a) DISTRIBUTED BY (a);
+DO $$ BEGIN EXECUTE 'CREATE TEMP TABLE tc_inpl_1 PARTITION OF tc_inpl FOR VALUES IN (' || (SELECT string_agg(i::text, ',') FROM generate_series(1, 80) i) || ')'; END $$;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE INDEX tc_inpl_1_i ON tc_inpl_1 (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relhasindex FROM pg_class WHERE oid = 'tc_inpl_1'::regclass;
+BEGIN;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+COMMENT ON TABLE tc_inpl_1 IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+INSERT INTO tc_inpl_1 SELECT i % 80 + 1 FROM generate_series(1, 100) i;
+ANALYZE tc_inpl_1;
+ROLLBACK;
+SELECT relpages > 0 AS relpages, reltuples FROM pg_class WHERE oid = 'tc_inpl_1'::regclass;
+DROP TABLE tc_inpl;
+
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the
 -- on-disk catalog.  The limit applies when the session's in-memory catalog

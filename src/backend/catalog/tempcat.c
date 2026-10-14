@@ -4138,6 +4138,46 @@ tempcat_delete(Relation rel, ItemPointer tid)
 }
 
 /*
+ * In-place updates overwrite fixed-width columns only, which come before
+ * the variable-width ones in the catalogs that get them (pg_class, pg_index,
+ * gp_fastsequence, ...).  A row moved to disk may be stored compressed there
+ * (pg_class has no TOAST table, so heap_insert() compresses its long values
+ * within the row), unlike in memory, and the two versions then differ in
+ * length.  Returns the length of the data that an in-place update of 'dst'
+ * with 'src' overwrites: the leading fixed-width columns then.
+ */
+uint32
+tempcat_fixed_part_len(Relation rel, HeapTupleHeader dst, HeapTupleHeader src)
+{
+	TupleDesc	desc = RelationGetDescr(rel);
+	int			natts = Min(desc->natts, HeapTupleHeaderGetNatts(src));
+	bool		hasnulls = (src->t_infomask & HEAP_HASNULL) != 0;
+	uint32		len = 0;
+	int			i;
+
+	/* (same columns, same nulls) */
+	if (dst->t_hoff != src->t_hoff ||
+		HeapTupleHeaderGetNatts(dst) != HeapTupleHeaderGetNatts(src) ||
+		((dst->t_infomask & HEAP_HASNULL) != 0) != hasnulls ||
+		(hasnulls && memcmp(dst->t_bits, src->t_bits,
+							BITMAPLEN(HeapTupleHeaderGetNatts(src))) != 0))
+		elog(ERROR, "wrong tuple length");
+
+	for (i = 0; i < natts; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(desc, i);
+
+		if (hasnulls && att_isnull(i, src->t_bits))
+			continue;
+		if (att->attlen <= 0)
+			break;
+		len = att_align_nominal(len, att->attalign);
+		len += att->attlen;
+	}
+	return len;
+}
+
+/*
  * Overwrite a row in place, non-transactionally, like heap_inplace_update().
  */
 void
@@ -4146,19 +4186,22 @@ tempcat_inplace_update(Relation rel, HeapTuple tup)
 	dsa_pointer ep;
 	TempcatEntry *e;
 	HeapTupleHeader hdr;
+	uint32		len;
 
 	Assert(!tempcat_is_reader());
 
 	e = tempcat_lookup_tid(rel, &tup->t_self, &ep);
 	hdr = TCE_DATA(e);
 
-	if (tup->t_len != e->len || tup->t_data->t_hoff != hdr->t_hoff)
-		elog(ERROR, "wrong tuple length");
+	/* (from the copy on disk of a row moved there, perhaps compressed) */
+	if (tup->t_len == e->len && tup->t_data->t_hoff == hdr->t_hoff)
+		len = tup->t_len - hdr->t_hoff;
+	else
+		len = tempcat_fixed_part_len(rel, hdr, tup->t_data);
 
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	memcpy((char *) hdr + hdr->t_hoff,
-		   (char *) tup->t_data + tup->t_data->t_hoff,
-		   tup->t_len - hdr->t_hoff);
+		   (char *) tup->t_data + tup->t_data->t_hoff, len);
 	LWLockRelease(&tc_root->lock);
 
 	/* e.g. VACUUM advancing relfrozenxid */
