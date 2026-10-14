@@ -1151,6 +1151,39 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 1q:
 DROP FUNCTION tc_subxact(int);
 
+-- Moves that a rolled-back subtransaction carried out, pending again, wait
+-- for a (sub)transaction in progress: the commands that follow an abort
+-- (ROLLBACK TO, COMMIT), a SAVEPOINT whose subtransaction has not started,
+-- and a subtransaction's commit on the segments end without one (they
+-- crashed the server).  The objects move whole later.
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_sp1 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a);
+1: CREATE TEMP TABLE tc_sp2 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a);
+1: BEGIN;
+1: SAVEPOINT a;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: COMMENT ON TABLE tc_sp1 IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SELECT 1/0;
+1: ROLLBACK TO SAVEPOINT a;
+1: SAVEPOINT b;
+1: INSERT INTO tc_sp1 VALUES (1, 'one');
+1: COMMIT;
+1: BEGIN;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: DO $$ BEGIN COMMENT ON TABLE tc_sp2 IS 'moved'; RAISE EXCEPTION 'undone'; EXCEPTION WHEN others THEN NULL; END $$;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+1: SAVEPOINT s;
+1: DO $$ BEGIN PERFORM 1; EXCEPTION WHEN others THEN NULL; END $$;
+1: INSERT INTO tc_sp2 VALUES (2, 'two');
+1: COMMIT;
+1: SELECT * FROM tc_sp1 UNION ALL SELECT * FROM tc_sp2 ORDER BY 1;
+1: SET gp_temp_memory_catalog_disk_only = on;
+1: SELECT c.relname, count(a.attname) AS attributes FROM pg_class c LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 WHERE c.relname IN ('tc_sp1', 'tc_sp2') GROUP BY 1 ORDER BY 1;
+1: SELECT count(*) AS segments_whole FROM gp_dist_random('pg_class') c WHERE c.relname IN ('tc_sp1', 'tc_sp2') AND c.relnatts = (SELECT count(*) FROM gp_dist_random('pg_attribute') a WHERE a.attrelid = c.oid AND a.attnum > 0 AND a.gp_segment_id = c.gp_segment_id);
+1: RESET gp_temp_memory_catalog_disk_only;
+1q:
+
 -- A move also takes the parts of an object that do not depend on it, and
 -- what they refer to: the RI triggers of a referenced table depend on
 -- their constraint only, which is the referencing table's, so that table

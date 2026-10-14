@@ -2623,6 +2623,17 @@ tempcat_materialize_moves(void)
 	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
 		return false;
 
+	/*
+	 * Not outside a (sub)transaction in progress, as in the
+	 * CommandCounterIncrement() of a ROLLBACK TO or COMMIT in an aborted
+	 * one, of a SAVEPOINT whose subtransaction has not started yet, or of a
+	 * subtransaction's commit: the moves stay pending, for the next command
+	 * or the commit.  (Moves that a rolled-back subtransaction carried out
+	 * are pending again then.)
+	 */
+	if (!IsTransactionState())
+		return false;
+
 	memset(&ctl, 0, sizeof(ctl));
 	ctl.keysize = sizeof(TempcatObject);
 	ctl.entrysize = sizeof(TempcatSetMember);
