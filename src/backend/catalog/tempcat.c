@@ -4258,35 +4258,77 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 }
 
 /*
- * A catalog row that SQL inserts (INSERT or COPY FROM, under
- * allow_system_table_mods) goes to disk through the table AM, whose callers
- * make index entries that a row in memory could not have: if it is a row of
- * an object of ours in memory, the object follows it to disk, as when a row
- * does not fit.  And a dependency row is checked as recordDependencyOn()
- * checks those it inserts.
+ * A catalog row that SQL writes (INSERT, COPY FROM or UPDATE, under
+ * allow_system_table_mods) is checked as the code that makes such rows
+ * checks them: dependencies as recordDependencyOn() does, inheritance as
+ * StoreSingleInheritance(), operator links as OperatorCreate(), typed tables
+ * as heap_create_with_catalog().
+ */
+void
+tempcat_sql_check(Relation rel, HeapTuple tup)
+{
+	TupleDesc	desc = RelationGetDescr(rel);
+	bool		isnull;
+
+	if (TempcatShared == NULL)
+		return;
+	switch (RelationGetRelid(rel))
+	{
+		case DependRelationId:
+			{
+				ObjectAddress depender;
+				ObjectAddress referenced;
+
+				depender.classId = tempcat_getoid(tup, desc, Anum_pg_depend_classid);
+				depender.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_objid);
+				depender.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_objsubid,
+																  desc, &isnull));
+				referenced.classId = tempcat_getoid(tup, desc, Anum_pg_depend_refclassid);
+				referenced.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_refobjid);
+				referenced.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_refobjsubid,
+																	desc, &isnull));
+				tempcat_check_dependency(&depender, &referenced);
+			}
+			break;
+		case InheritsRelationId:
+			tempcat_check_inheritance(tempcat_getoid(tup, desc, Anum_pg_inherits_inhrelid),
+									  tempcat_getoid(tup, desc, Anum_pg_inherits_inhparent));
+			break;
+		case OperatorRelationId:
+			{
+				Oid			nsp = tempcat_getoid(tup, desc, Anum_pg_operator_oprnamespace);
+
+				tempcat_check_operator_link(nsp, tempcat_getoid(tup, desc, Anum_pg_operator_oprcom));
+				tempcat_check_operator_link(nsp, tempcat_getoid(tup, desc, Anum_pg_operator_oprnegate));
+			}
+			break;
+		case RelationRelationId:
+			{
+				Oid			typid = tempcat_getoid(tup, desc, Anum_pg_class_reloftype);
+
+				if (OidIsValid(typid))
+					tempcat_check_typed_table(tempcat_getoid(tup, desc, Anum_pg_class_oid),
+											  typid);
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+/*
+ * Such a row that goes to disk through the table AM (all that INSERT and
+ * COPY FROM add, and new versions of rows on disk that UPDATE makes), whose
+ * callers make index entries that a row in memory could not have: if it is
+ * a row of an object of ours in memory, the object follows it to disk, as
+ * when a row does not fit.
  */
 void
 tempcat_sql_insert(Relation rel, HeapTuple tup)
 {
 	if (TempcatShared == NULL)
 		return;
-	if (RelationGetRelid(rel) == DependRelationId)
-	{
-		TupleDesc	desc = RelationGetDescr(rel);
-		ObjectAddress depender;
-		ObjectAddress referenced;
-		bool		isnull;
-
-		depender.classId = tempcat_getoid(tup, desc, Anum_pg_depend_classid);
-		depender.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_objid);
-		depender.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_objsubid,
-														  desc, &isnull));
-		referenced.classId = tempcat_getoid(tup, desc, Anum_pg_depend_refclassid);
-		referenced.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_refobjid);
-		referenced.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_refobjsubid,
-															desc, &isnull));
-		tempcat_check_dependency(&depender, &referenced);
-	}
+	tempcat_sql_check(rel, tup);
 	if (tempcat_route_insert(rel, tup))
 		tempcat_row_to_disk(rel, tup);
 }

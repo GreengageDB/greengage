@@ -1388,3 +1388,31 @@ SELECT c.relname, (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid)
   WHERE c.relname IN ('tc_sqlins', 'tc_sqlcopy', 'tc_sqldep') ORDER BY 1;
 RESET gp_temp_memory_catalog_disk_only;
 DROP TABLE tc_sqlins, tc_sqlcopy, tc_sqldep, tc_sqlins_ord;
+
+-- Catalog rows that SQL UPDATE changes are checked the same way, and a new
+-- version on disk that now belongs to an object in memory takes the object
+-- to disk; so are pg_inherits rows that SQL inserts.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TABLE tc_sqlup_ord (a int) DISTRIBUTED BY (a);
+COMMENT ON TABLE tc_sqlup_ord IS 'moved by UPDATE';
+CREATE TABLE tc_sqlup_ord2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_sqlup_parent (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqlup (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqlup_ref (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqlup_child (a int) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_sqlup_lt(int, int) RETURNS bool LANGUAGE sql IMMUTABLE AS 'select $1 < $2';
+CREATE OPERATOR pg_temp.<<< (LEFTARG = int, RIGHTARG = int, FUNCTION = pg_temp.tc_sqlup_lt);
+SET allow_system_table_mods = on;
+UPDATE pg_description SET objoid = 'tc_sqlup'::regclass WHERE objoid = 'tc_sqlup_ord'::regclass;
+UPDATE pg_depend SET refobjid = 'tc_sqlup_ref'::regclass WHERE classid = 'pg_type'::regclass AND objid = 'tc_sqlup_ord2'::regtype AND refobjid = 'tc_sqlup_ord2'::regclass;
+INSERT INTO pg_inherits VALUES ('tc_sqlup_child'::regclass, 'tc_sqlup_parent'::regclass, 1);
+UPDATE pg_operator SET oprcom = '<(int,int)'::regoperator WHERE oid = 'pg_temp.<<<(int,int)'::regoperator;
+RESET allow_system_table_mods;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT c.relname, (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid) AS attributes, d.description
+  FROM pg_class c LEFT JOIN pg_description d ON d.objoid = c.oid AND d.classoid = 'pg_class'::regclass
+  WHERE c.relname IN ('tc_sqlup', 'tc_sqlup_ref', 'tc_sqlup_child') ORDER BY 1;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_sqlup, tc_sqlup_ref, tc_sqlup_child, tc_sqlup_ord, tc_sqlup_ord2, tc_sqlup_parent;
+DROP OPERATOR pg_temp.<<< (int, int);

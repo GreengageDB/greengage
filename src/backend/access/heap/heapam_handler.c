@@ -418,6 +418,8 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	}
 	if (IsTempcatTid(otid))
 	{
+		/* (where the new version goes is decided below) */
+		tempcat_sql_check(relation, tuple);
 		result = tempcat_self_modified(relation, otid, tmfd);
 		if (result == TM_Invisible)
 			ereport(ERROR,
@@ -445,9 +447,15 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		return TM_Ok;
 	}
 
-	/* GPDB: a row on disk of a temporary object, perhaps (see tempcat.c) */
+	/*
+	 * GPDB: a row on disk of a temporary object, perhaps, or one that now
+	 * belongs to a temporary object in memory (see tempcat.c)
+	 */
 	if (IsCatalogRelation(relation))
+	{
+		tempcat_sql_insert(relation, tuple);
 		tempcat_disk_row_updated(relation, tuple);
+	}
 
 	result = heap_update(relation, otid, tuple, cid, crosscheck, wait,
 						 tmfd, lockmode);
