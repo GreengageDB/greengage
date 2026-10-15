@@ -128,7 +128,6 @@ static void setQryDistributionPolicy(ParseState *pstate, IntoClause *into, Query
 static bool checkCanOptSelectLockingClause(SelectStmt *stmt);
 static bool queryNodeSearch(Node *node, void *context);
 static void sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_set);
-static void sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where);
 
 /*
  * parse_analyze
@@ -3787,7 +3786,7 @@ sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_
 	}
 }
 
-static void
+void
 sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where)
 {
 	GpPolicy  *policy = GpPolicyFetch(relid);

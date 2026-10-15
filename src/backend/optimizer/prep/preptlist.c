@@ -56,6 +56,7 @@
 #include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
+#include "parser/analyze.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -245,11 +246,22 @@ preprocess_targetlist(PlannerInfo *root)
 	 * while we have the relation open.
 	 */
 	if (parse->onConflict)
+	{
+		/*
+		 * To prevent possible modification of distribution columns through
+		 * a view or smth else, check here for it again.
+		 */
+		if(parse->onConflict->action == ONCONFLICT_UPDATE)
+			sanity_check_on_conflict_update(target_rte->relid,
+				parse->onConflict->onConflictSet,
+				parse->onConflict->onConflictWhere);
+
 		parse->onConflict->onConflictSet =
 			expand_targetlist(root, parse->onConflict->onConflictSet,
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+	}
 
 	if (target_relation)
 		table_close(target_relation, NoLock);
