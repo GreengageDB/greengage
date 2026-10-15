@@ -3986,7 +3986,13 @@ tempcat_note_drop(const ObjectAddress *object)
 	tc_dropped = d;
 }
 
-/* Forget the drops of an aborted subtransaction, or hand them to its parent. */
+/*
+ * Forget the drops of an aborted subtransaction, or hand them to its parent.
+ * The newest are first, and none is of a deeper level than those before it
+ * (a subtransaction's end takes its own to its parent's level), so only the
+ * subtransaction's own are looked at: every exception block of a long
+ * transaction walked all of its drops.
+ */
 static void
 tempcat_dropped_end_subxact(bool commit)
 {
@@ -3995,20 +4001,17 @@ tempcat_dropped_end_subxact(bool commit)
 
 	if (tc_dropped_lxid != MyProc->lxid)
 		return;
-	while (*link != NULL)
+	while (*link != NULL && (*link)->level >= level)
 	{
 		TempcatDropped *d = *link;
 
-		if (d->level >= level)
+		if (!commit)
 		{
-			if (!commit)
-			{
-				*link = d->next;
-				pfree(d);
-				continue;
-			}
-			d->level = level - 1;
+			*link = d->next;
+			pfree(d);
+			continue;
 		}
+		d->level = level - 1;
 		link = &d->next;
 	}
 }
