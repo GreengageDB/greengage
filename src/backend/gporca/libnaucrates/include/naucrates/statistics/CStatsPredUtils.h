@@ -46,6 +46,12 @@ private:
 		EptSentinel
 	};
 
+	// columns locally referenced by predicate_expr (outer_refs excluded), for
+	// tagging an unsupported predicate's used_colids
+	static ULongPtrArray *ExtractUsedColIds(CMemoryPool *mp,
+											CExpression *predicate_expr,
+											CColRefSet *outer_refs);
+
 	// return the comparison type of an operator for the purpose of statistics computation
 	static CStatsPred::EStatsCmpType StatsCmpType(IMDId *mdid);
 
@@ -60,7 +66,8 @@ private:
 
 	// extract statistics filtering information from a scalar array compare operator
 	static void ProcessArrayCmp(CMemoryPool *mp, CExpression *predicate_expr,
-								CStatsPredPtrArry *pdrgpstatspred);
+								CStatsPredPtrArry *pdrgpstatspred,
+								CColRefSet *outer_refs);
 
 	// create and add statistics filtering information for supported filters
 	static void AddSupportedStatsFilters(CMemoryPool *mp,
