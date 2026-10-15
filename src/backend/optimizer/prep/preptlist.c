@@ -56,7 +56,6 @@
 #include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
-#include "parser/analyze.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -69,6 +68,11 @@ static List *expand_targetlist(PlannerInfo *root, List *tlist, int command_type,
 static List *supplement_simply_updatable_targetlist(PlannerInfo *root,
 													List *range_table,
 													List *tlist);
+
+static void sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy,
+														List *onconflict_set);
+static void sanity_check_on_conflict_update(Oid relid, List *on_conflict_set,
+											Node *on_conflict_where);
 
 
 /*
@@ -248,9 +252,13 @@ preprocess_targetlist(PlannerInfo *root)
 	if (parse->onConflict)
 	{
 		/*
-		 * To prevent possible modification of distribution columns through
-		 * a view or smth else, check here for it again.
-		 */
+		* Greengage specific behavior.
+		* OnConflictUpdate may modify the distkey of the table,
+		* this can lead to wrong data distribution. Add a check
+		* here and raise error for such case.
+		* This fixes the github issue: https://github.com/GreengageDB/greengage/issues/9444
+		* Check has been moved here from analyze.c to cover more cases.
+		*/
 		if(parse->onConflict->action == ONCONFLICT_UPDATE)
 			sanity_check_on_conflict_update(target_rte->relid,
 				parse->onConflict->onConflictSet,
@@ -710,4 +718,50 @@ supplement_simply_updatable_targetlist(PlannerInfo *root, List *range_table, Lis
 	}
 	
 	return tlist;
+}
+
+static void
+sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_set)
+{
+	ListCell  *lc;
+	Bitmapset *dist_cols = NULL;
+	Bitmapset *conflict_update_cols = NULL;
+
+	for (int i = 0; i < policy->nattrs; i++)
+		dist_cols = bms_add_member(dist_cols, policy->attrs[i]);
+
+	foreach(lc, onconflict_set)
+	{
+		TargetEntry *te = lfirst(lc);
+		conflict_update_cols = bms_add_member(conflict_update_cols,
+											  te->resno);
+	}
+
+	if (!bms_is_empty(bms_intersect(dist_cols, conflict_update_cols)))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("modification of distribution columns in OnConflictUpdate is not supported")));
+	}
+}
+
+static void
+sanity_check_on_conflict_update(Oid relid, List *on_conflict_set, Node *on_conflict_where)
+{
+	GpPolicy  *policy = GpPolicyFetch(relid);
+	switch (policy->ptype)
+	{
+		case POLICYTYPE_PARTITIONED:
+			sanity_check_on_conflict_update_set_distkey(policy, on_conflict_set);
+			break;
+		case POLICYTYPE_REPLICATED:
+			if (contain_volatile_functions((Node*)on_conflict_set) ||
+				contain_volatile_functions(on_conflict_where))
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("modification of replicated tables containing volatile functions in OnConflictUpdate is not supported")));
+			break;
+		default:
+			break;
+	}
 }
