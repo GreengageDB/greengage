@@ -4781,19 +4781,6 @@ static RelOptInfo *
 create_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel)
 {
 	RelOptInfo *distinct_rel;
-<<<<<<< HEAD
-	double		numDistinctRowsTotal;
-	double		numInputRowsTotal;
-	bool		allow_hash;
-	Path	   *path;
-	ListCell   *lc;
-||||||| e1c1c30f635
-	double		numDistinctRows;
-	bool		allow_hash;
-	Path	   *path;
-	ListCell   *lc;
-=======
->>>>>>> 3b231596ccf
 
 	/* For now, do all work in the (DISTINCT, NULL) upperrel */
 	distinct_rel = fetch_upper_rel(root, UPPERREL_DISTINCT, NULL);
@@ -4815,11 +4802,6 @@ create_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel)
 	distinct_rel->useridiscurrent = input_rel->useridiscurrent;
 	distinct_rel->fdwroutine = input_rel->fdwroutine;
 	distinct_rel->exec_location = input_rel->exec_location;
-
-	if (CdbPathLocus_IsPartitioned(cheapest_input_path->locus))
-		numInputRowsTotal = cheapest_input_path->rows * CdbPathLocus_NumSegments(cheapest_input_path->locus);
-	else
-		numInputRowsTotal = cheapest_input_path->rows;
 
 	/* build distinct paths based on input_rel's pathlist */
 	create_final_distinct_paths(root, input_rel, distinct_rel);
@@ -4943,6 +4925,7 @@ create_partial_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										 cheapest_partial_path->pathtarget,
 										 AGG_HASHED,
 										 AGGSPLIT_SIMPLE,
+										 false, /* streaming */
 										 parse->distinctClause,
 										 NIL,
 										 NULL,
@@ -4994,10 +4977,21 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 {
 	Query	   *parse = root->parse;
 	Path	   *cheapest_input_path = input_rel->cheapest_total_path;
-	double		numDistinctRows;
+	double		numDistinctRowsTotal;
+	double		numInputRowsTotal;
 	bool		allow_hash;
 	Path	   *path;
 	ListCell   *lc;
+
+	/*
+	 * GPDB: the row count of a partitioned path is per segment.  Estimate the
+	 * number of distinct rows across the whole cluster here; each candidate
+	 * path below divides it back by the number of segments it runs on.
+	 */
+	if (CdbPathLocus_IsPartitioned(cheapest_input_path->locus))
+		numInputRowsTotal = cheapest_input_path->rows * CdbPathLocus_NumSegments(cheapest_input_path->locus);
+	else
+		numInputRowsTotal = cheapest_input_path->rows;
 
 	/* Estimate number of distinct rows there will be */
 	if (parse->groupClause || parse->groupingSets || parse->hasAggs ||
@@ -5176,14 +5170,6 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 								 numDistinctRows));
 	}
 
-<<<<<<< HEAD
-	/* Give a helpful error if we failed to find any implementation */
-	if (distinct_rel->pathlist == NIL)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("could not implement DISTINCT"),
-				 errdetail("Some of the datatypes only support hashing, while others only support sorting.")));
-
 	/*
 	 * Add GPDB two-stage agg plans
 	 */
@@ -5194,52 +5180,6 @@ create_final_distinct_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										   cheapest_input_path->pathtarget,
 										   numDistinctRowsTotal);
 
-	/*
-	 * If there is an FDW that's responsible for all baserels of the query,
-	 * let it consider adding ForeignPaths.
-	 */
-	if (distinct_rel->fdwroutine &&
-		distinct_rel->fdwroutine->GetForeignUpperPaths)
-		distinct_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_DISTINCT,
-													   input_rel, distinct_rel,
-													   NULL);
-
-	/* Let extensions possibly add some more paths */
-	if (create_upper_paths_hook)
-		(*create_upper_paths_hook) (root, UPPERREL_DISTINCT,
-									input_rel, distinct_rel, NULL);
-
-	/* Now choose the best path(s) */
-	set_cheapest(distinct_rel);
-
-||||||| e1c1c30f635
-	/* Give a helpful error if we failed to find any implementation */
-	if (distinct_rel->pathlist == NIL)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("could not implement DISTINCT"),
-				 errdetail("Some of the datatypes only support hashing, while others only support sorting.")));
-
-	/*
-	 * If there is an FDW that's responsible for all baserels of the query,
-	 * let it consider adding ForeignPaths.
-	 */
-	if (distinct_rel->fdwroutine &&
-		distinct_rel->fdwroutine->GetForeignUpperPaths)
-		distinct_rel->fdwroutine->GetForeignUpperPaths(root, UPPERREL_DISTINCT,
-													   input_rel, distinct_rel,
-													   NULL);
-
-	/* Let extensions possibly add some more paths */
-	if (create_upper_paths_hook)
-		(*create_upper_paths_hook) (root, UPPERREL_DISTINCT,
-									input_rel, distinct_rel, NULL);
-
-	/* Now choose the best path(s) */
-	set_cheapest(distinct_rel);
-
-=======
->>>>>>> 3b231596ccf
 	return distinct_rel;
 }
 
