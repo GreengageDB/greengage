@@ -39,6 +39,7 @@
 #include "storage/ipc.h"
 #include "storage/lwlock.h"
 #include "storage/pg_shmem.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/resowner_private.h"
@@ -89,6 +90,19 @@ typedef struct dsm_control_header
 	dsm_control_item item[FLEXIBLE_ARRAY_MEMBER];
 } dsm_control_header;
 
+/*
+ * GPDB: segments created with DSM_CREATE_FILE are files in PG_DYNSHMEM_DIR
+ * (the mmap implementation), whatever dynamic_shared_memory_type says.  Their
+ * handles are odd and those of other segments even, so that a handle tells
+ * how to attach to or destroy its segment, and handles of the two kinds never
+ * collide.  (The control segment's handle can be either: it always uses
+ * dynamic_shared_memory_type.)
+ */
+#define DSM_HANDLE_IS_FILE(h)	(((h) & 1) != 0)
+
+static bool dsm_segment_op(dsm_op op, dsm_handle handle, Size request_size,
+						   void **impl_private, void **mapped_address,
+						   Size *mapped_size, int elevel);
 static void dsm_cleanup_for_mmap(void);
 static void dsm_postmaster_shutdown(int code, Datum arg);
 static dsm_segment *dsm_create_descriptor(void);
@@ -150,9 +164,14 @@ dsm_postmaster_startup(PGShmemHeader *shim)
 	 * Cleanup isn't needed on Windows, and happens earlier in startup for
 	 * POSIX and System V shared memory, via a direct call to
 	 * dsm_cleanup_using_control_segment.
+	 *
+	 * GPDB: segments created with DSM_CREATE_FILE use the mmap implementation
+	 * whatever dynamic_shared_memory_type says, and survive a reboot that
+	 * loses the control segment: clean up their files too.
 	 */
-	if (dynamic_shared_memory_type == DSM_IMPL_MMAP)
-		dsm_cleanup_for_mmap();
+#ifdef USE_DSM_MMAP
+	dsm_cleanup_for_mmap();
+#endif
 
 	/* Determine size for new control segment. */
 	maxitems = PG_DYNSHMEM_FIXED_SLOTS
@@ -253,8 +272,8 @@ dsm_cleanup_using_control_segment(dsm_handle old_control_handle)
 			 handle, refcnt);
 
 		/* Destroy the referenced segment. */
-		dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
-					&junk_mapped_address, &junk_mapped_size, LOG);
+		dsm_segment_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+					   &junk_mapped_address, &junk_mapped_size, LOG);
 	}
 
 	/* Destroy the old control segment, too. */
@@ -354,8 +373,8 @@ dsm_postmaster_shutdown(int code, Datum arg)
 			 handle);
 
 		/* Destroy the segment. */
-		dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
-					&junk_mapped_address, &junk_mapped_size, LOG);
+		dsm_segment_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+					   &junk_mapped_address, &junk_mapped_size, LOG);
 	}
 
 	/* Remove the control segment itself. */
@@ -449,11 +468,49 @@ dsm_create(Size size, int flags)
 	{
 		Assert(seg->mapped_address == NULL && seg->mapped_size == 0);
 		seg->handle = random();
+		/* GPDB: odd for files, even for others; see DSM_HANDLE_IS_FILE */
+#ifdef USE_DSM_MMAP
+		if ((flags & DSM_CREATE_FILE) != 0)
+			seg->handle |= 1;
+		else
+#endif
+			seg->handle &= ~(dsm_handle) 1;
 		if (seg->handle == DSM_HANDLE_INVALID)	/* Reserve sentinel */
 			continue;
-		if (dsm_impl_op(DSM_OP_CREATE, seg->handle, size, &seg->impl_private,
-						&seg->mapped_address, &seg->mapped_size, ERROR))
+		if (dsm_segment_op(DSM_OP_CREATE, seg->handle, size, &seg->impl_private,
+						   &seg->mapped_address, &seg->mapped_size,
+						   (flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 ? DEBUG1 : ERROR))
 			break;
+
+		/*
+		 * GPDB: with DSM_CREATE_NULL_IF_NOSPACE, a failure other than a
+		 * handle collision (e.g. /dev/shm or the disk being full) gets here
+		 * instead of raising an error.  The implementation has cleaned up
+		 * after itself.
+		 */
+		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 && errno != EEXIST)
+		{
+			/*
+			 * Lack of space is what the caller expects.  Other failures (e.g.
+			 * permissions, too many open files) point at a misconfiguration,
+			 * which should not go unnoticed: log the first one of the
+			 * process.
+			 */
+			static bool reported = false;
+
+			if (errno != ENOSPC && errno != ENOMEM && !reported)
+			{
+				reported = true;
+				ereport(LOG,
+						(errmsg("could not create dynamic shared memory segment: %m")));
+			}
+
+			if (seg->resowner != NULL)
+				ResourceOwnerForgetDSM(seg->resowner, seg);
+			dlist_delete(&seg->node);
+			pfree(seg);
+			return NULL;
+		}
 	}
 
 	/* Lock the control segment so we can register the new segment. */
@@ -480,8 +537,8 @@ dsm_create(Size size, int flags)
 	if (nitems >= dsm_control->maxitems)
 	{
 		LWLockRelease(DynamicSharedMemoryControlLock);
-		dsm_impl_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
-					&seg->mapped_address, &seg->mapped_size, WARNING);
+		dsm_segment_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
+					   &seg->mapped_address, &seg->mapped_size, WARNING);
 		if (seg->resowner != NULL)
 			ResourceOwnerForgetDSM(seg->resowner, seg);
 		dlist_delete(&seg->node);
@@ -597,8 +654,8 @@ dsm_attach(dsm_handle h)
 	}
 
 	/* Here's where we actually try to map the segment. */
-	dsm_impl_op(DSM_OP_ATTACH, seg->handle, 0, &seg->impl_private,
-				&seg->mapped_address, &seg->mapped_size, ERROR);
+	dsm_segment_op(DSM_OP_ATTACH, seg->handle, 0, &seg->impl_private,
+				   &seg->mapped_address, &seg->mapped_size, ERROR);
 
 	return seg;
 }
@@ -693,8 +750,8 @@ dsm_detach(dsm_segment *seg)
 	 */
 	if (seg->mapped_address != NULL)
 	{
-		dsm_impl_op(DSM_OP_DETACH, seg->handle, 0, &seg->impl_private,
-					&seg->mapped_address, &seg->mapped_size, WARNING);
+		dsm_segment_op(DSM_OP_DETACH, seg->handle, 0, &seg->impl_private,
+					   &seg->mapped_address, &seg->mapped_size, WARNING);
 		seg->impl_private = NULL;
 		seg->mapped_address = NULL;
 		seg->mapped_size = 0;
@@ -734,8 +791,8 @@ dsm_detach(dsm_segment *seg)
 			 * other reason, the postmaster may not have any better luck than
 			 * we did.  There's not much we can do about that, though.
 			 */
-			if (dsm_impl_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
-							&seg->mapped_address, &seg->mapped_size, WARNING))
+			if (dsm_segment_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
+							   &seg->mapped_address, &seg->mapped_size, WARNING))
 			{
 				LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
 				Assert(dsm_control->item[control_slot].handle == seg->handle);
@@ -899,8 +956,8 @@ dsm_unpin_segment(dsm_handle handle)
 		 * pass the mapped size, mapped address, and private data as NULL
 		 * here.
 		 */
-		if (dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
-						&junk_mapped_address, &junk_mapped_size, WARNING))
+		if (dsm_segment_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+						   &junk_mapped_address, &junk_mapped_size, WARNING))
 		{
 			LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
 			Assert(dsm_control->item[control_slot].handle == handle);
@@ -965,6 +1022,58 @@ dsm_handle
 dsm_segment_handle(dsm_segment *seg)
 {
 	return seg->handle;
+}
+
+/*
+ * GPDB: how many slots of the control segment are free, out of how many?
+ * Every segment takes one, so users that create many segments (in-memory
+ * temporary catalogs, see tempcat.c) can leave some to others.  Returns
+ * false if there is no control segment.
+ */
+bool
+dsm_free_slots(uint32 *nfree, uint32 *nmax)
+{
+	uint32		n = 0;
+	uint32		i;
+
+	if (dsm_control == NULL)
+		return false;
+
+	LWLockAcquire(DynamicSharedMemoryControlLock, LW_SHARED);
+	for (i = 0; i < dsm_control->nitems; ++i)
+	{
+		if (dsm_control->item[i].refcnt == 0)
+			n++;
+	}
+	*nfree = n + (dsm_control->maxitems - dsm_control->nitems);
+	*nmax = dsm_control->maxitems;
+	LWLockRelease(DynamicSharedMemoryControlLock);
+
+#ifdef FAULT_INJECTOR
+	/* Test hook: pretend that every slot is taken. */
+	if (SIMPLE_FAULT_INJECTOR("dsm_slots_low") == FaultInjectorTypeSkip)
+		*nfree = 0;
+#endif
+	return true;
+}
+
+/*
+ * GPDB: perform an operation on a segment other than the control segment,
+ * with the implementation its handle tells (see DSM_HANDLE_IS_FILE).
+ */
+static bool
+dsm_segment_op(dsm_op op, dsm_handle handle, Size request_size,
+			   void **impl_private, void **mapped_address, Size *mapped_size,
+			   int elevel)
+{
+#ifdef USE_DSM_MMAP
+	if (DSM_HANDLE_IS_FILE(handle))
+		return dsm_impl_op_type(DSM_IMPL_MMAP, op, handle, request_size,
+								impl_private, mapped_address, mapped_size,
+								elevel);
+#endif
+	return dsm_impl_op(op, handle, request_size, impl_private,
+					   mapped_address, mapped_size, elevel);
 }
 
 /*

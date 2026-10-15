@@ -54,6 +54,7 @@
 #include <unistd.h>
 #ifndef WIN32
 #include <sys/mman.h>
+#include <sys/statvfs.h>
 #endif
 #include <sys/stat.h>
 #ifdef HAVE_SYS_IPC_H
@@ -161,11 +162,25 @@ dsm_impl_op(dsm_op op, dsm_handle handle, Size request_size,
 			void **impl_private, void **mapped_address, Size *mapped_size,
 			int elevel)
 {
+	return dsm_impl_op_type(dynamic_shared_memory_type, op, handle,
+							request_size, impl_private, mapped_address,
+							mapped_size, elevel);
+}
+
+/*
+ * GPDB: as dsm_impl_op(), with implementation 'impl' rather than the one
+ * dynamic_shared_memory_type selects (see DSM_CREATE_FILE).
+ */
+bool
+dsm_impl_op_type(int impl, dsm_op op, dsm_handle handle, Size request_size,
+				 void **impl_private, void **mapped_address, Size *mapped_size,
+				 int elevel)
+{
 	Assert(op == DSM_OP_CREATE || request_size == 0);
 	Assert((op != DSM_OP_CREATE && op != DSM_OP_ATTACH) ||
 		   (*mapped_address == NULL && *mapped_size == 0));
 
-	switch (dynamic_shared_memory_type)
+	switch (impl)
 	{
 #ifdef USE_DSM_POSIX
 		case DSM_IMPL_POSIX:
@@ -188,8 +203,7 @@ dsm_impl_op(dsm_op op, dsm_handle handle, Size request_size,
 								 mapped_address, mapped_size, elevel);
 #endif
 		default:
-			elog(ERROR, "unexpected dynamic shared memory type: %d",
-				 dynamic_shared_memory_type);
+			elog(ERROR, "unexpected dynamic shared memory type: %d", impl);
 			return false;
 	}
 }
@@ -871,6 +885,26 @@ dsm_impl_mmap(dsm_op op, dsm_handle handle, Size request_size,
 		Size		remaining = request_size;
 		bool		success = true;
 
+#if defined(HAVE_POSIX_FALLOCATE) && defined(__linux__)
+
+		/*
+		 * GPDB: allocate the space without writing it, which file systems
+		 * that support it do without dirtying any pages: segments in files
+		 * can be large (see DSM_CREATE_FILE).  It is as sure to have
+		 * allocated all the space as the zero-filling below.
+		 */
+		pgstat_report_wait_start(WAIT_EVENT_DSM_FILL_ZERO_WRITE);
+		do
+		{
+			errno = posix_fallocate(fd, 0, request_size);
+		} while (errno == EINTR);
+		pgstat_report_wait_end();
+		if (errno == 0)
+			remaining = 0;
+		else if (errno != EINVAL && errno != EOPNOTSUPP)
+			success = false;
+#endif
+
 		/*
 		 * Zero-fill the file. We have to do this the hard way to ensure that
 		 * all the file space has really been allocated, so that we don't
@@ -1043,4 +1077,30 @@ errcode_for_dynamic_shared_memory(void)
 		errcode(ERRCODE_OUT_OF_MEMORY);
 	else
 		errcode_for_file_access();
+}
+
+/*
+ * GPDB: report the free and total space of the file system holding the
+ * segments that dynamic_shared_memory_type selects (/dev/shm for posix).
+ * Returns false if unknown: for System V shared memory, and for mmap, whose
+ * segments are files in pg_dynshmem on the data directory's file system,
+ * which the database itself fills (a share of it says nothing about the
+ * room left for segments).
+ */
+bool
+dsm_impl_free_space(Size *free_bytes, Size *total_bytes)
+{
+#ifdef USE_DSM_POSIX
+	struct statvfs st;
+
+	if (dynamic_shared_memory_type != DSM_IMPL_POSIX)
+		return false;
+	if (statvfs("/dev/shm", &st) != 0)
+		return false;
+	*free_bytes = (Size) st.f_bavail * st.f_frsize;
+	*total_bytes = (Size) st.f_blocks * st.f_frsize;
+	return true;
+#else
+	return false;
+#endif
 }
