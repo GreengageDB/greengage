@@ -4982,21 +4982,26 @@ tempcat_other_session_relation_oid(Oid relid)
 /*
  * SPI_execute() a query that names an AO table's aux relation, which may be
  * in another session's temporary namespace (see tc_name_other_namespaces).
- * With search_path set to pg_catalog meanwhile, so that no function,
- * operator or type of the user's (e.g. an aggregate named like the query's
- * sum()) runs while that namespace may be found by name.
+ * With only pg_catalog searched meanwhile, not even pg_temp, so that no
+ * function, operator or type of the user's (e.g. an aggregate named like the
+ * query's sum(), or a temporary domain named like its casts' int8) runs while
+ * that namespace may be found by name.  An override search path rather than
+ * search_path: gangs started by the query would keep the setting (they get
+ * the current GUC values), and it would not leave out pg_temp for types.
+ * After an error, the abort of the (sub)transaction pops it.
  */
 int
 tempcat_spi_execute_aux(const char *src, bool read_only, long tcount)
 {
 	bool		save = tc_name_other_namespaces;
-	int			save_nestlevel;
+	OverrideSearchPath path;
 	int			ret;
 
-	save_nestlevel = NewGUCNestLevel();
-	(void) set_config_option("search_path", "pg_catalog",
-							 PGC_USERSET, PGC_S_SESSION,
-							 GUC_ACTION_SAVE, true, 0, false);
+	path.schemas = list_make1_oid(PG_CATALOG_NAMESPACE);
+	path.addCatalog = false;
+	path.addTemp = false;
+	PushOverrideSearchPath(&path);
+	list_free(path.schemas);
 	tc_name_other_namespaces = true;
 	PG_TRY();
 	{
@@ -5009,7 +5014,7 @@ tempcat_spi_execute_aux(const char *src, bool read_only, long tcount)
 	}
 	PG_END_TRY();
 	tc_name_other_namespaces = save;
-	AtEOXact_GUC(false, save_nestlevel);
+	PopOverrideSearchPath();
 	return ret;
 }
 

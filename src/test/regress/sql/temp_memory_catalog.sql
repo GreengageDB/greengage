@@ -1272,3 +1272,42 @@ CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT 'tc_noid'::regclass::oid >= 4026531840 AS in_reserved_range;
 DROP TABLE tc_noid;
+
+-- The queries that the AO functions run over an AO table's aux relations,
+-- which may find another session's temporary namespace by name, search
+-- pg_catalog only, but without changing search_path: the gangs that such a
+-- query starts, here the session's first (a SET would start them), kept it
+-- for the session.
+\c
+SELECT current_database() AS tc_sp_db \gset
+CREATE SCHEMA tc_sp;
+CREATE TABLE tc_sp.tc_sp_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_sp.tc_sp_ao SELECT generate_series(1, 100);
+CREATE TABLE tc_sp.tc_sp_heap (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sp.tc_sp_heap SELECT generate_series(1, 30);
+CREATE FUNCTION tc_sp.tc_sp_path(int) RETURNS text LANGUAGE plpgsql VOLATILE AS $$ BEGIN RETURN current_setting('search_path'); END $$;
+ALTER DATABASE :"tc_sp_db" SET search_path = tc_sp, public;
+\c
+SELECT count(*) FROM get_ao_distribution('tc_sp_ao');
+SELECT DISTINCT gp_segment_id, tc_sp_path(a) AS segment_search_path FROM tc_sp_heap ORDER BY 1;
+SELECT count(*) FROM tc_sp_heap WHERE tc_sp_path(a) IS NOT NULL;
+ALTER DATABASE :"tc_sp_db" RESET search_path;
+\c
+-- Not even pg_temp, which search_path pg_catalog still searches for types:
+-- a temporary domain named like the queries' casts ran the user's function
+-- in its check.
+CREATE FUNCTION tc_sp.tc_sp_probe(v numeric) RETURNS bool LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'user function runs'; RETURN true; END $$;
+CREATE TEMP TABLE tc_sp_temp_ao (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_sp_temp_ao SELECT generate_series(1, 100);
+CREATE DOMAIN pg_temp.int8 AS numeric CHECK (tc_sp.tc_sp_probe(VALUE));
+CREATE DOMAIN pg_temp.int4 AS numeric CHECK (tc_sp.tc_sp_probe(VALUE));
+SET gp_enable_relsize_collection = on;
+SET optimizer = off;
+SELECT count(*) FROM tc_sp_temp_ao;
+RESET optimizer;
+RESET gp_enable_relsize_collection;
+SELECT get_ao_compression_ratio('tc_sp_temp_ao');
+SELECT count(*) FROM get_ao_distribution('tc_sp_temp_ao');
+DROP TABLE tc_sp_temp_ao;
+DROP DOMAIN pg_temp.int8, pg_temp.int4;
+DROP SCHEMA tc_sp CASCADE;
