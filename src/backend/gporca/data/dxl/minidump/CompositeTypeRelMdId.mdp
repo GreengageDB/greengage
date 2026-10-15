@@ -324,7 +324,7 @@
     <dxl:Plan Id="0" SpaceSize="4">
       <dxl:Sort SortDiscardDuplicates="false">
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="882758.081967" Rows="1.000000" Width="8"/>
+          <dxl:Cost StartupCost="0" TotalCost="882730.298799" Rows="1.000000" Width="8"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="0" Alias="rngfuncid">
@@ -343,7 +343,7 @@
         <dxl:LimitOffset/>
         <dxl:Result>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="882758.081876" Rows="1.000000" Width="8"/>
+            <dxl:Cost StartupCost="0" TotalCost="882730.298708" Rows="1.000000" Width="8"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="0" Alias="rngfuncid">
@@ -366,7 +366,7 @@
               </dxl:ParamList>
               <dxl:Result>
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="0.040900" Rows="400.000000" Width="4"/>
+                  <dxl:Cost StartupCost="0" TotalCost="0.040900" Rows="1.000000" Width="4"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="10" Alias="f2">

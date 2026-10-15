@@ -402,6 +402,7 @@ typedef struct _tableInfo
 	char	*distclause; /* distributed by clause */
 	char	*partclause;	/* partition definition, if table is partition parent */
 	char	*parttemplate;	/* subpartition template */
+	bool	 ignoreRootPartDroppedAttr; /* true if need to ignore root partition's dropped columns */
 } TableInfo;
 
 /* AO auxilliary table metadata */
@@ -439,6 +440,7 @@ typedef struct _tableDataInfo
 	DumpableObject dobj;
 	TableInfo  *tdtable;		/* link to table to dump */
 	char	   *filtercond;		/* WHERE condition to limit rows dumped */
+	bool		isCoordOnly;	/* the table has data only on coordinator? */
 } TableDataInfo;
 
 typedef struct _indxInfo

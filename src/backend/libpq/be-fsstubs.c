@@ -557,12 +557,18 @@ be_lo_export(PG_FUNCTION_ARGS)
 	 */
 	while ((nbytes = inv_read(lobj, buf, BUFSIZE)) > 0)
 	{
+		errno = 0;
 		tmp = write(fd, buf, nbytes);
 		if (tmp != nbytes)
+		{
+			/* if write didn't set errno, assume problem is no disk space */
+			if (errno == 0)
+				errno = ENOSPC;
 			ereport(ERROR,
 					(errcode_for_file_access(),
 					 errmsg("could not write server file \"%s\": %m",
 							fnamebuf)));
+		}
 	}
 
 	if (CloseTransientFile(fd))

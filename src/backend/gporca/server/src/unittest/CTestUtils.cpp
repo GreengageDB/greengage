@@ -461,7 +461,7 @@ CTestUtils::PexprLogicalDynamicGetWithIndexes(CMemoryPool *mp)
 		mp, GPOS_NEW(mp) CLogicalDynamicGet(
 				mp, GPOS_NEW(mp) CName(mp, CName(&strAlias)), ptabdesc,
 				0,	// ulPartIndex
-				partition_mdids, foreign_mdids));
+				partition_mdids, foreign_mdids, nullptr));
 }
 
 
@@ -1869,7 +1869,7 @@ CTestUtils::PexprLogicalDynamicGet(CMemoryPool *mp, CTableDescriptor *ptabdesc,
 	return GPOS_NEW(mp) CExpression(
 		mp, GPOS_NEW(mp) CLogicalDynamicGet(
 				mp, GPOS_NEW(mp) CName(mp, CName(pstrTableAlias)), ptabdesc,
-				ulPartIndex, partition_mdids, foreign_mdids));
+				ulPartIndex, partition_mdids, foreign_mdids, nullptr));
 }
 
 //---------------------------------------------------------------------------

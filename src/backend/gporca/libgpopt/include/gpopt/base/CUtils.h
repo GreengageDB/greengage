@@ -393,6 +393,8 @@ public:
 	static IMDType::ECmpType ParseCmpType(CMDAccessor *md_accessor,
 										  IMDId *mdid);
 
+	static BOOL FMatchSelectedParts(const CBitSet *set1, const CBitSet *set2);
+
 	// generate a binary join expression
 	template <class T>
 	static CExpression *PexprLogicalJoin(

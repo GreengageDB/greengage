@@ -3055,6 +3055,7 @@ _readDynamicForeignScan(void)
 	READ_NODE_FIELD(part_prune_info);
 	READ_NODE_FIELD(join_prune_paramids);
 	READ_NODE_FIELD(fdw_private_list);
+	READ_BITMAPSET_FIELD(selected_parts);
 	READ_DONE();
 }
 

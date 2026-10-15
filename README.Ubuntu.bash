@@ -46,8 +46,6 @@ apt-get install -y \
 	openssl \
 	pkg-config \
 	protobuf-compiler \
-	python3.11 \
-	python3.11-dev \
 	python3-dev \
 	python3-pip \
 	python3-psutil \
@@ -56,6 +54,12 @@ apt-get install -y \
 	rsync \
 	sudo \
 	zlib1g-dev
+
+curl -fsSL greengagedb.org/repositories/gpg | gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
+echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
+	https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
+	greengagedb main" \
+	| tee /etc/apt/sources.list.d/greengagedb.list
 
 tee -a /etc/sysctl.conf << EOF
 kernel.shmmax = 5000000000000

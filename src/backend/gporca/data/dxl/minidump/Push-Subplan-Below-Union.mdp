@@ -615,10 +615,10 @@ union
         </dxl:LogicalSelect>
       </dxl:LogicalCTEAnchor>
     </dxl:Query>
-    <dxl:Plan Id="0" SpaceSize="203400432">
+    <dxl:Plan Id="0" SpaceSize="4616977584">
       <dxl:Result>
         <dxl:Properties>
-          <dxl:Cost StartupCost="0" TotalCost="7327.003376" Rows="2.000000" Width="36"/>
+          <dxl:Cost StartupCost="0" TotalCost="7327.003097" Rows="1.000000" Width="28"/>
         </dxl:Properties>
         <dxl:ProjList>
           <dxl:ProjElem ColId="35" Alias="district_pop">
@@ -641,7 +641,7 @@ union
         <dxl:OneTimeFilter/>
         <dxl:Sequence>
           <dxl:Properties>
-            <dxl:Cost StartupCost="0" TotalCost="7327.003376" Rows="2.000000" Width="36"/>
+            <dxl:Cost StartupCost="0" TotalCost="7327.003097" Rows="1.000000" Width="28"/>
           </dxl:Properties>
           <dxl:ProjList>
             <dxl:ProjElem ColId="35" Alias="population">
@@ -837,7 +837,7 @@ union
           </dxl:CTEProducer>
           <dxl:Aggregate AggregationStrategy="Sorted" StreamSafe="false">
             <dxl:Properties>
-              <dxl:Cost StartupCost="0" TotalCost="6034.002823" Rows="2.000000" Width="36"/>
+              <dxl:Cost StartupCost="0" TotalCost="6034.002587" Rows="1.000000" Width="28"/>
             </dxl:Properties>
             <dxl:GroupingColumns>
               <dxl:GroupingColumn ColId="35"/>
@@ -874,7 +874,7 @@ union
             <dxl:Filter/>
             <dxl:Sort SortDiscardDuplicates="false">
               <dxl:Properties>
-                <dxl:Cost StartupCost="0" TotalCost="6034.002678" Rows="2.000000" Width="52"/>
+                <dxl:Cost StartupCost="0" TotalCost="6034.002528" Rows="1.000000" Width="44"/>
               </dxl:Properties>
               <dxl:ProjList>
                 <dxl:ProjElem ColId="35" Alias="population">
@@ -913,7 +913,7 @@ union
               <dxl:LimitOffset/>
               <dxl:Append IsTarget="false" IsZapped="false">
                 <dxl:Properties>
-                  <dxl:Cost StartupCost="0" TotalCost="6034.002089" Rows="2.000000" Width="52"/>
+                  <dxl:Cost StartupCost="0" TotalCost="6034.002029" Rows="1.000000" Width="44"/>
                 </dxl:Properties>
                 <dxl:ProjList>
                   <dxl:ProjElem ColId="35" Alias="population">

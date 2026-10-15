@@ -134,6 +134,11 @@ bool AggregateExists(Oid oid);
 // add member to Bitmapset
 Bitmapset *BmsAddMember(Bitmapset *a, int x);
 
+// get the next member of Bitmapset
+int BmsNextMember(const Bitmapset *a, int prevbit);
+
+Bitmapset *BmsAddRange(Bitmapset *a, int lower, int upper);
+
 // create a copy of an object
 void *CopyObject(void *from);
 
@@ -367,6 +372,9 @@ int ListNthInt(List *list, int n);
 
 // return the nth element in a list of oids
 Oid ListNthOid(List *list, int n);
+
+// return the last element in a list of ints
+int ListLastInt(List *list);
 
 // check whether the given oid is a member of the given list
 bool ListMemberOid(List *list, Oid oid);

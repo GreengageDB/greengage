@@ -74,10 +74,47 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 	ExecInitResultTypeTL(&state->ss.ps);
 	ExecAssignScanProjectionInfo(&state->ss);
 
-	state->nOids = list_length(node->partOids);
-	state->partOids = palloc(sizeof(Oid) * state->nOids);
-	foreach_with_count(lc, node->partOids, i)
-		state->partOids[i] = lfirst_oid(lc);
+	int selected_parts_count = bms_num_members(node->selected_parts);
+	if (selected_parts_count == 0)
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+				errmsg("No partition is selected for Dynamic Scan")));
+
+	if (node->join_prune_paramids)
+	{
+		state->nOids = list_length(node->partOids);
+		state->partOids = palloc0(sizeof(Oid) * state->nOids);
+		foreach_with_count(lc, node->partOids, i)
+			state->partOids[i] = lfirst_oid(lc);
+
+		/* populate fdw_private array from list so we can access by index later */
+		fdw_private_array = (void **) palloc0(state->nOids * sizeof(void *));
+		int fdw_private_Idx = 0;
+		for (i = 0; i < state->nOids; i++)
+		{
+			if (bms_is_member(i, node->selected_parts))
+			{
+				fdw_private_array[i] = list_nth(node->fdw_private_list, fdw_private_Idx++);
+			}
+		}
+	}
+	else
+	{
+		state->nOids = selected_parts_count;
+		state->partOids = palloc0(sizeof(Oid) * state->nOids);
+		int partIdx = 0;
+		foreach_with_count(lc, node->partOids, i)
+		{
+			if (bms_is_member(i, node->selected_parts))
+				state->partOids[partIdx++] = lfirst_oid(lc);
+		}
+
+		/* populate fdw_private array from list so we can access by index later */
+		fdw_private_array = (void **) palloc0(state->nOids * sizeof(void *));
+		i = 0;
+		foreach_with_count(lc, node->fdw_private_list, i)
+			fdw_private_array[i] = (void *) lfirst(lc);;
+	}
+	state->fdw_private_array = fdw_private_array;
 	state->whichPart = -1;
 
 	reloid = exec_rt_fetch(node->foreignscan.scan.scanrelid, estate)->relid;
@@ -89,13 +126,6 @@ ExecInitDynamicForeignScan(DynamicForeignScan *node, EState *estate, int eflags)
 	state->scanrelid = node->foreignscan.scan.scanrelid;
 
 	state->as_prune_state = NULL;
-
-	/* populate fdw_private array from list so we can access by index later */
-	fdw_private_array = (void **) palloc(state->nOids * sizeof(void *));
-	i = 0;
-	foreach_with_count(lc, node->fdw_private_list, i)
-		fdw_private_array[i] = (void *) lfirst(lc);;
-	state->fdw_private_array = fdw_private_array;
 
 	/*
 	 * This context will be reset per-partition to free up per-partition
@@ -194,11 +224,11 @@ ExecDynamicForeignScan(PlanState *pstate)
 	if (NULL != plan->join_prune_paramids && !node->did_pruning)
 	{
 		node->did_pruning = true;
-		node->as_valid_subplans =
+		node->as_valid_subplans = bms_intersect(plan->selected_parts,
 			ExecFindMatchingSubPlans(node->as_prune_state,
 									 node->ss.ps.state,
-									 list_length(plan->partOids),
-									 plan->join_prune_paramids);
+									 node->nOids,
+									 plan->join_prune_paramids));
 
 		int	i = 0;
 		int	partOidIdx = -1;
