@@ -264,7 +264,6 @@ of the `greengagedb/greengage-ci` repository:
 - Regression tests:
   [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
 - Resource group tests:
-- Resource group tests:
  [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
 - Resource group v2 tests:
  [README/REUSABLE-TESTS-RESGROUP-V2.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP-V2.md)
