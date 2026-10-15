@@ -5266,8 +5266,24 @@ tempcat_oid_of_other_session(Oid oid)
 		return false;
 	if (MyProc == NULL)
 		own = NULL;
+	else if (!tempcat_is_reader())
+		own = tempcat_my_state();
 	else
-		own = tempcat_is_reader() ? tempcat_writer_state() : tempcat_my_state();
+	{
+		/*
+		 * A reader goes by its writer's bounds; one that does not know its
+		 * writer cannot tell our objects from others', and says nothing.  A
+		 * retrieve connection only looks at the area it has: this is called
+		 * on the way to an error, e.g. in relation_open().
+		 */
+		if (am_cursor_retrieve_handler)
+			own = tc_area != NULL && tc_root != NULL ?
+				&TempcatShared->procs[tc_root->writer_pgprocno] : NULL;
+		else
+			own = tempcat_writer_state();
+		if (own == NULL)
+			return false;
+	}
 	pg_read_barrier();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
