@@ -51,25 +51,36 @@ $$ LANGUAGE plpython3u;
 
 CREATE TABLE bigtable AS
     SELECT i AS c1, 'abc' AS c2
-    FROM generate_series(1,50000) i distributed randomly;
+    FROM generate_series(1, 50000) i distributed randomly;
 
-CREATE OR REPLACE FUNCTION complex_compute(i int)
-RETURNS int AS $$
-    results = 1
-    for j in range(1, 10000 + i):
-        results = (results * j) % 35969
-    return results
+-- ANALYZE is required to make optimizer produce parallelized plan.
+ANALYZE bigtable;
+
+-- Creates view busy with k identical branches, trying to fill all cpu cores.
+-- Uses md5 to simulate cpu load, approx 5e10 rows will be processed by each
+-- branch.
+CREATE OR REPLACE FUNCTION create_busy_view() RETURNS void AS $$
+    branch = """
+        SELECT count(*) AS s
+            FROM (SELECT c1, generate_series(1, 1000000) AS g FROM bigtable) t
+        WHERE md5(c1::text || g::text) < '8'"""
+
+    import os
+    nsegs = plpy.execute("""
+        SELECT count(*) AS n FROM gp_segment_configuration
+         WHERE content >= 0 AND role = 'p'
+    """)[0]['n']
+    ncores = len(os.sched_getaffinity(0))
+
+    import math
+    procs_per_branch = 5 * nsegs
+    k = min(16, math.ceil(ncores / procs_per_branch) + 1)
+
+    plpy.execute('CREATE VIEW busy AS SELECT sum(s) FROM ({0}) x'.format(
+        ' UNION ALL '.join(['(' + branch + ')'] * k)))
 $$ LANGUAGE plpython3u;
 
-CREATE VIEW busy AS
-    WITH t1 as (select random(), complex_compute(c1) from bigtable),
-    t2 as (select random(), complex_compute(c1) from bigtable),
-    t3 as (select random(), complex_compute(c1) from bigtable),
-    t4 as (select random(), complex_compute(c1) from bigtable),
-    t5 as (select random(), complex_compute(c1) from bigtable)
-    SELECT count(*)
-    FROM
-    t1, t2, t3, t4, t5;
+SELECT create_busy_view();
 
 
 CREATE VIEW cancel_all AS
@@ -92,13 +103,11 @@ CREATE RESOURCE GROUP rg2_cpu_test WITH (concurrency=5, cpu_max_percent=-1, cpu_
 select check_cgroup_configuration();
 
 -- lower admin_group's cpu_max_percent to minimize its side effect
-ALTER RESOURCE GROUP admin_group SET cpu_max_percent 1;
+ALTER RESOURCE GROUP admin_group SET cpu_max_percent 5;
 
 -- create two roles and assign them to above groups
 CREATE ROLE role1_cpu_test RESOURCE GROUP rg1_cpu_test;
 CREATE ROLE role2_cpu_test RESOURCE GROUP rg2_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int) TO role1_cpu_test;
-GRANT ALL ON FUNCTION complex_compute(int) TO role2_cpu_test;
 GRANT ALL ON busy TO role1_cpu_test;
 GRANT ALL ON busy TO role2_cpu_test;
 
@@ -115,6 +124,18 @@ GRANT ALL ON busy TO role2_cpu_test;
 23: SET ROLE TO role2_cpu_test;
 24: SET ROLE TO role2_cpu_test;
 
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
+
 --
 -- now we get prepared.
 --
@@ -126,6 +147,8 @@ GRANT ALL ON busy TO role2_cpu_test;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 -- Gather CPU usage statistics into cpu_usage_samples
@@ -177,6 +200,18 @@ SELECT * FROM cancel_all;
 13: SET ROLE TO role1_cpu_test;
 14: SET ROLE TO role1_cpu_test;
 
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
+
 --
 -- when there are multiple groups with parallel queries,
 -- they should share the cpu usage by their cpu_weight settings,
@@ -198,6 +233,8 @@ SELECT * FROM cancel_all;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 TRUNCATE TABLE cpu_usage_samples;
@@ -275,6 +312,18 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 23: SET ROLE TO role2_cpu_test;
 24: SET ROLE TO role2_cpu_test;
 
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
+
 --
 -- now we get prepared.
 --
@@ -292,6 +341,8 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 12&: SELECT * FROM busy;
 13&: SELECT * FROM busy;
 14&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -343,6 +394,18 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 13: SET ROLE TO role1_cpu_test;
 14: SET ROLE TO role1_cpu_test;
 
+10: SET optimizer_force_multistage_agg = on;
+11: SET optimizer_force_multistage_agg = on;
+12: SET optimizer_force_multistage_agg = on;
+13: SET optimizer_force_multistage_agg = on;
+14: SET optimizer_force_multistage_agg = on;
+
+20: SET optimizer_force_multistage_agg = on;
+21: SET optimizer_force_multistage_agg = on;
+22: SET optimizer_force_multistage_agg = on;
+23: SET optimizer_force_multistage_agg = on;
+24: SET optimizer_force_multistage_agg = on;
+
 --
 -- when there are multiple groups with parallel queries,
 -- they should follow the enforcement of the cpu usage.
@@ -364,6 +427,8 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 22&: SELECT * FROM busy;
 23&: SELECT * FROM busy;
 24&: SELECT * FROM busy;
+
+SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT * FROM busy%' AND state = 'active';
 
 -- start_ignore
 1:TRUNCATE TABLE cpu_usage_samples;
@@ -428,11 +493,11 @@ ALTER RESOURCE GROUP rg2_cpu_test set cpu_max_percent 20;
 2:ALTER RESOURCE GROUP admin_group SET cpu_max_percent 10;
 
 -- cleanup
-2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role1_cpu_test;
-2:REVOKE ALL ON FUNCTION complex_compute(int) FROM role2_cpu_test;
 2:REVOKE ALL ON busy FROM role1_cpu_test;
 2:REVOKE ALL ON busy FROM role2_cpu_test;
 2:DROP ROLE role1_cpu_test;
 2:DROP ROLE role2_cpu_test;
 2:DROP RESOURCE GROUP rg1_cpu_test;
 2:DROP RESOURCE GROUP rg2_cpu_test;
+2:DROP FUNCTION create_busy_view();
+2:DROP VIEW IF EXISTS busy;
