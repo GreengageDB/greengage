@@ -313,25 +313,27 @@ class GGShrink:
 
         return True
 
-    def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> None:
+    def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> Any:
         # During the long operation of a C-function (like the DB driver),
         # if it is executed from the main thread, the signal handler will be executed only when
         # the low-level function is complete. Therefore, we execute queries that can be blocked,
         # or just potentially long-running queries, in a separate thread in order to allow
         # immediate invocation of the signal handler and cancelation of the query.
+        # Returns the cursor object, like dbconn.query does, so the results of the query
+        # can be fetched by the caller.
         self.cancel_conn = conn
         result_queue = Queue()
         def exec_sql():
             try:
-                dbconn.execSQL(conn, sql_cmd)
-                result_queue.put((0, None))
+                cursor = dbconn.query(conn, sql_cmd)
+                result_queue.put((0, cursor, None))
             except Exception as e:
                 self.logger.error(f"Error when performing query '{sql_cmd}': {str(e)}")
-                result_queue.put((1, e))
+                result_queue.put((1, None, e))
         thread = threading.Thread(target=exec_sql)
         thread.start()
         thread.join()
-        return_value, return_exception = result_queue.get()
+        return_value, return_cursor, return_exception = result_queue.get()
         if return_value != 0:
             # If the query failed due to the user request, log and raise the same
             # exception as done because of the 'shutdown_requested' flag for the behavior consistency reasons.
@@ -341,6 +343,7 @@ class GGShrink:
             # Otherwise, pass the original exception.
             raise return_exception
         self.cancel_conn = None
+        return return_cursor
 
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]
@@ -845,16 +848,16 @@ class GGShrink:
                             AND c.gp_segment_id {'<' if is_rollback else '>='} gp_segment_id_limit
                         ) SELECT sum(pg_catalog.pg_relation_size(cte.oid)) FROM cte;
                         $$ LANGUAGE sql STABLE''')
-                cursor = dbconn.query(conn,
-                                      f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
-                                      FROM pg_class c
-                                      JOIN pg_namespace n ON c.relnamespace = n.oid
-                                      JOIN gp_distribution_policy p ON c.oid = p.localoid
-                                      LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
-                                      WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
-                                      c.relpersistence != 't' AND
-                                      p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
-                                      n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
+                cursor = self.execSqlInThread(conn,
+                    f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
+                    FROM pg_class c
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    JOIN gp_distribution_policy p ON c.oid = p.localoid
+                    LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
+                    WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
+                    c.relpersistence != 't' AND
+                    p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
+                    n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
                 for schema_name, rel_name, rel_kind, external_writable, data_move_size in cursor:
                     if rel_kind == 'f' and not external_writable:
                         continue
