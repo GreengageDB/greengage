@@ -2604,3 +2604,77 @@ NOTICE:  drop cascades to 4 other objects
 drop cascades to table tc_sp.tc_sp_heap
 drop cascades to function tc_sp.tc_sp_path(integer)
 drop cascades to function tc_sp.tc_sp_probe(numeric)
+-- Objects that lived on disk are forgotten once dropped, as those in memory
+-- are: the session's set of its objects grew for good once its area was
+-- full, and a later object that reused such an OID, here after the slice
+-- wrapped around (the fault goes near its end), went to disk.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_reuse_first (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_reuse_disk (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+SELECT 'tc_reuse_disk'::regclass::oid AS tc_reuse_oid \gset
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS was_on_disk FROM pg_class WHERE oid = :tc_reuse_oid;
+ was_on_disk 
+------------
+           1
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_reuse_disk;
+-- (for VACUUM to remove its row, which would make the OID taken: the
+-- earlier sessions are gone)
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND backend_type = 'client backend' AND sess_id <> current_setting('gp_session_id')::int); PERFORM pg_sleep(0.1); END LOOP; END $$;
+VACUUM pg_class;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_reuse_mem (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+------------
+ Success:
+(1 row)
+
+SELECT 'tc_reuse_mem'::regclass::oid = :tc_reuse_oid AS reused;
+ reused 
+--------
+ t
+(1 row)
+
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE oid = :tc_reuse_oid;
+ on_disk 
+---------
+       0
+(1 row)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_reuse_mem;

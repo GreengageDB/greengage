@@ -1311,3 +1311,33 @@ SELECT count(*) FROM get_ao_distribution('tc_sp_temp_ao');
 DROP TABLE tc_sp_temp_ao;
 DROP DOMAIN pg_temp.int8, pg_temp.int4;
 DROP SCHEMA tc_sp CASCADE;
+
+-- Objects that lived on disk are forgotten once dropped, as those in memory
+-- are: the session's set of its objects grew for good once its area was
+-- full, and a later object that reused such an OID, here after the slice
+-- wrapped around (the fault goes near its end), went to disk.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_reuse_first (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_reuse_disk (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_reuse_disk'::regclass::oid AS tc_reuse_oid \gset
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS was_on_disk FROM pg_class WHERE oid = :tc_reuse_oid;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_reuse_disk;
+-- (for VACUUM to remove its row, which would make the OID taken: the
+-- earlier sessions are gone)
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND backend_type = 'client backend' AND sess_id <> current_setting('gp_session_id')::int); PERFORM pg_sleep(0.1); END LOOP; END $$;
+VACUUM pg_class;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_reuse_mem (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_reuse_mem'::regclass::oid = :tc_reuse_oid AS reused;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE oid = :tc_reuse_oid;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_reuse_mem;
