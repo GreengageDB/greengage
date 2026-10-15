@@ -55,8 +55,7 @@ CATALOG(pg_appendonly,6105,AppendOnlyRelationId)
 */
 typedef FormData_pg_appendonly *Form_pg_appendonly;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_appendonly_relid_index, 7141, on pg_appendonly using btree(relid oid_ops));
-#define AppendOnlyRelidIndexId  7141
+DECLARE_UNIQUE_INDEX_PKEY(pg_appendonly_relid_index, 7141, AppendOnlyRelidIndexId, on pg_appendonly using btree(relid oid_ops));
 
 /*
  * AORelationVersion defines valid values for the version of AppendOnlyEntry.

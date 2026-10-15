@@ -37,10 +37,8 @@ CATALOG(pg_resgroupcapability,6439,ResGroupCapabilityRelationId) BKI_SHARED_RELA
  */
 typedef FormData_pg_resgroupcapability *Form_pg_resgroupcapability;
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_resgroupcapability_resgroupid_reslimittype_index, 6445, on pg_resgroupcapability using btree(resgroupid oid_ops, reslimittype int2_ops));
-#define ResGroupCapabilityResgroupidResLimittypeIndexId	6445
+DECLARE_UNIQUE_INDEX_PKEY(pg_resgroupcapability_resgroupid_reslimittype_index, 6445, ResGroupCapabilityResgroupidResLimittypeIndexId, on pg_resgroupcapability using btree(resgroupid oid_ops, reslimittype int2_ops));
 
-DECLARE_INDEX(pg_resgroupcapability_resgroupid_index, 6446, on pg_resgroupcapability using btree(resgroupid oid_ops));
-#define ResGroupCapabilityResgroupidIndexId	6446
+DECLARE_INDEX(pg_resgroupcapability_resgroupid_index, 6446, ResGroupCapabilityResgroupidIndexId, on pg_resgroupcapability using btree(resgroupid oid_ops));
 
 #endif   /* PG_RESGROUPCAPABILITY_H */

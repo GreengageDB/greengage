@@ -46,8 +46,7 @@ CATALOG(gp_distribution_policy,7142,GpPolicyRelationId)
  */
 typedef FormData_gp_distribution_policy *Form_gp_distribution_policy;
 
-DECLARE_UNIQUE_INDEX_PKEY(gp_distribution_policy_localoid_index, 8104, on gp_distribution_policy using btree(localoid oid_ops));
-#define GpPolicyLocalOidIndexId  8104
+DECLARE_UNIQUE_INDEX_PKEY(gp_distribution_policy_localoid_index, 8104, GpPolicyLocalOidIndexId, on gp_distribution_policy using btree(localoid oid_ops));
 
 /*
  * Symbolic values for Anum_gp_distribution_policy_type column

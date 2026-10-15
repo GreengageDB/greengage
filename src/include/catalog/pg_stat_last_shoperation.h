@@ -52,10 +52,8 @@ CATALOG(pg_stat_last_shoperation,6056,StatLastShOpRelationId)  BKI_SHARED_RELATI
 typedef FormData_pg_statlastshop *Form_pg_statlastshop;
 
 /* Note: no dbid */
-DECLARE_INDEX(pg_statlastshop_classid_objid_index, 6057, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops));
-#define StatLastShOpClassidObjidIndexId  6057
+DECLARE_INDEX(pg_statlastshop_classid_objid_index, 6057, StatLastShOpClassidObjidIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops));
 
-DECLARE_UNIQUE_INDEX_PKEY(pg_statlastshop_classid_objid_staactionname_index, 6058, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
-#define StatLastShOpClassidObjidStaactionnameIndexId  6058
+DECLARE_UNIQUE_INDEX_PKEY(pg_statlastshop_classid_objid_staactionname_index, 6058, StatLastShOpClassidObjidStaactionnameIndexId, on pg_stat_last_shoperation using btree(classid oid_ops, objid oid_ops, staactionname name_ops));
 
 #endif   /* PG_STAT_LAST_SHOPERATION_H */
