@@ -4220,6 +4220,19 @@ _readVacuumRelation(void)
 	READ_DONE();
 }
 
+/*
+ * GPDB: see _outPublicationTable.
+ */
+static PublicationTable *
+_readPublicationTable(void)
+{
+	READ_LOCALS(PublicationTable);
+
+	READ_NODE_FIELD(relation);
+
+	READ_DONE();
+}
+
 static CreatePublicationStmt *
 _readCreatePublicationStmt()
 {
@@ -4966,6 +4979,8 @@ parseNodeString(void)
 		return_value = _readCreateOpFamilyStmt();
 	else if (MATCHX("CREATEPLANGSTMT"))
 		return_value = _readCreatePLangStmt();
+	else if (MATCHX("PUBLICATIONTABLE"))
+		return_value = _readPublicationTable();
 	else if (MATCHX("CREATEPUBLICATIONSTMT"))
 		return_value = _readCreatePublicationStmt();
 	else if (MATCHX("ALTERPUBLICATIONSTMT"))

@@ -5537,6 +5537,19 @@ _outAlterTSDictionaryStmt(StringInfo str, const AlterTSDictionaryStmt *node)
 	WRITE_NODE_FIELD(options);
 }
 
+/*
+ * GPDB: PublicationTable is an untransformed parse node that upstream never
+ * serializes, but CREATE/ALTER PUBLICATION ... FOR TABLE is dispatched to the
+ * segments with its 'tables' list of PublicationTable nodes.
+ */
+static void
+_outPublicationTable(StringInfo str, const PublicationTable *node)
+{
+	WRITE_NODE_TYPE("PUBLICATIONTABLE");
+
+	WRITE_NODE_FIELD(relation);
+}
+
 static void
 _outCreatePublicationStmt(StringInfo str, const CreatePublicationStmt *node)
 {
@@ -6750,6 +6763,10 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_AlterTSDictionaryStmt:
 				_outAlterTSDictionaryStmt(str, obj);
+				break;
+
+			case T_PublicationTable:
+				_outPublicationTable(str, obj);
 				break;
 
 			case T_CreatePublicationStmt:

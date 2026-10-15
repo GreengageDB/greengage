@@ -1818,6 +1818,10 @@ _outNode(StringInfo str, void *obj)
 				_outAlterTableSpaceOptionsStmt(str, obj);
 				break;
 
+			case T_PublicationTable:
+				_outPublicationTable(str, obj);
+				break;
+
 			case T_CreatePublicationStmt:
 				_outCreatePublicationStmt(str, obj);
 				break;

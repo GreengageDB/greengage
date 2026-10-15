@@ -2626,6 +2626,10 @@ readNodeBinary(void)
 				return_value = _readAlterTableMoveAllStmt();
 				break;
 
+			case T_PublicationTable:
+				return_value = _readPublicationTable();
+				break;
+
 			case T_CreatePublicationStmt:
 				return_value = _readCreatePublicationStmt();
 				break;
