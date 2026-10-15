@@ -61,6 +61,7 @@ static int64 calculate_ao_relation_physical_size(Relation rel, ForkNumber forknu
 												 bool include_ao_aux, int stat_error_level);
 static bool stat_ao_callback(const int segno, void *ctx);
 static int64 get_size_from_segDBs_nullable(const char *cmd, bool *isnull);
+static bool other_session_temp_relation(Relation rel);
 
 #define SEGNO_SUFFIX_LENGTH 12
 
@@ -141,6 +142,18 @@ get_size_from_segDBs_nullable(const char *cmd, bool *isnull)
 	cdbdisp_clearCdbPgResults(&cdb_pgresults);
 
 	return result;
+}
+
+/*
+ * A temporary relation of another session, which a segment that returned
+ * NULL for it keeps in memory (see tempcat.c)?  Not an ordinary relation with
+ * a reserved OID that happens to be within that session's bounds.
+ */
+static bool
+other_session_temp_relation(Relation rel)
+{
+	return rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP &&
+		tempcat_other_session_relation_oid(RelationGetRelid(rel));
 }
 
 /* Return physical size of directory contents, or 0 if dir doesn't exist */
@@ -712,10 +725,11 @@ pg_relation_size(PG_FUNCTION_ARGS)
 		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
+	/* (see get_size_from_segDBs_nullable()) */
+	segnull = segnull && other_session_temp_relation(rel);
 	relation_close(rel, AccessShareLock);
 
-	/* (see get_size_from_segDBs_nullable()) */
-	if (segnull && tempcat_other_session_relation_oid(relOid))
+	if (segnull)
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -879,9 +893,10 @@ pg_table_size(PG_FUNCTION_ARGS)
 		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
+	segnull = segnull && other_session_temp_relation(rel);
 	relation_close(rel, AccessShareLock);
 
-	if (segnull && tempcat_other_session_relation_oid(relOid))
+	if (segnull)
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -912,9 +927,10 @@ pg_indexes_size(PG_FUNCTION_ARGS)
 		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
+	segnull = segnull && other_session_temp_relation(rel);
 	relation_close(rel, AccessShareLock);
 
-	if (segnull && tempcat_other_session_relation_oid(relOid))
+	if (segnull)
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -977,9 +993,10 @@ pg_total_relation_size(PG_FUNCTION_ARGS)
 		size += get_size_from_segDBs_nullable(sql, &segnull);
 	}
 
+	segnull = segnull && other_session_temp_relation(rel);
 	relation_close(rel, AccessShareLock);
 
-	if (segnull && tempcat_other_session_relation_oid(relOid))
+	if (segnull)
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }

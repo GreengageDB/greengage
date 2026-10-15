@@ -5082,11 +5082,32 @@ tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 bool
 tempcat_other_session_relation_oid(Oid relid)
 {
+	TempcatProcState *own;
+	int			i;
+
 	if (!IsTempcatOid(relid) || TempcatShared == NULL)
 		return false;
-	if (tempcat_session_owns_oid(RelationRelationId, relid))
-		return false;
-	return tempcat_oid_live_now(relid, MyDatabaseId);
+
+	/*
+	 * Within the bounds of a live session of the database other than ours:
+	 * one of ours that we dropped is within ours, though we do not own it.
+	 * Each session takes its OIDs from a slice of its own.
+	 */
+	if (MyProc == NULL)
+		own = NULL;
+	else
+		own = tempcat_is_reader() ? tempcat_writer_state() : tempcat_my_state();
+	pg_read_barrier();
+	for (i = 0; i < TempcatShared->nprocs; i++)
+	{
+		TempcatProcState *st = &TempcatShared->procs[i];
+
+		if (st == own || st->databaseId != MyDatabaseId)
+			continue;
+		if (tempcat_bounds_cover(st, relid))
+			return true;
+	}
+	return false;
 }
 
 /*

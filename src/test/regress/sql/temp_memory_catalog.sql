@@ -1353,3 +1353,15 @@ SET gp_temp_memory_catalog_disk_only = on;
 SELECT count(*) AS on_disk FROM pg_class WHERE oid = :tc_reuse_oid;
 RESET gp_temp_memory_catalog_disk_only;
 DROP TABLE tc_reuse_mem;
+
+-- A relation that a process cannot open is taken for another session's,
+-- kept in its memory, only within the bounds of another live session: not
+-- one of the session's own that it dropped.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE FUNCTION pg_temp.tc_open_detail(cmd text) RETURNS text LANGUAGE plpgsql AS $$ DECLARE d text; BEGIN EXECUTE cmd; RETURN 'done'; EXCEPTION WHEN others THEN GET STACKED DIAGNOSTICS d = PG_EXCEPTION_DETAIL; RETURN d; END $$;
+CREATE TEMP TABLE tc_gone (a int) WITH (appendonly = true) DISTRIBUTED BY (a);
+SELECT 'tc_gone'::regclass::oid AS tc_gone_oid \gset
+DROP TABLE tc_gone;
+SELECT pg_temp.tc_open_detail(format('SELECT get_ao_distribution(%s)', :tc_gone_oid)) AS detail;
+SELECT pg_temp.tc_open_detail(format('SELECT get_ao_compression_ratio(%s)', :tc_gone_oid)) AS detail;
