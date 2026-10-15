@@ -1809,6 +1809,8 @@ typedef struct ParallelBitmapHeapState
  *		shared_tbmiterator	   shared iterator
  *		shared_prefetch_iterator shared iterator for prefetching
  *		pstate			   shared state for parallel bitmap scan
+ *		tempscan		   GPDB: catalog rows in memory, see BitmapHeapNext()
+ *		tempcat_done	   GPDB: ... looked for already
  * ----------------
  */
 typedef struct BitmapHeapScanState
@@ -1833,6 +1835,8 @@ typedef struct BitmapHeapScanState
 	TBMSharedIterator *shared_tbmiterator;
 	TBMSharedIterator *shared_prefetch_iterator;
 	ParallelBitmapHeapState *pstate;
+	struct TempcatScanData *tempscan;
+	bool		tempcat_done;
 } BitmapHeapScanState;
 
 typedef struct DynamicBitmapHeapScanState

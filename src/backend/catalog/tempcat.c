@@ -167,7 +167,6 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
-#include "utils/plancache.h"
 #include "utils/rel.h"
 #include "utils/sharedsnapshot.h"
 #include "utils/snapmgr.h"
@@ -442,6 +441,7 @@ struct TempcatScanData
 	TupleDesc	heapdesc;
 	int			nidxkeys;
 	FmgrInfo  **procs;
+	TupleDesc	idxcoldesc;		/* see tempcat_index_columns() */
 	HeapTuple	disk_tuple;		/* fetched on-disk row not returned yet */
 	bool		disk_done;
 	int			direction;		/* 0 until the first row, then 1 or -1 */
@@ -1240,12 +1240,6 @@ tempcat_activate(Oid oid)
 		pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
 		pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
 		st->databaseId = MyDatabaseId;
-
-		/*
-		 * Plans made before may scan the catalogs in ways that do not see
-		 * rows in memory (see tempcat_restrict_catalog_index_paths()).
-		 */
-		ResetPlanCache();
 	}
 
 	if (!tempcat_slice_swept())
@@ -3434,6 +3428,31 @@ tempcat_freeze(Relation rel, HeapTuple tup)
  * ----------------------------------------------------------------
  */
 
+/* Compare two values of key column 'i' of the scan's index. */
+static int
+tempcat_compare_key(TempcatScan scan, int i,
+					Datum ad, bool anull, Datum bd, bool bnull)
+{
+	int			cmp;
+
+	if (anull || bnull)
+	{
+		bool		nulls_first =
+		(scan->irel->rd_indoption[i] & INDOPTION_NULLS_FIRST) != 0;
+
+		if (anull && bnull)
+			return 0;
+		return (anull == nulls_first) ? -1 : 1;
+	}
+
+	cmp = DatumGetInt32(FunctionCall2Coll(scan->procs[i],
+										  scan->irel->rd_indcollation[i],
+										  ad, bd));
+	if (scan->irel->rd_indoption[i] & INDOPTION_DESC)
+		cmp = -cmp;
+	return cmp;
+}
+
 /* Compare two rows of the scanned catalog by the scan's index key. */
 static int
 tempcat_compare(TempcatScan scan, HeapTuple a, HeapTuple b)
@@ -3447,25 +3466,30 @@ tempcat_compare(TempcatScan scan, HeapTuple a, HeapTuple b)
 		bool		bnull;
 		Datum		ad = heap_getattr(a, attno, scan->heapdesc, &anull);
 		Datum		bd = heap_getattr(b, attno, scan->heapdesc, &bnull);
-		int			cmp;
+		int			cmp = tempcat_compare_key(scan, i, ad, anull, bd, bnull);
 
-		if (anull || bnull)
-		{
-			bool		nulls_first =
-			(scan->irel->rd_indoption[i] & INDOPTION_NULLS_FIRST) != 0;
+		if (cmp != 0)
+			return cmp;
+	}
+	return 0;
+}
 
-			if (anull && bnull)
-				continue;
-			cmp = (anull == nulls_first) ? -1 : 1;
-		}
-		else
-		{
-			cmp = DatumGetInt32(FunctionCall2Coll(scan->procs[i],
-												  scan->irel->rd_indcollation[i],
-												  ad, bd));
-			if (scan->irel->rd_indoption[i] & INDOPTION_DESC)
-				cmp = -cmp;
-		}
+/* Compare a row of the scanned catalog with an entry of the scan's index. */
+static int
+tempcat_compare_itup(TempcatScan scan, HeapTuple a,
+					 IndexTuple b, TupleDesc itupdesc)
+{
+	int			i;
+
+	for (i = 0; i < scan->nidxkeys; i++)
+	{
+		AttrNumber	attno = scan->irel->rd_index->indkey.values[i];
+		bool		anull;
+		bool		bnull;
+		Datum		ad = heap_getattr(a, attno, scan->heapdesc, &anull);
+		Datum		bd = index_getattr(b, i + 1, itupdesc, &bnull);
+		int			cmp = tempcat_compare_key(scan, i, ad, anull, bd, bnull);
+
 		if (cmp != 0)
 			return cmp;
 	}
@@ -3553,6 +3577,7 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	scan->heapdesc = desc;
 	scan->nidxkeys = 0;
 	scan->procs = NULL;
+	scan->idxcoldesc = NULL;
 	scan->disk_tuple = NULL;
 	scan->disk_done = false;
 	scan->direction = 0;
@@ -3631,12 +3656,14 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 }
 
 /*
- * Begin a scan of the visible rows in memory of catalog 'rel' to merge into
- * a scan of its index 'irel' by a plan (see index_getnext_slot()), or
- * return NULL if there are none.  The keys are those of the index scan:
- * those on simple index columns are converted to heap ones, the others are
- * dropped, as the executor rechecks the rows in memory against the original
- * quals.
+ * Begin a scan of the visible rows in memory of catalog 'rel' for a scan of
+ * its index 'irel' by a plan, or return NULL if there are none.  Index and
+ * index-only scans merge the rows into the scan of the index (see
+ * index_getnext_slot() and index_getnext_tid()), bitmap heap scans return
+ * them after the heap (see BitmapHeapNext()); without 'irel' and keys for
+ * the latter, all rows.  The keys are those of the index scan: those on
+ * simple index columns are converted to heap ones, the others are dropped,
+ * as the executor rechecks the rows in memory against the original quals.
  */
 TempcatScan
 tempcat_begin_index_scan(Relation rel, Relation irel, Snapshot snapshot,
@@ -3647,6 +3674,7 @@ tempcat_begin_index_scan(Relation rel, Relation irel, Snapshot snapshot,
 	int			nhkeys = 0;
 	int			i;
 
+	Assert(irel != NULL || nkeys == 0);
 	if (snapshot == NULL || !IsMVCCSnapshot(snapshot) ||
 		!tempcat_has_rows(rel))
 		return NULL;
@@ -3681,16 +3709,11 @@ tempcat_begin_index_scan(Relation rel, Relation irel, Snapshot snapshot,
 	return scan;
 }
 
-/*
- * The next row in memory of a scan through an index to return before the
- * on-disk row 'disk' (NULL if there are no more of those), or NULL if 'disk'
- * comes first.  Both come in index order, backward if !forward.
- */
-HeapTuple
-tempcat_merge_next(TempcatScan scan, bool forward, HeapTuple disk)
+/* The next row in memory in index order, without taking it. */
+static HeapTuple
+tempcat_merge_peek(TempcatScan scan, bool forward)
 {
 	int			dir = forward ? 1 : -1;
-	HeapTuple	vtup;
 
 	Assert(scan->irel != NULL);
 	if (scan->direction == 0)
@@ -3702,11 +3725,91 @@ tempcat_merge_next(TempcatScan scan, bool forward, HeapTuple disk)
 
 	if (scan->next >= scan->ntuples)
 		return NULL;
-	vtup = scan->tuples[forward ? scan->next : scan->ntuples - 1 - scan->next];
-	if (disk != NULL && tempcat_compare(scan, vtup, disk) * dir > 0)
+	return scan->tuples[forward ? scan->next : scan->ntuples - 1 - scan->next];
+}
+
+/* The position in the rows in memory of a scan through an index */
+int
+tempcat_scan_getpos(TempcatScan scan)
+{
+	return scan->next;
+}
+
+void
+tempcat_scan_setpos(TempcatScan scan, int pos)
+{
+	Assert(pos >= 0 && pos <= scan->ntuples);
+	scan->next = pos;
+}
+
+/*
+ * The next row in memory of a scan through an index to return before the
+ * on-disk row 'disk' (NULL if there are no more of those), or NULL if 'disk'
+ * comes first.  Both come in index order, backward if !forward.
+ */
+HeapTuple
+tempcat_merge_next(TempcatScan scan, bool forward, HeapTuple disk)
+{
+	HeapTuple	vtup = tempcat_merge_peek(scan, forward);
+
+	if (vtup == NULL ||
+		(disk != NULL && tempcat_compare(scan, vtup, disk) * (forward ? 1 : -1) > 0))
 		return NULL;
 	scan->next++;
 	return vtup;
+}
+
+/* Likewise, before the index entry 'disk' of an index-only scan */
+HeapTuple
+tempcat_merge_next_itup(TempcatScan scan, bool forward,
+						IndexTuple disk, TupleDesc itupdesc)
+{
+	HeapTuple	vtup = tempcat_merge_peek(scan, forward);
+
+	if (vtup == NULL ||
+		(disk != NULL &&
+		 tempcat_compare_itup(scan, vtup, disk, itupdesc) * (forward ? 1 : -1) > 0))
+		return NULL;
+	scan->next++;
+	return vtup;
+}
+
+/*
+ * The columns of the scan's index of row 'tup', as an index-only scan
+ * returns them: in the types of the catalog's columns, which those of the
+ * index may differ from (btree name_ops store cstrings), with their row
+ * type in *desc.
+ */
+HeapTuple
+tempcat_index_columns(TempcatScan scan, HeapTuple tup, TupleDesc *desc)
+{
+	int			natts = IndexRelationGetNumberOfAttributes(scan->irel);
+	Datum		values[INDEX_MAX_KEYS];
+	bool		isnull[INDEX_MAX_KEYS];
+	int			i;
+
+	if (scan->idxcoldesc == NULL)
+	{
+		MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
+
+		scan->idxcoldesc = CreateTemplateTupleDesc(natts);
+		for (i = 0; i < natts; i++)
+		{
+			AttrNumber	attno = scan->irel->rd_index->indkey.values[i];
+
+			if (attno <= 0)
+				elog(ERROR, "cannot return column %d of index \"%s\" of a row in memory",
+					 i + 1, RelationGetRelationName(scan->irel));
+			TupleDescCopyEntry(scan->idxcoldesc, i + 1, scan->heapdesc, attno);
+		}
+		MemoryContextSwitchTo(oldcxt);
+	}
+
+	for (i = 0; i < natts; i++)
+		values[i] = heap_getattr(tup, scan->irel->rd_index->indkey.values[i],
+								 scan->heapdesc, &isnull[i]);
+	*desc = scan->idxcoldesc;
+	return heap_form_tuple(scan->idxcoldesc, values, isnull);
 }
 
 /*
@@ -3798,6 +3901,8 @@ tempcat_endscan(TempcatScan scan)
 	pfree(scan->tuples);
 	if (scan->procs)
 		pfree(scan->procs);
+	if (scan->idxcoldesc)
+		FreeTupleDesc(scan->idxcoldesc);
 	pfree(scan);
 }
 
@@ -3836,25 +3941,6 @@ tempcat_fetch_tid(Relation rel, ItemPointer tid, Snapshot snapshot)
 }
 
 /*
- * Must the plans scanning catalog 'relid' keep to the kinds of index scans
- * that see its rows in memory?  Plain index scans merge them in (see
- * index_getnext_slot()), but index-only and bitmap scans, and marking and
- * restoring positions (for merge joins), do not: the planner and ORCA keep
- * away from them in sessions that keep temporary objects in memory, and
- * activating ResetPlanCache()s the plans cached before.
- */
-bool
-tempcat_restrict_catalog_index_paths(Oid relid)
-{
-	if (tempcat_catalog_index(relid) < 0)
-		return false;
-	if (tc_activated)
-		return true;
-	/* a reader of a session that keeps temporary objects in memory */
-	return tempcat_is_reader() && tempcat_attach();
-}
-
-/*
  * Does catalog 'rel' hold rows in memory that 'snapshot' sees?
  */
 static bool
@@ -3884,26 +3970,6 @@ tempcat_has_visible_rows(Relation rel, Snapshot snapshot)
 	if (reader)
 		LWLockRelease(&tc_root->lock);
 	return found;
-}
-
-/*
- * The executor is about to scan 'rel' index-only or with a bitmap, with
- * 'snapshot'.  Plans made since the session keeps temporary objects in
- * memory do not (see above), but plans made before that may live on outside
- * the plan cache, e.g. that of a CREATE TABLE AS that creates the session's
- * first temporary object, or those of a SQL function for the rest of the
- * statement that calls it: refuse them if the scan would miss rows.  (Rows
- * that the statement itself made are not visible to its snapshot.)
- */
-void
-tempcat_check_index_scan(Relation rel, Snapshot snapshot)
-{
-	if (tempcat_has_visible_rows(rel, snapshot))
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot scan catalog \"%s\" through an index in a plan made before the session kept temporary objects in memory",
-						RelationGetRelationName(rel)),
-				 errhint("Run the statement again.")));
 }
 
 /*

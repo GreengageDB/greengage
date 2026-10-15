@@ -127,7 +127,14 @@ IndexOnlyNext(IndexOnlyScanState *node)
 
 		CHECK_FOR_INTERRUPTS();
 
-		if (RelationIsAppendOptimized(scandesc->xs_heapfetch->rel))
+		/*
+		 * GPDB: a catalog row of a temporary object kept in memory, merged
+		 * into the scan by index_getnext_tid(), visible and with nothing in
+		 * the heap.
+		 */
+		if (scandesc->xs_tempcat != NULL && IsTempcatTid(tid))
+			tuple_from_heap = true;
+		else if (RelationIsAppendOptimized(scandesc->xs_heapfetch->rel))
 		{
 			if (!table_index_fetch_tuple_visible(scandesc->xs_heapfetch,
 												 tid,
@@ -544,10 +551,6 @@ ExecInitIndexOnlyScan(IndexOnlyScan *node, EState *estate, int eflags)
 	 * open the scan relation
 	 */
 	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
-
-	/* GPDB: see tempcat_check_index_scan() */
-	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-		tempcat_check_index_scan(currentRelation, estate->es_snapshot);
 
 	return ExecInitIndexOnlyScanForPartition(node, estate, eflags,
 											 currentRelation, node->indexid);

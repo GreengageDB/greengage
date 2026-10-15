@@ -6,3 +6,5 @@ HeapScanDescData
 struct HeapScanDescData
 IndexScanDescData
 struct IndexScanDescData
+BitmapHeapScanState
+struct BitmapHeapScanState

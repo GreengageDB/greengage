@@ -149,19 +149,6 @@ CTranslatorUtils::GetTableDescr(CMemoryPool *mp, CMDAccessor *md_accessor,
 			GPOS_WSZ_LIT("Queries on coordinator-only tables"));
 	}
 
-	// GPDB: index-only and bitmap scans of plans do not see the catalog rows
-	// of temporary objects kept in memory, and only the planner keeps away
-	// from them (see tempcat_restrict_catalog_index_paths())
-	if (IMDRelation::EreldistrCoordinatorOnly == distribution_policy &&
-		gpdb::TempcatRestrictsCatalogIndexScans(rel_oid))
-	{
-		GPOS_THROW_EXCEPTION(
-			gpdxl::ExmaDXL,							 // major
-			gpdxl::ExmiQuery2DXLUnsupportedFeature,	 // minor
-			GPOS_WSZ_LIT(
-				"Queries on catalogs with temporary objects kept in memory"));
-	}
-
 	// add columns from md cache relation object to table descriptor
 	for (ULONG ul = 0; ul < len; ul++)
 	{

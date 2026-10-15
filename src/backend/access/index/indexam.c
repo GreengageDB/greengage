@@ -119,21 +119,44 @@ static IndexScanDesc index_beginscan_internal(Relation indexRelation,
 /*
  * GPDB: the catalog rows of this session's temporary objects kept in memory
  * (see tempcat.c), to merge into a scan of a catalog index in index order.
- * The rows in memory are looked for at the first fetch after a (re)scan;
- * between fetches, an on-disk row that comes after the next row in memory
- * waits in 'stash'.
+ * The rows in memory are looked for at the first fetch after a (re)scan.
+ * Between fetches, the next on-disk row (of an index scan) or index entry
+ * (of an index-only scan), if it comes after the next row in memory, waits:
+ * the row in 'stash', the entry in the index AM, which is not asked for the
+ * next one meanwhile.
  */
 typedef struct IndexTempcatMerge
 {
 	TempcatScan tempscan;
 	TupleTableSlot *stash;
-	bool		stashed;		/* an on-disk row waits in stash */
+	bool		stashed;		/* an on-disk row or entry waits */
 	bool		disk_done;		/* the index has no more entries */
 	ItemPointerData stash_tid;
 	bool		stash_recheck;
+	IndexTuple	stash_itup;
+	struct TupleDescData *stash_itupdesc;
+	HeapTuple	hitup;			/* index columns of the last row in memory */
+
+	/* the above as of index_markpos(), see index_tempcat_markpos() */
+	bool		mark_valid;
+	int			mark_next;
+	bool		mark_stashed;
+	bool		mark_disk_done;
+	ItemPointerData mark_tid;
+	bool		mark_recheck;
+	TupleTableSlot *mark_slot;
+	IndexTuple	mark_itup;
+	IndexTuple	restored_itup;	/* copy of mark_itup in stash_itup */
 } IndexTempcatMerge;
 
+static void index_tempcat_begin(IndexScanDesc scan);
 static void index_tempcat_end(IndexScanDesc scan);
+static void index_tempcat_markpos(IndexScanDesc scan);
+static void index_tempcat_restrpos(IndexScanDesc scan);
+static ItemPointer index_getnext_tid_disk(IndexScanDesc scan,
+										  ScanDirection direction);
+static ItemPointer index_getnext_tid_tempcat(IndexScanDesc scan,
+											 ScanDirection direction);
 static bool index_getnext_slot_disk(IndexScanDesc scan,
 									ScanDirection direction,
 									TupleTableSlot *slot);
@@ -418,19 +441,13 @@ index_markpos(IndexScanDesc scan)
 	SCAN_CHECKS;
 	CHECK_SCAN_PROCEDURE(ammarkpos);
 
-	/*
-	 * GPDB: the merged rows in memory have no position in the index.  The
-	 * planner does not mark positions of such scans, but plans made before
-	 * the session kept temporary objects in memory may.
-	 */
-	if (scan->xs_tempcat != NULL)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot mark a position in a scan of catalog \"%s\", which holds rows of temporary objects kept in memory",
-						RelationGetRelationName(scan->heapRelation)),
-				 errhint("Run the statement again.")));
-
 	scan->indexRelation->rd_indam->ammarkpos(scan);
+
+	/* GPDB: and the position in the catalog rows in memory */
+	if (unlikely(scan->xs_tempcat_pending))
+		index_tempcat_begin(scan);
+	if (unlikely(scan->xs_tempcat != NULL))
+		index_tempcat_markpos(scan);
 }
 
 /* ----------------
@@ -464,6 +481,10 @@ index_restrpos(IndexScanDesc scan)
 	scan->xs_heap_continue = false;
 
 	scan->indexRelation->rd_indam->amrestrpos(scan);
+
+	/* GPDB: and the position in the catalog rows in memory */
+	if (unlikely(scan->xs_tempcat != NULL))
+		index_tempcat_restrpos(scan);
 }
 
 /*
@@ -591,6 +612,19 @@ index_beginscan_parallel(Relation heaprel, Relation indexrel, int nkeys,
 ItemPointer
 index_getnext_tid(IndexScanDesc scan, ScanDirection direction)
 {
+	/* GPDB: index-only scans merge in the catalog rows in memory, see above */
+	if (unlikely(scan->xs_tempcat_pending) && scan->xs_want_itup)
+		index_tempcat_begin(scan);
+	if (unlikely(scan->xs_tempcat != NULL) && scan->xs_want_itup)
+		return index_getnext_tid_tempcat(scan, direction);
+
+	return index_getnext_tid_disk(scan, direction);
+}
+
+/* The upstream index_getnext_tid(): the index entries only */
+static ItemPointer
+index_getnext_tid_disk(IndexScanDesc scan, ScanDirection direction)
+{
 	bool		found;
 
 	SCAN_CHECKS;
@@ -695,26 +729,7 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 
 	/* GPDB: merge in the catalog rows in memory, see above */
 	if (unlikely(scan->xs_tempcat_pending))
-	{
-		TempcatScan tempscan;
-
-		scan->xs_tempcat_pending = false;
-		tempscan = tempcat_begin_index_scan(scan->heapRelation,
-											scan->indexRelation,
-											scan->xs_snapshot,
-											scan->numberOfKeys,
-											scan->keyData);
-		if (tempscan != NULL)
-		{
-			MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
-
-			m = palloc0(sizeof(IndexTempcatMerge));
-			m->tempscan = tempscan;
-			m->stash = table_slot_create(scan->heapRelation, NULL);
-			scan->xs_tempcat = m;
-			MemoryContextSwitchTo(oldcxt);
-		}
-	}
+		index_tempcat_begin(scan);
 	if (likely(scan->xs_tempcat == NULL))
 		return index_getnext_slot_disk(scan, direction, slot);
 
@@ -773,7 +788,7 @@ index_getnext_slot_disk(IndexScanDesc scan, ScanDirection direction, TupleTableS
 			ItemPointer tid;
 
 			/* Time to fetch the next TID from the index */
-			tid = index_getnext_tid(scan, direction);
+			tid = index_getnext_tid_disk(scan, direction);
 
 			/* If we're out of index entries, we're done */
 			if (tid == NULL)
@@ -795,6 +810,161 @@ index_getnext_slot_disk(IndexScanDesc scan, ScanDirection direction, TupleTableS
 	return false;
 }
 
+/* GPDB: look for the catalog rows in memory to merge in, see above */
+static void
+index_tempcat_begin(IndexScanDesc scan)
+{
+	TempcatScan tempscan;
+	MemoryContext oldcxt;
+	IndexTempcatMerge *m;
+
+	scan->xs_tempcat_pending = false;
+	tempscan = tempcat_begin_index_scan(scan->heapRelation,
+										scan->indexRelation,
+										scan->xs_snapshot,
+										scan->numberOfKeys,
+										scan->keyData);
+	if (tempscan == NULL)
+		return;
+
+	oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
+	m = palloc0(sizeof(IndexTempcatMerge));
+	m->tempscan = tempscan;
+	if (!scan->xs_want_itup)
+		m->stash = table_slot_create(scan->heapRelation, NULL);
+	scan->xs_tempcat = m;
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/*
+ * GPDB: index_getnext_tid() of an index-only scan merging in the catalog
+ * rows in memory.  These come with their index columns in xs_hitup, and
+ * with xs_recheck, as the keys matched them loosely; their TIDs are
+ * IsTempcatTid(), with nothing to fetch from the heap.
+ */
+static ItemPointer
+index_getnext_tid_tempcat(IndexScanDesc scan, ScanDirection direction)
+{
+	IndexTempcatMerge *m = scan->xs_tempcat;
+	bool		have_disk = m->stashed;
+	HeapTuple	vtup;
+
+	if (m->hitup != NULL)
+	{
+		heap_freetuple(m->hitup);
+		m->hitup = NULL;
+		scan->xs_hitup = NULL;
+	}
+
+	if (!have_disk && !m->disk_done)
+	{
+		if (index_getnext_tid_disk(scan, direction) != NULL)
+		{
+			have_disk = true;
+			m->stash_tid = scan->xs_heaptid;
+			m->stash_recheck = scan->xs_recheck;
+			m->stash_itup = scan->xs_itup;
+			m->stash_itupdesc = scan->xs_itupdesc;
+			if (m->stash_itup == NULL)
+				elog(ERROR, "index-only scan of a catalog returned no index tuple");
+		}
+		else
+			m->disk_done = true;
+	}
+
+	vtup = tempcat_merge_next_itup(m->tempscan,
+								   !ScanDirectionIsBackward(direction),
+								   have_disk ? m->stash_itup : NULL,
+								   m->stash_itupdesc);
+	if (vtup != NULL)
+	{
+		m->stashed = have_disk;
+		m->hitup = tempcat_index_columns(m->tempscan, vtup,
+										 &scan->xs_hitupdesc);
+		scan->xs_hitup = m->hitup;
+		scan->xs_heaptid = vtup->t_self;
+		scan->xs_recheck = true;
+		return &scan->xs_heaptid;
+	}
+
+	if (!have_disk)
+		return NULL;
+	m->stashed = false;
+	scan->xs_heaptid = m->stash_tid;
+	scan->xs_recheck = m->stash_recheck;
+	scan->xs_itup = m->stash_itup;
+	scan->xs_itupdesc = m->stash_itupdesc;
+	return &scan->xs_heaptid;
+}
+
+/*
+ * GPDB: the index AM marks the position of the last entry it returned,
+ * which may be the on-disk row or entry still waiting to be returned after
+ * rows in memory: mark that too, and how far the rows in memory got.
+ */
+static void
+index_tempcat_markpos(IndexScanDesc scan)
+{
+	IndexTempcatMerge *m = scan->xs_tempcat;
+	MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(m));
+
+	m->mark_valid = true;
+	m->mark_next = tempcat_scan_getpos(m->tempscan);
+	m->mark_stashed = m->stashed;
+	m->mark_disk_done = m->disk_done;
+	if (m->stashed)
+	{
+		m->mark_tid = m->stash_tid;
+		m->mark_recheck = m->stash_recheck;
+		if (m->stash != NULL)
+		{
+			if (m->mark_slot == NULL)
+				m->mark_slot = table_slot_create(scan->heapRelation, NULL);
+			ExecCopySlot(m->mark_slot, m->stash);
+		}
+		else
+		{
+			if (m->mark_itup != NULL)
+				pfree(m->mark_itup);
+			m->mark_itup = CopyIndexTuple(m->stash_itup);
+		}
+	}
+	MemoryContextSwitchTo(oldcxt);
+}
+
+static void
+index_tempcat_restrpos(IndexScanDesc scan)
+{
+	IndexTempcatMerge *m = scan->xs_tempcat;
+
+	if (!m->mark_valid)
+		elog(ERROR, "no marked position in the catalog rows in memory");
+
+	tempcat_scan_setpos(m->tempscan, m->mark_next);
+	m->stashed = m->mark_stashed;
+	m->disk_done = m->mark_disk_done;
+	if (m->stash != NULL)
+		ExecClearTuple(m->stash);
+	if (m->stashed)
+	{
+		m->stash_tid = m->mark_tid;
+		m->stash_recheck = m->mark_recheck;
+		if (m->stash != NULL)
+			ExecCopySlot(m->stash, m->mark_slot);
+		else
+		{
+			MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(m));
+
+			if (m->restored_itup != NULL)
+				pfree(m->restored_itup);
+			m->restored_itup = CopyIndexTuple(m->mark_itup);
+			m->stash_itup = m->restored_itup;
+			m->stash_itupdesc = RelationGetDescr(scan->indexRelation);
+			MemoryContextSwitchTo(oldcxt);
+		}
+	}
+}
+
 /* GPDB: end the scan of catalog rows in memory, if any */
 static void
 index_tempcat_end(IndexScanDesc scan)
@@ -806,7 +976,19 @@ index_tempcat_end(IndexScanDesc scan)
 		return;
 	scan->xs_tempcat = NULL;
 	tempcat_endscan(m->tempscan);
-	ExecDropSingleTupleTableSlot(m->stash);
+	if (m->stash != NULL)
+		ExecDropSingleTupleTableSlot(m->stash);
+	if (m->mark_slot != NULL)
+		ExecDropSingleTupleTableSlot(m->mark_slot);
+	if (m->mark_itup != NULL)
+		pfree(m->mark_itup);
+	if (m->restored_itup != NULL)
+		pfree(m->restored_itup);
+	if (m->hitup != NULL)
+	{
+		heap_freetuple(m->hitup);
+		scan->xs_hitup = NULL;
+	}
 	pfree(m);
 }
 

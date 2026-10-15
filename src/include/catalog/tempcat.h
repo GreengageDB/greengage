@@ -20,6 +20,7 @@
 #define TEMPCAT_H
 
 #include "access/htup.h"
+#include "access/itup.h"
 #include "access/skey.h"
 #include "storage/itemptr.h"
 #include "utils/relcache.h"
@@ -112,8 +113,12 @@ extern TempcatScan tempcat_begin_index_scan(Relation rel, Relation irel,
 											int nkeys, ScanKey keys);
 extern HeapTuple tempcat_merge_next(TempcatScan scan, bool forward,
 									HeapTuple disk);
-extern bool tempcat_restrict_catalog_index_paths(Oid relid);
-extern void tempcat_check_index_scan(Relation rel, Snapshot snapshot);
+extern HeapTuple tempcat_merge_next_itup(TempcatScan scan, bool forward,
+										 IndexTuple disk, TupleDesc itupdesc);
+extern HeapTuple tempcat_index_columns(TempcatScan scan, HeapTuple tup,
+									   TupleDesc *desc);
+extern int	tempcat_scan_getpos(TempcatScan scan);
+extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Objects of other sessions */

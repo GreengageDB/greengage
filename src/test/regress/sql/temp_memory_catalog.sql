@@ -5,7 +5,7 @@
 -- is created, temporary objects get OIDs from the reserved range starting at
 -- 0xF0000000 (4026531840), and their catalog rows never reach the on-disk
 -- catalogs, but for dependencies on ordinary objects.  Catalog lookups and
--- sequential scans of the catalogs see the rows in memory.
+-- scans of the catalogs see the rows in memory.
 --
 
 -- On-disk catalog rows that belong to objects with reserved OIDs, on the
@@ -50,39 +50,73 @@ SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_t'::regclass ORD
 SELECT column_name, data_type FROM information_schema.columns
  WHERE table_name = 'tc_t' ORDER BY ordinal_position;
 SELECT indisprimary, indisunique, indkey FROM pg_index WHERE indexrelid = 'tc_t_pkey'::regclass;
--- Index scans of plans merge in the rows in memory, in index order.  The
--- planner does not scan the catalogs index-only or with bitmaps, which would
--- not see them, nor mark positions in their index scans (merge joins).
-EXPLAIN (costs off) SELECT relname FROM pg_class WHERE oid = 'pg_class'::regclass;
+-- Index, index-only and bitmap scans of the catalogs in plans see the rows
+-- in memory too: index and index-only scans in index order, also for merge
+-- joins, which mark and restore positions.  (tc_explain() hides reserved
+-- OIDs, which differ from run to run.)
+CREATE FUNCTION tc_explain(q text) RETURNS SETOF text LANGUAGE plpgsql AS $$
+DECLARE l text;
+BEGIN
+  FOR l IN EXECUTE 'EXPLAIN (costs off) ' || q LOOP
+    RETURN NEXT regexp_replace(l, '\m4[0-9]{9}\M', 'N', 'g');
+  END LOOP;
+END $$;
 SET enable_seqscan = off;
-SELECT relname FROM pg_class WHERE oid = 'tc_t'::regclass;
-SELECT relname FROM pg_class WHERE relname = 'tc_t'::text;
-EXPLAIN (costs off)
+SELECT tc_explain($$SELECT relkind FROM pg_class WHERE relname = 'tc_t'$$);
+SELECT relkind FROM pg_class WHERE relname = 'tc_t';
+SELECT relkind FROM pg_class WHERE relname = 'tc_t'::text;
+SELECT tc_explain($$SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class')$$);
+SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class');
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC$$);
+SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC;
+SELECT tc_explain($$SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC$$);
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
-SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
-EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
-SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
 SET enable_indexscan = off;
-EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
-SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
+SET enable_indexonlyscan = off;
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema()$$);
+SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema();
+SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relname = 'pg_class'$$);
+SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relname = 'pg_class' ORDER BY 1;
+RESET enable_indexonlyscan;
 RESET enable_indexscan;
+RESET enable_seqscan;
+-- The same joins with sequential scans, and with merge joins of index and
+-- index-only scans, over ordinary and temporary relations.
+SET enable_indexscan = off;
+SET enable_indexonlyscan = off;
+SET enable_bitmapscan = off;
+SELECT count(*) AS n, sum(a1.atttypid::int8 * a2.attnum) AS s1,
+       sum(a1.attnum * a2.atttypid::int8) AS s2
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass) \gset ref_
+RESET enable_bitmapscan;
+RESET enable_indexonlyscan;
+RESET enable_indexscan;
+SET enable_seqscan = off;
 SET enable_hashjoin = off;
-EXPLAIN (costs off)
-SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
- WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0;
-SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
- WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0 ORDER BY 1, 2;
 SET enable_nestloop = off;
 SET enable_mergejoin = on;
-EXPLAIN (costs off)
-SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
- WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0;
-SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
- WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0 ORDER BY 1, 2;
+SET enable_sort = off;
+SET enable_material = off;
+SELECT tc_explain($$SELECT count(*), sum(a1.attnum * a2.atttypid::int8)
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$);
+SELECT count(*) = :ref_n AND sum(a1.attnum * a2.atttypid::int8) = :ref_s2 AS same
+  FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass);
+SELECT tc_explain($$SELECT count(*), sum(a1.atttypid::int8 * a2.attnum)
+  FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$);
+SELECT count(*) = :ref_n AND sum(a1.atttypid::int8 * a2.attnum) = :ref_s1 AS same
+  FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass);
+RESET enable_material;
+RESET enable_sort;
 RESET enable_mergejoin;
 RESET enable_nestloop;
 RESET enable_hashjoin;
 RESET enable_seqscan;
+DROP FUNCTION tc_explain(text);
 -- The segments have them too.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_pkey');
 -- And nothing of them is on disk.
@@ -212,10 +246,10 @@ UPDATE pg_description SET description = 'updated'
 SELECT obj_description('tc_t'::regclass, 'pg_class');
 RESET allow_system_table_mods;
 
--- Plans made before the session kept temporary objects in memory may scan
--- the catalogs index-only, which does not see rows in memory.  A statement
--- that creates the session's first temporary object runs such a plan
--- safely: it does not see what it creates itself.
+-- Plans made before the session kept temporary objects in memory see them
+-- as well: that of a statement that creates the session's first temporary
+-- object does not see what it creates itself, and one kept for the rest of
+-- such a statement sees what it created.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET optimizer = off;
@@ -223,8 +257,6 @@ CREATE TEMP TABLE tc_cols AS
   SELECT attname FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum = 1
   DISTRIBUTED RANDOMLY;
 SELECT * FROM tc_cols;
--- A plan kept for the rest of a statement that would miss rows is refused;
--- plain index scans of such plans see the rows in memory.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET optimizer = off;
@@ -240,13 +272,8 @@ BEGIN
   END IF;
   RETURN i;
 END $$;
-SELECT i, tc_count_rel('tc_early'), tc_make(i) FROM generate_series(1, 2) i;
-SELECT tc_make(1), tc_count_rel('tc_early') AS planned_anew;
-\c
-SET gp_enable_temp_memory_catalog = on;
-SET optimizer = off;
-SET enable_seqscan = off;
-SELECT i, tc_kind_rel('tc_early'), tc_make(i) FROM generate_series(1, 2) i;
+SELECT i, tc_count_rel('tc_early'), tc_kind_rel('tc_early'), tc_make(i)
+  FROM generate_series(1, 2) i;
 DROP FUNCTION tc_count_rel(name);
 DROP FUNCTION tc_kind_rel(name);
 DROP FUNCTION tc_make(int);

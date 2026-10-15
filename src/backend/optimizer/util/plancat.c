@@ -33,7 +33,6 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic_ext.h"
-#include "catalog/tempcat.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "commands/tablecmds.h"
@@ -215,14 +214,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 		 * GPDB supports index-only scan on AO starting from AORelationVersion_GP7.
 		 */
 		bool enable_ios_ao = false;
-
-		/*
-		 * GPDB: only plain index scans see the rows of temporary objects
-		 * kept in memory, see tempcat_restrict_catalog_index_paths().
-		 */
-		bool		tempcat_restrict =
-			tempcat_restrict_catalog_index_paths(relationObjectId);
-
 		if (RelationStorageIsAO(relation))
 		{
 			Assert(relation->rd_appendonly != NULL);
@@ -318,8 +309,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 				/* GPDB: This AO table might not have met the requirement for IOScan. */
 				if (RelationIsAppendOptimized(relation) && !enable_ios_ao)
 					info->canreturn[i] = false;
-				else if (tempcat_restrict)
-					info->canreturn[i] = false;
 				else
 					info->canreturn[i] = index_can_return(indexRelation, i + 1);
 			}
@@ -342,11 +331,9 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			info->amcanparallel = amroutine->amcanparallel;
 			info->amhasgettuple = (amroutine->amgettuple != NULL);
 			info->amhasgetbitmap = amroutine->amgetbitmap != NULL &&
-				relation->rd_tableam->scan_bitmap_next_block != NULL &&
-				!tempcat_restrict;
+				relation->rd_tableam->scan_bitmap_next_block != NULL;
 			info->amcanmarkpos = (amroutine->ammarkpos != NULL &&
-								  amroutine->amrestrpos != NULL &&
-								  !tempcat_restrict);
+								  amroutine->amrestrpos != NULL);
 			info->amcostestimate = amroutine->amcostestimate;
 			Assert(info->amcostestimate != NULL);
 
