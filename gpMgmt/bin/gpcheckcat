@@ -984,33 +984,32 @@ def checkDependJoinCatalog(catalogs):
     # exist in that catalog table (classid::regclass or
     # refclassid::regclass)
     #
-    # Objects with OIDs from FIRST_TEMPCAT_OID up are temporary objects that
-    # their sessions keep in memory, or of sessions that are gone: only
-    # their dependencies on ordinary objects are on disk, which the server
-    # tells from leftovers itself.
+    # Rows of objects with OIDs from FIRST_TEMPCAT_OID up are dependencies
+    # of temporary objects that their sessions keep in memory, or of sessions
+    # that are gone, on ordinary objects: the server tells leftovers itself.
     deps = []
     for cat in catalogs:
         qry = """
           SELECT '{catalog}' as catalog, objid FROM (
             SELECT objid FROM pg_depend
-              WHERE classid = '{catalog}'::regclass
+              WHERE classid = '{catalog}'::regclass AND objid < {tempcat_oid}
             UNION ALL
             SELECT refobjid FROM pg_depend
-              WHERE refclassid = '{catalog}'::regclass
+              WHERE refclassid = '{catalog}'::regclass AND objid < {tempcat_oid}
           ) d
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
-          WHERE c.oid is NULL AND d.objid < {tempcat_oid}
+          WHERE c.oid is NULL
           UNION ALL
           SELECT '{catalog}' as catalog, objid FROM (
             SELECT dbid, objid FROM pg_shdepend
-              WHERE classid = '{catalog}'::regclass
+              WHERE classid = '{catalog}'::regclass AND objid < {tempcat_oid}
             UNION ALL
             SELECT dbid, refobjid FROM pg_shdepend
-              WHERE refclassid = '{catalog}'::regclass
+              WHERE refclassid = '{catalog}'::regclass AND objid < {tempcat_oid}
           ) d JOIN pg_database db
             ON (d.dbid = db.oid and datname= current_database())
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
-          WHERE c.oid is NULL AND d.objid < {tempcat_oid}
+          WHERE c.oid is NULL
           """.format(catalog=cat, tempcat_oid=FIRST_TEMPCAT_OID)
         deps.append(qry)
 
@@ -1669,7 +1668,14 @@ def checkAOLastrownums():
 # Exclude these tuples from the catalog table scan
 # pg_depend: classid 2603 (pg_amproc) is excluded because their OIDs can be
 #            nonsynchronous (catalog.c:RelationNeedsSynchronizedOIDs())
-MISSING_ENTRY_EXCLUDE = {'pg_depend': 'WHERE classid != 2603'}
+# pg_depend, pg_shdepend: rows of temporary objects with OIDs from
+#            FIRST_TEMPCAT_OID up are excluded: their sessions keep the
+#            objects in memory, and every node drops them on its own, also
+#            when they are leftovers of sessions that are gone
+MISSING_ENTRY_EXCLUDE = {
+    'pg_depend': 'WHERE classid != 2603 AND objid < %d' % FIRST_TEMPCAT_OID,
+    'pg_shdepend': 'WHERE objid < %d' % FIRST_TEMPCAT_OID,
+}
 
 def missingEntryQuery(max_content, catname, pkey, castedPkey):
     # =================

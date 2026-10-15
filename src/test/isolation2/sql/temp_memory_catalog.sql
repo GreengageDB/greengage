@@ -100,6 +100,62 @@ CREATE TABLE tc_slices (n int, slice bigint) DISTRIBUTED REPLICATED;
 6: SELECT count(DISTINCT slice) AS slices FROM tc_slices;
 6q:
 DROP TABLE tc_slices;
+
+-- Owner and privilege rows of roles beyond those a session publishes go to
+-- disk.  Left behind by a session that is gone, they are no reason to keep
+-- a role, and go with DROP ROLE rather than refer to a dropped role.
+DO $$ BEGIN FOR i IN 1..18 LOOP EXECUTE format('CREATE ROLE tc_g%s', i); END LOOP; END $$;
+7: SET gp_enable_temp_memory_catalog = on;
+7: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+7: DO $$ BEGIN FOR i IN 1..18 LOOP EXECUTE format('GRANT SELECT ON tc_t TO tc_g%s', i); END LOOP; END $$;
+7: SELECT count(*) AS on_disk FROM pg_shdepend
+    WHERE refobjid IN (SELECT oid FROM pg_roles WHERE rolname LIKE 'tc_g%') AND objid >= 4026531840
+      AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1;
+7: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+7: SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid)
+     FROM gp_segment_configuration WHERE role = 'p';
+7q:
+8: SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid)
+     FROM gp_segment_configuration WHERE role = 'p';
+8: SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid)
+     FROM gp_segment_configuration WHERE role = 'p';
+8: CALL tc_wait_gone();
+8: DO $$ BEGIN FOR i IN 1..18 LOOP EXECUTE format('DROP ROLE tc_g%s', i); END LOOP; END $$;
+8: SELECT count(*) AS left_rows FROM pg_shdepend
+    WHERE objid >= 4026531840 AND refobjid NOT IN (SELECT oid FROM pg_authid);
+8q:
+
+-- A role published for a row that failed to be stored is published no more
+-- once the session goes idle.
+CREATE ROLE tc_role;
+9: SET gp_enable_temp_memory_catalog = on;
+9: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+9: SET allow_system_table_mods = on;
+9: INSERT INTO pg_shdepend SELECT d.oid, 'pg_class'::regclass, 'tc_t'::regclass, 0,
+     'pg_authid'::regclass, r.oid, 'a'
+     FROM pg_database d, pg_roles r WHERE d.datname = current_database() AND r.rolname = 'tc_role';
+10: DROP ROLE tc_role;
+9q:
+10q:
+
+-- Ordinary objects with reserved OIDs (created before the range was
+-- reserved, or carried over by pg_upgrade) keep their dependencies, also
+-- in catalogs whose objects cannot be temporary objects kept in memory: the
+-- function's support entry goes with it, as it would otherwise.
+CREATE FUNCTION tc_cmp(int4, int4) RETURNS int LANGUAGE internal IMMUTABLE AS 'btint4cmp';
+CREATE OPERATOR FAMILY tc_fam USING btree;
+SELECT gp_inject_fault('oid_in_tempcat_range', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ALTER OPERATOR FAMILY tc_fam USING btree ADD FUNCTION 1 (int4, int4) tc_cmp(int4, int4);
+SELECT gp_inject_fault('oid_in_tempcat_range', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS reserved FROM pg_amproc
+ WHERE oid >= 4026531840 AND amprocfamily = (SELECT oid FROM pg_opfamily WHERE opfname = 'tc_fam');
+DROP FUNCTION tc_cmp(int4, int4);
+SELECT count(*) AS left_entries FROM pg_amproc
+ WHERE amprocfamily = (SELECT oid FROM pg_opfamily WHERE opfname = 'tc_fam');
+DROP OPERATOR FAMILY tc_fam USING btree;
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:

@@ -653,6 +653,7 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	StringInfoData descs;
 	StringInfoData alldescs;
 	bool		foreign_objects = false;
+	Relation	leftoverRel = NULL;
 
 	/*
 	 * We limit the number of dependencies reported to the client to
@@ -728,6 +729,14 @@ checkSharedDependencies(Oid classId, Oid objectId,
 
 				if (f == TCF_LIVE)
 					foreign_objects = true;
+				else if (f == TCF_GONE)
+				{
+					/* a leftover goes, rather than refer to what is dropped */
+					if (leftoverRel == NULL)
+						leftoverRel = table_open(SharedDependRelationId,
+												 RowExclusiveLock);
+					tempcat_forget_leftover(leftoverRel, tup);
+				}
 				if (f != TCF_NONE)
 					continue;
 			}
@@ -780,6 +789,8 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	systable_endscan(scan);
 
 	table_close(sdepRel, AccessShareLock);
+	if (leftoverRel != NULL)
+		table_close(leftoverRel, RowExclusiveLock);
 
 	/*
 	 * Sort and report local and shared objects.

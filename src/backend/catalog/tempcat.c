@@ -1167,10 +1167,29 @@ tempcat_sweep_slice(int slice)
 		CommandCounterIncrement();
 }
 
+/*
+ * The (sub)transaction that swept our slice rolled back: the leftovers are
+ * back.  Until the next sweep, other sessions take them for leftovers again
+ * (tempcat_foreign_object()): no object of ours in the slice can have
+ * committed, as a slice is swept before its first object.
+ */
+static void
+tempcat_sweep_rolled_back(void)
+{
+	tc_sweep_state = TCS_NONE;
+	if (tc_slice >= 0)
+		TempcatShared->slices[tc_slice].databaseId = InvalidOid;
+}
+
 /* Has the sweep of our slice committed?  Apply a prepared one's outcome. */
 static bool
 tempcat_slice_swept(void)
 {
+	/*
+	 * (A prepared sweep that rolled back leaves the slice published: later
+	 * transactions may have committed objects in it meanwhile.  The next
+	 * sweep, below, removes the leftovers again.)
+	 */
 	if (tc_sweep_state == TCS_PREPARED &&
 		!TransactionIdIsInProgress(tc_sweep_xid))
 		tc_sweep_state = TransactionIdDidCommit(tc_sweep_xid) ?
@@ -1463,6 +1482,14 @@ tempcat_publish_role(Oid roleid)
 	else
 		ok = false;
 	SpinLockRelease(&TempcatShared->mutex);
+
+	/*
+	 * The row may yet fail to be stored (no room, refused, an error): have
+	 * the roles published anew when the session goes idle or starts its next
+	 * transaction, from the rows there are then.
+	 */
+	if (ok)
+		tc_roles_dirty = true;
 
 	return ok;
 }
@@ -2828,7 +2855,7 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
-			tc_sweep_state = TCS_NONE;
+			tempcat_sweep_rolled_back();
 			break;
 		default:
 			break;
@@ -2844,7 +2871,7 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 	if (tc_sweep_state == TCS_IN_XACT && tc_sweep_subid == mySubid)
 	{
 		if (event == SUBXACT_EVENT_ABORT_SUB)
-			tc_sweep_state = TCS_NONE;
+			tempcat_sweep_rolled_back();
 		else if (event == SUBXACT_EVENT_COMMIT_SUB)
 			tc_sweep_subid = parentSubid;
 	}
@@ -3746,15 +3773,35 @@ TempcatForeign
 tempcat_foreign_object(Oid classId, Oid objectId)
 {
 	TempcatSliceState *ss;
+	int			slice;
+	int			i;
 
-	if (TempcatShared == NULL || !IsTempcatOid(objectId))
+	if (TempcatShared == NULL || !IsTempcatOid(objectId) || IsBinaryUpgrade)
 		return TCF_NONE;
+
+	/* only objects of these catalogs can be temporary objects in memory */
+	for (i = 0; i < lengthof(tempcat_object_classes); i++)
+	{
+		if (tempcat_object_classes[i] == classId)
+			break;
+	}
+	if (i == lengthof(tempcat_object_classes))
+		return TCF_NONE;
+
 	if (tempcat_session_owns_oid(classId, objectId))
 		return TCF_NONE;
 	if (tempcat_disk_object_exists(classId, objectId))
 		return TCF_NONE;
 
-	ss = &TempcatShared->slices[tempcat_slice_of(objectId)];
+	/*
+	 * In our own slice, what is not ours is a leftover, e.g. one that the
+	 * sweep of the slice left as somebody else was deleting it then.
+	 */
+	slice = tempcat_slice_of(objectId);
+	if (!tempcat_is_reader() && slice == tc_slice)
+		return TCF_GONE;
+
+	ss = &TempcatShared->slices[slice];
 	if (pg_atomic_read_u32(&ss->holder) != 0)
 	{
 		pg_read_barrier();
