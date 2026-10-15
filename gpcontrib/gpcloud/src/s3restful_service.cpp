@@ -102,8 +102,8 @@ struct CURLWrapper {
         curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, lowSpeedLimit);
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, lowSpeedTime);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, (long)lowSpeedLimit);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, (long)lowSpeedTime);
 
         if (debugCurl) {
             curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
@@ -154,7 +154,7 @@ Response S3RESTfulService::get(const string &url, HTTPHeaders &headers) {
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, RESTfulServiceWriteFuncCallback);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->verifyCert);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)this->verifyCert);
 
     this->performCurl(curl, response);
 
@@ -187,7 +187,7 @@ Response S3RESTfulService::put(const string &url, HTTPHeaders &headers, const S3
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, RESTfulServiceWriteFuncCallback);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->verifyCert);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)this->verifyCert);
 
     UploadData uploadData(data);
     curl_easy_setopt(curl, CURLOPT_READDATA, (void *)&uploadData);
@@ -230,7 +230,7 @@ Response S3RESTfulService::post(const string &url, HTTPHeaders &headers,
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, RESTfulServiceWriteFuncCallback);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->verifyCert);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)this->verifyCert);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
 
     S3VectorUInt8 s3data(data);
@@ -275,7 +275,7 @@ ResponseCode S3RESTfulService::head(const string &url, HTTPHeaders &headers) {
 
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "HEAD");
     curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->verifyCert);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)this->verifyCert);
 
     this->performCurl(curl, response);
 
@@ -308,7 +308,7 @@ Response S3RESTfulService::deleteRequest(const string &url, HTTPHeaders &headers
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&response);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, RESTfulServiceAbortFuncCallback);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, this->verifyCert);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)this->verifyCert);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
 
     S3VectorUInt8 data;
