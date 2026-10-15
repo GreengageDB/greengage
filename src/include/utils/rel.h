@@ -607,30 +607,15 @@ typedef struct ViewOptions
  * each time you need to access the SMgrRelation.  It's quite cheap in
  * comparison to whatever an smgr function is going to do.
  */
-<<<<<<< HEAD
-#define RelationOpenSmgr(relation) \
-	do { \
-		if ((relation)->rd_smgr == NULL) \
-			smgrsetowner(&((relation)->rd_smgr), \
-						 smgropen((relation)->rd_node, \
-								  (relation)->rd_backend, \
-								  RelationIsAppendOptimized(relation)?SMGR_AO:SMGR_MD)); \
-	} while (0)
-||||||| e1c1c30f635
-#define RelationOpenSmgr(relation) \
-	do { \
-		if ((relation)->rd_smgr == NULL) \
-			smgrsetowner(&((relation)->rd_smgr), smgropen((relation)->rd_node, (relation)->rd_backend)); \
-	} while (0)
-=======
 static inline SMgrRelation
 RelationGetSmgr(Relation rel)
 {
 	if (unlikely(rel->rd_smgr == NULL))
-		smgrsetowner(&(rel->rd_smgr), smgropen(rel->rd_node, rel->rd_backend));
+		smgrsetowner(&(rel->rd_smgr),
+					 smgropen(rel->rd_node, rel->rd_backend,
+							  RelationIsAppendOptimized(rel) ? SMGR_AO : SMGR_MD));
 	return rel->rd_smgr;
 }
->>>>>>> 3b231596ccf
 
 /*
  * RelationCloseSmgr
@@ -703,7 +688,7 @@ RelationGetSmgr(Relation rel)
  * that do not use shared/local buffers.
  */
 #define RelationUsesBufferManager(relation) \
-	((relation)->rd_smgr->smgr_which == SMGR_MD)
+	(!RelationIsAppendOptimized(relation))
 
 /*
  * RelationUsesTempNamespace
