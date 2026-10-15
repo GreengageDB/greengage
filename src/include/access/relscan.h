@@ -171,6 +171,7 @@ typedef struct SysScanDescData
 	struct IndexScanDescData *iscan;	/* only valid in index-scan case */
 	struct SnapshotData *snapshot;	/* snapshot to unregister at end of scan */
 	struct TupleTableSlot *slot;
+	struct TempcatScanData *tempscan;	/* virtual rows, see tempcat.c */
 }			SysScanDescData;
 
 #endif							/* RELSCAN_H */

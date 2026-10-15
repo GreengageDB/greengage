@@ -43,6 +43,10 @@ extern Oid GetNewOidForCollation(Relation relation, Oid indexId, AttrNumber oidc
 								 Oid collnamespace, char *collname);
 extern Oid GetNewOidForConstraint(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  Oid conrelid, Oid contypid, char *conname);
+extern Oid GetNewOidForDomainConstraint(Relation relation, Oid indexId,
+										AttrNumber oidcolumn, Oid conrelid,
+										Oid contypid, char *conname,
+										Oid domainId);
 extern Oid GetNewOidForConversion(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  Oid connamespace, char *conname);
 extern Oid GetPreassignedOidForDatabase(const char *datname);

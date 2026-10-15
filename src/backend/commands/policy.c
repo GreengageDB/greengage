@@ -405,6 +405,10 @@ RemovePolicyById(Oid policy_id)
 
 	/* Clean up */
 	table_close(pg_policy_rel, RowExclusiveLock);
+
+	/* MPP-6929: metadata tracking */
+	if (Gp_role == GP_ROLE_DISPATCH)
+		MetaTrackDropObject(PolicyRelationId, policy_id);
 }
 
 /*

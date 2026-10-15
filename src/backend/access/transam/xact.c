@@ -26,6 +26,7 @@
 #include "access/subtrans.h"
 #include "access/transam.h"
 #include "access/twophase.h"
+#include "catalog/tempcat.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xloginsert.h"
@@ -2744,6 +2745,9 @@ StartTransaction(void)
 		AssignResGroupOnCoordinator();
 
 	initialize_wal_bytes_written();
+	/* Apply the outcome of earlier transactions to in-memory temp catalog rows */
+	tempcat_start_transaction();
+
 	ShowTransactionState("StartTransaction");
 
 	ereportif(Debug_print_full_dtm, LOG,
@@ -3203,6 +3207,9 @@ PrepareTransaction(void)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot PREPARE a transaction that has operated on temporary objects")));
 #endif
+	/* GPDB: but not with in-memory temporary catalog rows, see tempcat.c */
+	tempcat_check_prepare();
+
 	SIMPLE_FAULT_INJECTOR("start_prepare");
 
 	/*
@@ -6269,6 +6276,9 @@ AbortSubTransaction(void)
 		/* Post-abort cleanup */
 		if (FullTransactionIdIsValid(s->fullTransactionId))
 			AtSubAbort_childXids();
+
+		/* Free in-memory temp catalog rows of the aborted subtransaction */
+		tempcat_abort_subtransaction();
 
 		CallSubXactCallbacks(SUBXACT_EVENT_ABORT_SUB, s->subTransactionId,
 							 s->parent->subTransactionId);

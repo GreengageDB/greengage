@@ -34,6 +34,7 @@
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "catalog/pg_am.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexscan.h"
 #include "lib/pairingheap.h"
@@ -916,6 +917,10 @@ ExecInitIndexScan(IndexScan *node, EState *estate, int eflags)
 	 * open the base relation and acquire appropriate lock on it.
 	 */
 	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
+
+	/* GPDB: see tempcat_check_index_scan() */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+		tempcat_check_index_scan(currentRelation);
 
 	return ExecInitIndexScanForPartition(node, estate, eflags,
 	                                     currentRelation, node->indexid);

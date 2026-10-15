@@ -21,6 +21,7 @@
 #include <sys/unistd.h>
 
 #include "access/reloptions.h"
+#include "catalog/tempcat.h"
 #include "access/transam.h"
 #include "access/url.h"
 #include "access/xlog_internal.h"
@@ -631,6 +632,19 @@ struct config_bool ConfigureNamesBool_gp[] =
 		},
 		&gp_enable_blkdir_sampling,
 		true,
+		NULL, NULL, NULL
+	},
+	{
+		{"gp_enable_temp_memory_catalog", PGC_USERSET, CLIENT_CONN_STATEMENT,
+			gettext_noop("Keep catalog rows of temporary objects in memory."),
+			gettext_noop("Takes effect when the session's temporary schema is "
+						 "created: objects in it then get OIDs from a reserved "
+						 "range and their catalog rows are kept in session "
+						 "memory instead of the on-disk catalog."),
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_enable_temp_memory_catalog,
+		false,
 		NULL, NULL, NULL
 	},
 	{
@@ -3124,6 +3138,36 @@ struct config_bool ConfigureNamesBool_gp[] =
 
 struct config_int ConfigureNamesInt_gp[] =
 {
+	{
+		{"gp_temp_memory_catalog_max_size", PGC_SUSET, RESOURCES_MEM,
+			gettext_noop("Maximum memory for the catalog rows of temporary objects, per process."),
+			gettext_noop("The memory is dynamic shared memory (in /dev/shm with the default "
+						 "dynamic_shared_memory_type). Beyond it, the rows go to files, see "
+						 "gp_temp_memory_catalog_max_file_size. Takes effect when a session "
+						 "creates its first temporary object."),
+			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
+		},
+		&gp_temp_memory_catalog_max_size,
+		16384, 1024, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"gp_temp_memory_catalog_max_file_size", PGC_SUSET, RESOURCES_DISK,
+			gettext_noop("Maximum size of the files for the catalog rows of temporary objects, per process."),
+			gettext_noop("Catalog rows of temporary objects that do not fit in "
+						 "gp_temp_memory_catalog_max_size go to files in pg_dynshmem, "
+						 "mapped into memory: the kernel keeps them in its page cache as "
+						 "long as it can spare the memory. 0 keeps the rows in memory "
+						 "only. Takes effect when a session creates its first temporary "
+						 "object."),
+			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
+		},
+		&gp_temp_memory_catalog_max_file_size,
+		1048576, 0, MAX_KILOBYTES,
+		NULL, NULL, NULL
+	},
+
 	{
 		{"readable_external_table_timeout", PGC_USERSET, EXTERNAL_TABLES,
 			gettext_noop("Cancel the query if no data read within N seconds."),

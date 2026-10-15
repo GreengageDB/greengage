@@ -33,6 +33,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_statistic_ext.h"
+#include "catalog/tempcat.h"
 #include "foreign/fdwapi.h"
 #include "miscadmin.h"
 #include "commands/tablecmds.h"
@@ -201,6 +202,13 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 		hasindex = false;
 	else
 		hasindex = relation->rd_rel->relhasindex;
+
+	/*
+	 * GPDB: nor of catalogs whose rows of temporary objects kept in memory
+	 * only sequential scans see (see tempcat.c).
+	 */
+	if (hasindex && !tempcat_plan_catalog_index_scans(relationObjectId))
+		hasindex = false;
 
 	if (hasindex)
 	{

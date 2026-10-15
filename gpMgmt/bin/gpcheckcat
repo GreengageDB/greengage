@@ -85,6 +85,8 @@ ERROR_NOREPAIR = 3
 
 FIRST_NORMAL_OID = 16384
 PG_CATALOG_OID = 11
+# FirstTempcatObjectId, see src/include/catalog/tempcat.h
+FIRST_TEMPCAT_OID = 4026531840
 
 def setError(level):
     '''
@@ -981,6 +983,11 @@ def checkDependJoinCatalog(catalogs):
     # and (refclassid, refobjid) pairs existing in pg_depend actually
     # exist in that catalog table (classid::regclass or
     # refclassid::regclass)
+    #
+    # Objects with OIDs from FIRST_TEMPCAT_OID up are temporary objects that
+    # their sessions keep in memory, or of sessions that are gone: only
+    # their dependencies on ordinary objects are on disk, which the server
+    # tells from leftovers itself.
     deps = []
     for cat in catalogs:
         qry = """
@@ -992,7 +999,7 @@ def checkDependJoinCatalog(catalogs):
               WHERE refclassid = '{catalog}'::regclass
           ) d
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
-          WHERE c.oid is NULL
+          WHERE c.oid is NULL AND d.objid < {tempcat_oid}
           UNION ALL
           SELECT '{catalog}' as catalog, objid FROM (
             SELECT dbid, objid FROM pg_shdepend
@@ -1003,8 +1010,8 @@ def checkDependJoinCatalog(catalogs):
           ) d JOIN pg_database db
             ON (d.dbid = db.oid and datname= current_database())
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
-          WHERE c.oid is NULL
-          """.format(catalog=cat)
+          WHERE c.oid is NULL AND d.objid < {tempcat_oid}
+          """.format(catalog=cat, tempcat_oid=FIRST_TEMPCAT_OID)
         deps.append(qry)
 
     qry = """

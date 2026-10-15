@@ -47,6 +47,7 @@
 #include "access/tableam.h"
 #include "access/transam.h"
 #include "access/visibilitymap.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeBitmapHeapscan.h"
 #include "miscadmin.h"
@@ -757,6 +758,10 @@ ExecInitBitmapHeapScan(BitmapHeapScan *node, EState *estate, int eflags)
 	 * open the scan relation
 	 */
 	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
+
+	/* GPDB: see tempcat_check_index_scan() */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+		tempcat_check_index_scan(currentRelation);
 
 	bhsState =  ExecInitBitmapHeapScanForPartition(node, estate, eflags,
 												   currentRelation);

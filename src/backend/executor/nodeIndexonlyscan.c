@@ -36,6 +36,7 @@
 #include "access/tupdesc.h"
 #include "access/visibilitymap.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexonlyscan.h"
 #include "executor/nodeIndexscan.h"
@@ -543,6 +544,10 @@ ExecInitIndexOnlyScan(IndexOnlyScan *node, EState *estate, int eflags)
 	 * open the scan relation
 	 */
 	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
+
+	/* GPDB: see tempcat_check_index_scan() */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+		tempcat_check_index_scan(currentRelation);
 
 	return ExecInitIndexOnlyScanForPartition(node, estate, eflags,
 											 currentRelation, node->indexid);

@@ -983,6 +983,51 @@ ActiveSnapshotSet(void)
 }
 
 /*
+ * GPDB: could a snapshot that this backend still uses see a row that its
+ * current transaction inserted in command 'cmin' and deleted in command
+ * 'cmax'?  That is, does an active or registered snapshot, the catalog
+ * snapshot or the current one have cmin < curcid <= cmax?  (tempcat.c frees
+ * such rows early only if none does.)
+ */
+static bool
+snapshot_sees_command_range(Snapshot snapshot, CommandId cmin, CommandId cmax)
+{
+	return snapshot != NULL && snapshot->snapshot_type == SNAPSHOT_MVCC &&
+		cmin < snapshot->curcid && snapshot->curcid <= cmax;
+}
+
+static bool
+registered_snapshots_see_command_range(pairingheap_node *node,
+									   CommandId cmin, CommandId cmax)
+{
+	for (; node != NULL; node = node->next_sibling)
+	{
+		if (snapshot_sees_command_range(pairingheap_container(SnapshotData, ph_node, node),
+										cmin, cmax) ||
+			registered_snapshots_see_command_range(node->first_child, cmin, cmax))
+			return true;
+	}
+	return false;
+}
+
+bool
+SnapshotsSeeCommandRange(CommandId cmin, CommandId cmax)
+{
+	ActiveSnapshotElt *active;
+
+	for (active = ActiveSnapshot; active != NULL; active = active->as_next)
+	{
+		if (snapshot_sees_command_range(active->as_snap, cmin, cmax))
+			return true;
+	}
+	return snapshot_sees_command_range(CatalogSnapshot, cmin, cmax) ||
+		snapshot_sees_command_range(CurrentSnapshot, cmin, cmax) ||
+		snapshot_sees_command_range(SecondarySnapshot, cmin, cmax) ||
+		registered_snapshots_see_command_range(RegisteredSnapshots.ph_root,
+											   cmin, cmax);
+}
+
+/*
  * RegisterSnapshot
  *		Register a snapshot as being in use by the current resource owner
  *

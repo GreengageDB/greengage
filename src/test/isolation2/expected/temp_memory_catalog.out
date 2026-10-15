@@ -1,0 +1,194 @@
+-- Temporary objects kept in memory (catalog/tempcat.c) as other sessions
+-- see them.
+--
+-- Their catalog rows are in their session's memory, but for dependencies on
+-- ordinary objects, which stay on disk: other sessions cannot see the
+-- objects, but must neither drop nor change what they depend on.
+
+-- Sessions that quit are gone only once their processes on all nodes are.
+CREATE TABLE tc_sess (id int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE PROCEDURE tc_wait_gone() LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..600 LOOP IF NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess s ON a.sess_id = s.id) AND NOT EXISTS (SELECT 1 FROM gp_dist_random('pg_stat_activity') a JOIN tc_sess s ON a.sess_id = s.id) THEN RETURN; END IF; COMMIT; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'session did not end'; END $$;
+CREATE PROCEDURE
+
+CREATE TYPE tc_comp AS (x int, y int);
+CREATE TYPE
+CREATE DOMAIN tc_dom AS int;
+CREATE DOMAIN
+CREATE TABLE tc_ord (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE
+CREATE FUNCTION tc_fn(int) RETURNS int LANGUAGE sql AS 'SELECT $1';
+CREATE FUNCTION
+CREATE ROLE tc_role;
+CREATE ROLE
+GRANT ALL ON tc_ord TO tc_role;
+GRANT
+
+1: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+1: SET gp_enable_temp_memory_catalog = on;
+SET
+1: SET ROLE tc_role;
+SET
+1: CREATE TEMP TABLE tc_t (c tc_comp, d tc_dom, e int DEFAULT tc_fn(1)) DISTRIBUTED BY (e);
+CREATE TABLE
+1: CREATE TEMP VIEW tc_v AS SELECT a, b FROM tc_ord;
+CREATE VIEW
+1: INSERT INTO tc_t VALUES ((1, 2), 3);
+INSERT 0 1
+1: SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ t        
+(1 row)
+
+-- Other sessions see neither the objects nor their schema.
+2: SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_v');
+ count 
+-------
+ 0     
+(1 row)
+2: SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_v');
+ count 
+-------
+ 0     
+(1 row)
+
+-- They cannot drop what the objects depend on, not even with CASCADE.
+2: DROP TYPE tc_comp;
+ERROR:  cannot drop type tc_comp because a temporary object of another session depends on it
+2: DROP TYPE tc_comp CASCADE;
+ERROR:  cannot drop type tc_comp because a temporary object of another session depends on it
+2: DROP DOMAIN tc_dom CASCADE;
+ERROR:  cannot drop type tc_dom because a temporary object of another session depends on it
+2: DROP FUNCTION tc_fn(int) CASCADE;
+ERROR:  cannot drop function tc_fn(integer) because a temporary object of another session depends on it
+2: DROP TABLE tc_ord CASCADE;
+ERROR:  cannot drop table tc_ord because a temporary object of another session depends on it
+2: ALTER TABLE tc_ord DROP COLUMN b CASCADE;
+ERROR:  cannot drop column b of table tc_ord because a temporary object of another session depends on it
+-- Nor change it so that the objects would not work any more.
+2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
+ERROR:  cannot alter type "tc_comp" because a temporary object of another session uses it
+2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_check CHECK (VALUE > 0);
+ERROR:  cannot alter type "tc_dom" because a temporary object of another session uses it
+2: ALTER TABLE tc_ord ALTER COLUMN b TYPE text;
+ERROR:  cannot alter type of column "b" of table "tc_ord" because a temporary object of another session uses it
+-- Nor drop the role owning them.  DROP OWNED and REASSIGN OWNED leave them
+-- to their session.
+2: DROP ROLE tc_role;
+ERROR:  role "tc_role" cannot be dropped because some objects depend on it
+DETAIL:  privileges for table tc_ord
+objects in temporary schemas of other sessions
+2: REASSIGN OWNED BY tc_role TO CURRENT_USER;
+REASSIGN OWNED
+1: SELECT * FROM tc_t;
+ c     | d | e 
+-------+---+---
+ (1,2) | 3 | 1 
+(1 row)
+1: SELECT count(*) FROM tc_v;
+ count 
+-------
+ 0     
+(1 row)
+2: DROP OWNED BY tc_role;
+DROP OWNED
+2: DROP ROLE tc_role;
+ERROR:  role "tc_role" cannot be dropped because some objects depend on it
+DETAIL:  objects in temporary schemas of other sessions
+1: SELECT * FROM tc_t;
+ c     | d | e 
+-------+---+---
+ (1,2) | 3 | 1 
+(1 row)
+
+-- Once the session is gone, so is all of that.
+1q: ... <quitting>
+2: CALL tc_wait_gone();
+CALL
+2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
+ALTER TYPE
+2: DROP TABLE tc_ord CASCADE;
+DROP TABLE
+2: DROP TYPE tc_comp;
+DROP TYPE
+2: DROP DOMAIN tc_dom;
+DROP DOMAIN
+2: DROP FUNCTION tc_fn(int);
+DROP FUNCTION
+2: DROP ROLE tc_role;
+DROP ROLE
+2q: ... <quitting>
+
+-- A session that does not drop its temporary objects (here as if it
+-- crashed) leaves their on-disk dependency rows behind.  Other sessions take
+-- them for leftovers: they are no reason to keep anything.
+CREATE TYPE tc_comp AS (x int, y int);
+CREATE TYPE
+CREATE ROLE tc_role;
+CREATE ROLE
+3: SET gp_enable_temp_memory_catalog = on;
+SET
+3: CREATE TEMP TABLE tc_t (c tc_comp, e int) DISTRIBUTED BY (e);
+CREATE TABLE
+3: ALTER TABLE tc_t OWNER TO tc_role;
+ALTER TABLE
+3: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+3: SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+3q: ... <quitting>
+4: SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+4: SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+4: CALL tc_wait_gone();
+CALL
+4: SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tc_comp'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+4: SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE refobjid = 'tc_comp'::regtype AND objid >= 4026531840;
+ leftovers 
+-----------
+ t         
+(1 row)
+4: DROP TYPE tc_comp;
+DROP TYPE
+4: SELECT count(*) FROM pg_depend WHERE objid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+4: SELECT count(*) FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840;
+ count 
+-------
+ 0     
+(1 row)
+4: DROP ROLE tc_role;
+DROP ROLE
+4: DROP TABLE tc_sess;
+DROP TABLE
+4: DROP PROCEDURE tc_wait_gone();
+DROP PROCEDURE
+4q: ... <quitting>

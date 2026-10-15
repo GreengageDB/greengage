@@ -23,6 +23,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_statistic_ext.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_statistic_ext_data.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
@@ -165,6 +166,18 @@ CreateStatistics(CreateStatsStmt *stmt)
 											  namespaceId);
 	}
 	namestrcpy(&stxname, namestr);
+
+	/*
+	 * GPDB: the catalog rows of a temporary table kept in memory (see
+	 * tempcat.c) are not visible to other sessions, so neither may be a
+	 * statistics object on it in an ordinary schema.
+	 */
+	if (tempcat_owns_oid(RelationRelationId, RelationGetRelid(rel)) &&
+		!tempcat_owns_oid(NamespaceRelationId, namespaceId))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("statistics object on a temporary table kept in memory must be in the temporary schema"),
+				 errhint("Name it pg_temp.%s.", namestr)));
 
 	/* Check we have creation rights in target namespace. */
 	aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_CREATE);
@@ -349,8 +362,13 @@ CreateStatistics(CreateStatsStmt *stmt)
 	memset(values, 0, sizeof(values));
 	memset(nulls, false, sizeof(nulls));
 
-	statoid = GetNewOidWithIndex(statrel, StatisticExtOidIndexId,
-								 Anum_pg_statistic_ext_oid);
+	/* GPDB: statistics of a temporary table kept in memory, see tempcat.c */
+	if (tempcat_owns_oid(RelationRelationId, relid))
+		statoid = tempcat_allocate_oid(statrel, StatisticExtOidIndexId,
+									   Anum_pg_statistic_ext_oid);
+	else
+		statoid = GetNewOidWithIndex(statrel, StatisticExtOidIndexId,
+									 Anum_pg_statistic_ext_oid);
 	values[Anum_pg_statistic_ext_oid - 1] = ObjectIdGetDatum(statoid);
 	values[Anum_pg_statistic_ext_stxrelid - 1] = ObjectIdGetDatum(relid);
 	values[Anum_pg_statistic_ext_stxname - 1] = NameGetDatum(&stxname);

@@ -61,6 +61,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_type_encoding.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/comment.h"
@@ -909,6 +910,26 @@ findDependentObjects(const ObjectAddress *object,
 			otherObject.objectId == object->objectId &&
 			object->objectSubId == 0)
 			continue;
+
+		/*
+		 * GPDB: a temporary object of another session kept in memory (see
+		 * tempcat.c), which cannot be seen, let alone dropped, here; or a
+		 * leftover of one whose session is gone, whose row goes away.
+		 */
+		switch (tempcat_foreign_object(otherObject.classId, otherObject.objectId))
+		{
+			case TCF_LIVE:
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop %s because a temporary object of another session depends on it",
+								getObjectDescription(object))));
+				break;
+			case TCF_GONE:
+				tempcat_forget_leftover(*depRel, tup);
+				continue;
+			case TCF_NONE:
+				break;
+		}
 
 		/*
 		 * Must lock the dependent object before recursing to it.

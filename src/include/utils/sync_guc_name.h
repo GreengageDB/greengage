@@ -90,6 +90,8 @@
 		"gp_select_invisible",
 		"gp_sessionstate_loglevel",
 		"gp_snapshotadd_timeout",
+		"gp_temp_memory_catalog_max_file_size",
+		"gp_temp_memory_catalog_max_size",
 		"gp_udp_bufsize_k",
 		"gp_udpic_dropacks_percent",
 		"gp_udpic_dropseg",

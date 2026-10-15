@@ -24,6 +24,7 @@
 #include "access/table.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_inherits.h"
+#include "catalog/tempcat.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
@@ -445,6 +446,9 @@ StoreSingleInheritance(Oid relationId, Oid parentOid, int32 seqNumber)
 	bool		nulls[Natts_pg_inherits];
 	HeapTuple	tuple;
 	Relation	inhRelation;
+
+	/* GPDB: see tempcat.c */
+	tempcat_check_inheritance(relationId, parentOid);
 
 	inhRelation = table_open(InheritsRelationId, RowExclusiveLock);
 
