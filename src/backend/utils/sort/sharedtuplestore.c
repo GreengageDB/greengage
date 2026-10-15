@@ -311,15 +311,9 @@ sts_puttuple(SharedTuplestoreAccessor *accessor, void *meta_data,
 
 		/* Create one.  Only this backend will write into it. */
 		sts_filename(name, accessor, accessor->participant);
-<<<<<<< HEAD
 		work_set = workfile_mgr_create_set("SharedTupleStore", name, false /* hold pin */);
-		accessor->write_file = BufFileCreateShared(accessor->fileset, name, work_set);
-||||||| e1c1c30f635
-		accessor->write_file = BufFileCreateShared(accessor->fileset, name);
-=======
 		accessor->write_file =
-			BufFileCreateFileSet(&accessor->fileset->fs, name);
->>>>>>> 3b231596ccf
+			BufFileCreateFileSet(&accessor->fileset->fs, name, work_set);
 
 		/* Set up the shared state for this backend's file. */
 		participant = &accessor->sts->participants[accessor->participant];

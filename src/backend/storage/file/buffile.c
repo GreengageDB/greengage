@@ -95,18 +95,10 @@ struct BufFile
 	bool		dirty;			/* does buffer need to be written? */
 	bool		readOnly;		/* has the file been set to read only? */
 
-<<<<<<< HEAD
 	char	   *operation_name; /* for naming temporary files. */
 
-	SharedFileSet *fileset;		/* space for segment files if shared */
-	const char *name;			/* name of this BufFile if shared */
-||||||| e1c1c30f635
-	SharedFileSet *fileset;		/* space for segment files if shared */
-	const char *name;			/* name of this BufFile if shared */
-=======
 	FileSet    *fileset;		/* space for fileset based segment files */
 	const char *name;			/* name of fileset based BufFile */
->>>>>>> 3b231596ccf
 
 	/*
 	 * workfile_set for the files in current buffile. The workfile_set creator
@@ -372,13 +364,7 @@ MakeNewFileSetSegment(BufFile *buffile, int segment)
  * unrelated SharedFileSet objects.
  */
 BufFile *
-<<<<<<< HEAD
-BufFileCreateShared(SharedFileSet *fileset, const char *name, workfile_set *work_set)
-||||||| e1c1c30f635
-BufFileCreateShared(SharedFileSet *fileset, const char *name)
-=======
-BufFileCreateFileSet(FileSet *fileset, const char *name)
->>>>>>> 3b231596ccf
+BufFileCreateFileSet(FileSet *fileset, const char *name, workfile_set *work_set)
 {
 	BufFile    *file;
 
@@ -1084,7 +1070,6 @@ BufFileSize(BufFile *file)
 }
 
 /*
-<<<<<<< HEAD
  * Returns the size of this file according to current accounting.
  *
  * Unlike BufFileSize(), which only returns the size of BufFile flushed to the
@@ -1124,15 +1109,8 @@ BufFileGetSize(BufFile *file)
 }
 
 /*
- * Append the contents of source file (managed within shared fileset) to
- * end of target file (managed within same shared fileset).
-||||||| e1c1c30f635
- * Append the contents of source file (managed within shared fileset) to
- * end of target file (managed within same shared fileset).
-=======
  * Append the contents of source file (managed within fileset) to
  * end of target file (managed within same fileset).
->>>>>>> 3b231596ccf
  *
  * Note that operation subsumes ownership of underlying resources from
  * "source".  Caller should never call BufFileClose against source having
@@ -1182,7 +1160,6 @@ BufFileAppend(BufFile *target, BufFile *source)
 }
 
 /*
-<<<<<<< HEAD
  * Return filename of the underlying file.
  *
  * For debugging purposes only. Returns the filename of the
@@ -1533,15 +1510,8 @@ BufFileLoadCompressedBuffer(BufFile *file, void *buffer, size_t bufsize)
 #endif		/* USE_ZSTD */
 
 /*
- * Truncate a BufFile created by BufFileCreateShared up to the given fileno and
- * the offset.
-||||||| e1c1c30f635
- * Truncate a BufFile created by BufFileCreateShared up to the given fileno and
- * the offset.
-=======
  * Truncate a BufFile created by BufFileCreateFileSet up to the given fileno
  * and the offset.
->>>>>>> 3b231596ccf
  */
 void
 BufFileTruncateFileSet(BufFile *file, int fileno, off_t offset)
