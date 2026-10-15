@@ -1653,11 +1653,22 @@ bool
 tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 					  Oid keyOid1, Oid keyOid2)
 {
+	/*
+	 * The temporary namespace decides, and the temporary toast namespace,
+	 * created right after it, goes where it went: its relations belong to
+	 * the other's.
+	 */
+	static bool namespace_in_memory = false;
+
+	if (catalog == NamespaceRelationId && objname != NULL &&
+		strncmp(objname, "pg_toast_temp_", 14) == 0)
+		return namespace_in_memory;
 	if (catalog == NamespaceRelationId)
-		return tempcat_key_is_temp(catalog, objname, namespaceOid,
-								   keyOid1, keyOid2,
-								   gp_enable_temp_memory_catalog) &&
-			tempcat_can_start();
+		return (namespace_in_memory =
+				tempcat_key_is_temp(catalog, objname, namespaceOid,
+									keyOid1, keyOid2,
+									gp_enable_temp_memory_catalog) &&
+				tempcat_can_start());
 	return tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1,
 							   keyOid2, false);
 }
@@ -2955,6 +2966,14 @@ tempcat_before_exit(int code, Datum arg)
 	if (tc_area == NULL)
 		return;
 
+	/*
+	 * Readers that come later, e.g. retrieve connections, must not attach to
+	 * an area that is going away with us.
+	 */
+	if (SharedLocalSnapshotSlot != NULL &&
+		SharedLocalSnapshotSlot->tempcat_handle == dsa_get_handle(tc_area))
+		SharedLocalSnapshotSlot->tempcat_handle = DSM_HANDLE_INVALID;
+
 	catidx = tempcat_catalog_index(RelationRelationId);
 	for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
 	{
@@ -3154,7 +3173,7 @@ tempcat_report_full(void)
 			 errmsg("out of room for the catalog rows of temporary objects"),
 			 errdetail("The session keeps them in %zu kB of memory and %zu kB of files.",
 					   memory / 1024, (total - memory) / 1024),
-			 errhint("Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size.")));
+			 errhint("Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size for new sessions.")));
 }
 
 /*

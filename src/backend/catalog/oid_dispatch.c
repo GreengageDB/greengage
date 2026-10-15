@@ -491,9 +491,6 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  searchkey->keyOid1, searchkey->keyOid2))
 			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
 		else
-			oid = InvalidOid;
-		/* (also when no reserved OID is free for a temporary schema) */
-		if (!OidIsValid(oid))
 			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 
 		oldcontext = MemoryContextSwitchTo(get_oids_context());
@@ -517,9 +514,6 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 								  searchkey->keyOid1, searchkey->keyOid2))
 			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
 		else
-			oid = InvalidOid;
-		/* (also when no reserved OID is free for a temporary schema) */
-		if (!OidIsValid(oid))
 			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);
 	}
 

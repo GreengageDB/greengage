@@ -133,6 +133,8 @@ CREATE TABLE tc_bad_t (c pg_temp.tc_comp) DISTRIBUTED RANDOMLY;
 CREATE TEMP TABLE tc_child () INHERITS (tc_ord_parent);
 CREATE TEMP TABLE tc_of OF tc_ord_comp;
 CREATE CAST (pg_temp.tc_comp AS text) WITH INOUT;
+ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+CREATE STATISTICS pg_temp.tc_stx ON a FROM tc_ord_parent;
 CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_inh_child () INHERITS (tc_inh_parent);
 -- A dependency on an ordinary object stays on disk.

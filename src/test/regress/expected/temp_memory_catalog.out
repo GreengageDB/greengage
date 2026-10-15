@@ -115,10 +115,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1842729)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1862471)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1842728)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1862470)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -290,6 +290,11 @@ HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its fir
 CREATE CAST (pg_temp.tc_comp AS text) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
 HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+ERROR:  extension members are not supported for temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+CREATE STATISTICS pg_temp.tc_stx ON a FROM tc_ord_parent;
+ERROR:  statistics object on an ordinary table cannot be in a temporary schema kept in memory
 CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_inh_child () INHERITS (tc_inh_parent);
 NOTICE:  table has parent, setting distribution columns to match parent table
@@ -487,7 +492,7 @@ BEGIN
 END $$;
 ERROR:  out of room for the catalog rows of temporary objects
 DETAIL:  The session keeps them in 1024 kB of memory and 8192 kB of files.
-HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size.
+HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size for new sessions.
 CONTEXT:  SQL statement "CREATE TEMP TABLE tc_many768 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)"
 PL/pgSQL function inline_code_block line 4 at EXECUTE
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
@@ -508,7 +513,7 @@ BEGIN
 END $$;
 ERROR:  out of room for the catalog rows of temporary objects
 DETAIL:  The session keeps them in 1024 kB of memory and 0 kB of files.
-HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size.
+HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size for new sessions.
 CONTEXT:  SQL statement "CREATE TEMP TABLE tc_full39 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)"
 PL/pgSQL function inline_code_block line 4 at EXECUTE
 -- Creating and dropping in one transaction frees the dead rows on the way.

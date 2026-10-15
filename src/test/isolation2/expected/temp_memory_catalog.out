@@ -42,7 +42,8 @@ INSERT 0 1
  t        
 (1 row)
 
--- Other sessions see neither the objects nor their schema.
+-- Other sessions see neither the objects nor their schema, and describe
+-- their dependencies on ordinary objects by nulls.
 2: SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_v');
  count 
 -------
@@ -52,6 +53,11 @@ INSERT 0 1
  count 
 -------
  0     
+(1 row)
+2: SELECT pg_describe_object(classid, objid, objsubid), (pg_identify_object(classid, objid, objsubid)).* FROM pg_depend WHERE refobjid = 'tc_comp'::regtype AND objid >= 4026531840;
+ pg_describe_object | type | schema | name | identity 
+--------------------+------+--------+------+----------
+                    |      |        |      |          
 (1 row)
 
 -- They cannot drop what the objects depend on, not even with CASCADE.

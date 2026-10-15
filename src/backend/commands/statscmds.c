@@ -178,6 +178,12 @@ CreateStatistics(CreateStatsStmt *stmt)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("statistics object on a temporary table kept in memory must be in the temporary schema"),
 				 errhint("Name it pg_temp.%s.", namestr)));
+	/* nor one on an ordinary table in the temporary schema */
+	if (!tempcat_owns_oid(RelationRelationId, RelationGetRelid(rel)) &&
+		tempcat_owns_oid(NamespaceRelationId, namespaceId))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("statistics object on an ordinary table cannot be in a temporary schema kept in memory")));
 
 	/* Check we have creation rights in target namespace. */
 	aclresult = pg_namespace_aclcheck(namespaceId, GetUserId(), ACL_CREATE);

@@ -24,9 +24,12 @@ GRANT ALL ON tc_ord TO tc_role;
 1: INSERT INTO tc_t VALUES ((1, 2), 3);
 1: SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved;
 
--- Other sessions see neither the objects nor their schema.
+-- Other sessions see neither the objects nor their schema, and describe
+-- their dependencies on ordinary objects by nulls.
 2: SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_v');
 2: SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_v');
+2: SELECT pg_describe_object(classid, objid, objsubid), (pg_identify_object(classid, objid, objsubid)).*
+     FROM pg_depend WHERE refobjid = 'tc_comp'::regtype AND objid >= 4026531840;
 
 -- They cannot drop what the objects depend on, not even with CASCADE.
 2: DROP TYPE tc_comp;

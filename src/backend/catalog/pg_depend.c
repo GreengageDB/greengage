@@ -167,6 +167,10 @@ recordDependencyOnCurrentExtension(const ObjectAddress *object,
 	{
 		ObjectAddress extension;
 
+		/* GPDB: other sessions could not see it among the members */
+		tempcat_check_unsupported(object->classId, object->objectId,
+								  "extension members");
+
 		/* Only need to check for existing membership if isReplace */
 		if (isReplace)
 		{

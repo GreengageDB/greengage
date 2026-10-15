@@ -1063,9 +1063,6 @@ pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg)
 }
 
 /*
- * Subroutine for pgstat_report_stat: populate and send a function stat message
- */
-/*
  * GPDB: ask the collector to forget the statistics of a table (or index,
  * ...) of this database that was dropped, after the counts still pending for
  * it, which would otherwise bring them back.  pgstat_vacuum_stat() does that
@@ -1151,6 +1148,9 @@ pgstat_send_purges(void)
 	pgStatPurgeFunctions.n = 0;
 }
 
+/*
+ * Subroutine for pgstat_report_stat: populate and send a function stat message
+ */
 static void
 pgstat_send_funcstats(void)
 {
