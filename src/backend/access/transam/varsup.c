@@ -642,10 +642,8 @@ GetNewObjectIdUnderLock(void)
 	/*
 	 * Test hook: hand out an OID from the range reserved for in-memory
 	 * temporary objects, as ordinary objects created before the range was
-	 * reserved may have.  Use the tail of the range, whose slices belong to
-	 * coordinator PGPROCs numbered from 4094 up, which no session of a test
-	 * cluster has, so it does not clash with temporary objects of running
-	 * sessions.
+	 * reserved may have.  Use the tail of the range, whose slices sessions
+	 * take last; they skip OIDs that ordinary objects have anyway.
 	 */
 	if (SIMPLE_FAULT_INJECTOR("oid_in_tempcat_range") == FaultInjectorTypeSkip)
 		result = LastTempcatObjectId - 100000 + result % 100000;

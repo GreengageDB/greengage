@@ -23,11 +23,12 @@
  *   dispatches them to the segments as usual, so all nodes agree on them.
  *
  * - The range is split into slices of TEMPCAT_SLICE_SIZE OIDs.  A session
- *   takes its OIDs from the slice numbered like its coordinator backend's
- *   PGPROC, so OIDs of concurrent sessions never collide and lock tags stay
- *   unique.  On every node, the process keeping the session's objects (the
- *   coordinator backend, or the writer QE on a segment) holds the slice for
- *   as long as it lives (see tempcat_claim_slice()).
+ *   takes its OIDs from a slice of its own, which its coordinator backend
+ *   takes when it creates the temporary namespace, so OIDs of concurrent
+ *   sessions never collide and lock tags stay unique.  On every node, the
+ *   process keeping the session's objects (the coordinator backend, or the
+ *   writer QE on a segment) holds the slice for as long as it lives (see
+ *   tempcat_claim_free_slice() and tempcat_claim_slice()).
  *
  * - A row inserted into one of the catalogs listed in tempcat_catalogs[] is
  *   kept in memory if its owner column (pg_attribute.attrelid,
@@ -551,7 +552,8 @@ tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno)
  *
  * Per slice of the reserved range: the process of this node holding it, the
  * database whose leftovers it has removed (see tempcat_claim_slice()), and,
- * on the coordinator, the next OID to assign.
+ * on the coordinator, the next OID to assign.  And where the coordinator
+ * looks for a free slice next (tempcat_claim_free_slice()).
  * ----------------------------------------------------------------
  */
 #define TEMPCAT_SLICE_BITS	16
@@ -592,6 +594,7 @@ typedef struct TempcatSharedData
 	int			tranche_id;		/* LWLock tranche of the session areas */
 	slock_t		mutex;			/* protects the roles */
 	int			nprocs;
+	pg_atomic_uint32 next_slice;	/* coordinator: see tempcat_claim_free_slice() */
 	TempcatSliceState slices[TEMPCAT_NSLICES];
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
@@ -625,6 +628,7 @@ TempcatShmemInit(void)
 	/* A dynamic tranche, so that the builtin tranche IDs stay unchanged. */
 	TempcatShared->tranche_id = LWLockNewTrancheId();
 	SpinLockInit(&TempcatShared->mutex);
+	pg_atomic_init_u32(&TempcatShared->next_slice, 0);
 	for (i = 0; i < TEMPCAT_NSLICES; i++)
 	{
 		TempcatSliceState *ss = &TempcatShared->slices[i];
@@ -909,13 +913,62 @@ static void tempcat_subxact_callback(SubXactEvent event,
 									 void *arg);
 
 /*
- * Take hold of 'slice' on this node, for the rest of the process's life.
- *
- * On the coordinator, the slice is that of the backend's PGPROC, which a
- * process that held it before has let go of before exiting.  On a segment,
- * a writer QE takes the slice of the OIDs its coordinator assigns; the
- * writer QE of an earlier session of the same coordinator PGPROC may still
- * be on its way out (e.g. dropping its temporary objects): wait for it.
+ * Register what lets go of a slice and settles the session's rows: before
+ * taking a slice, so that it cannot be kept for good.
+ */
+static void
+tempcat_register_callbacks(void)
+{
+	static bool registered = false;
+
+	if (registered)
+		return;
+	on_shmem_exit(tempcat_proc_exit, (Datum) 0);
+	before_shmem_exit(tempcat_before_exit, (Datum) 0);
+	RegisterSubXactCallback(tempcat_subxact_callback, NULL);
+	RegisterXactCallback(tempcat_xact_callback, NULL);
+	registered = true;
+}
+
+/*
+ * The coordinator takes hold of a free slice for its session, for the rest
+ * of the process's life.  It looks for one from where the last search
+ * stopped, so that a slice let go of is taken again only after all others
+ * were: the writer QEs of the session that held it may still be dropping
+ * their objects on the segments, where a new holder would wait for them
+ * (tempcat_claim_slice()).  Returns false if all slices are held.
+ */
+static bool
+tempcat_claim_free_slice(void)
+{
+	uint32		me = MyProc->pgprocno + 1;
+	int			i;
+
+	if (tc_slice >= 0)
+		return true;
+	tempcat_register_callbacks();
+	for (i = 0; i < TEMPCAT_NSLICES; i++)
+	{
+		int			slice = pg_atomic_fetch_add_u32(&TempcatShared->next_slice, 1) %
+		TEMPCAT_NSLICES;
+		uint32		expected = 0;
+
+		if (pg_atomic_compare_exchange_u32(&TempcatShared->slices[slice].holder,
+										   &expected, me))
+		{
+			tc_slice = slice;
+			tempcat_my_state()->slice = slice;
+			return true;
+		}
+	}
+	return false;
+}
+
+/*
+ * A writer QE takes hold of the slice of the OIDs its coordinator assigns,
+ * on this node, for the rest of the process's life.  The writer QE of an
+ * earlier session that held the slice may still be on its way out (e.g.
+ * dropping its temporary objects): wait for it.
  */
 static void
 tempcat_claim_slice(int slice)
@@ -1149,17 +1202,17 @@ tempcat_activate(Oid oid)
 	{
 		TempcatProcState *st;
 
-		tempcat_claim_slice(slice);
+		if (tc_slice < 0)
+		{
+			tempcat_register_callbacks();
+			tempcat_claim_slice(slice);
+		}
 		tc_activated = true;
 
 		st = tempcat_my_state();
 		pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
 		pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
 		st->databaseId = MyDatabaseId;
-		on_shmem_exit(tempcat_proc_exit, (Datum) 0);
-		before_shmem_exit(tempcat_before_exit, (Datum) 0);
-		RegisterSubXactCallback(tempcat_subxact_callback, NULL);
-		RegisterXactCallback(tempcat_xact_callback, NULL);
 
 		/*
 		 * Plans made before may scan the catalogs through their indexes,
@@ -1551,12 +1604,9 @@ tempcat_can_start(void)
 	if (IsBinaryUpgrade || !IsUnderPostmaster || TempcatShared == NULL)
 		return false;
 
-	/* our slice of the reserved range */
-	if (MyProc->pgprocno >= TEMPCAT_NSLICES)
-		return false;
-
-	/* and the memory to keep them in */
-	return tc_area != NULL || tempcat_create_area();
+	/* the memory to keep them in, and a slice of the reserved range */
+	return (tc_area != NULL || tempcat_create_area()) &&
+		tempcat_claim_free_slice();
 }
 
 /*
@@ -1617,13 +1667,17 @@ tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
 Oid
 tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 {
-	int			slice = tc_slice >= 0 ? tc_slice : MyProc->pgprocno;
-	TempcatSliceState *ss = &TempcatShared->slices[slice];
-	Oid			base = tempcat_slice_base(slice);
-	Oid			span = tempcat_slice_last(slice) - base + 1;
+	int			slice = tc_slice;
+	TempcatSliceState *ss;
+	Oid			base;
+	Oid			span;
 	Oid			tries;
 
-	Assert(slice < TEMPCAT_NSLICES);
+	if (slice < 0)
+		elog(ERROR, "tempcat: no slice of the reserved OIDs is held");
+	ss = &TempcatShared->slices[slice];
+	base = tempcat_slice_base(slice);
+	span = tempcat_slice_last(slice) - base + 1;
 
 	for (tries = 0; tries < span; tries++)
 	{

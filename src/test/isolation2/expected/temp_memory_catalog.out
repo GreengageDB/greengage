@@ -187,6 +187,33 @@ DROP TYPE
 (1 row)
 4: DROP ROLE tc_role;
 DROP ROLE
+
+-- A session takes a slice of the reserved OIDs that no session took since
+-- the last one let go of it: not the one of a session that just ended,
+-- whose processes on the segments may still be dropping its objects.
+CREATE TABLE tc_slices (n int, slice bigint) DISTRIBUTED REPLICATED;
+CREATE TABLE
+5: SET gp_enable_temp_memory_catalog = on;
+SET
+5: CREATE TEMP TABLE tc_s (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+5: INSERT INTO tc_slices VALUES (5, ('tc_s'::regclass::oid::bigint - 4026531840) >> 16);
+INSERT 0 1
+5q: ... <quitting>
+6: SET gp_enable_temp_memory_catalog = on;
+SET
+6: CREATE TEMP TABLE tc_s (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+6: INSERT INTO tc_slices VALUES (6, ('tc_s'::regclass::oid::bigint - 4026531840) >> 16);
+INSERT 0 1
+6: SELECT count(DISTINCT slice) AS slices FROM tc_slices;
+ slices 
+--------
+ 2      
+(1 row)
+6q: ... <quitting>
+DROP TABLE tc_slices;
+DROP TABLE
 4: DROP TABLE tc_sess;
 DROP TABLE
 4: DROP PROCEDURE tc_wait_gone();

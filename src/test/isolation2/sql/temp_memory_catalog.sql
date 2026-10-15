@@ -85,6 +85,21 @@ CREATE ROLE tc_role;
 4: SELECT count(*) FROM pg_depend WHERE objid >= 4026531840;
 4: SELECT count(*) FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840;
 4: DROP ROLE tc_role;
+
+-- A session takes a slice of the reserved OIDs that no session took since
+-- the last one let go of it: not the one of a session that just ended,
+-- whose processes on the segments may still be dropping its objects.
+CREATE TABLE tc_slices (n int, slice bigint) DISTRIBUTED REPLICATED;
+5: SET gp_enable_temp_memory_catalog = on;
+5: CREATE TEMP TABLE tc_s (a int) DISTRIBUTED BY (a);
+5: INSERT INTO tc_slices VALUES (5, ('tc_s'::regclass::oid::bigint - 4026531840) >> 16);
+5q:
+6: SET gp_enable_temp_memory_catalog = on;
+6: CREATE TEMP TABLE tc_s (a int) DISTRIBUTED BY (a);
+6: INSERT INTO tc_slices VALUES (6, ('tc_s'::regclass::oid::bigint - 4026531840) >> 16);
+6: SELECT count(DISTINCT slice) AS slices FROM tc_slices;
+6q:
+DROP TABLE tc_slices;
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:
