@@ -838,6 +838,8 @@ static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   void *arg);
 static void tempcat_sweep_exit(int code, Datum arg);
 static void tempcat_xact_callback(XactEvent event, void *arg);
+static bool tempcat_oid_of_other_session(Oid oid);
+static bool tempcat_hidden_object_of_other_session(const ObjectAddress *object);
 static void tempcat_note_created(Oid catalog, Oid oid);
 static bool tempcat_drops_ended(void);
 static void tempcat_finish_drops(void);
@@ -4370,6 +4372,12 @@ tempcat_sql_check(Relation rel, HeapTuple tup)
 				referenced.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_refobjsubid,
 																	desc, &isnull));
 				tempcat_check_dependency(&depender, &referenced);
+				/* (and on those that the code making such rows cannot name) */
+				if (tempcat_hidden_object_of_other_session(&referenced))
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("cannot depend on temporary objects of another session"),
+							 errdetail("The new object would depend on a temporary object that another session keeps in memory.")));
 			}
 			break;
 		case InheritsRelationId:
@@ -5240,17 +5248,22 @@ tempcat_namespace_of_other_session(Oid nspid, const char *nspname)
 bool
 tempcat_other_session_relation_oid(Oid relid)
 {
+	return tempcat_oid_of_other_session(relid);
+}
+
+/*
+ * Is 'oid' within the bounds of a live session of the database other than
+ * ours?  One of ours that we dropped is within ours, though we do not own
+ * it.  Each session takes its OIDs from a slice of its own.
+ */
+static bool
+tempcat_oid_of_other_session(Oid oid)
+{
 	TempcatProcState *own;
 	int			i;
 
-	if (!IsTempcatOid(relid) || TempcatShared == NULL)
+	if (!IsTempcatOid(oid) || TempcatShared == NULL)
 		return false;
-
-	/*
-	 * Within the bounds of a live session of the database other than ours:
-	 * one of ours that we dropped is within ours, though we do not own it.
-	 * Each session takes its OIDs from a slice of its own.
-	 */
 	if (MyProc == NULL)
 		own = NULL;
 	else
@@ -5262,7 +5275,7 @@ tempcat_other_session_relation_oid(Oid relid)
 
 		if (st == own || st->databaseId != MyDatabaseId)
 			continue;
-		if (tempcat_bounds_cover(st, relid))
+		if (tempcat_bounds_cover(st, oid))
 			return true;
 	}
 	return false;
@@ -5403,6 +5416,19 @@ tempcat_found_object_of_other_session(const ObjectAddress *object)
 	return tempcat_object_lookup(object->classId,
 								 object->objectId) == TCO_FOUND &&
 		tempcat_object_missing(object);
+}
+
+/*
+ * Is the object one that another live session keeps in its memory, which
+ * we cannot find?  Only SQL that writes catalog rows can name such an
+ * object, e.g. in a pg_depend row (see tempcat_sql_check()).
+ */
+static bool
+tempcat_hidden_object_of_other_session(const ObjectAddress *object)
+{
+	return tempcat_oid_of_other_session(object->objectId) &&
+		!tempcat_session_owns_oid(object->classId, object->objectId) &&
+		tempcat_object_lookup(object->classId, object->objectId) == TCO_MISSING;
 }
 
 /*

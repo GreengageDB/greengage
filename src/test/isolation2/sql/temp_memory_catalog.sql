@@ -1263,6 +1263,21 @@ SELECT pg_relation_size('tc_sz_broken') > 0 AS relation, pg_table_size('tc_sz_br
 DROP TABLE tc_sz_broken;
 0Uq:
 
+-- Nor can SQL that writes catalog rows (allow_system_table_mods) make an
+-- object depend on another session's temporary object in its memory, which
+-- the code making such rows could not even name.
+CREATE TABLE tc_dep_oid (o oid) DISTRIBUTED REPLICATED;
+CREATE TABLE tc_dep_ord (a int) DISTRIBUTED BY (a);
+1: SET gp_enable_temp_memory_catalog = on;
+1: CREATE TEMP TABLE tc_dep_hidden (a int) DISTRIBUTED BY (a);
+1: INSERT INTO tc_dep_oid SELECT 'tc_dep_hidden'::regclass::oid;
+2: SET allow_system_table_mods = on;
+2: INSERT INTO pg_depend SELECT 'pg_class'::regclass, 'tc_dep_ord'::regclass, 0, 'pg_class'::regclass, o, 0, 'n' FROM tc_dep_oid;
+2: SELECT count(*) AS deps FROM pg_depend d, tc_dep_oid t WHERE d.refobjid = t.o;
+2q:
+1q:
+DROP TABLE tc_dep_oid, tc_dep_ord;
+
 -- The AO functions that query an AO table's aux relations by name, with
 -- the session's temporary namespace, may find that namespace (as they
 -- did before it was hidden from other sessions), but nothing else does.
