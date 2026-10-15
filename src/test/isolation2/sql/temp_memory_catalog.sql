@@ -1252,6 +1252,16 @@ SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment
 2: SELECT relname, pg_relation_size(oid) > 0 AS relation, pg_table_size(oid) > 0 AS table, pg_indexes_size(oid) AS indexes, pg_total_relation_size(oid) > 0 AS total FROM pg_class WHERE relname IN ('tc_sz_qd', 'tc_sz_all') AND oid >= 4026531840 ORDER BY 1;
 1q:
 2q:
+-- Other relations missing on a segment, as gpexpand's tests make them,
+-- count as empty there, as before.
+CREATE TABLE tc_sz_broken (a int) DISTRIBUTED BY (a);
+CREATE INDEX tc_sz_broken_a ON tc_sz_broken (a);
+INSERT INTO tc_sz_broken SELECT generate_series(1, 1000);
+0U: DROP TABLE tc_sz_broken;
+SELECT pg_relation_size('tc_sz_broken') > 0 AS relation, pg_table_size('tc_sz_broken') > 0 AS table, pg_indexes_size('tc_sz_broken') > 0 AS indexes, pg_total_relation_size('tc_sz_broken') > 0 AS total;
+0U: CREATE TABLE tc_sz_broken (a int);
+DROP TABLE tc_sz_broken;
+0Uq:
 
 -- The AO functions that query an AO table's aux relations by name, with
 -- the session's temporary namespace, may find that namespace (as they

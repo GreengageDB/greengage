@@ -45,6 +45,7 @@
 
 #include "access/tableam.h"
 #include "catalog/pg_appendonly.h"
+#include "catalog/tempcat.h"
 #include "libpq-fe.h"
 #include "foreign/fdwapi.h"
 #include "cdb/cdbdisp_query.h"
@@ -88,9 +89,11 @@ get_size_from_segDBs(const char *cmd)
 }
 
 /*
- * As above, but set '*isnull' if a segment returned NULL, e.g. for a relation
- * it cannot open (a temporary relation of another session that is kept in
- * memory there, see tempcat.c); NULLs count as 0 in the sum.
+ * As above, but set '*isnull' if a segment returned NULL, for a relation it
+ * cannot open; NULLs count as 0 in the sum.  The callers return NULL then
+ * for a temporary relation of another session, which may be kept in memory
+ * there (see tempcat.c), but not for others missing on a segment, which
+ * count as empty there as before (gpexpand relies on it).
  */
 static int64
 get_size_from_segDBs_nullable(const char *cmd, bool *isnull)
@@ -711,8 +714,8 @@ pg_relation_size(PG_FUNCTION_ARGS)
 
 	relation_close(rel, AccessShareLock);
 
-	/* (missing on a segment, see get_size_from_segDBs_nullable()) */
-	if (segnull)
+	/* (see get_size_from_segDBs_nullable()) */
+	if (segnull && tempcat_other_session_relation_oid(relOid))
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -878,7 +881,7 @@ pg_table_size(PG_FUNCTION_ARGS)
 
 	relation_close(rel, AccessShareLock);
 
-	if (segnull)
+	if (segnull && tempcat_other_session_relation_oid(relOid))
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -911,7 +914,7 @@ pg_indexes_size(PG_FUNCTION_ARGS)
 
 	relation_close(rel, AccessShareLock);
 
-	if (segnull)
+	if (segnull && tempcat_other_session_relation_oid(relOid))
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
@@ -976,7 +979,7 @@ pg_total_relation_size(PG_FUNCTION_ARGS)
 
 	relation_close(rel, AccessShareLock);
 
-	if (segnull)
+	if (segnull && tempcat_other_session_relation_oid(relOid))
 		PG_RETURN_NULL();
 	PG_RETURN_INT64(size);
 }
