@@ -142,6 +142,7 @@
 #include "catalog/pg_type_encoding.h"
 #include "catalog/tempcat.h"
 #include "cdb/cdbendpoint.h"
+#include "commands/tablespace.h"
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -759,7 +760,10 @@ tempcat_create_area(void)
 			VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
 	}
 	if (area == NULL && files)
+	{
+		PrepareTempTablespaces();
 		area = dsa_try_create(tempcat_tranche_id(), true);
+	}
 	MemoryContextSwitchTo(oldcxt);
 	if (area == NULL)
 		return false;
@@ -3075,6 +3079,8 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
 
+	/* (where a segment that is a file would go; see dsm_create()) */
+	PrepareTempTablespaces();
 	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	ep = tempcat_entry_create_or_reclaim(catidx, tup, RelationGetDescr(rel),
@@ -3183,6 +3189,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	xid = GetCurrentTransactionId();
 	cid = GetCurrentCommandId(true);
 
+	PrepareTempTablespaces();
 	tempcat_reserve_pending(2);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	newep = tempcat_entry_create_or_reclaim(catidx, newtup, RelationGetDescr(rel),

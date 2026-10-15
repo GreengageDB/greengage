@@ -115,10 +115,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1730828)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1801866)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1730827)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1801865)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -360,27 +360,39 @@ SELECT 'tc_disk2'::regclass::oid >= 4026531840 AS reserved;
 (1 row)
 
 -- Beyond gp_temp_memory_catalog_max_size, the rows go to files in
--- pg_dynshmem, and beyond gp_temp_memory_catalog_max_file_size more, the
+-- the directory for temporary files, counted as work files, and beyond
+-- gp_temp_memory_catalog_max_file_size more, the
 -- session runs out of room.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';
 SET gp_temp_memory_catalog_max_file_size = '8MB';
 CREATE TEMP TABLE tc_first (a int) DISTRIBUTED BY (a);
-SELECT count(*) AS files_before FROM pg_ls_dir('pg_dynshmem') f
- WHERE f LIKE 'mmap.%' \gset
+SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp') f
+ WHERE f LIKE 'pgsql_tmpdsm.%' \gset
 DO $$
 BEGIN
   FOR i IN 1..200 LOOP
     EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
-SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('pg_dynshmem') f
- WHERE f LIKE 'mmap.%';
+SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp') f
+ WHERE f LIKE 'pgsql_tmpdsm.%';
  more_files 
 ------------
  t
 (1 row)
+
+SELECT segid, count(*) > 0 AS work_files FROM gp_toolkit.gp_workfile_entries
+ WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'
+ GROUP BY segid ORDER BY segid;
+ segid | work_files 
+-------+------------
+    -1 | t
+     0 | t
+     1 | t
+     2 | t
+(4 rows)
 
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
  count 

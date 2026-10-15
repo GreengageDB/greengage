@@ -182,23 +182,27 @@ CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
 SELECT 'tc_disk2'::regclass::oid >= 4026531840 AS reserved;
 
 -- Beyond gp_temp_memory_catalog_max_size, the rows go to files in
--- pg_dynshmem, and beyond gp_temp_memory_catalog_max_file_size more, the
+-- the directory for temporary files, counted as work files, and beyond
+-- gp_temp_memory_catalog_max_file_size more, the
 -- session runs out of room.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';
 SET gp_temp_memory_catalog_max_file_size = '8MB';
 CREATE TEMP TABLE tc_first (a int) DISTRIBUTED BY (a);
-SELECT count(*) AS files_before FROM pg_ls_dir('pg_dynshmem') f
- WHERE f LIKE 'mmap.%' \gset
+SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp') f
+ WHERE f LIKE 'pgsql_tmpdsm.%' \gset
 DO $$
 BEGIN
   FOR i IN 1..200 LOOP
     EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
-SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('pg_dynshmem') f
- WHERE f LIKE 'mmap.%';
+SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp') f
+ WHERE f LIKE 'pgsql_tmpdsm.%';
+SELECT segid, count(*) > 0 AS work_files FROM gp_toolkit.gp_workfile_entries
+ WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'
+ GROUP BY segid ORDER BY segid;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
 INSERT INTO tc_many200 VALUES (1, 'x');
 SELECT * FROM tc_many200;

@@ -50,6 +50,7 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
 #include "port/atomics.h"
 #include "storage/dsm.h"
 #include "storage/dsm_impl.h"
@@ -180,6 +181,8 @@ typedef struct
 	bool		freed;
 	/* GPDB: the segment is backed by a file (see dsa_set_memory_limit()) */
 	bool		file;
+	/* GPDB: the process whose vmem it is charged to, or 0 */
+	int			vmem_pid;
 } dsa_segment_header;
 
 /*
@@ -467,6 +470,11 @@ dsa_area *
 dsa_try_create(int tranche_id, bool file)
 {
 	dsa_area   *area;
+
+#ifndef USE_DSM_MMAP
+	if (file)
+		return NULL;
+#endif
 
 	area = dsa_create_with_flags(tranche_id,
 								 DSM_CREATE_NULL_IF_MAXSEGMENTS |
@@ -1372,6 +1380,7 @@ create_internal(void *place, size_t size,
 	control->segment_header.usable_pages = usable_pages;
 	control->segment_header.freed = false;
 	control->segment_header.file = false;
+	control->segment_header.vmem_pid = 0;
 	control->segment_header.size = DSA_INITIAL_SEGMENT_SIZE;
 	control->handle = control_handle;
 	control->max_total_segment_size = (size_t) -1;
@@ -2009,7 +2018,7 @@ destroy_superblock(dsa_area *area, dsa_pointer span_pointer)
 					   segment_map->header->size);
 				area->control->memory_segment_size -=
 					segment_map->header->size;
-				if (area->vmem_tracked)
+				if (segment_map->header->vmem_pid == MyProcPid)
 					VmemTracker_ReleaseVmem(segment_map->header->size);
 			}
 			dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
@@ -2210,125 +2219,31 @@ get_best_segment(dsa_area *area, size_t npages)
 	return NULL;
 }
 
-/*
- * GPDB: create the DSM segment of 'total_size' bytes for a new segment of the
- * area, in memory if 'in_memory' and possible, or else a file if the area
- * allows them (see dsa_set_memory_limit()); '*file' says which.  Returns NULL
- * if neither can be created and the caller asked not to fail
- * (DSA_ALLOC_NO_OOM), or if the area's limits on other users' room do not
- * allow it (see dsa_set_min_free_space(), dsa_set_min_free_slots(),
- * dsa_set_vmem_tracked()).
- */
-static dsm_segment *
-create_segment(dsa_area *area, size_t total_size, bool in_memory, bool *file)
+/* GPDB: can the area grow with segments that are files? */
+static inline bool
+files_allowed(dsa_area *area)
 {
-	int			flags = area->no_oom ?
-		DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0;
-	bool		files_allowed =
-		area->control->max_memory_segment_size != (size_t) -1;
-	dsm_segment *segment = NULL;
-
-	*file = false;
-
-	/* Leave slots of the control segment to others, files take them too. */
-	if (area->min_free_slots > 0)
-	{
-		uint32		nfree;
-		uint32		nmax;
-
-		if (dsm_free_slots(&nfree, &nmax) && nfree <= area->min_free_slots)
-			return NULL;
-	}
-
-	if (in_memory)
-	{
-		bool		room = true;
-
-		/* Leave room for other users of dynamic shared memory. */
-		if (area->min_free_space > 0)
-		{
-			Size		free_bytes;
-			Size		total_bytes;
-
-			if (dsm_impl_free_space(&free_bytes, &total_bytes) &&
-				free_bytes < total_size + area->min_free_space)
-				room = false;
-		}
-
-		/*
-		 * Charge it to vmem, which may refuse, before creating it: a refusal
-		 * then costs nothing, while the allocations of a full area keep
-		 * coming.  dsm_create() can still fail with an error (e.g. out of
-		 * local memory), which must not leave vmem charged.
-		 */
-		if (room && area->vmem_tracked &&
-			VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
-			room = false;
-
-		if (room)
-		{
-			/* (with files to fall back to, lack of space is no error) */
-			int			mflags = flags |
-				(files_allowed ? DSM_CREATE_NULL_IF_NOSPACE : 0);
-
-			PG_TRY();
-			{
-				segment = dsm_create(total_size, mflags);
-			}
-			PG_CATCH();
-			{
-				if (area->vmem_tracked)
-					VmemTracker_ReleaseVmem(total_size);
-				PG_RE_THROW();
-			}
-			PG_END_TRY();
-			if (segment == NULL && area->vmem_tracked)
-				VmemTracker_ReleaseVmem(total_size);
-		}
-		if (segment != NULL || !files_allowed)
-			return segment;
-	}
-
-	*file = true;
-	return dsm_create(total_size, flags | DSM_CREATE_FILE);
+#ifdef USE_DSM_MMAP
+	return area->control->max_memory_segment_size != (size_t) -1;
+#else
+	return false;
+#endif
 }
 
 /*
- * Create a new segment that can handle at least requested_pages.  Returns
- * NULL if the requested total size limit or maximum allowed number of
- * segments would be exceeded.
+ * GPDB: the size of a new segment 'new_index' of an area, at most 'limit'
+ * bytes beyond the geometric series (see make_new_segment()), and its
+ * layout.  Returns false if no segment can hold 'requested_pages'.
  */
-static dsa_segment_map *
-make_new_segment(dsa_area *area, size_t requested_pages)
+static bool
+segment_layout(dsa_area *area, dsa_segment_index new_index,
+			   size_t requested_pages, size_t limit, size_t *total_size_p,
+			   size_t *metadata_bytes_p, size_t *usable_pages_p)
 {
-	dsa_segment_index new_index;
-	size_t		metadata_bytes;
 	size_t		total_size;
 	size_t		total_pages;
+	size_t		metadata_bytes;
 	size_t		usable_pages;
-	dsa_segment_map *segment_map;
-	dsm_segment *segment;
-	bool		in_memory;
-	bool		file;
-
-	Assert(LWLockHeldByMe(DSA_AREA_LOCK(area)));
-
-	/* Find a segment slot that is not in use (linearly for now). */
-	for (new_index = 1; new_index < DSA_MAX_SEGMENTS; ++new_index)
-	{
-		if (area->control->segment_handles[new_index] == DSM_HANDLE_INVALID)
-			break;
-	}
-	if (new_index == DSA_MAX_SEGMENTS)
-		return NULL;
-
-	/*
-	 * If the total size limit is already exceeded, then we exit early and
-	 * avoid arithmetic wraparound in the unsigned expressions below.
-	 */
-	if (area->control->total_segment_size >=
-		area->control->max_total_segment_size)
-		return NULL;
 
 	/*
 	 * The size should be at least as big as requested, and at least big
@@ -2350,18 +2265,7 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 	total_size = Min(total_size,
 					 area->control->max_total_segment_size -
 					 area->control->total_segment_size);
-
-	/*
-	 * GPDB: a segment in memory fills what is left below the memory limit (see
-	 * dsa_set_memory_limit()), unless that is too little to bother: later
-	 * ones are files.
-	 */
-	in_memory = area->control->memory_segment_size +
-		DSA_INITIAL_SEGMENT_SIZE <= area->control->max_memory_segment_size;
-	if (in_memory)
-		total_size = Min(total_size,
-						 area->control->max_memory_segment_size -
-						 area->control->memory_segment_size);
+	total_size = Min(total_size, limit);
 
 	total_pages = total_size / FPM_PAGE_SIZE;
 	metadata_bytes =
@@ -2373,7 +2277,7 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 	if (metadata_bytes % FPM_PAGE_SIZE != 0)
 		metadata_bytes += FPM_PAGE_SIZE - (metadata_bytes % FPM_PAGE_SIZE);
 	if (total_size <= metadata_bytes)
-		return NULL;
+		return false;
 	usable_pages = (total_size - metadata_bytes) / FPM_PAGE_SIZE;
 	Assert(metadata_bytes + usable_pages * FPM_PAGE_SIZE <= total_size);
 
@@ -2397,20 +2301,164 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 
 		/* Is that too large for dsa_pointer's addressing scheme? */
 		if (total_size > DSA_MAX_SEGMENT_SIZE)
-			return NULL;
+			return false;
 
-		/* Would that exceed the limit? */
+		/* Would that exceed the limits? */
 		if (total_size > area->control->max_total_segment_size -
-			area->control->total_segment_size)
+			area->control->total_segment_size ||
+			total_size > limit)
+			return false;
+	}
+
+	*total_size_p = total_size;
+	*metadata_bytes_p = metadata_bytes;
+	*usable_pages_p = usable_pages;
+	return true;
+}
+
+/*
+ * GPDB: create the DSM segment of 'total_size' bytes for a new segment of the
+ * area in memory.  Returns NULL if it cannot be created, and the caller asked
+ * not to fail (DSA_ALLOC_NO_OOM) or may fall back to a file, or if the
+ * area's limits on other users' room do not allow it (see
+ * dsa_set_min_free_space(), dsa_set_vmem_tracked()).  '*vmem' says whether it
+ * was charged to this backend's vmem.
+ */
+static dsm_segment *
+create_memory_segment(dsa_area *area, size_t total_size, bool *vmem)
+{
+	int			flags = area->no_oom ?
+		DSM_CREATE_NULL_IF_MAXSEGMENTS | DSM_CREATE_NULL_IF_NOSPACE : 0;
+	dsm_segment *segment = NULL;
+
+	*vmem = false;
+
+	/* Leave room for other users of dynamic shared memory. */
+	if (area->min_free_space > 0)
+	{
+		Size		free_bytes;
+		Size		total_bytes;
+
+		if (dsm_impl_free_space(&free_bytes, &total_bytes) &&
+			free_bytes < total_size + area->min_free_space)
 			return NULL;
 	}
 
-	/* Create the segment. */
-	if (in_memory &&
-		area->control->memory_segment_size + total_size >
+	/*
+	 * Charge it to vmem, which may refuse, before creating it: a refusal then
+	 * costs nothing, while the allocations of a full area keep coming.
+	 * dsm_create() can still fail with an error (e.g. out of local memory),
+	 * which must not leave vmem charged.
+	 */
+	if (area->vmem_tracked)
+	{
+		if (VmemTracker_ReserveVmem(total_size) != MemoryAllocation_Success)
+			return NULL;
+		*vmem = true;
+	}
+
+	/* (with files to fall back to, lack of space is no error) */
+	if (files_allowed(area))
+		flags |= DSM_CREATE_NULL_IF_NOSPACE;
+
+	PG_TRY();
+	{
+		segment = dsm_create(total_size, flags);
+	}
+	PG_CATCH();
+	{
+		if (*vmem)
+			VmemTracker_ReleaseVmem(total_size);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	if (segment == NULL && *vmem)
+	{
+		VmemTracker_ReleaseVmem(total_size);
+		*vmem = false;
+	}
+	return segment;
+}
+
+/*
+ * Create a new segment that can handle at least requested_pages.  Returns
+ * NULL if the requested total size limit or maximum allowed number of
+ * segments would be exceeded.
+ */
+static dsa_segment_map *
+make_new_segment(dsa_area *area, size_t requested_pages)
+{
+	dsa_segment_index new_index;
+	size_t		metadata_bytes;
+	size_t		total_size;
+	size_t		usable_pages;
+	dsa_segment_map *segment_map;
+	dsm_segment *segment;
+	bool		file;
+	bool		vmem;
+
+	Assert(LWLockHeldByMe(DSA_AREA_LOCK(area)));
+
+	/* Find a segment slot that is not in use (linearly for now). */
+	for (new_index = 1; new_index < DSA_MAX_SEGMENTS; ++new_index)
+	{
+		if (area->control->segment_handles[new_index] == DSM_HANDLE_INVALID)
+			break;
+	}
+	if (new_index == DSA_MAX_SEGMENTS)
+		return NULL;
+
+	/*
+	 * If the total size limit is already exceeded, then we exit early and
+	 * avoid arithmetic wraparound in the unsigned expressions below.
+	 */
+	if (area->control->total_segment_size >=
+		area->control->max_total_segment_size)
+		return NULL;
+
+	/* Leave slots of the control segment to others, files take them too. */
+	if (area->min_free_slots > 0 || area->no_oom)
+	{
+		uint32		nfree;
+		uint32		nmax;
+
+		if (dsm_free_slots(&nfree, &nmax) &&
+			(nfree == 0 || nfree <= area->min_free_slots))
+			return NULL;
+	}
+
+	/*
+	 * GPDB: a segment in memory fills what is left below the memory limit (see
+	 * dsa_set_memory_limit()), unless that is too little to bother.  Beyond,
+	 * or if one cannot be created in memory, segments are files, which grow
+	 * geometrically as usual.
+	 */
+	segment = NULL;
+	file = false;
+	vmem = false;
+	if (!files_allowed(area) ||
+		area->control->memory_segment_size + DSA_INITIAL_SEGMENT_SIZE <=
 		area->control->max_memory_segment_size)
-		in_memory = false;
-	segment = create_segment(area, total_size, in_memory, &file);
+	{
+		size_t		limit = files_allowed(area) ?
+			area->control->max_memory_segment_size -
+			area->control->memory_segment_size : (size_t) -1;
+
+		if (segment_layout(area, new_index, requested_pages, limit,
+						   &total_size, &metadata_bytes, &usable_pages))
+			segment = create_memory_segment(area, total_size, &vmem);
+	}
+	if (segment == NULL && files_allowed(area) &&
+		segment_layout(area, new_index, requested_pages, (size_t) -1,
+					   &total_size, &metadata_bytes, &usable_pages))
+	{
+		file = true;
+		segment = dsm_create(total_size,
+							 DSM_CREATE_FILE |
+							 (area->no_oom ?
+							  DSM_CREATE_NULL_IF_MAXSEGMENTS |
+							  DSM_CREATE_NULL_IF_NOSPACE : 0));
+	}
 	if (segment == NULL)
 		return NULL;
 	dsm_pin_segment(segment);
@@ -2462,6 +2510,7 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 		area->control->segment_bins[segment_map->header->bin];
 	segment_map->header->freed = false;
 	segment_map->header->file = file;
+	segment_map->header->vmem_pid = vmem ? MyProcPid : 0;
 	area->control->segment_bins[segment_map->header->bin] = new_index;
 	if (segment_map->header->next != DSA_SEGMENT_INDEX_NONE)
 	{
