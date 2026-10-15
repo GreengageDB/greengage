@@ -2258,9 +2258,10 @@ typedef struct TempcatFrozenMove
 {
 	TempcatObject obj;
 	LocalTransactionId lxid;	/* of the transaction that froze the row */
+	struct TempcatFrozenMove *next;
 } TempcatFrozenMove;
 
-static List *tc_frozen_moves = NIL;	/* in TopMemoryContext */
+static TempcatFrozenMove *tc_frozen_moves = NULL;	/* in TopMemoryContext */
 static LocalTransactionId tc_frozen_moves_lxid = InvalidLocalTransactionId;
 
 void
@@ -2269,8 +2270,6 @@ tempcat_frozen_on_disk(Relation rel, HeapTuple tup)
 	int			catidx;
 	TempcatObject obj;
 	TempcatFrozenMove *f;
-	ListCell   *lc;
-	MemoryContext oldcxt;
 
 	if (tc_owned == NULL)
 		return;
@@ -2280,58 +2279,55 @@ tempcat_frozen_on_disk(Relation rel, HeapTuple tup)
 	obj = tempcat_row_object(catidx, tup, RelationGetDescr(rel));
 	if (tempcat_owned_entry(obj.classId, obj.objectId) == NULL)
 		return;
-	foreach(lc, tc_frozen_moves)
+	for (f = tc_frozen_moves; f != NULL; f = f->next)
 	{
-		f = (TempcatFrozenMove *) lfirst(lc);
 		if (f->obj.classId == obj.classId && f->obj.objectId == obj.objectId)
 		{
 			f->lxid = MyProc->lxid;
 			return;
 		}
 	}
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	f = palloc(sizeof(TempcatFrozenMove));
+	f = MemoryContextAlloc(TopMemoryContext, sizeof(TempcatFrozenMove));
 	f->obj = obj;
 	f->lxid = MyProc->lxid;
-	tc_frozen_moves = lappend(tc_frozen_moves, f);
-	MemoryContextSwitchTo(oldcxt);
+	f->next = tc_frozen_moves;
+	tc_frozen_moves = f;
 }
 
 /*
  * Once per writing transaction, see above.  An object whose row this
  * transaction froze has its move asked for already, or done: it is kept for
- * the next one, in case this one aborts.
+ * the next one, in case this one aborts.  An entry is unlinked before it is
+ * freed, so that an error on the way (in tempcat_schedule_move()) leaves the
+ * list whole.
  */
 static void
 tempcat_schedule_frozen_moves(void)
 {
-	List	   *kept = NIL;
-	ListCell   *lc;
-	MemoryContext oldcxt;
+	TempcatFrozenMove **link = &tc_frozen_moves;
 
 	if (tc_frozen_moves_lxid == MyProc->lxid ||
 		!TransactionIdIsValid(GetTopTransactionIdIfAny()))
 		return;
 	tc_frozen_moves_lxid = MyProc->lxid;
 
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	foreach(lc, tc_frozen_moves)
+	while (*link != NULL)
 	{
-		TempcatFrozenMove *f = (TempcatFrozenMove *) lfirst(lc);
+		TempcatFrozenMove *f = *link;
 
 		if (f->lxid == MyProc->lxid ||
 			(tempcat_owned_entry(f->obj.classId, f->obj.objectId) != NULL &&
 			 tempcat_object_in_memory(f->obj.classId, f->obj.objectId)))
 		{
 			tempcat_schedule_move(f->obj.classId, f->obj.objectId);
-			kept = lappend(kept, f);
+			link = &f->next;
 		}
 		else
+		{
+			*link = f->next;
 			pfree(f);
+		}
 	}
-	list_free(tc_frozen_moves);
-	tc_frozen_moves = kept;
-	MemoryContextSwitchTo(oldcxt);
 }
 
 /*
@@ -2759,7 +2755,7 @@ tempcat_materialize_moves(void)
 	int			level = GetCurrentTransactionNestLevel();
 	bool		moved = false;
 
-	if (tc_frozen_moves != NIL && IsTransactionState())
+	if (tc_frozen_moves != NULL && IsTransactionState())
 		tempcat_schedule_frozen_moves();
 	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
 		return false;
