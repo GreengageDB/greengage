@@ -838,6 +838,7 @@ static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   void *arg);
 static void tempcat_sweep_exit(int code, Datum arg);
 static void tempcat_xact_callback(XactEvent event, void *arg);
+static void tempcat_note_created(Oid catalog, Oid oid);
 static bool tempcat_drops_ended(void);
 static void tempcat_finish_drops(void);
 static void tempcat_subxact_callback(SubXactEvent event,
@@ -1121,7 +1122,10 @@ tempcat_remember_oid(Oid catalog, Oid oid)
 	key.oid = oid;
 	entry = hash_search(tc_owned, &key, HASH_ENTER, &found);
 	if (!found)
+	{
 		entry->on_disk = false;
+		tempcat_note_created(catalog, oid);
+	}
 
 	if (IsTempcatOid(oid))
 		tempcat_publish_oid(oid);
@@ -4030,6 +4034,77 @@ tempcat_dropped_end_xact(bool commit)
 	}
 }
 
+/*
+ * Our objects that this transaction made ours (see tempcat_remember_oid()),
+ * with the subtransaction level that did.  If that rolls back, those whose
+ * rows went to disk are forgotten, and their statistics purged, as those of
+ * dropped objects are (tempcat_finish_drops()): no row of theirs in memory
+ * is left to do so through tempcat_forget_if_gone(), and the owned set would
+ * grow for good, e.g. with exception blocks that create objects in a full
+ * area, and a later object that reused such an OID would go to disk.  The
+ * newest are first, so a subtransaction's end looks only at its own.
+ */
+static TempcatDropped *tc_created = NULL;	/* in TopMemoryContext */
+static LocalTransactionId tc_created_lxid = InvalidLocalTransactionId;
+
+static void
+tempcat_note_created(Oid catalog, Oid oid)
+{
+	TempcatDropped *c;
+
+	if (!IsTransactionState())
+		return;
+	if (tc_created_lxid != MyProc->lxid)
+	{
+		TempcatDropped *old = tc_created;
+
+		tc_created = NULL;
+		tc_created_lxid = MyProc->lxid;
+		tempcat_free_drops(old);
+	}
+	c = MemoryContextAlloc(TopMemoryContext, sizeof(TempcatDropped));
+	c->obj.classId = catalog;
+	c->obj.objectId = oid;
+	c->level = GetCurrentTransactionNestLevel();
+	c->xid = InvalidTransactionId;
+	c->next = tc_created;
+	tc_created = c;
+}
+
+/*
+ * The (sub)transaction at 'level' ended: hand what it made ours to its
+ * parent, or, as it rolled back, finish those of them that went to disk
+ * (nothing is allocated).  At the top level, a commit or PREPARE forgets
+ * the list.
+ */
+static void
+tempcat_created_end(int level, bool commit)
+{
+	while (tc_created != NULL && tc_created->level >= level)
+	{
+		TempcatDropped *c = tc_created;
+		TempcatOwnedEntry *owned;
+
+		if (commit && level > 1)
+		{
+			/* (all of the subtransaction's are first: relabel them) */
+			for (; c != NULL && c->level >= level; c = c->next)
+				c->level = level - 1;
+			return;
+		}
+		tc_created = c->next;
+		owned = commit ? NULL : tempcat_owned_entry(c->obj.classId, c->obj.objectId);
+		if (owned != NULL && owned->on_disk)
+		{
+			c->xid = InvalidTransactionId;
+			c->next = tc_ended_drops;
+			tc_ended_drops = c;
+		}
+		else
+			pfree(c);
+	}
+}
+
 static void
 tempcat_forget_owned(TempcatObject obj)
 {
@@ -4109,9 +4184,11 @@ tempcat_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PREPARE:
 			tempcat_dropped_end_xact(event == XACT_EVENT_COMMIT);
+			tempcat_created_end(1, true);
 			break;
 		case XACT_EVENT_ABORT:
 			tempcat_reset_drops();
+			tempcat_created_end(1, false);
 			break;
 		default:
 			break;
@@ -4129,12 +4206,14 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 	{
 		tempcat_moved_end_subxact(false);
 		tempcat_dropped_end_subxact(false);
+		tempcat_created_end(GetCurrentTransactionNestLevel(), false);
 	}
 	if (event != SUBXACT_EVENT_COMMIT_SUB)
 		return;
 	tempcat_moved_end_subxact(true);
 	tempcat_dropped_end_subxact(true);
 	level = GetCurrentTransactionNestLevel();
+	tempcat_created_end(level, true);
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
 }

@@ -1416,3 +1416,31 @@ SELECT c.relname, (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid)
 RESET gp_temp_memory_catalog_disk_only;
 DROP TABLE tc_sqlup, tc_sqlup_ref, tc_sqlup_child, tc_sqlup_ord, tc_sqlup_ord2, tc_sqlup_parent;
 DROP OPERATOR pg_temp.<<< (int, int);
+
+-- So are objects whose creation rolled back after their rows went to disk:
+-- nothing of theirs is left in memory to forget them.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_reuse_first2 (a int) DISTRIBUTED BY (a);
+BEGIN;
+SAVEPOINT s;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_reuse_aborted (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_reuse_aborted'::regclass::oid AS tc_reuse_aborted_oid \gset
+SET LOCAL gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS was_on_disk FROM pg_class WHERE oid = :tc_reuse_aborted_oid;
+ROLLBACK TO SAVEPOINT s;
+COMMIT;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND backend_type = 'client backend' AND sess_id <> current_setting('gp_session_id')::int); PERFORM pg_sleep(0.1); END LOOP; END $$;
+VACUUM pg_class;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_reuse_mem2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_reuse_mem2'::regclass::oid = :tc_reuse_aborted_oid AS reused;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS on_disk FROM pg_class WHERE oid = :tc_reuse_aborted_oid;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_reuse_mem2;
