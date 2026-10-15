@@ -2,9 +2,9 @@
 
 ## Overview
 
-This documentation describes the packaging system for Greengage Database
-located in the `gpAux/` subdirectory: Debian packages (`pkg-deb`, using
-`debian/rules`) and RPM packages (`pkg-rpm`, using `rpm/greengage7.spec`).
+This documentation describes the packaging system for Greengage Database:
+Debian packages (`pkg-deb`, using `debian/rules`) and RPM packages
+(`pkg-rpm`, using `rpm/greengage7.spec`).
 
 ## Location and Structure
 
@@ -25,21 +25,19 @@ The packaging system is located in [gpAux/](../gpAux/):
 - [rpm/greengage7.spec](rpm/greengage7.spec) -
   RPM spec file defining package metadata and build steps
 - [rpm/greengage7.rpmlintrc](rpm/greengage7.rpmlintrc) -
-  `rpmlint` warning overrides, same as `debian/lintian-overrides`
+  `rpmlint` warning overrides, analogous to `debian/lintian-overrides`
 
 ## Usage
 
-### Building the Debian Package
+Run the commands from the project root directory.
 
-From the project root directory, run:
+### Building the Debian Package
 
 ```bash
 make -C ./gpAux pkg-deb
 ```
 
 ### Building the RPM Package
-
-From the project root directory, run:
 
 ```bash
 make -C ./gpAux pkg-rpm
@@ -51,6 +49,9 @@ To customize installation paths, pass the variables to `make`:
 
 ```bash
 make -C ./gpAux pkg-deb GPROOT=/custom/path GPDIR=custom_dir
+```
+
+```bash
 make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 ```
 
@@ -71,9 +72,9 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 
 - `pkg`: Default target (aliases to `pkg-deb`)
 - `pkg-deb`: Builds the Debian package
-- `pkg-rpm`: Builds the RPM package and checks it with `rpmlint`
-- `changelog`: Generates `debian/changelog`
-- `debian/install`: Creates the installation manifest
+- `pkg-rpm`: Builds the RPM package
+- `changelog`: Generates `debian/changelog` (not stored in repo)
+- `debian/install`: Creates the installation manifest (not stored in repo)
 - `../VERSION`: Generates the version file using `../getversion`
 - `version-vars`: Sets build variables (`FULL_VERSION`, `PACKAGE_VERSION`,
   `VERSION_CODENAME`, `IS_RELEASE`, `BUILD_TYPE`) from the `../VERSION` file
@@ -83,7 +84,6 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 
 Both package formats reuse `version-vars`:
 
-- Processes the version string into `FULL_VERSION` and `PACKAGE_VERSION`
 - Debian: `IS_RELEASE` and `BUILD_TYPE` are used for the changelog generation
 - RPM: `PACKAGE_VERSION` is normalized (`+`/`-` replaced with `.`) and passed
   to `rpmbuild` via `--define gpdb_version`
@@ -96,8 +96,6 @@ Both package formats reuse `version-vars`:
   `DESTDIR` as `PACKAGE_NAME`)
 - Skips signing with `-us -uc` flags and skips tests
   (`DEB_BUILD_OPTIONS=nocheck`) for faster builds
-- Generates `debian/changelog` and the installation manifest `debian/install`
-  (both are not committed to the repository)
 - Collects only the build artifacts (`.deb`, `.ddeb`, `.build`, `.buildinfo`,
   `.changes`) into `ARTIFACTS_DIR`
 
@@ -123,8 +121,7 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
   `gpdb_release`, `gproot`, `gpdir` and `sourcedir` passed via `--define`
 - Collects only the resulting `.rpm` into `ARTIFACTS_DIR`
 - Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the collected `.rpm` and
-  fails the build if `rpmlint` reports errors (`rpmlint` is installed by
-  `README.Rhel-Rocky.bash`)
+  fails the build if `rpmlint` reports errors
 
 The `rpm/greengage7.spec` file defines the RPM build:
 
@@ -138,39 +135,34 @@ The `rpm/greengage7.spec` file defines the RPM build:
   via `strip --strip-unneeded`, which also removes BUILDROOT paths embedded by
   the compiler (e.g., PyGreSQL's `_pg.so`) that would otherwise fail
   `check-buildroot` validation
-- Removes the executable bit from the same files as the custom `dh_fixperms`
-  of `debian/rules`
-- Has one `%changelog` entry, its date is set at build time
+- Applies the same executable bit cleanup as the custom `dh_fixperms` of
+  `debian/rules`
+- Has one `%changelog` entry with the build date
 
 ## Dependencies
 
 ### Build Dependencies
 
-Both `pkg-deb` and `pkg-rpm` assume that all build dependencies and the
-GPDB build itself (`make dist`) are already satisfied/buildable on the
-host — neither target builds GPDB from scratch; they package an already
-configured and built source tree.
+Both `pkg-deb` and `pkg-rpm` package an already configured and built source
+tree. They assume that the build dependencies are installed and that
+`make dist` works on the host; neither target builds GPDB from scratch.
 
-To get a complete environment with all dependencies installed, use the
-provided Docker images instead of installing dependencies manually:
+To get a complete environment, use the Docker images instead of installing
+the dependencies manually:
 
 - [ci/Dockerfile.ubuntu](../ci/Dockerfile.ubuntu) - Ubuntu 22.04
 - [ci/Dockerfile.rockylinux](../ci/Dockerfile.rockylinux) - Rocky Linux 9
 
 See [ci/readme.md](../ci/readme.md) for instructions on building and
-using these images. To install dependencies directly on a host without
+using these images. To install the dependencies directly on a host without
 Docker, see [README.Linux.md](../README.Linux.md) together with
-[README.Ubuntu.bash](README.Ubuntu.bash) (Ubuntu) or
-[README.Rhel-Rocky.bash](README.Rhel-Rocky.bash) (RHEL/Rocky Linux).
+[README.Ubuntu.bash](../README.Ubuntu.bash) (Ubuntu) or
+[README.Rhel-Rocky.bash](../README.Rhel-Rocky.bash) (RHEL/Rocky Linux).
 
 ### Package Dependencies
 
-Package dependencies and conflicts for the Debian package are defined in
-`debian/control`.
-
-Package dependencies for the RPM package are defined directly in
-`rpm/greengage7.spec` via `Requires:`/`Conflicts:` tags: system utilities
-(e.g., `openssh-server`, `rsync`, `zip`), `python3` and `python3-pip`.
+The package dependencies and conflicts are listed in the table in
+[Updating Package Metadata](#updating-package-metadata).
 
 The RPM package also requires the library `libxerces-c-3.2.so` (package
 `xerces-c`), which comes from EPEL on Rocky Linux 9. Enable EPEL before
