@@ -3404,16 +3404,21 @@ tempcat_compare(TempcatScan scan, HeapTuple a, HeapTuple b)
 
 		if (anull || bnull)
 		{
+			bool		nulls_first =
+			(scan->irel->rd_indoption[i] & INDOPTION_NULLS_FIRST) != 0;
+
 			if (anull && bnull)
 				continue;
-			cmp = anull ? 1 : -1;	/* NULLS LAST */
+			cmp = (anull == nulls_first) ? -1 : 1;
 		}
 		else
+		{
 			cmp = DatumGetInt32(FunctionCall2Coll(scan->procs[i],
 												  scan->irel->rd_indcollation[i],
 												  ad, bd));
-		if (scan->irel->rd_indoption[i] & INDOPTION_DESC)
-			cmp = -cmp;
+			if (scan->irel->rd_indoption[i] & INDOPTION_DESC)
+				cmp = -cmp;
+		}
 		if (cmp != 0)
 			return cmp;
 	}
@@ -3748,6 +3753,20 @@ tempcat_check_index_scan(Relation rel)
 				 errmsg("cannot scan catalog \"%s\" through an index in a plan made before the session kept temporary objects in memory",
 						RelationGetRelationName(rel)),
 				 errhint("Run the statement again.")));
+}
+
+/*
+ * Sample scans of a catalog do not see its rows in memory (they read pages
+ * of the heap): refuse them rather than miss rows.
+ */
+void
+tempcat_check_sample_scan(Relation rel)
+{
+	if (tempcat_has_rows(rel))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot sample catalog \"%s\", which holds rows of temporary objects kept in memory",
+						RelationGetRelationName(rel))));
 }
 
 /* ----------------------------------------------------------------

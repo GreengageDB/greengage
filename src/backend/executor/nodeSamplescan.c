@@ -17,6 +17,7 @@
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "access/tsmapi.h"
+#include "catalog/tempcat.h"
 #include "executor/executor.h"
 #include "executor/nodeSamplescan.h"
 #include "miscadmin.h"
@@ -124,6 +125,10 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 		ExecOpenScanRelation(estate,
 							 node->scan.scanrelid,
 							 eflags);
+
+	/* GPDB: see tempcat_check_sample_scan() */
+	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+		tempcat_check_sample_scan(scanstate->ss.ss_currentRelation);
 
 	/* we won't set up the HeapScanDesc till later */
 	scanstate->ss.ss_currentScanDesc = NULL;

@@ -115,10 +115,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1801866)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=1833348)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1801865)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=1833347)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -140,6 +140,30 @@ SELECT count(*) FROM tc_t t JOIN gp_dist_random('pg_attribute') a
      6
 (1 row)
 
+-- TID scans of the catalogs find the rows in memory; sample scans do not
+-- see them, and are refused.
+SET enable_seqscan = off;
+EXPLAIN (costs off)
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+                 QUERY PLAN                 
+--------------------------------------------
+ Tid Scan on pg_class
+   TID Cond: (ctid = $0)
+   InitPlan 1 (returns $0)
+     ->  Seq Scan on pg_class pg_class_1
+           Filter: (relname = 'tc_t'::name)
+ Optimizer: Postgres-based planner
+(6 rows)
+
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+ relname 
+---------
+ tc_t
+(1 row)
+
+RESET enable_seqscan;
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_t';
+ERROR:  cannot sample catalog "pg_class", which holds rows of temporary objects kept in memory
 -- DDL and maintenance
 ALTER TABLE tc_t ADD COLUMN c int DEFAULT 7;
 ALTER TABLE tc_t RENAME COLUMN b TO bb;

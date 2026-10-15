@@ -387,9 +387,16 @@ systable_beginscan(Relation heapRelation,
 		sysscan->snapshot = NULL;
 	}
 
-	/* Must run while the keys still hold heap attribute numbers. */
-	sysscan->tempscan = tempcat_beginscan(heapRelation, irel, snapshot,
-										  nkeys, key);
+	/*
+	 * Must run while the keys still hold heap attribute numbers.  (Without
+	 * an index, an MVCC heap scan returns the rows itself, after the heap's;
+	 * see heap_getnext_tempcat().)
+	 */
+	if (irel != NULL || !IsMVCCSnapshot(snapshot))
+		sysscan->tempscan = tempcat_beginscan(heapRelation, irel, snapshot,
+											  nkeys, key);
+	else
+		sysscan->tempscan = NULL;
 
 	if (irel)
 	{
@@ -518,8 +525,8 @@ systable_recheck_tuple(SysScanDesc sysscan, HeapTuple tup)
 	Snapshot	freshsnap;
 	bool		result;
 
-	/* Virtual rows belong to this session; nobody else can change them. */
-	if (tempcat_scan_on_virtual(sysscan->tempscan))
+	/* Rows in memory belong to this session; nobody else can change them. */
+	if (IsTempcatTid(&tup->t_self))
 		return true;
 
 	Assert(tup == ExecFetchSlotHeapTuple(sysscan->slot, false, NULL));
@@ -871,8 +878,9 @@ systable_inplace_update_cancel(void *state)
 	HeapTuple	oldtup;
 	Buffer		buffer;
 
-	/* A virtual row holds no buffer lock. */
-	if (tempcat_scan_on_virtual(scan->tempscan))
+	/* A row in memory holds no buffer lock. */
+	if (tempcat_scan_on_virtual(scan->tempscan) ||
+		(bslot->base.tuple != NULL && IsTempcatTid(&bslot->base.tuple->t_self)))
 	{
 		systable_endscan(scan);
 		return;

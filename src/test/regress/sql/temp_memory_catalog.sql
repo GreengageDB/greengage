@@ -70,6 +70,15 @@ SELECT count(*) FROM tc_t t1 JOIN tc_t t2 ON t1.a = t2.a + 1;
 SELECT count(*) FROM tc_t t JOIN gp_dist_random('pg_attribute') a
   ON a.attrelid = 'tc_t'::regclass AND a.attnum = t.a;
 
+-- TID scans of the catalogs find the rows in memory; sample scans do not
+-- see them, and are refused.
+SET enable_seqscan = off;
+EXPLAIN (costs off)
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+RESET enable_seqscan;
+SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_t';
+
 -- DDL and maintenance
 ALTER TABLE tc_t ADD COLUMN c int DEFAULT 7;
 ALTER TABLE tc_t RENAME COLUMN b TO bb;

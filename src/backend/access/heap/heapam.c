@@ -1895,6 +1895,13 @@ heap_get_latest_tid(TableScanDesc sscan,
 	Assert(ItemPointerIsValid(tid));
 
 	/*
+	 * GPDB: a catalog row of a temporary object kept in memory, which has no
+	 * update chain to follow (see tempcat.c)
+	 */
+	if (IsTempcatTid(tid))
+		return;
+
+	/*
 	 * Loop to chase down t_ctid links.  At top of loop, ctid is the tuple we
 	 * need to examine, and *tid is the TID we will return if ctid turns out
 	 * to be bogus.
