@@ -4,10 +4,7 @@
 %{!?gpdir:  %global gpdir  greengage7}
 %global     prefix %{gproot}/%{gpdir}
 
-# bin/, sbin/, lib/python/ use bare 'python' interpreter intentionally.
-# On Rocky 8/9, python3 -> python3.12 via alternatives.
-# Perl test scripts use /usr/bin/env perl for portability across environments
-# where Perl is not at /usr/bin/perl — see commit:eab7246a65e3c7834f8d4763d73972e4a6c0fcbd
+# Scripts use `#!/usr/bin/env <interpreter>' for portability
 %global __brp_mangle_shebangs_exclude_from ^%{prefix}/.*$
 
 Name:    greengage7
@@ -33,6 +30,10 @@ Requires: zip
 
 Requires: python3
 Requires: python3-pip
+Requires: python3-psutil
+Requires: python3-pyyaml
+Requires: python3-psycopg2
+Requires: python3-setuptools
 
 Conflicts: greengage-loaders
 
