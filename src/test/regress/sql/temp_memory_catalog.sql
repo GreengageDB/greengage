@@ -50,10 +50,39 @@ SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_t'::regclass ORD
 SELECT column_name, data_type FROM information_schema.columns
  WHERE table_name = 'tc_t' ORDER BY ordinal_position;
 SELECT indisprimary, indisunique, indkey FROM pg_index WHERE indexrelid = 'tc_t_pkey'::regclass;
--- Sequential scans of the catalogs see the rows in memory, index scans of
--- plans would not: the planner leaves the catalogs' indexes alone once the
--- session keeps temporary objects in memory.
+-- Index scans of plans merge in the rows in memory, in index order.  The
+-- planner does not scan the catalogs index-only or with bitmaps, which would
+-- not see them, nor mark positions in their index scans (merge joins).
 EXPLAIN (costs off) SELECT relname FROM pg_class WHERE oid = 'pg_class'::regclass;
+SET enable_seqscan = off;
+SELECT relname FROM pg_class WHERE oid = 'tc_t'::regclass;
+SELECT relname FROM pg_class WHERE relname = 'tc_t'::text;
+EXPLAIN (costs off)
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
+SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
+SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
+SET enable_indexscan = off;
+EXPLAIN (costs off) SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
+SELECT count(*) FROM pg_class WHERE relname = 'tc_t';
+RESET enable_indexscan;
+SET enable_hashjoin = off;
+EXPLAIN (costs off)
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+ WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0;
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+ WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0 ORDER BY 1, 2;
+SET enable_nestloop = off;
+SET enable_mergejoin = on;
+EXPLAIN (costs off)
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+ WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0;
+SELECT c.relname, a.attname FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid
+ WHERE c.relnamespace = pg_my_temp_schema() AND a.attnum > 0 ORDER BY 1, 2;
+RESET enable_mergejoin;
+RESET enable_nestloop;
+RESET enable_hashjoin;
+RESET enable_seqscan;
 -- The segments have them too.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_pkey');
 -- And nothing of them is on disk.
@@ -184,9 +213,9 @@ SELECT obj_description('tc_t'::regclass, 'pg_class');
 RESET allow_system_table_mods;
 
 -- Plans made before the session kept temporary objects in memory may scan
--- the catalogs through their indexes, which do not see rows in memory.  A
--- statement that creates the session's first temporary object runs such a
--- plan safely: it does not see what it creates itself.
+-- the catalogs index-only, which does not see rows in memory.  A statement
+-- that creates the session's first temporary object runs such a plan
+-- safely: it does not see what it creates itself.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET optimizer = off;
@@ -194,13 +223,16 @@ CREATE TEMP TABLE tc_cols AS
   SELECT attname FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum = 1
   DISTRIBUTED RANDOMLY;
 SELECT * FROM tc_cols;
--- A plan kept for the rest of a statement that would miss rows is refused.
+-- A plan kept for the rest of a statement that would miss rows is refused;
+-- plain index scans of such plans see the rows in memory.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET optimizer = off;
 SET enable_seqscan = off;
 CREATE FUNCTION tc_count_rel(n name) RETURNS bigint LANGUAGE sql VOLATILE AS
   $$ SELECT count(*) FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_kind_rel(n name) RETURNS "char" LANGUAGE sql VOLATILE AS
+  $$ SELECT relkind FROM pg_class WHERE relname = n $$;
 CREATE FUNCTION tc_make(i int) RETURNS int LANGUAGE plpgsql AS $$
 BEGIN
   IF i = 1 THEN
@@ -210,7 +242,13 @@ BEGIN
 END $$;
 SELECT i, tc_count_rel('tc_early'), tc_make(i) FROM generate_series(1, 2) i;
 SELECT tc_make(1), tc_count_rel('tc_early') AS planned_anew;
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+SET enable_seqscan = off;
+SELECT i, tc_kind_rel('tc_early'), tc_make(i) FROM generate_series(1, 2) i;
 DROP FUNCTION tc_count_rel(name);
+DROP FUNCTION tc_kind_rel(name);
 DROP FUNCTION tc_make(int);
 
 -- The setting has no effect on a session whose temporary schema is on disk

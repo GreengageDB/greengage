@@ -107,7 +107,12 @@ extern bool tempcat_scan_on_virtual(TempcatScan scan);
 extern void tempcat_endscan(TempcatScan scan);
 extern HeapTuple tempcat_fetch_tid(Relation rel, ItemPointer tid,
 								   Snapshot snapshot);
-extern bool tempcat_plan_catalog_index_scans(Oid relid);
+extern TempcatScan tempcat_begin_index_scan(Relation rel, Relation irel,
+											Snapshot snapshot,
+											int nkeys, ScanKey keys);
+extern HeapTuple tempcat_merge_next(TempcatScan scan, bool forward,
+									HeapTuple disk);
+extern bool tempcat_restrict_catalog_index_paths(Oid relid);
 extern void tempcat_check_index_scan(Relation rel, Snapshot snapshot);
 extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 

@@ -4,3 +4,5 @@ SharedSnapshotSlot
 struct SharedSnapshotSlot
 HeapScanDescData
 struct HeapScanDescData
+IndexScanDescData
+struct IndexScanDescData

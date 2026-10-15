@@ -1242,9 +1242,8 @@ tempcat_activate(Oid oid)
 		st->databaseId = MyDatabaseId;
 
 		/*
-		 * Plans made before may scan the catalogs through their indexes,
-		 * which do not see rows in memory (see
-		 * tempcat_plan_catalog_index_scans()).
+		 * Plans made before may scan the catalogs in ways that do not see
+		 * rows in memory (see tempcat_restrict_catalog_index_paths()).
 		 */
 		ResetPlanCache();
 	}
@@ -3632,6 +3631,85 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 }
 
 /*
+ * Begin a scan of the visible rows in memory of catalog 'rel' to merge into
+ * a scan of its index 'irel' by a plan (see index_getnext_slot()), or
+ * return NULL if there are none.  The keys are those of the index scan:
+ * those on simple index columns are converted to heap ones, the others are
+ * dropped, as the executor rechecks the rows in memory against the original
+ * quals.
+ */
+TempcatScan
+tempcat_begin_index_scan(Relation rel, Relation irel, Snapshot snapshot,
+						 int nkeys, ScanKey keys)
+{
+	TempcatScan scan;
+	ScanKey		hkeys;
+	int			nhkeys = 0;
+	int			i;
+
+	if (snapshot == NULL || !IsMVCCSnapshot(snapshot) ||
+		!tempcat_has_rows(rel))
+		return NULL;
+
+	hkeys = palloc(sizeof(ScanKeyData) * Max(nkeys, 1));
+	for (i = 0; i < nkeys; i++)
+	{
+		ScanKey		k = &keys[i];
+		AttrNumber	attno;
+
+		if (k->sk_flags & (SK_ISNULL | SK_ROW_HEADER | SK_SEARCHARRAY |
+						   SK_SEARCHNULL | SK_SEARCHNOTNULL | SK_ORDER_BY))
+			continue;
+		if (k->sk_attno < 1 ||
+			k->sk_attno > IndexRelationGetNumberOfKeyAttributes(irel))
+			continue;
+		attno = irel->rd_index->indkey.values[k->sk_attno - 1];
+		if (attno <= 0)
+			continue;
+		hkeys[nhkeys] = *k;
+		hkeys[nhkeys].sk_attno = attno;
+		nhkeys++;
+	}
+
+	scan = tempcat_beginscan(rel, irel, snapshot, nhkeys, hkeys);
+	pfree(hkeys);
+	if (scan != NULL && scan->ntuples == 0)
+	{
+		tempcat_endscan(scan);
+		scan = NULL;
+	}
+	return scan;
+}
+
+/*
+ * The next row in memory of a scan through an index to return before the
+ * on-disk row 'disk' (NULL if there are no more of those), or NULL if 'disk'
+ * comes first.  Both come in index order, backward if !forward.
+ */
+HeapTuple
+tempcat_merge_next(TempcatScan scan, bool forward, HeapTuple disk)
+{
+	int			dir = forward ? 1 : -1;
+	HeapTuple	vtup;
+
+	Assert(scan->irel != NULL);
+	if (scan->direction == 0)
+		scan->direction = dir;
+	else if (scan->direction != dir)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot change the direction of a catalog scan that includes rows of temporary objects kept in memory")));
+
+	if (scan->next >= scan->ntuples)
+		return NULL;
+	vtup = scan->tuples[forward ? scan->next : scan->ntuples - 1 - scan->next];
+	if (disk != NULL && tempcat_compare(scan, vtup, disk) * dir > 0)
+		return NULL;
+	scan->next++;
+	return vtup;
+}
+
+/*
  * Return the next row: rows in memory merged with the on-disk rows that
  * fetch_disk() returns.  For scans through an index both come in index
  * order (backward if !forward, for ordered scans); otherwise the rows in
@@ -3641,7 +3719,6 @@ HeapTuple
 tempcat_getnext_dir(TempcatScan scan, bool forward,
 					HeapTuple (*fetch_disk) (void *), void *arg)
 {
-	int			dir = forward ? 1 : -1;
 	HeapTuple	vtup;
 
 	if (scan->irel == NULL)
@@ -3655,11 +3732,6 @@ tempcat_getnext_dir(TempcatScan scan, bool forward,
 		return fetch_disk(arg);
 	}
 
-	if (scan->direction == 0)
-		scan->direction = dir;
-	else if (scan->direction != dir)
-		elog(ERROR, "cannot change the direction of a catalog scan that includes in-memory temporary objects");
-
 	if (scan->disk_tuple == NULL && !scan->disk_done)
 	{
 		scan->disk_tuple = fetch_disk(arg);
@@ -3667,13 +3739,9 @@ tempcat_getnext_dir(TempcatScan scan, bool forward,
 			scan->disk_done = true;
 	}
 
-	vtup = scan->next < scan->ntuples ?
-		scan->tuples[forward ? scan->next : scan->ntuples - 1 - scan->next] : NULL;
-	if (vtup != NULL &&
-		(scan->disk_tuple == NULL ||
-		 tempcat_compare(scan, vtup, scan->disk_tuple) * dir <= 0))
+	vtup = tempcat_merge_next(scan, forward, scan->disk_tuple);
+	if (vtup != NULL)
 	{
-		scan->next++;
 		scan->on_virtual = true;
 		return vtup;
 	}
@@ -3768,21 +3836,22 @@ tempcat_fetch_tid(Relation rel, ItemPointer tid, Snapshot snapshot)
 }
 
 /*
- * May the planner scan catalog 'relid' through its indexes?  Index scans in
- * plans do not see rows in memory (only sequential scans and the catalog
- * scans of the backend code do, see heapam.c and genam.c), so not in
- * sessions that keep temporary objects in memory.  Activating
- * ResetPlanCache()s the plans cached before.
+ * Must the plans scanning catalog 'relid' keep to the kinds of index scans
+ * that see its rows in memory?  Plain index scans merge them in (see
+ * index_getnext_slot()), but index-only and bitmap scans, and marking and
+ * restoring positions (for merge joins), do not: the planner and ORCA keep
+ * away from them in sessions that keep temporary objects in memory, and
+ * activating ResetPlanCache()s the plans cached before.
  */
 bool
-tempcat_plan_catalog_index_scans(Oid relid)
+tempcat_restrict_catalog_index_paths(Oid relid)
 {
 	if (tempcat_catalog_index(relid) < 0)
-		return true;
-	if (tc_activated)
 		return false;
+	if (tc_activated)
+		return true;
 	/* a reader of a session that keeps temporary objects in memory */
-	return !(tempcat_is_reader() && tempcat_attach());
+	return tempcat_is_reader() && tempcat_attach();
 }
 
 /*
@@ -3818,11 +3887,11 @@ tempcat_has_visible_rows(Relation rel, Snapshot snapshot)
 }
 
 /*
- * The executor is about to scan 'rel' through an index, with 'snapshot'.
- * Plans made since the session keeps temporary objects in memory do not
- * (see above), but plans made before that may live on outside the plan
- * cache, e.g. that of a CREATE TABLE AS that creates the session's first
- * temporary object, or those of a SQL function for the rest of the
+ * The executor is about to scan 'rel' index-only or with a bitmap, with
+ * 'snapshot'.  Plans made since the session keeps temporary objects in
+ * memory do not (see above), but plans made before that may live on outside
+ * the plan cache, e.g. that of a CREATE TABLE AS that creates the session's
+ * first temporary object, or those of a SQL function for the rest of the
  * statement that calls it: refuse them if the scan would miss rows.  (Rows
  * that the statement itself made are not visible to its snapshot.)
  */

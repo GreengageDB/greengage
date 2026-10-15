@@ -1918,8 +1918,15 @@ check_index_only(RelOptInfo *rel, IndexOptInfo *index)
 	index_canreturn_attrs = bms_del_members(index_canreturn_attrs,
 											index_cannotreturn_attrs);
 
-	/* Do we have all the necessary attributes? */
-	result = bms_is_subset(attrs_used, index_canreturn_attrs);
+	/*
+	 * Do we have all the necessary attributes?  GPDB: not with an index that
+	 * can return none, which get_relation_info() makes of those that must
+	 * not be scanned index-only (e.g. of AO tables of old versions, or of
+	 * catalogs, see tempcat_restrict_catalog_index_paths()), also if no
+	 * attribute is needed.
+	 */
+	result = !bms_is_empty(index_canreturn_attrs) &&
+		bms_is_subset(attrs_used, index_canreturn_attrs);
 
 	bms_free(attrs_used);
 	bms_free(index_canreturn_attrs);

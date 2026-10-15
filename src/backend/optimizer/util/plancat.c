@@ -203,13 +203,6 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 	else
 		hasindex = relation->rd_rel->relhasindex;
 
-	/*
-	 * GPDB: nor of catalogs whose rows of temporary objects kept in memory
-	 * only sequential scans see (see tempcat.c).
-	 */
-	if (hasindex && !tempcat_plan_catalog_index_scans(relationObjectId))
-		hasindex = false;
-
 	if (hasindex)
 	{
 		List	   *indexoidlist;
@@ -222,6 +215,14 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 		 * GPDB supports index-only scan on AO starting from AORelationVersion_GP7.
 		 */
 		bool enable_ios_ao = false;
+
+		/*
+		 * GPDB: only plain index scans see the rows of temporary objects
+		 * kept in memory, see tempcat_restrict_catalog_index_paths().
+		 */
+		bool		tempcat_restrict =
+			tempcat_restrict_catalog_index_paths(relationObjectId);
+
 		if (RelationStorageIsAO(relation))
 		{
 			Assert(relation->rd_appendonly != NULL);
@@ -317,6 +318,8 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 				/* GPDB: This AO table might not have met the requirement for IOScan. */
 				if (RelationIsAppendOptimized(relation) && !enable_ios_ao)
 					info->canreturn[i] = false;
+				else if (tempcat_restrict)
+					info->canreturn[i] = false;
 				else
 					info->canreturn[i] = index_can_return(indexRelation, i + 1);
 			}
@@ -339,9 +342,11 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 			info->amcanparallel = amroutine->amcanparallel;
 			info->amhasgettuple = (amroutine->amgettuple != NULL);
 			info->amhasgetbitmap = amroutine->amgetbitmap != NULL &&
-				relation->rd_tableam->scan_bitmap_next_block != NULL;
+				relation->rd_tableam->scan_bitmap_next_block != NULL &&
+				!tempcat_restrict;
 			info->amcanmarkpos = (amroutine->ammarkpos != NULL &&
-								  amroutine->amrestrpos != NULL);
+								  amroutine->amrestrpos != NULL &&
+								  !tempcat_restrict);
 			info->amcostestimate = amroutine->amcostestimate;
 			Assert(info->amcostestimate != NULL);
 

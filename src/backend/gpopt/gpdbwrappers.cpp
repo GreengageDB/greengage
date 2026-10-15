@@ -2186,7 +2186,7 @@ gpdb::TempcatRestrictsCatalogIndexScans(Oid relid)
 {
 	GP_WRAP_START;
 	{
-		return !tempcat_plan_catalog_index_scans(relid);
+		return tempcat_restrict_catalog_index_paths(relid);
 	}
 	GP_WRAP_END;
 }

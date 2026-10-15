@@ -128,6 +128,10 @@ RelationGetIndexScan(Relation indexRelation, int nkeys, int norderbys)
 	scan->xs_hitup = NULL;
 	scan->xs_hitupdesc = NULL;
 
+	scan->xs_tempcat_off = false;
+	scan->xs_tempcat_pending = false;
+	scan->xs_tempcat = NULL;
+
 	return scan;
 }
 
@@ -421,6 +425,8 @@ systable_beginscan(Relation heapRelation,
 
 		sysscan->iscan = index_beginscan(heapRelation, irel,
 										 snapshot, nkeys, 0);
+		/* GPDB: the rows in memory come from sysscan->tempscan */
+		sysscan->iscan->xs_tempcat_off = true;
 		index_rescan(sysscan->iscan, key, nkeys, NULL, 0);
 		sysscan->scan = NULL;
 	}
@@ -656,6 +662,8 @@ systable_beginscan_ordered(Relation heapRelation,
 
 	sysscan->iscan = index_beginscan(heapRelation, indexRelation,
 									 snapshot, nkeys, 0);
+	/* GPDB: the rows in memory come from sysscan->tempscan */
+	sysscan->iscan->xs_tempcat_off = true;
 	index_rescan(sysscan->iscan, key, nkeys, NULL, 0);
 	sysscan->scan = NULL;
 
