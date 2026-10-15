@@ -920,7 +920,7 @@ ExecInitIndexScan(IndexScan *node, EState *estate, int eflags)
 
 	/* GPDB: see tempcat_check_index_scan() */
 	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-		tempcat_check_index_scan(currentRelation);
+		tempcat_check_index_scan(currentRelation, estate->es_snapshot);
 
 	return ExecInitIndexScanForPartition(node, estate, eflags,
 	                                     currentRelation, node->indexid);

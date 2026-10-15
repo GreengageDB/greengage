@@ -181,6 +181,36 @@ UPDATE pg_description SET description = 'updated'
 SELECT obj_description('tc_t'::regclass, 'pg_class');
 RESET allow_system_table_mods;
 
+-- Plans made before the session kept temporary objects in memory may scan
+-- the catalogs through their indexes, which do not see rows in memory.  A
+-- statement that creates the session's first temporary object runs such a
+-- plan safely: it does not see what it creates itself.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+CREATE TEMP TABLE tc_cols AS
+  SELECT attname FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum = 1
+  DISTRIBUTED RANDOMLY;
+SELECT * FROM tc_cols;
+-- A plan kept for the rest of a statement that would miss rows is refused.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET optimizer = off;
+SET enable_seqscan = off;
+CREATE FUNCTION tc_count_rel(n name) RETURNS bigint LANGUAGE sql VOLATILE AS
+  $$ SELECT count(*) FROM pg_class WHERE relname = n $$;
+CREATE FUNCTION tc_make(i int) RETURNS int LANGUAGE plpgsql AS $$
+BEGIN
+  IF i = 1 THEN
+    CREATE TEMP TABLE tc_early (a int) DISTRIBUTED BY (a);
+  END IF;
+  RETURN i;
+END $$;
+SELECT i, tc_count_rel('tc_early'), tc_make(i) FROM generate_series(1, 2) i;
+SELECT tc_make(1), tc_count_rel('tc_early') AS planned_anew;
+DROP FUNCTION tc_count_rel(name);
+DROP FUNCTION tc_make(int);
+
 -- The setting has no effect on a session whose temporary schema is on disk
 \c
 SET gp_enable_temp_memory_catalog = off;

@@ -108,8 +108,8 @@ extern void tempcat_endscan(TempcatScan scan);
 extern HeapTuple tempcat_fetch_tid(Relation rel, ItemPointer tid,
 								   Snapshot snapshot);
 extern bool tempcat_plan_catalog_index_scans(Oid relid);
-extern void tempcat_check_index_scan(Relation rel);
-extern void tempcat_check_sample_scan(Relation rel);
+extern void tempcat_check_index_scan(Relation rel, Snapshot snapshot);
+extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Objects of other sessions */
 extern TempcatForeign tempcat_foreign_object(Oid classId, Oid objectId);

@@ -128,7 +128,8 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 
 	/* GPDB: see tempcat_check_sample_scan() */
 	if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-		tempcat_check_sample_scan(scanstate->ss.ss_currentRelation);
+		tempcat_check_sample_scan(scanstate->ss.ss_currentRelation,
+								  estate->es_snapshot);
 
 	/* we won't set up the HeapScanDesc till later */
 	scanstate->ss.ss_currentScanDesc = NULL;

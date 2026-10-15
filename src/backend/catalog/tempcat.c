@@ -3738,16 +3738,50 @@ tempcat_plan_catalog_index_scans(Oid relid)
 }
 
 /*
- * The executor is about to scan 'rel' through an index.  Plans made since
- * the session keeps temporary objects in memory do not (see above), but
- * plans made before that may live on outside the plan cache, e.g. those of a
- * SQL function for the rest of the statement that calls it: refuse them if
- * the scan would miss rows.
+ * Does catalog 'rel' hold rows in memory that 'snapshot' sees?
+ */
+static bool
+tempcat_has_visible_rows(Relation rel, Snapshot snapshot)
+{
+	int			catidx = tempcat_catalog_index(RelationGetRelid(rel));
+	bool		reader;
+	bool		found = false;
+	dsa_pointer ep;
+
+	if (catidx < 0 || (tc_area == NULL && !tempcat_attach()) ||
+		tc_root->catalogs[catidx].nentries == 0)
+		return false;
+	if (snapshot == NULL)
+		return true;
+
+	reader = tempcat_is_reader();
+	if (reader)
+		LWLockAcquire(&tc_root->lock, LW_SHARED);
+	for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep) && !found;)
+	{
+		TempcatEntry *e = TC_ADDR(ep);
+
+		found = tempcat_entry_visible(e, snapshot);
+		ep = e->next;
+	}
+	if (reader)
+		LWLockRelease(&tc_root->lock);
+	return found;
+}
+
+/*
+ * The executor is about to scan 'rel' through an index, with 'snapshot'.
+ * Plans made since the session keeps temporary objects in memory do not
+ * (see above), but plans made before that may live on outside the plan
+ * cache, e.g. that of a CREATE TABLE AS that creates the session's first
+ * temporary object, or those of a SQL function for the rest of the
+ * statement that calls it: refuse them if the scan would miss rows.  (Rows
+ * that the statement itself made are not visible to its snapshot.)
  */
 void
-tempcat_check_index_scan(Relation rel)
+tempcat_check_index_scan(Relation rel, Snapshot snapshot)
 {
-	if (tempcat_has_rows(rel))
+	if (tempcat_has_visible_rows(rel, snapshot))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot scan catalog \"%s\" through an index in a plan made before the session kept temporary objects in memory",
@@ -3760,9 +3794,9 @@ tempcat_check_index_scan(Relation rel)
  * of the heap): refuse them rather than miss rows.
  */
 void
-tempcat_check_sample_scan(Relation rel)
+tempcat_check_sample_scan(Relation rel, Snapshot snapshot)
 {
-	if (tempcat_has_rows(rel))
+	if (tempcat_has_visible_rows(rel, snapshot))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot sample catalog \"%s\", which holds rows of temporary objects kept in memory",
