@@ -349,7 +349,7 @@ setTargetTable(ParseState *pstate, RangeVar *relation,
 	/*
 	 * Special check for DML on system relations,
 	 * allow DML when:
-	 * 	- in single user mode: initdb insert PIN entries to pg_depend,...
+	 * 	- in single user mode (initdb's post-bootstrap processing)
 	 * 	- in maintenance mode, upgrade mode or
 	 *  - allow_system_table_mods = true
 	 */

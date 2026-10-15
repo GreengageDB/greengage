@@ -477,57 +477,6 @@ IsSharedRelation(Oid relationId)
 }
 
 /*
-<<<<<<< HEAD
- * OIDs for catalog object are normally allocated in the master, and
- * executor nodes should just use the OIDs passed by the master. But
- * there are some exceptions.
- */
-static bool
-RelationNeedsSynchronizedOIDs(Relation relation)
-{
-	if (IsCatalogNamespace(RelationGetNamespace(relation)))
-	{
-		switch(RelationGetRelid(relation))
-		{
-			/*
-			 * pg_largeobject is more like a user table, and has
-			 * different contents in each segment and master.
-			 *
-			 * Large objects don't work very consistently in GPDB. They are not
-			 * distributed in the segments, but rather stored in the master node.
-			 * Or actually, it depends on which node the lo_create() function
-			 * happens to run, which isn't very deterministic.
-			 */
-			case LargeObjectRelationId:
-			case LargeObjectMetadataRelationId:
-				return false;
-
-			/*
-			 * We don't currently synchronize the OIDs of these catalogs.
-			 * It's a bit sketchy that we don't, but we get away with it
-			 * because these OIDs don't appear in any of the Node structs
-			 * that are dispatched from master to segments. (Except for the
-			 * OIDs, the contents of these tables should be in sync.)
-			 */
-			case RewriteRelationId:
-			case TriggerRelationId:
-				return false;
-
-			/* Event triggers are only stored and fired in the QD. */
-			case EventTriggerRelationId:
-				return false;
-		}
-
-		/*
-		 * All other system catalogs are assumed to need synchronized
-		 * OIDs.
-		 */
-		return true;
-	}
-	return false;
-}
-||||||| e1c1c30f635
-=======
  * IsPinnedObject
  *		Given the class + OID identity of a database object, report whether
  *		it is "pinned", that is not droppable because the system requires it.
@@ -585,7 +534,55 @@ IsPinnedObject(Oid classId, Oid objectId)
 	return true;
 }
 
->>>>>>> 3b231596ccf
+/*
+ * OIDs for catalog object are normally allocated in the master, and
+ * executor nodes should just use the OIDs passed by the master. But
+ * there are some exceptions.
+ */
+static bool
+RelationNeedsSynchronizedOIDs(Relation relation)
+{
+	if (IsCatalogNamespace(RelationGetNamespace(relation)))
+	{
+		switch(RelationGetRelid(relation))
+		{
+			/*
+			 * pg_largeobject is more like a user table, and has
+			 * different contents in each segment and master.
+			 *
+			 * Large objects don't work very consistently in GPDB. They are not
+			 * distributed in the segments, but rather stored in the master node.
+			 * Or actually, it depends on which node the lo_create() function
+			 * happens to run, which isn't very deterministic.
+			 */
+			case LargeObjectRelationId:
+			case LargeObjectMetadataRelationId:
+				return false;
+
+			/*
+			 * We don't currently synchronize the OIDs of these catalogs.
+			 * It's a bit sketchy that we don't, but we get away with it
+			 * because these OIDs don't appear in any of the Node structs
+			 * that are dispatched from master to segments. (Except for the
+			 * OIDs, the contents of these tables should be in sync.)
+			 */
+			case RewriteRelationId:
+			case TriggerRelationId:
+				return false;
+
+			/* Event triggers are only stored and fired in the QD. */
+			case EventTriggerRelationId:
+				return false;
+		}
+
+		/*
+		 * All other system catalogs are assumed to need synchronized
+		 * OIDs.
+		 */
+		return true;
+	}
+	return false;
+}
 
 /*
  * GetNewOidWithIndex

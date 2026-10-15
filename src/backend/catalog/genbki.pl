@@ -175,19 +175,9 @@ die "found $found duplicate OID(s) in catalog data\n" if $found;
 my $FirstGenbkiObjectId =
   Catalog::FindDefinedSymbol('catalog/pg_magic_oid.h', $include_path,
 	'FirstGenbkiObjectId');
-<<<<<<< HEAD
-my $FirstBootstrapObjectId =
-  Catalog::FindDefinedSymbol('catalog/pg_magic_oid.h', $include_path,
-	'FirstBootstrapObjectId');
-||||||| e1c1c30f635
-my $FirstBootstrapObjectId =
-  Catalog::FindDefinedSymbol('access/transam.h', $include_path,
-	'FirstBootstrapObjectId');
-=======
 my $FirstUnpinnedObjectId =
-  Catalog::FindDefinedSymbol('access/transam.h', $include_path,
+  Catalog::FindDefinedSymbol('catalog/pg_magic_oid.h', $include_path,
 	'FirstUnpinnedObjectId');
->>>>>>> 3b231596ccf
 # Hash of next available OID, indexed by catalog name.
 my %GenbkiNextOids;
 

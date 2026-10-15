@@ -674,7 +674,47 @@ GetNewObjectId(void)
 }
 
 /*
-<<<<<<< HEAD
+ * SetNextObjectId
+ *
+ * This may only be called during initdb; it advances the OID counter
+ * to the specified value.
+ */
+static void
+SetNextObjectId(Oid nextOid)
+{
+	/* Safety check, this is only allowable during initdb */
+	if (IsPostmasterEnvironment)
+		elog(ERROR, "cannot advance OID counter anymore");
+
+	/* Taking the lock is, therefore, just pro forma; but do it anyway */
+	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+
+	if (ShmemVariableCache->nextOid > nextOid)
+		elog(ERROR, "too late to advance OID counter to %u, it is now %u",
+			 nextOid, ShmemVariableCache->nextOid);
+
+	ShmemVariableCache->nextOid = nextOid;
+	ShmemVariableCache->oidCount = 0;
+
+	LWLockRelease(OidGenLock);
+}
+
+/*
+ * StopGeneratingPinnedObjectIds
+ *
+ * This is called once during initdb to force the OID counter up to
+ * FirstUnpinnedObjectId.  This supports letting initdb's post-bootstrap
+ * processing create some pinned objects early on.  Once it's done doing
+ * so, it calls this (via pg_stop_making_pinned_objects()) so that the
+ * remaining objects it makes will be considered un-pinned.
+ */
+void
+StopGeneratingPinnedObjectIds(void)
+{
+	SetNextObjectId(FirstUnpinnedObjectId);
+}
+
+/*
  * AdvanceObjectId -- advance object id counter for QD and QE nodes
  *
  * When advancing the Oid counter of a QD, it should only be for the purpose
@@ -781,49 +821,6 @@ OidFollowsNextOid(Oid id)
 	diff = (int32) (id - ShmemVariableCache->nextOid);
 	return (diff > 0);
 }
-||||||| e1c1c30f635
-=======
- * SetNextObjectId
- *
- * This may only be called during initdb; it advances the OID counter
- * to the specified value.
- */
-static void
-SetNextObjectId(Oid nextOid)
-{
-	/* Safety check, this is only allowable during initdb */
-	if (IsPostmasterEnvironment)
-		elog(ERROR, "cannot advance OID counter anymore");
-
-	/* Taking the lock is, therefore, just pro forma; but do it anyway */
-	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
-
-	if (ShmemVariableCache->nextOid > nextOid)
-		elog(ERROR, "too late to advance OID counter to %u, it is now %u",
-			 nextOid, ShmemVariableCache->nextOid);
-
-	ShmemVariableCache->nextOid = nextOid;
-	ShmemVariableCache->oidCount = 0;
-
-	LWLockRelease(OidGenLock);
-}
-
-/*
- * StopGeneratingPinnedObjectIds
- *
- * This is called once during initdb to force the OID counter up to
- * FirstUnpinnedObjectId.  This supports letting initdb's post-bootstrap
- * processing create some pinned objects early on.  Once it's done doing
- * so, it calls this (via pg_stop_making_pinned_objects()) so that the
- * remaining objects it makes will be considered un-pinned.
- */
-void
-StopGeneratingPinnedObjectIds(void)
-{
-	SetNextObjectId(FirstUnpinnedObjectId);
-}
-
->>>>>>> 3b231596ccf
 
 #ifdef USE_ASSERT_CHECKING
 
