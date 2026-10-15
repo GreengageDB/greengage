@@ -291,6 +291,10 @@ heapam_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
 
+	/* GPDB: SQL INSERT into a catalog, see tempcat_sql_insert() */
+	if (IsCatalogRelation(relation))
+		tempcat_sql_insert(relation, tuple);
+
 	/* Perform the insertion, and copy the resulting ItemPointer */
 	heap_insert(relation, tuple, cid, options, bistate, xid);
 	ItemPointerCopy(&tuple->t_self, &slot->tts_tid);
@@ -311,6 +315,10 @@ heapam_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 	/* Update the tuple with table oid */
 	slot->tts_tableOid = RelationGetRelid(relation);
 	tuple->t_tableOid = slot->tts_tableOid;
+
+	/* GPDB: see heapam_tuple_insert() */
+	if (IsCatalogRelation(relation))
+		tempcat_sql_insert(relation, tuple);
 
 	HeapTupleHeaderSetSpeculativeToken(tuple->t_data, specToken);
 	options |= HEAP_INSERT_SPECULATIVE;

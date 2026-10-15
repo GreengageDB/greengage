@@ -1365,3 +1365,26 @@ SELECT 'tc_gone'::regclass::oid AS tc_gone_oid \gset
 DROP TABLE tc_gone;
 SELECT pg_temp.tc_open_detail(format('SELECT get_ao_distribution(%s)', :tc_gone_oid)) AS detail;
 SELECT pg_temp.tc_open_detail(format('SELECT get_ao_compression_ratio(%s)', :tc_gone_oid)) AS detail;
+
+-- Catalog rows that SQL inserts (allow_system_table_mods), with INSERT or
+-- COPY FROM, go to disk through the table AM, and take their objects in
+-- memory with them, as rows that do not fit; dependency rows are checked as
+-- recordDependencyOn() checks them.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_sqlins (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqlcopy (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqldep (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_sqlins_ord (a int) DISTRIBUTED BY (a);
+SELECT format('printf "%s\t1259\t0\tcopied\n"', 'tc_sqlcopy'::regclass::oid) AS tc_sqlcopy_cmd \gset
+SET allow_system_table_mods = on;
+INSERT INTO pg_description (objoid, classoid, objsubid, description) VALUES ('tc_sqlins'::regclass, 'pg_class'::regclass, 0, 'inserted');
+COPY pg_description (objoid, classoid, objsubid, description) FROM PROGRAM :'tc_sqlcopy_cmd';
+INSERT INTO pg_depend VALUES ('pg_class'::regclass, 'tc_sqlins_ord'::regclass, 0, 'pg_class'::regclass, 'tc_sqldep'::regclass, 0, 'n');
+RESET allow_system_table_mods;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT c.relname, (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid) AS attributes, d.description
+  FROM pg_class c LEFT JOIN pg_description d ON d.objoid = c.oid AND d.classoid = 'pg_class'::regclass
+  WHERE c.relname IN ('tc_sqlins', 'tc_sqlcopy', 'tc_sqldep') ORDER BY 1;
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_sqlins, tc_sqlcopy, tc_sqldep, tc_sqlins_ord;

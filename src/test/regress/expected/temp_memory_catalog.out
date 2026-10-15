@@ -2736,3 +2736,34 @@ SELECT pg_temp.tc_open_detail(format('SELECT get_ao_compression_ratio(%s)', :tc_
  This can be validly caused by a concurrent delete operation on this object.
 (1 row)
 
+-- Catalog rows that SQL inserts (allow_system_table_mods), with INSERT or
+-- COPY FROM, go to disk through the table AM, and take their objects in
+-- memory with them, as rows that do not fit; dependency rows are checked as
+-- recordDependencyOn() checks them.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_sqlins (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqlcopy (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_sqldep (a int) DISTRIBUTED BY (a);
+CREATE TABLE tc_sqlins_ord (a int) DISTRIBUTED BY (a);
+SELECT format('printf "%s\t1259\t0\tcopied\n"', 'tc_sqlcopy'::regclass::oid) AS tc_sqlcopy_cmd \gset
+SET allow_system_table_mods = on;
+INSERT INTO pg_description (objoid, classoid, objsubid, description) VALUES ('tc_sqlins'::regclass, 'pg_class'::regclass, 0, 'inserted');
+COPY pg_description (objoid, classoid, objsubid, description) FROM PROGRAM :'tc_sqlcopy_cmd';
+INSERT INTO pg_depend VALUES ('pg_class'::regclass, 'tc_sqlins_ord'::regclass, 0, 'pg_class'::regclass, 'tc_sqldep'::regclass, 0, 'n');
+DETAIL:  The new object would depend on table tc_sqldep.
+ERROR:  ordinary objects cannot depend on temporary objects kept in memory
+HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
+RESET allow_system_table_mods;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT c.relname, (SELECT count(*) FROM pg_attribute a WHERE a.attrelid = c.oid) AS attributes, d.description
+  FROM pg_class c LEFT JOIN pg_description d ON d.objoid = c.oid AND d.classoid = 'pg_class'::regclass
+  WHERE c.relname IN ('tc_sqlins', 'tc_sqlcopy', 'tc_sqldep') ORDER BY 1;
+  relname   | attributes | description 
+------------+------------+-------------
+ tc_sqlcopy |          8 | copied
+ tc_sqlins  |          8 | inserted
+(2 rows)
+
+RESET gp_temp_memory_catalog_disk_only;
+DROP TABLE tc_sqlins, tc_sqlcopy, tc_sqldep, tc_sqlins_ord;

@@ -4258,6 +4258,40 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 }
 
 /*
+ * A catalog row that SQL inserts (INSERT or COPY FROM, under
+ * allow_system_table_mods) goes to disk through the table AM, whose callers
+ * make index entries that a row in memory could not have: if it is a row of
+ * an object of ours in memory, the object follows it to disk, as when a row
+ * does not fit.  And a dependency row is checked as recordDependencyOn()
+ * checks those it inserts.
+ */
+void
+tempcat_sql_insert(Relation rel, HeapTuple tup)
+{
+	if (TempcatShared == NULL)
+		return;
+	if (RelationGetRelid(rel) == DependRelationId)
+	{
+		TupleDesc	desc = RelationGetDescr(rel);
+		ObjectAddress depender;
+		ObjectAddress referenced;
+		bool		isnull;
+
+		depender.classId = tempcat_getoid(tup, desc, Anum_pg_depend_classid);
+		depender.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_objid);
+		depender.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_objsubid,
+														  desc, &isnull));
+		referenced.classId = tempcat_getoid(tup, desc, Anum_pg_depend_refclassid);
+		referenced.objectId = tempcat_getoid(tup, desc, Anum_pg_depend_refobjid);
+		referenced.objectSubId = DatumGetInt32(heap_getattr(tup, Anum_pg_depend_refobjsubid,
+															desc, &isnull));
+		tempcat_check_dependency(&depender, &referenced);
+	}
+	if (tempcat_route_insert(rel, tup))
+		tempcat_row_to_disk(rel, tup);
+}
+
+/*
  * Refuse a row that would not fit on disk, as heap_insert() and
  * heap_update() would: in a catalog without a TOAST table, one that
  * compression does not bring under MaxHeapTupleSize (e.g. a long column

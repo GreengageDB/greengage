@@ -2321,6 +2321,9 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		tuple = ExecFetchSlotHeapTuple(slots[i], true, NULL);
 		slots[i]->tts_tableOid = RelationGetRelid(relation);
 		tuple->t_tableOid = slots[i]->tts_tableOid;
+		/* GPDB: COPY FROM into a catalog, see tempcat_sql_insert() */
+		if (IsCatalogRelation(relation))
+			tempcat_sql_insert(relation, tuple);
 		heaptuples[i] = heap_prepare_insert(relation, tuple, xid, cid,
 											options);
 	}

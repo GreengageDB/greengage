@@ -70,6 +70,7 @@ extern bool tempcat_owns_oid(Oid catalog, Oid oid);
 
 /* Catalog DML */
 extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
+extern void tempcat_sql_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_insert(Relation rel, HeapTuple tup);
 extern bool tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup);
 extern void tempcat_delete(Relation rel, ItemPointer tid);
