@@ -1098,6 +1098,18 @@ DROP FUNCTION pg_temp.tc_stat_disk_fn();
 SELECT pg_sleep(0.6);
 SELECT pg_temp.tc_wait_function_calls(:tc_stat_disk_fn_oid, NULL) AS calls;
 RESET track_functions;
+-- Also of those dropped ON COMMIT, after the commit began.
+BEGIN;
+CREATE TEMP TABLE tc_stat_oncommit (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 1, 1, 0, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+COMMENT ON TABLE tc_stat_oncommit IS 'moved';
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ANALYZE tc_stat_oncommit;
+SELECT 'tc_stat_oncommit'::regclass::oid AS tc_stat_oncommit_oid \gset
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 1) AS analyze_count;
+COMMIT;
+SELECT pg_sleep(0.6);
+SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 0) AS analyze_count;
 DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
 DROP FUNCTION pg_temp.tc_wait_function_calls(oid, bigint);
 -- A gp_fastsequence row that went to disk is frozen, so it outlives an abort

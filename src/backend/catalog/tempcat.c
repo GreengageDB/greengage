@@ -838,7 +838,8 @@ static void tempcat_sweep_subxact_callback(SubXactEvent event,
 										   void *arg);
 static void tempcat_sweep_exit(int code, Datum arg);
 static void tempcat_xact_callback(XactEvent event, void *arg);
-static void tempcat_forget_prepared_drops(void);
+static bool tempcat_drops_ended(void);
+static void tempcat_finish_drops(void);
 static void tempcat_subxact_callback(SubXactEvent event,
 									 SubTransactionId mySubid,
 									 SubTransactionId parentSubid,
@@ -3788,7 +3789,7 @@ tempcat_start_transaction(void)
 	}
 
 	tempcat_resolve_pending();
-	tempcat_forget_prepared_drops();
+	tempcat_finish_drops();
 	if (tc_horizon_dirty && tc_area != NULL)
 		tempcat_recompute_horizon();
 	if (tc_roles_dirty)
@@ -3817,12 +3818,14 @@ tempcat_idle(void)
 {
 	MemoryContext oldcxt = CurrentMemoryContext;
 
-	if (!tc_roles_dirty &&
+	if (!tc_roles_dirty && !tempcat_drops_ended() &&
 		(tc_area == NULL || (tc_npending == 0 && !tc_horizon_dirty)))
 		return;
 
 	PG_TRY();
 	{
+		/* (the statistics of what ended transactions dropped, see there) */
+		tempcat_finish_drops();
 		if (tc_area != NULL)
 		{
 			tempcat_resolve_pending();
@@ -3906,27 +3909,63 @@ tempcat_abort_subtransaction(void)
  * subtransaction level that dropped them.  Objects in memory are forgotten,
  * and the statistics of relations and functions purged, as their last row
  * is freed (tempcat_forget_if_gone()), but nothing frees rows on disk so:
- * the statistics of these, which pgstat_vacuum_stat() keeps for all OIDs
- * within our bounds, are purged when the transaction commits or prepares,
- * and the objects forgotten once it committed (tempcat_dropped_end_xact()).
- * Otherwise the owned set would grow for good in sessions whose area is
- * full, and a later object that reused such an OID would go to disk.
+ * these are once their transaction committed, also after its ON COMMIT
+ * actions (tempcat_finish_drops()).  Otherwise pgstat_vacuum_stat(), which
+ * keeps the statistics of all OIDs within our bounds, would keep theirs,
+ * the owned set would grow for good in sessions whose area is full, and a
+ * later object that reused such an OID would go to disk.
+ *
+ * As the transaction ends, they go to tc_ended_drops, with the XID of a
+ * prepared transaction, whose outcome is not known yet; they are finished at
+ * the start of the next transaction and when the session goes idle.  Not
+ * right at commit, where an error, e.g. running out of memory for the
+ * statistics purge, would be too late: nothing is allocated then.
  */
 typedef struct TempcatDropped
 {
 	TempcatObject obj;
 	int			level;
+	TransactionId xid;			/* of the prepared transaction, once ended */
+	struct TempcatDropped *next;
 } TempcatDropped;
 
-static List *tc_dropped = NIL;	/* in TopTransactionContext */
+/* in TopMemoryContext */
+static TempcatDropped *tc_dropped = NULL;
 static LocalTransactionId tc_dropped_lxid = InvalidLocalTransactionId;
+static TempcatDropped *tc_ended_drops = NULL;
+
+/* The transaction ending, as of its PRE_COMMIT or PRE_PREPARE */
+static LocalTransactionId tc_ending_lxid = InvalidLocalTransactionId;
+static TransactionId tc_ending_xid = InvalidTransactionId;
+
+static void
+tempcat_free_drops(TempcatDropped *d)
+{
+	while (d != NULL)
+	{
+		TempcatDropped *next = d->next;
+
+		pfree(d);
+		d = next;
+	}
+}
+
+/* Forget those of a transaction that went away without ending here. */
+static void
+tempcat_reset_drops(void)
+{
+	TempcatDropped *old = tc_dropped;
+
+	tc_dropped = NULL;
+	tc_dropped_lxid = InvalidLocalTransactionId;
+	tempcat_free_drops(old);
+}
 
 void
 tempcat_note_drop(const ObjectAddress *object)
 {
 	TempcatOwnedEntry *owned;
 	TempcatDropped *d;
-	MemoryContext oldcxt;
 
 	if (object->objectSubId != 0)
 		return;
@@ -3935,16 +3974,16 @@ tempcat_note_drop(const ObjectAddress *object)
 		return;
 	if (tc_dropped_lxid != MyProc->lxid)
 	{
-		tc_dropped = NIL;
+		tempcat_reset_drops();
 		tc_dropped_lxid = MyProc->lxid;
 	}
-	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
-	d = palloc(sizeof(TempcatDropped));
+	d = MemoryContextAlloc(TopMemoryContext, sizeof(TempcatDropped));
 	d->obj.classId = object->classId;
 	d->obj.objectId = object->objectId;
 	d->level = GetCurrentTransactionNestLevel();
-	tc_dropped = lappend(tc_dropped, d);
-	MemoryContextSwitchTo(oldcxt);
+	d->xid = InvalidTransactionId;
+	d->next = tc_dropped;
+	tc_dropped = d;
 }
 
 /* Forget the drops of an aborted subtransaction, or hand them to its parent. */
@@ -3952,64 +3991,48 @@ static void
 tempcat_dropped_end_subxact(bool commit)
 {
 	int			level = GetCurrentTransactionNestLevel();
-	List	   *kept = NIL;
-	ListCell   *lc;
-	MemoryContext oldcxt;
+	TempcatDropped **link = &tc_dropped;
 
-	if (tc_dropped_lxid != MyProc->lxid || tc_dropped == NIL)
+	if (tc_dropped_lxid != MyProc->lxid)
 		return;
-	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
-	foreach(lc, tc_dropped)
+	while (*link != NULL)
 	{
-		TempcatDropped *d = (TempcatDropped *) lfirst(lc);
+		TempcatDropped *d = *link;
 
 		if (d->level >= level)
 		{
 			if (!commit)
+			{
+				*link = d->next;
+				pfree(d);
 				continue;
+			}
 			d->level = level - 1;
 		}
-		kept = lappend(kept, d);
+		link = &d->next;
 	}
-	list_free(tc_dropped);
-	tc_dropped = kept;
-	MemoryContextSwitchTo(oldcxt);
 }
 
-/* The transaction is about to commit or prepare: purge their statistics. */
+/* The transaction committed or prepared: see above. */
 static void
-tempcat_purge_dropped(void)
+tempcat_dropped_end_xact(bool commit)
 {
-	ListCell   *lc;
+	TempcatDropped *d = tc_dropped;
 
-	if (tc_dropped_lxid != MyProc->lxid)
+	if (tc_dropped_lxid != tc_ending_lxid)
 		return;
-	foreach(lc, tc_dropped)
+	tc_dropped = NULL;
+	tc_dropped_lxid = InvalidLocalTransactionId;
+	while (d != NULL)
 	{
-		TempcatDropped *d = (TempcatDropped *) lfirst(lc);
+		TempcatDropped *next = d->next;
 
-		if (d->obj.classId == RelationRelationId)
-			pgstat_purge_relation(d->obj.objectId);
-		else if (d->obj.classId == ProcedureRelationId)
-			pgstat_purge_function(d->obj.objectId);
+		d->xid = commit ? InvalidTransactionId : tc_ending_xid;
+		d->next = tc_ended_drops;
+		tc_ended_drops = d;
+		d = next;
 	}
 }
-
-/*
- * Objects that a prepared transaction dropped (see above), with its XID, to
- * forget once it committed (tempcat_forget_prepared_drops()).
- */
-typedef struct TempcatPreparedDrop
-{
-	TempcatObject obj;
-	TransactionId xid;
-} TempcatPreparedDrop;
-
-static List *tc_prepared_drops = NIL;	/* in TopMemoryContext */
-
-/* The transaction ending, as of its PRE_COMMIT or PRE_PREPARE */
-static LocalTransactionId tc_ending_lxid = InvalidLocalTransactionId;
-static TransactionId tc_ending_xid = InvalidTransactionId;
 
 static void
 tempcat_forget_owned(TempcatObject obj)
@@ -4023,72 +4046,51 @@ tempcat_forget_owned(TempcatObject obj)
 	(void) hash_search(tc_owned, &key, HASH_REMOVE, NULL);
 }
 
-/*
- * The transaction committed or prepared, also after its ON COMMIT actions:
- * forget the objects it dropped that lived on disk, or once it committed.
- */
-static void
-tempcat_dropped_end_xact(bool commit)
+static bool
+tempcat_drops_ended(void)
 {
-	ListCell   *lc;
-	MemoryContext oldcxt;
-
-	if (tc_dropped_lxid != tc_ending_lxid || tc_dropped == NIL)
-	{
-		tc_dropped = NIL;
-		return;
-	}
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	foreach(lc, tc_dropped)
-	{
-		TempcatDropped *d = (TempcatDropped *) lfirst(lc);
-		TempcatPreparedDrop *p;
-
-		if (commit || !TransactionIdIsValid(tc_ending_xid))
-		{
-			tempcat_forget_owned(d->obj);
-			continue;
-		}
-		p = palloc(sizeof(TempcatPreparedDrop));
-		p->obj = d->obj;
-		p->xid = tc_ending_xid;
-		tc_prepared_drops = lappend(tc_prepared_drops, p);
-	}
-	MemoryContextSwitchTo(oldcxt);
-	tc_dropped = NIL;
-	tc_dropped_lxid = InvalidLocalTransactionId;
+	return tc_ended_drops != NULL;
 }
 
-/* At the start of a transaction: the prepared ones finished meanwhile. */
+/*
+ * Purge the statistics of the objects that ended transactions dropped, and
+ * forget them, once they committed; those of transactions that rolled back
+ * after PREPARE live on.  Each is unlinked once done, so an error leaves the
+ * rest, or that one, for the next time.
+ */
 static void
-tempcat_forget_prepared_drops(void)
+tempcat_finish_drops(void)
 {
-	List	   *kept = NIL;
-	List	   *done = NIL;
-	ListCell   *lc;
-	MemoryContext oldcxt;
+	TempcatDropped **link = &tc_ended_drops;
 
-	if (tc_prepared_drops == NIL)
-		return;
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	foreach(lc, tc_prepared_drops)
+	while (*link != NULL)
 	{
-		TempcatPreparedDrop *p = (TempcatPreparedDrop *) lfirst(lc);
-		TempcatXidStatus status = tempcat_xid_status(p->xid);
+		TempcatDropped *d = *link;
 
-		if (status == TCX_IN_PROGRESS)
-			kept = lappend(kept, p);
-		else
+		if (TransactionIdIsValid(d->xid))
 		{
-			if (status == TCX_COMMITTED)
-				tempcat_forget_owned(p->obj);
-			done = lappend(done, p);
+			TempcatXidStatus status = tempcat_xid_status(d->xid);
+
+			if (status == TCX_IN_PROGRESS)
+			{
+				link = &d->next;
+				continue;
+			}
+			if (status != TCX_COMMITTED)
+			{
+				*link = d->next;
+				pfree(d);
+				continue;
+			}
 		}
+		if (d->obj.classId == RelationRelationId)
+			pgstat_purge_relation(d->obj.objectId);
+		else if (d->obj.classId == ProcedureRelationId)
+			pgstat_purge_function(d->obj.objectId);
+		tempcat_forget_owned(d->obj);
+		*link = d->next;
+		pfree(d);
 	}
-	list_free(tc_prepared_drops);
-	tc_prepared_drops = kept;
-	list_free_deep(done);
-	MemoryContextSwitchTo(oldcxt);
 }
 
 /*
@@ -4105,13 +4107,15 @@ tempcat_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PRE_PREPARE:
 			if (tempcat_materialize_moves())
 				CommandCounterIncrement();
-			tempcat_purge_dropped();
 			tc_ending_lxid = MyProc->lxid;
 			tc_ending_xid = GetTopTransactionIdIfAny();
 			break;
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PREPARE:
 			tempcat_dropped_end_xact(event == XACT_EVENT_COMMIT);
+			break;
+		case XACT_EVENT_ABORT:
+			tempcat_reset_drops();
 			break;
 		default:
 			break;
