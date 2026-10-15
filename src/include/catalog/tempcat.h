@@ -77,6 +77,7 @@ extern int	tempcat_self_modified(Relation rel, ItemPointer tid,
 								  struct TM_FailureData *tmfd);
 extern void tempcat_inplace_update(Relation rel, HeapTuple tup);
 extern void tempcat_freeze(Relation rel, HeapTuple tup);
+extern void tempcat_frozen_on_disk(Relation rel, HeapTuple tup);
 
 /* Catalog scans */
 extern TempcatScan tempcat_beginscan(Relation rel, Relation irel,

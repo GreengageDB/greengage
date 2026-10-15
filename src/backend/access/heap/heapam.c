@@ -7215,6 +7215,9 @@ heap_freeze_tuple_wal_logged(Relation rel, HeapTuple tup)
 	END_CRIT_SECTION();
 
 	UnlockReleaseBuffer(buffer);
+
+	/* GPDB: of a temporary object in memory, which is to follow (tempcat.c) */
+	tempcat_frozen_on_disk(rel, tup);
 }
 
 /*

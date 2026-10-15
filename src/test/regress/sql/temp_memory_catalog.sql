@@ -1100,6 +1100,34 @@ SELECT pg_temp.tc_wait_function_calls(:tc_stat_disk_fn_oid, NULL) AS calls;
 RESET track_functions;
 DROP FUNCTION pg_temp.tc_wait_analyze_count(oid, bigint);
 DROP FUNCTION pg_temp.tc_wait_function_calls(oid, bigint);
+-- A gp_fastsequence row that went to disk is frozen, so it outlives an abort
+-- of its transaction, unlike the move of its object that it asked for: the
+-- next transaction that writes, not one that only reads, moves the object.
+-- (The fault fails the allocations on the segments during the INSERT.)
+CREATE TEMP TABLE tc_ao_frozen (a int, b int) WITH (appendonly = true) DISTRIBUTED BY (a);
+SELECT 'tc_ao_frozen'::regclass::oid AS tc_ao_frozen_oid,
+       (SELECT segrelid FROM pg_appendonly WHERE relid = 'tc_ao_frozen'::regclass)::oid AS tc_ao_frozen_seg \gset
+BEGIN;
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content >= 0;
+INSERT INTO tc_ao_frozen SELECT g, g FROM generate_series(1, 30) g;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content >= 0;
+ROLLBACK;
+SELECT count(*) FROM tc_ao_frozen;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS frozen_rows_on_disk FROM gp_dist_random('gp_fastsequence') WHERE objid = :tc_ao_frozen_seg;
+SELECT count(*) AS tables_on_disk FROM gp_dist_random('pg_class') WHERE oid = :tc_ao_frozen_oid;
+RESET gp_temp_memory_catalog_disk_only;
+INSERT INTO tc_ao_frozen SELECT g, g FROM generate_series(1, 30) g;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS tables_on_disk FROM gp_dist_random('pg_class') WHERE oid = :tc_ao_frozen_oid;
+SELECT count(*) AS sequence_rows_on_disk FROM gp_dist_random('gp_fastsequence') WHERE objid = :tc_ao_frozen_seg;
+RESET gp_temp_memory_catalog_disk_only;
+INSERT INTO tc_ao_frozen SELECT g, g FROM generate_series(31, 60) g;
+SELECT count(*), count(DISTINCT a) FROM tc_ao_frozen;
+DROP TABLE tc_ao_frozen;
+SET gp_temp_memory_catalog_disk_only = on;
+SELECT count(*) AS sequence_rows_on_disk FROM gp_dist_random('gp_fastsequence') WHERE objid = :tc_ao_frozen_seg;
+RESET gp_temp_memory_catalog_disk_only;
 
 --
 -- Rows that do not fit into gp_temp_memory_catalog_max_size go to the

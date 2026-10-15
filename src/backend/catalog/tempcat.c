@@ -2245,6 +2245,94 @@ tempcat_mark_on_disk(Oid classId, Oid objectId)
 }
 
 /*
+ * Objects of ours with a frozen row on disk (gp_fastsequence).  The row
+ * outlives an abort of its transaction, unlike the move of its object that
+ * it asked for, and would stay on disk while the object is in memory.  So
+ * the next transaction that writes moves such objects that are still in
+ * memory, and forgets the others; not one that only reads, which a QE may
+ * end without a distributed commit.
+ */
+typedef struct TempcatFrozenMove
+{
+	TempcatObject obj;
+	LocalTransactionId lxid;	/* of the transaction that froze the row */
+} TempcatFrozenMove;
+
+static List *tc_frozen_moves = NIL;	/* in TopMemoryContext */
+static LocalTransactionId tc_frozen_moves_lxid = InvalidLocalTransactionId;
+
+void
+tempcat_frozen_on_disk(Relation rel, HeapTuple tup)
+{
+	int			catidx;
+	TempcatObject obj;
+	TempcatFrozenMove *f;
+	ListCell   *lc;
+	MemoryContext oldcxt;
+
+	if (tc_owned == NULL)
+		return;
+	catidx = tempcat_catalog_index(RelationGetRelid(rel));
+	if (catidx < 0)
+		return;
+	obj = tempcat_row_object(catidx, tup, RelationGetDescr(rel));
+	if (tempcat_owned_entry(obj.classId, obj.objectId) == NULL)
+		return;
+	foreach(lc, tc_frozen_moves)
+	{
+		f = (TempcatFrozenMove *) lfirst(lc);
+		if (f->obj.classId == obj.classId && f->obj.objectId == obj.objectId)
+		{
+			f->lxid = MyProc->lxid;
+			return;
+		}
+	}
+	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+	f = palloc(sizeof(TempcatFrozenMove));
+	f->obj = obj;
+	f->lxid = MyProc->lxid;
+	tc_frozen_moves = lappend(tc_frozen_moves, f);
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/*
+ * Once per writing transaction, see above.  An object whose row this
+ * transaction froze has its move asked for already, or done: it is kept for
+ * the next one, in case this one aborts.
+ */
+static void
+tempcat_schedule_frozen_moves(void)
+{
+	List	   *kept = NIL;
+	ListCell   *lc;
+	MemoryContext oldcxt;
+
+	if (tc_frozen_moves_lxid == MyProc->lxid ||
+		!TransactionIdIsValid(GetTopTransactionIdIfAny()))
+		return;
+	tc_frozen_moves_lxid = MyProc->lxid;
+
+	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+	foreach(lc, tc_frozen_moves)
+	{
+		TempcatFrozenMove *f = (TempcatFrozenMove *) lfirst(lc);
+
+		if (f->lxid == MyProc->lxid ||
+			(tempcat_owned_entry(f->obj.classId, f->obj.objectId) != NULL &&
+			 tempcat_object_in_memory(f->obj.classId, f->obj.objectId)))
+		{
+			tempcat_schedule_move(f->obj.classId, f->obj.objectId);
+			kept = lappend(kept, f);
+		}
+		else
+			pfree(f);
+	}
+	list_free(tc_frozen_moves);
+	tc_frozen_moves = kept;
+	MemoryContextSwitchTo(oldcxt);
+}
+
+/*
  * Virtual TIDs of rows moved to disk in the current transaction, and the
  * TIDs of their copies there: callers may still hold a row's virtual TID,
  * found in this command before the move, to update or delete it
@@ -2669,6 +2757,8 @@ tempcat_materialize_moves(void)
 	int			level = GetCurrentTransactionNestLevel();
 	bool		moved = false;
 
+	if (tc_frozen_moves != NIL && IsTransactionState())
+		tempcat_schedule_frozen_moves();
 	if (tc_pending_moves == NULL || tc_pending_moves_lxid != MyProc->lxid)
 		return false;
 
