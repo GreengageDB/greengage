@@ -321,6 +321,32 @@ SELECT count(*) AS left_entries FROM pg_amproc WHERE amprocfamily = (SELECT oid 
 DROP OPERATOR FAMILY tc_fam USING btree;
 DROP OPERATOR FAMILY
 
+-- Only the coordinator leaves room in dynamic shared memory to others when
+-- a session starts to keep temporary objects in memory: a segment cannot
+-- decide otherwise, and makes do with what there is.
+SELECT gp_inject_fault_infinite('dsm_slots_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+11: SET gp_enable_temp_memory_catalog = on;
+SET
+11: CREATE TEMP TABLE tc_t (a int PRIMARY KEY) DISTRIBUTED BY (a);
+CREATE TABLE
+11: INSERT INTO tc_t SELECT generate_series(1, 10);
+INSERT 0 10
+11: SELECT count(*), 'tc_t'::regclass::oid >= 4026531840 AS reserved FROM tc_t;
+ count | reserved 
+-------+----------
+ 10    | t        
+(1 row)
+SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+11q: ... <quitting>
+
 4: DROP TABLE tc_sess;
 DROP TABLE
 4: DROP PROCEDURE tc_wait_gone();

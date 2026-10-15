@@ -457,6 +457,7 @@ typedef enum TempcatXidStatus
 static int	tempcat_tranche_id(void);
 static void tempcat_activate(Oid oid);
 static void tempcat_forget_if_gone(int catidx, Oid objoid);
+static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
 
 /*
@@ -723,9 +724,15 @@ tempcat_file_bytes(void)
  * Create the session's area (writer only).  Returns false if it cannot be
  * created: no slot of the DSM control segment to spare, nor space in memory
  * or (if allowed) on disk.
+ *
+ * The coordinator decides whether a session keeps its temporary objects in
+ * memory, and leaves room to other users of dynamic shared memory
+ * ('headroom'): if it cannot, the session keeps them on disk.  A segment
+ * cannot decide otherwise, and fails only if the area cannot be created at
+ * all; it leaves the room to others as the area grows.
  */
 static bool
-tempcat_create_area(void)
+tempcat_create_area(bool headroom)
 {
 	MemoryContext oldcxt;
 	dsa_pointer rootptr;
@@ -734,7 +741,7 @@ tempcat_create_area(void)
 
 	Assert(tc_area == NULL && !tempcat_is_reader());
 
-	if (tempcat_dsm_slots_low())
+	if (headroom && tempcat_dsm_slots_low())
 		return false;
 
 	/*
@@ -747,7 +754,7 @@ tempcat_create_area(void)
 	 * charged.
 	 */
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	if (!tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT) &&
+	if (!(headroom && tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT)) &&
 		VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) == MemoryAllocation_Success)
 	{
 		PG_TRY();
@@ -774,11 +781,10 @@ tempcat_create_area(void)
 
 	dsa_pin_mapping(area);
 	dsa_set_vmem_tracked(area);
-	tc_area = area;
 
-	dsa_set_size_limit(tc_area, tempcat_memory_bytes() + tempcat_file_bytes());
+	dsa_set_size_limit(area, tempcat_memory_bytes() + tempcat_file_bytes());
 	if (files)
-		dsa_set_memory_limit(tc_area, tempcat_memory_bytes());
+		dsa_set_memory_limit(area, tempcat_memory_bytes());
 	{
 		Size		free_bytes;
 		Size		total_bytes;
@@ -786,15 +792,17 @@ tempcat_create_area(void)
 		uint32		nmax;
 
 		if (dsm_impl_free_space(&free_bytes, &total_bytes))
-			dsa_set_min_free_space(tc_area, total_bytes / TEMPCAT_DSM_HEADROOM_DIV);
+			dsa_set_min_free_space(area, total_bytes / TEMPCAT_DSM_HEADROOM_DIV);
 		if (dsm_free_slots(&nfree, &nmax))
-			dsa_set_min_free_slots(tc_area, nmax / TEMPCAT_DSM_HEADROOM_DIV);
+			dsa_set_min_free_slots(area, nmax / TEMPCAT_DSM_HEADROOM_DIV);
 	}
 
-	rootptr = dsa_allocate0(tc_area, sizeof(TempcatRoot));
-	tc_root = dsa_get_address(tc_area, rootptr);
+	/* (in the first segment, which has room for it) */
+	rootptr = dsa_allocate0(area, sizeof(TempcatRoot));
+	tc_root = dsa_get_address(area, rootptr);
 	LWLockInitialize(&tc_root->lock, tempcat_tranche_id());
 	tc_root->writer_pgprocno = MyProc->pgprocno;
+	tc_area = area;
 
 	/* Publish the area to the readers of this session. */
 	if (SharedLocalSnapshotSlot != NULL)
@@ -1632,7 +1640,7 @@ tempcat_can_start(void)
 		return false;
 
 	/* the memory to keep them in, and a slice of the reserved range */
-	return (tc_area != NULL || tempcat_create_area()) &&
+	return (tc_area != NULL || tempcat_create_area(true)) &&
 		tempcat_claim_free_slice();
 }
 
@@ -1699,6 +1707,8 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	Oid			base;
 	Oid			span;
 	Oid			tries;
+	Oid			collisions = 0;
+	bool		reclaimed = false;
 
 	if (slice < 0)
 		elog(ERROR, "tempcat: no slice of the reserved OIDs is held");
@@ -1745,12 +1755,30 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 				tempcat_remember_oid(RelationGetRelid(relation), oid);
 			return oid;
 		}
+
+		/*
+		 * The OIDs of rows that the current transaction inserted and deleted
+		 * stay taken until it ends, as dead rows on disk would until vacuum:
+		 * a transaction that creates and drops temporary objects in a loop
+		 * goes through the slice.  Once the OIDs collide time and again,
+		 * free such rows that no snapshot can see any more, as when the area
+		 * is full, and go on.
+		 */
+		if (++collisions >= 1000 && !reclaimed && tc_area != NULL)
+		{
+			reclaimed = true;
+			LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
+			(void) tempcat_reclaim_dead();
+			LWLockRelease(&tc_root->lock);
+		}
 	}
 
 	ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("out of OIDs for temporary objects kept in memory"),
-			 errdetail("The session has used all %u OIDs it can take.", span)));
+			 errdetail("All %u OIDs that the session can give its temporary objects in catalog \"%s\" are taken by them, or by ordinary objects.",
+					   span, RelationGetRelationName(relation)),
+			 errhint("Drop temporary objects, or end the transaction that dropped some.")));
 	return InvalidOid;			/* keep compiler quiet */
 }
 
@@ -1808,11 +1836,12 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 		tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
 							true))
 	{
-		if (tc_area == NULL && !tempcat_create_area())
+		if (tc_area == NULL && !tempcat_create_area(false))
 			ereport(ERROR,
 					(errcode(ERRCODE_OUT_OF_MEMORY),
 					 errmsg("could not create the in-memory catalog of temporary objects on this node"),
-					 errdetail("Dynamic shared memory, or slots for its segments, ran short.")));
+					 errdetail("Dynamic shared memory, or slots for its segments, ran out, and so did disk space for files."),
+					 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
 		tempcat_activate(oid);
 		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 		tempcat_remember_oid(catalog, oid);
