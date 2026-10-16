@@ -35,24 +35,6 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 	CStatistics *inner_join_stats =
 		CStatistics::CastStats(result_stats_outer_side->CalcInnerJoinStats(
 			mp, inner_side_stats, join_preds_stats));
-	CDouble num_rows_inner_join_unfiltered = inner_join_stats->Rows();
-
-	if (nullptr != unsupported_pred_stats)
-	{
-		// Join predicates that cannot be modeled by the join histograms only
-		// apply to the matched pairs of the join, so filter the inner join
-		// result with them. The outer rows that lose all their matches this
-		// way are added back as null-extended rows in MakeLOJHistogram(),
-		// so that Card(LOJ) = Card(matched) + Card(null-extended) still holds
-		// and the null fraction of the inner columns reflects those rows.
-		// TODO: we currently only cap NDVs for filters immediately on top of tables.
-		CStatistics *inner_join_stats_filtered =
-			CFilterStatsProcessor::MakeStatsFilter(mp, inner_join_stats,
-												   unsupported_pred_stats,
-												   false /* do_cap_NDVs */);
-		inner_join_stats->Release();
-		inner_join_stats = inner_join_stats_filtered;
-	}
 	CDouble num_rows_inner_join = inner_join_stats->Rows();
 	CDouble num_rows_LASJ(1.0);
 
@@ -61,9 +43,8 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 	UlongToHistogramMap *LOJ_histograms =
 		CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			mp, result_stats_outer_side, result_stats_inner_side,
-			inner_join_stats, join_preds_stats, num_rows_inner_join,
-			num_rows_inner_join_unfiltered, &num_rows_LASJ,
-			&num_rows_inner_join);
+			inner_join_stats, join_preds_stats, unsupported_pred_stats,
+			num_rows_inner_join, &num_rows_LASJ, &num_rows_inner_join);
 
 	// cardinality of LOJ is at least the cardinality of the outer child.
 	// num_rows_inner_join may have been bounded above (by MakeLOJHistogram)
@@ -97,7 +78,7 @@ CLeftOuterJoinStatsProcessor::CalcLOJoinStatsStatic(
 }
 
 // number of outer rows that lose all their matches to join predicates that
-// could not be modeled by the join histograms (see CalcLOJoinStatsStatic);
+// could not be modeled by the join histograms (see MakeLOJHistogram);
 // the caller has already estimated
 //   num_rows_LASJ: outer rows without a match under the supported predicates,
 //   num_rows_inner_join_unfiltered: matched pairs under the supported predicates,
@@ -147,14 +128,47 @@ CLeftOuterJoinStatsProcessor::NumRowsUnmatchedByUnsupportedPreds(
 	return num_rows_matched * (CDouble(1.0) - selectivity);
 }
 
+// add the num_rows_LASJ_unsupported outer rows that lost all their matches to
+// the unsupported join predicates to LOJ_histogram, which describes
+// num_rows_LOJ_histogram rows of an outer column; we do not know which outer
+// values these rows have, so they are assumed to be spread like the values of
+// the outer child. Takes ownership of LOJ_histogram and returns the histogram
+// to use in its place.
+CHistogram *
+CLeftOuterJoinStatsProcessor::AddUnmatchedOuterRows(
+	CHistogram *LOJ_histogram, CDouble num_rows_LOJ_histogram,
+	const CHistogram *outer_histogram, CDouble num_rows_LASJ_unsupported)
+{
+	GPOS_ASSERT(nullptr != LOJ_histogram);
+	GPOS_ASSERT(nullptr != outer_histogram);
+
+	if (num_rows_LASJ_unsupported < CStatistics::Epsilon ||
+		!outer_histogram->IsWellDefined() || !LOJ_histogram->IsWellDefined())
+	{
+		return LOJ_histogram;
+	}
+
+	CHistogram *result_histogram =
+		LOJ_histogram->MakeUnionAllHistogramNormalize(
+			num_rows_LOJ_histogram, outer_histogram, num_rows_LASJ_unsupported);
+	// the union builds a fresh histogram, keep the mark of the one it replaces
+	if (LOJ_histogram->IsUnsupportedPredDerived())
+	{
+		result_histogram->SetUnsupportedPredDerived();
+	}
+	GPOS_DELETE(LOJ_histogram);
+
+	return result_histogram;
+}
+
 // create a new hash map of histograms for LOJ from the histograms
 // of the outer child and the histograms of the inner join
 UlongToHistogramMap *
 CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	CMemoryPool *mp, const CStatistics *outer_side_stats,
 	const CStatistics *inner_side_stats, CStatistics *inner_join_stats,
-	CStatsPredJoinArray *join_preds_stats, CDouble num_rows_inner_join,
-	CDouble num_rows_inner_join_unfiltered, CDouble *result_rows_LASJ,
+	CStatsPredJoinArray *join_preds_stats, CStatsPred *unsupported_pred_stats,
+	CDouble num_rows_inner_join, CDouble *result_rows_LASJ,
 	CDouble *result_rows_inner_join)
 {
 	GPOS_ASSERT(nullptr != outer_side_stats);
@@ -210,13 +224,6 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	// LOJ's per-column histograms below, so every histogram this function
 	// builds, and the row count the caller derives from it, stay
 	// consistent.
-	//
-	// The overcount sits in the generic equi-join computation, i.e. in
-	// num_rows_inner_join_unfiltered; num_rows_inner_join is that same count
-	// after the unsupported join predicates were applied to it. Correct the
-	// unfiltered count and carry the predicates' selectivity over to the
-	// filtered one, so that the fraction the two still describe (see
-	// NumRowsUnmatchedByUnsupportedPreds) is unchanged by the correction.
 	BOOL any_join_col_marked = false;
 	for (ULONG j = 0; j < join_preds_stats->Size() && !any_join_col_marked; j++)
 	{
@@ -236,27 +243,42 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	{
 		CDouble outer_rows = outer_side_stats->Rows();
 
-		if (num_rows_inner_join_unfiltered + num_rows_LASJ > outer_rows)
+		if (num_rows_inner_join + num_rows_LASJ > outer_rows)
 		{
-			CDouble unsupported_preds_selectivity(1.0);
-			if (num_rows_inner_join_unfiltered > CStatistics::Epsilon)
-			{
-				unsupported_preds_selectivity =
-					num_rows_inner_join / num_rows_inner_join_unfiltered;
-			}
-			num_rows_inner_join_unfiltered =
-				std::max(CStatistics::MinRows,
-						 num_rows_inner_join_unfiltered - num_rows_LASJ);
-			num_rows_inner_join = std::max(
-				CStatistics::MinRows,
-				num_rows_inner_join_unfiltered * unsupported_preds_selectivity);
+			num_rows_inner_join = std::max(CStatistics::MinRows,
+										   num_rows_inner_join - num_rows_LASJ);
 		}
 	}
 
+	// Join predicates that cannot be modeled by the join histograms only apply
+	// to the matched pairs of the join, so filter the inner join with them; the
+	// outer rows that lose all their matches this way are added back below as
+	// null-extended rows, so that Card(LOJ) = Card(matched) + Card(null-extended)
+	// still holds and the null fraction of the inner columns reflects those
+	// rows. The filter starts from the corrected num_rows_inner_join, so the
+	// inner join statistics are scaled to that count first if it changed.
+	// TODO: we currently only cap NDVs for filters immediately on top of tables.
+	CDouble num_rows_inner_join_unfiltered = num_rows_inner_join;
+	CStatistics *matched_stats = inner_join_stats;
+	matched_stats->AddRef();
+	if (nullptr != unsupported_pred_stats)
+	{
+		if (inner_join_stats->Rows() > CStatistics::Epsilon &&
+			num_rows_inner_join != inner_join_stats->Rows())
+		{
+			matched_stats->Release();
+			matched_stats = CStatistics::CastStats(inner_join_stats->ScaleStats(
+				mp, num_rows_inner_join / inner_join_stats->Rows()));
+		}
+		CStatistics *filtered_stats = CFilterStatsProcessor::MakeStatsFilter(
+			mp, matched_stats, unsupported_pred_stats, false /* do_cap_NDVs */);
+		matched_stats->Release();
+		matched_stats = filtered_stats;
+		num_rows_inner_join = matched_stats->Rows();
+	}
+
 	// outer rows that had a match under the supported join predicates but
-	// lost all their matches to the unsupported ones; we do not know which
-	// outer values these are, so they are assumed to be spread like the
-	// values of the outer child
+	// lost all their matches to the unsupported ones
 	CDouble num_rows_LASJ_unsupported = NumRowsUnmatchedByUnsupportedPreds(
 		outer_side_stats->Rows(), num_rows_LASJ, num_rows_inner_join_unfiltered,
 		num_rows_inner_join);
@@ -272,30 +294,19 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	{
 		ULONG colid = *(*outer_colids_with_stats)[i];
 		const CHistogram *inner_join_histogram =
-			inner_join_stats->GetHistogram(colid);
+			matched_stats->GetHistogram(colid);
 		GPOS_ASSERT(nullptr != inner_join_histogram);
-
-		// histogram of the column after the LOJ and the number of rows it describes
-		CHistogram *LOJ_histogram = nullptr;
-		CDouble num_rows_LOJ_histogram = num_rows_inner_join;
-
-		// whether the LOJ histogram must carry the unsupported-predicate mark;
-		// the unions below build fresh histograms, so it is set at the end
-		BOOL LOJ_histogram_is_marked =
-			inner_join_histogram->IsUnsupportedPredDerived();
 
 		if (outer_side_join_cols->Get(colid))
 		{
 			// the outer side's own column is preserved in full by a LOJ, so
 			// its value range is exact regardless of any imprecision on the
 			// inner side - the only mark that can legitimately apply here is
-			// one this column already carried coming in (inner_join_histogram
-			// may have picked up a mark from the inner side alone, which says
-			// nothing about this column's own value range)
+			// one this column already carried coming in
 			const CHistogram *outer_own_histogram =
 				outer_side_stats->GetHistogram(colid);
 			GPOS_ASSERT(nullptr != outer_own_histogram);
-			LOJ_histogram_is_marked =
+			BOOL outer_is_marked =
 				outer_own_histogram->IsUnsupportedPredDerived();
 
 			// add buckets from the outer histogram that do not contribute to the inner join
@@ -305,52 +316,59 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 			if (LASJ_histogram->IsWellDefined() && !LASJ_histogram->IsEmpty())
 			{
 				// union the buckets from the inner join and LASJ to get the LOJ buckets
-				LOJ_histogram = LASJ_histogram->MakeUnionAllHistogramNormalize(
-					num_rows_LASJ, inner_join_histogram, num_rows_inner_join);
-				num_rows_LOJ_histogram = num_rows_LASJ + num_rows_inner_join;
-			}
-		}
-
-		if (nullptr == LOJ_histogram)
-		{
-			// column from the outer side that is not a join column, or a join
-			// column whose LASJ histogram is empty: use the inner join histogram
-			LOJ_histogram = inner_join_histogram->CopyHistogram();
-		}
-
-		if (num_rows_LASJ_unsupported > CStatistics::Epsilon)
-		{
-			const CHistogram *outer_histogram =
-				outer_side_stats->GetHistogram(colid);
-			GPOS_ASSERT(nullptr != outer_histogram);
-
-			if (outer_histogram->IsWellDefined() &&
-				LOJ_histogram->IsWellDefined())
-			{
-				// add the outer rows that lost their matches to the
-				// unsupported predicates, spread like the outer child
-				CHistogram *LOJ_histogram_with_unmatched =
-					LOJ_histogram->MakeUnionAllHistogramNormalize(
-						num_rows_LOJ_histogram, outer_histogram,
-						num_rows_LASJ_unsupported);
+				CHistogram *LOJ_histogram =
+					LASJ_histogram->MakeUnionAllHistogramNormalize(
+						num_rows_LASJ, inner_join_histogram,
+						num_rows_inner_join);
+				if (outer_is_marked)
+				{
+					LOJ_histogram->SetUnsupportedPredDerived();
+				}
+				LOJ_histogram = AddUnmatchedOuterRows(
+					LOJ_histogram, num_rows_LASJ + num_rows_inner_join,
+					outer_own_histogram, num_rows_LASJ_unsupported);
+				CStatisticsUtils::AddHistogram(mp, colid, LOJ_histogram,
+											   LOJ_histograms);
 				GPOS_DELETE(LOJ_histogram);
-				LOJ_histogram = LOJ_histogram_with_unmatched;
 			}
-		}
-
-		if (LOJ_histogram_is_marked)
-		{
-			LOJ_histogram->SetUnsupportedPredDerived();
+			else
+			{
+				CHistogram *result_histogram =
+					inner_join_histogram->CopyHistogram();
+				if (outer_is_marked)
+				{
+					result_histogram->SetUnsupportedPredDerived();
+				}
+				else
+				{
+					// inner_join_histogram may have picked up a mark from
+					// the inner side alone, which says nothing about this
+					// (preserved) outer column's own value range
+					result_histogram->ResetUnsupportedPredDerived();
+				}
+				result_histogram = AddUnmatchedOuterRows(
+					result_histogram, num_rows_inner_join, outer_own_histogram,
+					num_rows_LASJ_unsupported);
+				CStatisticsUtils::AddHistogram(mp, colid, result_histogram,
+											   LOJ_histograms);
+				GPOS_DELETE(result_histogram);
+			}
 		}
 		else
 		{
-			LOJ_histogram->ResetUnsupportedPredDerived();
+			// if column from the outer side that is not a join then just add it
+			const CHistogram *outer_histogram =
+				outer_side_stats->GetHistogram(colid);
+			GPOS_ASSERT(nullptr != outer_histogram);
+			CHistogram *LOJ_histogram = AddUnmatchedOuterRows(
+				inner_join_histogram->CopyHistogram(), num_rows_inner_join,
+				outer_histogram, num_rows_LASJ_unsupported);
+			CStatisticsUtils::AddHistogram(mp, colid, LOJ_histogram,
+										   LOJ_histograms);
+			GPOS_DELETE(LOJ_histogram);
 		}
-
-		CStatisticsUtils::AddHistogram(mp, colid, LOJ_histogram,
-									   LOJ_histograms);
-		GPOS_DELETE(LOJ_histogram);
 	}
+
 	LASJ_stats->Release();
 
 	// extract all columns from the inner child of the join
@@ -358,7 +376,7 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 		inner_side_stats->GetColIdsWithStats(mp);
 
 	// add its corresponding statistics
-	AddHistogramsLOJInner(mp, inner_join_stats, inner_colids_with_stats,
+	AddHistogramsLOJInner(mp, matched_stats, inner_colids_with_stats,
 						  num_rows_LASJ_total, num_rows_inner_join,
 						  LOJ_histograms);
 
@@ -366,6 +384,7 @@ CLeftOuterJoinStatsProcessor::MakeLOJHistogram(
 	*result_rows_inner_join = num_rows_inner_join;
 
 	// clean up
+	matched_stats->Release();
 	inner_colids_with_stats->Release();
 	outer_colids_with_stats->Release();
 	outer_side_join_cols->Release();

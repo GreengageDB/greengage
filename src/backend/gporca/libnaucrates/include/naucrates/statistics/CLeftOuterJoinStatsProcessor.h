@@ -22,10 +22,9 @@ private:
 	static UlongToHistogramMap *MakeLOJHistogram(
 		CMemoryPool *mp, const CStatistics *outer_stats,
 		const CStatistics *inner_side_stats, CStatistics *inner_join_stats,
-		CStatsPredJoinArray *join_preds_stats, CDouble num_rows_inner_join,
-		CDouble num_rows_inner_join_unfiltered, CDouble *result_rows_LASJ,
-		CDouble *result_rows_inner_join);
-
+		CStatsPredJoinArray *join_preds_stats,
+		CStatsPred *unsupported_pred_stats, CDouble num_rows_inner_join,
+		CDouble *result_rows_LASJ, CDouble *result_rows_inner_join);
 	// helper method to add histograms of the inner side of a LOJ
 	static void AddHistogramsLOJInner(CMemoryPool *mp,
 									  const CStatistics *inner_join_stats,
@@ -39,6 +38,13 @@ private:
 	static CDouble NumRowsUnmatchedByUnsupportedPreds(
 		CDouble num_rows_outer, CDouble num_rows_LASJ,
 		CDouble num_rows_inner_join_unfiltered, CDouble num_rows_inner_join);
+
+	// add the outer rows that lost all their matches to the unsupported join
+	// predicates to the histogram of an outer column
+	static CHistogram *AddUnmatchedOuterRows(CHistogram *LOJ_histogram,
+											 CDouble num_rows_LOJ_histogram,
+											 const CHistogram *outer_histogram,
+											 CDouble num_rows_LASJ_unsupported);
 
 public:
 	// return statistics object after performing LOJ operation with another statistics structure;
