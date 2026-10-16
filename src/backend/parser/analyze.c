@@ -3774,6 +3774,10 @@ sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_
 	foreach(lc, onconflict_set)
 	{
 		TargetEntry *te = lfirst(lc);
+
+		if (te->resjunk)
+			continue;
+
 		conflict_update_cols = bms_add_member(conflict_update_cols,
 											  te->resno);
 	}
