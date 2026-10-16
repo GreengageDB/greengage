@@ -4331,23 +4331,82 @@ static TempcatDiskDrop *tc_disk_drops = NULL;
 static int	tc_ndisk_drops = 0;
 static int	tc_max_disk_drops = 0;
 
+/*
+ * Those of the transaction this process prepared last, until it finishes it
+ * (FinishPreparedTransaction(), on a QE in the same process): purge them
+ * only if it commits.  If another process finishes it, e.g. after a
+ * restart, they are not purged, as before this was done.
+ */
+static TempcatDiskDrop *tc_prepared_drops = NULL;
+static int	tc_nprepared_drops = 0;
+static TransactionId tc_prepared_drops_xid = InvalidTransactionId;
+static TransactionId tc_preparing_xid = InvalidTransactionId;
+
 static void
-tempcat_disk_drop_xact_callback(XactEvent event, void *arg)
+tempcat_purge_disk_drops(TempcatDiskDrop *drops, int n)
 {
 	int			i;
 
-	if (event == XACT_EVENT_COMMIT)
+	for (i = 0; i < n; i++)
 	{
-		for (i = 0; i < tc_ndisk_drops; i++)
-		{
-			if (tc_disk_drops[i].catalog == RelationRelationId)
-				pgstat_purge_relation(tc_disk_drops[i].oid);
-			else
-				pgstat_purge_function(tc_disk_drops[i].oid);
-		}
+		if (drops[i].catalog == RelationRelationId)
+			pgstat_purge_relation(drops[i].oid);
+		else
+			pgstat_purge_function(drops[i].oid);
 	}
-	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
-		tc_ndisk_drops = 0;
+}
+
+static void
+tempcat_disk_drop_xact_callback(XactEvent event, void *arg)
+{
+	switch (event)
+	{
+		case XACT_EVENT_COMMIT:
+			tempcat_purge_disk_drops(tc_disk_drops, tc_ndisk_drops);
+			tc_ndisk_drops = 0;
+			break;
+		case XACT_EVENT_ABORT:
+			tc_ndisk_drops = 0;
+			break;
+		case XACT_EVENT_PRE_PREPARE:
+			tc_preparing_xid = GetTopTransactionIdIfAny();
+			break;
+		case XACT_EVENT_PREPARE:
+			/* (a transaction prepared earlier and not finished here: lost) */
+			if (tc_prepared_drops != NULL)
+				pfree(tc_prepared_drops);
+			tc_prepared_drops = NULL;
+			tc_nprepared_drops = 0;
+			tc_prepared_drops_xid = InvalidTransactionId;
+			if (tc_ndisk_drops > 0 && TransactionIdIsValid(tc_preparing_xid))
+			{
+				tc_prepared_drops = MemoryContextAlloc(TopMemoryContext,
+													   sizeof(TempcatDiskDrop) * tc_ndisk_drops);
+				memcpy(tc_prepared_drops, tc_disk_drops,
+					   sizeof(TempcatDiskDrop) * tc_ndisk_drops);
+				tc_nprepared_drops = tc_ndisk_drops;
+				tc_prepared_drops_xid = tc_preparing_xid;
+			}
+			tc_ndisk_drops = 0;
+			tc_preparing_xid = InvalidTransactionId;
+			break;
+		default:
+			break;
+	}
+}
+
+/* The prepared transaction 'xid' is committed or rolled back. */
+void
+tempcat_finish_prepared(TransactionId xid, bool isCommit)
+{
+	if (tc_nprepared_drops == 0 || !TransactionIdEquals(xid, tc_prepared_drops_xid))
+		return;
+	if (isCommit)
+		tempcat_purge_disk_drops(tc_prepared_drops, tc_nprepared_drops);
+	pfree(tc_prepared_drops);
+	tc_prepared_drops = NULL;
+	tc_nprepared_drops = 0;
+	tc_prepared_drops_xid = InvalidTransactionId;
 }
 
 static void

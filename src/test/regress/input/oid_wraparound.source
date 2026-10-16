@@ -243,3 +243,41 @@ INSERT INTO oid_tc7_next SELECT generate_series(1, 10);
 SELECT count(*) FROM oid_tc7_next;
 DROP TABLE oid_tc7_next, oid_crowd;
 DROP FUNCTION oid_wait_gone(int);
+
+-- Scenario 8: on the segments, the statistics of such a table are purged
+-- when the prepared transaction that drops it commits, not when it is
+-- rolled back (here as PREPARE fails on another segment).
+CREATE FUNCTION oid_seg_inserted(r oid) RETURNS TABLE (seg int, n bigint)
+	LANGUAGE sql EXECUTE ON ALL SEGMENTS AS
+$$ SELECT gp_execution_segment(), pg_stat_get_tuples_inserted(r) $$;
+-- (the writer QEs send statistics when idle, at most every 500ms)
+CREATE FUNCTION oid_seg_flush() RETURNS SETOF int
+	LANGUAGE sql EXECUTE ON ALL SEGMENTS AS
+$$ SELECT 1 FROM pg_sleep(0.6) $$;
+CREATE TEMP TABLE oid_tc8_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc8_first'::regclass::oid::bigint + 1)::oid AS st_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_set_next_oid_master(:st_oid);
+CREATE TABLE oid_2pc (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'oid_2pc'::regclass::oid = :st_oid AS st_in_session_slice;
+INSERT INTO oid_2pc SELECT generate_series(1, 300);
+SELECT count(*) FROM oid_seg_flush();
+SELECT count(*) FROM oid_seg_flush();
+SELECT n > 0 AS counted FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+\set VERBOSITY terse
+DROP TABLE oid_2pc;
+\set VERBOSITY default
+SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+SELECT count(*) FROM oid_2pc;
+SELECT count(*) FROM oid_seg_flush();
+SELECT count(*) FROM oid_seg_flush();
+SELECT n > 0 AS still_counted FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+DROP TABLE oid_2pc;
+SELECT count(*) FROM oid_seg_flush();
+SELECT count(*) FROM oid_seg_flush();
+SELECT n AS purged FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+DROP TABLE oid_tc8_first;
+DROP FUNCTION oid_seg_inserted(oid);
+DROP FUNCTION oid_seg_flush();
