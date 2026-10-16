@@ -1407,9 +1407,13 @@ tempcat_activate(Oid oid)
 		}
 		tc_activated = true;
 
+		/* (rows still pending keep theirs, see tempcat_abandon_slice()) */
 		st = tempcat_my_state();
-		pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
-		pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
+		if (tc_npending == 0)
+		{
+			pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
+			pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
+		}
 		st->databaseId = MyDatabaseId;
 	}
 
@@ -1471,17 +1475,18 @@ tempcat_let_go_of_slice(void)
  * every attempt of the session.  Writer QEs do the same, and those whose
  * transaction was prepared before the rollback take the next slice in
  * tempcat_activate().
+ *
+ * The published horizon stays: the rows of the transaction, freed only
+ * when the session goes idle or starts its next one, need the clog until
+ * then (see tempcat_add_pending()).
  */
 static void
 tempcat_abandon_slice(void)
 {
-	TempcatProcState *st = tempcat_my_state();
-
 	tempcat_let_go_of_slice();
 	tc_activated = false;
 	tc_sweep_state = TCS_NONE;
 	tc_namespace_oid = InvalidOid;
-	st->databaseId = InvalidOid;
 	if (tc_owned != NULL)
 	{
 		hash_destroy(tc_owned);

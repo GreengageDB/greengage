@@ -438,6 +438,27 @@ CREATE TYPE tc_wait_comp AS (x int);
 27q:
 28q:
 
+-- A transaction that started to use the slice rolls back: the session lets
+-- go of the slice, but its rows are freed only when it goes idle or starts
+-- its next transaction (here it is idle in the aborted one).  Until then
+-- their xids keep datfrozenxid, and so clog truncation, from passing them.
+CREATE DATABASE tc_frozen;
+30:@db_name tc_frozen: VACUUM FREEZE;
+29:@db_name tc_frozen: SET gp_enable_temp_memory_catalog = on;
+29: BEGIN;
+29: CREATE TEMP TABLE tc_f (a int) DISTRIBUTED BY (a);
+29: SELECT 1/0;
+30: CREATE TABLE tc_f_burn (a int) DISTRIBUTED BY (a);
+30: DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN COMMENT ON TABLE tc_f_burn IS 'x'; EXCEPTION WHEN others THEN NULL; END; END LOOP; END $$;
+30: VACUUM FREEZE;
+30: SELECT age(datfrozenxid) >= 100 AS held FROM pg_database WHERE datname = 'tc_frozen';
+29: ROLLBACK;
+30: VACUUM FREEZE;
+30: SELECT age(datfrozenxid) < 100 AS held_no_more FROM pg_database WHERE datname = 'tc_frozen';
+29q:
+30q:
+DROP DATABASE tc_frozen;
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:
