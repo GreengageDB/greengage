@@ -951,9 +951,14 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 			 * GPDB: allocate the space without writing it, which file
 			 * systems that support it do without dirtying any pages:
 			 * segments in files can be large (see DSM_CREATE_FILE).  It is as
-			 * sure to have allocated all the space as the zero-filling below.
-			 * Block signals meanwhile, as dsm_impl_posix_resize() does: it
-			 * can take long, and is all or nothing.
+			 * sure to have allocated all the space as the zero-filling below
+			 * on file systems that write in place.  On copy-on-write ones
+			 * (btrfs, ZFS) neither reserves space for later writes, and a
+			 * full disk, as an I/O error on any, makes a write through the
+			 * mapping fail with SIGBUS: see the documentation of
+			 * gp_temp_memory_catalog_max_file_size.  Block signals meanwhile,
+			 * as dsm_impl_posix_resize() does: it can take long, and is all or
+			 * nothing.
 			 */
 			if (IsUnderPostmaster)
 				sigprocmask(SIG_SETMASK, &BlockSig, &save_sigmask);
