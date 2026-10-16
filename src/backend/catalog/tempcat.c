@@ -600,6 +600,7 @@ typedef struct TempcatProcState
 	pg_atomic_uint32 frozenXid; /* or InvalidTransactionId */
 	pg_atomic_uint32 minMulti;	/* or InvalidMultiXactId */
 	int			slice;			/* the slice held, or -1 */
+	bool		ending;			/* see tempcat_session_ending() */
 
 	/*
 	 * Roles that in-memory pg_shdepend rows of the session refer to (owners
@@ -1475,6 +1476,9 @@ tempcat_proc_exit(int code, Datum arg)
 #endif
 		tempcat_let_go_of_slice();
 	}
+	/* (after letting go: see tempcat_foreign_session_ending()) */
+	pg_write_barrier();
+	st->ending = false;
 }
 
 /* Let go of our slice. */
@@ -4480,6 +4484,45 @@ tempcat_foreign_object(Oid classId, Oid objectId)
 			return TCF_LIVE;
 	}
 	return TCF_GONE;
+}
+
+/*
+ * The session is ending.  Its locks go first, then its temporary objects
+ * (RemoveTempRelationsCallback(), which calls this before), then its slice
+ * (tempcat_proc_exit()): a DROP that waited for a lock on one of its
+ * objects waits for them too (see tempcat_foreign_session_ending()).
+ */
+void
+tempcat_session_ending(void)
+{
+	if (TempcatShared == NULL || tc_slice < 0)
+		return;
+	tempcat_my_state()->ending = true;
+	pg_write_barrier();
+}
+
+/*
+ * Is the live session that keeps 'objectId' (TCF_LIVE) ending?  Then its
+ * object goes, or turns into a leftover, soon.  Also true if it let go of
+ * the slice meanwhile: look again.
+ */
+bool
+tempcat_foreign_session_ending(Oid objectId)
+{
+	TempcatSliceState *ss;
+	uint32		holder;
+	bool		ending;
+
+	if (TempcatShared == NULL || !IsTempcatOid(objectId))
+		return false;
+	ss = &TempcatShared->slices[tempcat_slice_of(objectId)];
+	holder = pg_atomic_read_u32(&ss->holder);
+	if (holder == 0)
+		return true;
+	pg_read_barrier();
+	ending = TempcatShared->procs[holder - 1].ending;
+	pg_read_barrier();
+	return ending || pg_atomic_read_u32(&ss->holder) != holder;
 }
 
 /*

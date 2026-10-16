@@ -123,6 +123,8 @@ extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Objects of other sessions */
 extern TempcatForeign tempcat_foreign_object(Oid classId, Oid objectId);
+extern bool tempcat_foreign_session_ending(Oid objectId);
+extern void tempcat_session_ending(void);
 extern void tempcat_forget_leftover(Relation rel, HeapTuple tup);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);

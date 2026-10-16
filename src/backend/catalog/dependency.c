@@ -896,6 +896,7 @@ findDependentObjects(const ObjectAddress *object,
 	{
 		Form_pg_depend foundDep = (Form_pg_depend) GETSTRUCT(tup);
 		int			subflags;
+		TempcatForeign tcf;
 
 		otherObject.classId = foundDep->classid;
 		otherObject.objectId = foundDep->objid;
@@ -917,26 +918,45 @@ findDependentObjects(const ObjectAddress *object,
 		 * leftover of one whose session is gone, whose row goes away.  As
 		 * for other dependent objects (below), lock it first: its session
 		 * may be dropping it, and then the row is gone once it is done.
+		 * An ending session lets go of its locks before its objects and its
+		 * slice: wait for them too, without the lock, which it needs to drop
+		 * them.
 		 */
-		switch (tempcat_foreign_object(otherObject.classId, otherObject.objectId))
+		tcf = tempcat_foreign_object(otherObject.classId, otherObject.objectId);
+		if (tcf == TCF_LIVE)
 		{
-			case TCF_LIVE:
+			bool		row_gone = false;
+
+			for (;;)
+			{
 				AcquireDeletionLock(&otherObject, 0);
 				if (!systable_recheck_tuple(scan, tup))
 				{
-					ReleaseDeletionLock(&otherObject);
-					continue;
+					row_gone = true;
+					break;
 				}
+				tcf = tempcat_foreign_object(otherObject.classId,
+											 otherObject.objectId);
+				if (tcf != TCF_LIVE ||
+					!tempcat_foreign_session_ending(otherObject.objectId))
+					break;
+				ReleaseDeletionLock(&otherObject);
+				pg_usleep(10000L);
+				CHECK_FOR_INTERRUPTS();
+			}
+			ReleaseDeletionLock(&otherObject);
+			if (row_gone)
+				continue;
+			if (tcf == TCF_LIVE)
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 						 errmsg("cannot drop %s because a temporary object of another session depends on it",
 								getObjectDescription(object))));
-				break;
-			case TCF_GONE:
-				tempcat_forget_leftover(*depRel, tup);
-				continue;
-			case TCF_NONE:
-				break;
+		}
+		if (tcf == TCF_GONE)
+		{
+			tempcat_forget_leftover(*depRel, tup);
+			continue;
 		}
 
 		/*

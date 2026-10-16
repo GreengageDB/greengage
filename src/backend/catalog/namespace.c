@@ -46,6 +46,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
@@ -4561,6 +4562,9 @@ RemoveTempRelations(Oid tempNamespaceId)
 static void
 RemoveTempRelationsCallback(int code, Datum arg)
 {
+	/* GPDB: before the locks go, see tempcat.c */
+	tempcat_session_ending();
+
 #ifdef FAULT_INJECTOR
 	/*
 	 * Test hook: leave the temporary objects behind, like a crashed session

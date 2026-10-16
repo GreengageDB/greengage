@@ -438,6 +438,36 @@ CREATE TYPE tc_wait_comp AS (x int);
 27q:
 28q:
 
+-- An ending session lets go of its locks before it drops its temporary
+-- objects, and lets go of its slice after: DROP waits for that too.  Here
+-- the session does not drop them (as if it crashed), and stops before it
+-- lets go of its slice: DROP takes its rows for leftovers once it has.
+CREATE TYPE tc_end_comp AS (x int);
+31: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+31: SET gp_enable_temp_memory_catalog = on;
+31: CREATE TEMP TABLE tc_e (c tc_end_comp) DISTRIBUTED RANDOMLY;
+31: BEGIN;
+31: SELECT count(*) FROM tc_e;
+32&: DROP TYPE tc_end_comp;
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('tempcat_release_slice', 'suspend', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+31q:
+SELECT gp_wait_until_triggered_fault('tempcat_release_slice', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_release_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+32<:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+32: CALL tc_wait_gone();
+32: SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
+    WHERE objid >= 4026531840;
+32q:
+
 -- A transaction that started to use the slice rolls back: the session lets
 -- go of the slice, but its rows are freed only when it goes idle or starts
 -- its next transaction (here it is idle in the aborted one).  Until then
