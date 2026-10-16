@@ -403,7 +403,7 @@ pkg-rpm : GPDIR  = $(PACKAGE_NAME)
 pkg-rpm : version-vars
 	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
 	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-	rpmbuild -bb \
+	@rpmbuild -bb \
 		--define "_topdir $(RPM_TOPDIR)" \
 		--define "gpdb_version $(subst +,.,$(subst -,.,$(PACKAGE_VERSION)))" \
 		--define "gpdb_release 1" \
