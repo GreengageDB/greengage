@@ -4664,38 +4664,14 @@ tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid)
 	tc_ndisk_drops++;
 }
 
-/*
- * Is 'oid' that of a table or function (by 'catalog') of the writer's
- * temporary objects kept in memory, which a committed transaction dropped?
- * For a reader process sending statistics (pgstat_report_stat()): the
- * writer purged those of what it dropped (tempcat_forget_if_gone()), and a
- * reader's counts still pending, sent later, would bring them back.  Out of
- * a transaction: the rows in memory tell, with an OID of the writer's
- * slice that no live row has.  (The counts of an ordinary object that has
- * an OID of the slice, which no row in memory has, are lost too.)
- */
-bool
-tempcat_stats_object_gone(Oid catalog, Oid oid)
+/* See tempcat_stats_object_gone(). */
+static bool
+tempcat_stats_object_gone_guts(int catidx, Oid oid)
 {
-	TempcatProcState *st;
-	int			catidx;
-	const TempcatCatalogDef *def;
-	uint32		hash;
+	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+	uint32		hash = DatumGetUInt32(hash_uint32(oid));
 	bool		gone = true;
 	int			k;
-
-	/* (at exit, the area may be detached already) */
-	if (!IsTempcatOid(oid) || TempcatShared == NULL || proc_exit_inprogress ||
-		!tempcat_is_reader() || tc_area == NULL)
-		return false;
-	st = tempcat_writer_state();
-	if (st == NULL || st->slice < 0 || tempcat_slice_of(oid) != st->slice)
-		return false;
-	catidx = tempcat_catalog_index(catalog);
-	if (catidx < 0)
-		return false;
-	def = &tempcat_catalogs[catidx];
-	hash = DatumGetUInt32(hash_uint32(oid));
 
 	LWLockAcquire(&tc_root->lock, LW_SHARED);
 	for (k = 0; k < TEMPCAT_NKEYS && gone; k++)
@@ -4712,14 +4688,74 @@ tempcat_stats_object_gone(Oid catalog, Oid oid)
 			TempcatHashNode *node = TC_ADDR(np);
 			TempcatEntry *e = TC_ADDR(node->entry);
 
-			if (node->hash == hash && tempcat_entry_oid(e) == oid &&
-				!(TransactionIdIsValid(e->xmax) &&
-				  tempcat_xid_status(e->xmax) == TCX_COMMITTED))
-				gone = false;
+			if (node->hash == hash && tempcat_entry_oid(e) == oid)
+			{
+#ifdef FAULT_INJECTOR
+				/* Test hook: fail with the lock held (with 'error'). */
+				SIMPLE_FAULT_INJECTOR("tempcat_stats_object_gone");
+#endif
+				if (!(TransactionIdIsValid(e->xmax) &&
+					  tempcat_xid_status(e->xmax) == TCX_COMMITTED))
+					gone = false;
+			}
 			np = node->next;
 		}
 	}
 	LWLockRelease(&tc_root->lock);
+	return gone;
+}
+
+/*
+ * Is 'oid' that of a table or function (by 'catalog') of the writer's
+ * temporary objects kept in memory, which a committed transaction dropped?
+ * For a reader process sending statistics (pgstat_report_stat()): the
+ * writer purged those of what it dropped (tempcat_forget_if_gone()), and a
+ * reader's counts still pending, sent later, would bring them back.  Out of
+ * a transaction: the rows in memory tell, with an OID of the writer's
+ * slice that no live row has.  (The counts of an ordinary object that has
+ * an OID of the slice, which no row in memory has, are lost too.)
+ *
+ * Out of a transaction, an error would not release the locks (ours, and
+ * the clog's): as in tempcat_idle(), log it instead, and keep the counts.
+ */
+bool
+tempcat_stats_object_gone(Oid catalog, Oid oid)
+{
+	MemoryContext oldcxt = CurrentMemoryContext;
+	TempcatProcState *st;
+	int			catidx;
+	volatile bool gone = false;
+
+	/* (at exit, the area may be detached already) */
+	if (!IsTempcatOid(oid) || TempcatShared == NULL || proc_exit_inprogress ||
+		!tempcat_is_reader() || tc_area == NULL)
+		return false;
+	st = tempcat_writer_state();
+	if (st == NULL || st->slice < 0 || tempcat_slice_of(oid) != st->slice)
+		return false;
+	catidx = tempcat_catalog_index(catalog);
+	if (catidx < 0)
+		return false;
+
+	PG_TRY();
+	{
+		gone = tempcat_stats_object_gone_guts(catidx, oid);
+	}
+	PG_CATCH();
+	{
+		ErrorData  *edata;
+
+		LWLockReleaseAll();
+		MemoryContextSwitchTo(oldcxt);
+		edata = CopyErrorData();
+		FlushErrorState();
+		ereport(LOG,
+				(errmsg("could not check whether a temporary object kept in memory was dropped: %s",
+						edata->message)));
+		FreeErrorData(edata);
+		gone = false;
+	}
+	PG_END_TRY();
 	return gone;
 }
 

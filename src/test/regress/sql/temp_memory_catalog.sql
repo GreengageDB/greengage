@@ -62,6 +62,7 @@ BEGIN
   END LOOP;
 END $$;
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
 SELECT tc_explain($$SELECT relkind FROM pg_class WHERE relname = 'tc_t'$$);
 SELECT relkind FROM pg_class WHERE relname = 'tc_t';
 SELECT relkind FROM pg_class WHERE relname = 'tc_t'::text;
@@ -71,6 +72,7 @@ SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname >= 'tc_' AND reln
 SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC;
 SELECT tc_explain($$SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC$$);
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
+RESET enable_bitmapscan;
 SET enable_indexscan = off;
 SET enable_indexonlyscan = off;
 SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema()$$);
@@ -145,9 +147,11 @@ SELECT count(*) FROM tc_t t JOIN gp_dist_random('pg_attribute') a
 -- TID scans of the catalogs find the rows in memory; sample scans do not
 -- see them, and are refused.
 SET enable_seqscan = off;
+SET enable_bitmapscan = off;
 EXPLAIN (costs off)
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
+RESET enable_bitmapscan;
 RESET enable_seqscan;
 SELECT count(*) FROM pg_class TABLESAMPLE SYSTEM (100) WHERE relname = 'tc_t';
 
@@ -984,6 +988,28 @@ SELECT gp_inject_fault('tempcat_area_file_full', 'reset', dbid)
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 DROP FUNCTION tc_seg_dsm_files();
+
+-- A reader that fails as it checks, at idle, whether a table it counted
+-- was dropped (the fault, with the area's lock held) logs it, and lets go
+-- of the lock: the writer goes on.  (A reader sends the counts of a query
+-- at idle after the next one.)
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_rs (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_rs SELECT i, i + 1 FROM generate_series(1, 100) i;
+SELECT gp_inject_fault_infinite('tempcat_stats_object_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
+SELECT pg_sleep(0.6);
+SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
+SELECT gp_wait_until_triggered_fault('tempcat_stats_object_gone', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT gp_inject_fault('tempcat_stats_object_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+CREATE TEMP TABLE tc_rs2 (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_rs2 SELECT generate_series(1, 10);
+SELECT count(*) FROM tc_rs2;
+SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
 
 
 \c
