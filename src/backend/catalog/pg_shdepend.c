@@ -1197,7 +1197,7 @@ storeObjectDescription(StringInfo descs,
 					   SharedDependencyType deptype,
 					   int count)
 {
-	char	   *objdesc = getObjectDescription(object);
+	char	   *objdesc = getObjectDescriptionOrTemp(object);
 
 	/*
 	 * An object being dropped concurrently doesn't need to be reported.
@@ -1369,6 +1369,22 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 				sdepForm->dbid != InvalidOid)
 				continue;
 
+			/*
+			 * A temporary object of another session can be neither dropped
+			 * nor have its ACL rewritten from here; its catalog rows live
+			 * only in the owning backend's temp memory catalog.
+			 */
+			obj.classId = sdepForm->classid;
+			obj.objectId = sdepForm->objid;
+			obj.objectSubId = sdepForm->objsubid;
+			if (isTempObjectOfOtherSession(&obj))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop objects owned by %s because %s belongs to another session",
+								GetUserNameFromId(roleid, false),
+								getObjectDescriptionOrTemp(&obj)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+
 			switch (sdepForm->deptype)
 			{
 					/* Shouldn't happen */
@@ -1526,6 +1542,26 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			/* We leave non-owner dependencies alone */
 			if (sdepForm->deptype != SHARED_DEPENDENCY_OWNER)
 				continue;
+
+			/*
+			 * The ALTER OWNER routines below would open the object, which
+			 * fails for a temporary object of another session: its catalog
+			 * rows live only in the owning backend's temp memory catalog.
+			 */
+			{
+				ObjectAddress obj;
+
+				obj.classId = sdepForm->classid;
+				obj.objectId = sdepForm->objid;
+				obj.objectSubId = sdepForm->objsubid;
+				if (isTempObjectOfOtherSession(&obj))
+					ereport(ERROR,
+							(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+							 errmsg("cannot reassign objects owned by %s because %s belongs to another session",
+									GetUserNameFromId(roleid, false),
+									getObjectDescriptionOrTemp(&obj)),
+							 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+			}
 
 			/*
 			 * The various ALTER OWNER routines tend to leak memory in

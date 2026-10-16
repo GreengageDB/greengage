@@ -30,6 +30,8 @@
 #include "catalog/catalog.h"
 #include "catalog/gp_fastsequence_d.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_depend_d.h"
+#include "catalog/pg_shdepend_d.h"
 #include "storage/itemptr.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -119,10 +121,19 @@ extern bool temp_table_scope;
  * because AO row numbers are embedded in index TIDs and reusing them
  * yields wrong index scan results (see the invariant comment atop
  * gp_fastsequence.c).
+ *
+ * pg_depend and pg_shdepend are always excluded: their rows must be real
+ * on-disk rows visible to every session, or another session could drop an
+ * object (column type, index expression function, owner role) that some
+ * session's temporary table depends on.  The depender side of such rows
+ * may still be a virtual tempcat object; drop-time reporting copes with
+ * that via getObjectDescriptionOrTemp().
  */
 #define IsTempTableScopeFor(rel)  \
 	(temp_table_scope && IsCatalogRelation(rel) && \
-	 RelationGetRelid(rel) != FastSequenceRelationId)
+	 RelationGetRelid(rel) != FastSequenceRelationId && \
+	 RelationGetRelid(rel) != DependRelationId && \
+	 RelationGetRelid(rel) != SharedDependRelationId)
 
 /* Dirty tracking for tempcat versioning */
 extern bool tempcat_is_dirty(void);

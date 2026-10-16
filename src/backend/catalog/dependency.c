@@ -1068,6 +1068,53 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 	int			i;
 
 	/*
+	 * Refuse to delete temporary objects that live in another session's
+	 * temp memory catalog.  Their dependency rows are real rows, so they do
+	 * reach this list when the referenced object is dropped from another
+	 * session, but their catalog tuples belong to the other backend and
+	 * cannot be deleted from here - not even with CASCADE, which in this
+	 * case would have to destroy the other session's temporary table.
+	 *
+	 * This must run before the quiet early-return below: internal callers
+	 * such as shdepDropOwned use PERFORM_DELETION_QUIETLY and would
+	 * otherwise walk into deleting a nonexistent object.
+	 *
+	 * Original deletion targets are skipped, like in the reporting loop
+	 * below: a target named by the user is visible by construction, while
+	 * the session-reset machinery (RemoveTempRelations) does delete its own
+	 * temp namespace even when its pg_namespace row has been rolled back
+	 * along with the temp table that first needed it.  Objects dropped in
+	 * the creating session itself are visible there (tempcat scans merge
+	 * the virtual rows), so they do not trip this check either.
+	 */
+	for (i = 0; i < targetObjects->numrefs; i++)
+	{
+		const ObjectAddress *object = &targetObjects->refs[i];
+		const ObjectAddressExtra *extra = &targetObjects->extras[i];
+
+		if (extra->flags & DEPFLAG_ORIGINAL)
+			continue;
+
+		if (!isTempObjectOfOtherSession(object))
+			continue;
+
+		if (origObject)
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescriptionOrTemp(origObject)),
+					 errdetail("%s depends on %s",
+							   getObjectDescriptionOrTemp(object),
+							   getObjectDescriptionOrTemp(&extra->dependee)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop desired object(s) because temporary objects in other sessions depend on them"),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
+
+	/*
 	 * If we need to delete any partition-dependent objects, make sure that
 	 * we're deleting at least one of their partition dependencies, too. That
 	 * can be detected by checking that we reached them by a PARTITION
