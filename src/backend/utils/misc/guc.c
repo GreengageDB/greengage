@@ -5819,6 +5819,71 @@ SelectConfigFiles(const char *userDoption, const char *progname)
 
 
 /*
+ * Run the check hook of a GUC marked GUC_CHECK_HOOK_ON_RESET against its
+ * reset value.  Returns false only when the hook rejects the value at a
+ * non-ERROR elevel; with elevel ERROR (the only way this is called today)
+ * the hook's ereport does not return.  This is validation only: the value
+ * assigned afterwards is still conf->reset_val / reset_extra, so hooks
+ * that rely on a parsed "extra" being passed to the assign hook are not
+ * supported with this flag.
+ */
+static bool
+check_hook_on_reset_passes(struct config_generic *gconf)
+{
+	switch (gconf->vartype)
+	{
+		case PGC_BOOL:
+			{
+				struct config_bool *conf = (struct config_bool *) gconf;
+				bool	newval = conf->reset_val;
+				void   *newextra = conf->reset_extra;
+
+				return call_bool_check_hook(conf, &newval, &newextra,
+											gconf->reset_source, ERROR);
+			}
+		case PGC_INT:
+			{
+				struct config_int *conf = (struct config_int *) gconf;
+				int		newval = conf->reset_val;
+				void   *newextra = conf->reset_extra;
+
+				return call_int_check_hook(conf, &newval, &newextra,
+										   gconf->reset_source, ERROR);
+			}
+		case PGC_REAL:
+			{
+				struct config_real *conf = (struct config_real *) gconf;
+				double	newval = conf->reset_val;
+				void   *newextra = conf->reset_extra;
+
+				return call_real_check_hook(conf, &newval, &newextra,
+											gconf->reset_source, ERROR);
+			}
+		case PGC_STRING:
+			{
+				struct config_string *conf = (struct config_string *) gconf;
+				char   *newval = conf->reset_val;
+				void   *newextra = conf->reset_extra;
+
+				return call_string_check_hook(conf, &newval, &newextra,
+											  gconf->reset_source, ERROR);
+			}
+		case PGC_ENUM:
+			{
+				struct config_enum *conf = (struct config_enum *) gconf;
+				int		newval = conf->reset_val;
+				void   *newextra = conf->reset_extra;
+
+				return call_enum_check_hook(conf, &newval, &newextra,
+											gconf->reset_source, ERROR);
+			}
+	}
+
+	elog(ERROR, "unrecognized GUC type: %d", gconf->vartype);
+	return false;				/* silence compiler */
+}
+
+/*
  * Reset all options to their saved default values (implements RESET ALL)
  */
 void
@@ -5843,6 +5908,15 @@ ResetAllOptions(void)
 
 		/* Save old value to support transaction abort */
 		push_old_value(gconf, GUC_ACTION_SET);
+
+		/*
+		 * GUC_CHECK_HOOK_ON_RESET GUCs must pass their check hook before
+		 * being reset; a rejecting hook ereports at ERROR, which aborts
+		 * the RESET ALL (or the enclosing DISCARD ALL).
+		 */
+		if ((gconf->flags & GUC_CHECK_HOOK_ON_RESET) &&
+			!check_hook_on_reset_passes(gconf))
+			elog(ERROR, "cannot reset parameter \"%s\"", gconf->name);
 
 		switch (gconf->vartype)
 		{
@@ -7372,6 +7446,10 @@ set_config_option(const char *name, const char *value,
 					newextra = conf->reset_extra;
 					source = conf->gen.reset_source;
 					context = conf->gen.reset_scontext;
+					if ((conf->gen.flags & GUC_CHECK_HOOK_ON_RESET) &&
+						!call_bool_check_hook(conf, &newval, &newextra,
+											  source, elevel))
+						return 0;
 				}
 
 				if (prohibitValueChange)
@@ -7466,6 +7544,10 @@ set_config_option(const char *name, const char *value,
 					newextra = conf->reset_extra;
 					source = conf->gen.reset_source;
 					context = conf->gen.reset_scontext;
+					if ((conf->gen.flags & GUC_CHECK_HOOK_ON_RESET) &&
+						!call_int_check_hook(conf, &newval, &newextra,
+											 source, elevel))
+						return 0;
 				}
 
 				if (prohibitValueChange)
@@ -7560,6 +7642,10 @@ set_config_option(const char *name, const char *value,
 					newextra = conf->reset_extra;
 					source = conf->gen.reset_source;
 					context = conf->gen.reset_scontext;
+					if ((conf->gen.flags & GUC_CHECK_HOOK_ON_RESET) &&
+						!call_real_check_hook(conf, &newval, &newextra,
+											  source, elevel))
+						return 0;
 				}
 
 				if (prohibitValueChange)
@@ -7672,6 +7758,17 @@ set_config_option(const char *name, const char *value,
 					newextra = conf->reset_extra;
 					source = conf->gen.reset_source;
 					context = conf->gen.reset_scontext;
+					if ((conf->gen.flags & GUC_CHECK_HOOK_ON_RESET) &&
+						!call_string_check_hook(conf, &newval, &newextra,
+												source, elevel))
+					{
+						/* release hook-allocated values, if any */
+						if (newval && newval != conf->reset_val)
+							free(newval);
+						if (newextra && newextra != conf->reset_extra)
+							free(newextra);
+						return 0;
+					}
 				}
 
 				if (prohibitValueChange)
@@ -7818,6 +7915,10 @@ set_config_option(const char *name, const char *value,
 					newextra = conf->reset_extra;
 					source = conf->gen.reset_source;
 					context = conf->gen.reset_scontext;
+					if ((conf->gen.flags & GUC_CHECK_HOOK_ON_RESET) &&
+						!call_enum_check_hook(conf, &newval, &newextra,
+											  source, elevel))
+						return 0;
 				}
 
 				if (prohibitValueChange)

@@ -29,6 +29,7 @@
 #include "access/tableam.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/tupconvert.h"
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -5029,6 +5030,8 @@ ATController(AlterTableStmt *parsetree,
 
 	cdb_sync_oid_to_segments();
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	/* Phase 1: preliminary examination of commands, create work queue */
 	/*
 	 * In QE, we receive an already-prepped work queue from the QD.
@@ -5081,6 +5084,8 @@ ATController(AlterTableStmt *parsetree,
 		parsetree->lockmode = lockmode;
 		parsetree->wqueue = wqueue;
 	}
+
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*
