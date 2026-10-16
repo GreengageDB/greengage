@@ -68,6 +68,13 @@ typedef struct HeapScanDescData
 	int			rs_cindex;		/* current tuple's index in vistuples */
 	int			rs_ntuples;		/* number of visible tuples on page */
 	OffsetNumber rs_vistuples[MaxHeapTuplesPerPage];	/* their offsets */
+
+	/*
+	 * GPDB: past the heap, catalog rows of temporary objects kept in memory
+	 * (see heap_getnext_tempcat())
+	 */
+	struct TempcatScanData *rs_tempscan;
+	bool		rs_heapdone;
 }			HeapScanDescData;
 typedef struct HeapScanDescData *HeapScanDesc;
 

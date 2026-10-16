@@ -57,6 +57,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/tempcat.h"
 #include "catalog/toasting.h"
 #include "catalog/gp_fastsequence.h"
 #include "cdb/cdbappendonlyam.h"
@@ -6742,6 +6743,21 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		*/
 		if (tab->partition_constraint && tab->rewrite == 0)
 			scan = table_beginscan_es(oldrel, snapshot, NULL, NULL, NULL, lappend(NIL, tab->partition_constraint));
+		else if (newrel == NULL && IsCatalogRelation(oldrel))
+		{
+			/*
+			 * GPDB: a check of a catalog checks the catalog rows of this
+			 * session's temporary objects kept in memory too (see tempcat.c).
+			 * Not a rewrite, which would write them to disk.
+			 */
+			scan = oldrel->rd_tableam->scan_begin(oldrel, snapshot, 0, NULL,
+												  NULL,
+												  SO_TYPE_SEQSCAN |
+												  SO_ALLOW_STRAT |
+												  SO_ALLOW_SYNC |
+												  SO_ALLOW_PAGEMODE |
+												  SO_TEMPCAT);
+		}
 		else
 			scan = table_beginscan(oldrel, snapshot, 0, NULL);
 
@@ -7274,6 +7290,13 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory use the type
+	 * through rows that cannot be seen here; wait until none does (see
+	 * tempcat.c).
+	 */
+	tempcat_lock_out_users(TypeRelationId, typeOid);
 
 	/*
 	 * We scan pg_depend to find those things that depend on the given type.
@@ -13658,7 +13681,12 @@ ATExecAlterColumnType(List **wqueue,
 	 * performed all the individual ALTER TYPE operations.  We have to save
 	 * the info before executing ALTER TYPE, though, else the deparser will
 	 * get confused.
+	 *
+	 * GPDB: temporary objects of other sessions kept in memory (e.g.
+	 * temporary views of the table) use it through rows that cannot be seen
+	 * here; wait until none does (see tempcat.c).
 	 */
+	tempcat_lock_out_users(RelationRelationId, RelationGetRelid(rel));
 	depRel = table_open(DependRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&key[0],
@@ -19105,6 +19133,8 @@ ATExecAddOf(Relation rel, const TypeName *ofTypename, LOCKMODE lockmode)
 	check_of_type(typetuple);
 	typeform = (Form_pg_type) GETSTRUCT(typetuple);
 	typeid = typeform->oid;
+	/* GPDB: see tempcat.c */
+	tempcat_check_typed_table(RelationGetRelid(rel), typeid);
 
 	/* Fail if the table has any inheritance parents. */
 	inheritsRelation = table_open(InheritsRelationId, AccessShareLock);

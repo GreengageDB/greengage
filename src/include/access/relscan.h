@@ -149,6 +149,15 @@ typedef struct IndexScanDescData
 
 	/* parallel index scan information, in shared memory */
 	struct ParallelIndexScanDescData *parallel_scan;
+
+	/*
+	 * GPDB: merging in the catalog rows of temporary objects kept in memory,
+	 * see index_getnext_slot().  Catalog scans of the backend code do that
+	 * on their own (xs_tempcat_off, see systable_beginscan()).
+	 */
+	bool		xs_tempcat_off;
+	bool		xs_tempcat_pending; /* to look for rows at the next fetch */
+	struct IndexTempcatMerge *xs_tempcat;	/* rows found, or NULL */
 }			IndexScanDescData;
 
 /* Generic structure for parallel scans */
@@ -171,6 +180,7 @@ typedef struct SysScanDescData
 	struct IndexScanDescData *iscan;	/* only valid in index-scan case */
 	struct SnapshotData *snapshot;	/* snapshot to unregister at end of scan */
 	struct TupleTableSlot *slot;
+	struct TempcatScanData *tempscan;	/* virtual rows, see tempcat.c */
 }			SysScanDescData;
 
 #endif							/* RELSCAN_H */

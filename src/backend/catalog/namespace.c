@@ -46,8 +46,11 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
+#include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "commands/seclabel.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -61,6 +64,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/catcache.h"
+#include "utils/faultinjector.h"
 #include "utils/guc.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -211,6 +215,7 @@ static void recomputeNamespacePath(void);
 static void AccessTempTableNamespace(bool force);
 static void RemoveTempRelations(Oid tempNamespaceId);
 static void RemoveTempRelationsCallback(int code, Datum arg);
+static void RemoveTempSchemaById(Oid namespaceId);
 static void NamespaceCallback(Datum arg, int cacheid, uint32 hashvalue);
 static bool MatchNamedCall(HeapTuple proctup, int nargs, List *argnames,
 						   int **argnumbers);
@@ -4187,7 +4192,7 @@ InitTempTableNamespace(void)
 	if (OidIsValid(namespaceId))
 	{
 		RemoveTempRelations(namespaceId);
-		RemoveSchemaById(namespaceId);
+		RemoveTempSchemaById(namespaceId);
 		elog(DEBUG1, "Remove schema entry %u from pg_namespace",
 			 namespaceId);
 		namespaceId = InvalidOid;
@@ -4220,7 +4225,7 @@ InitTempTableNamespace(void)
 	toastspaceId = get_namespace_oid(namespaceName, true);
 	if (OidIsValid(toastspaceId))
 	{
-		RemoveSchemaById(toastspaceId);
+		RemoveTempSchemaById(toastspaceId);
 		elog(DEBUG1, "Remove schema entry %u from pg_namespace",
 			 namespaceId);
 		toastspaceId = InvalidOid;
@@ -4287,6 +4292,26 @@ InitTempTableNamespace(void)
 }
 
 /*
+ * GPDB: remove a temporary namespace, whose objects are gone, directly rather
+ * than by performDeletion(): with its shared dependencies, comment and
+ * security labels too, as that would (deleteOneObject()).  Shared
+ * dependencies left behind, of roles granted privileges on it, would make
+ * DROP ROLE fail ("cache lookup failed for namespace"), or, kept in memory
+ * (see tempcat.c), keep it from dropping the roles while the session lives.
+ */
+static void
+RemoveTempSchemaById(Oid namespaceId)
+{
+	ObjectAddress object;
+
+	ObjectAddressSet(object, NamespaceRelationId, namespaceId);
+	deleteSharedDependencyRecordsFor(NamespaceRelationId, namespaceId, 0);
+	DeleteComments(namespaceId, NamespaceRelationId, 0);
+	DeleteSecurityLabel(&object);
+	RemoveSchemaById(namespaceId);
+}
+
+/*
  * Drop temp relations for session reset.
  */
 void
@@ -4317,8 +4342,8 @@ DropTempTableNamespaceEntryForResetSession(Oid namespaceOid, Oid toastNamespaceO
 	if (SearchSysCacheExists1(NAMESPACEOID,
 							  ObjectIdGetDatum(namespaceOid)))
 	{
-		RemoveSchemaById(namespaceOid);
-		RemoveSchemaById(toastNamespaceOid);
+		RemoveTempSchemaById(namespaceOid);
+		RemoveTempSchemaById(toastNamespaceOid);
 	}
 
 	CommitTransactionCommand();
@@ -4537,6 +4562,16 @@ RemoveTempRelations(Oid tempNamespaceId)
 static void
 RemoveTempRelationsCallback(int code, Datum arg)
 {
+#ifdef FAULT_INJECTOR
+	/*
+	 * Test hook: leave the temporary objects behind, like a crashed session
+	 * does (used to test the leftovers of temporary objects kept in memory,
+	 * see tempcat.c).
+	 */
+	if (SIMPLE_FAULT_INJECTOR("skip_temp_relations_cleanup") == FaultInjectorTypeSkip)
+		return;
+#endif
+
 	if (DistributedTransactionContext == DTX_CONTEXT_QE_PREPARED)
 	{
 		/*

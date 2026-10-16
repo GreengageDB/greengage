@@ -45,6 +45,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbgang.h"
 #include "commands/alter.h"
 #include "commands/comment.h"
@@ -3487,6 +3488,10 @@ ExecAlterExtensionContentsStmt_internal(AlterExtensionContentsStmt *stmt,
 							"because the schema contains the extension",
 							get_namespace_name(object.objectId),
 							stmt->extname)));
+
+		/* GPDB: other sessions could not see it among the members */
+		tempcat_check_unsupported(object.classId, object.objectId,
+								  "extension members");
 
 		/*
 		 * OK, add the dependency.

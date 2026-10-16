@@ -45,6 +45,7 @@
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_dict.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/alter.h"
 #include "commands/dbcommands.h"
@@ -650,6 +651,13 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	int			allocedobjects;
 	StringInfoData descs;
 	StringInfoData alldescs;
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory depend on the
+	 * object through rows that cannot be seen here; wait until none does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(classId, objectId);
 
 	/*
 	 * We limit the number of dependencies reported to the client to

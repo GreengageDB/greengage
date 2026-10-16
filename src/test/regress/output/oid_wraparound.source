@@ -117,3 +117,461 @@ SELECT gp_get_next_oid_segments();
                     16385
 (3 rows)
 
+-- Scenario 3: OIDs from 0xF0000000 (4026531840) up are reserved for temporary
+-- objects kept in memory (see tempcat.c), so the counter wraps around before
+-- reaching them, and none of the objects created meanwhile gets one.
+SELECT gp_set_next_oid_master(4026531838);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_wraparound_reserved (a int, b text) DISTRIBUTED BY (a);
+SELECT count(*) AS reserved_oids FROM (
+	SELECT oid FROM pg_class WHERE oid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT oid FROM pg_type WHERE typrelid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT t.typarray FROM pg_type t WHERE t.typrelid = 'oid_wraparound_reserved'::regclass
+	UNION ALL SELECT reltoastrelid FROM pg_class WHERE oid = 'oid_wraparound_reserved'::regclass
+) o WHERE oid >= 4026531840;
+ reserved_oids 
+---------------
+             0
+(1 row)
+
+SELECT gp_get_next_oid_master() < 4026531840 AS wrapped_around;
+ wrapped_around 
+----------------
+ t
+(1 row)
+
+DROP TABLE oid_wraparound_reserved;
+-- Scenario 4: ordinary objects can have OIDs in the reserved range (created
+-- by an older version, which did not reserve it, and carried over by
+-- pg_upgrade; the fault lets the counter enter the range to create them).
+-- They may sit right where a session's temporary objects get their OIDs
+-- from: the session must skip them, and leave their rows on disk (rows in
+-- memory have TIDs with offsets from 0x8000 (32768) up).
+CREATE EXTENSION gp_inject_fault;
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE oid_tc_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc_first'::regclass::oid::bigint + 1)::oid AS legacy_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+SELECT gp_set_next_oid_master(:legacy_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_legacy (a int, b text) DISTRIBUTED BY (a);
+CREATE INDEX oid_legacy_i ON oid_legacy (b);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+INSERT INTO oid_legacy SELECT i, 'v' || i FROM generate_series(1, 10) i;
+SELECT 'oid_legacy'::regclass::oid = :legacy_oid AS legacy_in_session_slice;
+ legacy_in_session_slice 
+-------------------------
+ t
+(1 row)
+
+SELECT count(*) AS legacy_rows_on_disk FROM pg_class
+WHERE relname IN ('oid_legacy', 'oid_legacy_i') AND (ctid::text::point)[1] < 32768;
+ legacy_rows_on_disk 
+---------------------
+                   2
+(1 row)
+
+DO $$ BEGIN FOR i IN 1..10 LOOP EXECUTE format('CREATE TEMP TABLE oid_tc_%s (a int, b text) DISTRIBUTED BY (a)', i); END LOOP; END $$;
+SELECT count(*) AS duplicate_oids FROM (
+	SELECT oid FROM pg_class GROUP BY oid HAVING count(*) > 1
+	UNION ALL SELECT oid FROM pg_type GROUP BY oid HAVING count(*) > 1
+	UNION ALL SELECT oid FROM gp_dist_random('pg_class') GROUP BY gp_segment_id, oid HAVING count(*) > 1
+) d;
+ duplicate_oids 
+----------------
+              0
+(1 row)
+
+SELECT count(*) > 0 AS skipped_taken_oids FROM pg_class
+WHERE relname LIKE 'oid\_tc\_%' AND oid > 'oid_legacy_i'::regclass::oid;
+ skipped_taken_oids 
+--------------------
+ t
+(1 row)
+
+SET enable_seqscan = off;
+SELECT count(*) FROM oid_legacy WHERE b = 'v5';
+ count 
+-------
+     1
+(1 row)
+
+RESET enable_seqscan;
+INSERT INTO oid_tc_10 SELECT * FROM oid_legacy;
+SELECT count(*) FROM oid_tc_10;
+ count 
+-------
+    10
+(1 row)
+
+DO $$ BEGIN FOR i IN 1..10 LOOP EXECUTE format('DROP TABLE oid_tc_%s', i); END LOOP; END $$;
+DROP TABLE oid_tc_first;
+SELECT count(*) AS legacy_rows_on_disk FROM pg_class
+WHERE relname IN ('oid_legacy', 'oid_legacy_i') AND (ctid::text::point)[1] < 32768;
+ legacy_rows_on_disk 
+---------------------
+                   2
+(1 row)
+
+SELECT count(*) FROM oid_legacy;
+ count 
+-------
+    10
+(1 row)
+
+DROP TABLE oid_legacy;
+SELECT gp_get_next_oid_master() < 4026531840 AS counter_below_reserved_range;
+ counter_below_reserved_range 
+------------------------------
+ t
+(1 row)
+
+-- Scenario 5: a segment can keep dead catalog rows with OIDs that the
+-- coordinator vacuumed away (here an ordinary table of the old version
+-- dropped, and only the coordinator's catalogs vacuumed).  When the
+-- coordinator gives such an OID to a temporary object, the segment must
+-- not refuse it: only live rows conflict.
+CREATE TEMP TABLE oid_tc5_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc5_first'::regclass::oid::bigint + 1)::oid AS dead_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+SELECT gp_set_next_oid_master(:dead_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_dead (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_dead'::regclass::oid = :dead_oid AS dead_in_session_slice;
+ dead_in_session_slice 
+-----------------------
+ t
+(1 row)
+
+CREATE TABLE oid_dead_oids AS
+	SELECT 'pg_class'::regclass AS cat, oid FROM pg_class WHERE relname = 'oid_dead'
+	UNION ALL SELECT 'pg_type'::regclass, oid FROM pg_type WHERE typrelid = 'oid_dead'::regclass
+	UNION ALL SELECT 'pg_type'::regclass, typarray FROM pg_type WHERE typrelid = 'oid_dead'::regclass
+	DISTRIBUTED RANDOMLY;
+DROP TABLE oid_dead;
+\! PGOPTIONS='-c gp_role=utility' psql -X -q -d oid_wraparound -c 'VACUUM pg_class, pg_type'
+CREATE TEMP TABLE oid_tc5_next (a int) DISTRIBUTED BY (a);
+SELECT count(*) > 0 AS got_dead_oids FROM oid_dead_oids WHERE (cat, oid) IN (
+	SELECT 'pg_class'::regclass, oid FROM pg_class WHERE relname = 'oid_tc5_next'
+	UNION ALL SELECT 'pg_type'::regclass, oid FROM pg_type WHERE typrelid = 'oid_tc5_next'::regclass
+	UNION ALL SELECT 'pg_type'::regclass, typarray FROM pg_type WHERE typrelid = 'oid_tc5_next'::regclass);
+ got_dead_oids 
+---------------
+ t
+(1 row)
+
+DROP TABLE oid_tc5_next, oid_tc5_first, oid_dead_oids;
+CREATE TABLE oid_after (a int) DISTRIBUTED BY (a);
+DROP TABLE oid_after;
+SELECT gp_get_next_oid_master() < 4026531840 AS counter_below_reserved_range;
+ counter_below_reserved_range 
+------------------------------
+ t
+(1 row)
+
+-- Scenario 6: a session passes over a slice whose OIDs ordinary objects of
+-- its database take too many of (more than half in a catalog; the fault
+-- makes one too many), and takes another one: it could run out of OIDs
+-- there.  (The other fault makes the session try the slice that the
+-- previous one let go of first.)
+CREATE FUNCTION oid_wait_gone(p int) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+	FOR i IN 1..600 LOOP
+		PERFORM pg_stat_clear_snapshot();
+		IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = p) THEN
+			RETURN;
+		END IF;
+		PERFORM pg_sleep(0.1);
+	END LOOP;
+	RAISE EXCEPTION 'session did not end';
+END $$;
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE oid_tc7_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc7_first'::regclass::oid::bigint + 1)::oid AS crowd_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+SELECT gp_set_next_oid_master(:crowd_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_crowd (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_crowd'::regclass::oid = :crowd_oid AS crowd_in_session_slice;
+ crowd_in_session_slice 
+------------------------
+ t
+(1 row)
+
+SELECT pg_backend_pid() AS old_pid \gset
+\c
+SELECT oid_wait_gone(:old_pid);
+ oid_wait_gone 
+---------------
+ 
+(1 row)
+
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault_infinite('tempcat_slice_crowded', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_next (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_crowded', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_tc7_next'::regclass::oid >= 4026531840 AS reserved,
+       ('oid_tc7_next'::regclass::oid::bigint - 4026531840) / 65536 =
+       (:crowd_oid::bigint - 4026531840) / 65536 AS same_slice;
+ reserved | same_slice 
+----------+------------
+ t        | f
+(1 row)
+
+INSERT INTO oid_tc7_next SELECT generate_series(1, 10);
+SELECT count(*) FROM oid_tc7_next;
+ count 
+-------
+    10
+(1 row)
+
+SELECT ('oid_tc7_next'::regclass::oid::bigint - 4026531840) / 65536 AS err_slice \gset
+DROP TABLE oid_tc7_next, oid_crowd;
+-- An error while the slice is checked lets go of it: the next attempt, made
+-- to try the same slice first, takes it.
+SELECT pg_backend_pid() AS old_pid \gset
+\c
+SELECT oid_wait_gone(:old_pid);
+ oid_wait_gone 
+---------------
+ 
+(1 row)
+
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_slice_crowded', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+ERROR:  fault triggered, fault name:'tempcat_slice_crowded' fault type:'error'
+LINE 1: CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+                          ^
+SELECT gp_inject_fault('tempcat_slice_crowded', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT ('oid_tc7_err'::regclass::oid::bigint - 4026531840) / 65536 = :err_slice AS same_slice;
+ same_slice 
+------------
+ t
+(1 row)
+
+DROP TABLE oid_tc7_err;
+DROP FUNCTION oid_wait_gone(int);
+-- Scenario 7: on the segments, the statistics of such a table are purged
+-- when the prepared transaction that drops it commits, not when it is
+-- rolled back (here as PREPARE fails on another segment).
+CREATE FUNCTION oid_seg_inserted(r oid) RETURNS TABLE (seg int, n bigint)
+	LANGUAGE sql EXECUTE ON ALL SEGMENTS AS
+$$ SELECT gp_execution_segment(), pg_stat_get_tuples_inserted(r) $$;
+-- (the writer QEs send statistics when idle, at most every 500ms)
+CREATE FUNCTION oid_seg_flush() RETURNS SETOF int
+	LANGUAGE sql EXECUTE ON ALL SEGMENTS AS
+$$ SELECT 1 FROM pg_sleep(0.6) $$;
+CREATE TEMP TABLE oid_tc8_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc8_first'::regclass::oid::bigint + 1)::oid AS st_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+SELECT gp_set_next_oid_master(:st_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_2pc (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_2pc'::regclass::oid = :st_oid AS st_in_session_slice;
+ st_in_session_slice 
+---------------------
+ t
+(1 row)
+
+INSERT INTO oid_2pc SELECT generate_series(1, 300);
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT n > 0 AS counted FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+ counted 
+---------
+ t
+(1 row)
+
+SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+\set VERBOSITY terse
+DROP TABLE oid_2pc;
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=272897)
+\set VERBOSITY default
+SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT count(*) FROM oid_2pc;
+ count 
+-------
+   300
+(1 row)
+
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT n > 0 AS still_counted FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+ still_counted 
+---------------
+ t
+(1 row)
+
+DROP TABLE oid_2pc;
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT count(*) FROM oid_seg_flush();
+ count 
+-------
+     3
+(1 row)
+
+SELECT n AS purged FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
+ purged 
+--------
+      0
+(1 row)
+
+DROP TABLE oid_tc8_first;
+DROP FUNCTION oid_seg_inserted(oid);
+DROP FUNCTION oid_seg_flush();

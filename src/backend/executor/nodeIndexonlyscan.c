@@ -36,6 +36,7 @@
 #include "access/tupdesc.h"
 #include "access/visibilitymap.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeIndexonlyscan.h"
 #include "executor/nodeIndexscan.h"
@@ -126,7 +127,14 @@ IndexOnlyNext(IndexOnlyScanState *node)
 
 		CHECK_FOR_INTERRUPTS();
 
-		if (RelationIsAppendOptimized(scandesc->xs_heapfetch->rel))
+		/*
+		 * GPDB: a catalog row of a temporary object kept in memory, merged
+		 * into the scan by index_getnext_tid(), visible and with nothing in
+		 * the heap.
+		 */
+		if (scandesc->xs_tempcat != NULL && IsTempcatTid(tid))
+			tuple_from_heap = true;
+		else if (RelationIsAppendOptimized(scandesc->xs_heapfetch->rel))
 		{
 			if (!table_index_fetch_tuple_visible(scandesc->xs_heapfetch,
 												 tid,

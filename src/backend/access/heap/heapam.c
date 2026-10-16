@@ -51,6 +51,7 @@
 #include "access/xloginsert.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_database_d.h"
 #include "miscadmin.h"
@@ -68,6 +69,7 @@
 #include "utils/gpexpand.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 #include "utils/spccache.h"
@@ -1279,9 +1281,84 @@ heap_beginscan(Relation relation, Snapshot snapshot,
 	else
 		scan->rs_base.rs_key = NULL;
 
+	scan->rs_tempscan = NULL;
+	scan->rs_heapdone = false;
+
 	initscan(scan, key, false);
 
 	return (TableScanDesc) scan;
+}
+
+/* GPDB: end the scan of catalog rows in memory, see heap_getnext_tempcat() */
+static void
+heap_end_tempscan(HeapScanDesc scan)
+{
+	if (scan->rs_tempscan != NULL)
+		tempcat_endscan(scan->rs_tempscan);
+	scan->rs_tempscan = NULL;
+	scan->rs_heapdone = false;
+}
+
+/*
+ * GPDB: after the heap, a sequential scan of a catalog returns the catalog
+ * rows of this session's temporary objects kept in memory (see tempcat.c):
+ * those of the backend code (table_beginscan_catalog(), systable scans) and
+ * those of plans (SeqScan, COPY TO) alike, which ask for them with
+ * SO_TEMPCAT.  Others may use the buffer of the heap tuple returned (index
+ * builds, pgrowlocks), which these have none of.  Only MVCC scans.  As for
+ * the heap, a call after the end starts a new scan.
+ */
+static bool
+heap_tempcat_scan(HeapScanDesc scan)
+{
+	return (scan->rs_base.rs_flags & SO_TYPE_SEQSCAN) &&
+		(scan->rs_base.rs_flags & SO_TEMPCAT) &&
+		scan->rs_base.rs_snapshot != NULL &&
+		IsMVCCSnapshot(scan->rs_base.rs_snapshot) &&
+		scan->rs_base.rs_parallel == NULL &&
+		IsCatalogRelation(scan->rs_base.rs_rd);
+}
+
+/* (scrollable cursors cannot go back over the rows in memory) */
+static void
+heap_check_backward_tempcat(HeapScanDesc scan)
+{
+	if (scan->rs_heapdone ||
+		(heap_tempcat_scan(scan) && tempcat_has_rows(scan->rs_base.rs_rd)))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot scan backward a catalog that holds rows of temporary objects kept in memory")));
+}
+
+static HeapTuple
+heap_getnext_tempcat(HeapScanDesc scan, ScanDirection direction)
+{
+	HeapTuple	tup;
+
+	Assert(ScanDirectionIsForward(direction));
+	if (!scan->rs_heapdone)
+	{
+		MemoryContext oldcxt;
+
+		if (!heap_tempcat_scan(scan))
+			return NULL;
+
+		oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
+		scan->rs_tempscan = tempcat_beginscan(scan->rs_base.rs_rd, NULL,
+											  scan->rs_base.rs_snapshot,
+											  scan->rs_base.rs_nkeys,
+											  scan->rs_base.rs_key);
+		MemoryContextSwitchTo(oldcxt);
+		if (scan->rs_tempscan == NULL)
+			return NULL;
+		scan->rs_heapdone = true;
+	}
+
+	if ((tup = tempcat_next_virtual(scan->rs_tempscan)) != NULL)
+		return tup;
+
+	heap_end_tempscan(scan);
+	return NULL;
 }
 
 void
@@ -1315,6 +1392,8 @@ heap_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
 	if (BufferIsValid(scan->rs_cbuf))
 		ReleaseBuffer(scan->rs_cbuf);
 
+	heap_end_tempscan(scan);
+
 	/*
 	 * reinitialize scan descriptor
 	 */
@@ -1333,6 +1412,8 @@ heap_endscan(TableScanDesc sscan)
 	 */
 	if (BufferIsValid(scan->rs_cbuf))
 		ReleaseBuffer(scan->rs_cbuf);
+
+	heap_end_tempscan(scan);
 
 	/*
 	 * decrement relation reference count and free scan descriptor storage
@@ -1387,6 +1468,12 @@ heap_getnext(TableScanDesc sscan, ScanDirection direction)
 
 	HEAPDEBUG_1;				/* heap_getnext( info ) */
 
+	/* GPDB: past the heap, see heap_getnext_tempcat() */
+	if (!ScanDirectionIsForward(direction))
+		heap_check_backward_tempcat(scan);
+	else if (scan->rs_heapdone)
+		return heap_getnext_tempcat(scan, direction);
+
 	if (scan->rs_base.rs_flags & SO_ALLOW_PAGEMODE)
 		heapgettup_pagemode(scan, direction,
 							scan->rs_base.rs_nkeys, scan->rs_base.rs_key);
@@ -1397,7 +1484,9 @@ heap_getnext(TableScanDesc sscan, ScanDirection direction)
 	if (scan->rs_ctup.t_data == NULL)
 	{
 		HEAPDEBUG_2;			/* heap_getnext returning EOS */
-		return NULL;
+		if (!ScanDirectionIsForward(direction))
+			return NULL;
+		return heap_getnext_tempcat(scan, direction);
 	}
 
 	/*
@@ -1434,13 +1523,32 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 
 	HEAPAMSLOTDEBUG_1;			/* heap_getnextslot( info ) */
 
-	if (sscan->rs_flags & SO_ALLOW_PAGEMODE)
-		heapgettup_pagemode(scan, direction, sscan->rs_nkeys, sscan->rs_key);
-	else
-		heapgettup(scan, direction, sscan->rs_nkeys, sscan->rs_key);
+	/* GPDB: see heap_getnext() */
+	if (!ScanDirectionIsForward(direction))
+		heap_check_backward_tempcat(scan);
 
-	if (scan->rs_ctup.t_data == NULL)
+	if (!scan->rs_heapdone)
 	{
+		if (sscan->rs_flags & SO_ALLOW_PAGEMODE)
+			heapgettup_pagemode(scan, direction, sscan->rs_nkeys, sscan->rs_key);
+		else
+			heapgettup(scan, direction, sscan->rs_nkeys, sscan->rs_key);
+	}
+
+	if (scan->rs_heapdone || scan->rs_ctup.t_data == NULL)
+	{
+		/* GPDB: past the heap, see heap_getnext_tempcat() */
+		HeapTuple	tup = ScanDirectionIsForward(direction) ?
+			heap_getnext_tempcat(scan, direction) : NULL;
+
+		if (tup != NULL)
+		{
+			ExecForceStoreHeapTuple(tup, slot, false);
+			slot->tts_tid = tup->t_self;
+			slot->tts_tableOid = RelationGetRelid(sscan->rs_rd);
+			return true;
+		}
+
 		HEAPAMSLOTDEBUG_2;		/* heap_getnextslot returning EOS */
 		ExecClearTuple(slot);
 		return false;
@@ -1787,6 +1895,13 @@ heap_get_latest_tid(TableScanDesc sscan,
 	 * ones in the table.
 	 */
 	Assert(ItemPointerIsValid(tid));
+
+	/*
+	 * GPDB: a catalog row of a temporary object kept in memory, which has no
+	 * update chain to follow (see tempcat.c)
+	 */
+	if (IsTempcatTid(tid))
+		return;
 
 	/*
 	 * Loop to chase down t_ctid links.  At top of loop, ctid is the tuple we
@@ -2256,6 +2371,9 @@ heap_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		tuple = ExecFetchSlotHeapTuple(slots[i], true, NULL);
 		slots[i]->tts_tableOid = RelationGetRelid(relation);
 		tuple->t_tableOid = slots[i]->tts_tableOid;
+		/* GPDB: COPY FROM into a catalog, see tempcat_sql_insert() */
+		if (IsCatalogRelation(relation))
+			tempcat_sql_insert(relation, tuple);
 		heaptuples[i] = heap_prepare_insert(relation, tuple, xid, cid,
 											options);
 	}
@@ -3007,6 +3125,13 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 {
 	TM_Result	result;
 	TM_FailureData tmfd;
+
+	/* GPDB: a catalog row of a temporary object kept in memory */
+	if (IsTempcatTid(tid))
+	{
+		tempcat_delete(relation, tid);
+		return;
+	}
 
 	result = heap_delete(relation, tid,
 						 GetCurrentCommandId(true), InvalidSnapshot,
@@ -4254,6 +4379,18 @@ simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
 	TM_Result	result;
 	TM_FailureData tmfd;
 	LockTupleMode lockmode;
+
+	/*
+	 * GPDB: a catalog row of a temporary object kept in memory, whose new
+	 * version stays there (CatalogTupleUpdate() moves others)
+	 */
+	if (IsTempcatTid(otid))
+	{
+		if (!tempcat_route_insert(relation, tup))
+			elog(ERROR, "new version of a catalog row kept in memory does not belong there");
+		tempcat_update(relation, otid, tup);
+		return;
+	}
 
 	result = heap_update_internal(relation, otid, tup,
 						 GetCurrentCommandId(true), InvalidSnapshot,
@@ -6341,6 +6478,13 @@ heap_inplace_update(Relation relation, HeapTuple tuple)
 	uint32		oldlen;
 	uint32		newlen;
 
+	/* GPDB: a catalog row of a temporary object kept in memory */
+	if (IsTempcatTid(&tuple->t_self))
+	{
+		tempcat_inplace_update(relation, tuple);
+		return;
+	}
+
 	/*
 	 * For now, parallel operations are required to be strictly read-only.
 	 * Unlike a regular update, this should never create a combo CID, so it
@@ -7030,6 +7174,13 @@ heap_freeze_tuple_wal_logged(Relation rel, HeapTuple tup)
 	Buffer 			buffer;
 	Page 			page;
 	HeapTupleHeader		htup;
+
+	/* GPDB: a catalog row of a temporary object kept in memory */
+	if (IsTempcatTid(&tup->t_self))
+	{
+		tempcat_freeze(rel, tup);
+		return;
+	}
 
 	/* Set the passed-in tuple to be frozen */
 	HeapTupleHeaderSetXminFrozen(tup->t_data);

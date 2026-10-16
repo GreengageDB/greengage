@@ -42,6 +42,10 @@ s/requested \d+ bytes//
 m/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./
 s/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./DETAIL:  Process PID waits for ShareLock on transaction XID; blocked by process PID./
 
+# a segment refusing a slice of temporary object OIDs (tempcat.c)
+m/^DETAIL:  Process \d+ holds OIDs \d+ to \d+\./
+s/^DETAIL:  Process \d+ holds OIDs \d+ to \d+\./DETAIL:  Process PID holds OIDs OID to OID./
+
 # For resource queue deadlock
 m/.*Process \d+ waits for ExclusiveLock on resource queue \d+; blocked by process \d+./
 s/.*Process \d+ waits for ExclusiveLock on resource queue \d+; blocked by process \d+./Process PID waits for ExclusiveLock on resource queue OID; blocked by process PID./

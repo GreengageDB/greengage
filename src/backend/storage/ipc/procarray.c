@@ -1660,7 +1660,29 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 
 		memcpy(SharedLocalSnapshotSlot->snapshot.xip, snapshot->xip, snapshot->xcnt * sizeof(TransactionId));
 	}
-	
+
+	/*
+	 * And the subtransaction XIDs of the transactions in progress: without
+	 * them, a reader would take a subtransaction of one, e.g. a released
+	 * one, for finished, and as clog does not say it committed, hint its
+	 * rows aborted for good.  If there are too many, the readers look them
+	 * up in pg_subtrans, as when the snapshot overflowed.
+	 */
+	if (snapshot->suboverflowed ||
+		snapshot->subxcnt > SHARED_SNAPSHOT_MAX_SUBXIDS)
+	{
+		SharedLocalSnapshotSlot->snapshot.subxcnt = 0;
+		SharedLocalSnapshotSlot->snapshot.suboverflowed = true;
+	}
+	else
+	{
+		SharedLocalSnapshotSlot->snapshot.subxcnt = snapshot->subxcnt;
+		SharedLocalSnapshotSlot->snapshot.suboverflowed = false;
+		if (snapshot->subxcnt > 0)
+			memcpy(SharedLocalSnapshotSlot->snapshot.subxip, snapshot->subxip,
+				   snapshot->subxcnt * sizeof(TransactionId));
+	}
+
 	SharedLocalSnapshotSlot->snapshot.curcid = snapshot->curcid;
 
 	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
@@ -1734,10 +1756,17 @@ copyLocalSnapshot(Snapshot snapshot)
 	/* We now capture our current view of the xip/combocid arrays */
 	memcpy(snapshot->xip, SharedLocalSnapshotSlot->snapshot.xip, snapshot->xcnt * sizeof(TransactionId));
 
-	snapshot->curcid = SharedLocalSnapshotSlot->snapshot.curcid;
-	snapshot->subxcnt = -1;
+	/* and of the subtransaction XIDs, see updateSharedLocalSnapshot() */
+	snapshot->subxcnt = SharedLocalSnapshotSlot->snapshot.subxcnt;
+	snapshot->suboverflowed = SharedLocalSnapshotSlot->snapshot.suboverflowed;
+	if (snapshot->subxcnt > 0)
+		memcpy(snapshot->subxip, SharedLocalSnapshotSlot->snapshot.subxip,
+			   snapshot->subxcnt * sizeof(TransactionId));
 
-	if (TransactionIdPrecedes(snapshot->xmin, TransactionXmin))
+	snapshot->curcid = SharedLocalSnapshotSlot->snapshot.curcid;
+
+	if (!TransactionIdIsValid(TransactionXmin) ||
+		TransactionIdPrecedes(snapshot->xmin, TransactionXmin))
 		TransactionXmin = snapshot->xmin;
 
 	ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
@@ -2283,6 +2312,22 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		 distributedTransactionContext == DTX_CONTEXT_QE_ENTRY_DB_SINGLETON))
 	{
 		readerFillLocalSnapshot(snapshot, distributedTransactionContext);
+
+		/*
+		 * With an overflowed snapshot, XidInMVCCSnapshot() looks XIDs from
+		 * its xmin up in pg_subtrans, which checkpoints truncate up to the
+		 * oldest xmin of the processes (GetLocalOldestXmin()).  Readers
+		 * advertise none: the writer's covers the snapshot it shares while
+		 * its statement runs, but not the older one of a cursor, whose
+		 * readers may run long after.  Advertise it then.  (At the time a
+		 * snapshot is shared, the writer's xmin keeps it from being passed.)
+		 */
+		if (snapshot->suboverflowed && !TransactionIdIsValid(MyPgXact->xmin))
+		{
+			LWLockAcquire(ProcArrayLock, LW_SHARED);
+			MyPgXact->xmin = snapshot->xmin;
+			LWLockRelease(ProcArrayLock);
+		}
 		return snapshot;
 	}
 

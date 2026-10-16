@@ -61,6 +61,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_type_encoding.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/comment.h"
@@ -542,6 +543,13 @@ findDependentObjects(const ObjectAddress *object,
 	 */
 	if (object_address_present_add_flags(object, objflags, targetObjects))
 		return;
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory depend on the
+	 * object through rows that cannot be seen here; wait until none does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(object->classId, object->objectId);
 
 	/*
 	 * The target object might be internally dependent on some other object

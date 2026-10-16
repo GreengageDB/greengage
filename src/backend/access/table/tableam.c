@@ -94,7 +94,8 @@ TableScanDesc
 table_beginscan_catalog(Relation relation, int nkeys, struct ScanKeyData *key)
 {
 	uint32		flags = SO_TYPE_SEQSCAN |
-	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE | SO_TEMP_SNAPSHOT;
+	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE | SO_TEMP_SNAPSHOT |
+	SO_TEMPCAT;
 	Oid			relid = RelationGetRelid(relation);
 	Snapshot	snapshot = RegisterSnapshot(GetCatalogSnapshot(relid));
 
