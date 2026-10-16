@@ -299,6 +299,8 @@ plan_tree_walker(Node *node,
 				return true;
 			if (walker((Node *) ((IndexScan *) node)->indexqual, context))
 				return true;
+			if (walker((Node *) ((IndexOnlyScan *) node)->recheckqual, context))
+				return true;
 			/* Other fields are lists of basic items, nothing to walk. */
 			break;
 
