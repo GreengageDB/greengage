@@ -761,6 +761,36 @@ tempcat_file_bytes(void)
 }
 
 /*
+ * The area's memory is the session's, though shared: charge it to the
+ * session's vmem (gp_vmem_protect_limit, resource groups), its first segment
+ * here and later ones as the area grows (dsa_set_vmem_tracked()).  Its
+ * segments in files are not charged.  Charge it before creating the area, so
+ * that a refusal costs nothing; dsa_try_create() can still fail with an
+ * error (e.g. out of local memory), which must not leave vmem charged.
+ */
+static dsa_area *
+tempcat_create_area_in_memory(void)
+{
+	dsa_area   *area = NULL;
+
+	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
+		return NULL;
+	PG_TRY();
+	{
+		area = dsa_try_create(tempcat_tranche_id(), false);
+	}
+	PG_CATCH();
+	{
+		VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	if (area == NULL)
+		VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
+	return area;
+}
+
+/*
  * Create the session's area (writer only).  Returns false if it cannot be
  * created: no slot of the DSM control segment to spare, nor space in memory
  * or (if allowed) on disk.
@@ -771,9 +801,9 @@ tempcat_file_bytes(void)
  * cannot decide otherwise, and fails only if the area cannot be created at
  * all.  It leaves the room in memory to others by starting the area in a
  * file, if files are allowed (several primaries of a host share its
- * /dev/shm, and other users of it fail when it is full), and as the area
- * grows.  Slots of the DSM control segment it cannot leave: segments in
- * files take them too.
+ * /dev/shm, and other users of it fail when it is full), unless there is no
+ * room for the file either, and as the area grows.  Slots of the DSM control
+ * segment it cannot leave: segments in files take them too.
  */
 static bool
 tempcat_create_area(bool headroom)
@@ -790,38 +820,31 @@ tempcat_create_area(bool headroom)
 		return false;
 
 	/*
-	 * The area's memory is the session's, though shared: charge it to the
-	 * session's vmem (gp_vmem_protect_limit, resource groups), its first
-	 * segment here and later ones as the area grows (dsa_set_vmem_tracked()).
-	 * Its segments in files are not charged.  Charge it before creating the
-	 * area, so that a refusal costs nothing; dsa_try_create() can still fail
-	 * with an error (e.g. out of local memory), which must not leave vmem
-	 * charged.
+	 * With files allowed, an area starts in a file when dynamic shared
+	 * memory runs short.  A segment, which cannot keep the temporary objects
+	 * on disk instead, then tries the memory left to others too.
 	 */
 	try_memory = !((headroom || files) &&
 				   tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT));
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	if (try_memory &&
-		VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) == MemoryAllocation_Success)
-	{
-		PG_TRY();
-		{
-			area = dsa_try_create(tempcat_tranche_id(), false);
-		}
-		PG_CATCH();
-		{
-			VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-		if (area == NULL)
-			VmemTracker_ReleaseVmem(TEMPCAT_DSA_FIRST_SEGMENT);
-	}
+	if (try_memory)
+		area = tempcat_create_area_in_memory();
 	if (area == NULL && files)
 	{
-		PrepareTempTablespaces();
-		area = dsa_try_create(tempcat_tranche_id(), true);
+		bool		full = false;
+
+#ifdef FAULT_INJECTOR
+		/* Test hook: no room for the file. */
+		full = SIMPLE_FAULT_INJECTOR("tempcat_area_file_full") == FaultInjectorTypeSkip;
+#endif
+		if (!full)
+		{
+			PrepareTempTablespaces();
+			area = dsa_try_create(tempcat_tranche_id(), true);
+		}
 	}
+	if (area == NULL && !try_memory && !headroom)
+		area = tempcat_create_area_in_memory();
 	MemoryContextSwitchTo(oldcxt);
 	if (area == NULL)
 		return false;

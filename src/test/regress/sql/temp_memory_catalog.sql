@@ -968,6 +968,19 @@ CREATE TEMP TABLE tc_seglow (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_seglow SELECT generate_series(1, 10);
 SELECT count(*), 'tc_seglow'::regclass::oid >= 4026531840 AS reserved FROM tc_seglow;
 SELECT n > :seg0_files_before AS seg0_in_files FROM tc_seg_dsm_files() WHERE seg = 0;
+-- If there is no room for the file either, it starts the area in the memory
+-- left to others: it cannot keep the temporary objects on disk instead.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_area_file_full', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT n AS seg0_files_before FROM tc_seg_dsm_files() WHERE seg = 0 \gset
+CREATE TEMP TABLE tc_segfull (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_segfull SELECT generate_series(1, 10);
+SELECT count(*), 'tc_segfull'::regclass::oid >= 4026531840 AS reserved FROM tc_segfull;
+SELECT n = :seg0_files_before AS seg0_in_memory FROM tc_seg_dsm_files() WHERE seg = 0;
+SELECT gp_inject_fault('tempcat_area_file_full', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 DROP FUNCTION tc_seg_dsm_files();
