@@ -398,10 +398,12 @@ pkg-deb : debian/changelog debian/install
 											-exec mv -f {} $(ARTIFACTS_DIR)/ \;
 
 # Build RPM package
-pkg-rpm : GPROOT = /opt/greengagedb
-pkg-rpm : GPDIR  = $(PACKAGE_NAME)
+pkg-rpm : GPROOT   = /opt/greengagedb
+pkg-rpm : GPDIR    = $(PACKAGE_NAME)
+pkg-rpm : RPM_ARCH = $(shell rpm --eval '%{_arch}')
 pkg-rpm : version-vars
-	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME)"
+	@echo "Building RPM with GPROOT=$(GPROOT), GPDIR=$(GPDIR), PACKAGE_NAME=$(PACKAGE_NAME), ARCH=$(RPM_ARCH)"
+	@rm -rf $(RPM_TOPDIR)
 	@mkdir -p $(RPM_TOPDIR)/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 	@rpmbuild -bb \
 		--define "_topdir $(RPM_TOPDIR)" \
@@ -411,10 +413,9 @@ pkg-rpm : version-vars
 		--define "gpdir $(GPDIR)" \
 		--define "sourcedir $(CURDIR)/.." \
 		rpm/greengage7.spec
+	@rpmlint -f rpm/greengage7.rpmlintrc $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm
 	@mkdir -p $(ARTIFACTS_DIR)
-	@find $(RPM_TOPDIR)/RPMS -name "*.rpm" \
-		-exec mv -f {} $(ARTIFACTS_DIR)/ \;
-	@rpmlint -f rpm/greengage7.rpmlintrc $(ARTIFACTS_DIR)/*.rpm
+	@mv -f $(RPM_TOPDIR)/RPMS/$(RPM_ARCH)/*.rpm $(ARTIFACTS_DIR)/
 
 .PHONY: pkg pkg-deb pkg-rpm changelog version-vars version-info
 

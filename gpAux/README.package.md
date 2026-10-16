@@ -64,7 +64,8 @@ make -C ./gpAux pkg-rpm GPROOT=/custom/path GPDIR=custom_dir
 - `ARTIFACTS_DIR`: Directory for artifacts (default: `$(CURDIR)/../Package`,
   shared between `.deb` and `.rpm` outputs)
 - `RPM_TOPDIR`: `rpmbuild` working directory, used only by `pkg-rpm`
-  (default: `$(CURDIR)/../RPM`, kept after the build for inspection)
+  (default: `$(CURDIR)/../RPM`, removed before the build and kept after
+  the build for inspection)
 
 ## Build Process
 
@@ -116,12 +117,13 @@ The `debian/rules` file uses debhelper (dh) with custom overrides:
 
 `pkg-rpm` does the following:
 
-- Sets up the `rpmbuild` tree under `RPM_TOPDIR`
+- Removes `RPM_TOPDIR` and sets up the `rpmbuild` tree under it
 - Runs `rpmbuild -bb rpm/greengage7.spec` without signing, with `gpdb_version`,
   `gpdb_release`, `gproot`, `gpdir` and `sourcedir` passed via `--define`
-- Collects only the resulting `.rpm` into `ARTIFACTS_DIR`
-- Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the collected `.rpm` and
-  fails the build if `rpmlint` reports errors
+- Runs `rpmlint` with `rpm/greengage7.rpmlintrc` on the `.rpm` files in
+  `RPMS/$(RPM_ARCH)` and fails the build if `rpmlint` reports errors
+- Collects only the resulting `.rpm` for the host architecture
+  (`rpm --eval '%{_arch}'`) into `ARTIFACTS_DIR`
 
 The `rpm/greengage7.spec` file defines the RPM build:
 
