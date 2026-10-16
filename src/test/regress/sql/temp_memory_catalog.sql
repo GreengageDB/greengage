@@ -117,6 +117,15 @@ RESET enable_nestloop;
 RESET enable_hashjoin;
 RESET enable_seqscan;
 DROP FUNCTION tc_explain(text);
+-- So do the plans of GPORCA, if it plans catalog queries: its index-only
+-- scans recheck the rows in memory too, here against the array.
+SET optimizer = on;
+SET optimizer_enable_coordinator_only_queries = on;
+SELECT count(*) FROM pg_attribute
+ WHERE attrelid IN ('tc_t'::regclass, 'tc_t_pkey'::regclass) AND attnum > 0;
+SELECT relname FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class') ORDER BY 1;
+RESET optimizer_enable_coordinator_only_queries;
+SET optimizer = off;
 -- The segments have them too.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_pkey');
 -- And nothing of them is on disk.
@@ -296,7 +305,7 @@ SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';
 SET gp_temp_memory_catalog_max_file_size = '8MB';
 CREATE TEMP TABLE tc_first (a int) DISTRIBUTED BY (a);
-SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp') f
+SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%' \gset
 DO $$
 BEGIN
@@ -304,7 +313,7 @@ BEGIN
     EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
-SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp') f
+SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%';
 SELECT segid, count(*) > 0 AS work_files FROM gp_toolkit.gp_workfile_entries
  WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'

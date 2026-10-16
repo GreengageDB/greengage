@@ -270,6 +270,27 @@ RESET enable_nestloop;
 RESET enable_hashjoin;
 RESET enable_seqscan;
 DROP FUNCTION tc_explain(text);
+-- So do the plans of GPORCA, if it plans catalog queries: its index-only
+-- scans recheck the rows in memory too, here against the array.
+SET optimizer = on;
+SET optimizer_enable_coordinator_only_queries = on;
+SELECT count(*) FROM pg_attribute
+ WHERE attrelid IN ('tc_t'::regclass, 'tc_t_pkey'::regclass) AND attnum > 0;
+ count 
+-------
+     3
+(1 row)
+
+SELECT relname FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class') ORDER BY 1;
+  relname  
+-----------
+ pg_class
+ tc_t
+ tc_t_pkey
+(3 rows)
+
+RESET optimizer_enable_coordinator_only_queries;
+SET optimizer = off;
 -- The segments have them too.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_pkey');
  count 
@@ -293,10 +314,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.4:7003 pid=2037426)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=23777)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.4:7002 pid=2037425)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=23776)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -617,7 +638,7 @@ SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';
 SET gp_temp_memory_catalog_max_file_size = '8MB';
 CREATE TEMP TABLE tc_first (a int) DISTRIBUTED BY (a);
-SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp') f
+SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%' \gset
 DO $$
 BEGIN
@@ -625,7 +646,7 @@ BEGIN
     EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
-SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp') f
+SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%';
  more_files 
 ------------
