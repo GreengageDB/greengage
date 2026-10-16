@@ -87,6 +87,20 @@ FIRST_NORMAL_OID = 16384
 PG_CATALOG_OID = 11
 # FirstTempcatObjectId, see src/include/catalog/tempcat.h
 FIRST_TEMPCAT_OID = 4026531840
+# Catalogs whose objects can be temporary objects kept in memory, whose
+# pg_depend and pg_shdepend rows on disk may refer to them; see
+# tempcat_object_classes in src/backend/catalog/tempcat.c
+TEMPCAT_OBJECT_CLASSES = ['pg_class', 'pg_type', 'pg_namespace', 'pg_proc',
+                          'pg_operator', 'pg_constraint', 'pg_attrdef',
+                          'pg_rewrite', 'pg_trigger', 'pg_policy',
+                          'pg_statistic_ext']
+# Not such a row: of an object with an ordinary OID, or of a catalog whose
+# objects cannot be temporary objects kept in memory.  (An ordinary object
+# with a reserved OID, created before the range was reserved, cannot be
+# told from a temporary object kept in memory if its row is missing.)
+NOT_TEMPCAT_DEPENDENCY = '(objid < %d OR classid NOT IN (%s))' % (
+    FIRST_TEMPCAT_OID,
+    ', '.join("'%s'::regclass" % c for c in TEMPCAT_OBJECT_CLASSES))
 
 def setError(level):
     '''
@@ -984,33 +998,34 @@ def checkDependJoinCatalog(catalogs):
     # exist in that catalog table (classid::regclass or
     # refclassid::regclass)
     #
-    # Rows of objects with OIDs from FIRST_TEMPCAT_OID up are dependencies
-    # of temporary objects that their sessions keep in memory, or of sessions
-    # that are gone, on ordinary objects: the server tells leftovers itself.
+    # Rows of objects with OIDs from FIRST_TEMPCAT_OID up in the catalogs of
+    # TEMPCAT_OBJECT_CLASSES are dependencies of temporary objects that their
+    # sessions keep in memory, or of sessions that are gone, on ordinary
+    # objects: the server tells leftovers itself.
     deps = []
     for cat in catalogs:
         qry = """
           SELECT '{catalog}' as catalog, objid FROM (
             SELECT objid FROM pg_depend
-              WHERE classid = '{catalog}'::regclass AND objid < {tempcat_oid}
+              WHERE classid = '{catalog}'::regclass AND {not_tempcat}
             UNION ALL
             SELECT refobjid FROM pg_depend
-              WHERE refclassid = '{catalog}'::regclass AND objid < {tempcat_oid}
+              WHERE refclassid = '{catalog}'::regclass AND {not_tempcat}
           ) d
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
           WHERE c.oid is NULL
           UNION ALL
           SELECT '{catalog}' as catalog, objid FROM (
             SELECT dbid, objid FROM pg_shdepend
-              WHERE classid = '{catalog}'::regclass AND objid < {tempcat_oid}
+              WHERE classid = '{catalog}'::regclass AND {not_tempcat}
             UNION ALL
             SELECT dbid, refobjid FROM pg_shdepend
-              WHERE refclassid = '{catalog}'::regclass AND objid < {tempcat_oid}
+              WHERE refclassid = '{catalog}'::regclass AND {not_tempcat}
           ) d JOIN pg_database db
             ON (d.dbid = db.oid and datname= current_database())
           LEFT OUTER JOIN {catalog} c on (d.objid = c.oid)
           WHERE c.oid is NULL
-          """.format(catalog=cat, tempcat_oid=FIRST_TEMPCAT_OID)
+          """.format(catalog=cat, not_tempcat=NOT_TEMPCAT_DEPENDENCY)
         deps.append(qry)
 
     qry = """
@@ -1669,12 +1684,13 @@ def checkAOLastrownums():
 # pg_depend: classid 2603 (pg_amproc) is excluded because their OIDs can be
 #            nonsynchronous (catalog.c:RelationNeedsSynchronizedOIDs())
 # pg_depend, pg_shdepend: rows of temporary objects with OIDs from
-#            FIRST_TEMPCAT_OID up are excluded: their sessions keep the
-#            objects in memory, and every node drops them on its own, also
-#            when they are leftovers of sessions that are gone
+#            FIRST_TEMPCAT_OID up are excluded (NOT_TEMPCAT_DEPENDENCY):
+#            their sessions keep the objects in memory, and every node drops
+#            them on its own, also when they are leftovers of sessions that
+#            are gone
 MISSING_ENTRY_EXCLUDE = {
-    'pg_depend': 'WHERE classid != 2603 AND objid < %d' % FIRST_TEMPCAT_OID,
-    'pg_shdepend': 'WHERE objid < %d' % FIRST_TEMPCAT_OID,
+    'pg_depend': 'WHERE classid != 2603 AND %s' % NOT_TEMPCAT_DEPENDENCY,
+    'pg_shdepend': 'WHERE %s' % NOT_TEMPCAT_DEPENDENCY,
 }
 
 def missingEntryQuery(max_content, catname, pkey, castedPkey):

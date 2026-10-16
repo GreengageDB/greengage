@@ -267,6 +267,27 @@ SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid)
 17: SELECT sum(x.c) FROM tc_idle x JOIN tc_idle y ON x.b = y.a + 1;
 17q:
 
+-- A segment refuses a reserved OID that a row of its own already has (here
+-- a made-up pg_class row of a transaction in progress in utility mode, as
+-- of an ordinary object that exists on this node only): two rows with one
+-- OID would corrupt its catalog.  (The session's OIDs follow one another:
+-- the next one goes to the next table.)
+CREATE TABLE tc_ref_oid (x oid) DISTRIBUTED REPLICATED;
+18: SET gp_enable_temp_memory_catalog = on;
+18: CREATE TEMP TABLE tc_ref1 (a int) DISTRIBUTED BY (a);
+18: INSERT INTO tc_ref_oid SELECT (max(oid)::bigint + 1)::oid FROM (SELECT oid FROM pg_class WHERE relnamespace = pg_my_temp_schema() UNION ALL SELECT oid FROM pg_type WHERE typnamespace = pg_my_temp_schema()) s;
+0U: BEGIN;
+0U: SET allow_system_table_mods = on;
+0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
+18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+0U: ROLLBACK;
+0Uq:
+18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
+18: INSERT INTO tc_ref2 SELECT generate_series(1, 10);
+18: SELECT count(*), 'tc_ref2'::regclass::oid > (SELECT x FROM tc_ref_oid) AS next_oid FROM tc_ref2;
+18q:
+DROP TABLE tc_ref_oid;
+
 -- A writer QE waits for the writer QE of the session that held the slice
 -- before, which may still be on its way out: here, on segment 0, a fault
 -- holds it there, and another makes the next session take the same slice.

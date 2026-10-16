@@ -756,7 +756,8 @@ COMMIT;
 DROP TABLE tc_sx1, tc_sx2;
 
 -- When ordinary objects take every OID of the session's slice of the
--- reserved range (the fault pretends so), its temporary objects get none.
+-- reserved range (the fault pretends so), the session keeps its temporary
+-- objects on disk, with a warning.
 \c
 SET gp_enable_temp_memory_catalog = on;
 \set VERBOSITY terse
@@ -765,8 +766,9 @@ SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid)
 CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
-SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved;
+CREATE TEMP TABLE tc_noid2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved,
+       'tc_noid2'::regclass::oid >= 4026531840 AS reserved2;
 
 -- The OIDs of a slice wrap around at its end (the fault puts the session
 -- near it) and go on from its start.

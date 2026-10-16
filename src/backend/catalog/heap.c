@@ -2010,6 +2010,8 @@ DeleteRelationTuple(Oid relid)
 
 	/* delete the relation tuple from pg_class, and finish up */
 	CatalogTupleDelete(pg_class_desc, &tup->t_self);
+	/* GPDB: see tempcat_note_disk_drop() */
+	tempcat_note_disk_drop(RelationRelationId, relid, &tup->t_self);
 
 	ReleaseSysCache(tup);
 

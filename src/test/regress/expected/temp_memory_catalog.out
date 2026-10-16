@@ -314,10 +314,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=69822)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=110548)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=69821)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=110547)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -1042,7 +1042,7 @@ SELECT * FROM tc_sp1;
 
 -- A failing CREATE TABLE AS leaves nothing behind.
 CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
-ERROR:  division by zero  (seg2 slice1 172.18.0.6:7004 pid=70288)
+ERROR:  division by zero  (seg1 slice1 172.18.0.6:7003 pid=110985)
 SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
  not_created 
 -------------
@@ -1065,7 +1065,7 @@ BEGIN;
 CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_defer VALUES (1);
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=70227)
+ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=110920)
 DETAIL:  Key (i)=(1) already exists.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
  count 
@@ -1615,7 +1615,8 @@ SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
 COMMIT;
 DROP TABLE tc_sx1, tc_sx2;
 -- When ordinary objects take every OID of the session's slice of the
--- reserved range (the fault pretends so), its temporary objects get none.
+-- reserved range (the fault pretends so), the session keeps its temporary
+-- objects on disk, with a warning.
 \c
 SET gp_enable_temp_memory_catalog = on;
 \set VERBOSITY terse
@@ -1627,7 +1628,7 @@ SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid)
 (1 row)
 
 CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
-ERROR:  out of OIDs for temporary objects kept in memory at character 19
+WARNING:  out of OIDs for temporary objects kept in memory at character 19
 SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
@@ -1635,11 +1636,12 @@ SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid)
  Success:
 (1 row)
 
-CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
-SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved;
- reserved 
-----------
- t
+CREATE TEMP TABLE tc_noid2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved,
+       'tc_noid2'::regclass::oid >= 4026531840 AS reserved2;
+ reserved | reserved2 
+----------+-----------
+ f        | f
 (1 row)
 
 -- The OIDs of a slice wrap around at its end (the fault puts the session

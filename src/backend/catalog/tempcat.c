@@ -459,6 +459,7 @@ static void tempcat_activate(Oid oid);
 static void tempcat_forget_if_gone(int catidx, Oid objoid);
 static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
+static bool tempcat_take_namespace_oid(void);
 
 /*
  * Reader processes (reader gangs, entry-db readers, and parallel retrieve
@@ -1679,7 +1680,8 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 				tempcat_key_is_temp(catalog, objname, namespaceOid,
 									keyOid1, keyOid2,
 									gp_enable_temp_memory_catalog) &&
-				tempcat_can_start());
+				tempcat_can_start() &&
+				tempcat_take_namespace_oid());
 	return tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1,
 							   keyOid2, false);
 }
@@ -1721,8 +1723,8 @@ tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
  * sessions that use the same slice keep moving forward instead of reusing
  * recent OIDs.
  */
-Oid
-tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
+static Oid
+tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 {
 	int			slice = tc_slice;
 	TempcatSliceState *ss;
@@ -1808,13 +1810,66 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		}
 	}
 
-	ereport(ERROR,
-			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			 errmsg("out of OIDs for temporary objects kept in memory"),
-			 errdetail("All %u OIDs that the session can give its temporary objects in catalog \"%s\" are taken by them, or by ordinary objects.",
-					   span, RelationGetRelationName(relation)),
-			 errhint("Drop temporary objects, or end the transaction that dropped some.")));
-	return InvalidOid;			/* keep compiler quiet */
+	return InvalidOid;
+}
+
+/*
+ * The OID of the session's temporary namespace, taken before it decided to
+ * keep it in memory (see tempcat_want_temp_oid()).
+ */
+static Oid	tc_namespace_oid = InvalidOid;
+
+Oid
+tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
+{
+	Oid			oid;
+
+	if (RelationGetRelid(relation) == NamespaceRelationId &&
+		OidIsValid(tc_namespace_oid))
+	{
+		oid = tc_namespace_oid;
+		tc_namespace_oid = InvalidOid;
+		return oid;
+	}
+
+	oid = tempcat_try_allocate_oid(relation, indexId, oidcolumn);
+	if (!OidIsValid(oid))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("out of OIDs for temporary objects kept in memory"),
+				 errdetail("All %u OIDs that the session can give its temporary objects in catalog \"%s\" are taken by them, or by ordinary objects.",
+						   tempcat_slice_last(tc_slice) - tempcat_slice_base(tc_slice) + 1,
+						   RelationGetRelationName(relation)),
+				 errhint("Drop temporary objects, or end the transaction that dropped some.")));
+	return oid;
+}
+
+/*
+ * Take the OID of the session's temporary namespace from its slice.  If
+ * ordinary objects took every OID of the slice (created before the range was
+ * reserved, or carried over by pg_upgrade), the session keeps its temporary
+ * objects on disk, and holds on to the slice, so that other sessions do not
+ * take it.
+ */
+static bool
+tempcat_take_namespace_oid(void)
+{
+	Relation	rel;
+
+	/* (taken already by an attempt that failed later) */
+	if (OidIsValid(tc_namespace_oid))
+		return true;
+	rel = table_open(NamespaceRelationId, AccessShareLock);
+	tc_namespace_oid = tempcat_try_allocate_oid(rel, NamespaceOidIndexId,
+												Anum_pg_namespace_oid);
+	table_close(rel, AccessShareLock);
+
+	if (!OidIsValid(tc_namespace_oid))
+		ereport(WARNING,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("out of OIDs for temporary objects kept in memory"),
+				 errdetail("Ordinary objects have all OIDs that the session could give its temporary objects; it keeps them on disk.")));
+	return OidIsValid(tc_namespace_oid);
 }
 
 /*
@@ -4095,6 +4150,101 @@ tempcat_foreign_object(Oid classId, Oid objectId)
 			return TCF_LIVE;
 	}
 	return TCF_GONE;
+}
+
+/*
+ * Ordinary tables and functions with reserved OIDs (created before the
+ * range was reserved, or carried over by pg_upgrade) dropped by the current
+ * transaction, at subtransaction nesting levels.  pgstat_vacuum_stat() keeps
+ * their statistics as long as a live session holds the slice of their OIDs
+ * (tempcat_oid_maybe_live()): purge them at commit.
+ */
+typedef struct TempcatDiskDrop
+{
+	Oid			catalog;
+	Oid			oid;
+	int			level;
+} TempcatDiskDrop;
+
+static TempcatDiskDrop *tc_disk_drops = NULL;
+static int	tc_ndisk_drops = 0;
+static int	tc_max_disk_drops = 0;
+
+static void
+tempcat_disk_drop_xact_callback(XactEvent event, void *arg)
+{
+	int			i;
+
+	if (event == XACT_EVENT_COMMIT)
+	{
+		for (i = 0; i < tc_ndisk_drops; i++)
+		{
+			if (tc_disk_drops[i].catalog == RelationRelationId)
+				pgstat_purge_relation(tc_disk_drops[i].oid);
+			else
+				pgstat_purge_function(tc_disk_drops[i].oid);
+		}
+	}
+	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_ABORT)
+		tc_ndisk_drops = 0;
+}
+
+static void
+tempcat_disk_drop_subxact_callback(SubXactEvent event,
+								   SubTransactionId mySubid,
+								   SubTransactionId parentSubid, void *arg)
+{
+	int			level = GetCurrentTransactionNestLevel();
+	int			i;
+
+	if (event == SUBXACT_EVENT_ABORT_SUB)
+	{
+		while (tc_ndisk_drops > 0 &&
+			   tc_disk_drops[tc_ndisk_drops - 1].level >= level)
+			tc_ndisk_drops--;
+	}
+	else if (event == SUBXACT_EVENT_COMMIT_SUB)
+	{
+		for (i = 0; i < tc_ndisk_drops; i++)
+		{
+			if (tc_disk_drops[i].level >= level)
+				tc_disk_drops[i].level = level - 1;
+		}
+	}
+}
+
+/* An on-disk pg_class or pg_proc row at 'tid' with OID 'oid' is deleted. */
+void
+tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid)
+{
+	static bool registered = false;
+
+	Assert(catalog == RelationRelationId || catalog == ProcedureRelationId);
+	if (!IsTempcatOid(oid) || IsTempcatTid(tid) || IsBinaryUpgrade)
+		return;
+
+	if (!registered)
+	{
+		RegisterXactCallback(tempcat_disk_drop_xact_callback, NULL);
+		RegisterSubXactCallback(tempcat_disk_drop_subxact_callback, NULL);
+		registered = true;
+	}
+	if (tc_ndisk_drops >= tc_max_disk_drops)
+	{
+		int			newmax = Max(16, tc_max_disk_drops * 2);
+
+		if (tc_disk_drops == NULL)
+			tc_disk_drops = MemoryContextAlloc(TopMemoryContext,
+											   sizeof(TempcatDiskDrop) * newmax);
+		else
+			tc_disk_drops = repalloc(tc_disk_drops,
+									 sizeof(TempcatDiskDrop) * newmax);
+		tc_max_disk_drops = newmax;
+	}
+	tc_disk_drops[tc_ndisk_drops].catalog = catalog;
+	tc_disk_drops[tc_ndisk_drops].oid = oid;
+	tc_disk_drops[tc_ndisk_drops].level = GetCurrentTransactionNestLevel();
+	tc_ndisk_drops++;
 }
 
 /*
