@@ -397,6 +397,8 @@ static TempcatRoot *tc_root = NULL;
  */
 static dsa_pointer *tc_pending = NULL;
 static int	tc_npending = 0;
+static bool tc_resolve_wanted = false;	/* see tempcat_abort_subtransaction() */
+static void tempcat_resolve_pending(void);
 static int	tc_maxpending = 0;
 
 /* Rows deleted so far, and the last walk of tempcat_reclaim_dead() */
@@ -2565,6 +2567,10 @@ tempcat_set_caller_tuple(HeapTuple tup, Relation rel, TempcatEntry *e)
 static void
 tempcat_reserve_pending(int n)
 {
+	/* (see tempcat_abort_subtransaction()) */
+	if (tc_resolve_wanted)
+		tempcat_resolve_pending();
+
 	if (tc_npending + n > tc_maxpending)
 	{
 		int			newmax = Max(64, Max(tc_maxpending * 2, tc_npending + n));
@@ -2722,6 +2728,7 @@ tempcat_resolve_pending(void)
 	int			i = 0;
 	int			npending = tc_npending;
 
+	tc_resolve_wanted = false;
 	if (tc_npending == 0)
 		return;
 
@@ -3105,9 +3112,12 @@ tempcat_xact_changed(void)
 
 /*
  * After a subtransaction abort, free the rows it inserted and undo its
- * deletions right away, so that loops with exception blocks do not keep
- * dead rows around until the end of the top-level transaction.  Only if it,
- * or a subtransaction committed into it, changed rows.
+ * deletions soon, so that loops with exception blocks do not keep dead rows
+ * around until the end of the top-level transaction.  Only if it, or a
+ * subtransaction committed into it, changed rows.  Not here, in the middle
+ * of the abort, where an error could not be handled: before the next change
+ * of rows in memory (tempcat_reserve_pending()), or at the start or end of
+ * the next transaction, which see the same outcomes.
  */
 void
 tempcat_abort_subtransaction(void)
@@ -3116,7 +3126,7 @@ tempcat_abort_subtransaction(void)
 
 	if (tc_change_level < level || tc_area == NULL || tempcat_is_reader())
 		return;
-	tempcat_resolve_pending();
+	tc_resolve_wanted = true;
 	tc_change_level = level - 1;
 }
 

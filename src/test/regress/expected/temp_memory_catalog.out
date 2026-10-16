@@ -314,10 +314,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=211216)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=286949)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=211215)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=286948)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -1042,7 +1042,7 @@ SELECT * FROM tc_sp1;
 
 -- A failing CREATE TABLE AS leaves nothing behind.
 CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
-ERROR:  division by zero  (seg0 slice1 172.18.0.6:7002 pid=211669)
+ERROR:  division by zero  (seg0 slice1 172.18.0.6:7002 pid=287382)
 SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
  not_created 
 -------------
@@ -1065,7 +1065,7 @@ BEGIN;
 CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_defer VALUES (1);
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=211602)
+ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=287323)
 DETAIL:  Key (i)=(1) already exists.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
  count 
@@ -1567,7 +1567,9 @@ SELECT * FROM tc_pend;
 DROP TABLE tc_pend;
 -- A subtransaction abort applies outcomes only if the subtransaction, or
 -- one committed into it (here s1), changed rows: exception blocks that
--- change none do not walk the pending rows of the whole transaction.
+-- change none do not walk the pending rows of the whole transaction.  It
+-- does so before the next change of rows in memory, not in the middle of
+-- the abort.
 BEGIN;
 CREATE TEMP TABLE tc_sx1 (a int) DISTRIBUTED BY (a);
 SAVEPOINT s1;
@@ -1595,6 +1597,14 @@ SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  walks 
 -------
+ 0
+(1 row)
+
+CREATE TEMP TABLE tc_sx4 (a int) DISTRIBUTED BY (a);
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ walks 
+-------
  1
 (1 row)
 
@@ -1610,10 +1620,50 @@ SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
 ---------
  tc_sx1
  tc_sx2
-(2 rows)
+ tc_sx4
+(3 rows)
 
 COMMIT;
-DROP TABLE tc_sx1, tc_sx2;
+DROP TABLE tc_sx1, tc_sx2, tc_sx4;
+-- An error while the outcome of a subtransaction is applied (here the fault
+-- fails it) is one of the statement that changes rows next, and rolls its
+-- transaction back as usual.
+BEGIN;
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s;
+CREATE TEMP TABLE tc_sy2 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_sy3 (a int) DISTRIBUTED BY (a);
+ERROR:  fault triggered, fault name:'tempcat_forget_if_gone' fault type:'error'
+ROLLBACK;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sy_' ORDER BY 1;
+ relname 
+---------
+(0 rows)
+
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sy1 VALUES (1);
+SELECT * FROM tc_sy1;
+ a 
+---
+ 1
+(1 row)
+
+DROP TABLE tc_sy1;
 -- When ordinary objects take every OID of the session's slice of the
 -- reserved range (the fault pretends so), the session keeps its temporary
 -- objects on disk, with a warning.

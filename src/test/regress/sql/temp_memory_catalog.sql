@@ -733,7 +733,9 @@ DROP TABLE tc_pend;
 
 -- A subtransaction abort applies outcomes only if the subtransaction, or
 -- one committed into it (here s1), changed rows: exception blocks that
--- change none do not walk the pending rows of the whole transaction.
+-- change none do not walk the pending rows of the whole transaction.  It
+-- does so before the next change of rows in memory, not in the middle of
+-- the abort.
 BEGIN;
 CREATE TEMP TABLE tc_sx1 (a int) DISTRIBUTED BY (a);
 SAVEPOINT s1;
@@ -749,11 +751,33 @@ CREATE TEMP TABLE tc_sx3 (a int) DISTRIBUTED BY (a);
 ROLLBACK TO SAVEPOINT s2;
 SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_sx4 (a int) DISTRIBUTED BY (a);
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
 COMMIT;
-DROP TABLE tc_sx1, tc_sx2;
+DROP TABLE tc_sx1, tc_sx2, tc_sx4;
+-- An error while the outcome of a subtransaction is applied (here the fault
+-- fails it) is one of the statement that changes rows next, and rolls its
+-- transaction back as usual.
+BEGIN;
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s;
+CREATE TEMP TABLE tc_sy2 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_sy3 (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sy_' ORDER BY 1;
+CREATE TEMP TABLE tc_sy1 (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sy1 VALUES (1);
+SELECT * FROM tc_sy1;
+DROP TABLE tc_sy1;
 
 -- When ordinary objects take every OID of the session's slice of the
 -- reserved range (the fault pretends so), the session keeps its temporary
