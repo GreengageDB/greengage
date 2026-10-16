@@ -2283,6 +2283,18 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		 distributedTransactionContext == DTX_CONTEXT_QE_ENTRY_DB_SINGLETON))
 	{
 		readerFillLocalSnapshot(snapshot, distributedTransactionContext);
+
+		/*
+		 * The writer's snapshot comes without the subtransaction XIDs of
+		 * the transactions in progress.  Have XidInMVCCSnapshot() look an
+		 * XID that is not in xip[] up in pg_subtrans, as when they
+		 * overflowed: it may be a subtransaction of one in progress, e.g.
+		 * released, which must not be taken for finished, as clog would
+		 * not say it committed and its rows would be hinted aborted for
+		 * good.
+		 */
+		snapshot->subxcnt = 0;
+		snapshot->suboverflowed = true;
 		return snapshot;
 	}
 
