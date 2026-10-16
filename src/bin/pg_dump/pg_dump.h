@@ -460,6 +460,8 @@ typedef struct _indxInfo
 	bool		indisreplident;
 	Oid			parentidx;		/* if a partition, parent index OID */
 	SimplePtrList partattaches;	/* if partitioned, partition attach objects */
+	int			numSkippedChildren;	/* if on an extension table, number of
+									 * child indexes not dumped */
 
 	/* if there is an associated constraint object, its dumpId: */
 	DumpId		indexconstraint;
