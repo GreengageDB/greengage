@@ -955,6 +955,15 @@ tempcat_claim_free_slice(void)
 	if (tc_slice >= 0)
 		return true;
 	tempcat_register_callbacks();
+#ifdef FAULT_INJECTOR
+	/*
+	 * Test hook: start the search at the slice taken last, as if all others
+	 * had been taken since, to take it again once its holder let go of it
+	 * here (see tempcat_claim_slice()).
+	 */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_again") == FaultInjectorTypeSkip)
+		pg_atomic_fetch_sub_u32(&TempcatShared->next_slice, 1);
+#endif
 	for (i = 0; i < TEMPCAT_NSLICES; i++)
 	{
 		int			slice = pg_atomic_fetch_add_u32(&TempcatShared->next_slice, 1) %
@@ -993,6 +1002,11 @@ tempcat_claim_slice(int slice)
 			break;
 		if (expected == me)
 			break;
+#ifdef FAULT_INJECTOR
+		/* Test hook: report the wait for the earlier holder. */
+		if (waited == 0)
+			SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_wait");
+#endif
 		if (waited >= TEMPCAT_CLAIM_TIMEOUT_MS)
 			ereport(ERROR,
 					(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
@@ -1273,6 +1287,10 @@ tempcat_proc_exit(int code, Datum arg)
 	{
 		TempcatSliceState *ss = &TempcatShared->slices[tc_slice];
 
+#ifdef FAULT_INJECTOR
+		/* Test hook: hold on to the slice on the way out (with 'suspend'). */
+		SIMPLE_FAULT_INJECTOR("tempcat_release_slice");
+#endif
 		ss->databaseId = InvalidOid;
 		pg_write_barrier();
 		pg_atomic_write_u32(&ss->holder, 0);
@@ -1720,7 +1738,15 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	base = tempcat_slice_base(slice);
 	span = tempcat_slice_last(slice) - base + 1;
 
-	for (tries = 0; tries < span; tries++)
+#ifdef FAULT_INJECTOR
+	/* Test hook: ordinary objects take every OID of the slice. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_oid_exhausted") == FaultInjectorTypeSkip)
+		tries = span;
+	else
+#endif
+		tries = 0;
+
+	for (; tries < span; tries++)
 	{
 		Oid			oid = ss->nextOid;
 		ScanKeyData key;
@@ -1737,6 +1763,11 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 			oid = base + (Oid) (random() % span);
 		else if (oid < base || oid - base >= span)
 			oid = base;
+#ifdef FAULT_INJECTOR
+		/* Test hook: go near the end of the slice, to wrap around soon. */
+		if (SIMPLE_FAULT_INJECTOR("tempcat_slice_near_end") == FaultInjectorTypeSkip)
+			oid = base + span - 3;
+#endif
 		ss->nextOid = oid + 1;
 
 		/* (before the lookup: the leftovers' rows go first) */
@@ -2183,6 +2214,15 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 			goto oom;
 		nodes[nnodes] = dsa_allocate_extended(tc_area, sizeof(TempcatHashNode),
 											  DSA_ALLOC_NO_OOM);
+#ifdef FAULT_INJECTOR
+		/* Test hook: the area runs full in the middle of adding a row. */
+		if (DsaPointerIsValid(nodes[nnodes]) &&
+			SIMPLE_FAULT_INJECTOR("tempcat_hash_node_alloc") == FaultInjectorTypeSkip)
+		{
+			dsa_free(tc_area, nodes[nnodes]);
+			nodes[nnodes] = InvalidDsaPointer;
+		}
+#endif
 		if (!DsaPointerIsValid(nodes[nnodes]))
 			goto oom;
 		nnodes++;
@@ -2441,6 +2481,11 @@ tempcat_xid_status(TransactionId xid)
 static void
 tempcat_forget_if_gone(int catidx, Oid objoid)
 {
+#ifdef FAULT_INJECTOR
+	/* Test hook: fail while the outcomes are applied (with 'error'). */
+	SIMPLE_FAULT_INJECTOR("tempcat_forget_if_gone");
+#endif
+
 	if (tempcat_catalogs[catidx].relid == RelationRelationId)
 		tc_horizon_dirty = true;
 
@@ -2478,6 +2523,11 @@ tempcat_resolve_pending(void)
 		return;
 
 	Assert(tc_area != NULL);
+
+#ifdef FAULT_INJECTOR
+	/* Test hook: count the walks; see tempcat_abort_subtransaction(). */
+	SIMPLE_FAULT_INJECTOR("tempcat_resolve_pending");
+#endif
 
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 

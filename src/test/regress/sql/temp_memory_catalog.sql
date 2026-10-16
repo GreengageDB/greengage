@@ -350,6 +350,127 @@ BEGIN
 END $$;
 SELECT count(*) FROM pg_class WHERE relpersistence = 't';
 
+-- Failures, made by faults on the coordinator.
+\c
+SET client_min_messages = warning;
+CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
+RESET client_min_messages;
+SET gp_enable_temp_memory_catalog = on;
+\set VERBOSITY terse
+-- Allocations failing in the middle of adding a row (here from the tenth
+-- hash node of the statement on) fail the statement, and leave nothing
+-- behind; so do those failing for a new version of a row.
+CREATE TEMP TABLE tc_f0 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 10, -1, 0, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) FROM pg_class WHERE relname = 'tc_oom';
+SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ALTER TABLE tc_f0 ALTER COLUMN a SET STATISTICS 5;
+SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT attname, attstattarget FROM pg_attribute WHERE attrelid = 'tc_f0'::regclass AND attnum > 0;
+CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_oom SELECT i, 'x' FROM generate_series(1, 10) i;
+SELECT count(*) FROM tc_oom;
+DROP TABLE tc_oom, tc_f0;
+
+-- An error while the outcome of earlier transactions is applied to the rows
+-- (here as the first row of the dropped table is freed, when the session
+-- goes idle after the drop) is only logged, and leaves the rows still to be
+-- done consistent: the next transaction finishes them.  (At the start of a
+-- transaction, it would fail the transaction.)
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DROP TABLE tc_pend;
+SELECT gp_wait_until_triggered_fault('tempcat_forget_if_gone', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_forget_if_gone', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_pend') IS NULL AS dropped;
+CREATE TEMP TABLE tc_pend (a int, b text) DISTRIBUTED BY (a);
+INSERT INTO tc_pend VALUES (1, 'x');
+SELECT * FROM tc_pend;
+DROP TABLE tc_pend;
+
+-- A subtransaction abort applies outcomes only if the subtransaction, or
+-- one committed into it (here s1), changed rows: exception blocks that
+-- change none do not walk the pending rows of the whole transaction.
+BEGIN;
+CREATE TEMP TABLE tc_sx1 (a int) DISTRIBUTED BY (a);
+SAVEPOINT s1;
+CREATE TEMP TABLE tc_sx2 (a int) DISTRIBUTED BY (a);
+RELEASE SAVEPOINT s1;
+SELECT gp_inject_fault_infinite('tempcat_resolve_pending', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+DO $$ BEGIN FOR i IN 1..3 LOOP BEGIN PERFORM 1 / 0; EXCEPTION WHEN division_by_zero THEN NULL; END; END LOOP; END $$;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SAVEPOINT s2;
+CREATE TEMP TABLE tc_sx3 (a int) DISTRIBUTED BY (a);
+ROLLBACK TO SAVEPOINT s2;
+SELECT substring(gp_inject_fault('tempcat_resolve_pending', 'status', dbid) from 'num times hit:''(\d+)''') AS walks
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT relname FROM pg_class WHERE relname LIKE 'tc\_sx_' ORDER BY 1;
+COMMIT;
+DROP TABLE tc_sx1, tc_sx2;
+
+-- When ordinary objects take every OID of the session's slice of the
+-- reserved range (the fault pretends so), its temporary objects get none.
+\c
+SET gp_enable_temp_memory_catalog = on;
+\set VERBOSITY terse
+SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
+SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved;
+
+-- The OIDs of a slice wrap around at its end (the fault puts the session
+-- near it) and go on from its start.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
+CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped,
+       'tc_wrap2'::regclass::oid >= 4026531840 AS reserved;
+INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
+INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
+SELECT count(*) FROM tc_wrap1 JOIN tc_wrap2 USING (a);
+
+-- When dynamic shared memory runs short for others (the fault pretends
+-- so), a new session keeps the catalog rows of its temporary objects in
+-- files from the start; without files, its temporary schema is on disk.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp', true, false) f
+ WHERE f LIKE 'pgsql_tmpdsm.%' \gset
+CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
+SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
+SELECT count(*) > :files_before AS in_files FROM pg_ls_dir('base/pgsql_tmp', true, false) f
+ WHERE f LIKE 'pgsql_tmpdsm.%';
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_file_size = 0;
+CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
+SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+
 \c
 DROP FUNCTION tc_disk_rows();
 DROP TYPE tc_ord_comp;
