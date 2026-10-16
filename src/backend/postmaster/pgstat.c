@@ -975,6 +975,10 @@ pgstat_report_stat(bool force)
 					   sizeof(PgStat_TableCounts)) == 0)
 				continue;
 
+			/* GPDB: nor those of tables dropped meanwhile, see tempcat.c */
+			if (tempcat_stats_object_gone(RelationRelationId, entry->t_id))
+				continue;
+
 			/*
 			 * OK, insert data into the appropriate message, and send if full.
 			 */
@@ -1177,6 +1181,13 @@ pgstat_send_funcstats(void)
 		if (memcmp(&entry->f_counts, &all_zeroes,
 				   sizeof(PgStat_FunctionCounts)) == 0)
 			continue;
+
+		/* GPDB: nor those of functions dropped meanwhile, see tempcat.c */
+		if (tempcat_stats_object_gone(ProcedureRelationId, entry->f_id))
+		{
+			MemSet(&entry->f_counts, 0, sizeof(PgStat_FunctionCounts));
+			continue;
+		}
 
 		/* need to convert format of time accumulators */
 		m_ent = &msg.m_entry[msg.m_nentries];

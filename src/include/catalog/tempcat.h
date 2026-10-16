@@ -126,6 +126,7 @@ extern TempcatForeign tempcat_foreign_object(Oid classId, Oid objectId);
 extern void tempcat_forget_leftover(Relation rel, HeapTuple tup);
 extern bool tempcat_role_used_elsewhere(Oid roleid);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
+extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);
 extern void tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid);
 extern void tempcat_finish_prepared(TransactionId xid, bool isCommit);
 extern bool tempcat_check_type_user(Oid classId, Oid objectId,

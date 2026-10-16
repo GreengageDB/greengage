@@ -377,7 +377,7 @@ DROP TABLE
 14: INSERT INTO tc_perm SELECT generate_series(1, 10);
 INSERT 0 10
 14: COMMIT;
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=327252)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=537648)
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -585,8 +585,8 @@ SET
 0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
 DO
 18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
-ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=327418)
-HINT:  OID 4246842527 belongs to an object that exists on this node only; gpcheckcat reports such objects.
+ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=537776)
+HINT:  OID 4032353087 belongs to an object that exists on this node only; gpcheckcat reports such objects.
 0U: ROLLBACK;
 ROLLBACK
 0Uq: ... <quitting>
@@ -713,10 +713,10 @@ INSERT 0 1
 20: SET gp_enable_temp_memory_catalog = on;
 SET
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=327511)
+ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=537845)
 LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
                           ^
-DETAIL:  Process 327499 holds OIDs 4246929408 to 4246994943.
+DETAIL:  Process 537834 holds OIDs 4032430080 to 4032495615.
 HINT:  Retry once that session has ended.
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 CREATE TABLE
@@ -804,7 +804,7 @@ SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configura
 23: SET gp_enable_temp_memory_catalog = on;
 SET
 23: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=327560)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=537894)
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -897,6 +897,28 @@ SELECT (max(slice) FILTER (WHERE session = 26) - max(slice) FILTER (WHERE sessio
 26q: ... <quitting>
 DROP TABLE tc_slices;
 DROP TABLE
+
+-- DROP of what a temporary object of another session depends on waits for
+-- that session when it is dropping the object (here in a transaction in
+-- progress), and goes on once the object is gone, as for other dependent
+-- objects.
+CREATE TYPE tc_wait_comp AS (x int);
+CREATE TYPE
+27: SET gp_enable_temp_memory_catalog = on;
+SET
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+27: BEGIN;
+BEGIN
+27: DROP TABLE tc_w;
+DROP TABLE
+28&: DROP TYPE tc_wait_comp;  <waiting ...>
+27: COMMIT;
+COMMIT
+28<:  <... completed>
+DROP TYPE
+27q: ... <quitting>
+28q: ... <quitting>
 
 4: DROP TABLE tc_sess;
 DROP TABLE

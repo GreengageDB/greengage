@@ -429,9 +429,18 @@ static bool tc_roles_dirty = false;
 
 struct TempcatScanData
 {
+	/*
+	 * The visible rows in memory that match the keys: for scans through an
+	 * index, copies of them; otherwise only their TIDs, each copied when
+	 * returned (into 'current', valid until the next one), so that scans of
+	 * catalogs with many rows in memory do not keep copies of them all.
+	 */
 	HeapTuple  *tuples;
+	ItemPointerData *tids;
 	int			ntuples;
 	int			next;
+	Oid			relid;
+	HeapTuple	current;
 	bool		on_virtual;		/* last tuple returned was in memory */
 
 	/*
@@ -2557,12 +2566,17 @@ tempcat_entry_copy(TempcatEntry *e, Oid relid)
 	tup->t_data = hdr = (HeapTupleHeader) ((char *) tup + HEAPTUPLESIZE);
 	memcpy(hdr, TCE_DATA(e), e->len);
 
+	/*
+	 * A copy of a row visible to the scan's snapshot: its xmax, if any,
+	 * shows (e.g. in the xmax system column) but is marked invalid, as
+	 * visibility checks of the copy must not take it away again.
+	 */
 	hdr->t_infomask &= ~HEAP_XACT_MASK;
 	hdr->t_infomask |= HEAP_XMAX_INVALID;
 	if (e->flags & TCE_XMIN_COMMITTED)
 		hdr->t_infomask |= HEAP_XMIN_COMMITTED;
 	HeapTupleHeaderSetXmin(hdr, e->xmin);
-	HeapTupleHeaderSetXmax(hdr, InvalidTransactionId);
+	HeapTupleHeaderSetXmax(hdr, e->xmax);
 	HeapTupleHeaderSetCmin(hdr, e->cmin);
 	hdr->t_ctid = e->tid;
 
@@ -3889,6 +3903,8 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	scan = palloc(sizeof(struct TempcatScanData));
 	scan->ntuples = 0;
 	scan->next = 0;
+	scan->relid = RelationGetRelid(rel);
+	scan->current = NULL;
 	scan->on_virtual = false;
 	scan->irel = irel;
 	scan->heapdesc = desc;
@@ -3899,7 +3915,16 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	scan->disk_done = false;
 	scan->direction = 0;
 	maxtuples = 8;
-	scan->tuples = palloc(sizeof(HeapTuple) * maxtuples);
+	if (irel != NULL)
+	{
+		scan->tuples = palloc(sizeof(HeapTuple) * maxtuples);
+		scan->tids = NULL;
+	}
+	else
+	{
+		scan->tuples = NULL;
+		scan->tids = palloc(sizeof(ItemPointerData) * maxtuples);
+	}
 
 	reader = tempcat_is_reader();
 	if (reader)
@@ -3950,9 +3975,15 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 		if (scan->ntuples >= maxtuples)
 		{
 			maxtuples *= 2;
-			scan->tuples = repalloc(scan->tuples, sizeof(HeapTuple) * maxtuples);
+			if (irel != NULL)
+				scan->tuples = repalloc(scan->tuples, sizeof(HeapTuple) * maxtuples);
+			else
+				scan->tids = repalloc(scan->tids, sizeof(ItemPointerData) * maxtuples);
 		}
-		scan->tuples[scan->ntuples++] = tempcat_entry_copy(e, RelationGetRelid(rel));
+		if (irel != NULL)
+			scan->tuples[scan->ntuples++] = tempcat_entry_copy(e, RelationGetRelid(rel));
+		else
+			scan->tids[scan->ntuples++] = e->tid;
 	}
 
 	if (reader)
@@ -4143,10 +4174,10 @@ tempcat_getnext_dir(TempcatScan scan, bool forward,
 
 	if (scan->irel == NULL)
 	{
-		if (scan->next < scan->ntuples)
+		if ((vtup = tempcat_next_virtual(scan)) != NULL)
 		{
 			scan->on_virtual = true;
-			return scan->tuples[scan->next++];
+			return vtup;
 		}
 		scan->on_virtual = false;
 		return fetch_disk(arg);
@@ -4193,12 +4224,48 @@ tempcat_has_rows(Relation rel)
 		tc_root->catalogs[catidx].nentries > 0;
 }
 
-/* The next row in memory of a scan without an index, or NULL. */
+/*
+ * The next row in memory, in no particular order, or NULL: a copy, valid
+ * until the next call (for a scan without an index; otherwise until the
+ * end of the scan).  The rows were visible to the scan's snapshot when
+ * it began, and cannot have been freed since (see tempcat_reclaim_dead());
+ * one that was all the same is passed over.
+ */
 HeapTuple
 tempcat_next_virtual(TempcatScan scan)
 {
-	if (scan->next < scan->ntuples)
-		return scan->tuples[scan->next++];
+	bool		reader = tempcat_is_reader();
+
+	/* (a bitmap heap scan's, begun with the keys of an index) */
+	if (scan->irel != NULL)
+		return scan->next < scan->ntuples ? scan->tuples[scan->next++] : NULL;
+
+	if (scan->current != NULL)
+	{
+		pfree(scan->current);
+		scan->current = NULL;
+	}
+	while (scan->next < scan->ntuples)
+	{
+		ItemPointerData tid = scan->tids[scan->next++];
+		dsa_pointer ep;
+
+		if (reader)
+			LWLockAcquire(&tc_root->lock, LW_SHARED);
+		ep = tempcat_find_tid(&tid);
+		if (DsaPointerIsValid(ep))
+		{
+			/* (in the scan's context, which the caller's may outlive) */
+			MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
+
+			scan->current = tempcat_entry_copy(TC_ADDR(ep), scan->relid);
+			MemoryContextSwitchTo(oldcxt);
+		}
+		if (reader)
+			LWLockRelease(&tc_root->lock);
+		if (scan->current != NULL)
+			return scan->current;
+	}
 	return NULL;
 }
 
@@ -4213,9 +4280,16 @@ tempcat_endscan(TempcatScan scan)
 {
 	int			i;
 
-	for (i = 0; i < scan->ntuples; i++)
-		pfree(scan->tuples[i]);
-	pfree(scan->tuples);
+	if (scan->tuples != NULL)
+	{
+		for (i = 0; i < scan->ntuples; i++)
+			pfree(scan->tuples[i]);
+		pfree(scan->tuples);
+	}
+	if (scan->tids != NULL)
+		pfree(scan->tids);
+	if (scan->current != NULL)
+		pfree(scan->current);
 	if (scan->procs)
 		pfree(scan->procs);
 	if (scan->idxcoldesc)
@@ -4544,6 +4618,65 @@ tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid)
 	tc_disk_drops[tc_ndisk_drops].oid = oid;
 	tc_disk_drops[tc_ndisk_drops].level = GetCurrentTransactionNestLevel();
 	tc_ndisk_drops++;
+}
+
+/*
+ * Is 'oid' that of a table or function (by 'catalog') of the writer's
+ * temporary objects kept in memory, which a committed transaction dropped?
+ * For a reader process sending statistics (pgstat_report_stat()): the
+ * writer purged those of what it dropped (tempcat_forget_if_gone()), and a
+ * reader's counts still pending, sent later, would bring them back.  Out of
+ * a transaction: the rows in memory tell, with an OID of the writer's
+ * slice that no live row has.  (The counts of an ordinary object that has
+ * an OID of the slice, which no row in memory has, are lost too.)
+ */
+bool
+tempcat_stats_object_gone(Oid catalog, Oid oid)
+{
+	TempcatProcState *st;
+	int			catidx;
+	const TempcatCatalogDef *def;
+	uint32		hash;
+	bool		gone = true;
+	int			k;
+
+	/* (at exit, the area may be detached already) */
+	if (!IsTempcatOid(oid) || TempcatShared == NULL || proc_exit_inprogress ||
+		!tempcat_is_reader() || tc_area == NULL)
+		return false;
+	st = tempcat_writer_state();
+	if (st == NULL || st->slice < 0 || tempcat_slice_of(oid) != st->slice)
+		return false;
+	catidx = tempcat_catalog_index(catalog);
+	if (catidx < 0)
+		return false;
+	def = &tempcat_catalogs[catidx];
+	hash = DatumGetUInt32(hash_uint32(oid));
+
+	LWLockAcquire(&tc_root->lock, LW_SHARED);
+	for (k = 0; k < TEMPCAT_NKEYS && gone; k++)
+	{
+		TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
+		dsa_pointer np;
+
+		/* the oid column is always attribute 1 */
+		if (def->keyattr[k] != 1 || h->nbuckets == 0)
+			continue;
+		np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
+		while (DsaPointerIsValid(np) && gone)
+		{
+			TempcatHashNode *node = TC_ADDR(np);
+			TempcatEntry *e = TC_ADDR(node->entry);
+
+			if (node->hash == hash && tempcat_entry_oid(e) == oid &&
+				!(TransactionIdIsValid(e->xmax) &&
+				  tempcat_xid_status(e->xmax) == TCX_COMMITTED))
+				gone = false;
+			np = node->next;
+		}
+	}
+	LWLockRelease(&tc_root->lock);
+	return gone;
 }
 
 /*

@@ -762,6 +762,15 @@ CLOSE tc_cur3;
 END;
 DROP TABLE tc_cur_src, tc_cur_mid;
 
+-- A row in memory that the transaction deleted after a cursor's snapshot
+-- shows its xmax to the cursor, as on disk.
+CREATE TEMP TABLE tc_xmax (a int) DISTRIBUTED BY (a);
+BEGIN;
+DECLARE tc_xc CURSOR FOR SELECT xmax::text::bigint <> 0 AS deleted FROM pg_class WHERE relname = 'tc_xmax';
+DROP TABLE tc_xmax;
+FETCH ALL FROM tc_xc;
+COMMIT;
+
 -- Turning the setting off does not affect the session's temporary objects:
 -- they stay in memory, and new ones join them.  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;

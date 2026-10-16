@@ -914,11 +914,19 @@ findDependentObjects(const ObjectAddress *object,
 		/*
 		 * GPDB: a temporary object of another session kept in memory (see
 		 * tempcat.c), which cannot be seen, let alone dropped, here; or a
-		 * leftover of one whose session is gone, whose row goes away.
+		 * leftover of one whose session is gone, whose row goes away.  As
+		 * for other dependent objects (below), lock it first: its session
+		 * may be dropping it, and then the row is gone once it is done.
 		 */
 		switch (tempcat_foreign_object(otherObject.classId, otherObject.objectId))
 		{
 			case TCF_LIVE:
+				AcquireDeletionLock(&otherObject, 0);
+				if (!systable_recheck_tuple(scan, tup))
+				{
+					ReleaseDeletionLock(&otherObject);
+					continue;
+				}
 				ereport(ERROR,
 						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 						 errmsg("cannot drop %s because a temporary object of another session depends on it",
