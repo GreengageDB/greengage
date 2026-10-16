@@ -1225,6 +1225,33 @@ SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid >= 402
 40q: ... <quitting>
 41q: ... <quitting>
 
+-- Reader gangs of a session that keeps no temporary objects in memory take
+-- the reserved OIDs of other sessions' objects for those of others too
+-- (here a filter evaluated by a reader describes them as nothing).
+CREATE TYPE tc_rd_comp AS (x int);
+CREATE TYPE
+43: SET gp_enable_temp_memory_catalog = on;
+SET
+43: CREATE TEMP TABLE tc_rd (c tc_rd_comp) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+44: SET optimizer = off;
+SET
+44: CREATE TEMP TABLE tc_rd_ids (id oid) DISTRIBUTED BY (id);
+CREATE TABLE
+44: INSERT INTO tc_rd_ids SELECT objid FROM pg_depend WHERE refobjid = 'tc_rd_comp'::regtype;
+INSERT 0 3
+44: SELECT count(*) FROM gp_dist_random('pg_depend') d JOIN tc_rd_ids i ON d.objid = i.id WHERE d.refobjid = 'tc_rd_comp'::regtype AND pg_describe_object(d.classid, d.objid, d.objsubid) IS NULL;
+ count 
+-------
+ 3     
+(1 row)
+43: DROP TABLE tc_rd;
+DROP TABLE
+43q: ... <quitting>
+44q: ... <quitting>
+DROP TYPE tc_rd_comp;
+DROP TYPE
+
 4: DROP TABLE tc_sess;
 DROP TABLE
 4: DROP PROCEDURE tc_wait_gone();

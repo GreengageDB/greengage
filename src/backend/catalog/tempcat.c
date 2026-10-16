@@ -1698,7 +1698,8 @@ tempcat_writer_state(void)
 /*
  * Is 'oid' that of a temporary object of our session?  Readers do not know
  * which OIDs their writer assigned, but all of them are in the slice it
- * holds.  (What is not known is taken as ours.)
+ * holds.  A writer that holds none keeps no temporary objects in memory,
+ * and one that is not known cannot be looked up either.
  */
 static bool
 tempcat_session_owns_oid(Oid catalog, Oid oid)
@@ -1712,9 +1713,9 @@ tempcat_session_owns_oid(Oid catalog, Oid oid)
 		return false;
 	st = tempcat_writer_state();
 	if (st == NULL)
-		return true;
+		return false;
 	slice = st->slice;
-	return slice < 0 || slice == tempcat_slice_of(oid);
+	return slice >= 0 && slice == tempcat_slice_of(oid);
 }
 
 /* ----------------------------------------------------------------
