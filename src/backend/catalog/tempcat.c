@@ -1819,11 +1819,22 @@ tempcat_can_start(void)
 	 * and if no area can be made, the slice goes back unused.
 	 */
 	if (!tempcat_claim_free_slice())
+	{
+		ereport(WARNING,
+				(errcode(ERRCODE_CONFIGURATION_LIMIT_EXCEEDED),
+				 errmsg("no range of OIDs for temporary objects kept in memory is free"),
+				 errdetail("Other sessions hold all %d ranges, or ordinary objects take too many of their OIDs; the session keeps its temporary objects on disk.",
+						   TEMPCAT_NSLICES)));
 		return false;
+	}
 	if (tc_area == NULL && !tempcat_create_area(true))
 	{
 		if (!tc_slice_used)
 			tempcat_let_go_of_slice();
+		ereport(WARNING,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("could not create the in-memory catalog of temporary objects"),
+				 errdetail("Dynamic shared memory, or slots for its segments, run short, and files are not allowed or ran out too; the session keeps its temporary objects on disk.")));
 		return false;
 	}
 	return true;

@@ -314,10 +314,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=345973)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=357635)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=345971)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=357633)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -1042,7 +1042,7 @@ SELECT * FROM tc_sp1;
 
 -- A failing CREATE TABLE AS leaves nothing behind.
 CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
-ERROR:  division by zero  (seg1 slice1 172.18.0.6:7003 pid=346456)
+ERROR:  division by zero  (seg0 slice1 172.18.0.6:7002 pid=358155)
 SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
  not_created 
 -------------
@@ -1065,7 +1065,7 @@ BEGIN;
 CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_defer VALUES (1);
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=346378)
+ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=358087)
 DETAIL:  Key (i)=(1) already exists.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
  count 
@@ -1761,6 +1761,7 @@ SELECT count(*) > :files_before AS in_files FROM pg_ls_dir('base/pgsql_tmp', tru
 SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_file_size = 0;
 CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
+WARNING:  could not create the in-memory catalog of temporary objects at character 19
 SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
  reserved 
 ----------
@@ -1796,6 +1797,7 @@ SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
 SELECT count(*) AS files_before FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%' \gset
 CREATE TEMP TABLE tc_noslice (a int) DISTRIBUTED BY (a);
+WARNING:  no range of OIDs for temporary objects kept in memory is free at character 19
 SELECT 'tc_noslice'::regclass::oid >= 4026531840 AS reserved;
  reserved 
 ----------
