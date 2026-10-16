@@ -56,6 +56,7 @@
 #include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
+#include "parser/analyze.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
@@ -245,11 +246,24 @@ preprocess_targetlist(PlannerInfo *root)
 	 * while we have the relation open.
 	 */
 	if (parse->onConflict)
+	{
+		/*
+		 * OnConflictUpdate may modify the distkey of the table through a view
+		 * or a rule, avoiding similar check in analyze.c.
+		 * This can lead to wrong data distribution. Add a check
+		 * here and raise error for such case.
+		 */
+		if (parse->onConflict->action == ONCONFLICT_UPDATE)
+			sanity_check_on_conflict_update(target_rte->relid,
+				parse->onConflict->onConflictSet,
+				parse->onConflict->onConflictWhere);
+
 		parse->onConflict->onConflictSet =
 			expand_targetlist(root, parse->onConflict->onConflictSet,
 							  CMD_UPDATE,
 							  result_relation,
 							  target_relation);
+	}
 
 	if (target_relation)
 		table_close(target_relation, NoLock);
