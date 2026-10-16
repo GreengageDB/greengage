@@ -725,6 +725,7 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 {
 	IndexTempcatMerge *m;
 	TupleTableSlot *disk = NULL;
+	bool		from_stash = false;
 	HeapTuple	vtup;
 
 	/* GPDB: merge in the catalog rows in memory, see above */
@@ -734,8 +735,19 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 		return index_getnext_slot_disk(scan, direction, slot);
 
 	m = scan->xs_tempcat;
+	/* (none if the merge began for an index-only scan) */
+	if (m->stash == NULL)
+	{
+		MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(m));
+
+		m->stash = table_slot_create(scan->heapRelation, NULL);
+		MemoryContextSwitchTo(oldcxt);
+	}
 	if (m->stashed)
+	{
 		disk = m->stash;
+		from_stash = true;
+	}
 	else if (!m->disk_done)
 	{
 		if (index_getnext_slot_disk(scan, direction, slot))
@@ -764,7 +776,7 @@ index_getnext_slot(IndexScanDesc scan, ScanDirection direction, TupleTableSlot *
 		return true;
 	}
 
-	if (disk == m->stash)
+	if (from_stash)
 	{
 		ExecCopySlot(slot, m->stash);
 		ExecClearTuple(m->stash);
@@ -819,15 +831,20 @@ index_tempcat_begin(IndexScanDesc scan)
 	IndexTempcatMerge *m;
 
 	scan->xs_tempcat_pending = false;
+
+	/* (in the scan's context, which the fetches need not run in) */
+	oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
 	tempscan = tempcat_begin_index_scan(scan->heapRelation,
 										scan->indexRelation,
 										scan->xs_snapshot,
 										scan->numberOfKeys,
 										scan->keyData);
 	if (tempscan == NULL)
+	{
+		MemoryContextSwitchTo(oldcxt);
 		return;
+	}
 
-	oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(scan));
 	m = palloc0(sizeof(IndexTempcatMerge));
 	m->tempscan = tempscan;
 	if (!scan->xs_want_itup)
@@ -878,9 +895,12 @@ index_getnext_tid_tempcat(IndexScanDesc scan, ScanDirection direction)
 								   m->stash_itupdesc);
 	if (vtup != NULL)
 	{
+		MemoryContext oldcxt = MemoryContextSwitchTo(GetMemoryChunkContext(m));
+
 		m->stashed = have_disk;
 		m->hitup = tempcat_index_columns(m->tempscan, vtup,
 										 &scan->xs_hitupdesc);
+		MemoryContextSwitchTo(oldcxt);
 		scan->xs_hitup = m->hitup;
 		scan->xs_heaptid = vtup->t_self;
 		scan->xs_recheck = true;
