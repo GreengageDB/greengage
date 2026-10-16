@@ -550,6 +550,36 @@ SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
 36q:
 37q:
 
+-- Until the transaction that swept the slice commits, the leftovers are
+-- leftovers to other sessions too: DROP waits for it rather than take them
+-- for rows of the new holder's objects.
+CREATE TYPE tc_pub_comp AS (x int);
+42: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+42: SET gp_enable_temp_memory_catalog = on;
+42: CREATE TEMP TABLE tc_pub (c tc_pub_comp) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+42q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+4: CALL tc_wait_gone();
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+40: SET gp_enable_temp_memory_catalog = on;
+40: BEGIN;
+40: CREATE TEMP TABLE tc_pub2 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+41&: DROP TYPE tc_pub_comp;
+40: COMMIT;
+41<:
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
+ WHERE objid >= 4026531840 AND deptype = 'n';
+40q:
+41q:
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:

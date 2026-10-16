@@ -1131,8 +1131,10 @@ tempcat_claim_slice(int slice)
  * Leftovers of earlier holders of our slice: on-disk pg_depend and
  * pg_shdepend rows of their temporary objects, whose other rows were in
  * their memory, are removed when a holder takes the slice in a database
- * (tempcat_sweep_slice()).  Until that committed, other sessions take such
- * rows for leftovers too (see tempcat_foreign_object()).  The removal is
+ * (tempcat_sweep_slice()).  Until that commits, other sessions take such
+ * rows for leftovers too (see tempcat_foreign_object()), and wait for it if
+ * they remove them: the slice is published as live in the database at
+ * commit only, before the session's own rows can be seen.  The removal is
  * part of the transaction that takes the slice: if that, or its
  * subtransaction, rolls back, the rows come back, and are removed again
  * before the next OID is assigned or received.
@@ -1480,9 +1482,9 @@ tempcat_slice_swept(void)
 /*
  * The session gets a reserved OID of slice 'slice(oid)' for one of its
  * temporary objects: on the coordinator when it assigns one, on a segment
- * when it receives one.  Take hold of the slice, remove the leftovers of
- * its earlier holders, and publish that our objects in this database are
- * live (see tempcat_foreign_object()).
+ * when it receives one.  Take hold of the slice, and remove the leftovers of
+ * its earlier holders; that our objects in this database are live is
+ * published as that commits (see tempcat_foreign_object()).
  */
 static void
 tempcat_activate(Oid oid)
@@ -1538,7 +1540,6 @@ tempcat_activate(Oid oid)
 		tempcat_sweep_slice(slice);
 		tc_sweep_state = TCS_IN_XACT;
 		tc_sweep_subid = GetCurrentSubTransactionId();
-		TempcatShared->slices[slice].databaseId = MyDatabaseId;
 	}
 }
 
@@ -3350,12 +3351,19 @@ tempcat_xact_callback(XactEvent event, void *arg)
 		return;
 	switch (event)
 	{
+		case XACT_EVENT_PRE_COMMIT:
+			/* (before our rows can be seen; see TempcatSweepState) */
+			if (tc_slice >= 0)
+				TempcatShared->slices[tc_slice].databaseId = MyDatabaseId;
+			break;
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PARALLEL_COMMIT:
 			tc_sweep_state = TCS_DONE;
 			break;
 		case XACT_EVENT_PRE_PREPARE:
 			tc_sweep_xid = GetTopTransactionIdIfAny();
+			if (tc_slice >= 0)
+				TempcatShared->slices[tc_slice].databaseId = MyDatabaseId;
 			break;
 		case XACT_EVENT_PREPARE:
 			tc_sweep_state = TransactionIdIsValid(tc_sweep_xid) ?
