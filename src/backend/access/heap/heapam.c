@@ -1302,15 +1302,17 @@ heap_end_tempscan(HeapScanDesc scan)
 /*
  * GPDB: after the heap, a sequential scan of a catalog returns the catalog
  * rows of this session's temporary objects kept in memory (see tempcat.c):
- * those of the backend code (e.g. table_beginscan_catalog()) and those of
- * plans alike.  Only MVCC scans: others are for maintenance of the heap
- * itself (VACUUM FULL, index builds), which has none of them.  As for the
- * heap, a call after the end starts a new scan.
+ * those of the backend code (table_beginscan_catalog(), systable scans) and
+ * those of plans (SeqScan, COPY TO) alike, which ask for them with
+ * SO_TEMPCAT.  Others may use the buffer of the heap tuple returned (index
+ * builds, pgrowlocks), which these have none of.  Only MVCC scans.  As for
+ * the heap, a call after the end starts a new scan.
  */
 static bool
 heap_tempcat_scan(HeapScanDesc scan)
 {
 	return (scan->rs_base.rs_flags & SO_TYPE_SEQSCAN) &&
+		(scan->rs_base.rs_flags & SO_TEMPCAT) &&
 		scan->rs_base.rs_snapshot != NULL &&
 		IsMVCCSnapshot(scan->rs_base.rs_snapshot) &&
 		scan->rs_base.rs_parallel == NULL &&

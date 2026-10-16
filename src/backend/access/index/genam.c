@@ -438,10 +438,18 @@ systable_beginscan(Relation heapRelation,
 		 * that the unpredictable start point of a syncscan is a serious
 		 * disadvantage; and there are no compensating advantages, because
 		 * it's unlikely that such scans will occur in parallel.
+		 *
+		 * GPDB: with the catalog rows of temporary objects kept in memory
+		 * (SO_TEMPCAT).
 		 */
-		sysscan->scan = table_beginscan_strat(heapRelation, snapshot,
-											  nkeys, key,
-											  true, false);
+		sysscan->scan = heapRelation->rd_tableam->scan_begin(heapRelation,
+															 snapshot,
+															 nkeys, key,
+															 NULL,
+															 SO_TYPE_SEQSCAN |
+															 SO_ALLOW_STRAT |
+															 SO_ALLOW_PAGEMODE |
+															 SO_TEMPCAT);
 		sysscan->iscan = NULL;
 	}
 
