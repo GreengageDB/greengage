@@ -149,10 +149,10 @@ ERROR:  DROP SUBSCRIPTION cannot run inside a transaction block
 COMMIT;
 ALTER SUBSCRIPTION regress_testsub SET (slot_name = NONE);
 \dRs+
-                                                                 List of subscriptions
-      Name       |           Owner            | Enabled |     Publication     | Binary | Streaming | Synchronous commit |           Conninfo           
------------------+----------------------------+---------+---------------------+--------+-----------+--------------------+------------------------------
- regress_testsub | regress_subscription_user2 | f       | {testpub2,testpub3} | f      | f         | local              | dbname=regress_doesnotexist2
+                                                                          List of subscriptions
+      Name       |           Owner            | Enabled |     Publication     | Binary | Streaming | Two phase commit | Synchronous commit |           Conninfo           
+-----------------+----------------------------+---------+---------------------+--------+-----------+------------------+--------------------+------------------------------
+ regress_testsub | regress_subscription_user2 | f       | {testpub2,testpub3} | f      | f         | d                | local              | dbname=regress_doesnotexist2
 (1 row)
 
 -- now it works
@@ -274,6 +274,9 @@ ERROR:  two_phase requires a Boolean value
 -- now it works
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, two_phase = true);
 WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
 \dRs+
                                                                      List of subscriptions
       Name       |           Owner           | Enabled | Publication | Binary | Streaming | Two phase commit | Synchronous commit |          Conninfo           
@@ -297,6 +300,9 @@ ALTER SUBSCRIPTION regress_testsub SET (slot_name = NONE);
 DROP SUBSCRIPTION regress_testsub;
 -- two_phase and streaming are compatible.
 CREATE SUBSCRIPTION regress_testsub CONNECTION 'dbname=regress_doesnotexist' PUBLICATION testpub WITH (connect = false, streaming = true, two_phase = true);
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
+WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
 WARNING:  tables were not subscribed, you will have to run ALTER SUBSCRIPTION ... REFRESH PUBLICATION to subscribe the tables
 \dRs+
                                                                      List of subscriptions

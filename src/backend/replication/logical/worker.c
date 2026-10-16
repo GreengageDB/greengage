@@ -952,7 +952,7 @@ apply_handle_commit_prepared(StringInfo s)
 	replorigin_session_origin_lsn = prepare_data.end_lsn;
 	replorigin_session_origin_timestamp = prepare_data.commit_time;
 
-	FinishPreparedTransaction(gid, true);
+	FinishPreparedTransaction(gid, true, /* raiseErrorIfNotFound */ true);
 	end_replication_step();
 	CommitTransactionCommand();
 	pgstat_report_stat(false);
@@ -1001,7 +1001,7 @@ apply_handle_rollback_prepared(StringInfo s)
 
 		/* There is no transaction when ABORT/ROLLBACK PREPARED is called */
 		begin_replication_step();
-		FinishPreparedTransaction(gid, false);
+		FinishPreparedTransaction(gid, false, /* raiseErrorIfNotFound */ true);
 		end_replication_step();
 		CommitTransactionCommand();
 	}

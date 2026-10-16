@@ -85,6 +85,12 @@ $node->command_ok(
 $slot = $node->slot('test');
 isnt($slot->{'restart_lsn'}, '', 'restart lsn is defined for new slot');
 
+SKIP:
+{
+	# GPDB: PREPARE TRANSACTION is not supported in utility mode, and the
+	# TAP nodes run in utility mode.
+	skip "PREPARE TRANSACTION not implemented on GPDB", 2;
+
 $node->safe_psql('postgres',
 	"BEGIN; INSERT INTO test_table values (11); PREPARE TRANSACTION 'test'");
 $node->safe_psql('postgres',
@@ -106,3 +112,4 @@ $node->command_ok(
 		'--start', '--endpos', "$nextlsn", '--no-loop', '-f', '-'
 	],
 	'replayed a two-phase transaction');
+}
