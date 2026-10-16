@@ -353,6 +353,218 @@ SELECT gp_inject_fault('dsm_slots_low', 'reset', dbid) FROM gp_segment_configura
 (1 row)
 11q: ... <quitting>
 
+-- Two-phase commit: a transaction that drops a temporary table kept in
+-- memory and writes an ordinary table is prepared on all segments; when
+-- PREPARE fails on one of them, the others roll the prepared transaction
+-- back, and the table must survive everywhere.
+CREATE TABLE tc_perm (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+14: SET gp_enable_temp_memory_catalog = on;
+SET
+14: CREATE TEMP TABLE tc_2pc (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+14: INSERT INTO tc_2pc SELECT generate_series(1, 30);
+INSERT 0 30
+SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+14: BEGIN;
+BEGIN
+14: DROP TABLE tc_2pc;
+DROP TABLE
+14: INSERT INTO tc_perm SELECT generate_series(1, 10);
+INSERT 0 10
+14: COMMIT;
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=74887)
+SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+14: SELECT count(*) FROM tc_2pc;
+ count 
+-------
+ 30    
+(1 row)
+14: INSERT INTO tc_2pc VALUES (100);
+INSERT 0 1
+14: SELECT count(*) FROM tc_2pc x JOIN tc_2pc y ON x.a = y.a + 1;
+ count 
+-------
+ 29    
+(1 row)
+14: SELECT count(*) FROM tc_perm;
+ count 
+-------
+ 0     
+(1 row)
+-- A temporary table created in a rolled back subtransaction of a prepared
+-- transaction does not come back.
+14: BEGIN;
+BEGIN
+14: SAVEPOINT s1;
+SAVEPOINT
+14: CREATE TEMP TABLE tc_2pc_sub (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+14: ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+14: INSERT INTO tc_perm SELECT generate_series(1, 10);
+INSERT 0 10
+14: COMMIT;
+COMMIT
+14: SELECT to_regclass('tc_2pc_sub') IS NULL AS not_created;
+ not_created 
+-------------
+ t           
+(1 row)
+14: CREATE TEMP TABLE tc_2pc_sub (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+14q: ... <quitting>
+DROP TABLE tc_perm;
+DROP TABLE
+
+-- Concurrent sessions get OIDs from separate slices: same names, different
+-- OIDs, and locks on their own temporary tables do not conflict.
+CREATE TABLE tc_oids (session int, reloid oid) DISTRIBUTED REPLICATED;
+CREATE TABLE
+15: SET gp_enable_temp_memory_catalog = on;
+SET
+16: SET gp_enable_temp_memory_catalog = on;
+SET
+15: CREATE TEMP TABLE tc_conc (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+16: CREATE TEMP TABLE tc_conc (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+15: INSERT INTO tc_conc SELECT generate_series(1, 10);
+INSERT 0 10
+16: INSERT INTO tc_conc SELECT generate_series(1, 20);
+INSERT 0 20
+15: INSERT INTO tc_oids SELECT 1, 'tc_conc'::regclass;
+INSERT 0 1
+16: INSERT INTO tc_oids SELECT 2, 'tc_conc'::regclass;
+INSERT 0 1
+SELECT count(DISTINCT reloid) AS distinct_oids, bool_and(reloid >= 4026531840) AS reserved FROM tc_oids;
+ distinct_oids | reserved 
+---------------+----------
+ 2             | t        
+(1 row)
+15: BEGIN;
+BEGIN
+15: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE
+16: BEGIN;
+BEGIN
+16: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE
+16: SELECT count(*) FROM tc_conc;
+ count 
+-------
+ 20    
+(1 row)
+15: SELECT count(*) FROM tc_conc;
+ count 
+-------
+ 10    
+(1 row)
+15: COMMIT;
+COMMIT
+16: COMMIT;
+COMMIT
+15q: ... <quitting>
+16q: ... <quitting>
+DROP TABLE tc_oids;
+DROP TABLE
+
+-- A utility-mode session on a segment keeps its temporary objects on disk:
+-- OIDs from the reserved range could be the ones that the coordinator gives
+-- the temporary objects of its sessions there.
+0U: SET gp_enable_temp_memory_catalog = on;
+SET
+0U: CREATE TEMP TABLE tc_utility (a int);
+CREATE TABLE
+0U: SELECT 'tc_utility'::regclass::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ f        
+(1 row)
+0Uq: ... <quitting>
+-- A utility-mode session on the coordinator keeps them in memory, but
+-- cannot PREPARE a transaction that changed them (which utility mode allows
+-- through the extended query protocol, or as here with the fault): the
+-- changes would be lost with the session.
+SELECT gp_inject_fault_infinite('enable_prepare_transaction', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+-1U: SET gp_enable_temp_memory_catalog = on;
+SET
+-1U: CREATE TEMP TABLE tc_utility (a int);
+CREATE TABLE
+-1U: SELECT 'tc_utility'::regclass::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ t        
+(1 row)
+-1U: BEGIN;
+BEGIN
+-1U: ALTER TABLE tc_utility ADD COLUMN b int;
+ALTER TABLE
+-1U: PREPARE TRANSACTION 'tc_utility_prep';
+ERROR:  cannot PREPARE a transaction that has operated on temporary objects kept in memory
+-1U: SELECT attname FROM pg_attribute WHERE attrelid = 'tc_utility'::regclass AND attnum > 0;
+ attname 
+---------
+ a       
+(1 row)
+-1U: SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'tc_utility_prep';
+ count 
+-------
+ 0     
+(1 row)
+-1Uq: ... <quitting>
+SELECT gp_inject_fault('enable_prepare_transaction', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+
+-- Reader gangs that are destroyed when idle and created again later attach
+-- to the writer's rows again, and see later changes.
+17: SET gp_enable_temp_memory_catalog = on;
+SET
+17: SET gp_vmem_idle_resource_timeout = 500;
+SET
+17: CREATE TEMP TABLE tc_idle (a int, b int) DISTRIBUTED BY (a);
+CREATE TABLE
+17: INSERT INTO tc_idle SELECT i, i FROM generate_series(1, 100) i;
+INSERT 0 100
+17: SELECT count(*) FROM tc_idle x JOIN tc_idle y ON x.b = y.a + 1;
+ count 
+-------
+ 99    
+(1 row)
+!\retcode sleep 2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+17: ALTER TABLE tc_idle ADD COLUMN c int DEFAULT 7;
+ALTER TABLE
+!\retcode sleep 2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+17: SELECT sum(x.c) FROM tc_idle x JOIN tc_idle y ON x.b = y.a + 1;
+ sum 
+-----
+ 693 
+(1 row)
+17q: ... <quitting>
+
 -- A writer QE waits for the writer QE of the session that held the slice
 -- before, which may still be on its way out: here, on segment 0, a fault
 -- holds it there, and another makes the next session take the same slice.
