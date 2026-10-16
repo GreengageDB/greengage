@@ -354,6 +354,45 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
 20q:
 4: CALL tc_wait_gone();
 
+-- A writer QE whose prepared transaction swept the leftovers of its slice
+-- and started to use it is rolled back (here as PREPARE fails on segment 1):
+-- the leftovers come back, and the QE lets go of the slice, so that other
+-- sessions take them for leftovers again rather than for objects of a live
+-- session.
+CREATE TYPE tc_lo_comp AS (x int);
+22: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+22: SET gp_enable_temp_memory_catalog = on;
+22: CREATE TEMP TABLE tc_lo (c tc_lo_comp) DISTRIBUTED RANDOMLY;
+22: SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid)
+      FROM gp_segment_configuration WHERE role = 'p';
+22q:
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p';
+4: CALL tc_wait_gone();
+SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend')
+ WHERE refobjid = 'tc_lo_comp'::regtype AND objid >= 4026531840;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('start_prepare', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+23: SET gp_enable_temp_memory_catalog = on;
+23: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('start_prepare', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend')
+ WHERE refobjid = 'tc_lo_comp'::regtype AND objid >= 4026531840;
+4: DROP TYPE tc_lo_comp;
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
+ WHERE refobjid >= 4026531840 OR objid >= 4026531840;
+23: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+23: INSERT INTO tc_t SELECT generate_series(1, 10);
+23: SELECT count(*), 'tc_t'::regclass::oid >= 4026531840 AS reserved FROM tc_t;
+23q:
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:

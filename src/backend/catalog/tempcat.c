@@ -466,6 +466,8 @@ static bool tempcat_slice_crowded(int slice);
 static void tempcat_let_go_of_slice(void);
 static void tempcat_abandon_slice(void);
 static bool tc_slice_used = false;	/* see tempcat_abandon_slice() */
+static TransactionId tc_slice_prepared_xid = InvalidTransactionId;
+static TransactionId tc_prepare_xid = InvalidTransactionId;
 
 /* OIDs assigned by this session to its temporary objects, see below */
 static HTAB *tc_owned = NULL;
@@ -3134,12 +3136,24 @@ tempcat_abort_subtransaction(void)
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
 {
-	/* Whether anything with the OIDs of our slice may have been kept */
+	if (event == XACT_EVENT_PRE_PREPARE)
+		tc_prepare_xid = GetTopTransactionIdIfAny();
+
+	/*
+	 * Whether anything with the OIDs of our slice may have been kept.  A
+	 * prepared transaction may still roll back: see tempcat_finish_prepared().
+	 */
+	if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_PARALLEL_COMMIT)
+		tc_slice_prepared_xid = InvalidTransactionId;
 	if (tc_slice >= 0 && !tc_slice_used)
 	{
-		if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_PARALLEL_COMMIT ||
-			event == XACT_EVENT_PREPARE)
+		if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_PARALLEL_COMMIT)
 			tc_slice_used = true;
+		else if (event == XACT_EVENT_PREPARE)
+		{
+			tc_slice_used = true;
+			tc_slice_prepared_xid = tc_prepare_xid;
+		}
 		else if (event == XACT_EVENT_ABORT || event == XACT_EVENT_PARALLEL_ABORT)
 		{
 			tempcat_abandon_slice();
@@ -4405,10 +4419,38 @@ tempcat_disk_drop_xact_callback(XactEvent event, void *arg)
 	}
 }
 
-/* The prepared transaction 'xid' is committed or rolled back. */
+/*
+ * The prepared transaction 'xid' is committed or rolled back, by this
+ * process (on a QE, the writer that prepared it), or by another one.  Apply
+ * the outcome to what this process noted for it at PREPARE: the sweep of
+ * the slice (see tempcat_slice_swept(), which finds it out later
+ * otherwise), the start of the use of the slice (see tempcat_abandon_slice()),
+ * and the statistics of ordinary objects it dropped.
+ */
 void
 tempcat_finish_prepared(TransactionId xid, bool isCommit)
 {
+	if (!TransactionIdIsValid(xid))
+		return;
+
+	if (tc_sweep_state == TCS_PREPARED && TransactionIdEquals(xid, tc_sweep_xid))
+	{
+		if (isCommit)
+			tc_sweep_state = TCS_DONE;
+		else
+			tempcat_sweep_rolled_back();
+	}
+
+	if (TransactionIdEquals(xid, tc_slice_prepared_xid))
+	{
+		tc_slice_prepared_xid = InvalidTransactionId;
+		if (!isCommit && tc_slice >= 0)
+		{
+			tc_slice_used = false;
+			tempcat_abandon_slice();
+		}
+	}
+
 	if (tc_nprepared_drops == 0 || !TransactionIdEquals(xid, tc_prepared_drops_xid))
 		return;
 	if (isCommit)
