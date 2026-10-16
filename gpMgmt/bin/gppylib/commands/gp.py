@@ -12,8 +12,13 @@ import sys
 from builtins import range
 from builtins import object
 import os, pickle, base64, time
+
+try:
+    from shlex import quote
+except ImportError:
+    from pipes import quote
+
 import os.path
-import pipes
 try:
     import subprocess32 as subprocess
 except:
@@ -910,7 +915,7 @@ class ConfigureNewSegment(Command):
                  batchSize=None, verbose=False,ctxt=LOCAL, remoteHost=None, validationOnly=False, writeGpIdFileOnly=False,
                  forceoverwrite=False):
 
-        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\" -l %s' % (confinfo, pipes.quote(logdir))
+        cmdStr = '$GPHOME/bin/lib/gpconfigurenewsegment -c \"%s\" -l %s' % (confinfo, quote(logdir))
 
         if newSegments:
             cmdStr += ' -n'
@@ -1012,7 +1017,7 @@ class GpSegRecovery(Command):
 
 
 def _get_cmd_for_recovery_wrapper(wrapper_filename, confinfo, logdir, batchSize, verbose, forceoverwrite, era=None):
-    cmdStr = '$GPHOME/sbin/{}.py -c {} -l {}'.format(wrapper_filename, pipes.quote(confinfo), pipes.quote(logdir))
+    cmdStr = '$GPHOME/sbin/{}.py -c {} -l {}'.format(wrapper_filename, quote(confinfo), quote(logdir))
 
     if verbose:
         cmdStr += ' -v'
