@@ -377,7 +377,7 @@ DROP TABLE
 14: INSERT INTO tc_perm SELECT generate_series(1, 10);
 INSERT 0 10
 14: COMMIT;
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=314536)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=327252)
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -585,8 +585,8 @@ SET
 0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
 DO
 18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
-ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=314696)
-HINT:  OID 4251058759 belongs to an object that exists on this node only; gpcheckcat reports such objects.
+ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=327418)
+HINT:  OID 4246842527 belongs to an object that exists on this node only; gpcheckcat reports such objects.
 0U: ROLLBACK;
 ROLLBACK
 0Uq: ... <quitting>
@@ -713,10 +713,10 @@ INSERT 0 1
 20: SET gp_enable_temp_memory_catalog = on;
 SET
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=314759)
+ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=327511)
 LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
                           ^
-DETAIL:  Process 314747 holds OIDs 4251189248 to 4251254783.
+DETAIL:  Process 327499 holds OIDs 4246929408 to 4246994943.
 HINT:  Retry once that session has ended.
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 CREATE TABLE
@@ -804,7 +804,7 @@ SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configura
 23: SET gp_enable_temp_memory_catalog = on;
 SET
 23: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=314808)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=327560)
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -837,6 +837,66 @@ INSERT 0 10
  10    | t        
 (1 row)
 23q: ... <quitting>
+
+-- A session that cannot make its area (here as dynamic shared memory runs
+-- short on the coordinator, and no files are allowed) keeps its temporary
+-- objects on disk, and lets the slice it took go: the next session (made
+-- to try it) takes the slice after the one taken before.
+CREATE TABLE tc_slices (session int, slice bigint) DISTRIBUTED REPLICATED;
+CREATE TABLE
+24: SET gp_enable_temp_memory_catalog = on;
+SET
+24: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+24: INSERT INTO tc_slices SELECT 24, ('tc_t'::regclass::oid::bigint - 4026531840) / 65536;
+INSERT 0 1
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+25: SET gp_enable_temp_memory_catalog = on;
+SET
+25: SET gp_temp_memory_catalog_max_file_size = 0;
+SET
+25: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+25: SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved;
+ reserved 
+----------
+ f        
+(1 row)
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+26: SET gp_enable_temp_memory_catalog = on;
+SET
+26: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+26: INSERT INTO tc_slices SELECT 26, ('tc_t'::regclass::oid::bigint - 4026531840) / 65536;
+INSERT 0 1
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT (max(slice) FILTER (WHERE session = 26) - max(slice) FILTER (WHERE session = 24) + 4096) % 4096 AS slices_apart FROM tc_slices;
+ slices_apart 
+--------------
+ 1            
+(1 row)
+24q: ... <quitting>
+25q: ... <quitting>
+26q: ... <quitting>
+DROP TABLE tc_slices;
+DROP TABLE
 
 4: DROP TABLE tc_sess;
 DROP TABLE

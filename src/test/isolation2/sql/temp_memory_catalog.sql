@@ -393,6 +393,36 @@ SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
 23: SELECT count(*), 'tc_t'::regclass::oid >= 4026531840 AS reserved FROM tc_t;
 23q:
 
+-- A session that cannot make its area (here as dynamic shared memory runs
+-- short on the coordinator, and no files are allowed) keeps its temporary
+-- objects on disk, and lets the slice it took go: the next session (made
+-- to try it) takes the slice after the one taken before.
+CREATE TABLE tc_slices (session int, slice bigint) DISTRIBUTED REPLICATED;
+24: SET gp_enable_temp_memory_catalog = on;
+24: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+24: INSERT INTO tc_slices SELECT 24, ('tc_t'::regclass::oid::bigint - 4026531840) / 65536;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+25: SET gp_enable_temp_memory_catalog = on;
+25: SET gp_temp_memory_catalog_max_file_size = 0;
+25: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+25: SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved;
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+26: SET gp_enable_temp_memory_catalog = on;
+26: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+26: INSERT INTO tc_slices SELECT 26, ('tc_t'::regclass::oid::bigint - 4026531840) / 65536;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT (max(slice) FILTER (WHERE session = 26) - max(slice) FILTER (WHERE session = 24) + 4096) % 4096
+       AS slices_apart FROM tc_slices;
+24q:
+25q:
+26q:
+DROP TABLE tc_slices;
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:

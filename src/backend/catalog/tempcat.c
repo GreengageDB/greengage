@@ -994,6 +994,11 @@ tempcat_claim_free_slice(void)
 
 	if (tc_slice >= 0)
 		return true;
+#ifdef FAULT_INJECTOR
+	/* Test hook: other sessions hold all slices. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_no_free_slice") == FaultInjectorTypeSkip)
+		return false;
+#endif
 	tempcat_register_callbacks();
 #ifdef FAULT_INJECTOR
 	/*
@@ -1808,9 +1813,20 @@ tempcat_can_start(void)
 	if (IsBinaryUpgrade || !IsUnderPostmaster || TempcatShared == NULL)
 		return false;
 
-	/* the memory to keep them in, and a slice of the reserved range */
-	return (tc_area != NULL || tempcat_create_area(true)) &&
-		tempcat_claim_free_slice();
+	/*
+	 * A slice of the reserved range, and the memory to keep them in: the
+	 * slice first, so that no area is made for nothing when there is none,
+	 * and if no area can be made, the slice goes back unused.
+	 */
+	if (!tempcat_claim_free_slice())
+		return false;
+	if (tc_area == NULL && !tempcat_create_area(true))
+	{
+		if (!tc_slice_used)
+			tempcat_let_go_of_slice();
+		return false;
+	}
+	return true;
 }
 
 /*
