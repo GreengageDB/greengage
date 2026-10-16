@@ -460,6 +460,7 @@ static void tempcat_forget_if_gone(int catidx, Oid objoid);
 static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
 static bool tempcat_take_namespace_oid(void);
+static bool tempcat_slice_crowded(int slice);
 
 /*
  * Reader processes (reader gangs, entry-db readers, and parallel retrieve
@@ -945,7 +946,9 @@ tempcat_register_callbacks(void)
  * stopped, so that a slice let go of is taken again only after all others
  * were: the writer QEs of the session that held it may still be dropping
  * their objects on the segments, where a new holder would wait for them
- * (tempcat_claim_slice()).  Returns false if all slices are held.
+ * (tempcat_claim_slice()).  It passes over slices whose OIDs ordinary
+ * objects of its database take too many of (tempcat_slice_crowded()).
+ * Returns false if no slice is left.
  */
 static bool
 tempcat_claim_free_slice(void)
@@ -974,6 +977,11 @@ tempcat_claim_free_slice(void)
 		if (pg_atomic_compare_exchange_u32(&TempcatShared->slices[slice].holder,
 										   &expected, me))
 		{
+			if (tempcat_slice_crowded(slice))
+			{
+				pg_atomic_write_u32(&TempcatShared->slices[slice].holder, 0);
+				continue;
+			}
 			tc_slice = slice;
 			tempcat_my_state()->slice = slice;
 			return true;
@@ -1047,6 +1055,26 @@ static TempcatSweepState tc_sweep_state = TCS_NONE;
 static SubTransactionId tc_sweep_subid = InvalidSubTransactionId;
 static TransactionId tc_sweep_xid = InvalidTransactionId;
 
+/* The OID column and index of the objects of catalog 'classId', if known */
+static bool
+tempcat_object_oid_index(Oid classId, AttrNumber *oidattr, Oid *indexId)
+{
+	/* (not in objectaddress.c's ObjectProperty in this version) */
+	if (classId == AttrDefaultRelationId)
+	{
+		*oidattr = Anum_pg_attrdef_oid;
+		*indexId = AttrDefaultOidIndexId;
+	}
+	else if (is_objectclass_supported(classId))
+	{
+		*oidattr = get_object_attnum_oid(classId);
+		*indexId = get_object_oid_index(classId);
+	}
+	else
+		return false;
+	return true;
+}
+
 /* Is there an object of 'classId' with this OID on disk? */
 static bool
 tempcat_disk_object_exists(Oid classId, Oid objectId)
@@ -1059,18 +1087,7 @@ tempcat_disk_object_exists(Oid classId, Oid objectId)
 	AttrNumber	oidattr;
 	Oid			indexId;
 
-	/* (not in objectaddress.c's ObjectProperty in this version) */
-	if (classId == AttrDefaultRelationId)
-	{
-		oidattr = Anum_pg_attrdef_oid;
-		indexId = AttrDefaultOidIndexId;
-	}
-	else if (is_objectclass_supported(classId))
-	{
-		oidattr = get_object_attnum_oid(classId);
-		indexId = get_object_oid_index(classId);
-	}
-	else
+	if (!tempcat_object_oid_index(classId, &oidattr, &indexId))
 		return false;
 
 	rel = table_open(classId, AccessShareLock);
@@ -1088,6 +1105,61 @@ tempcat_disk_object_exists(Oid classId, Oid objectId)
 	systable_endscan(scan);
 	table_close(rel, AccessShareLock);
 	return found;
+}
+
+/*
+ * Do ordinary objects of this database (created before the range was
+ * reserved, or carried over by pg_upgrade) take so many OIDs of the slice in
+ * one of the catalogs whose objects can be temporary objects in memory that
+ * the session could run out of them?  Then it takes another slice.  The
+ * scans of the OID indexes over the slice usually find nothing.
+ */
+#define TEMPCAT_SLICE_CROWDED	(TEMPCAT_SLICE_SIZE / 2)
+
+static bool
+tempcat_slice_crowded(int slice)
+{
+	Oid			lo = tempcat_slice_base(slice);
+	Oid			hi = tempcat_slice_last(slice);
+	int			limit = TEMPCAT_SLICE_CROWDED;
+	int			i;
+
+#ifdef FAULT_INJECTOR
+	/* Test hook: one ordinary object is too many. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_slice_crowded") == FaultInjectorTypeSkip)
+		limit = 0;
+#endif
+
+	for (i = 0; i < lengthof(tempcat_object_classes); i++)
+	{
+		Oid			classId = tempcat_object_classes[i];
+		AttrNumber	oidattr;
+		Oid			indexId;
+		Relation	rel;
+		ScanKeyData key[2];
+		SysScanDesc scan;
+		HeapTuple	tup;
+		int			n = 0;
+
+		if (!tempcat_object_oid_index(classId, &oidattr, &indexId))
+			continue;
+		rel = table_open(classId, AccessShareLock);
+		ScanKeyInit(&key[0], oidattr, BTGreaterEqualStrategyNumber,
+					F_OIDGE, ObjectIdGetDatum(lo));
+		ScanKeyInit(&key[1], oidattr, BTLessEqualStrategyNumber,
+					F_OIDLE, ObjectIdGetDatum(hi));
+		scan = systable_beginscan(rel, indexId, true, NULL, 2, key);
+		while (n <= limit && HeapTupleIsValid(tup = systable_getnext(scan)))
+		{
+			if (!IsTempcatTid(&tup->t_self))
+				n++;
+		}
+		systable_endscan(scan);
+		table_close(rel, AccessShareLock);
+		if (n > limit)
+			return true;
+	}
+	return false;
 }
 
 /*

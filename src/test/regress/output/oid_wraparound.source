@@ -443,3 +443,98 @@ DROP TYPE oid_sw_type;
 DROP TABLE oid_tc6_next;
 DROP FUNCTION oid_wait_analyze_count(oid, bigint);
 DROP FUNCTION oid_wait_gone(int);
+-- Scenario 7: a session passes over a slice whose OIDs ordinary objects of
+-- its database take too many of (more than half in a catalog; the fault
+-- makes one too many), and takes another one: it could run out of OIDs
+-- there.  (The other fault makes the session try the slice that the
+-- previous one let go of first.)
+CREATE FUNCTION oid_wait_gone(p int) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+	FOR i IN 1..600 LOOP
+		PERFORM pg_stat_clear_snapshot();
+		IF NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = p) THEN
+			RETURN;
+		END IF;
+		PERFORM pg_sleep(0.1);
+	END LOOP;
+	RAISE EXCEPTION 'session did not end';
+END $$;
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE oid_tc7_first (a int) DISTRIBUTED BY (a);
+SELECT ('oid_tc7_first'::regclass::oid::bigint + 1)::oid AS crowd_oid \gset
+SELECT gp_inject_fault_infinite('oid_keep_reserved_range', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+SELECT gp_set_next_oid_master(:crowd_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_crowd (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('oid_keep_reserved_range', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_crowd'::regclass::oid = :crowd_oid AS crowd_in_session_slice;
+ crowd_in_session_slice 
+------------------------
+ t
+(1 row)
+
+SELECT pg_backend_pid() AS old_pid \gset
+\c
+SELECT oid_wait_gone(:old_pid);
+ oid_wait_gone 
+---------------
+ 
+(1 row)
+
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault_infinite('tempcat_slice_crowded', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_next (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_crowded', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'oid_tc7_next'::regclass::oid >= 4026531840 AS reserved,
+       ('oid_tc7_next'::regclass::oid::bigint - 4026531840) / 65536 =
+       (:crowd_oid::bigint - 4026531840) / 65536 AS same_slice;
+ reserved | same_slice 
+----------+------------
+ t        | f
+(1 row)
+
+INSERT INTO oid_tc7_next SELECT generate_series(1, 10);
+SELECT count(*) FROM oid_tc7_next;
+ count 
+-------
+    10
+(1 row)
+
+DROP TABLE oid_tc7_next, oid_crowd;
+DROP FUNCTION oid_wait_gone(int);
