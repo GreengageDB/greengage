@@ -1411,7 +1411,9 @@ tempcat_activate(Oid oid)
 		tempcat_let_go_of_slice();
 		tc_activated = false;
 		tc_sweep_state = TCS_NONE;
+		tc_sweep_xid = InvalidTransactionId;
 		tc_slice_used = false;
+		tc_slice_prepared_xid = InvalidTransactionId;
 	}
 	if (tc_slice >= 0 && tc_slice != slice)
 		ereport(ERROR,
@@ -1513,6 +1515,8 @@ tempcat_abandon_slice(void)
 	tempcat_let_go_of_slice();
 	tc_activated = false;
 	tc_sweep_state = TCS_NONE;
+	tc_sweep_xid = InvalidTransactionId;
+	tc_slice_prepared_xid = InvalidTransactionId;
 	tc_namespace_oid = InvalidOid;
 	if (tc_owned != NULL)
 	{
