@@ -447,6 +447,29 @@ dsm_set_control_handle(dsm_handle h)
 #endif
 
 /*
+ * GPDB: does a live segment have this handle?  Caller holds
+ * DynamicSharedMemoryControlLock.  (A segment going away, with a reference
+ * count of 1, cannot be attached any more; see dsm_attach().)
+ */
+static bool
+dsm_handle_in_use(dsm_handle handle)
+{
+	uint32		i;
+
+	for (i = 0; i < dsm_control->nitems; i++)
+	{
+		if (dsm_control->item[i].refcnt > 1 &&
+			dsm_control->item[i].handle == handle)
+			return true;
+	}
+	return false;
+}
+
+#ifdef FAULT_INJECTOR
+static dsm_handle last_file_handle = DSM_HANDLE_INVALID;
+#endif
+
+/*
  * Create a new dynamic shared memory segment.
  *
  * If there is a non-NULL CurrentResourceOwner, the new segment is associated
@@ -462,6 +485,9 @@ dsm_create(Size size, int flags)
 	dsm_segment *seg;
 	uint32		i;
 	uint32		nitems;
+#ifdef FAULT_INJECTOR
+	bool		reuse_tried = false;
+#endif
 
 	/* Unsafe in postmaster. */
 	Assert(!IsPostmasterEnvironment || IsUnderPostmaster);
@@ -504,13 +530,35 @@ dsm_create(Size size, int flags)
 			seg->handle |= 1;
 		else
 			seg->handle &= ~(dsm_handle) 1;
+#ifdef FAULT_INJECTOR
+		/* Test hook: first take the handle of the last file of the process. */
+		if ((flags & DSM_CREATE_FILE) != 0 && !reuse_tried &&
+			last_file_handle != DSM_HANDLE_INVALID &&
+			SIMPLE_FAULT_INJECTOR("dsm_file_handle_reuse") == FaultInjectorTypeSkip)
+			seg->handle = last_file_handle;
+		reuse_tried = true;
+#endif
 		if (seg->handle == DSM_HANDLE_INVALID)	/* Reserve sentinel */
 			continue;
 		if (dsm_segment_op(DSM_OP_CREATE, seg->handle, seg->tablespace, size,
 						   &seg->impl_private,
 						   &seg->mapped_address, &seg->mapped_size,
 						   (flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 ? DEBUG1 : ERROR))
-			break;
+		{
+			/*
+			 * GPDB: the file is unique in its directory only, and files of
+			 * other temporary tablespaces may have the same handle.  Take
+			 * another one then.  (The lock is kept to register the segment.)
+			 */
+			LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
+			if ((flags & DSM_CREATE_FILE) == 0 || !dsm_handle_in_use(seg->handle))
+				break;
+			LWLockRelease(DynamicSharedMemoryControlLock);
+			dsm_segment_op(DSM_OP_DESTROY, seg->handle, seg->tablespace, 0,
+						   &seg->impl_private,
+						   &seg->mapped_address, &seg->mapped_size, ERROR);
+			continue;
+		}
 
 		/*
 		 * GPDB: with DSM_CREATE_NULL_IF_NOSPACE, a failure other than a
@@ -543,8 +591,11 @@ dsm_create(Size size, int flags)
 		}
 	}
 
-	/* Lock the control segment so we can register the new segment. */
-	LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
+	/* (The control segment is locked, so we can register the new segment.) */
+#ifdef FAULT_INJECTOR
+	if ((flags & DSM_CREATE_FILE) != 0)
+		last_file_handle = seg->handle;
+#endif
 
 	/* Search the control segment for an unused slot. */
 	nitems = dsm_control->nitems;

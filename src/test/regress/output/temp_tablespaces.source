@@ -679,3 +679,68 @@ DROP TABLESPACE temp_files0;
 DROP TABLESPACE "temp_files1'";
 DROP TABLESPACE "temp_files2""";
 DROP TABLESPACE temp_files3;
+-- Files of the catalog of temporary objects kept in memory go to the
+-- temporary tablespaces in turn, too.  Their names are unique in their
+-- directories only: a file takes another handle than a file of another
+-- tablespace has (the fault makes it try that one first).
+create tablespace tc_files1 location '@testtablespace@_tc_files1';
+create tablespace tc_files2 location '@testtablespace@_tc_files2';
+create procedure tc_wait_sess_gone(s int) language plpgsql as $$
+begin
+  for i in 1..600 loop
+    if not exists (select 1 from pg_stat_activity where sess_id = s) and
+       not exists (select 1 from gp_dist_random('pg_stat_activity') where sess_id = s) then
+      return;
+    end if;
+    commit;
+    perform pg_sleep(0.1);
+  end loop;
+  raise exception 'session did not end';
+end $$;
+\c
+set gp_enable_temp_memory_catalog = on;
+set gp_temp_memory_catalog_max_size = '1MB';
+set gp_temp_memory_catalog_max_file_size = '8MB';
+set temp_tablespaces = tc_files1, tc_files2;
+select gp_inject_fault_infinite('dsm_file_handle_reuse', 'skip', dbid)
+  from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+do $$
+begin
+  for i in 1..200 loop
+    execute format('create temp table tc_many%s (a int primary key, b text) distributed by (a)', i);
+  end loop;
+end $$;
+select gp_inject_fault('dsm_file_handle_reuse', 'reset', dbid)
+  from gp_segment_configuration where role = 'p' and content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+select count(*) >= 2 as files, count(distinct name) = count(*) as distinct_names
+  from (select name from pg_ls_tmpdir((select oid from pg_tablespace where spcname = 'tc_files1'))
+        union all
+        select name from pg_ls_tmpdir((select oid from pg_tablespace where spcname = 'tc_files2'))) f
+ where name like 'pgsql_tmpdsm.%';
+ files | distinct_names 
+-------+----------------
+ t     | t
+(1 row)
+
+select count(*) from pg_class where relname like 'tc_many%';
+ count 
+-------
+   400
+(1 row)
+
+select current_setting('gp_session_id')::int as tc_sess \gset
+\c
+call tc_wait_sess_gone(:tc_sess);
+drop procedure tc_wait_sess_gone(int);
+drop tablespace tc_files1;
+drop tablespace tc_files2;
