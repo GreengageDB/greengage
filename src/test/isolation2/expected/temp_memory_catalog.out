@@ -1032,6 +1032,93 @@ VACUUM
 DROP DATABASE tc_frozen;
 DROP DATABASE
 
+-- The sweep of a slice waits for a session deleting a leftover row of it
+-- (here DROP of what the row refers to, which rolls back) rather than
+-- leaving the row behind, where other sessions take it for one of a live
+-- session's object.
+CREATE TYPE tc_sw_comp AS (x int);
+CREATE TYPE
+33: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+33: SET gp_enable_temp_memory_catalog = on;
+SET
+33: CREATE TEMP TABLE tc_sw (c tc_sw_comp) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+33q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('skip_temp_relations_cleanup', 1, dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+ Success:                      
+ Success:                      
+ Success:                      
+(4 rows)
+SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p';
+ gp_inject_fault 
+-----------------
+ Success:        
+ Success:        
+ Success:        
+ Success:        
+(4 rows)
+4: CALL tc_wait_gone();
+CALL
+SELECT gp_inject_fault('tempcat_forget_leftover', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+35: BEGIN;
+BEGIN
+35&: DROP TYPE tc_sw_comp;  <waiting ...>
+SELECT gp_wait_until_triggered_fault('tempcat_forget_leftover', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+36: SET gp_enable_temp_memory_catalog = on;
+SET
+36&: CREATE TEMP TABLE tc_sw2 (a int) DISTRIBUTED BY (a);  <waiting ...>
+SELECT gp_inject_fault('tempcat_forget_leftover', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+35<:  <... completed>
+DROP TYPE
+35: ROLLBACK;
+ROLLBACK
+36<:  <... completed>
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+37: DROP TYPE tc_sw_comp;
+DROP TYPE
+SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840 AND deptype = 'n';
+ leftovers 
+-----------
+ 0         
+(1 row)
+35q: ... <quitting>
+36q: ... <quitting>
+37q: ... <quitting>
+
 4: DROP TABLE tc_sess;
 DROP TABLE
 4: DROP PROCEDURE tc_wait_gone();

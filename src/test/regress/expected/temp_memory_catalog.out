@@ -2075,6 +2075,51 @@ SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
 (1 row)
 
 DROP FUNCTION tc_seg_dsm_files();
+-- A leftover row that the sweep of the slice could not see (here added by
+-- hand) goes when the session gives its OID to an object of its own:
+-- otherwise the object would depend on the type, and go with it.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TYPE tc_lo_type AS (x int);
+CREATE TEMP TABLE tc_lo_first (a int) DISTRIBUTED BY (a);
+SELECT (4026531840 + ('tc_lo_first'::regclass::oid::bigint - 4026531840) / 65536 * 65536 + 65536 - 3)::oid AS lo_oid \gset
+SET allow_system_table_mods = on;
+INSERT INTO pg_depend VALUES ('pg_class'::regclass, :lo_oid, 0, 'pg_type'::regclass, 'tc_lo_type'::regtype, 0, 'n');
+RESET allow_system_table_mods;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_lo_next (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT 'tc_lo_next'::regclass::oid = :lo_oid AS same_oid;
+ same_oid 
+----------
+ t
+(1 row)
+
+SELECT count(*) FROM pg_depend WHERE objid = :lo_oid AND refobjid = 'tc_lo_type'::regtype;
+ count 
+-------
+     0
+(1 row)
+
+DROP TYPE tc_lo_type;
+SELECT count(*) FROM tc_lo_next;
+ count 
+-------
+     0
+(1 row)
+
 -- A reader that fails as it checks, at idle, whether a table it counted
 -- was dropped (the fault, with the area's lock held) logs it, and lets go
 -- of the lock: the writer goes on.  (A reader sends the counts of a query

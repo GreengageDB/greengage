@@ -1257,8 +1257,10 @@ tempcat_slice_crowded(int slice)
 }
 
 /*
- * Delete an on-disk leftover row, unless somebody else is deleting or
- * changing it (that one may be a leftover sweep too).
+ * Delete an on-disk leftover row.  If somebody else is deleting it (e.g.
+ * DROP of what it depends on), wait: if that one rolls back, the row is
+ * back, and would outlive the sweep of the slice.  Returns false if it is
+ * gone already.
  */
 static bool
 tempcat_delete_leftover(Relation rel, ItemPointer tid)
@@ -1266,7 +1268,95 @@ tempcat_delete_leftover(Relation rel, ItemPointer tid)
 	TM_FailureData tmfd;
 
 	return heap_delete(rel, tid, GetCurrentCommandId(true), InvalidSnapshot,
-					   false, &tmfd, false) == TM_Ok;
+					   true, &tmfd, false) == TM_Ok;
+}
+
+/*
+ * Our new object takes 'oid' of our slice.  On-disk pg_depend and
+ * pg_shdepend rows of an object of 'classId' with that OID are leftovers of
+ * an earlier holder of the slice, which its sweep could not see (e.g. those
+ * of a prepared transaction committed after it): they would attach to our
+ * object, which other objects would then drop or alter along with what the
+ * rows refer to.  Remove them, after waiting for transactions in progress
+ * that insert or delete them.
+ */
+static void
+tempcat_clear_leftovers_of(Oid classId, Oid oid)
+{
+	Relation	rels[2];
+	bool		deleted = false;
+	int			r;
+
+	for (r = 0; r < lengthof(tempcat_object_classes); r++)
+	{
+		if (tempcat_object_classes[r] == classId)
+			break;
+	}
+	if (r == lengthof(tempcat_object_classes))
+		return;
+
+	rels[0] = table_open(DependRelationId, RowExclusiveLock);
+	rels[1] = table_open(SharedDependRelationId, RowExclusiveLock);
+	for (r = 0; r < 2; r++)
+	{
+		for (;;)
+		{
+			SnapshotData snapshot;
+			ScanKeyData key[3];
+			SysScanDesc scan;
+			HeapTuple	tup;
+			TransactionId wait = InvalidTransactionId;
+
+			InitDirtySnapshot(snapshot);
+			if (r == 0)
+			{
+				ScanKeyInit(&key[0], Anum_pg_depend_classid,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(classId));
+				ScanKeyInit(&key[1], Anum_pg_depend_objid,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(oid));
+				scan = systable_beginscan(rels[r], DependDependerIndexId, true,
+										  &snapshot, 2, key);
+			}
+			else
+			{
+				ScanKeyInit(&key[0], Anum_pg_shdepend_dbid,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(MyDatabaseId));
+				ScanKeyInit(&key[1], Anum_pg_shdepend_classid,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(classId));
+				ScanKeyInit(&key[2], Anum_pg_shdepend_objid,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(oid));
+				scan = systable_beginscan(rels[r], SharedDependDependerIndexId,
+										  true, &snapshot, 3, key);
+			}
+			while (HeapTupleIsValid(tup = systable_getnext(scan)))
+			{
+				if (IsTempcatTid(&tup->t_self) ||
+					TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(tup->t_data)))
+					continue;
+				if (TransactionIdIsValid(snapshot.xmin))
+					wait = snapshot.xmin;
+				else if (TransactionIdIsValid(snapshot.xmax))
+					wait = snapshot.xmax;
+				if (TransactionIdIsValid(wait))
+					break;
+				if (tempcat_delete_leftover(rels[r], &tup->t_self))
+					deleted = true;
+			}
+			systable_endscan(scan);
+			if (!TransactionIdIsValid(wait))
+				break;
+			XactLockTableWait(wait, NULL, NULL, XLTW_None);
+		}
+	}
+	table_close(rels[1], RowExclusiveLock);
+	table_close(rels[0], RowExclusiveLock);
+	if (deleted)
+		CommandCounterIncrement();
 }
 
 /*
@@ -2035,6 +2125,7 @@ tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 			 */
 			if (RelationGetRelid(relation) != EnumRelationId)
 				tempcat_remember_oid(RelationGetRelid(relation), oid);
+			tempcat_clear_leftovers_of(RelationGetRelid(relation), oid);
 			return oid;
 		}
 
@@ -2175,6 +2266,7 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 		tempcat_activate(oid);
 		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 		tempcat_remember_oid(catalog, oid);
+		tempcat_clear_leftovers_of(catalog, oid);
 	}
 }
 
@@ -4832,6 +4924,10 @@ tempcat_forget_leftover(Relation rel, HeapTuple tup)
 		   RelationGetRelid(rel) == SharedDependRelationId);
 	if (!IsTempcatTid(&tup->t_self))
 		(void) tempcat_delete_leftover(rel, &tup->t_self);
+#ifdef FAULT_INJECTOR
+	/* Test hook: stop with the row deleted (with 'suspend'). */
+	SIMPLE_FAULT_INJECTOR("tempcat_forget_leftover");
+#endif
 }
 
 /*
