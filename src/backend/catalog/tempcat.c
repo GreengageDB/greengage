@@ -461,6 +461,18 @@ static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
 static bool tempcat_take_namespace_oid(void);
 static bool tempcat_slice_crowded(int slice);
+static void tempcat_let_go_of_slice(void);
+static void tempcat_abandon_slice(void);
+static bool tc_slice_used = false;	/* see tempcat_abandon_slice() */
+
+/* OIDs assigned by this session to its temporary objects, see below */
+static HTAB *tc_owned = NULL;
+
+/*
+ * The OID of the session's temporary namespace, taken before it decided to
+ * keep it in memory (see tempcat_want_temp_oid()).
+ */
+static Oid	tc_namespace_oid = InvalidOid;
 
 /*
  * Reader processes (reader gangs, entry-db readers, and parallel retrieve
@@ -631,7 +643,20 @@ TempcatShmemInit(void)
 	/* A dynamic tranche, so that the builtin tranche IDs stay unchanged. */
 	TempcatShared->tranche_id = LWLockNewTrancheId();
 	SpinLockInit(&TempcatShared->mutex);
-	pg_atomic_init_u32(&TempcatShared->next_slice, 0);
+	/*
+	 * Start the search for free slices at a random point, not where the
+	 * coordinator before a restart or a failover started: writer QEs of its
+	 * sessions may still hold their slices on the segments for a while (until
+	 * they notice that their coordinator is gone), where new holders would
+	 * wait for them (tempcat_claim_slice()).
+	 */
+	{
+		uint32		start;
+
+		if (!pg_strong_random(&start, sizeof(start)))
+			start = (uint32) (GetCurrentTimestamp() ^ MyProcPid);
+		pg_atomic_init_u32(&TempcatShared->next_slice, start % TEMPCAT_NSLICES);
+	}
 	for (i = 0; i < TEMPCAT_NSLICES; i++)
 	{
 		TempcatSliceState *ss = &TempcatShared->slices[i];
@@ -1015,6 +1040,10 @@ tempcat_claim_slice(int slice)
 		/* Test hook: report the wait for the earlier holder. */
 		if (waited == 0)
 			SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_wait");
+		/* Test hook: give up at once. */
+		if (waited == 0 &&
+			SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_timeout") == FaultInjectorTypeSkip)
+			waited = TEMPCAT_CLAIM_TIMEOUT_MS;
 #endif
 		if (waited >= TEMPCAT_CLAIM_TIMEOUT_MS)
 			ereport(ERROR,
@@ -1305,6 +1334,20 @@ tempcat_activate(Oid oid)
 {
 	int			slice = tempcat_slice_of(oid);
 
+	/*
+	 * A writer QE whose prepared transaction that started to use its slice
+	 * was rolled back keeps the slice, but the coordinator took another one
+	 * (tempcat_abandon_slice()): follow it if nothing is left in the old one.
+	 */
+	if (tc_slice >= 0 && tc_slice != slice && Gp_role == GP_ROLE_EXECUTE &&
+		tc_npending == 0 &&
+		(tc_owned == NULL || hash_get_num_entries(tc_owned) == 0))
+	{
+		tempcat_let_go_of_slice();
+		tc_activated = false;
+		tc_sweep_state = TCS_NONE;
+		tc_slice_used = false;
+	}
 	if (tc_slice >= 0 && tc_slice != slice)
 		ereport(ERROR,
 				(errcode(ERRCODE_INTERNAL_ERROR),
@@ -1358,17 +1401,50 @@ tempcat_proc_exit(int code, Datum arg)
 
 	if (tc_slice >= 0)
 	{
-		TempcatSliceState *ss = &TempcatShared->slices[tc_slice];
-
 #ifdef FAULT_INJECTOR
 		/* Test hook: hold on to the slice on the way out (with 'suspend'). */
 		SIMPLE_FAULT_INJECTOR("tempcat_release_slice");
 #endif
-		ss->databaseId = InvalidOid;
-		pg_write_barrier();
-		pg_atomic_write_u32(&ss->holder, 0);
-		st->slice = -1;
-		tc_slice = -1;
+		tempcat_let_go_of_slice();
+	}
+}
+
+/* Let go of our slice. */
+static void
+tempcat_let_go_of_slice(void)
+{
+	TempcatSliceState *ss = &TempcatShared->slices[tc_slice];
+
+	ss->databaseId = InvalidOid;
+	pg_write_barrier();
+	pg_atomic_write_u32(&ss->holder, 0);
+	tempcat_my_state()->slice = -1;
+	tc_slice = -1;
+}
+
+/*
+ * The transaction that started to use our slice rolled back, and nothing
+ * with its OIDs was committed: let go of it, so that the next attempt takes
+ * another one.  Otherwise a slice that a segment refused (its earlier
+ * holder's writer QE lingers there, see tempcat_claim_slice()) would fail
+ * every attempt of the session.  Writer QEs do the same, and those whose
+ * transaction was prepared before the rollback take the next slice in
+ * tempcat_activate().
+ */
+static void
+tempcat_abandon_slice(void)
+{
+	TempcatProcState *st = tempcat_my_state();
+
+	tempcat_let_go_of_slice();
+	tc_activated = false;
+	tc_sweep_state = TCS_NONE;
+	tc_namespace_oid = InvalidOid;
+	st->databaseId = InvalidOid;
+	if (tc_owned != NULL)
+	{
+		hash_destroy(tc_owned);
+		tc_owned = NULL;
 	}
 }
 
@@ -1383,8 +1459,6 @@ typedef struct TempcatOwnedKey
 	Oid			catalog;
 	Oid			oid;
 } TempcatOwnedKey;
-
-static HTAB *tc_owned = NULL;
 
 static void
 tempcat_remember_oid(Oid catalog, Oid oid)
@@ -1885,11 +1959,6 @@ tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	return InvalidOid;
 }
 
-/*
- * The OID of the session's temporary namespace, taken before it decided to
- * keep it in memory (see tempcat_want_temp_oid()).
- */
-static Oid	tc_namespace_oid = InvalidOid;
 
 Oid
 tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
@@ -3048,6 +3117,19 @@ tempcat_abort_subtransaction(void)
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
 {
+	/* Whether anything with the OIDs of our slice may have been kept */
+	if (tc_slice >= 0 && !tc_slice_used)
+	{
+		if (event == XACT_EVENT_COMMIT || event == XACT_EVENT_PARALLEL_COMMIT ||
+			event == XACT_EVENT_PREPARE)
+			tc_slice_used = true;
+		else if (event == XACT_EVENT_ABORT || event == XACT_EVENT_PARALLEL_ABORT)
+		{
+			tempcat_abandon_slice();
+			return;
+		}
+	}
+
 	if (tc_sweep_state != TCS_IN_XACT)
 		return;
 	switch (event)

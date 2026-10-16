@@ -377,7 +377,7 @@ DROP TABLE
 14: INSERT INTO tc_perm SELECT generate_series(1, 10);
 INSERT 0 10
 14: COMMIT;
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=109793)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=196559)
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -585,8 +585,8 @@ SET
 0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
 DO
 18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
-ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=109925)
-HINT:  OID 4027372776 belongs to an object that exists on this node only; gpcheckcat reports such objects.
+ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=196705)
+HINT:  OID 4058514120 belongs to an object that exists on this node only; gpcheckcat reports such objects.
 0U: ROLLBACK;
 ROLLBACK
 0Uq: ... <quitting>
@@ -672,6 +672,77 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segme
  Success:        
 (1 row)
 13q: ... <quitting>
+4: CALL tc_wait_gone();
+CALL
+
+-- A slice that a segment refuses, as its earlier holder's writer QE
+-- lingers there (here a fault holds it on segment 0, and another makes the
+-- wait give up at once), is let go of when the transaction that started to
+-- use it rolls back, with nothing kept: the next attempt takes another one.
+19: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+19: SET gp_enable_temp_memory_catalog = on;
+SET
+19: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+SELECT gp_inject_fault('tempcat_release_slice', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+19q: ... <quitting>
+SELECT gp_wait_until_triggered_fault('tempcat_release_slice', 1, dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_wait_until_triggered_fault 
+-------------------------------
+ Success:                      
+(1 row)
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'session did not end on the coordinator'; END $$;
+DO
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_claim_slice_timeout', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+20: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+20: SET gp_enable_temp_memory_catalog = on;
+SET
+20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=196773)
+LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+                          ^
+DETAIL:  Process 196756 holds OIDs 4058644480 to 4058710015.
+HINT:  Retry once that session has ended.
+20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+20: INSERT INTO tc_t SELECT generate_series(1, 10);
+INSERT 0 10
+20: SELECT count(*), 'tc_t'::regclass::oid >= 4026531840 AS reserved FROM tc_t;
+ count | reserved 
+-------+----------
+ 10    | t        
+(1 row)
+SELECT gp_inject_fault('tempcat_release_slice', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_claim_slice_timeout', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:        
+(1 row)
+20q: ... <quitting>
 4: CALL tc_wait_gone();
 CALL
 

@@ -322,6 +322,38 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
 13q:
 4: CALL tc_wait_gone();
 
+-- A slice that a segment refuses, as its earlier holder's writer QE
+-- lingers there (here a fault holds it on segment 0, and another makes the
+-- wait give up at once), is let go of when the transaction that started to
+-- use it rolls back, with nothing kept: the next attempt takes another one.
+19: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+19: SET gp_enable_temp_memory_catalog = on;
+19: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_release_slice', 'suspend', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+19q:
+SELECT gp_wait_until_triggered_fault('tempcat_release_slice', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'session did not end on the coordinator'; END $$;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_claim_slice_timeout', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+20: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+20: SET gp_enable_temp_memory_catalog = on;
+20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+20: INSERT INTO tc_t SELECT generate_series(1, 10);
+20: SELECT count(*), 'tc_t'::regclass::oid >= 4026531840 AS reserved FROM tc_t;
+SELECT gp_inject_fault('tempcat_release_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT gp_inject_fault('tempcat_claim_slice_timeout', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+20q:
+4: CALL tc_wait_gone();
+
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();
 4q:
