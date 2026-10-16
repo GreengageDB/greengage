@@ -3228,9 +3228,9 @@ tempcat_start_transaction(void)
 }
 
 /*
- * The session goes idle, out of any transaction: apply the outcome of its
- * finished transactions to the pending rows now, rather than at the start
- * of its next transaction, let the published horizon rise (see
+ * The session goes idle, out of any transaction or in one that rolled back
+ * already: apply the outcome of its finished transactions to the pending
+ * rows now, rather than at the start of its next transaction, let the published horizon rise (see
  * tempcat_add_pending()), and republish the roles its rows refer to.  The
  * next transaction may be long in coming, especially for a writer QE.
  *

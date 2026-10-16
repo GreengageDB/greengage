@@ -490,12 +490,15 @@ SELECT gp_inject_fault('tempcat_session_ending', 'reset', dbid)
 39q:
 
 -- A transaction that started to use the slice rolls back: the session lets
--- go of the slice, but its rows are freed only when it goes idle or starts
--- its next transaction (here it is idle in the aborted one).  Until then
--- their xids keep datfrozenxid, and so clog truncation, from passing them.
+-- go of the slice, but its rows are freed only when it goes idle, also in
+-- the aborted transaction, or starts its next one (here freeing them at
+-- idle fails, as the fault makes it).  Until then their xids keep
+-- datfrozenxid, and so clog truncation, from passing them.
 CREATE DATABASE tc_frozen;
 30:@db_name tc_frozen: VACUUM FREEZE;
 29:@db_name tc_frozen: SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_resolve_pending', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 29: BEGIN;
 29: CREATE TEMP TABLE tc_f (a int) DISTRIBUTED BY (a);
 29: SELECT 1/0;
@@ -503,9 +506,19 @@ CREATE DATABASE tc_frozen;
 30: DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN COMMENT ON TABLE tc_f_burn IS 'x'; EXCEPTION WHEN others THEN NULL; END; END LOOP; END $$;
 30: VACUUM FREEZE;
 30: SELECT age(datfrozenxid) >= 100 AS held FROM pg_database WHERE datname = 'tc_frozen';
+SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 29: ROLLBACK;
 30: VACUUM FREEZE;
 30: SELECT age(datfrozenxid) < 100 AS held_no_more FROM pg_database WHERE datname = 'tc_frozen';
+-- Without the fault, idle in the aborted transaction frees them already.
+29: BEGIN;
+29: CREATE TEMP TABLE tc_f (a int) DISTRIBUTED BY (a);
+29: SELECT 1/0;
+30: DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN COMMENT ON TABLE tc_f_burn IS 'x'; EXCEPTION WHEN others THEN NULL; END; END LOOP; END $$;
+30: VACUUM FREEZE;
+30: SELECT age(datfrozenxid) < 100 AS not_held FROM pg_database WHERE datname = 'tc_frozen';
+29: ROLLBACK;
 29q:
 30q:
 DROP DATABASE tc_frozen;
