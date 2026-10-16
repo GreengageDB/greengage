@@ -33,7 +33,8 @@ operating systems:
   - Behave tests
   - Regression tests
   - Orca tests
-  - Resource group tests
+  - Resource group tests (cgroup v1)
+  - Resource group v2 tests (cgroup v2, version 7.x only)
   - JIT tests (version 7.x only)
   - pg_upgrade test (Ubuntu 22.04 only, no matrix)
 - **Upload**: Retags and pushes final Docker images to GHCR and optionally
@@ -268,6 +269,8 @@ of the `greengagedb/greengage-ci` repository:
   [README/REUSABLE-TESTS-REGRESSION.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-REGRESSION.md)
 - Resource group tests:
   [README/REUSABLE-TESTS-RESGROUP.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP.md)
+- Resource group v2 tests:
+  [README/REUSABLE-TESTS-RESGROUP-V2.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-RESGROUP-V2.md)
 - pg_upgrade test:
   [README/REUSABLE-TESTS-PG_UPGRADE.md](https://github.com/greengagedb/greengage-ci/blob/main/README/REUSABLE-TESTS-PG_UPGRADE.md)
 - Upload process:
