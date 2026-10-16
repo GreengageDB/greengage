@@ -46,7 +46,8 @@
 #include "utils/resowner_private.h"
 #include "utils/workfile_mgr.h"
 
-#define PG_DYNSHMEM_CONTROL_MAGIC		0x9a503d32
+/* GPDB: other than upstream's 0x9a503d32, as items have a tablespace */
+#define PG_DYNSHMEM_CONTROL_MAGIC		0x9a503d33
 
 #define PG_DYNSHMEM_FIXED_SLOTS			64
 #define PG_DYNSHMEM_SLOTS_PER_BACKEND	5
@@ -522,7 +523,11 @@ dsm_create(Size size, int flags)
 	 * or to the database's default one.
 	 */
 	if ((flags & DSM_CREATE_FILE) != 0)
+	{
 		seg->tablespace = GetNextTempTableSpace();
+		if (!OidIsValid(seg->tablespace))
+			seg->tablespace = MyDatabaseTableSpace;
+	}
 
 	/* Loop until we find an unused segment identifier. */
 	for (;;)
@@ -1196,6 +1201,7 @@ dsm_segment_op(dsm_op op, dsm_handle handle, Oid tablespace,
 static void
 dsm_track_file(dsm_segment *seg)
 {
+#ifdef USE_DSM_MMAP
 	char		path[MAXPGPATH];
 	workfile_set *work_set;
 	File		file;
@@ -1216,6 +1222,10 @@ dsm_track_file(dsm_segment *seg)
 	dsm_work_nfiles++;
 	seg->workfile_in_set = true;
 	UpdateWorkFileSize(file, seg->mapped_size);
+#else
+	/* (dsm_create() ignores DSM_CREATE_FILE) */
+	elog(ERROR, "dynamic shared memory segments in files are not supported");
+#endif
 }
 
 /*

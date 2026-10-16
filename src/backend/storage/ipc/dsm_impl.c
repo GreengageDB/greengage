@@ -937,8 +937,11 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 		 * Note: palloc zbuffer, instead of just using a local char array, to
 		 * ensure it is reasonably well-aligned; this may save a few cycles
 		 * transferring data to the kernel.
+		 *
+		 * GPDB: only if it is used (not after posix_fallocate()), and freed
+		 * after: the caller may be in a long-lived memory context.
 		 */
-		char	   *zbuffer = (char *) palloc0(ZBUFFER_SIZE);
+		char	   *zbuffer = NULL;
 		Size		remaining = request_size;
 		bool		success = true;
 
@@ -988,6 +991,8 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 		 */
 		if (success)
 			errno = 0;
+		if (success && remaining > 0)
+			zbuffer = (char *) palloc0(ZBUFFER_SIZE);
 		while (success && remaining > 0)
 		{
 			Size		goal = remaining;
@@ -1001,6 +1006,8 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 				success = false;
 			pgstat_report_wait_end();
 		}
+		if (zbuffer != NULL)
+			pfree(zbuffer);
 
 		if (!success)
 		{

@@ -61,10 +61,11 @@
  * session attach to it and see the same rows, including uncommitted ones,
  * without any serialization.  The area grows in memory up to
  * gp_temp_memory_catalog_max_size, and beyond that, or when dynamic shared
- * memory runs short, with segments backed by files in pg_dynshmem (see
- * dsa_set_memory_limit()) up to gp_temp_memory_catalog_max_file_size more:
- * the kernel keeps their pages in memory as long as it can spare it.  A
- * session that needs more gets an error.
+ * memory runs short, with segments backed by temporary files (see
+ * DSM_CREATE_FILE and dsa_set_memory_limit()) up to
+ * gp_temp_memory_catalog_max_file_size more: the kernel keeps their pages
+ * in memory as long as it can spare it.  A session that needs more gets an
+ * error.
  *
  * Every row carries xmin/xmax/cmin/cmax and is checked with the usual MVCC
  * rules, so subtransactions, aborts and two-phase commit behave like on-disk
@@ -157,7 +158,6 @@
 #include "storage/procarray.h"
 #include "storage/shmem.h"
 #include "storage/smgr.h"
-#include "storage/spin.h"
 #include "utils/builtins.h"
 #include "utils/dsa.h"
 #include "utils/faultinjector.h"
@@ -605,7 +605,7 @@ typedef struct TempcatProcState
 	/*
 	 * Roles that in-memory pg_shdepend rows of the session refer to (owners
 	 * and grantees of its temporary objects), standing in for the rows
-	 * DROP ROLE cannot see.  Changed under TempcatShared->mutex.
+	 * DROP ROLE cannot see.  Changed under TempcatShared->roles_lock.
 	 */
 	int			nroles;
 	Oid			roles[TEMPCAT_MAX_ROLES];
@@ -614,6 +614,7 @@ typedef struct TempcatProcState
 typedef struct TempcatSliceState
 {
 	pg_atomic_uint32 holder;	/* pgprocno + 1, or 0 */
+	pg_atomic_uint32 claims;	/* times taken; see tempcat_foreign_session_ending() */
 	Oid			databaseId;		/* set once its leftovers there are gone */
 	Oid			nextOid;		/* coordinator: next OID to assign */
 } TempcatSliceState;
@@ -621,7 +622,7 @@ typedef struct TempcatSliceState
 typedef struct TempcatSharedData
 {
 	int			tranche_id;		/* LWLock tranche of the session areas */
-	slock_t		mutex;			/* protects the roles */
+	LWLock		roles_lock;		/* protects the roles */
 	int			nprocs;
 	pg_atomic_uint32 next_slice;	/* coordinator: see tempcat_claim_free_slice() */
 	TempcatSliceState slices[TEMPCAT_NSLICES];
@@ -656,7 +657,7 @@ TempcatShmemInit(void)
 
 	/* A dynamic tranche, so that the builtin tranche IDs stay unchanged. */
 	TempcatShared->tranche_id = LWLockNewTrancheId();
-	SpinLockInit(&TempcatShared->mutex);
+	LWLockInitialize(&TempcatShared->roles_lock, TempcatShared->tranche_id);
 	/*
 	 * Start the search for free slices at a random point, not where the
 	 * coordinator before a restart or a failover started: writer QEs of its
@@ -676,6 +677,7 @@ TempcatShmemInit(void)
 		TempcatSliceState *ss = &TempcatShared->slices[i];
 
 		pg_atomic_init_u32(&ss->holder, 0);
+		pg_atomic_init_u32(&ss->claims, 0);
 		ss->databaseId = InvalidOid;
 		ss->nextOid = InvalidOid;
 	}
@@ -688,6 +690,7 @@ TempcatShmemInit(void)
 		pg_atomic_init_u32(&st->frozenXid, InvalidTransactionId);
 		pg_atomic_init_u32(&st->minMulti, InvalidMultiXactId);
 		st->slice = -1;
+		st->ending = false;
 		st->nroles = 0;
 	}
 }
@@ -1053,6 +1056,8 @@ tempcat_claim_free_slice(void)
 		{
 			bool		crowded;
 
+			pg_atomic_fetch_add_u32(&TempcatShared->slices[slice].claims, 1);
+
 			/*
 			 * Ours already while it is checked: an error there, or the exit
 			 * of the process (tempcat_proc_exit()), lets go of it.
@@ -1098,7 +1103,10 @@ tempcat_claim_slice(int slice)
 		uint32		expected = 0;
 
 		if (pg_atomic_compare_exchange_u32(&ss->holder, &expected, me))
+		{
+			pg_atomic_fetch_add_u32(&ss->claims, 1);
 			break;
+		}
 		if (expected == me)
 			break;
 #ifdef FAULT_INJECTOR
@@ -1561,9 +1569,9 @@ tempcat_proc_exit(int code, Datum arg)
 	pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
 	st->databaseId = InvalidOid;
 
-	SpinLockAcquire(&TempcatShared->mutex);
+	LWLockAcquire(&TempcatShared->roles_lock, LW_EXCLUSIVE);
 	st->nroles = 0;
-	SpinLockRelease(&TempcatShared->mutex);
+	LWLockRelease(&TempcatShared->roles_lock);
 
 	if (tc_slice >= 0)
 	{
@@ -1815,12 +1823,12 @@ tempcat_publish_role(Oid roleid)
 			return true;
 	}
 
-	SpinLockAcquire(&TempcatShared->mutex);
+	LWLockAcquire(&TempcatShared->roles_lock, LW_EXCLUSIVE);
 	if (st->nroles < TEMPCAT_MAX_ROLES)
 		st->roles[st->nroles++] = roleid;
 	else
 		ok = false;
-	SpinLockRelease(&TempcatShared->mutex);
+	LWLockRelease(&TempcatShared->roles_lock);
 
 	/*
 	 * The row may yet fail to be stored (no room, refused, an error): have
@@ -1849,7 +1857,7 @@ tempcat_role_used_elsewhere(Oid roleid)
 	if (TempcatShared == NULL)
 		return false;
 
-	SpinLockAcquire(&TempcatShared->mutex);
+	LWLockAcquire(&TempcatShared->roles_lock, LW_SHARED);
 	for (i = 0; i < TempcatShared->nprocs && !found; i++)
 	{
 		TempcatProcState *st = &TempcatShared->procs[i];
@@ -1865,7 +1873,7 @@ tempcat_role_used_elsewhere(Oid roleid)
 			}
 		}
 	}
-	SpinLockRelease(&TempcatShared->mutex);
+	LWLockRelease(&TempcatShared->roles_lock);
 
 	return found;
 }
@@ -1904,10 +1912,10 @@ tempcat_recompute_roles(void)
 		ep = e->next;
 	}
 
-	SpinLockAcquire(&TempcatShared->mutex);
+	LWLockAcquire(&TempcatShared->roles_lock, LW_EXCLUSIVE);
 	memcpy(st->roles, roles, sizeof(Oid) * nroles);
 	st->nroles = nroles;
-	SpinLockRelease(&TempcatShared->mutex);
+	LWLockRelease(&TempcatShared->roles_lock);
 }
 
 /* ----------------------------------------------------------------
@@ -3260,6 +3268,7 @@ tempcat_idle(void)
 		ErrorData  *edata;
 
 		LWLockReleaseAll();
+		pgstat_report_wait_end();
 		MemoryContextSwitchTo(oldcxt);
 		edata = CopyErrorData();
 		FlushErrorState();
@@ -4617,25 +4626,30 @@ tempcat_session_ending(void)
 /*
  * Is the live session that keeps 'objectId' (TCF_LIVE) ending?  Then its
  * object goes, or turns into a leftover, soon.  Also true if it let go of
- * the slice meanwhile: look again.
+ * the slice meanwhile, or another process took it (maybe one in the same
+ * PGPROC slot, which the holder alone does not tell): look again.
  */
 static bool
 tempcat_foreign_session_ending(Oid objectId)
 {
 	TempcatSliceState *ss;
+	uint32		claims;
 	uint32		holder;
 	bool		ending;
 
 	if (TempcatShared == NULL || !IsTempcatOid(objectId))
 		return false;
 	ss = &TempcatShared->slices[tempcat_slice_of(objectId)];
+	claims = pg_atomic_read_u32(&ss->claims);
+	pg_read_barrier();
 	holder = pg_atomic_read_u32(&ss->holder);
 	if (holder == 0)
 		return true;
 	pg_read_barrier();
 	ending = TempcatShared->procs[holder - 1].ending;
 	pg_read_barrier();
-	return ending || pg_atomic_read_u32(&ss->holder) != holder;
+	return ending || pg_atomic_read_u32(&ss->holder) != holder ||
+		pg_atomic_read_u32(&ss->claims) != claims;
 }
 
 /*
@@ -4945,6 +4959,7 @@ tempcat_stats_object_gone(Oid catalog, Oid oid)
 		ErrorData  *edata;
 
 		LWLockReleaseAll();
+		pgstat_report_wait_end();
 		MemoryContextSwitchTo(oldcxt);
 		edata = CopyErrorData();
 		FlushErrorState();

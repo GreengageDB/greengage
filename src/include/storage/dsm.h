@@ -21,7 +21,8 @@ typedef struct dsm_segment dsm_segment;
 /* GPDB: return NULL if the segment cannot be created, e.g. for lack of space */
 #define DSM_CREATE_NULL_IF_NOSPACE				0x0002
 /*
- * GPDB: back the segment by a file in PG_DYNSHMEM_DIR, whatever
+ * GPDB: back the segment by a temporary file in the next tablespace of
+ * temp_tablespaces, or the database's default one, whatever
  * dynamic_shared_memory_type says: the kernel may write its pages out to
  * disk rather than keep them in memory
  */

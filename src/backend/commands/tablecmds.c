@@ -6743,6 +6743,21 @@ ATRewriteTable(AlteredTableInfo *tab, Oid OIDNewHeap, LOCKMODE lockmode)
 		*/
 		if (tab->partition_constraint && tab->rewrite == 0)
 			scan = table_beginscan_es(oldrel, snapshot, NULL, NULL, NULL, lappend(NIL, tab->partition_constraint));
+		else if (newrel == NULL && IsCatalogRelation(oldrel))
+		{
+			/*
+			 * GPDB: a check of a catalog checks the catalog rows of this
+			 * session's temporary objects kept in memory too (see tempcat.c).
+			 * Not a rewrite, which would write them to disk.
+			 */
+			scan = oldrel->rd_tableam->scan_begin(oldrel, snapshot, 0, NULL,
+												  NULL,
+												  SO_TYPE_SEQSCAN |
+												  SO_ALLOW_STRAT |
+												  SO_ALLOW_SYNC |
+												  SO_ALLOW_PAGEMODE |
+												  SO_TEMPCAT);
+		}
 		else
 			scan = table_beginscan(oldrel, snapshot, 0, NULL);
 
