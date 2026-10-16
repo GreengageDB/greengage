@@ -253,7 +253,7 @@ preprocess_targetlist(PlannerInfo *root)
 		 * This can lead to wrong data distribution. Add a check
 		 * here and raise error for such case.
 		 */
-		if(parse->onConflict->action == ONCONFLICT_UPDATE)
+		if (parse->onConflict->action == ONCONFLICT_UPDATE)
 			sanity_check_on_conflict_update(target_rte->relid,
 				parse->onConflict->onConflictSet,
 				parse->onConflict->onConflictWhere);
