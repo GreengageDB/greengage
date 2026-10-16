@@ -669,6 +669,99 @@ COMMIT;
 SELECT pg_sleep(0.6);
 SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 0) AS analyze_count;
 
+-- Nested subtransactions (after the tests of PR #451): ROLLBACK TO an outer
+-- savepoint discards what every inner level created, at once; repeated
+-- ROLLBACK TO the same savepoint; RELEASE of an inner savepoint merges into
+-- the outer one, which ROLLBACK TO discards too; an exception block inside
+-- a savepoint.
+CREATE FUNCTION tc_exist(VARIADIC names text[]) RETURNS text LANGUAGE sql AS
+$$ SELECT string_agg(n || '=' || (to_regclass(n) IS NOT NULL)::text, ' ' ORDER BY n) FROM unnest(names) n $$;
+BEGIN;
+CREATE TEMP TABLE tcn_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT s1;
+CREATE TEMP TABLE tcn_l1 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s2;
+CREATE TEMP TABLE tcn_l2 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s3;
+CREATE TEMP TABLE tcn_l3 (x int) DISTRIBUTED BY (x);
+ROLLBACK TO s1;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3');
+CREATE TEMP TABLE tcn_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3', 'tcn_after');
+DROP TABLE tcn_base, tcn_after;
+BEGIN;
+CREATE TEMP TABLE tcr_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT sp;
+CREATE TEMP TABLE tcr_a (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_b (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_c (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_final (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcr_base', 'tcr_a', 'tcr_b', 'tcr_c', 'tcr_final');
+DROP TABLE tcr_base, tcr_final;
+BEGIN;
+CREATE TEMP TABLE tcm_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT a;
+CREATE TEMP TABLE tcm_a (x int) DISTRIBUTED BY (x);
+SAVEPOINT b;
+CREATE TEMP TABLE tcm_b (x int) DISTRIBUTED BY (x);
+RELEASE SAVEPOINT b;
+SELECT tc_exist('tcm_a', 'tcm_b');
+ROLLBACK TO a;
+CREATE TEMP TABLE tcm_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcm_base', 'tcm_a', 'tcm_b', 'tcm_after');
+DROP TABLE tcm_base, tcm_after;
+BEGIN;
+CREATE TEMP TABLE tcp_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT outer_sp;
+CREATE TEMP TABLE tcp_s1 (x int) DISTRIBUTED BY (x);
+DO $$ BEGIN CREATE TEMP TABLE tcp_pl (y int) DISTRIBUTED BY (y); RAISE EXCEPTION 'boom'; EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'caught: %', SQLERRM; END $$;
+SELECT tc_exist('tcp_s1', 'tcp_pl');
+ROLLBACK TO outer_sp;
+COMMIT;
+SELECT tc_exist('tcp_base', 'tcp_s1', 'tcp_pl');
+DROP TABLE tcp_base;
+DROP FUNCTION tc_exist(text[]);
+
+-- An index on an append-optimized temporary table: its block directory
+-- rows go to the block directory, not to the catalog in memory.
+CREATE TEMP TABLE tc_ao_idx (a int, b text) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_ao_idx SELECT i, 'v' || i FROM generate_series(1, 10) i;
+CREATE INDEX tc_ao_idx_a ON tc_ao_idx (a);
+SET enable_seqscan = off;
+SELECT count(*) FROM tc_ao_idx WHERE a = 5;
+RESET enable_seqscan;
+ALTER TABLE tc_ao_idx ADD COLUMN c int;
+SELECT count(*), sum(a) FROM tc_ao_idx;
+TRUNCATE tc_ao_idx;
+SELECT count(*) FROM tc_ao_idx;
+DROP TABLE tc_ao_idx;
+
+-- Cursors of one transaction see what the transaction did in between: a
+-- new temporary table, and a changed one.
+CREATE TEMP TABLE tc_cur_src (id int) DISTRIBUTED BY (id);
+INSERT INTO tc_cur_src SELECT generate_series(1, 5);
+BEGIN;
+DECLARE tc_cur1 CURSOR FOR SELECT id FROM tc_cur_src ORDER BY id;
+FETCH 1 FROM tc_cur1;
+CLOSE tc_cur1;
+CREATE TEMP TABLE tc_cur_mid (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_cur_mid VALUES (2), (4);
+DECLARE tc_cur2 CURSOR FOR SELECT s.id, m.a FROM tc_cur_src s JOIN tc_cur_mid m ON s.id = m.a ORDER BY s.id;
+FETCH ALL FROM tc_cur2;
+CLOSE tc_cur2;
+ALTER TABLE tc_cur_src ADD COLUMN b text DEFAULT 'z';
+DECLARE tc_cur3 CURSOR FOR SELECT * FROM tc_cur_src ORDER BY id;
+FETCH ALL FROM tc_cur3;
+CLOSE tc_cur3;
+END;
+DROP TABLE tc_cur_src, tc_cur_mid;
+
 -- Turning the setting off does not affect the session's temporary objects:
 -- they stay in memory, and new ones join them.  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;

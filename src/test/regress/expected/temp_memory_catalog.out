@@ -314,10 +314,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=357635)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=473674)
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=357633)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=473673)
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -1042,7 +1042,7 @@ SELECT * FROM tc_sp1;
 
 -- A failing CREATE TABLE AS leaves nothing behind.
 CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
-ERROR:  division by zero  (seg0 slice1 172.18.0.6:7002 pid=358155)
+ERROR:  division by zero  (seg1 slice1 172.18.0.6:7003 pid=474132)
 SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
  not_created 
 -------------
@@ -1065,7 +1065,7 @@ BEGIN;
 CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_defer VALUES (1);
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=358087)
+ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=474066)
 DETAIL:  Key (i)=(1) already exists.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
  count 
@@ -1414,6 +1414,167 @@ SELECT pg_temp.tc_wait_analyze_count(:tc_stat_oncommit_oid, 0) AS analyze_count;
              0
 (1 row)
 
+-- Nested subtransactions (after the tests of PR #451): ROLLBACK TO an outer
+-- savepoint discards what every inner level created, at once; repeated
+-- ROLLBACK TO the same savepoint; RELEASE of an inner savepoint merges into
+-- the outer one, which ROLLBACK TO discards too; an exception block inside
+-- a savepoint.
+CREATE FUNCTION tc_exist(VARIADIC names text[]) RETURNS text LANGUAGE sql AS
+$$ SELECT string_agg(n || '=' || (to_regclass(n) IS NOT NULL)::text, ' ' ORDER BY n) FROM unnest(names) n $$;
+BEGIN;
+CREATE TEMP TABLE tcn_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT s1;
+CREATE TEMP TABLE tcn_l1 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s2;
+CREATE TEMP TABLE tcn_l2 (x int) DISTRIBUTED BY (x);
+SAVEPOINT s3;
+CREATE TEMP TABLE tcn_l3 (x int) DISTRIBUTED BY (x);
+ROLLBACK TO s1;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3');
+                       tc_exist                       
+------------------------------------------------------
+ tcn_base=true tcn_l1=false tcn_l2=false tcn_l3=false
+(1 row)
+
+CREATE TEMP TABLE tcn_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcn_base', 'tcn_l1', 'tcn_l2', 'tcn_l3', 'tcn_after');
+                              tc_exist                               
+---------------------------------------------------------------------
+ tcn_after=true tcn_base=true tcn_l1=false tcn_l2=false tcn_l3=false
+(1 row)
+
+DROP TABLE tcn_base, tcn_after;
+BEGIN;
+CREATE TEMP TABLE tcr_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT sp;
+CREATE TEMP TABLE tcr_a (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_b (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_c (x int) DISTRIBUTED BY (x);
+ROLLBACK TO sp;
+CREATE TEMP TABLE tcr_final (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcr_base', 'tcr_a', 'tcr_b', 'tcr_c', 'tcr_final');
+                             tc_exist                             
+------------------------------------------------------------------
+ tcr_a=false tcr_b=false tcr_base=true tcr_c=false tcr_final=true
+(1 row)
+
+DROP TABLE tcr_base, tcr_final;
+BEGIN;
+CREATE TEMP TABLE tcm_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT a;
+CREATE TEMP TABLE tcm_a (x int) DISTRIBUTED BY (x);
+SAVEPOINT b;
+CREATE TEMP TABLE tcm_b (x int) DISTRIBUTED BY (x);
+RELEASE SAVEPOINT b;
+SELECT tc_exist('tcm_a', 'tcm_b');
+       tc_exist        
+-----------------------
+ tcm_a=true tcm_b=true
+(1 row)
+
+ROLLBACK TO a;
+CREATE TEMP TABLE tcm_after (x int) DISTRIBUTED BY (x);
+COMMIT;
+SELECT tc_exist('tcm_base', 'tcm_a', 'tcm_b', 'tcm_after');
+                       tc_exist                       
+------------------------------------------------------
+ tcm_a=false tcm_after=true tcm_b=false tcm_base=true
+(1 row)
+
+DROP TABLE tcm_base, tcm_after;
+BEGIN;
+CREATE TEMP TABLE tcp_base (x int) DISTRIBUTED BY (x);
+SAVEPOINT outer_sp;
+CREATE TEMP TABLE tcp_s1 (x int) DISTRIBUTED BY (x);
+DO $$ BEGIN CREATE TEMP TABLE tcp_pl (y int) DISTRIBUTED BY (y); RAISE EXCEPTION 'boom'; EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'caught: %', SQLERRM; END $$;
+NOTICE:  caught: boom
+SELECT tc_exist('tcp_s1', 'tcp_pl');
+         tc_exist         
+--------------------------
+ tcp_pl=false tcp_s1=true
+(1 row)
+
+ROLLBACK TO outer_sp;
+COMMIT;
+SELECT tc_exist('tcp_base', 'tcp_s1', 'tcp_pl');
+                tc_exist                 
+-----------------------------------------
+ tcp_base=true tcp_pl=false tcp_s1=false
+(1 row)
+
+DROP TABLE tcp_base;
+DROP FUNCTION tc_exist(text[]);
+-- An index on an append-optimized temporary table: its block directory
+-- rows go to the block directory, not to the catalog in memory.
+CREATE TEMP TABLE tc_ao_idx (a int, b text) WITH (appendonly = true) DISTRIBUTED BY (a);
+INSERT INTO tc_ao_idx SELECT i, 'v' || i FROM generate_series(1, 10) i;
+CREATE INDEX tc_ao_idx_a ON tc_ao_idx (a);
+SET enable_seqscan = off;
+SELECT count(*) FROM tc_ao_idx WHERE a = 5;
+ count 
+-------
+     1
+(1 row)
+
+RESET enable_seqscan;
+ALTER TABLE tc_ao_idx ADD COLUMN c int;
+SELECT count(*), sum(a) FROM tc_ao_idx;
+ count | sum 
+-------+-----
+    10 |  55
+(1 row)
+
+TRUNCATE tc_ao_idx;
+SELECT count(*) FROM tc_ao_idx;
+ count 
+-------
+     0
+(1 row)
+
+DROP TABLE tc_ao_idx;
+-- Cursors of one transaction see what the transaction did in between: a
+-- new temporary table, and a changed one.
+CREATE TEMP TABLE tc_cur_src (id int) DISTRIBUTED BY (id);
+INSERT INTO tc_cur_src SELECT generate_series(1, 5);
+BEGIN;
+DECLARE tc_cur1 CURSOR FOR SELECT id FROM tc_cur_src ORDER BY id;
+FETCH 1 FROM tc_cur1;
+ id 
+----
+  1
+(1 row)
+
+CLOSE tc_cur1;
+CREATE TEMP TABLE tc_cur_mid (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_cur_mid VALUES (2), (4);
+DECLARE tc_cur2 CURSOR FOR SELECT s.id, m.a FROM tc_cur_src s JOIN tc_cur_mid m ON s.id = m.a ORDER BY s.id;
+FETCH ALL FROM tc_cur2;
+ id | a 
+----+---
+  2 | 2
+  4 | 4
+(2 rows)
+
+CLOSE tc_cur2;
+ALTER TABLE tc_cur_src ADD COLUMN b text DEFAULT 'z';
+DECLARE tc_cur3 CURSOR FOR SELECT * FROM tc_cur_src ORDER BY id;
+FETCH ALL FROM tc_cur3;
+ id | b 
+----+---
+  1 | z
+  2 | z
+  3 | z
+  4 | z
+  5 | z
+(5 rows)
+
+CLOSE tc_cur3;
+END;
+DROP TABLE tc_cur_src, tc_cur_mid;
 -- Turning the setting off does not affect the session's temporary objects:
 -- they stay in memory, and new ones join them.  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;
