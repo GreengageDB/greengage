@@ -13716,7 +13716,7 @@ ATExecAlterColumnType(List **wqueue,
 		 * temporary view of the table, which cannot be seen here (see
 		 * tempcat.c); or a leftover of one, whose row goes away.
 		 */
-		switch (tempcat_foreign_object(foundObject.classId, foundObject.objectId))
+		switch (tempcat_foreign_object_wait(foundObject.classId, foundObject.objectId))
 		{
 			case TCF_LIVE:
 				ereport(ERROR,

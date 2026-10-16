@@ -919,32 +919,29 @@ findDependentObjects(const ObjectAddress *object,
 		 * for other dependent objects (below), lock it first: its session
 		 * may be dropping it, and then the row is gone once it is done.
 		 * An ending session lets go of its locks before its objects and its
-		 * slice: wait for them too, without the lock, which it needs to drop
-		 * them.
+		 * slice, and on a QE may not have started ending yet: wait for them
+		 * too (tempcat_wait_foreign_session()).
 		 */
 		tcf = tempcat_foreign_object(otherObject.classId, otherObject.objectId);
 		if (tcf == TCF_LIVE)
 		{
 			bool		row_gone = false;
+			int			waited = 0;
 
 			for (;;)
 			{
 				AcquireDeletionLock(&otherObject, 0);
 				if (!systable_recheck_tuple(scan, tup))
-				{
 					row_gone = true;
-					break;
-				}
-				tcf = tempcat_foreign_object(otherObject.classId,
-											 otherObject.objectId);
-				if (tcf != TCF_LIVE ||
-					!tempcat_foreign_session_ending(otherObject.objectId))
-					break;
+				else
+					tcf = tempcat_foreign_object(otherObject.classId,
+												 otherObject.objectId);
 				ReleaseDeletionLock(&otherObject);
-				pg_usleep(10000L);
-				CHECK_FOR_INTERRUPTS();
+				if (row_gone || tcf != TCF_LIVE ||
+					!tempcat_wait_foreign_session(otherObject.objectId,
+												  &waited))
+					break;
 			}
-			ReleaseDeletionLock(&otherObject);
 			if (row_gone)
 				continue;
 			if (tcf == TCF_LIVE)

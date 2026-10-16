@@ -468,6 +468,27 @@ SELECT gp_inject_fault('skip_temp_relations_cleanup', 'reset', dbid)
     WHERE objid >= 4026531840;
 32q:
 
+-- The writer QEs of an ending session end only after its coordinator: on a
+-- segment, DROP waits for them too (here the one on segment 0 stops before
+-- it starts ending).
+CREATE TYPE tc_end2_comp AS (x int);
+38: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+38: SET gp_enable_temp_memory_catalog = on;
+38: CREATE TEMP TABLE tc_e2 (c tc_end2_comp) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault('tempcat_session_ending', 'suspend', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+38q:
+SELECT gp_wait_until_triggered_fault('tempcat_session_ending', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+39&: DROP TYPE tc_end2_comp;
+SELECT gp_inject_fault('tempcat_session_ending', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+39<:
+39: CALL tc_wait_gone();
+39: SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend')
+    WHERE objid >= 4026531840;
+39q:
+
 -- A transaction that started to use the slice rolls back: the session lets
 -- go of the slice, but its rows are freed only when it goes idle or starts
 -- its next transaction (here it is idle in the aborted one).  Until then

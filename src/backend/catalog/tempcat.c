@@ -4593,6 +4593,10 @@ tempcat_session_ending(void)
 {
 	if (TempcatShared == NULL || tc_slice < 0)
 		return;
+#ifdef FAULT_INJECTOR
+	/* Test hook: start ending later (with 'suspend'). */
+	SIMPLE_FAULT_INJECTOR("tempcat_session_ending");
+#endif
 	tempcat_my_state()->ending = true;
 	pg_write_barrier();
 }
@@ -4602,7 +4606,7 @@ tempcat_session_ending(void)
  * object goes, or turns into a leftover, soon.  Also true if it let go of
  * the slice meanwhile: look again.
  */
-bool
+static bool
 tempcat_foreign_session_ending(Oid objectId)
 {
 	TempcatSliceState *ss;
@@ -4619,6 +4623,49 @@ tempcat_foreign_session_ending(Oid objectId)
 	ending = TempcatShared->procs[holder - 1].ending;
 	pg_read_barrier();
 	return ending || pg_atomic_read_u32(&ss->holder) != holder;
+}
+
+/*
+ * The live session that keeps 'objectId' (TCF_LIVE) may be about to drop
+ * it, or to leave it behind: wait a little, without locks on it, which the
+ * session needs to drop it, and return true to look again.  That is if the
+ * session is ending.  On a QE, also if it has not started ending yet, for a
+ * while ('*waited', in ms): the coordinator, which checked the same rows
+ * first, found its objects gone or ending, and the session's writer QEs end
+ * only after its coordinator (cdb_cleanup()).
+ */
+bool
+tempcat_wait_foreign_session(Oid objectId, int *waited)
+{
+	if (!tempcat_foreign_session_ending(objectId))
+	{
+		if (Gp_role != GP_ROLE_EXECUTE || *waited >= TEMPCAT_CLAIM_TIMEOUT_MS)
+			return false;
+		*waited += 10;
+	}
+	pgstat_report_wait_start(WAIT_EVENT_PG_SLEEP);
+	pg_usleep(10000L);
+	pgstat_report_wait_end();
+	CHECK_FOR_INTERRUPTS();
+	return true;
+}
+
+/*
+ * tempcat_foreign_object(), but an object of a session that may be about to
+ * drop it, or to leave it behind, is waited for (see
+ * tempcat_wait_foreign_session()).  For those that do not lock the objects
+ * they find.
+ */
+TempcatForeign
+tempcat_foreign_object_wait(Oid classId, Oid objectId)
+{
+	TempcatForeign f;
+	int			waited = 0;
+
+	while ((f = tempcat_foreign_object(classId, objectId)) == TCF_LIVE &&
+		   tempcat_wait_foreign_session(objectId, &waited))
+		;
+	return f;
 }
 
 /*
@@ -4939,7 +4986,7 @@ tempcat_forget_leftover(Relation rel, HeapTuple tup)
 bool
 tempcat_check_type_user(Oid classId, Oid objectId, const char *typeName)
 {
-	switch (tempcat_foreign_object(classId, objectId))
+	switch (tempcat_foreign_object_wait(classId, objectId))
 	{
 		case TCF_NONE:
 			return false;

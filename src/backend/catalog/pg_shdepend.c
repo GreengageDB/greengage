@@ -724,8 +724,8 @@ checkSharedDependencies(Oid classId, Oid objectId,
 			 */
 			if (sdepForm->dbid == MyDatabaseId)
 			{
-				TempcatForeign f = tempcat_foreign_object(sdepForm->classid,
-														  sdepForm->objid);
+				TempcatForeign f = tempcat_foreign_object_wait(sdepForm->classid,
+															   sdepForm->objid);
 
 				if (f == TCF_LIVE)
 					foreign_objects = true;
@@ -1712,7 +1712,7 @@ shdepForeignObject(Relation sdepRel, HeapTuple tup)
 
 	if (sdepForm->dbid != MyDatabaseId)
 		return false;
-	switch (tempcat_foreign_object(sdepForm->classid, sdepForm->objid))
+	switch (tempcat_foreign_object_wait(sdepForm->classid, sdepForm->objid))
 	{
 		case TCF_NONE:
 			return false;
