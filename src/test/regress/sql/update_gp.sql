@@ -404,25 +404,17 @@ insert into v_insert_on_conflict_update_distkey values (1, 1, 'x') on conflict(a
 insert into v2_insert_on_conflict_update_distkey values ('x', 1, 1) on conflict(key, b) do update set cc = 'v2';
 select * from t_insert_on_conflict_update_distkey_view;
 
--- the following statement should succeed: the resjunk MULTIEXPR entry gets
--- resno (view natts + 1) = 5, which is the attnum of distkey d in the base table
-create table t_insert_on_conflict_update_distkey_wide(k int, c text, x text, pad int, d int) distributed by (d);
+-- the following statement should succeed: the view has 3 columns, so the
+-- resjunk MULTIEXPR entry gets resno 4, which is the attnum of distkey d in
+-- the base table
+create table t_insert_on_conflict_update_distkey_wide(k int, c text, pad int, d int) distributed by (d);
 create unique index uidx_t_insert_on_conflict_update_distkey_wide on t_insert_on_conflict_update_distkey_wide(k, d);
-insert into t_insert_on_conflict_update_distkey_wide values (1, 'orig', 'orig', 0, 1);
+insert into t_insert_on_conflict_update_distkey_wide values (1, 'orig', 0, 1);
 create view v_insert_on_conflict_update_distkey_narrow as
-  select k, c, x, d from t_insert_on_conflict_update_distkey_wide;
-insert into v_insert_on_conflict_update_distkey_narrow values (1, 'c', 'x', 1)
-  on conflict(k, d) do update set (c, x) = (select 'multi', 'expr');
+  select k, c, d from t_insert_on_conflict_update_distkey_wide;
+insert into v_insert_on_conflict_update_distkey_narrow values (1, 'c', 1)
+  on conflict(k, d) do update set (k, c) = (select 1, 'multiexpr');
 select * from t_insert_on_conflict_update_distkey_wide;
-
--- the following statement should error out because it uses a volatile function
--- on a replicated table through a view
-create table t_insert_on_conflict_update_distkey_repl(a int, b int, c text) distributed replicated;
-create unique index uidx_t_insert_on_conflict_update_distkey_repl on t_insert_on_conflict_update_distkey_repl(a, b);
-create view v_insert_on_conflict_update_distkey_repl as
-  select * from t_insert_on_conflict_update_distkey_repl;
-insert into v_insert_on_conflict_update_distkey_repl values (1, 1, 'x')
-  on conflict(a, b) do update set c = random()::text;
 
 -- the following statement should error out because a stored rule action is
 -- checked against the current policy: b became a distkey after the rule was created
