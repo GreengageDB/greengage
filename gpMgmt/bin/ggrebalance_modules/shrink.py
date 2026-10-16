@@ -328,25 +328,27 @@ class GGShrink:
 
         return True
 
-    def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> None:
+    def execSqlInThread(self, conn: dbconn.Connection, sql_cmd: str) -> Any:
         # During the long operation of a C-function (like the DB driver),
         # if it is executed from the main thread, the signal handler will be executed only when
         # the low-level function is complete. Therefore, we execute queries that can be blocked,
         # or just potentially long-running queries, in a separate thread in order to allow
         # immediate invocation of the signal handler and cancelation of the query.
+        # Returns the cursor object, like dbconn.query does, so the results of the query
+        # can be fetched by the caller.
         self.cancel_conn = conn
         result_queue = Queue()
         def exec_sql():
             try:
-                dbconn.execSQL(conn, sql_cmd)
-                result_queue.put((0, None))
+                cursor = dbconn.query(conn, sql_cmd)
+                result_queue.put((0, cursor, None))
             except Exception as e:
                 self.logger.error(f"Error when performing query '{sql_cmd}': {str(e)}")
-                result_queue.put((1, e))
+                result_queue.put((1, None, e))
         thread = threading.Thread(target=exec_sql)
         thread.start()
         thread.join()
-        return_value, return_exception = result_queue.get()
+        return_value, return_cursor, return_exception = result_queue.get()
         if return_value != 0:
             # If the query failed due to the user request, log and raise the same
             # exception as done because of the 'shutdown_requested' flag for the behavior consistency reasons.
@@ -356,6 +358,7 @@ class GGShrink:
             # Otherwise, pass the original exception.
             raise return_exception
         self.cancel_conn = None
+        return return_cursor
 
     def state_is_final(self, state: str) -> bool:
         return state == self.states_main_shrink_flow[-1]
@@ -897,9 +900,9 @@ class GGShrink:
                             AND c.gp_segment_id {'<' if is_rollback else '>='} gp_segment_id_limit
                         ) SELECT sum(pg_catalog.pg_relation_size(cte.oid)) FROM cte;
                         $$ LANGUAGE sql STABLE''')
-                cursor = dbconn.query(conn,
-                                      f'''SELECT n.nspname, c.relname, {str_data_move_size}
-                                      {self.get_tables_to_rebalance_from_where(is_rollback)}''')
+                cursor = self.execSqlInThread(conn,
+                    f'''SELECT n.nspname, c.relname, {str_data_move_size}
+                    {self.get_tables_to_rebalance_from_where(is_rollback)}''')
                 for schema_name, rel_name, data_move_size in cursor:
                     self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, data_move_size)
 
