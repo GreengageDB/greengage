@@ -3142,31 +3142,13 @@ struct config_int ConfigureNamesInt_gp[] =
 		{"gp_temp_memory_catalog_max_size", PGC_SUSET, RESOURCES_MEM,
 			gettext_noop("Maximum memory for the catalog rows of temporary objects, per process."),
 			gettext_noop("The memory is dynamic shared memory (in /dev/shm with the default "
-						 "dynamic_shared_memory_type). Beyond it, the rows go to files, see "
-						 "gp_temp_memory_catalog_max_file_size. Takes effect when a session "
-						 "creates its first temporary object."),
+						 "dynamic_shared_memory_type). A session that needs more gets an "
+						 "error. Takes effect when a session creates its first temporary "
+						 "object."),
 			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
 		},
 		&gp_temp_memory_catalog_max_size,
 		16384, 1024, MAX_KILOBYTES,
-		NULL, NULL, NULL
-	},
-
-	{
-		{"gp_temp_memory_catalog_max_file_size", PGC_SUSET, RESOURCES_DISK,
-			gettext_noop("Maximum size of the files for the catalog rows of temporary objects, per process."),
-			gettext_noop("Catalog rows of temporary objects that do not fit in "
-						 "gp_temp_memory_catalog_max_size go to temporary files in "
-						 "temp_tablespaces, mapped into memory: the kernel keeps them in "
-						 "its page cache as long as it can spare the memory. They must not "
-						 "be on copy-on-write file systems (btrfs, ZFS), where a full disk "
-						 "kills the process with SIGBUS. 0 keeps the rows in memory "
-						 "only. Takes effect when a session creates its first temporary "
-						 "object."),
-			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
-		},
-		&gp_temp_memory_catalog_max_file_size,
-		1048576, 0, MAX_KILOBYTES,
 		NULL, NULL, NULL
 	},
 

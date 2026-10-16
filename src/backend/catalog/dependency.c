@@ -545,6 +545,13 @@ findDependentObjects(const ObjectAddress *object,
 		return;
 
 	/*
+	 * GPDB: temporary objects of other sessions kept in memory depend on the
+	 * object through rows that cannot be seen here; wait until none does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(object->classId, object->objectId);
+
+	/*
 	 * The target object might be internally dependent on some other object
 	 * (its "owner"), and/or be a member of an extension (also considered its
 	 * owner).  If so, and if we aren't recursing from the owning object, we
@@ -896,7 +903,6 @@ findDependentObjects(const ObjectAddress *object,
 	{
 		Form_pg_depend foundDep = (Form_pg_depend) GETSTRUCT(tup);
 		int			subflags;
-		TempcatForeign tcf;
 
 		otherObject.classId = foundDep->classid;
 		otherObject.objectId = foundDep->objid;
@@ -911,50 +917,6 @@ findDependentObjects(const ObjectAddress *object,
 			otherObject.objectId == object->objectId &&
 			object->objectSubId == 0)
 			continue;
-
-		/*
-		 * GPDB: a temporary object of another session kept in memory (see
-		 * tempcat.c), which cannot be seen, let alone dropped, here; or a
-		 * leftover of one whose session is gone, whose row goes away.  As
-		 * for other dependent objects (below), lock it first: its session
-		 * may be dropping it, and then the row is gone once it is done.
-		 * An ending session lets go of its locks before its objects and its
-		 * slice, and on a QE may not have started ending yet: wait for them
-		 * too (tempcat_wait_foreign_session()).
-		 */
-		tcf = tempcat_foreign_object(otherObject.classId, otherObject.objectId);
-		if (tcf == TCF_LIVE)
-		{
-			bool		row_gone = false;
-			int			waited = 0;
-
-			for (;;)
-			{
-				AcquireDeletionLock(&otherObject, 0);
-				if (!systable_recheck_tuple(scan, tup))
-					row_gone = true;
-				else
-					tcf = tempcat_foreign_object(otherObject.classId,
-												 otherObject.objectId);
-				ReleaseDeletionLock(&otherObject);
-				if (row_gone || tcf != TCF_LIVE ||
-					!tempcat_wait_foreign_session(otherObject.objectId,
-												  &waited))
-					break;
-			}
-			if (row_gone)
-				continue;
-			if (tcf == TCF_LIVE)
-				ereport(ERROR,
-						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-						 errmsg("cannot drop %s because a temporary object of another session depends on it",
-								getObjectDescription(object))));
-		}
-		if (tcf == TCF_GONE)
-		{
-			tempcat_forget_leftover(*depRel, tup);
-			continue;
-		}
 
 		/*
 		 * Must lock the dependent object before recursing to it.

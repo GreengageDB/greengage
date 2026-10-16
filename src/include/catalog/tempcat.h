@@ -50,25 +50,11 @@
 /* GUCs */
 extern bool gp_enable_temp_memory_catalog;
 extern int	gp_temp_memory_catalog_max_size;
-extern int	gp_temp_memory_catalog_max_file_size;
 
 typedef struct TempcatScanData *TempcatScan;
 
 struct ObjectAddress;
 struct TM_FailureData;
-
-/*
- * What a session knows of an object that on-disk rows refer to (pg_depend,
- * pg_shdepend): an object of its own or an ordinary one, a temporary object
- * that another live session keeps in memory, or one of a session that is
- * gone, whose rows are leftovers.
- */
-typedef enum TempcatForeign
-{
-	TCF_NONE,
-	TCF_LIVE,
-	TCF_GONE
-} TempcatForeign;
 
 /* OID assignment */
 extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
@@ -121,19 +107,12 @@ extern int	tempcat_scan_getpos(TempcatScan scan);
 extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
-/* Objects of other sessions */
-extern TempcatForeign tempcat_foreign_object(Oid classId, Oid objectId);
-extern TempcatForeign tempcat_foreign_object_wait(Oid classId, Oid objectId);
-extern bool tempcat_wait_foreign_session(Oid objectId, int *waited);
-extern void tempcat_session_ending(void);
-extern void tempcat_forget_leftover(Relation rel, HeapTuple tup);
-extern bool tempcat_role_used_elsewhere(Oid roleid);
+/* Other sessions */
+extern void tempcat_lock_out_users(Oid classId, Oid objectId);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);
 extern void tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid);
 extern void tempcat_finish_prepared(TransactionId xid, bool isCommit);
-extern bool tempcat_check_type_user(Oid classId, Oid objectId,
-									const char *typeName);
 
 /* Object restrictions */
 extern void tempcat_check_inheritance(Oid relid, Oid parentid);

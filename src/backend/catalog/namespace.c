@@ -4562,9 +4562,6 @@ RemoveTempRelations(Oid tempNamespaceId)
 static void
 RemoveTempRelationsCallback(int code, Datum arg)
 {
-	/* GPDB: before the locks go, see tempcat.c */
-	tempcat_session_ending();
-
 #ifdef FAULT_INJECTOR
 	/*
 	 * Test hook: leave the temporary objects behind, like a crashed session

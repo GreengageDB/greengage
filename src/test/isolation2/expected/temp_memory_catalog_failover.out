@@ -2,9 +2,8 @@
 -- nodes fail: a writer QE dies, a segment fails over to its mirror, the
 -- coordinator restarts after a crash.  Rows in memory are lost with their
 -- process and are not replicated; what the session or the cluster sees
--- afterwards must be as with temporary objects on disk, and the dependency
--- rows left on disk (replicated to the mirrors as other catalog rows) must
--- not keep anything.
+-- afterwards must be as with temporary objects on disk, with nothing of
+-- them left on disk, and nothing keeping what they used.
 
 -- start_ignore
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
@@ -77,9 +76,8 @@ DELETE FROM tcf_sess;
 DELETE 1
 
 -- 2. Segment 0 fails over to its mirror while a session keeps temporary
--- objects in memory there: they are gone with the old primary, the
--- dependency rows replicated to the mirror are leftovers on the new
--- primary, and the session goes on with new ones.
+-- objects in memory there: they are gone with the old primary, nothing of
+-- them was replicated to the mirror, and the session goes on with new ones.
 CREATE TYPE tcf_comp AS (x int);
 CREATE TYPE
 3: SET gp_enable_temp_memory_catalog = on;
@@ -106,10 +104,10 @@ CHECKPOINT
  m    | p              
  p    | m              
 (2 rows)
-4: SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND refobjid = 'tcf_comp'::regtype AND objid >= 4026531840;
- leftovers 
------------
- t         
+4: SELECT count(*) AS on_disk FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND objid >= 4026531840;
+ on_disk 
+---------
+ 0       
 (1 row)
 3: SELECT count(*) FROM tcf_m;
 ERROR:  gang was lost due to cluster reconfiguration (cdbgang_async.c:103)
@@ -120,11 +118,6 @@ ERROR:  gang was lost due to cluster reconfiguration (cdbgang_async.c:103)
 (1 row)
 4: DROP TYPE tcf_comp;
 DROP TYPE
-4: SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840 AND refobjid < 4026531840 AND refclassid = 'pg_type'::regclass;
- leftovers 
------------
- 0         
-(1 row)
 3: CREATE TEMP TABLE tcf_m2 (a int) DISTRIBUTED BY (a);
 CREATE TABLE
 3: INSERT INTO tcf_m2 SELECT generate_series(1, 30);
@@ -147,12 +140,12 @@ stdout: pg_control version number:            12010700
 Catalog version number:               302307241
 Database system identifier:           7697083608052169097
 Database cluster state:               in production
-pg_control last modified:             Fri 16 Oct 2026 05:58:18 AM Asia
-Latest checkpoint location:           0/21C3D5E8
-Latest checkpoint's REDO location:    0/21C3D5E8
-Latest checkpoint's REDO WAL file:    0000000A0000000000000008
-Latest checkpoint's TimeLineID:       10
-Latest checkpoint's PrevTimeLineID:   10
+pg_control last modified:             Fri 16 Oct 2026 04:32:59 PM Asia
+Latest checkpoint location:           0/4E504F20
+Latest checkpoint's REDO location:    0/4E504F20
+Latest checkpoint's REDO WAL file:    0000001F0000000000000013
+Latest checkpoint's TimeLineID:       31
+Latest checkpoint's PrevTimeLineID:   31
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:21938
 Latest checkpoint's NextGxid:         47000
@@ -167,10 +160,10 @@ Latest checkpoint's oldestMultiXid:   1
 Latest checkpoint's oldestMulti's DB: 13720
 Latest checkpoint's oldestCommitTsXid:0
 Latest checkpoint's newestCommitTsXid:0
-Time of latest checkpoint:            Fri 16 Oct 2026 05:57:42 AM Asia
+Time of latest checkpoint:            Fri 16 Oct 2026 04:31:58 PM Asia
 Fake LSN counter for unlogged rels:   0/3E8
-Minimum recovery ending location:     0/21DDAF90
-Min recovery ending loc's timeline:   12
+Minimum recovery ending location:     0/4E87C0D0
+Min recovery ending loc's timeline:   32
 Backup start location:                0/0
 Backup end location:                  0/0
 End-of-backup record required:        no
@@ -197,18 +190,34 @@ Float8 argument passing:              by value
 Data page checksum version:           1
 Mock authentication nonce:            a8c545f589c07475cbac2ad5dccb89fa8ac063bbcb9e8f6fd94a2bf3cc259248
 
-stderr: 
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/.data/dbfast1/demoDataDir0 for dbid 2:
+stderr: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/.data/dbfast1/demoDataDir0 for dbid 2:
 stdout: pg_control version number:            12010700
 Catalog version number:               302307241
 Database system identifier:           7697083608052169097
 Database cluster state:               in production
-pg_control last modified:             Fri 16 Oct 2026 05:58:13 AM Asia
-Latest checkpoint location:           0/21DDAED8
-Latest checkpoint's REDO location:    0/21DDAEA0
-Latest checkpoint's REDO WAL file:    0000000B0000000000000008
-Latest checkpoint's TimeLineID:       11
-Latest checkpoint's PrevTimeLineID:   11
+pg_control last modified:             Fri 16 Oct 2026 04:32:54 PM Asia
+Latest checkpoint location:           0/4E87C018
+Latest checkpoint's REDO location:    0/4E87BFE0
+Latest checkpoint's REDO WAL file:    0000001F0000000000000013
+Latest checkpoint's TimeLineID:       31
+Latest checkpoint's PrevTimeLineID:   31
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:21938
 Latest checkpoint's NextGxid:         55189
@@ -223,7 +232,7 @@ Latest checkpoint's oldestMultiXid:   1
 Latest checkpoint's oldestMulti's DB: 13720
 Latest checkpoint's oldestCommitTsXid:0
 Latest checkpoint's newestCommitTsXid:0
-Time of latest checkpoint:            Fri 16 Oct 2026 05:58:13 AM Asia
+Time of latest checkpoint:            Fri 16 Oct 2026 04:32:54 PM Asia
 Fake LSN counter for unlogged rels:   0/3E8
 Minimum recovery ending location:     0/0
 Min recovery ending loc's timeline:   0
@@ -253,35 +262,67 @@ Float8 argument passing:              by value
 Data page checksum version:           1
 Mock authentication nonce:            a8c545f589c07475cbac2ad5dccb89fa8ac063bbcb9e8f6fd94a2bf3cc259248
 
-stderr: 
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Greengage instance recovery parameters
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery type              = Standard
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery 1 of 1
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance host                 = cdw
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance address              = cdw
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/.data/dbfast1/demoDataDir0
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance port                 = 7002
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance host        = cdw
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance address     = cdw
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/.data/dbfast_mirror1/demoDataDir0
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance port        = 7005
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Target                      = in-place
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:18:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-killing existing walsender process on primary cdw:7005 to refresh replication connection
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-1 segment(s) to recover
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Setting up the required segments for recovery
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Updating configuration for mirrors
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
-20261016:05:58:19:387620 gprecoverseg:cdw:gpadmin-[INFO]:-era is 638eae55d28b225e_261016055016
-cdw (dbid 2):       0/1219195 kB (0%) copied
+stderr: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Greengage instance recovery parameters
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery type              = Standard
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery 1 of 1
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance host                 = cdw
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance address              = cdw
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/.data/dbfast1/demoDataDir0
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance port                 = 7002
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance host        = cdw
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance address     = cdw
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/.data/dbfast_mirror1/demoDataDir0
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance port        = 7005
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:32:59:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-killing existing walsender process on primary cdw:7005 to refresh replication connection
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-1 segment(s) to recover
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Setting up the required segments for recovery
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Updating configuration for mirrors
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20261016:16:33:00:1309115 gprecoverseg:cdw:gpadmin-[INFO]:-era is 638eae55d28b225e_261016163201
+cdw (dbid 2):       0/1563487 kB (0%) copied
 cdw (dbid 2): pg_rewind: Done!
 20261016:05:58:21:387620 gprecoverseg:cdw:gpadmin-[INFO]:-Triggering FTS probe
 20261016:05:58:21:387620 gprecoverseg:cdw:gpadmin-[INFO]:-********************************
@@ -340,12 +381,12 @@ stdout: pg_control version number:            12010700
 Catalog version number:               302307241
 Database system identifier:           7697083608052169097
 Database cluster state:               in production
-pg_control last modified:             Fri 16 Oct 2026 05:58:29 AM Asia
-Latest checkpoint location:           0/21DDAED8
-Latest checkpoint's REDO location:    0/21DDAEA0
-Latest checkpoint's REDO WAL file:    0000000B0000000000000008
-Latest checkpoint's TimeLineID:       11
-Latest checkpoint's PrevTimeLineID:   11
+pg_control last modified:             Fri 16 Oct 2026 04:33:10 PM Asia
+Latest checkpoint location:           0/4E87C018
+Latest checkpoint's REDO location:    0/4E87BFE0
+Latest checkpoint's REDO WAL file:    0000001F0000000000000013
+Latest checkpoint's TimeLineID:       31
+Latest checkpoint's PrevTimeLineID:   31
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:21947
 Latest checkpoint's NextGxid:         55189
@@ -360,10 +401,10 @@ Latest checkpoint's oldestMultiXid:   1
 Latest checkpoint's oldestMulti's DB: 13720
 Latest checkpoint's oldestCommitTsXid:0
 Latest checkpoint's newestCommitTsXid:0
-Time of latest checkpoint:            Fri 16 Oct 2026 05:58:13 AM Asia
+Time of latest checkpoint:            Fri 16 Oct 2026 04:32:54 PM Asia
 Fake LSN counter for unlogged rels:   0/3E8
-Minimum recovery ending location:     0/21DF8508
-Min recovery ending loc's timeline:   13
+Minimum recovery ending location:     0/4E89A110
+Min recovery ending loc's timeline:   33
 Backup start location:                0/0
 Backup end location:                  0/0
 End-of-backup record required:        no
@@ -390,18 +431,34 @@ Float8 argument passing:              by value
 Data page checksum version:           1
 Mock authentication nonce:            a8c545f589c07475cbac2ad5dccb89fa8ac063bbcb9e8f6fd94a2bf3cc259248
 
-stderr: 
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/.data/dbfast_mirror1/demoDataDir0 for dbid 5:
+stderr: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully finished pg_controldata /home/gpadmin/.data/dbfast_mirror1/demoDataDir0 for dbid 5:
 stdout: pg_control version number:            12010700
 Catalog version number:               302307241
 Database system identifier:           7697083608052169097
 Database cluster state:               shut down
-pg_control last modified:             Fri 16 Oct 2026 05:58:22 AM Asia
-Latest checkpoint location:           0/21DF8450
-Latest checkpoint's REDO location:    0/21DF8450
-Latest checkpoint's REDO WAL file:    0000000C0000000000000008
-Latest checkpoint's TimeLineID:       12
-Latest checkpoint's PrevTimeLineID:   12
+pg_control last modified:             Fri 16 Oct 2026 04:33:04 PM Asia
+Latest checkpoint location:           0/4E89A058
+Latest checkpoint's REDO location:    0/4E89A058
+Latest checkpoint's REDO WAL file:    000000200000000000000013
+Latest checkpoint's TimeLineID:       32
+Latest checkpoint's PrevTimeLineID:   32
 Latest checkpoint's full_page_writes: on
 Latest checkpoint's NextXID:          0:21947
 Latest checkpoint's NextGxid:         55192
@@ -416,7 +473,7 @@ Latest checkpoint's oldestMultiXid:   1
 Latest checkpoint's oldestMulti's DB: 13720
 Latest checkpoint's oldestCommitTsXid:0
 Latest checkpoint's newestCommitTsXid:0
-Time of latest checkpoint:            Fri 16 Oct 2026 05:58:22 AM Asia
+Time of latest checkpoint:            Fri 16 Oct 2026 04:33:04 PM Asia
 Fake LSN counter for unlogged rels:   0/3E8
 Minimum recovery ending location:     0/0
 Min recovery ending loc's timeline:   0
@@ -446,34 +503,66 @@ Float8 argument passing:              by value
 Data page checksum version:           1
 Mock authentication nonce:            a8c545f589c07475cbac2ad5dccb89fa8ac063bbcb9e8f6fd94a2bf3cc259248
 
-stderr: 
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Greengage instance recovery parameters
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery type              = Standard
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery 1 of 1
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance host                 = cdw
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance address              = cdw
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/.data/dbfast_mirror1/demoDataDir0
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance port                 = 7005
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance host        = cdw
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance address     = cdw
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/.data/dbfast1/demoDataDir0
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance port        = 7002
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Target                      = in-place
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-killing existing walsender process on primary cdw:7002 to refresh replication connection
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-1 segment(s) to recover
-20261016:05:58:29:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
-20261016:05:58:30:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Setting up the required segments for recovery
-20261016:05:58:30:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Updating configuration for mirrors
-20261016:05:58:30:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
-20261016:05:58:30:387955 gprecoverseg:cdw:gpadmin-[INFO]:-era is 638eae55d28b225e_261016055016
+stderr: @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Heap checksum setting is consistent between coordinator and the segments that are candidates for recoverseg
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Greengage instance recovery parameters
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery type              = Standard
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Recovery 1 of 1
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Synchronization mode                 = Incremental
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance host                 = cdw
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance address              = cdw
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance directory            = /home/gpadmin/.data/dbfast_mirror1/demoDataDir0
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Failed instance port                 = 7005
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance host        = cdw
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance address     = cdw
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance directory   = /home/gpadmin/.data/dbfast1/demoDataDir0
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Source instance port        = 7002
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-   Recovery Target                      = in-place
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:----------------------------------------------------------
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Starting to create new pg_hba.conf on primary segments
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+It is also possible that a host key has just been changed.
+The fingerprint for the ED25519 key sent by the remote host is
+SHA256:dBBFQF6WRK7qWMhxe73Uc6nFjZETYwn4brXLr1RWRkI.
+Please contact your system administrator.
+Add correct host key in /home/gpadmin/.ssh/known_hosts to get rid of this message.
+Offending ECDSA key in /home/gpadmin/.ssh/known_hosts:3
+  remove with:
+  ssh-keygen -f "/home/gpadmin/.ssh/known_hosts" -R "cdw"
+Password authentication is disabled to avoid man-in-the-middle attacks.
+Keyboard-interactive authentication is disabled to avoid man-in-the-middle attacks.
+UpdateHostkeys is disabled because the host key is not trusted.
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-killing existing walsender process on primary cdw:7002 to refresh replication connection
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Successfully modified pg_hba.conf on primary segments to allow replication connections
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-1 segment(s) to recover
+20261016:16:33:10:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Ensuring 1 failed segment(s) are stopped
+20261016:16:33:11:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Setting up the required segments for recovery
+20261016:16:33:11:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Updating configuration for mirrors
+20261016:16:33:11:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-Initiating segment recovery. Upon completion, will start the successfully recovered segments
+20261016:16:33:11:1309444 gprecoverseg:cdw:gpadmin-[INFO]:-era is 638eae55d28b225e_261016163201
 cdw (dbid 5): pg_rewind: no rewind required
 20261016:05:58:31:387955 gprecoverseg:cdw:gpadmin-[INFO]:-Triggering FTS probe
 20261016:05:58:31:387955 gprecoverseg:cdw:gpadmin-[INFO]:-********************************
@@ -501,9 +590,9 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd' OR role <> pref
 
 -- 3. The coordinator restarts after a crash (the fault makes the next
 -- query PANIC there) while a session keeps temporary objects in memory:
--- the writer QEs of the session drop theirs as they exit, the dependency
--- rows left on the coordinator are leftovers, and new sessions keep their
--- temporary objects in memory as before.
+-- the writer QEs of the session drop theirs as they exit, nothing of them
+-- is left on the coordinator, and new sessions keep their temporary objects
+-- in memory as before.
 CREATE TYPE tcf_comp AS (x int);
 CREATE TYPE
 5: SET gp_enable_temp_memory_catalog = on;
@@ -534,18 +623,13 @@ server closed the connection unexpectedly
 6q: ... <quitting>
 7: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM gp_dist_random('pg_stat_activity') a JOIN tcf_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the writer QEs did not end'; END $$;
 DO
-7: SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tcf_comp'::regtype AND objid >= 4026531840;
- leftovers 
------------
- t         
+7: SELECT count(*) AS on_disk FROM pg_depend WHERE objid >= 4026531840;
+ on_disk 
+---------
+ 0       
 (1 row)
 7: DROP TYPE tcf_comp;
 DROP TYPE
-7: SELECT count(*) AS leftovers FROM pg_depend WHERE objid >= 4026531840 AND refclassid = 'pg_type'::regclass AND refobjid < 4026531840;
- leftovers 
------------
- 0         
-(1 row)
 7: SET gp_enable_temp_memory_catalog = on;
 SET
 7: CREATE TEMP TABLE tcf_c2 (a int) DISTRIBUTED BY (a);

@@ -105,7 +105,6 @@ static void storeObjectDescription(StringInfo descs,
 								   SharedDependencyType deptype,
 								   int count);
 static bool isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel);
-static bool shdepForeignObject(Relation sdepRel, HeapTuple tup);
 
 
 /*
@@ -652,8 +651,13 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	int			allocedobjects;
 	StringInfoData descs;
 	StringInfoData alldescs;
-	bool		foreign_objects = false;
-	Relation	leftoverRel = NULL;
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory depend on the
+	 * object through rows that cannot be seen here; wait until none does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(classId, objectId);
 
 	/*
 	 * We limit the number of dependencies reported to the client to
@@ -717,30 +721,6 @@ checkSharedDependencies(Oid classId, Oid objectId,
 		if (sdepForm->dbid == MyDatabaseId ||
 			sdepForm->dbid == InvalidOid)
 		{
-			/*
-			 * GPDB: a temporary object of another session kept in memory,
-			 * which cannot be described here, or a leftover of one, which is
-			 * none (see tempcat.c).
-			 */
-			if (sdepForm->dbid == MyDatabaseId)
-			{
-				TempcatForeign f = tempcat_foreign_object_wait(sdepForm->classid,
-															   sdepForm->objid);
-
-				if (f == TCF_LIVE)
-					foreign_objects = true;
-				else if (f == TCF_GONE)
-				{
-					/* a leftover goes, rather than refer to what is dropped */
-					if (leftoverRel == NULL)
-						leftoverRel = table_open(SharedDependRelationId,
-												 RowExclusiveLock);
-					tempcat_forget_leftover(leftoverRel, tup);
-				}
-				if (f != TCF_NONE)
-					continue;
-			}
-
 			if (numobjects >= allocedobjects)
 			{
 				allocedobjects *= 2;
@@ -789,8 +769,6 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	systable_endscan(scan);
 
 	table_close(sdepRel, AccessShareLock);
-	if (leftoverRel != NULL)
-		table_close(leftoverRel, RowExclusiveLock);
 
 	/*
 	 * Sort and report local and shared objects.
@@ -840,24 +818,6 @@ checkSharedDependencies(Oid classId, Oid objectId,
 			numNotReportedDbs++;
 		storeObjectDescription(&alldescs, REMOTE_OBJECT, &object,
 							   SHARED_DEPENDENCY_INVALID, dep->count);
-	}
-
-	/*
-	 * GPDB: temporary objects of other sessions kept in memory (see
-	 * tempcat.c) have their pg_shdepend rows in memory too, mostly; the
-	 * sessions publish the roles their objects refer to instead.
-	 */
-	if (foreign_objects ||
-		(classId == AuthIdRelationId && tempcat_role_used_elsewhere(objectId)))
-	{
-		const char *msg = _("objects in temporary schemas of other sessions");
-
-		if (descs.len > 0)
-			appendStringInfoChar(&descs, '\n');
-		appendStringInfoString(&descs, msg);
-		if (alldescs.len > 0)
-			appendStringInfoChar(&alldescs, '\n');
-		appendStringInfoString(&alldescs, msg);
 	}
 
 	pfree(objects);
@@ -1417,10 +1377,6 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 				sdepForm->dbid != InvalidOid)
 				continue;
 
-			/* GPDB: nor on those we cannot see */
-			if (shdepForeignObject(sdepRel, tuple))
-				continue;
-
 			switch (sdepForm->deptype)
 			{
 					/* Shouldn't happen */
@@ -1571,10 +1527,6 @@ shdepReassignOwned(List *roleids, Oid newrole)
 				sdepForm->dbid != InvalidOid)
 				continue;
 
-			/* GPDB: nor on those we cannot see */
-			if (shdepForeignObject(sdepRel, tuple))
-				continue;
-
 			/* Unexpected because we checked for pins above */
 			if (sdepForm->deptype == SHARED_DEPENDENCY_PIN)
 				elog(ERROR, "unexpected shared pin");
@@ -1696,31 +1648,4 @@ shdepReassignOwned(List *roleids, Oid newrole)
 	}
 
 	table_close(sdepRel, RowExclusiveLock);
-}
-
-/*
- * GPDB: is the object of this dependency of the current database a
- * temporary object that another session keeps in memory, or a leftover of
- * one whose session is gone (see tempcat.c)?  DROP OWNED and REASSIGN OWNED
- * leave the former to its session (DROP ROLE still refuses to drop the
- * role), and remove the latter's row.
- */
-static bool
-shdepForeignObject(Relation sdepRel, HeapTuple tup)
-{
-	Form_pg_shdepend sdepForm = (Form_pg_shdepend) GETSTRUCT(tup);
-
-	if (sdepForm->dbid != MyDatabaseId)
-		return false;
-	switch (tempcat_foreign_object_wait(sdepForm->classid, sdepForm->objid))
-	{
-		case TCF_NONE:
-			return false;
-		case TCF_GONE:
-			tempcat_forget_leftover(sdepRel, tup);
-			return true;
-		case TCF_LIVE:
-			return true;
-	}
-	return false;
 }

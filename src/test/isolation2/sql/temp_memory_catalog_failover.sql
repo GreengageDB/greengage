@@ -2,9 +2,8 @@
 -- nodes fail: a writer QE dies, a segment fails over to its mirror, the
 -- coordinator restarts after a crash.  Rows in memory are lost with their
 -- process and are not replicated; what the session or the cluster sees
--- afterwards must be as with temporary objects on disk, and the dependency
--- rows left on disk (replicated to the mirrors as other catalog rows) must
--- not keep anything.
+-- afterwards must be as with temporary objects on disk, with nothing of
+-- them left on disk, and nothing keeping what they used.
 
 -- start_ignore
 CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
@@ -33,9 +32,8 @@ CREATE TYPE tcf_comp AS (x int);
 DELETE FROM tcf_sess;
 
 -- 2. Segment 0 fails over to its mirror while a session keeps temporary
--- objects in memory there: they are gone with the old primary, the
--- dependency rows replicated to the mirror are leftovers on the new
--- primary, and the session goes on with new ones.
+-- objects in memory there: they are gone with the old primary, nothing of
+-- them was replicated to the mirror, and the session goes on with new ones.
 CREATE TYPE tcf_comp AS (x int);
 3: SET gp_enable_temp_memory_catalog = on;
 3: CREATE TEMP TABLE tcf_m (c tcf_comp, a int) DISTRIBUTED BY (a);
@@ -44,11 +42,10 @@ CREATE TYPE tcf_comp AS (x int);
 -1U: SELECT pg_ctl((SELECT datadir FROM gp_segment_configuration c WHERE c.role = 'p' AND c.content = 0), 'stop', 'immediate');
 4: SELECT gp_request_fts_probe_scan();
 4: SELECT role, preferred_role FROM gp_segment_configuration WHERE content = 0 ORDER BY role;
-4: SELECT count(*) > 0 AS leftovers FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND refobjid = 'tcf_comp'::regtype AND objid >= 4026531840;
+4: SELECT count(*) AS on_disk FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND objid >= 4026531840;
 3: SELECT count(*) FROM tcf_m;
 3: SELECT to_regclass('tcf_m') IS NULL AS gone;
 4: DROP TYPE tcf_comp;
-4: SELECT count(*) AS leftovers FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840 AND refobjid < 4026531840 AND refclassid = 'pg_type'::regclass;
 3: CREATE TEMP TABLE tcf_m2 (a int) DISTRIBUTED BY (a);
 3: INSERT INTO tcf_m2 SELECT generate_series(1, 30);
 3: SELECT count(*), 'tcf_m2'::regclass::oid >= 4026531840 AS reserved FROM tcf_m2;
@@ -62,9 +59,9 @@ SELECT count(*) FROM gp_segment_configuration WHERE status = 'd' OR role <> pref
 
 -- 3. The coordinator restarts after a crash (the fault makes the next
 -- query PANIC there) while a session keeps temporary objects in memory:
--- the writer QEs of the session drop theirs as they exit, the dependency
--- rows left on the coordinator are leftovers, and new sessions keep their
--- temporary objects in memory as before.
+-- the writer QEs of the session drop theirs as they exit, nothing of them
+-- is left on the coordinator, and new sessions keep their temporary objects
+-- in memory as before.
 CREATE TYPE tcf_comp AS (x int);
 5: SET gp_enable_temp_memory_catalog = on;
 5: CREATE TEMP TABLE tcf_c (c tcf_comp, a int) DISTRIBUTED BY (a);
@@ -78,9 +75,8 @@ CREATE TYPE tcf_comp AS (x int);
 5q:
 6q:
 7: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM gp_dist_random('pg_stat_activity') a JOIN tcf_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the writer QEs did not end'; END $$;
-7: SELECT count(*) > 0 AS leftovers FROM pg_depend WHERE refobjid = 'tcf_comp'::regtype AND objid >= 4026531840;
+7: SELECT count(*) AS on_disk FROM pg_depend WHERE objid >= 4026531840;
 7: DROP TYPE tcf_comp;
-7: SELECT count(*) AS leftovers FROM pg_depend WHERE objid >= 4026531840 AND refclassid = 'pg_type'::regclass AND refobjid < 4026531840;
 7: SET gp_enable_temp_memory_catalog = on;
 7: CREATE TEMP TABLE tcf_c2 (a int) DISTRIBUTED BY (a);
 7: INSERT INTO tcf_c2 SELECT generate_series(1, 30);

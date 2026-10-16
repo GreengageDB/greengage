@@ -187,8 +187,6 @@ tablespace-setup:
 	./testtablespace_default_tablespace \
 	./testtablespace_temp_tablespace \
 	./testtablespace_temp_tablespace2 \
-	./testtablespace_tc_files1 \
-	./testtablespace_tc_files2 \
 	./testtablespace_mytempsp0 \
 	./testtablespace_mytempsp1 \
 	./testtablespace_mytempsp2 \

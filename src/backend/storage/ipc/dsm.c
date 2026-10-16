@@ -33,7 +33,6 @@
 #endif
 #include <sys/stat.h>
 
-#include "cdb/cdbvars.h"
 #include "lib/ilist.h"
 #include "miscadmin.h"
 #include "storage/dsm.h"
@@ -44,10 +43,8 @@
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/resowner_private.h"
-#include "utils/workfile_mgr.h"
 
-/* GPDB: other than upstream's 0x9a503d32, as items have a tablespace */
-#define PG_DYNSHMEM_CONTROL_MAGIC		0x9a503d33
+#define PG_DYNSHMEM_CONTROL_MAGIC		0x9a503d32
 
 #define PG_DYNSHMEM_FIXED_SLOTS			64
 #define PG_DYNSHMEM_SLOTS_PER_BACKEND	5
@@ -73,9 +70,6 @@ struct dsm_segment
 	void	   *mapped_address; /* Mapping address, or NULL if unmapped. */
 	Size		mapped_size;	/* Size of our mapping. */
 	slist_head	on_detach;		/* On-detach callbacks. */
-	Oid			tablespace;		/* GPDB: of a segment that is a file */
-	File		workfile;		/* GPDB: creator's file, see dsm_track_file() */
-	bool		workfile_in_set;	/* GPDB: counted in dsm_work_nfiles */
 };
 
 /* Shared-memory state for a dynamic shared memory segment. */
@@ -85,7 +79,6 @@ typedef struct dsm_control_item
 	uint32		refcnt;			/* 2+ = active, 1 = moribund, 0 = gone */
 	void	   *impl_private_pm_handle; /* only needed on Windows */
 	bool		pinned;
-	Oid			tablespace;		/* GPDB: of a segment that is a file */
 } dsm_control_item;
 
 /* Layout of the dynamic shared memory control segment. */
@@ -97,27 +90,6 @@ typedef struct dsm_control_header
 	dsm_control_item item[FLEXIBLE_ARRAY_MEMBER];
 } dsm_control_header;
 
-/*
- * GPDB: segments created with DSM_CREATE_FILE are files mapped into memory,
- * in the directory for temporary files of a temporary tablespace (see
- * dsm_impl_file()), whatever dynamic_shared_memory_type says.  Their handles
- * are odd and those of other segments even, so that a handle tells how to
- * attach to or destroy its segment, and handles of the two kinds never
- * collide.  (The control segment's handle can be either: it always uses
- * dynamic_shared_memory_type.)  The control segment keeps their tablespace.
- */
-#define DSM_HANDLE_IS_FILE(h)	(((h) & 1) != 0)
-
-static bool dsm_segment_op(dsm_op op, dsm_handle handle, Oid tablespace,
-						   Size request_size, void **impl_private,
-						   void **mapped_address, Size *mapped_size,
-						   int elevel);
-
-/* GPDB: the workfile set of the files of this process; see dsm_track_file() */
-static struct workfile_set *dsm_work_set = NULL;
-static int	dsm_work_nfiles = 0;
-
-static void dsm_track_file(dsm_segment *seg);
 static void dsm_cleanup_for_mmap(void);
 static void dsm_postmaster_shutdown(int code, Datum arg);
 static dsm_segment *dsm_create_descriptor(void);
@@ -179,9 +151,6 @@ dsm_postmaster_startup(PGShmemHeader *shim)
 	 * Cleanup isn't needed on Windows, and happens earlier in startup for
 	 * POSIX and System V shared memory, via a direct call to
 	 * dsm_cleanup_using_control_segment.
-	 *
-	 * (GPDB: the files of segments created with DSM_CREATE_FILE are
-	 * temporary files, which RemovePgTempFiles() removes.)
 	 */
 	if (dynamic_shared_memory_type == DSM_IMPL_MMAP)
 		dsm_cleanup_for_mmap();
@@ -285,9 +254,8 @@ dsm_cleanup_using_control_segment(dsm_handle old_control_handle)
 			 handle, refcnt);
 
 		/* Destroy the referenced segment. */
-		dsm_segment_op(DSM_OP_DESTROY, handle, old_control->item[i].tablespace,
-					   0, &junk_impl_private,
-					   &junk_mapped_address, &junk_mapped_size, LOG);
+		dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+					&junk_mapped_address, &junk_mapped_size, LOG);
 	}
 
 	/* Destroy the old control segment, too. */
@@ -387,9 +355,8 @@ dsm_postmaster_shutdown(int code, Datum arg)
 			 handle);
 
 		/* Destroy the segment. */
-		dsm_segment_op(DSM_OP_DESTROY, handle, dsm_control->item[i].tablespace,
-					   0, &junk_impl_private,
-					   &junk_mapped_address, &junk_mapped_size, LOG);
+		dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+					&junk_mapped_address, &junk_mapped_size, LOG);
 	}
 
 	/* Remove the control segment itself. */
@@ -453,29 +420,6 @@ dsm_set_control_handle(dsm_handle h)
 #endif
 
 /*
- * GPDB: does a live segment have this handle?  Caller holds
- * DynamicSharedMemoryControlLock.  (A segment going away, with a reference
- * count of 1, cannot be attached any more; see dsm_attach().)
- */
-static bool
-dsm_handle_in_use(dsm_handle handle)
-{
-	uint32		i;
-
-	for (i = 0; i < dsm_control->nitems; i++)
-	{
-		if (dsm_control->item[i].refcnt > 1 &&
-			dsm_control->item[i].handle == handle)
-			return true;
-	}
-	return false;
-}
-
-#ifdef FAULT_INJECTOR
-static dsm_handle last_file_handle = DSM_HANDLE_INVALID;
-#endif
-
-/*
  * Create a new dynamic shared memory segment.
  *
  * If there is a non-NULL CurrentResourceOwner, the new segment is associated
@@ -491,9 +435,6 @@ dsm_create(Size size, int flags)
 	dsm_segment *seg;
 	uint32		i;
 	uint32		nitems;
-#ifdef FAULT_INJECTOR
-	bool		reuse_tried = false;
-#endif
 
 	/* Unsafe in postmaster. */
 	Assert(!IsPostmasterEnvironment || IsUnderPostmaster);
@@ -501,79 +442,25 @@ dsm_create(Size size, int flags)
 	if (!dsm_init_done)
 		dsm_backend_startup();
 
-#ifndef USE_DSM_MMAP
-	flags &= ~DSM_CREATE_FILE;
-#endif
-
-	/*
-	 * GPDB: a file must fit in the limits on work files (otherwise
-	 * dsm_track_file() fails with an error, once the file exists).
-	 */
-	if ((flags & DSM_CREATE_FILE) != 0 &&
-		(flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 &&
-		!workfile_mgr_file_fits(dsm_work_set, size))
-		return NULL;
-
 	/* Create a new segment descriptor. */
 	seg = dsm_create_descriptor();
-
-	/*
-	 * GPDB: a file goes to the next temporary tablespace, as temporary files
-	 * do (the caller has called PrepareTempTablespaces(), if it is to apply),
-	 * or to the database's default one.
-	 */
-	if ((flags & DSM_CREATE_FILE) != 0)
-	{
-		seg->tablespace = GetNextTempTableSpace();
-		if (!OidIsValid(seg->tablespace))
-			seg->tablespace = MyDatabaseTableSpace;
-	}
 
 	/* Loop until we find an unused segment identifier. */
 	for (;;)
 	{
 		Assert(seg->mapped_address == NULL && seg->mapped_size == 0);
 		seg->handle = random();
-		/* GPDB: odd for files, even for others; see DSM_HANDLE_IS_FILE */
-		if ((flags & DSM_CREATE_FILE) != 0)
-			seg->handle |= 1;
-		else
-			seg->handle &= ~(dsm_handle) 1;
-#ifdef FAULT_INJECTOR
-		/* Test hook: first take the handle of the last file of the process. */
-		if ((flags & DSM_CREATE_FILE) != 0 && !reuse_tried &&
-			last_file_handle != DSM_HANDLE_INVALID &&
-			SIMPLE_FAULT_INJECTOR("dsm_file_handle_reuse") == FaultInjectorTypeSkip)
-			seg->handle = last_file_handle;
-		reuse_tried = true;
-#endif
 		if (seg->handle == DSM_HANDLE_INVALID)	/* Reserve sentinel */
 			continue;
-		if (dsm_segment_op(DSM_OP_CREATE, seg->handle, seg->tablespace, size,
-						   &seg->impl_private,
-						   &seg->mapped_address, &seg->mapped_size,
-						   (flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 ? DEBUG1 : ERROR))
-		{
-			/*
-			 * GPDB: the file is unique in its directory only, and files of
-			 * other temporary tablespaces may have the same handle.  Take
-			 * another one then.  (The lock is kept to register the segment.)
-			 */
-			LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
-			if ((flags & DSM_CREATE_FILE) == 0 || !dsm_handle_in_use(seg->handle))
-				break;
-			LWLockRelease(DynamicSharedMemoryControlLock);
-			dsm_segment_op(DSM_OP_DESTROY, seg->handle, seg->tablespace, 0,
-						   &seg->impl_private,
-						   &seg->mapped_address, &seg->mapped_size, ERROR);
-			continue;
-		}
+		if (dsm_impl_op(DSM_OP_CREATE, seg->handle, size, &seg->impl_private,
+						&seg->mapped_address, &seg->mapped_size,
+						(flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 ? DEBUG1 : ERROR))
+			break;
 
 		/*
 		 * GPDB: with DSM_CREATE_NULL_IF_NOSPACE, a failure other than a
-		 * handle collision (e.g. /dev/shm or the disk being full) gets here
-		 * instead of raising an error.  The implementation has cleaned up
-		 * after itself.
+		 * handle collision (e.g. /dev/shm being full) gets here instead of
+		 * raising an error.  The implementation has cleaned up after itself.
 		 */
 		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 && errno != EEXIST)
 		{
@@ -600,11 +487,8 @@ dsm_create(Size size, int flags)
 		}
 	}
 
-	/* (The control segment is locked, so we can register the new segment.) */
-#ifdef FAULT_INJECTOR
-	if ((flags & DSM_CREATE_FILE) != 0)
-		last_file_handle = seg->handle;
-#endif
+	/* Lock the control segment so we can register the new segment. */
+	LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
 
 	/* Search the control segment for an unused slot. */
 	nitems = dsm_control->nitems;
@@ -617,11 +501,8 @@ dsm_create(Size size, int flags)
 			dsm_control->item[i].refcnt = 2;
 			dsm_control->item[i].impl_private_pm_handle = NULL;
 			dsm_control->item[i].pinned = false;
-			dsm_control->item[i].tablespace = seg->tablespace;
 			seg->control_slot = i;
 			LWLockRelease(DynamicSharedMemoryControlLock);
-			if ((flags & DSM_CREATE_FILE) != 0)
-				dsm_track_file(seg);
 			return seg;
 		}
 	}
@@ -630,9 +511,8 @@ dsm_create(Size size, int flags)
 	if (nitems >= dsm_control->maxitems)
 	{
 		LWLockRelease(DynamicSharedMemoryControlLock);
-		dsm_segment_op(DSM_OP_DESTROY, seg->handle, seg->tablespace, 0,
-					   &seg->impl_private,
-					   &seg->mapped_address, &seg->mapped_size, WARNING);
+		dsm_impl_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
+					&seg->mapped_address, &seg->mapped_size, WARNING);
 		if (seg->resowner != NULL)
 			ResourceOwnerForgetDSM(seg->resowner, seg);
 		dlist_delete(&seg->node);
@@ -651,13 +531,10 @@ dsm_create(Size size, int flags)
 	dsm_control->item[nitems].refcnt = 2;
 	dsm_control->item[nitems].impl_private_pm_handle = NULL;
 	dsm_control->item[nitems].pinned = false;
-	dsm_control->item[nitems].tablespace = seg->tablespace;
 	seg->control_slot = nitems;
 	dsm_control->nitems++;
 	LWLockRelease(DynamicSharedMemoryControlLock);
 
-	if ((flags & DSM_CREATE_FILE) != 0)
-		dsm_track_file(seg);
 	return seg;
 }
 
@@ -734,7 +611,6 @@ dsm_attach(dsm_handle h)
 		/* Otherwise we've found a match. */
 		dsm_control->item[i].refcnt++;
 		seg->control_slot = i;
-		seg->tablespace = dsm_control->item[i].tablespace;
 		break;
 	}
 	LWLockRelease(DynamicSharedMemoryControlLock);
@@ -752,9 +628,8 @@ dsm_attach(dsm_handle h)
 	}
 
 	/* Here's where we actually try to map the segment. */
-	dsm_segment_op(DSM_OP_ATTACH, seg->handle, seg->tablespace, 0,
-				   &seg->impl_private,
-				   &seg->mapped_address, &seg->mapped_size, ERROR);
+	dsm_impl_op(DSM_OP_ATTACH, seg->handle, 0, &seg->impl_private,
+				&seg->mapped_address, &seg->mapped_size, ERROR);
 
 	return seg;
 }
@@ -847,20 +722,10 @@ dsm_detach(dsm_segment *seg)
 	 * remaining mappings exist.  Even if this fails, we pretend that it
 	 * works, because retrying is likely to fail in the same way.
 	 */
-	if (seg->workfile >= 0)
-	{
-		/* GPDB: see dsm_track_file() */
-		FileClose(seg->workfile);
-		seg->workfile = -1;
-		if (seg->workfile_in_set && --dsm_work_nfiles == 0)
-			dsm_work_set = NULL;	/* freed with its last file */
-		seg->workfile_in_set = false;
-	}
 	if (seg->mapped_address != NULL)
 	{
-		dsm_segment_op(DSM_OP_DETACH, seg->handle, seg->tablespace, 0,
-					   &seg->impl_private,
-					   &seg->mapped_address, &seg->mapped_size, WARNING);
+		dsm_impl_op(DSM_OP_DETACH, seg->handle, 0, &seg->impl_private,
+					&seg->mapped_address, &seg->mapped_size, WARNING);
 		seg->impl_private = NULL;
 		seg->mapped_address = NULL;
 		seg->mapped_size = 0;
@@ -900,9 +765,8 @@ dsm_detach(dsm_segment *seg)
 			 * other reason, the postmaster may not have any better luck than
 			 * we did.  There's not much we can do about that, though.
 			 */
-			if (dsm_segment_op(DSM_OP_DESTROY, seg->handle, seg->tablespace, 0,
-							   &seg->impl_private,
-							   &seg->mapped_address, &seg->mapped_size, WARNING))
+			if (dsm_impl_op(DSM_OP_DESTROY, seg->handle, 0, &seg->impl_private,
+							&seg->mapped_address, &seg->mapped_size, WARNING))
 			{
 				LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
 				Assert(dsm_control->item[control_slot].handle == seg->handle);
@@ -1066,10 +930,8 @@ dsm_unpin_segment(dsm_handle handle)
 		 * pass the mapped size, mapped address, and private data as NULL
 		 * here.
 		 */
-		if (dsm_segment_op(DSM_OP_DESTROY, handle,
-						   dsm_control->item[control_slot].tablespace, 0,
-						   &junk_impl_private,
-						   &junk_mapped_address, &junk_mapped_size, WARNING))
+		if (dsm_impl_op(DSM_OP_DESTROY, handle, 0, &junk_impl_private,
+						&junk_mapped_address, &junk_mapped_size, WARNING))
 		{
 			LWLockAcquire(DynamicSharedMemoryControlLock, LW_EXCLUSIVE);
 			Assert(dsm_control->item[control_slot].handle == handle);
@@ -1170,65 +1032,6 @@ dsm_free_slots(uint32 *nfree, uint32 *nmax)
 }
 
 /*
- * GPDB: perform an operation on a segment other than the control segment,
- * with the implementation its handle tells (see DSM_HANDLE_IS_FILE).
- */
-static bool
-dsm_segment_op(dsm_op op, dsm_handle handle, Oid tablespace,
-			   Size request_size, void **impl_private, void **mapped_address,
-			   Size *mapped_size, int elevel)
-{
-#ifdef USE_DSM_MMAP
-	if (DSM_HANDLE_IS_FILE(handle))
-		return dsm_impl_file(op, handle, tablespace, request_size,
-							 impl_private, mapped_address, mapped_size,
-							 elevel);
-#endif
-	return dsm_impl_op(op, handle, request_size, impl_private,
-					   mapped_address, mapped_size, elevel);
-}
-
-/*
- * GPDB: count the file of a segment just created with DSM_CREATE_FILE as a
- * work file of the creating process, for the limits on work files and the
- * gp_toolkit views: through a virtual file descriptor kept open until the
- * creator detaches (dsm_detach()), or exits.  All such files of a process
- * share a workfile set, rather than take one each (there are
- * gp_workfile_max_entries of them on a node) for as long as they live: they
- * count as work files of the query that created the first one, also for the
- * limits per query.  The set goes with the last file.
- */
-static void
-dsm_track_file(dsm_segment *seg)
-{
-#ifdef USE_DSM_MMAP
-	char		path[MAXPGPATH];
-	workfile_set *work_set;
-	File		file;
-
-	dsm_impl_file_path(path, seg->handle, seg->tablespace);
-	work_set = dsm_work_set;
-	if (work_set == NULL)
-		work_set = workfile_mgr_create_set("dsm", NULL, false);
-	file = PathNameOpenFile(path, O_RDWR | PG_BINARY);
-	if (file < 0)
-		ereport(ERROR,
-				(errcode_for_file_access(),
-				 errmsg("could not open file \"%s\": %m", path)));
-	seg->workfile = file;
-	FileSetIsWorkfile(file);
-	RegisterFileWithSet(file, work_set);
-	dsm_work_set = work_set;
-	dsm_work_nfiles++;
-	seg->workfile_in_set = true;
-	UpdateWorkFileSize(file, seg->mapped_size);
-#else
-	/* (dsm_create() ignores DSM_CREATE_FILE) */
-	elog(ERROR, "dynamic shared memory segments in files are not supported");
-#endif
-}
-
-/*
  * Register an on-detach callback for a dynamic shared memory segment.
  */
 void
@@ -1316,9 +1119,6 @@ dsm_create_descriptor(void)
 	seg->impl_private = NULL;
 	seg->mapped_address = NULL;
 	seg->mapped_size = 0;
-	seg->tablespace = InvalidOid;
-	seg->workfile = -1;
-	seg->workfile_in_set = false;
 
 	seg->resowner = CurrentResourceOwner;
 	if (CurrentResourceOwner)

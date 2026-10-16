@@ -100,9 +100,13 @@ SET enable_nestloop = off;
 SET enable_mergejoin = on;
 SET enable_sort = off;
 SET enable_material = off;
-SELECT tc_explain($$SELECT count(*), sum(a1.attnum * a2.atttypid::int8)
+-- (the join order depends on the statistics of pg_attribute)
+SELECT bool_or(l LIKE '%Merge Join%') AS merge_join,
+       bool_or(l LIKE '%Index Only Scan%') AS index_only_scan,
+       bool_or(l LIKE '%Index Scan using%') AS index_scan
+  FROM tc_explain($$SELECT count(*), sum(a1.attnum * a2.atttypid::int8)
   FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
- WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$);
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$) l;
 SELECT count(*) = :ref_n AND sum(a1.attnum * a2.atttypid::int8) = :ref_s2 AS same
   FROM pg_attribute a1 JOIN pg_attribute a2 ON a1.attrelid = a2.attrelid
  WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass);
@@ -300,28 +304,17 @@ SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
 SELECT 'tc_disk2'::regclass::oid >= 4026531840 AS reserved;
 
--- Beyond gp_temp_memory_catalog_max_size, the rows go to files in
--- the directory for temporary files, counted as work files, and beyond
--- gp_temp_memory_catalog_max_file_size more, the
--- session runs out of room.
+-- The area grows, segment by segment, up to gp_temp_memory_catalog_max_size;
+-- beyond, the session runs out of room.
 \c
 SET gp_enable_temp_memory_catalog = on;
-SET gp_temp_memory_catalog_max_size = '1MB';
-SET gp_temp_memory_catalog_max_file_size = '8MB';
-CREATE TEMP TABLE tc_first (a int) DISTRIBUTED BY (a);
+SET gp_temp_memory_catalog_max_size = '8MB';
 DO $$
 BEGIN
   FOR i IN 1..200 LOOP
     EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
-SELECT coalesce(sum(numfiles), 0) > 0 AS more_files FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%' AND segid = -1;
--- (one workfile set for all files of a process)
-SELECT segid, count(*) AS work_sets, sum(numfiles) > 1 AS work_files
-  FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'
- GROUP BY segid ORDER BY segid;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
 INSERT INTO tc_many200 VALUES (1, 'x');
 SELECT * FROM tc_many200;
@@ -334,27 +327,9 @@ BEGIN
 END $$;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
 
--- All files of a process count as work files of the query that created the
--- first one, and must fit in its limits: beyond them, the session is out of
--- room, as beyond gp_temp_memory_catalog_max_file_size, rather than fail on
--- a limit once a file exists.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';
-SET gp_temp_memory_catalog_max_file_size = '8MB';
-SET gp_workfile_limit_files_per_query = 1;
-DO $$
-BEGIN
-  FOR i IN 1..200 LOOP
-    EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
-  END LOOP;
-END $$;
-RESET gp_workfile_limit_files_per_query;
-
-\c
-SET gp_enable_temp_memory_catalog = on;
-SET gp_temp_memory_catalog_max_size = '1MB';
-SET gp_temp_memory_catalog_max_file_size = 0;
 DO $$
 BEGIN
   FOR i IN 1..500 LOOP
@@ -934,89 +909,24 @@ INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
 SELECT count(*) FROM tc_wrap1 JOIN tc_wrap2 USING (a);
 
 -- When dynamic shared memory runs short for others (the fault pretends
--- so), a new session keeps the catalog rows of its temporary objects in
--- files from the start; without files, its temporary schema is on disk.
+-- so), a new session keeps its temporary objects on disk.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
-SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
-SELECT coalesce(sum(numfiles), 0) > 0 AS in_files FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%' AND segid = -1;
-\c
-SET gp_enable_temp_memory_catalog = on;
-SET gp_temp_memory_catalog_max_file_size = 0;
 CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
 SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
--- A session that finds no free slice (the fault pretends so) keeps its
--- temporary objects on disk, without making an area for nothing (here it
--- would be a file).
+-- So does a session that finds no free slice (the fault pretends so).
 \c
 SET gp_enable_temp_memory_catalog = on;
-SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_noslice (a int) DISTRIBUTED BY (a);
 SELECT 'tc_noslice'::regclass::oid >= 4026531840 AS reserved;
-SELECT coalesce(sum(numfiles), 0) = 0 AS no_area FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%' AND segid = -1;
 SELECT gp_inject_fault('tempcat_no_free_slice', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-
--- A segment starts the area in a file too when dynamic shared memory runs
--- short there, if files are allowed: several primaries of a host share its
--- /dev/shm, whose other users fail when it is full.
-\c
-SET gp_enable_temp_memory_catalog = on;
-SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-CREATE TEMP TABLE tc_seglow (a int) DISTRIBUTED BY (a);
-INSERT INTO tc_seglow SELECT generate_series(1, 10);
-SELECT count(*), 'tc_seglow'::regclass::oid >= 4026531840 AS reserved FROM tc_seglow;
-SELECT coalesce(sum(numfiles), 0) > 0 AS seg0_in_files FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%' AND segid = 0;
--- If there is no room for the file either, it starts the area in the memory
--- left to others: it cannot keep the temporary objects on disk instead.
-\c
-SET gp_enable_temp_memory_catalog = on;
-SELECT gp_inject_fault_infinite('tempcat_area_file_full', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-CREATE TEMP TABLE tc_segfull (a int) DISTRIBUTED BY (a);
-INSERT INTO tc_segfull SELECT generate_series(1, 10);
-SELECT count(*), 'tc_segfull'::regclass::oid >= 4026531840 AS reserved FROM tc_segfull;
-SELECT coalesce(sum(numfiles), 0) = 0 AS seg0_in_memory FROM gp_toolkit.gp_workfile_entries
- WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%' AND segid = 0;
-SELECT gp_inject_fault('tempcat_area_file_full', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-
--- A leftover row that the sweep of the slice could not see (here added by
--- hand) goes when the session gives its OID to an object of its own:
--- otherwise the object would depend on the type, and go with it.
-\c
-SET gp_enable_temp_memory_catalog = on;
-CREATE TYPE tc_lo_type AS (x int);
-CREATE TEMP TABLE tc_lo_first (a int) DISTRIBUTED BY (a);
-SELECT (4026531840 + ('tc_lo_first'::regclass::oid::bigint - 4026531840) / 65536 * 65536 + 65536 - 3)::oid AS lo_oid \gset
-SET allow_system_table_mods = on;
-INSERT INTO pg_depend VALUES ('pg_class'::regclass, :lo_oid, 0, 'pg_type'::regclass, 'tc_lo_type'::regtype, 0, 'n');
-RESET allow_system_table_mods;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_lo_next (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT 'tc_lo_next'::regclass::oid = :lo_oid AS same_oid;
-SELECT count(*) FROM pg_depend WHERE objid = :lo_oid AND refobjid = 'tc_lo_type'::regtype;
-DROP TYPE tc_lo_type;
-SELECT count(*) FROM tc_lo_next;
 
 -- A reader that fails as it checks, at idle, whether a table it counted
 -- was dropped (the fault, with the area's lock held) logs it, and lets go

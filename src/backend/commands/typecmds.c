@@ -3026,6 +3026,13 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 	check_stack_depth();
 
 	/*
+	 * GPDB: temporary objects of other sessions kept in memory use the domain
+	 * through rows that cannot be seen here; wait until none does (see
+	 * tempcat.c).
+	 */
+	tempcat_lock_out_users(TypeRelationId, domainOid);
+
+	/*
 	 * We scan pg_depend to find those things that depend on the domain. (We
 	 * assume we can ignore refobjsubid for a domain.)
 	 */
@@ -3054,11 +3061,6 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 		/* Check for directly dependent types */
 		if (pg_depend->classid == TypeRelationId)
 		{
-			/* GPDB: not one of another session's in-memory types */
-			if (tempcat_check_type_user(TypeRelationId, pg_depend->objid,
-										domainTypeName))
-				continue;
-
 			if (get_typtype(pg_depend->objid) == TYPTYPE_DOMAIN)
 			{
 				/*
@@ -3107,14 +3109,6 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 		{
 			/* First attribute found for this relation */
 			Relation	rel;
-
-			/*
-			 * GPDB: a temporary table of another session kept in memory,
-			 * which cannot be opened, let alone checked (see tempcat.c).
-			 */
-			if (tempcat_check_type_user(RelationRelationId, pg_depend->objid,
-										domainTypeName))
-				continue;
 
 			/* Acquire requested lock on relation */
 			rel = relation_open(pg_depend->objid, lockmode);

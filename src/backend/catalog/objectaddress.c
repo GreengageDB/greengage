@@ -64,7 +64,6 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
-#include "catalog/tempcat.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -3867,10 +3866,6 @@ pg_describe_object(PG_FUNCTION_ARGS)
 	address.objectId = objid;
 	address.objectSubId = objsubid;
 
-	/* GPDB: nor for another session's temporary object (see tempcat.c) */
-	if (tempcat_foreign_object(classid, objid) != TCF_NONE)
-		PG_RETURN_NULL();
-
 	description = getObjectDescription(&address);
 	PG_RETURN_TEXT_P(cstring_to_text(description));
 }
@@ -3911,17 +3906,6 @@ pg_identify_object(PG_FUNCTION_ARGS)
 					   TEXTOID, -1, 0);
 
 	tupdesc = BlessTupleDesc(tupdesc);
-
-	/*
-	 * GPDB: another session's temporary object, which only that session can
-	 * see (see tempcat.c), is described by nulls
-	 */
-	if (tempcat_foreign_object(classid, objid) != TCF_NONE)
-	{
-		memset(nulls, true, sizeof(nulls));
-		htup = heap_form_tuple(tupdesc, values, nulls);
-		PG_RETURN_DATUM(HeapTupleGetDatum(htup));
-	}
 
 	if (is_objectclass_supported(address.classId))
 	{
@@ -4039,14 +4023,6 @@ pg_identify_object_as_address(PG_FUNCTION_ARGS)
 					   TEXTARRAYOID, -1, 0);
 
 	tupdesc = BlessTupleDesc(tupdesc);
-
-	/* GPDB: see pg_identify_object() */
-	if (tempcat_foreign_object(classid, objid) != TCF_NONE)
-	{
-		memset(nulls, true, sizeof(nulls));
-		htup = heap_form_tuple(tupdesc, values, nulls);
-		PG_RETURN_DATUM(HeapTupleGetDatum(htup));
-	}
 
 	/* object type */
 	values[0] = CStringGetTextDatum(getObjectTypeDescription(&address));

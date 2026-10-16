@@ -774,11 +774,6 @@ dsm_impl_windows(dsm_op op, dsm_handle handle, Size request_size,
 #endif
 
 #ifdef USE_DSM_MMAP
-static bool dsm_impl_mmap_path(dsm_op op, const char *name, bool file,
-							   Size request_size, void **impl_private,
-							   void **mapped_address, Size *mapped_size,
-							   int elevel);
-
 /*
  * Operating system primitives to support mmap-based shared memory.
  *
@@ -795,60 +790,12 @@ dsm_impl_mmap(dsm_op op, dsm_handle handle, Size request_size,
 			  int elevel)
 {
 	char		name[64];
-
-	snprintf(name, 64, PG_DYNSHMEM_DIR "/" PG_DYNSHMEM_MMAP_FILE_PREFIX "%u",
-			 handle);
-	return dsm_impl_mmap_path(op, name, false, request_size, impl_private,
-							  mapped_address, mapped_size, elevel);
-}
-
-/*
- * GPDB: the path of the file of a segment created with DSM_CREATE_FILE in
- * 'tablespace' (InvalidOid for the database's default), in the tablespace's
- * directory for temporary files, as a temporary file: RemovePgTempFiles()
- * removes those left by a crash, and base backups skip them.
- */
-void
-dsm_impl_file_path(char *path, dsm_handle handle, Oid tablespace)
-{
-	char		dir[MAXPGPATH];
-
-	TempTablespacePath(dir, tablespace);
-	snprintf(path, MAXPGPATH, "%s/%s" PG_DSM_FILE_PREFIX "%u",
-			 dir, PG_TEMP_FILE_PREFIX, handle);
-}
-
-/*
- * GPDB: like dsm_impl_op(), for a segment created with DSM_CREATE_FILE: a
- * file mapped into memory, in the directory for temporary files of
- * 'tablespace'.
- */
-bool
-dsm_impl_file(dsm_op op, dsm_handle handle, Oid tablespace, Size request_size,
-			  void **impl_private, void **mapped_address, Size *mapped_size,
-			  int elevel)
-{
-	char		name[MAXPGPATH];
-
-	dsm_impl_file_path(name, handle, tablespace);
-	return dsm_impl_mmap_path(op, name, true, request_size, impl_private,
-							  mapped_address, mapped_size, elevel);
-}
-
-/*
- * The mmap implementation, with the file named 'name'.  For a segment
- * created with DSM_CREATE_FILE ('file'), the directory is made if missing,
- * and a file already gone (removed by RemovePgTempFiles()) is no error to
- * destroy.
- */
-static bool
-dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
-				   void **impl_private, void **mapped_address,
-				   Size *mapped_size, int elevel)
-{
 	int			flags;
 	int			fd;
 	char	   *address;
+
+	snprintf(name, 64, PG_DYNSHMEM_DIR "/" PG_DYNSHMEM_MMAP_FILE_PREFIX "%u",
+			 handle);
 
 	/* Handle teardown cases. */
 	if (op == DSM_OP_DETACH || op == DSM_OP_DESTROY)
@@ -864,8 +811,7 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 		}
 		*mapped_address = NULL;
 		*mapped_size = 0;
-		if (op == DSM_OP_DESTROY && unlink(name) != 0 &&
-			!(file && errno == ENOENT))
+		if (op == DSM_OP_DESTROY && unlink(name) != 0)
 		{
 			ereport(elevel,
 					(errcode_for_dynamic_shared_memory(),
@@ -878,23 +824,7 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 
 	/* Create new segment or open an existing one for attach. */
 	flags = O_RDWR | (op == DSM_OP_CREATE ? O_CREAT | O_EXCL : 0);
-	fd = OpenTransientFile(name, flags);
-	if (fd == -1 && file && op == DSM_OP_CREATE && errno == ENOENT)
-	{
-		/* (as OpenTemporaryFileInTablespace() does) */
-		char		dir[MAXPGPATH];
-		char	   *slash;
-
-		strlcpy(dir, name, sizeof(dir));
-		slash = strrchr(dir, '/');
-		if (slash != NULL)
-		{
-			*slash = '\0';
-			(void) MakePGDirectory(dir);
-		}
-		fd = OpenTransientFile(name, flags);
-	}
-	if (fd == -1)
+	if ((fd = OpenTransientFile(name, flags)) == -1)
 	{
 		if (op == DSM_OP_ATTACH || errno != EEXIST)
 			ereport(elevel,
@@ -937,51 +867,10 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 		 * Note: palloc zbuffer, instead of just using a local char array, to
 		 * ensure it is reasonably well-aligned; this may save a few cycles
 		 * transferring data to the kernel.
-		 *
-		 * GPDB: only if it is used (not after posix_fallocate()), and freed
-		 * after: the caller may be in a long-lived memory context.
 		 */
-		char	   *zbuffer = NULL;
+		char	   *zbuffer = (char *) palloc0(ZBUFFER_SIZE);
 		Size		remaining = request_size;
 		bool		success = true;
-
-#if defined(HAVE_POSIX_FALLOCATE) && defined(__linux__)
-		{
-			int			rc;
-			sigset_t	save_sigmask;
-
-			/*
-			 * GPDB: allocate the space without writing it, which file
-			 * systems that support it do without dirtying any pages:
-			 * segments in files can be large (see DSM_CREATE_FILE).  It is as
-			 * sure to have allocated all the space as the zero-filling below
-			 * on file systems that write in place.  On copy-on-write ones
-			 * (btrfs, ZFS) neither reserves space for later writes, and a
-			 * full disk, as an I/O error on any, makes a write through the
-			 * mapping fail with SIGBUS: see the documentation of
-			 * gp_temp_memory_catalog_max_file_size.  Block signals meanwhile,
-			 * as dsm_impl_posix_resize() does: it can take long, and is all or
-			 * nothing.
-			 */
-			if (IsUnderPostmaster)
-				sigprocmask(SIG_SETMASK, &BlockSig, &save_sigmask);
-			pgstat_report_wait_start(WAIT_EVENT_DSM_FILL_ZERO_WRITE);
-			do
-			{
-				rc = posix_fallocate(fd, 0, request_size);
-			} while (rc == EINTR);
-			pgstat_report_wait_end();
-			if (IsUnderPostmaster)
-				sigprocmask(SIG_SETMASK, &save_sigmask, NULL);
-			if (rc == 0)
-				remaining = 0;
-			else if (rc != EINVAL && rc != EOPNOTSUPP)
-			{
-				success = false;
-				errno = rc;
-			}
-		}
-#endif
 
 		/*
 		 * Zero-fill the file. We have to do this the hard way to ensure that
@@ -989,10 +878,6 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 		 * later seg fault when accessing the memory mapping.  This is pretty
 		 * pessimal.
 		 */
-		if (success)
-			errno = 0;
-		if (success && remaining > 0)
-			zbuffer = (char *) palloc0(ZBUFFER_SIZE);
 		while (success && remaining > 0)
 		{
 			Size		goal = remaining;
@@ -1006,8 +891,6 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 				success = false;
 			pgstat_report_wait_end();
 		}
-		if (zbuffer != NULL)
-			pfree(zbuffer);
 
 		if (!success)
 		{
@@ -1052,16 +935,6 @@ dsm_impl_mmap_path(dsm_op op, const char *name, bool file, Size request_size,
 
 	if (CloseTransientFile(fd))
 	{
-		int			save_errno = errno;
-
-		/* GPDB: back out the mapping and the file too, as above */
-		munmap(address, request_size);
-		*mapped_address = NULL;
-		*mapped_size = 0;
-		if (op == DSM_OP_CREATE)
-			unlink(name);
-		errno = save_errno;
-
 		ereport(elevel,
 				(errcode_for_file_access(),
 				 errmsg("could not close shared memory segment \"%s\": %m",
