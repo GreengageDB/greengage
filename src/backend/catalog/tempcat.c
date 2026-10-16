@@ -1364,7 +1364,9 @@ tempcat_clear_leftovers_of(Oid classId, Oid oid)
 /*
  * Remove the on-disk pg_depend and pg_shdepend rows of temporary objects of
  * earlier holders of our slice in this database; see above.  Rows of
- * ordinary objects with OIDs in the slice (see the file header) stay.
+ * ordinary objects with OIDs in the slice (see the file header) stay, and
+ * so do those of our own objects, if any (a sweep again after one that
+ * rolled back may come after objects of ours that committed meanwhile).
  */
 static void
 tempcat_sweep_slice(int slice)
@@ -1386,7 +1388,7 @@ tempcat_sweep_slice(int slice)
 		SysScanDesc scan;
 		HeapTuple	tup;
 		Oid			last = InvalidOid;
-		bool		ordinary = false;
+		bool		keep = false;
 
 		ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber,
 					F_OIDEQ, ObjectIdGetDatum(classId));
@@ -1406,9 +1408,10 @@ tempcat_sweep_slice(int slice)
 			if (dep->objid != last)
 			{
 				last = dep->objid;
-				ordinary = tempcat_disk_object_exists(classId, dep->objid);
+				keep = tempcat_disk_object_exists(classId, dep->objid) ||
+					tempcat_owns_oid(classId, dep->objid);
 			}
-			if (!ordinary && tempcat_delete_leftover(deprel, &tup->t_self))
+			if (!keep && tempcat_delete_leftover(deprel, &tup->t_self))
 				deleted = true;
 		}
 		systable_endscan(scan);
@@ -1434,9 +1437,10 @@ tempcat_sweep_slice(int slice)
 			if (dep->objid != last)
 			{
 				last = dep->objid;
-				ordinary = tempcat_disk_object_exists(classId, dep->objid);
+				keep = tempcat_disk_object_exists(classId, dep->objid) ||
+					tempcat_owns_oid(classId, dep->objid);
 			}
-			if (!ordinary && tempcat_delete_leftover(sdeprel, &tup->t_self))
+			if (!keep && tempcat_delete_leftover(sdeprel, &tup->t_self))
 				deleted = true;
 		}
 		systable_endscan(scan);
