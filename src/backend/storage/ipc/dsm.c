@@ -74,6 +74,7 @@ struct dsm_segment
 	slist_head	on_detach;		/* On-detach callbacks. */
 	Oid			tablespace;		/* GPDB: of a segment that is a file */
 	File		workfile;		/* GPDB: creator's file, see dsm_track_file() */
+	bool		workfile_in_set;	/* GPDB: counted in dsm_work_nfiles */
 };
 
 /* Shared-memory state for a dynamic shared memory segment. */
@@ -110,7 +111,11 @@ static bool dsm_segment_op(dsm_op op, dsm_handle handle, Oid tablespace,
 						   Size request_size, void **impl_private,
 						   void **mapped_address, Size *mapped_size,
 						   int elevel);
-static bool dsm_file_fits(Size size);
+
+/* GPDB: the workfile set of the files of this process; see dsm_track_file() */
+static struct workfile_set *dsm_work_set = NULL;
+static int	dsm_work_nfiles = 0;
+
 static void dsm_track_file(dsm_segment *seg);
 static void dsm_cleanup_for_mmap(void);
 static void dsm_postmaster_shutdown(int code, Datum arg);
@@ -499,15 +504,14 @@ dsm_create(Size size, int flags)
 	flags &= ~DSM_CREATE_FILE;
 #endif
 
-	/* GPDB: a file must fit in the limit on all work files of the node */
-	if ((flags & DSM_CREATE_FILE) != 0 && !dsm_file_fits(size))
-	{
-		if ((flags & DSM_CREATE_NULL_IF_NOSPACE) != 0)
-			return NULL;
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_RESOURCES),
-				 errmsg("workfile per segment size limit exceeded")));
-	}
+	/*
+	 * GPDB: a file must fit in the limits on work files (otherwise
+	 * dsm_track_file() fails with an error, once the file exists).
+	 */
+	if ((flags & DSM_CREATE_FILE) != 0 &&
+		(flags & DSM_CREATE_NULL_IF_NOSPACE) != 0 &&
+		!workfile_mgr_file_fits(dsm_work_set, size))
+		return NULL;
 
 	/* Create a new segment descriptor. */
 	seg = dsm_create_descriptor();
@@ -843,6 +847,9 @@ dsm_detach(dsm_segment *seg)
 		/* GPDB: see dsm_track_file() */
 		FileClose(seg->workfile);
 		seg->workfile = -1;
+		if (seg->workfile_in_set && --dsm_work_nfiles == 0)
+			dsm_work_set = NULL;	/* freed with its last file */
+		seg->workfile_in_set = false;
 	}
 	if (seg->mapped_address != NULL)
 	{
@@ -1177,23 +1184,14 @@ dsm_segment_op(dsm_op op, dsm_handle handle, Oid tablespace,
 }
 
 /*
- * GPDB: would a file of 'size' bytes fit in gp_workfile_limit_per_segment?
- * The files of segments count as work files (see dsm_track_file()).
- */
-static bool
-dsm_file_fits(Size size)
-{
-	return gp_workfile_limit_per_segment <= 0 ||
-		(WorkfileSegspace_GetSize() + size) / 1024 <=
-		(uint64) gp_workfile_limit_per_segment;
-}
-
-/*
  * GPDB: count the file of a segment just created with DSM_CREATE_FILE as a
- * work file of the creating process, in a work file set of its own, for
- * gp_workfile_limit_per_segment and the gp_toolkit views: through a virtual
- * file descriptor kept open until the creator detaches (dsm_detach()), or
- * exits.  The set lives as long as the file.
+ * work file of the creating process, for the limits on work files and the
+ * gp_toolkit views: through a virtual file descriptor kept open until the
+ * creator detaches (dsm_detach()), or exits.  All such files of a process
+ * share a workfile set, rather than take one each (there are
+ * gp_workfile_max_entries of them on a node) for as long as they live: they
+ * count as work files of the query that created the first one, also for the
+ * limits per query.  The set goes with the last file.
  */
 static void
 dsm_track_file(dsm_segment *seg)
@@ -1203,7 +1201,9 @@ dsm_track_file(dsm_segment *seg)
 	File		file;
 
 	dsm_impl_file_path(path, seg->handle, seg->tablespace);
-	work_set = workfile_mgr_create_set("dsm", NULL, false);
+	work_set = dsm_work_set;
+	if (work_set == NULL)
+		work_set = workfile_mgr_create_set("dsm", NULL, false);
 	file = PathNameOpenFile(path, O_RDWR | PG_BINARY);
 	if (file < 0)
 		ereport(ERROR,
@@ -1212,6 +1212,9 @@ dsm_track_file(dsm_segment *seg)
 	seg->workfile = file;
 	FileSetIsWorkfile(file);
 	RegisterFileWithSet(file, work_set);
+	dsm_work_set = work_set;
+	dsm_work_nfiles++;
+	seg->workfile_in_set = true;
 	UpdateWorkFileSize(file, seg->mapped_size);
 }
 
@@ -1305,6 +1308,7 @@ dsm_create_descriptor(void)
 	seg->mapped_size = 0;
 	seg->tablespace = InvalidOid;
 	seg->workfile = -1;
+	seg->workfile_in_set = false;
 
 	seg->resowner = CurrentResourceOwner;
 	if (CurrentResourceOwner)

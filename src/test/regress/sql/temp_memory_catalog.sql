@@ -319,7 +319,9 @@ BEGIN
 END $$;
 SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp', true, false) f
  WHERE f LIKE 'pgsql_tmpdsm.%';
-SELECT segid, count(*) > 0 AS work_files FROM gp_toolkit.gp_workfile_entries
+-- (one workfile set for all files of a process)
+SELECT segid, count(*) AS work_sets, sum(numfiles) > 1 AS work_files
+  FROM gp_toolkit.gp_workfile_entries
  WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'
  GROUP BY segid ORDER BY segid;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
@@ -333,6 +335,23 @@ BEGIN
   END LOOP;
 END $$;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
+
+-- All files of a process count as work files of the query that created the
+-- first one, and must fit in its limits: beyond them, the session is out of
+-- room, as beyond gp_temp_memory_catalog_max_file_size, rather than fail on
+-- a limit once a file exists.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_temp_memory_catalog_max_file_size = '8MB';
+SET gp_workfile_limit_files_per_query = 1;
+DO $$
+BEGIN
+  FOR i IN 1..200 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
+  END LOOP;
+END $$;
+RESET gp_workfile_limit_files_per_query;
 
 \c
 SET gp_enable_temp_memory_catalog = on;

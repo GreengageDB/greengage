@@ -125,5 +125,6 @@ extern void workfile_mgr_close_set(workfile_set *work_set);
 extern Datum gp_workfile_mgr_cache_entries_internal(PG_FUNCTION_ARGS);
 extern workfile_set *workfile_mgr_cache_entries_get_copy(int* num_actives);
 extern uint64 WorkfileSegspace_GetSize(void);
+extern bool workfile_mgr_file_fits(workfile_set *work_set, uint64 size);
 
 #endif /* __WORKFILE_MGR_H__ */

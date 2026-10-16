@@ -657,15 +657,17 @@ SELECT count(*) > :files_before AS more_files FROM pg_ls_dir('base/pgsql_tmp', t
  t
 (1 row)
 
-SELECT segid, count(*) > 0 AS work_files FROM gp_toolkit.gp_workfile_entries
+-- (one workfile set for all files of a process)
+SELECT segid, count(*) AS work_sets, sum(numfiles) > 1 AS work_files
+  FROM gp_toolkit.gp_workfile_entries
  WHERE sess_id = current_setting('gp_session_id')::int AND prefix LIKE 'dsm%'
  GROUP BY segid ORDER BY segid;
- segid | work_files 
--------+------------
-    -1 | t
-     0 | t
-     1 | t
-     2 | t
+ segid | work_sets | work_files 
+-------+-----------+------------
+    -1 |         1 | t
+     0 |         1 | t
+     1 |         1 | t
+     2 |         1 | t
 (4 rows)
 
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
@@ -704,6 +706,27 @@ SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
    400
 (1 row)
 
+-- All files of a process count as work files of the query that created the
+-- first one, and must fit in its limits: beyond them, the session is out of
+-- room, as beyond gp_temp_memory_catalog_max_file_size, rather than fail on
+-- a limit once a file exists.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_temp_memory_catalog_max_file_size = '8MB';
+SET gp_workfile_limit_files_per_query = 1;
+DO $$
+BEGIN
+  FOR i IN 1..200 LOOP
+    EXECUTE format('CREATE TEMP TABLE tc_many%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
+  END LOOP;
+END $$;
+ERROR:  out of room for the catalog rows of temporary objects
+DETAIL:  The session keeps them in 1024 kB of memory and 1024 kB of files.
+HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size or gp_temp_memory_catalog_max_file_size for new sessions.
+CONTEXT:  SQL statement "CREATE TEMP TABLE tc_many129 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)"
+PL/pgSQL function inline_code_block line 4 at EXECUTE
+RESET gp_workfile_limit_files_per_query;
 \c
 SET gp_enable_temp_memory_catalog = on;
 SET gp_temp_memory_catalog_max_size = '1MB';

@@ -936,6 +936,48 @@ gp_workfile_mgr_cache_entries_internal(PG_FUNCTION_ARGS)
 /*
  * Get the total number of bytes used across all workfiles
  */
+/*
+ * GPDB: would a new file of 'size' bytes in 'work_set', or in a new
+ * workfile set of the current query if it is NULL, stay within the limits
+ * that RegisterFileWithSet() and UpdateWorkFileSize() enforce?  For those
+ * that must not fail with an error once the file exists (see dsm_create()).
+ * Others may take room meanwhile: it is a good guess only.
+ */
+bool
+workfile_mgr_file_fits(workfile_set *work_set, uint64 size)
+{
+	WorkFileUsagePerQuery *perquery = NULL;
+	bool		fits = true;
+
+	LWLockAcquire(WorkFileManagerLock, LW_SHARED);
+	if (work_set != NULL)
+		perquery = work_set->perquery;
+	else
+	{
+		WorkFileUsagePerQuery key;
+
+		if (dlist_is_empty(&workfile_shared->freeList))
+			fits = false;
+		key.session_id = gp_session_id;
+		key.command_count = MyProc->queryCommandId;
+		perquery = (WorkFileUsagePerQuery *)
+			hash_search(workfile_shared->per_query_hash, &key, HASH_FIND, NULL);
+	}
+	if (gp_workfile_limit_files_per_query > 0 &&
+		(perquery ? perquery->num_files : 0) + 1 > gp_workfile_limit_files_per_query)
+		fits = false;
+	if (gp_workfile_limit_per_query > 0 &&
+		((perquery ? perquery->total_bytes : 0) + size + 1023) / 1024 >
+		(uint64) gp_workfile_limit_per_query)
+		fits = false;
+	if (gp_workfile_limit_per_segment > 0 &&
+		(workfile_shared->total_bytes + size) / 1024 >
+		(uint64) gp_workfile_limit_per_segment)
+		fits = false;
+	LWLockRelease(WorkFileManagerLock);
+	return fits;
+}
+
 uint64
 WorkfileSegspace_GetSize(void)
 {
