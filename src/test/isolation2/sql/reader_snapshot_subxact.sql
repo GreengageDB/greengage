@@ -34,7 +34,41 @@ TRUNCATE rs_sub;
 1: COMMIT;
 1: SELECT count(*) FROM rs_sub;
 
+-- The same with more subtransaction XIDs in progress than a snapshot holds
+-- (here another transaction's, over 64 per segment): the readers look the
+-- XIDs up in pg_subtrans.
+TRUNCATE rs_sub;
+4: BEGIN;
+4: DO $$ BEGIN FOR i IN 1..600 LOOP BEGIN INSERT INTO rs_other VALUES (i); EXCEPTION WHEN others THEN NULL; END; END LOOP; END $$;
+1: BEGIN;
+1: SAVEPOINT s;
+1: INSERT INTO rs_sub SELECT g, g FROM generate_series(1, 300) g;
+1: RELEASE s;
+2: INSERT INTO rs_other SELECT generate_series(1, 30);
+3: SELECT count(*) FROM rs_sub x JOIN rs_sub y ON x.b = y.b;
+1: COMMIT;
+1: SELECT count(*) FROM rs_sub;
+
+-- A cursor's readers, which may start long after their snapshot was taken
+-- (here in a REPEATABLE READ transaction, with the subtransaction XIDs
+-- overflowed), look XIDs as old as the snapshot up in pg_subtrans.
+TRUNCATE rs_sub;
+1: BEGIN;
+1: INSERT INTO rs_sub SELECT g, g FROM generate_series(1, 300) g;
+3: BEGIN ISOLATION LEVEL REPEATABLE READ;
+3: SELECT count(*) FROM rs_other;
+1: COMMIT;
+4: COMMIT;
+2: INSERT INTO rs_other SELECT generate_series(1, 30);
+2: INSERT INTO rs_other SELECT generate_series(1, 30);
+3: DECLARE c CURSOR FOR SELECT count(*) FROM rs_sub x JOIN rs_sub y ON x.b = y.b;
+3: FETCH ALL FROM c;
+3: COMMIT;
+3: SELECT count(*) FROM rs_sub x JOIN rs_sub y ON x.b = y.b;
+1: SELECT count(*) FROM rs_sub;
+
 1q:
 2q:
 3q:
+4q:
 DROP TABLE rs_sub, rs_other;

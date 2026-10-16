@@ -233,6 +233,8 @@ SharedSnapshotShmemSize(void)
 
 	slotSize = sizeof(SharedSnapshotSlot);
 	slotSize += mul_size(sizeof(TransactionId), (xipEntryCount));
+	/* and the subtransaction XIDs, see SHARED_SNAPSHOT_MAX_SUBXIDS */
+	slotSize += mul_size(sizeof(TransactionId), SHARED_SNAPSHOT_MAX_SUBXIDS);
 	slotSize = MAXALIGN(slotSize);
 
 	/*
@@ -316,6 +318,10 @@ CreateSharedSnapshotArray(void)
 			 */
 			tmpSlot->snapshot.xip = &xip_base[0];
 			xip_base += xipEntryCount;
+			tmpSlot->snapshot.subxip = &xip_base[0];
+			tmpSlot->snapshot.subxcnt = 0;
+			tmpSlot->snapshot.suboverflowed = false;
+			xip_base += SHARED_SNAPSHOT_MAX_SUBXIDS;
 		}
 	}
 }
@@ -789,6 +795,16 @@ readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTrans
 
 	/* zero out the slack in the xip-array */
 	memset(snapshot->xip + snapshot->xcnt, 0, (xipEntryCount - snapshot->xcnt)*sizeof(TransactionId));
+
+	/* the subtransaction XIDs too, see copyLocalSnapshot() */
+	snapshot->subxcnt = dumpsnapshot->subxcnt;
+	snapshot->suboverflowed = dumpsnapshot->suboverflowed;
+	if (snapshot->subxcnt > 0)
+		memcpy(snapshot->subxip, dumpsnapshot->subxip,
+			   snapshot->subxcnt * sizeof(TransactionId));
+	if (!TransactionIdIsValid(TransactionXmin) ||
+		TransactionIdPrecedes(snapshot->xmin, TransactionXmin))
+		TransactionXmin = snapshot->xmin;
 
 	snapshot->curcid = dumpsnapshot->curcid;
 
