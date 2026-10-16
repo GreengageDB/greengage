@@ -806,6 +806,26 @@ CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
 SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+-- A segment starts the area in a file too when dynamic shared memory runs
+-- short there, if files are allowed: several primaries of a host share its
+-- /dev/shm, whose other users fail when it is full.
+CREATE FUNCTION tc_seg_dsm_files() RETURNS TABLE (seg int, n bigint)
+  LANGUAGE sql EXECUTE ON ALL SEGMENTS AS
+$$ SELECT gp_execution_segment(), count(*) FROM pg_ls_dir('base/pgsql_tmp', true, false) f
+   WHERE f LIKE 'pgsql_tmpdsm.%' $$;
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT n AS seg0_files_before FROM tc_seg_dsm_files() WHERE seg = 0 \gset
+CREATE TEMP TABLE tc_seglow (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_seglow SELECT generate_series(1, 10);
+SELECT count(*), 'tc_seglow'::regclass::oid >= 4026531840 AS reserved FROM tc_seglow;
+SELECT n > :seg0_files_before AS seg0_in_files FROM tc_seg_dsm_files() WHERE seg = 0;
+SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+DROP FUNCTION tc_seg_dsm_files();
+
 
 \c
 DROP FUNCTION tc_disk_rows();

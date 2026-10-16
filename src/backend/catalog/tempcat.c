@@ -756,7 +756,11 @@ tempcat_file_bytes(void)
  * memory, and leaves room to other users of dynamic shared memory
  * ('headroom'): if it cannot, the session keeps them on disk.  A segment
  * cannot decide otherwise, and fails only if the area cannot be created at
- * all; it leaves the room to others as the area grows.
+ * all.  It leaves the room in memory to others by starting the area in a
+ * file, if files are allowed (several primaries of a host share its
+ * /dev/shm, and other users of it fail when it is full), and as the area
+ * grows.  Slots of the DSM control segment it cannot leave: segments in
+ * files take them too.
  */
 static bool
 tempcat_create_area(bool headroom)
@@ -765,6 +769,7 @@ tempcat_create_area(bool headroom)
 	dsa_pointer rootptr;
 	dsa_area   *area = NULL;
 	bool		files = tempcat_file_bytes() > 0;
+	bool		try_memory;
 
 	Assert(tc_area == NULL && !tempcat_is_reader());
 
@@ -780,8 +785,10 @@ tempcat_create_area(bool headroom)
 	 * with an error (e.g. out of local memory), which must not leave vmem
 	 * charged.
 	 */
+	try_memory = !((headroom || files) &&
+				   tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT));
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	if (!(headroom && tempcat_dsm_space_low(2 * TEMPCAT_DSA_FIRST_SEGMENT)) &&
+	if (try_memory &&
 		VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) == MemoryAllocation_Success)
 	{
 		PG_TRY();
