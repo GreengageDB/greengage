@@ -1027,13 +1027,29 @@ tempcat_claim_free_slice(void)
 		if (pg_atomic_compare_exchange_u32(&TempcatShared->slices[slice].holder,
 										   &expected, me))
 		{
-			if (tempcat_slice_crowded(slice))
-			{
-				pg_atomic_write_u32(&TempcatShared->slices[slice].holder, 0);
-				continue;
-			}
+			bool		crowded;
+
+			/*
+			 * Ours already while it is checked: an error there, or the exit
+			 * of the process (tempcat_proc_exit()), lets go of it.
+			 */
 			tc_slice = slice;
 			tempcat_my_state()->slice = slice;
+			PG_TRY();
+			{
+				crowded = tempcat_slice_crowded(slice);
+			}
+			PG_CATCH();
+			{
+				tempcat_let_go_of_slice();
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
+			if (crowded)
+			{
+				tempcat_let_go_of_slice();
+				continue;
+			}
 			return true;
 		}
 	}

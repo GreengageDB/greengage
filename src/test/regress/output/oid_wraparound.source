@@ -536,7 +536,67 @@ SELECT count(*) FROM oid_tc7_next;
     10
 (1 row)
 
+SELECT ('oid_tc7_next'::regclass::oid::bigint - 4026531840) / 65536 AS err_slice \gset
 DROP TABLE oid_tc7_next, oid_crowd;
+-- An error while the slice is checked lets go of it: the next attempt, made
+-- to try the same slice first, takes it.
+SELECT pg_backend_pid() AS old_pid \gset
+\c
+SELECT oid_wait_gone(:old_pid);
+ oid_wait_gone 
+---------------
+ 
+(1 row)
+
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_slice_crowded', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+ERROR:  fault triggered, fault name:'tempcat_slice_crowded' fault type:'error'
+LINE 1: CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+                          ^
+SELECT gp_inject_fault('tempcat_slice_crowded', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT ('oid_tc7_err'::regclass::oid::bigint - 4026531840) / 65536 = :err_slice AS same_slice;
+ same_slice 
+------------
+ t
+(1 row)
+
+DROP TABLE oid_tc7_err;
 DROP FUNCTION oid_wait_gone(int);
 -- Scenario 8: on the segments, the statistics of such a table are purged
 -- when the prepared transaction that drops it commits, not when it is

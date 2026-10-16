@@ -241,7 +241,25 @@ SELECT 'oid_tc7_next'::regclass::oid >= 4026531840 AS reserved,
        (:crowd_oid::bigint - 4026531840) / 65536 AS same_slice;
 INSERT INTO oid_tc7_next SELECT generate_series(1, 10);
 SELECT count(*) FROM oid_tc7_next;
+SELECT ('oid_tc7_next'::regclass::oid::bigint - 4026531840) / 65536 AS err_slice \gset
 DROP TABLE oid_tc7_next, oid_crowd;
+
+-- An error while the slice is checked lets go of it: the next attempt, made
+-- to try the same slice first, takes it.
+SELECT pg_backend_pid() AS old_pid \gset
+\c
+SELECT oid_wait_gone(:old_pid);
+SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_crowded', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_slice_crowded', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE oid_tc7_err (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT ('oid_tc7_err'::regclass::oid::bigint - 4026531840) / 65536 = :err_slice AS same_slice;
+DROP TABLE oid_tc7_err;
 DROP FUNCTION oid_wait_gone(int);
 
 -- Scenario 8: on the segments, the statistics of such a table are purged
