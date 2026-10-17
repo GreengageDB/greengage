@@ -108,6 +108,7 @@ public:
 
 	// join buckets tests
 	static GPOS_RESULT EresUnittest_Join();
+	static GPOS_RESULT EresUnittest_LOJUnsupportedPred();
 
 };	// class CJoinCardinalityTest
 }  // namespace gpnaucrates
