@@ -253,6 +253,8 @@ FreeExecutorState(EState *estate)
 	estate->dispatcherState = NULL;
 	estate->dynamicTableScanInfo = NULL;
 
+	PartInsertDescReport(estate);
+
 	/*
 	 * Free the per-query memory context, thereby releasing all working
 	 * memory, including the EState node itself.

@@ -78,6 +78,7 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h" /* dumpDynamicTableScanPidIndex() */
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
@@ -91,6 +92,9 @@
 #include "utils/faultinjector.h"
 #include "utils/resource_manager.h"
 #include "utils/resgroup-ops.h"
+#include "utils/resgroup.h"
+#include "utils/vmem_tracker.h"
+#include "optimizer/walkers.h"
 
 #include "catalog/pg_inherits_fn.h"
 #include "catalog/pg_statistic.h"
@@ -462,17 +466,26 @@ standard_ExecutorStart(QueryDesc *queryDesc, int eflags)
 
 		if (!should_skip_operator_memory_assign)
 		{
+			/*
+			 * The share of query_mem reserved for the per-partition insert
+			 * descriptors (gp_partition_insert_desc_memory_percent) is not
+			 * handed to the operators.
+			 */
+			uint64		operator_mem = queryDesc->plannedstmt->query_mem -
+				PartInsertDescMemoryReserve(queryDesc->plannedstmt,
+											queryDesc->plannedstmt->query_mem);
+
 			PG_TRY();
 			{
 				switch (*gp_resmanager_memory_policy)
 				{
 				case RESMANAGER_MEMORY_POLICY_AUTO:
 					PolicyAutoAssignOperatorMemoryKB(queryDesc->plannedstmt,
-													 queryDesc->plannedstmt->query_mem);
+													 operator_mem);
 					break;
 				case RESMANAGER_MEMORY_POLICY_EAGER_FREE:
 					PolicyEagerFreeAssignOperatorMemoryKB(queryDesc->plannedstmt,
-														  queryDesc->plannedstmt->query_mem);
+														  operator_mem);
 					break;
 				default:
 					Assert(IsResManagerMemoryPolicyNone());
@@ -4632,6 +4645,425 @@ get_part(EState *estate, Datum *values, bool *isnull, TupleDesc tupdesc,
 	return targetid_get_partition(targetid, estate, openIndices);
 }
 
+/*
+ * Memory budget for the open per-partition AO/AOCS insert descriptors.
+ *
+ * A COPY/INSERT that routes rows through a partition root opens, on first touch
+ * of each leaf partition, one DatumStream write stack per column
+ * (aocs_insert_init -> OpenAOCSDatumStreams), and keeps it for the whole
+ * statement in estate->es_query_cxt. For a wide table with many partitions this
+ * is tens of MB times thousands of partitions and runs the backend out of vmem.
+ *
+ * When bounded, every leaf's descriptor is allocated in its own context, a
+ * child of one per-statement parent context, and the leaves are kept in an LRU
+ * list. Memory accounting propagates to parent contexts, so the parent's
+ * current space is exactly what the open descriptors occupy. Once that exceeds
+ * the statement's budget the least-recently-used descriptors are flushed and
+ * closed. The budget is
+ *
+ * - for an INSERT, gp_partition_insert_desc_memory_percent of its query_mem
+ *   (statement_mem with memory policy none). That share is reserved before
+ *   operator memory is assigned (PartInsertDescMemoryReserve), so descriptors
+ *   and operators split one query_mem;
+ * - for a COPY, which has no operators, when gp_partition_copy_desc_budget is
+ *   on, all of the resource group slot's memory quota, or statement_mem under
+ *   resource queues or a group in memory_spill_ratio fallback mode.
+ *
+ * Only this statement's own descriptors are measured, so the outcome depends
+ * neither on what other sessions on the segment are doing nor on anything but
+ * the table shape, the input order and the budget. The descriptor just opened
+ * is never evicted, so a partition that alone exceeds the budget is still
+ * loaded. Input that keeps switching between more leaves than the budget holds
+ * re-opens them over and over; a WARNING is raised once per statement when
+ * that happens, as each eviction costs an fsync, a short trailing block per
+ * column and a catalog update.
+ *
+ * A closed partition is re-opened transparently at its current on-disk EOF if
+ * it is written to again (aocs_insert_init / appendonly_insert_init read the
+ * segfile state through SnapshotSelf, so they see this transaction's own
+ * just-flushed data). The transaction-scoped segment-file lock taken in
+ * OpenAOCSDatumStreams is NOT released by the flush, so exclusivity is
+ * preserved across the close/re-open.
+ *
+ * State a compression library allocates with plain malloc (zstd's CCtx/DCtx)
+ * is invisible to memory accounting and is not counted against the budget,
+ * just as it is not counted by the vmem tracker.
+ *
+ * Each flush bumps pg_ao(cs)seg.modcount, so a partition that is evicted and
+ * re-opened N times gets modcount += N+1 instead of +1. The partition really
+ * was written by this transaction, so incremental backup picks it up either
+ * way; nothing it decides changes.
+ */
+typedef struct PartInsertLru
+{
+	dlist_head	lru;			/* open leaves, most-recently-used at the head */
+	MemoryContext cxt;			/* parent of every leaf's insertDescCxt */
+	int64		budget;			/* bytes the open descriptors may occupy */
+	const char *budgetSource;	/* where the budget came from */
+
+	/* statistics, for the thrashing WARNING and the DEBUG1 summary */
+	int			nopen;			/* descriptors open now */
+	int64		leaves;			/* distinct leaves opened */
+	int64		reopens;		/* opens of a leaf evicted earlier */
+	int64		evictions;
+	int64		peak;			/* most bytes the open descriptors occupied */
+	bool		warned;
+} PartInsertLru;
+
+/* Warn once re-opens outnumber the leaves touched, and are at least this many. */
+#define PART_INSERT_REOPEN_WARN_MIN 100
+
+static bool
+count_plan_nodes_walker(Node *node, int *count)
+{
+	if (node == NULL)
+		return false;
+	if (is_plan_node(node))
+		(*count)++;
+	return plan_tree_walker(node, count_plan_nodes_walker, count);
+}
+
+/*
+ * Is the plan an INSERT through a partition root? pg_partition is only
+ * populated on the QD, where this is asked before InitPlan() fills in
+ * result_partitions; the QEs get the hierarchy from the QD in the plan.
+ */
+static bool
+PartInsertThroughRoot(PlannedStmt *stmt)
+{
+	Oid			relid;
+
+	if (stmt->commandType != CMD_INSERT || stmt->resultRelations == NIL)
+		return false;
+
+	relid = getrelid(linitial_int(stmt->resultRelations), stmt->rtable);
+	if (Gp_role == GP_ROLE_EXECUTE)
+		return stmt->result_partitions != NULL &&
+			stmt->result_partitions->part->parrelid == relid;
+	return rel_is_partitioned(relid);
+}
+
+/*
+ * Bytes of query_mem reserved for the open per-partition insert descriptors of
+ * an INSERT through a partition root (gp_partition_insert_desc_memory_percent);
+ * 0 when there is none. standard_ExecutorStart() sizes the operators from
+ * query_mem minus this, on the QD and, under resource groups, again on the QE
+ * from its recomputed query_mem; the QE's descriptor budget is this same value.
+ * Everything it depends on is in the plan or is a synced GUC, so the QD and
+ * the QEs agree.
+ *
+ * The share is capped so that every plan node keeps the fixed minimum memquota
+ * hands a non-memory-intensive operator. Counting every node rather than just
+ * the ones memquota counts keeps operator memory assignment clear of
+ * "insufficient memory reserved for statement". Memory-intensive operators
+ * (hash join, hash agg, sort) have no such minimum in memquota: a share that
+ * leaves them too little makes them spill or fail at run time, just as a too
+ * small statement_mem would.
+ */
+uint64
+PartInsertDescMemoryReserve(PlannedStmt *stmt, uint64 query_mem)
+{
+	uint64		floor;
+	int			nnodes = 0;
+	ListCell   *lc;
+
+	if (gp_partition_insert_desc_memory_percent <= 0 ||
+		!PartInsertThroughRoot(stmt))
+		return 0;
+
+	count_plan_nodes_walker((Node *) stmt->planTree, &nnodes);
+	foreach(lc, stmt->subplans)
+		count_plan_nodes_walker((Node *) lfirst(lc), &nnodes);
+	floor = (uint64) nnodes * *gp_resmanager_memory_policy_auto_fixed_mem * 1024;
+
+	if (query_mem <= floor)
+		return 0;
+	return Min(query_mem / 100 * gp_partition_insert_desc_memory_percent,
+			   query_mem - floor);
+}
+
+/*
+ * Are the per-partition insert descriptors of this statement bounded? Not on
+ * the QD: there they carry pg_ao(cs)seg row-count bookkeeping that is only
+ * finalised from the QE-reported counts at end of COPY, and evicting them
+ * mid-stream would drop that. The memory pressure is on the QEs (and
+ * utility-mode single node) anyway. A COPY is the statement without a plan.
+ */
+static bool
+PartInsertDescBounded(EState *estate)
+{
+	PlannedStmt *stmt = estate->es_plannedstmt;
+
+	if (Gp_role == GP_ROLE_DISPATCH)
+		return false;
+	if (stmt == NULL)
+		return gp_partition_copy_desc_budget;
+	return gp_partition_insert_desc_memory_percent > 0 &&
+		PartInsertThroughRoot(stmt);
+}
+
+/*
+ * Hash entry of a leaf partition reached through the partition root, or NULL
+ * for any other result relation (the root itself, a non-partitioned target).
+ * Those live in the es_result_relations array; the leaves live in the root's
+ * ri_partition_hash (targetid_get_partition), whose entries never move.
+ */
+static ResultPartHashEntry *
+PartInsertHashEntry(EState *estate, ResultRelInfo *rri)
+{
+	ResultPartHashEntry *entry;
+
+	if (rri >= estate->es_result_relations &&
+		rri < estate->es_result_relations + estate->es_num_result_relations)
+		return NULL;
+
+	entry = (ResultPartHashEntry *)
+		((char *) rri - offsetof(ResultPartHashEntry, resultRelInfo));
+	Assert(entry->targetid == RelationGetRelid(rri->ri_RelationDesc));
+	return entry;
+}
+
+static PartInsertLru *
+PartInsertLruGet(EState *estate)
+{
+	PartInsertLru *lru = estate->es_partInsertLru;
+
+	if (lru == NULL)
+	{
+		PlannedStmt *stmt = estate->es_plannedstmt;
+
+		lru = MemoryContextAllocZero(estate->es_query_cxt, sizeof(PartInsertLru));
+		dlist_init(&lru->lru);
+		lru->cxt = AllocSetContextCreate(estate->es_query_cxt,
+										 "PartitionInsertDescs",
+										 ALLOCSET_DEFAULT_SIZES);
+
+		/* Fixed for the statement. */
+		if (stmt != NULL)
+		{
+			/* with memory policy none query_mem is 0 */
+			if (stmt->query_mem > 0)
+			{
+				lru->budget = PartInsertDescMemoryReserve(stmt, stmt->query_mem);
+				lru->budgetSource = "query_mem";
+			}
+			else
+			{
+				lru->budget = PartInsertDescMemoryReserve(stmt,
+														  (uint64) statement_mem * 1024L);
+				lru->budgetSource = "statement_mem";
+			}
+		}
+		else
+		{
+			int			memLimit;
+			int			slotQuota = -1;
+			int			sharedQuota;
+
+			/*
+			 * A COPY: no operators to share with. In memory_spill_ratio
+			 * fallback mode the group sizes statements by statement_mem, so
+			 * do the same.
+			 */
+			if (IsResGroupActivated() && ResGroupIsAssigned() &&
+				!ResGroupIsBypassed() &&
+				memory_spill_ratio != RESGROUP_FALLBACK_MEMORY_SPILL_RATIO)
+				ResGroupGetMemInfo(&memLimit, &slotQuota, &sharedQuota);
+
+			if (slotQuota > 0)
+			{
+				lru->budget = (int64) slotQuota << VmemTracker_GetChunkSizeInBits();
+				lru->budgetSource = "resource group slot";
+			}
+			else
+			{
+				lru->budget = (int64) statement_mem * 1024L;
+				lru->budgetSource = "statement_mem";
+			}
+		}
+		estate->es_partInsertLru = lru;
+	}
+	return lru;
+}
+
+static void
+PartInsertDescEvict(ResultPartHashEntry *entry)
+{
+	ResultRelInfo *rri = &entry->resultRelInfo;
+
+	dlist_delete(&entry->insertDescLruNode);
+	entry->insertDescLruNode.prev = entry->insertDescLruNode.next = NULL;
+
+	if (rri->ri_aocsInsertDesc)
+	{
+		aocs_insert_finish(rri->ri_aocsInsertDesc);
+		rri->ri_aocsInsertDesc = NULL;
+	}
+	else if (rri->ri_aoInsertDesc)
+	{
+		appendonly_insert_finish(rri->ri_aoInsertDesc);
+		rri->ri_aoInsertDesc = NULL;
+	}
+
+	/*
+	 * aocs_insert_finish() / appendonly_insert_finish() just transactionally
+	 * updated this segment file's pg_aocsseg / pg_aoseg row (eof, tupcount,
+	 * modcount) via simple_heap_update(). If this partition is written to again
+	 * later in the same command, it is closed a second time and that same row
+	 * is updated again -- without advancing the command counter the second
+	 * simple_heap_update() trips HeapTupleSelfUpdated ("tuple already updated by
+	 * self"). Bump the counter here so the row we just wrote is seen by the
+	 * next update as a prior-command change. InsertInitialAOCSFileSegInfo()
+	 * already does the same thing during first-touch init on this code path, so
+	 * an extra CommandCounterIncrement() mid-COPY/INSERT is nothing new here.
+	 */
+	CommandCounterIncrement();
+
+	/*
+	 * aocs_insert_finish() / appendonly_insert_finish() only free part of what
+	 * the matching _init() allocated -- the rest is normally reclaimed when
+	 * es_query_cxt is reset at end of statement. Since we re-run the open/close
+	 * cycle many times within one statement, reclaim it now by deleting the
+	 * descriptor's private context; otherwise a wide, many-partition load leaks
+	 * es_query_cxt without bound and defeats the whole point of the budget.
+	 * Delete rather than reset so nothing lingers for partitions that are never
+	 * written again; it is recreated on re-open.
+	 */
+	MemoryContextDelete(entry->insertDescCxt);
+	entry->insertDescCxt = NULL;
+}
+
+/*
+ * Open (or, if already open, LRU-touch) the AO-row / AOCS insert descriptor for
+ * a result relation. Called from the COPY / INSERT lazy-init sites so those
+ * sites carry none of the segno / context / LRU bookkeeping.
+ */
+static void
+PartInsertDescEnsure(EState *estate, ResultRelInfo *rri, List *mapping,
+					 bool aocs)
+{
+	ResultPartHashEntry *entry = PartInsertHashEntry(estate, rri);
+	PartInsertLru *lru = NULL;
+	MemoryContext cxt = estate->es_query_cxt;
+	MemoryContext oldcxt;
+
+	if (aocs ? rri->ri_aocsInsertDesc != NULL : rri->ri_aoInsertDesc != NULL)
+	{
+		/* Already open; refresh its LRU position if it is tracked. */
+		if (entry != NULL && entry->insertDescLruNode.next != NULL)
+		{
+			dlist_delete(&entry->insertDescLruNode);
+			dlist_push_head(&estate->es_partInsertLru->lru,
+							&entry->insertDescLruNode);
+		}
+		return;
+	}
+
+	ResultRelInfoSetSegno(rri, mapping);
+
+	/* once the statement is known to be bounded, don't ask again */
+	if (entry != NULL &&
+		(estate->es_partInsertLru != NULL || PartInsertDescBounded(estate)))
+	{
+		lru = PartInsertLruGet(estate);
+		Assert(entry->insertDescCxt == NULL);
+		entry->insertDescCxt = AllocSetContextCreate(lru->cxt,
+													 "PartitionInsertDesc",
+													 ALLOCSET_DEFAULT_SIZES);
+		cxt = entry->insertDescCxt;
+	}
+
+	oldcxt = MemoryContextSwitchTo(cxt);
+	if (aocs)
+		rri->ri_aocsInsertDesc = aocs_insert_init(rri->ri_RelationDesc,
+												  rri->ri_aosegno, false);
+	else
+		rri->ri_aoInsertDesc = appendonly_insert_init(rri->ri_RelationDesc,
+													  rri->ri_aosegno, false);
+	MemoryContextSwitchTo(oldcxt);
+
+	if (lru == NULL)
+		return;
+
+	dlist_push_head(&lru->lru, &entry->insertDescLruNode);
+	lru->nopen++;
+	if (entry->insertDescOpened)
+		lru->reopens++;
+	else
+	{
+		entry->insertDescOpened = true;
+		lru->leaves++;
+	}
+	lru->peak = Max(lru->peak, (int64) MemoryContextGetCurrentSpace(lru->cxt));
+
+	/* Evict from the tail, never the descriptor just opened. */
+	while ((int64) MemoryContextGetCurrentSpace(lru->cxt) > lru->budget)
+	{
+		ResultPartHashEntry *victim =
+			dlist_container(ResultPartHashEntry, insertDescLruNode,
+							dlist_tail_node(&lru->lru));
+
+		if (victim == entry)
+			break;
+		PartInsertDescEvict(victim);
+		lru->nopen--;
+		lru->evictions++;
+	}
+
+	/*
+	 * More re-opens than leaves: on average every leaf has been flushed and
+	 * re-opened, i.e. the input is not clustered by leaf and the budget does
+	 * not hold the leaves it keeps switching between. Say so while the load
+	 * can still be cancelled, rather than leave a fragmented table silently.
+	 */
+	if (!lru->warned &&
+		lru->reopens >= PART_INSERT_REOPEN_WARN_MIN &&
+		lru->reopens > lru->leaves)
+	{
+		lru->warned = true;
+		ereport(WARNING,
+				(errmsg("partition insert descriptors are thrashing: " INT64_FORMAT
+						" re-opens across " INT64_FORMAT " leaf partitions (budget "
+						INT64_FORMAT " kB, %d open at once)",
+						lru->reopens, lru->leaves, lru->budget / 1024, lru->nopen),
+				 errhint("Sort the input by the partitioning key, load the leaf "
+						 "partitions directly, or give the statement more memory "
+						 "(statement_mem, resource group, "
+						 "gp_partition_insert_desc_memory_percent).")));
+	}
+}
+
+/*
+ * End-of-statement summary of the bounded per-partition insert descriptors,
+ * called from FreeExecutorState().
+ */
+void
+PartInsertDescReport(EState *estate)
+{
+	PartInsertLru *lru = estate->es_partInsertLru;
+
+	if (lru == NULL)
+		return;
+
+	elog(DEBUG1, "partition insert descriptors: budget " INT64_FORMAT " kB (%s), "
+		 INT64_FORMAT " leaf partitions, " INT64_FORMAT " re-opens, "
+		 INT64_FORMAT " evictions, peak " INT64_FORMAT " kB",
+		 lru->budget / 1024, lru->budgetSource, lru->leaves, lru->reopens,
+		 lru->evictions, lru->peak / 1024);
+}
+
+void
+PartInsertDescEnsureAO(EState *estate, ResultRelInfo *rri, List *mapping)
+{
+	PartInsertDescEnsure(estate, rri, mapping, false);
+}
+
+void
+PartInsertDescEnsureAOCS(EState *estate, ResultRelInfo *rri, List *mapping)
+{
+	PartInsertDescEnsure(estate, rri, mapping, true);
+}
+
 ResultRelInfo *
 targetid_get_partition(Oid targetid, EState *estate, bool openIndices)
 {
@@ -4673,6 +5105,11 @@ targetid_get_partition(Oid targetid, EState *estate, bool openIndices)
 		Oid			parentRelid = estate->es_result_partitions->part->parrelid;
 
 		natts = parentInfo->ri_RelationDesc->rd_att->natts; /* in base relation */
+
+		/* dynahash does not zero new entries */
+		entry->insertDescLruNode.prev = entry->insertDescLruNode.next = NULL;
+		entry->insertDescCxt = NULL;
+		entry->insertDescOpened = false;
 
 		resultRelation = heap_open(targetid, RowExclusiveLock);
 		InitResultRelInfo(childInfo,
