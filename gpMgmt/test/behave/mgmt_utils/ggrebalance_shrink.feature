@@ -663,7 +663,7 @@ Feature: ggrebalance behave tests
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1 | on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE_end                 |
         | fault_rebalance_table_test_db_2.test_schema_2.test_table_1 | on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START_begin                  |
 
-    Scenario: test 4. test shrink continue, when a table planned for rebalance was dropped or renamed
+    Scenario: test 4. test shrink continue, when a table planned for rebalance was dropped, replaced with a view or renamed
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -683,12 +683,14 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+         And there is a "heap" table "test_schema_2.test_table_3" in "test_db_2" with "100" rows
         When set fault inject "on_enter_STATE_SHRINK_TABLES_STARTED_begin"
          And the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And table "test_schema_2.test_table_1" is dropped in "test_db_2"
+         And sql "DROP TABLE test_schema_2.test_table_3; CREATE VIEW test_schema_2.test_table_3 AS SELECT 1 AS a;" is executed in "test_db_2" db
          And sql "ALTER TABLE test_schema_1.test_table_2 RENAME TO test_table_2_new;" is executed in "test_db_1" db
         When user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance"
@@ -744,7 +746,7 @@ Feature: ggrebalance behave tests
          And distribution information from table "test_schema_2.test_table_1" with data in "test_db_2" is equal to segment count = 1, row count = 100
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 1, row count = 100
 
-    Scenario: test 4.3. test shrink, when a table planned for rebalance was dropped or renamed from a parallel connection without shrink interruption
+    Scenario: test 4.3. test shrink, when a table planned for rebalance was dropped, replaced with a view or renamed from a parallel connection without shrink interruption
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -764,12 +766,13 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+         And there is a "heap" table "test_schema_2.test_table_3" in "test_db_2" with "100" rows
         When set fault inject "on_enter_STATE_SHRINK_TABLES_STARTED_begin"
          And set fault inject type to suspend
         When the user asynchronously runs "ggrebalance -x 1 --skip-rebalance" and the process is saved
          And the user waits till ggrebalance prints "Initiated list of tables to rebalance" in the logs (with timeout of "60" sec)
          And the user connects to "test_db_2" with named connection "test_connection"
-         And the user executes "DROP TABLE test_schema_2.test_table_1;" with named connection "test_connection"
+         And the user executes "DROP TABLE test_schema_2.test_table_1; DROP TABLE test_schema_2.test_table_3; CREATE VIEW test_schema_2.test_table_3 AS SELECT 1 AS a;" with named connection "test_connection"
          And the user drops the named connection "test_connection"
          And the user connects to "test_db_1" with named connection "test_connection"
          And the user executes "ALTER TABLE test_schema_1.test_table_2 RENAME TO test_table_2_new;" with named connection "test_connection"
@@ -786,7 +789,7 @@ Feature: ggrebalance behave tests
          And the numsegments of table "ext_test" is 1
          And distribution information from table "test_schema_2.test_table_2" with data in "test_db_2" is equal to segment count = 1, row count = 100
 
-    Scenario: test 4.4. test shrink rollback continue, when a table planned for rebalance rollback was dropped or renamed
+    Scenario: test 4.4. test shrink rollback continue, when a table planned for rebalance rollback was dropped, replaced with a view or renamed
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -806,6 +809,7 @@ Feature: ggrebalance behave tests
          And schema "test_schema_2" exists in "test_db_2"
          And there is a "heap" table "test_schema_2.test_table_1" in "test_db_2" with "100" rows
          And there is a "ao" table "test_schema_2.test_table_2" in "test_db_2" with "100" rows
+         And there is a "heap" table "test_schema_2.test_table_3" in "test_db_2" with "100" rows
         When set fault inject "on_enter_STATE_SHRINK_CATALOG_STARTED_begin"
          And the user runs "ggrebalance -x 1 --skip-rebalance"
         Then ggrebalance should return a return code of 1
@@ -817,6 +821,7 @@ Feature: ggrebalance behave tests
          And ggrebalance should print "ggrebalance failed" to logfile with latest timestamp
          And unset fault inject
          And table "test_schema_2.test_table_1" is dropped in "test_db_2"
+         And sql "DROP TABLE test_schema_2.test_table_3; CREATE VIEW test_schema_2.test_table_3 AS SELECT 1 AS a;" is executed in "test_db_2" db
          And sql "ALTER TABLE test_schema_1.test_table_2 RENAME TO test_table_2_new;" is executed in "test_db_1" db
         When user will answer "yes" to the prompt "Proceed with continue?"
          And the user runs "ggrebalance"
@@ -1041,7 +1046,7 @@ Feature: ggrebalance behave tests
          And distribution information from table "test_schema_1.mv_test_table_1" with data in "test_db_1" is equal to segment count = 1, row count = 100
          And the numsegments of table "ext_test" is 1
 
-    Scenario: test 6. test shrink, when a table, planned for rebalance, is dropped or renamed in a parallel transaction, committed after the start of table redistribution
+    Scenario: test 6. test shrink, when a table, planned for rebalance, is dropped, replaced with a view or renamed in a parallel transaction, committed after the start of table redistribution
         Given the database is not running
          And a working directory of the test as '/data/gpdata/ggrebalance'
          And a cluster is created with mirrors on "cdw" and "sdw1"
@@ -1058,6 +1063,7 @@ Feature: ggrebalance behave tests
          And database "gptest" exists
          And there is a "heap" table "test_table_1" in "gptest" with "100" rows
          And there is a "heap" table "test_table_2_old" in "gptest" with "100" rows
+         And there is a "heap" table "test_table_3" in "gptest" with "100" rows
          And the user create a writable external table with name "ext_test"
          And database "test_db_2" exists
          And schema "test_schema_2" exists in "test_db_2"
@@ -1068,7 +1074,7 @@ Feature: ggrebalance behave tests
         When the user asynchronously runs "ggrebalance -x 1 --skip-rebalance" and the process is saved
          And the user waits till ggrebalance prints "Updated target segment count to 1" in the logs (with timeout of "60" sec)
          And the user connects to "gptest" with named connection "test_connection"
-         And the user executes "BEGIN; DROP TABLE test_table_1; ALTER TABLE test_table_2_old RENAME TO test_table_2_new;" with named connection "test_connection"
+         And the user executes "BEGIN; DROP TABLE test_table_1; DROP TABLE test_table_3; CREATE VIEW test_table_3 AS SELECT 1 AS a; ALTER TABLE test_table_2_old RENAME TO test_table_2_new;" with named connection "test_connection"
          And unset fault inject
          And the user waits till ggrebalance prints "Start table rebalance for \"gptest\".\"public\".\"test_table_1\" to 1 segments" in the logs (with timeout of "60" sec)
          And waiting "5" seconds
