@@ -714,10 +714,16 @@ class GGShrink:
             return long_func
 
         def table_exists(self, conn: dbconn.Connection) -> bool:
+            # The table could be dropped after the list of tables was built, and another
+            # relation (for example, a view) could be created with the same name. So check
+            # the relation is still of a kind we rebalance (see get_tables_to_rebalance_from_where()).
             if dbconn.querySingleton(conn, f"""
                 SELECT count(1)
                 FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}'
+                JOIN gp_distribution_policy p ON c.oid = p.localoid
+                LEFT JOIN pg_exttable pe ON (c.oid = pe.reloid AND pe.writable)
+                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}' AND
+                c.relkind IN ('r', 'p', 'm', 'f') AND (c.relkind != 'f' OR pe.reloid IS NOT NULL)
                 """) == 0:
                 return False
             return True
