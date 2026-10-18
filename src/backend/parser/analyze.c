@@ -3775,6 +3775,10 @@ sanity_check_on_conflict_update_set_distkey(GpPolicy  *policy, List *onconflict_
 	{
 		TargetEntry *te = lfirst(lc);
 
+		/*
+		 * Skip resjunk entries (e.g. the sub-select of a multiple-column
+		 * assignment): they don't assign a column of the table.
+		 */
 		if (te->resjunk)
 			continue;
 

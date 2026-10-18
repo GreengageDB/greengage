@@ -387,31 +387,31 @@ SELECT tableoid::regclass, * FROM update_gp_rangep WHERE b = 1;
 -- Modifying distribution key through a view. This skipped previous check
 -- because on analyze stage columns weren't resolved to base table yet, so
 -- it looked like there were no errors.
-create table t_insert_on_conflict_update_distkey_view(a int, b int, c text) distributed by (a);
+create table t_insert_on_conflict_update_distkey_view(a int, b int, c text, pad int) distributed by (a);
 create unique index uidx_t_insert_on_conflict_update_distkey_view on t_insert_on_conflict_update_distkey_view(a, b);
-insert into t_insert_on_conflict_update_distkey_view values (1, 1, 'orig');
+insert into t_insert_on_conflict_update_distkey_view values (1, 1, 'orig', 0);
+-- the view hides a column, so it has fewer columns than the base table
 create view v_insert_on_conflict_update_distkey as
-  select * from t_insert_on_conflict_update_distkey_view;
+  select a, b, c from t_insert_on_conflict_update_distkey_view;
 -- view on view, with renamed and reordered columns (view resno != table attnum)
 create view v2_insert_on_conflict_update_distkey as
   select c as cc, b, a as key from v_insert_on_conflict_update_distkey;
-
+ 
 -- the following statements should error out because they modify the distkey through a view
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x') on conflict(a, b) do update set a = 5;
 insert into v2_insert_on_conflict_update_distkey values ('x', 1, 1) on conflict(key, b) do update set key = 5;
 -- the following statements should succeed because they only modify non-distkey columns
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x') on conflict(a, b) do update set c = 'v';
 insert into v2_insert_on_conflict_update_distkey values ('x', 1, 1) on conflict(key, b) do update set cc = 'v2';
-select * from t_insert_on_conflict_update_distkey_view;
-
--- multiple-column assignment from a sub-select through a view: the first
--- should error out (it sets the distkey), the second should succeed
+-- multiple-column assignment from a sub-select (a resjunk MULTIEXPR entry in
+-- the SET list) through the view: the first should error out because it sets
+-- the distkey, the second should succeed
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x')
   on conflict(a, b) do update set (c, a) = (select 'm', 5);
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x')
   on conflict(a, b) do update set (b, c) = (select 1, 'multi');
 select * from t_insert_on_conflict_update_distkey_view;
-
+ 
 -- the following statement should error out because a stored rule action is
 -- checked against the current policy: b became a distkey after the rule was created
 create table t_insert_on_conflict_update_distkey_rule(a int, b int, c text) distributed by (a);
@@ -508,10 +508,8 @@ drop table into_table;
 drop table from_table;
 drop view v2_insert_on_conflict_update_distkey;
 drop view v_insert_on_conflict_update_distkey;
-drop view v_insert_on_conflict_update_distkey_narrow;
 drop view v_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_view;
-drop table t_insert_on_conflict_update_distkey_wide;
 drop table t_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_rule_src;
 drop table t_insert_on_conflict_update_distkey_rule;
