@@ -40,8 +40,9 @@
 	((Oid) (oid) >= FirstTempcatObjectId && (Oid) (oid) <= LastTempcatObjectId)
 
 /*
- * Rows in memory get TIDs with this bit set in the offset number.  Real
- * offsets never reach it (MaxOffsetNumber is far below 0x8000).
+ * Rows in memory get TIDs with this bit set in the offset number.  Heap
+ * offsets never reach it (MaxOffsetNumber is far below 0x8000), but those
+ * of append-optimized tables do: test it on catalog TIDs only.
  */
 #define TEMPCAT_TID_BIT		0x8000
 
@@ -109,6 +110,7 @@ extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Other sessions */
 extern void tempcat_lock_out_users(Oid classId, Oid objectId);
+extern void tempcat_warn_users(Oid classId, Oid objectId, const char *command);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);
 extern void tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid);

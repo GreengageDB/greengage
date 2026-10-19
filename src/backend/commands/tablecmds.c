@@ -7292,8 +7292,8 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 	check_stack_depth();
 
 	/*
-	 * GPDB: temporary objects of other sessions kept in memory use the type
-	 * through rows that cannot be seen here; wait until none does (see
+	 * GPDB: temporary objects of other sessions kept in memory may use the
+	 * type through rows that cannot be seen here: fail if any does (see
 	 * tempcat.c).
 	 */
 	tempcat_lock_out_users(TypeRelationId, typeOid);
@@ -13683,8 +13683,8 @@ ATExecAlterColumnType(List **wqueue,
 	 * get confused.
 	 *
 	 * GPDB: temporary objects of other sessions kept in memory (e.g.
-	 * temporary views of the table) use it through rows that cannot be seen
-	 * here; wait until none does (see tempcat.c).
+	 * temporary views of the table) may use it through rows that cannot be
+	 * seen here: fail if any does (see tempcat.c).
 	 */
 	tempcat_lock_out_users(RelationRelationId, RelationGetRelid(rel));
 	depRel = table_open(DependRelationId, RowExclusiveLock);

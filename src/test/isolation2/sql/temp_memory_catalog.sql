@@ -4,8 +4,8 @@
 -- All their catalog rows are in their session's memory, also their
 -- dependencies on ordinary objects: other sessions cannot see the objects.
 -- The session holds a lock on each ordinary object they use instead, which
--- keeps other sessions from dropping or changing it: they wait for the
--- session (here with lock_timeout, to see that they do).
+-- keeps other sessions from dropping or changing it: they fail, as they
+-- would on dependent objects they could see, naming the session's process.
 
 -- Sessions that quit are gone only once their processes on all nodes are.
 CREATE TABLE tc_sess (id int) DISTRIBUTED REPLICATED;
@@ -36,20 +36,20 @@ GRANT ALL ON tc_ord TO tc_role;
 2: SELECT count(*) FROM gp_dist_random('pg_depend') WHERE objid >= 4026531840;
 2: SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE objid >= 4026531840;
 
--- They wait to drop what the objects use, also with CASCADE.
-2: SET lock_timeout = '500ms';
+-- They cannot drop what the objects use, also with CASCADE, which cannot
+-- reach into the session's memory.
 2: DROP TYPE tc_comp;
 2: DROP TYPE tc_comp CASCADE;
 2: DROP DOMAIN tc_dom CASCADE;
 2: DROP FUNCTION tc_fn(int) CASCADE;
 2: DROP TABLE tc_ord CASCADE;
 2: ALTER TABLE tc_ord DROP COLUMN b CASCADE;
--- And to change it so that the objects would not work any more.
+-- Nor change it so that the objects would not work any more.
 2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_check CHECK (VALUE > 0);
 2: ALTER TABLE tc_ord ALTER COLUMN b TYPE text;
--- And to drop the roles owning them or granted privileges on them.  DROP
--- OWNED and REASSIGN OWNED leave them to their session.
+-- Nor drop the roles owning them or granted privileges on them.  DROP
+-- OWNED and REASSIGN OWNED leave them to their session, with a warning.
 2: DROP ROLE tc_role;
 2: DROP ROLE tc_grantee;
 2: REASSIGN OWNED BY tc_role TO CURRENT_USER;
@@ -58,7 +58,7 @@ GRANT ALL ON tc_ord TO tc_role;
 2: DROP OWNED BY tc_role;
 2: DROP ROLE tc_role;
 1: SELECT * FROM tc_t;
--- Other changes need not wait.
+-- Other changes work.
 2: ALTER TYPE tc_comp RENAME ATTRIBUTE x TO x1;
 2: ALTER TABLE tc_ord ADD COLUMN c int;
 2: COMMENT ON FUNCTION tc_fn(int) IS 'used';
@@ -84,12 +84,10 @@ GRANT ALL ON tc_ord TO tc_role;
 1: SELECT pg_advisory_unlock_all();
 2: DROP FUNCTION tc_fn(int);
 
--- Once the session is gone, so is all of that: DROP waits for it.
-2: RESET lock_timeout;
-2&: DROP TYPE tc_comp;
+-- Once the session is gone, so is all of that.
 1q:
-2<:
 2: CALL tc_wait_gone();
+2: DROP TYPE tc_comp;
 2: DROP DOMAIN tc_dom;
 2: DROP FUNCTION tc_fn(int);
 2: DROP ROLE tc_role;
@@ -311,7 +309,7 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
 
 -- A slice that a segment refuses, as its earlier holder's writer QE
 -- lingers there (here a fault holds it on segment 0, and another makes the
--- wait give up at once), is let go of when the transaction that started to
+-- wait give up at once), is given up when the transaction that started to
 -- use it rolls back, with nothing kept: the next attempt takes another one.
 19: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 19: SET gp_enable_temp_memory_catalog = on;
@@ -342,8 +340,9 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
 4: CALL tc_wait_gone();
 
 -- A writer QE whose prepared transaction started to use its slice is
--- rolled back (here as PREPARE fails on segment 1): it lets go of the slice
--- with the coordinator, and follows it to the next one.
+-- rolled back (here as PREPARE fails on segment 1): the coordinator takes
+-- the next slice, and the writer QE lets go of the first one once the rows
+-- of the transaction are gone.
 SELECT gp_inject_fault('start_prepare', 'error', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 23: SET gp_enable_temp_memory_catalog = on;
@@ -384,23 +383,23 @@ SELECT (max(slice) FILTER (WHERE session = 26) - max(slice) FILTER (WHERE sessio
 26q:
 DROP TABLE tc_slices;
 
--- DROP of what a temporary object of another session depends on waits for
--- that session when it is dropping the object (here in a transaction in
--- progress), and goes on once the object is gone, as for other dependent
--- objects.
+-- DROP of what a temporary object of another session depends on fails
+-- also while that session is dropping the object (here in a transaction in
+-- progress), and works once the object is gone: the session lets go of the
+-- lock when it goes idle, before it reports the end of the transaction.
 CREATE TYPE tc_wait_comp AS (x int);
 27: SET gp_enable_temp_memory_catalog = on;
 27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
 27: BEGIN;
 27: DROP TABLE tc_w;
-28&: DROP TYPE tc_wait_comp;
+28: DROP TYPE tc_wait_comp;
 27: COMMIT;
-28<:
+28: DROP TYPE tc_wait_comp;
 27q:
 28q:
 
--- A transaction that started to use the slice rolls back: the session lets
--- go of the slice, but its rows are freed only when it goes idle, also in
+-- A transaction that started to use the slice rolls back: the session gives
+-- up the slice, but its rows are freed only when it goes idle, also in
 -- the aborted transaction, or starts its next one (here freeing them at
 -- idle fails, as the fault makes it).  Until then their xids keep
 -- datfrozenxid, and so clog truncation, from passing them.
@@ -432,6 +431,26 @@ SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
 29q:
 30q:
 DROP DATABASE tc_frozen;
+
+-- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
+-- temporary objects kept in memory of the session connected to it, whose
+-- objects do not exist in the new database.
+CREATE DATABASE tc_tmpl;
+CREATE ROLE tc_copy_role;
+31:@db_name tc_tmpl: SET gp_enable_temp_memory_catalog = on;
+31: CREATE TEMP TABLE tc_c (a int) DISTRIBUTED BY (a);
+31: GRANT SELECT ON tc_c TO tc_copy_role;
+31: CREATE DATABASE tc_copy TEMPLATE tc_tmpl;
+31: SELECT count(*) FROM pg_shdepend WHERE refobjid = 'tc_copy_role'::regrole
+      AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
+31: SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'tc_copy_role'::regrole
+      AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
+4: INSERT INTO tc_sess SELECT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl';
+31q:
+4: CALL tc_wait_gone();
+DROP DATABASE tc_copy;
+DROP DATABASE tc_tmpl;
+DROP ROLE tc_copy_role;
 
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();

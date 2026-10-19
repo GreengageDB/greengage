@@ -99,7 +99,6 @@ SELECT tc_explain($$SELECT relkind FROM pg_class WHERE relname = 'tc_t'$$);
 ---------------------------------------------------------
  Index Scan using pg_class_relname_nsp_index on pg_class
    Index Cond: (relname = 'tc_t'::name)
- Optimizer: Postgres-based planner
 (3 rows)
 
 SELECT relkind FROM pg_class WHERE relname = 'tc_t';
@@ -120,7 +119,6 @@ SELECT tc_explain($$SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_
  Aggregate
    ->  Index Only Scan using pg_class_relname_nsp_index on pg_class
          Index Cond: (relname = ANY ('{tc_t,tc_t_pkey,pg_class}'::name[]))
- Optimizer: Postgres-based planner
 (4 rows)
 
 SELECT count(*) FROM pg_class WHERE relname IN ('tc_t', 'tc_t_pkey', 'pg_class');
@@ -134,7 +132,6 @@ SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname >= 'tc_' AND reln
 -----------------------------------------------------------------------
  Index Only Scan Backward using pg_class_relname_nsp_index on pg_class
    Index Cond: ((relname >= 'tc_'::name) AND (relname < 'tc`'::name))
- Optimizer: Postgres-based planner
 (3 rows)
 
 SELECT relname FROM pg_class WHERE relname >= 'tc_' AND relname < 'tc`' ORDER BY relname DESC;
@@ -149,7 +146,6 @@ SELECT tc_explain($$SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::re
 ---------------------------------------------------------------------------
  Index Scan Backward using pg_attribute_relid_attnum_index on pg_attribute
    Index Cond: ((attrelid = 'N'::oid) AND (attnum > 0))
- Optimizer: Postgres-based planner
 (3 rows)
 
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_t'::regclass AND attnum > 0 ORDER BY attnum DESC;
@@ -169,7 +165,6 @@ SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' AND reln
    Recheck Cond: ((relname = 'tc_t'::name) AND (relnamespace = 'N'::oid))
    ->  Bitmap Index Scan on pg_class_relname_nsp_index
          Index Cond: ((relname = 'tc_t'::name) AND (relnamespace = 'N'::oid))
- Optimizer: Postgres-based planner
 (5 rows)
 
 SELECT relname FROM pg_class WHERE relname = 'tc_t' AND relnamespace = pg_my_temp_schema();
@@ -188,7 +183,6 @@ SELECT tc_explain($$SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relna
                Index Cond: (relname = 'tc_t'::name)
          ->  Bitmap Index Scan on pg_class_relname_nsp_index
                Index Cond: (relname = 'pg_class'::name)
- Optimizer: Postgres-based planner
 (8 rows)
 
 SELECT relname FROM pg_class WHERE relname = 'tc_t' OR relname = 'pg_class' ORDER BY 1;
@@ -251,7 +245,6 @@ SELECT tc_explain($$SELECT count(*), sum(a1.atttypid::int8 * a2.attnum)
                Index Cond: (attrelid = ANY ('{1259,N,1247,N}'::oid[]))
          ->  Index Only Scan using pg_attribute_relid_attnum_index on pg_attribute
                Index Cond: (attrelid = ANY ('{1259,N,1247,N}'::oid[]))
- Optimizer: Postgres-based planner
 (8 rows)
 
 SELECT count(*) = :ref_n AND sum(a1.atttypid::int8 * a2.attnum) = :ref_s1 AS same
@@ -313,10 +306,10 @@ SELECT count(*) AS in_memory FROM pg_class
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
-ERROR:  duplicate key value violates unique constraint "tc_t_pkey"  (seg1 172.18.0.6:7003 pid=536306)
+ERROR:  duplicate key value violates unique constraint "tc_t_pkey"
 DETAIL:  Key (a)=(1) already exists.
 INSERT INTO tc_t VALUES (101, '');
-ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"  (seg0 172.18.0.6:7002 pid=536305)
+ERROR:  new row for relation "tc_t" violates check constraint "tc_t_b_check"
 DETAIL:  Failing row contains (101, ).
 SELECT count(*), sum(a) FROM tc_t;
  count | sum  
@@ -351,7 +344,6 @@ SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relna
    InitPlan 1 (returns $0)
      ->  Index Scan using pg_class_relname_nsp_index on pg_class pg_class_1
            Index Cond: (relname = 'tc_t'::name)
- Optimizer: Postgres-based planner
 (6 rows)
 
 SELECT relname FROM pg_class WHERE ctid = (SELECT ctid FROM pg_class WHERE relname = 'tc_t');
@@ -473,31 +465,21 @@ CREATE TABLE tc_ord_parent (a int) DISTRIBUTED BY (a);
 CREATE FUNCTION public.tc_bad(pg_temp.tc_comp) RETURNS int LANGUAGE sql AS 'SELECT 1';
 ERROR:  ordinary objects cannot depend on temporary objects kept in memory
 DETAIL:  The new object would depend on type tc_comp.
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 CREATE TABLE tc_bad_t (c pg_temp.tc_comp) DISTRIBUTED RANDOMLY;
 ERROR:  ordinary objects cannot depend on temporary objects kept in memory
 DETAIL:  The new object would depend on type tc_comp.
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 CREATE TEMP TABLE tc_child () INHERITS (tc_ord_parent);
-NOTICE:  table has parent, setting distribution columns to match parent table
 ERROR:  temporary tables kept in memory cannot inherit from ordinary table "tc_ord_parent"
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 CREATE TEMP TABLE tc_of OF tc_ord_comp;
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'x' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 ERROR:  temporary tables kept in memory cannot be typed tables of ordinary type tc_ord_comp
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 CREATE CAST (pg_temp.tc_comp AS text) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
 ERROR:  extension members are not supported for temporary objects kept in memory
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 CREATE STATISTICS pg_temp.tc_stx ON a FROM tc_ord_parent;
 ERROR:  statistics object on an ordinary table cannot be in a temporary schema kept in memory
 CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_inh_child () INHERITS (tc_inh_parent);
-NOTICE:  table has parent, setting distribution columns to match parent table
 -- A dependency on an ordinary object stays on disk.
 CREATE TEMP TABLE tc_uses_ord (c tc_ord_comp) DISTRIBUTED RANDOMLY;
 SELECT classid::regclass, refobjid::regtype FROM pg_depend
@@ -668,8 +650,6 @@ BEGIN
 END $$;
 ERROR:  out of room for the catalog rows of temporary objects
 DETAIL:  The session keeps them in up to 8192 kB of memory.
-HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size for new sessions.
-CONTEXT:  SQL statement "CREATE TEMP TABLE tc_many673 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)"
 PL/pgSQL function inline_code_block line 4 at EXECUTE
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
  count 
@@ -688,8 +668,6 @@ BEGIN
 END $$;
 ERROR:  out of room for the catalog rows of temporary objects
 DETAIL:  The session keeps them in up to 1024 kB of memory.
-HINT:  Drop temporary objects, or raise gp_temp_memory_catalog_max_size for new sessions.
-CONTEXT:  SQL statement "CREATE TEMP TABLE tc_full39 (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)"
 PL/pgSQL function inline_code_block line 4 at EXECUTE
 -- Creating and dropping in one transaction frees the dead rows on the way.
 DO $$
@@ -914,7 +892,6 @@ CREATE TYPE pg_temp.tc_ct AS (a int);
 CREATE TEMP TABLE tc_typed_of OF pg_temp.tc_ct DISTRIBUTED RANDOMLY;
 ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int;
 ERROR:  cannot alter type "tc_ct" because it is the type of a typed table
-HINT:  Use ALTER ... CASCADE to alter the typed tables too.
 ALTER TYPE pg_temp.tc_ct ADD ATTRIBUTE b int CASCADE;
 SELECT attname FROM pg_attribute WHERE attrelid = 'tc_typed_of'::regclass AND attnum > 0 ORDER BY attnum;
  attname 
@@ -1018,7 +995,7 @@ SELECT * FROM tc_sp1;
 
 -- A failing CREATE TABLE AS leaves nothing behind.
 CREATE TEMP TABLE tc_ctas_fail AS SELECT 1 / (i - 5) AS x FROM generate_series(1, 10) i DISTRIBUTED BY (x);
-ERROR:  division by zero  (seg0 slice1 172.18.0.6:7002 pid=536800)
+ERROR:  division by zero
 SELECT to_regclass('tc_ctas_fail') IS NULL AS not_created;
  not_created 
 -------------
@@ -1041,7 +1018,7 @@ BEGIN;
 CREATE TEMP TABLE tc_defer_new (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_defer VALUES (1);
 COMMIT;
-ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"  (seg1 172.18.0.6:7003 pid=536729)
+ERROR:  duplicate key value violates unique constraint "tc_defer_i_key"
 DETAIL:  Key (i)=(1) already exists.
 SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_defer_new';
  count 
@@ -1127,7 +1104,6 @@ CREATE OPERATOR public.<<<< (PROCEDURE = int4lt, LEFTARG = int, RIGHTARG = int);
 CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
                               COMMUTATOR = OPERATOR(public.<<<<));
 ERROR:  temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other
-HINT:  Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.
 DROP OPERATOR public.<<<< (int, int);
 -- Enum labels are read by ordered catalog scans, forward and backward;
 -- they get reserved OIDs too, the same on the segments.
@@ -1844,10 +1820,12 @@ SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved,
  f        | f
 (1 row)
 
--- The OIDs of a slice wrap around at its end (the fault puts the session
--- near it) and go on from its start.
+-- A session gives each OID once (caches keyed by OID count on it): at the
+-- end of its slice (the fault puts the session near it) it takes another
+-- one, and keeps the first one as long as its objects have OIDs of it.
 \c
 SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_wrap0 (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
@@ -1856,7 +1834,6 @@ SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
 (1 row)
 
 CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
-CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
@@ -1864,16 +1841,69 @@ SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
  Success:
 (1 row)
 
-SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped,
+CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
+       ('tc_wrap1'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice1,
+       ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
+       ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice2,
        'tc_wrap2'::regclass::oid >= 4026531840 AS reserved;
- wrapped | reserved 
----------+----------
- t       | t
+ same_slice1 | same_slice2 | reserved 
+-------------+-------------+----------
+ t           | f           | t
 (1 row)
 
+INSERT INTO tc_wrap0 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
-SELECT count(*) FROM tc_wrap1 JOIN tc_wrap2 USING (a);
+SELECT count(*) FROM tc_wrap0 JOIN tc_wrap1 USING (a) JOIN tc_wrap2 USING (a);
+ count 
+-------
+    10
+(1 row)
+
+-- With no slice left to take (the fault pretends so), it runs out of OIDs.
+-- Then it goes on with another slice.
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
+ERROR:  out of OIDs for temporary objects kept in memory
+SELECT gp_inject_fault('tempcat_no_free_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_wrap3'::regclass::oid::bigint - 4026531840) >> 16 NOT IN
+       (('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16,
+        ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16) AS third_slice;
+ third_slice 
+-------------
+ t
+(1 row)
+
+INSERT INTO tc_wrap3 SELECT generate_series(1, 10);
+SELECT count(*) FROM tc_wrap0 JOIN tc_wrap3 USING (a);
  count 
 -------
     10

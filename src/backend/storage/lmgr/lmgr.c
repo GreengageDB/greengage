@@ -21,6 +21,7 @@
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
+#include "catalog/tempcat.h"
 #include "commands/progress.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -562,6 +563,18 @@ UnlockPage(Relation relation, BlockNumber blkno, LOCKMODE lockmode)
 }
 
 /*
+ * GPDB: catalog rows of temporary objects kept in memory (see tempcat.c) are
+ * changed by their own session only, so they need no tuple locks.  Their
+ * TIDs are not unique across sessions either: locks on them would make
+ * unrelated sessions wait for each other.
+ */
+static inline bool
+TupleLockNeeded(Relation relation, ItemPointer tid)
+{
+	return !(IsTempcatTid(tid) && IsCatalogRelation(relation));
+}
+
+/*
  *		LockTuple
  *
  * Obtain a tuple-level lock.  This is used in a less-than-intuitive fashion
@@ -572,6 +585,9 @@ void
 LockTuple(Relation relation, ItemPointer tid, LOCKMODE lockmode)
 {
 	LOCKTAG		tag;
+
+	if (!TupleLockNeeded(relation, tid))
+		return;
 
 	SET_LOCKTAG_TUPLE(tag,
 					  relation->rd_lockInfo.lockRelId.dbId,
@@ -593,6 +609,9 @@ ConditionalLockTuple(Relation relation, ItemPointer tid, LOCKMODE lockmode)
 {
 	LOCKTAG		tag;
 
+	if (!TupleLockNeeded(relation, tid))
+		return true;
+
 	SET_LOCKTAG_TUPLE(tag,
 					  relation->rd_lockInfo.lockRelId.dbId,
 					  relation->rd_lockInfo.lockRelId.relId,
@@ -609,6 +628,9 @@ void
 UnlockTuple(Relation relation, ItemPointer tid, LOCKMODE lockmode)
 {
 	LOCKTAG		tag;
+
+	if (!TupleLockNeeded(relation, tid))
+		return;
 
 	SET_LOCKTAG_TUPLE(tag,
 					  relation->rd_lockInfo.lockRelId.dbId,

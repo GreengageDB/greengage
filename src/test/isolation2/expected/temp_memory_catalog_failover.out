@@ -10,13 +10,13 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 CREATE EXTENSION
 !\retcode gpconfig -c gp_gang_creation_retry_count -v 120 --skipvalidation --coordinatoronly;
 -- start_ignore
-20261016:05:58:12:387306 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c gp_gang_creation_retry_count -v 120 --skipvalidation --coordinatoronly'
+completed successfully with parameters '-c gp_gang_creation_retry_count -v 120 --skipvalidation --coordinatoronly'
 
 -- end_ignore
 (exited with code 0)
 !\retcode gpconfig -c gp_gang_creation_retry_timer -v 1000 --skipvalidation --coordinatoronly;
 -- start_ignore
-20261016:05:58:13:387382 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-c gp_gang_creation_retry_timer -v 1000 --skipvalidation --coordinatoronly'
+completed successfully with parameters '-c gp_gang_creation_retry_timer -v 1000 --skipvalidation --coordinatoronly'
 
 -- end_ignore
 (exited with code 0)
@@ -54,7 +54,7 @@ INSERT 0 1
  t          
 (1 row)
 1: SELECT count(*) FROM tcf_t;
-ERROR:  terminating connection due to administrator command  (seg0 slice1 172.18.0.6:7002 pid=387502)
+ERROR:  terminating connection due to administrator command
 1: SELECT to_regclass('tcf_t') IS NULL AS gone;
  gone 
 ------
@@ -650,13 +650,13 @@ server closed the connection unexpectedly
 -- start_ignore
 !\retcode gpconfig -r gp_gang_creation_retry_count --skipvalidation --coordinatoronly;
 -- start_ignore
-20261016:05:58:32:388680 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-r gp_gang_creation_retry_count --skipvalidation --coordinatoronly'
+completed successfully with parameters '-r gp_gang_creation_retry_count --skipvalidation --coordinatoronly'
 
 -- end_ignore
 (exited with code 0)
 !\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly;
 -- start_ignore
-20261016:05:58:33:388755 gpconfig:cdw:gpadmin-[INFO]:-completed successfully with parameters '-r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly'
+completed successfully with parameters '-r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly'
 
 -- end_ignore
 (exited with code 0)

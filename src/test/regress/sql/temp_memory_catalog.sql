@@ -892,21 +892,44 @@ CREATE TEMP TABLE tc_noid2 (a int) DISTRIBUTED BY (a);
 SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved,
        'tc_noid2'::regclass::oid >= 4026531840 AS reserved2;
 
--- The OIDs of a slice wrap around at its end (the fault puts the session
--- near it) and go on from its start.
+-- A session gives each OID once (caches keyed by OID count on it): at the
+-- end of its slice (the fault puts the session near it) it takes another
+-- one, and keeps the first one as long as its objects have OIDs of it.
 \c
 SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_wrap0 (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
-CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
 SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT 'tc_wrap1'::regclass::oid > 'tc_wrap2'::regclass::oid AS wrapped,
+CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
+       ('tc_wrap1'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice1,
+       ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
+       ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice2,
        'tc_wrap2'::regclass::oid >= 4026531840 AS reserved;
+INSERT INTO tc_wrap0 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
-SELECT count(*) FROM tc_wrap1 JOIN tc_wrap2 USING (a);
+SELECT count(*) FROM tc_wrap0 JOIN tc_wrap1 USING (a) JOIN tc_wrap2 USING (a);
+-- With no slice left to take (the fault pretends so), it runs out of OIDs.
+-- Then it goes on with another slice.
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_no_free_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_wrap3'::regclass::oid::bigint - 4026531840) >> 16 NOT IN
+       (('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16,
+        ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16) AS third_slice;
+INSERT INTO tc_wrap3 SELECT generate_series(1, 10);
+SELECT count(*) FROM tc_wrap0 JOIN tc_wrap3 USING (a);
 
 -- When dynamic shared memory runs short for others (the fault pretends
 -- so), a new session keeps its temporary objects on disk.

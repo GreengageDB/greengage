@@ -653,8 +653,8 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	StringInfoData alldescs;
 
 	/*
-	 * GPDB: temporary objects of other sessions kept in memory depend on the
-	 * object through rows that cannot be seen here; wait until none does
+	 * GPDB: temporary objects of other sessions kept in memory may depend on
+	 * the object through rows that cannot be seen here: fail if any does
 	 * (see tempcat.c).
 	 */
 	tempcat_lock_out_users(classId, objectId);
@@ -902,6 +902,14 @@ copyTemplateDependencies(Oid templateDbId, Oid newDbId)
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{
 		HeapTuple	newtup;
+
+		/*
+		 * GPDB: not the rows of this session's temporary objects kept in
+		 * memory (see tempcat.c), which the scan returns too: their objects
+		 * do not exist in the new database.
+		 */
+		if (IsTempcatTid(&tup->t_self))
+			continue;
 
 		newtup = heap_modify_tuple(tup, sdepDesc, values, nulls, replace);
 		CatalogTupleInsertWithInfo(sdepRel, newtup, indstate);
@@ -1336,6 +1344,12 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 		SysScanDesc scan;
 		HeapTuple	tuple;
 
+		/*
+		 * GPDB: temporary objects of other sessions kept in memory are out
+		 * of reach (see tempcat.c): say so.
+		 */
+		tempcat_warn_users(AuthIdRelationId, roleid, "DROP OWNED");
+
 		/* Doesn't work for pinned objects */
 		if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
 		{
@@ -1480,6 +1494,9 @@ shdepReassignOwned(List *roleids, Oid newrole)
 		ScanKeyData key[2];
 		HeapTuple	tuple;
 		Oid			roleid = lfirst_oid(cell);
+
+		/* GPDB: see shdepDropOwned() */
+		tempcat_warn_users(AuthIdRelationId, roleid, "REASSIGN OWNED");
 
 		/* Refuse to work on pinned roles */
 		if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))

@@ -545,8 +545,8 @@ findDependentObjects(const ObjectAddress *object,
 		return;
 
 	/*
-	 * GPDB: temporary objects of other sessions kept in memory depend on the
-	 * object through rows that cannot be seen here; wait until none does
+	 * GPDB: temporary objects of other sessions kept in memory may depend on
+	 * the object through rows that cannot be seen here: fail if any does
 	 * (see tempcat.c).
 	 */
 	tempcat_lock_out_users(object->classId, object->objectId);

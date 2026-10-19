@@ -4,8 +4,8 @@
 -- All their catalog rows are in their session's memory, also their
 -- dependencies on ordinary objects: other sessions cannot see the objects.
 -- The session holds a lock on each ordinary object they use instead, which
--- keeps other sessions from dropping or changing it: they wait for the
--- session (here with lock_timeout, to see that they do).
+-- keeps other sessions from dropping or changing it: they fail, as they
+-- would on dependent objects they could see, naming the session's process.
 
 -- Sessions that quit are gone only once their processes on all nodes are.
 CREATE TABLE tc_sess (id int) DISTRIBUTED REPLICATED;
@@ -73,34 +73,44 @@ INSERT 0 1
  0     
 (1 row)
 
--- They wait to drop what the objects use, also with CASCADE.
-2: SET lock_timeout = '500ms';
-SET
+-- They cannot drop what the objects use, also with CASCADE, which cannot
+-- reach into the session's memory.
 2: DROP TYPE tc_comp;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_comp
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: DROP TYPE tc_comp CASCADE;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_comp
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: DROP DOMAIN tc_dom CASCADE;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_dom
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: DROP FUNCTION tc_fn(int) CASCADE;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: DROP TABLE tc_ord CASCADE;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on table tc_ord
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: ALTER TABLE tc_ord DROP COLUMN b CASCADE;
-ERROR:  canceling statement due to lock timeout
--- And to change it so that the objects would not work any more.
+ERROR:  temporary objects of other sessions depend on table tc_ord
+DETAIL:  The sessions of processes 148317 keep them in memory.
+-- Nor change it so that the objects would not work any more.
 2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_comp
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_check CHECK (VALUE > 0);
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_dom
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: ALTER TABLE tc_ord ALTER COLUMN b TYPE text;
-ERROR:  canceling statement due to lock timeout
--- And to drop the roles owning them or granted privileges on them.  DROP
--- OWNED and REASSIGN OWNED leave them to their session.
+ERROR:  temporary objects of other sessions depend on table tc_ord
+DETAIL:  The sessions of processes 148317 keep them in memory.
+-- Nor drop the roles owning them or granted privileges on them.  DROP
+-- OWNED and REASSIGN OWNED leave them to their session, with a warning.
 2: DROP ROLE tc_role;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on role tc_role
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: DROP ROLE tc_grantee;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on role tc_grantee
+DETAIL:  The sessions of processes 148317 keep them in memory.
 2: REASSIGN OWNED BY tc_role TO CURRENT_USER;
 REASSIGN OWNED
 1: SELECT * FROM tc_t;
@@ -116,13 +126,14 @@ REASSIGN OWNED
 2: DROP OWNED BY tc_role;
 DROP OWNED
 2: DROP ROLE tc_role;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on role tc_role
+DETAIL:  The sessions of processes 148317 keep them in memory.
 1: SELECT * FROM tc_t;
  c     | d | e 
 -------+---+---
  (1,2) | 3 | 1 
 (1 row)
--- Other changes need not wait.
+-- Other changes work.
 2: ALTER TYPE tc_comp RENAME ATTRIBUTE x TO x1;
 ALTER TYPE
 2: ALTER TABLE tc_ord ADD COLUMN c int;
@@ -139,7 +150,8 @@ ERROR:  division by zero
 1: ROLLBACK;
 ROLLBACK
 2: DROP TYPE tc_comp;
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on type tc_comp
+DETAIL:  The sessions of processes 148317 keep them in memory.
 -- They go with the last object using what they lock, once the session goes
 -- idle, also when its creation rolled back.
 1: DROP VIEW tc_v;
@@ -166,17 +178,15 @@ DROP DOMAIN
                         
 (1 row)
 2: DROP FUNCTION tc_fn(int);
-ERROR:  canceling statement due to lock timeout
+ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
+DETAIL:  The sessions of processes 148317 keep them in memory.
 
--- Once the session is gone, so is all of that: DROP waits for it.
-2: RESET lock_timeout;
-RESET
-2&: DROP TYPE tc_comp;  <waiting ...>
+-- Once the session is gone, so is all of that.
 1q: ... <quitting>
-2<:  <... completed>
-DROP TYPE
 2: CALL tc_wait_gone();
 CALL
+2: DROP TYPE tc_comp;
+DROP TYPE
 2: DROP DOMAIN tc_dom;
 DROP DOMAIN
 2: DROP FUNCTION tc_fn(int);
@@ -344,7 +354,7 @@ DROP TABLE
 14: INSERT INTO tc_perm SELECT generate_series(1, 10);
 INSERT 0 10
 14: COMMIT;
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=537648)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -552,8 +562,7 @@ SET
 0U: DO $$ BEGIN EXECUTE (SELECT format('INSERT INTO pg_class SELECT %s FROM pg_class WHERE oid = %s', string_agg(CASE attname WHEN 'oid' THEN (SELECT x FROM tc_ref_oid)::text || '::oid' WHEN 'relname' THEN '''tc_ref_fake''' ELSE quote_ident(attname) END, ', ' ORDER BY attnum), 'pg_am'::regclass::oid) FROM pg_attribute WHERE attrelid = 'pg_class'::regclass AND attnum > 0); END $$;
 DO
 18: CREATE TEMP TABLE tc_ref2 (a int) DISTRIBUTED BY (a);
-ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node  (seg0 172.18.0.6:7002 pid=537776)
-HINT:  OID 4032353087 belongs to an object that exists on this node only; gpcheckcat reports such objects.
+ERROR:  OID of a new temporary object is already used in catalog "pg_class" on this node
 0U: ROLLBACK;
 ROLLBACK
 0Uq: ... <quitting>
@@ -644,7 +653,7 @@ CALL
 
 -- A slice that a segment refuses, as its earlier holder's writer QE
 -- lingers there (here a fault holds it on segment 0, and another makes the
--- wait give up at once), is let go of when the transaction that started to
+-- wait give up at once), is given up when the transaction that started to
 -- use it rolls back, with nothing kept: the next attempt takes another one.
 19: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
@@ -680,11 +689,10 @@ INSERT 0 1
 20: SET gp_enable_temp_memory_catalog = on;
 SET
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  an earlier session using the same temporary object OIDs is still running on this node  (seg0 172.18.0.6:7002 pid=537845)
+ERROR:  an earlier session using the same temporary object OIDs is still running on this node
 LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
                           ^
-DETAIL:  Process 537834 holds OIDs 4032430080 to 4032495615.
-HINT:  Retry once that session has ended.
+DETAIL:  Process 148585 holds OIDs 4100718592 to 4100784127.
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 CREATE TABLE
 20: INSERT INTO tc_t SELECT generate_series(1, 10);
@@ -714,8 +722,9 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid) FROM gp_segme
 CALL
 
 -- A writer QE whose prepared transaction started to use its slice is
--- rolled back (here as PREPARE fails on segment 1): it lets go of the slice
--- with the coordinator, and follows it to the next one.
+-- rolled back (here as PREPARE fails on segment 1): the coordinator takes
+-- the next slice, and the writer QE lets go of the first one once the rows
+-- of the transaction are gone.
 SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -724,7 +733,7 @@ SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configura
 23: SET gp_enable_temp_memory_catalog = on;
 SET
 23: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=537894)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
 -----------------
@@ -799,10 +808,10 @@ SELECT (max(slice) FILTER (WHERE session = 26) - max(slice) FILTER (WHERE sessio
 DROP TABLE tc_slices;
 DROP TABLE
 
--- DROP of what a temporary object of another session depends on waits for
--- that session when it is dropping the object (here in a transaction in
--- progress), and goes on once the object is gone, as for other dependent
--- objects.
+-- DROP of what a temporary object of another session depends on fails
+-- also while that session is dropping the object (here in a transaction in
+-- progress), and works once the object is gone: the session lets go of the
+-- lock when it goes idle, before it reports the end of the transaction.
 CREATE TYPE tc_wait_comp AS (x int);
 CREATE TYPE
 27: SET gp_enable_temp_memory_catalog = on;
@@ -813,16 +822,18 @@ CREATE TABLE
 BEGIN
 27: DROP TABLE tc_w;
 DROP TABLE
-28&: DROP TYPE tc_wait_comp;  <waiting ...>
+28: DROP TYPE tc_wait_comp;
+ERROR:  temporary objects of other sessions depend on type tc_wait_comp
+DETAIL:  The sessions of processes 148676 keep them in memory.
 27: COMMIT;
 COMMIT
-28<:  <... completed>
+28: DROP TYPE tc_wait_comp;
 DROP TYPE
 27q: ... <quitting>
 28q: ... <quitting>
 
--- A transaction that started to use the slice rolls back: the session lets
--- go of the slice, but its rows are freed only when it goes idle, also in
+-- A transaction that started to use the slice rolls back: the session gives
+-- up the slice, but its rows are freed only when it goes idle, also in
 -- the aborted transaction, or starts its next one (here freeing them at
 -- idle fails, as the fault makes it).  Until then their xids keep
 -- datfrozenxid, and so clog truncation, from passing them.
@@ -890,6 +901,43 @@ ROLLBACK
 30q: ... <quitting>
 DROP DATABASE tc_frozen;
 DROP DATABASE
+
+-- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
+-- temporary objects kept in memory of the session connected to it, whose
+-- objects do not exist in the new database.
+CREATE DATABASE tc_tmpl;
+CREATE DATABASE
+CREATE ROLE tc_copy_role;
+CREATE ROLE
+31:@db_name tc_tmpl: SET gp_enable_temp_memory_catalog = on;
+SET
+31: CREATE TEMP TABLE tc_c (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+31: GRANT SELECT ON tc_c TO tc_copy_role;
+GRANT
+31: CREATE DATABASE tc_copy TEMPLATE tc_tmpl;
+CREATE DATABASE
+31: SELECT count(*) FROM pg_shdepend WHERE refobjid = 'tc_copy_role'::regrole AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
+ count 
+-------
+ 0     
+(1 row)
+31: SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'tc_copy_role'::regrole AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
+ count 
+-------
+ 0     
+(1 row)
+4: INSERT INTO tc_sess SELECT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl';
+INSERT 0 1
+31q: ... <quitting>
+4: CALL tc_wait_gone();
+CALL
+DROP DATABASE tc_copy;
+DROP DATABASE
+DROP DATABASE tc_tmpl;
+DROP DATABASE
+DROP ROLE tc_copy_role;
+DROP ROLE
 
 4: DROP TABLE tc_sess;
 DROP TABLE

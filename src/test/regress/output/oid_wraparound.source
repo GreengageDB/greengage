@@ -521,7 +521,7 @@ SELECT gp_inject_fault('start_prepare', 'error', dbid) FROM gp_segment_configura
 
 \set VERBOSITY terse
 DROP TABLE oid_2pc;
-ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'  (seg1 172.18.0.6:7003 pid=272897)
+ERROR:  fault triggered, fault name:'start_prepare' fault type:'error'
 \set VERBOSITY default
 SELECT gp_inject_fault('start_prepare', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
  gp_inject_fault 
