@@ -17,18 +17,12 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-<<<<<<< HEAD
 dnl The PACKAGE_VERSION from upstream PostgreSQL is maintained in the
 dnl PG_PACKAGE_VERSION variable, when merging make sure to update this
 dnl variable with the merge conflict from the AC_INIT() statement.
 AC_INIT([Greenplum Database], [8.0.0-alpha.0], [support@greenplum.org], [], [https://greengagedb.org/])
-[PG_PACKAGE_VERSION=14beta2]
+[PG_PACKAGE_VERSION=15devel]
 AC_SUBST(PG_PACKAGE_VERSION)
-||||||| e1c1c30f635
-AC_INIT([PostgreSQL], [14beta2], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
-=======
-AC_INIT([PostgreSQL], [15devel], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
->>>>>>> 3b231596ccf
 
 dnl m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 dnl Untested combinations of 'autoconf' and PostgreSQL versions are not

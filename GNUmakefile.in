@@ -10,7 +10,6 @@ include $(top_builddir)/src/Makefile.global
 
 $(call recurse,all install,src config)
 
-<<<<<<< HEAD
 all:
 	$(MAKE) -C contrib/auto_explain all
 	$(MAKE) -C contrib/citext all
@@ -37,39 +36,22 @@ endif
 	$(MAKE) -C gpcontrib all
 	+@echo "All of Greenplum Database successfully made. Ready to install."
 
-||||||| e1c1c30f635
-all:
-	+@echo "All of PostgreSQL successfully made. Ready to install."
-
-=======
->>>>>>> 3b231596ccf
 docs:
 	$(MAKE) -C doc all
 
-<<<<<<< HEAD
-$(call recurse,world,doc src config contrib gpcontrib,all)
-world:
-	+@echo "PostgreSQL, contrib, and documentation successfully made. Ready to install."
-||||||| e1c1c30f635
-$(call recurse,world,doc src config contrib,all)
-world:
-	+@echo "PostgreSQL, contrib, and documentation successfully made. Ready to install."
-=======
-$(call recurse,world,doc src config contrib,all)
->>>>>>> 3b231596ccf
+$(call recurse,world,doc src config contrib gpcontrib gpMgmt,all)
 
-# build src/ before contrib/
-world-contrib-recurse: world-src-recurse
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+world-contrib-recurse world-gpcontrib-recurse world-gpMgmt-recurse: world-src-recurse
 
-$(call recurse,world-bin,src config contrib,all)
+$(call recurse,world-bin,src config contrib gpcontrib gpMgmt,all)
 
-# build src/ before contrib/
-world-bin-contrib-recurse: world-bin-src-recurse
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+world-bin-contrib-recurse world-bin-gpcontrib-recurse world-bin-gpMgmt-recurse: world-bin-src-recurse
 
 html man:
 	$(MAKE) -C doc $@
 
-<<<<<<< HEAD
 install:
 	$(MAKE) -C contrib/amcheck $@  # needed by src/bin/pg_amcheck
 	$(MAKE) -C contrib/auto_explain $@
@@ -97,42 +79,20 @@ endif
 	$(MAKE) -C gpcontrib $@
 	+@echo "Greenplum Database installation complete."
 
-||||||| e1c1c30f635
-install:
-	+@echo "PostgreSQL installation complete."
-
-=======
->>>>>>> 3b231596ccf
 install-docs:
 	$(MAKE) -C doc install
 
-<<<<<<< HEAD
-$(call recurse,install-world,doc src config contrib gpcontrib,install)
-install-world:
-	+@echo "PostgreSQL, contrib, and documentation installation complete."
-||||||| e1c1c30f635
-$(call recurse,install-world,doc src config contrib,install)
-install-world:
-	+@echo "PostgreSQL, contrib, and documentation installation complete."
-=======
-$(call recurse,install-world,doc src config contrib,install)
->>>>>>> 3b231596ccf
+$(call recurse,install-world,doc src config contrib gpcontrib gpMgmt,install)
 
-# build src/ before contrib/
-install-world-contrib-recurse: install-world-src-recurse
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+install-world-contrib-recurse install-world-gpcontrib-recurse install-world-gpMgmt-recurse: install-world-src-recurse
 
-<<<<<<< HEAD
+$(call recurse,install-world-bin,src config contrib gpcontrib gpMgmt,install)
+
+# build src/ before contrib/, gpcontrib/ and gpMgmt/
+install-world-bin-contrib-recurse install-world-bin-gpcontrib-recurse install-world-bin-gpMgmt-recurse: install-world-bin-src-recurse
+
 $(call recurse,installdirs uninstall init-po update-po,doc src config gpcontrib)
-||||||| e1c1c30f635
-$(call recurse,installdirs uninstall init-po update-po,doc src config)
-=======
-$(call recurse,install-world-bin,src config contrib,install)
-
-# build src/ before contrib/
-install-world-bin-contrib-recurse: install-world-bin-src-recurse
-
-$(call recurse,installdirs uninstall init-po update-po,doc src config)
->>>>>>> 3b231596ccf
 
 $(call recurse,distprep coverage,doc src config contrib gpcontrib)
 
