@@ -56,11 +56,11 @@
 #include "partitioning/partdesc.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/rel.h"
-#include "parser/analyze.h"
 
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
 #include "optimizer/plancat.h"
+#include "parser/analyze.h"
 #include "parser/parse_relation.h"
 #include "utils/lsyscache.h"
 
