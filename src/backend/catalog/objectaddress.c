@@ -3724,67 +3724,45 @@ getObjectDescriptionOids(Oid classid, Oid objid)
 }
 
 /*
- * isTempObjectOfOtherSession
+ * getTempObjectDescription
  *
- * True when the object is reached only through dependency rows but has no
- * catalog tuple of its own.  With the temp memory catalog, pg_depend and
- * pg_shdepend rows of a temporary table are real rows (so that drops of the
- * referenced objects are properly blocked in every session), while the
- * depender itself - the temporary relation or its temp namespace - lives
- * only in the creating backend's memory.  A committed regular relation
- * always has a visible pg_class row, and uncommitted ones have uncommitted
- * dependency rows too, so "real dependency row, missing depender tuple"
- * can only mean such an object (or a leftover from a crashed backend, which
- * is reported the same way).
+ * Describe a temporary object of another session for a drop/alter refusal.
+ * The object's rows live only in the owning backend's temp memory catalog,
+ * so its name cannot be resolved here; the address comes from the shared
+ * memory dependency registry, which knows only classid/objid.  Catalog
+ * lookups must not be attempted: they would fail, and a missing row does
+ * not prove anything about the owning session.
  */
-bool
-isTempObjectOfOtherSession(const ObjectAddress *object)
+char *
+getTempObjectDescription(const ObjectAddress *object)
 {
 	switch (object->classId)
 	{
 		case RelationRelationId:
-			return !SearchSysCacheExists1(RELOID,
-										  ObjectIdGetDatum(object->objectId));
+			if (object->objectSubId != 0)
+				return psprintf(_("column %d of temporary relation %u in another session"),
+								object->objectSubId, object->objectId);
+			return psprintf(_("temporary relation %u in another session"),
+							object->objectId);
 		case NamespaceRelationId:
-			return !SearchSysCacheExists1(NAMESPACEOID,
-										  ObjectIdGetDatum(object->objectId));
+			return psprintf(_("temporary schema %u in another session"),
+							object->objectId);
+		case AttrDefaultRelationId:
+			return psprintf(_("temporary default %u in another session"),
+							object->objectId);
+		case ConstraintRelationId:
+			return psprintf(_("temporary constraint %u in another session"),
+							object->objectId);
+		case TriggerRelationId:
+			return psprintf(_("temporary trigger %u in another session"),
+							object->objectId);
+		case RewriteRelationId:
+			return psprintf(_("temporary rule %u in another session"),
+							object->objectId);
 		default:
-			return false;
+			return psprintf(_("temporary object %u in another session"),
+							object->objectId);
 	}
-}
-
-/*
- * getObjectDescriptionOrTemp
- *
- * getObjectDescription for a dependent object reached through dependency
- * rows: like getObjectDescription, but describes temp objects of other
- * sessions (see isTempObjectOfOtherSession) instead of failing with
- * "cache lookup failed".  Drop-time error reporting is the intended
- * caller; elsewhere a missing tuple means corruption and must stay loud.
- */
-char *
-getObjectDescriptionOrTemp(const ObjectAddress *object)
-{
-	if (isTempObjectOfOtherSession(object))
-	{
-		switch (object->classId)
-		{
-			case RelationRelationId:
-				if (object->objectSubId != 0)
-					return psprintf(_("column %d of temporary relation %u in another session"),
-									object->objectSubId, object->objectId);
-				return psprintf(_("temporary relation %u in another session"),
-								object->objectId);
-			case NamespaceRelationId:
-				return psprintf(_("temporary schema %u in another session"),
-								object->objectId);
-			default:
-				Assert(false);	/* isTempObjectOfOtherSession checked these */
-				break;
-		}
-	}
-
-	return getObjectDescription(object);
 }
 
 /*

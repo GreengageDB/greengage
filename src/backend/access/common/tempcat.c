@@ -39,6 +39,7 @@
 
 #include "pgstat.h"
 #include "miscadmin.h"
+#include "storage/ipc.h"
 #include "access/tempcat.h"
 #include "access/relscan.h"
 #include "access/xact.h"
@@ -46,6 +47,8 @@
 #include "access/memtup.h"
 #include "access/sysattr.h"
 #include "access/htup_details.h"
+#include "access/table.h"
+#include "catalog/dependency.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
@@ -146,6 +149,157 @@ static TempcatSnapshot PendingPreparedSnapshot = NULL;
 
 /* Dirty flag: set when tempcat content changes, cleared after serialization */
 static bool TempcatDirtyFlag = false;
+
+/*
+ * Set when the session's set of dependency edges changed and must be
+ * re-published to the shared-memory registry at the next commit.  Readers
+ * that received their rows via deserialization never set it.
+ */
+static bool TempcatPublishPending = false;
+static bool TempcatRegistryExitHookRegistered = false;
+
+/* True while tempcat_deserialize() rebuilds state received from the writer. */
+static bool TempcatDeserializing = false;
+
+/*
+ * TupleDesc copies of pg_depend and pg_shdepend, captured on first local
+ * insert of such a row: the commit-time edge sync runs after the
+ * transaction state is already TRANS_DEFAULT, where relations cannot be
+ * opened anymore (relation_open asserts IsTransactionState()).
+ */
+static TupleDesc TempcatDepTupleDesc = NULL;
+static TupleDesc TempcatShdepTupleDesc = NULL;
+static TupleDesc TempcatInheritsTupleDesc = NULL;
+
+/*
+ * Fetch a NOT NULL attribute; a virtual pg_depend/pg_shdepend row with a
+ * NULL there is a bug, not a data condition.
+ */
+static Datum
+TempcatGetAttrNotNull(HeapTuple tup, int attnum, TupleDesc tupDesc)
+{
+	bool		isnull;
+	Datum		datum = heap_getattr(tup, attnum, tupDesc, &isnull);
+
+	Assert(!isnull);
+	return datum;
+}
+
+/*
+ * Rebuild this session's dependency edges from the committed (root)
+ * snapshot and publish them to the shared-memory registry, replacing the
+ * previous set.  Runs at commit of a transaction that wrote pg_depend or
+ * pg_shdepend rows into tempcat, so uncommitted and rolled-back edges are
+ * never published.
+ */
+static void
+TempcatRegistrySyncFromCommitted(void)
+{
+	TempcatSnapshot snapshot = CurrentTempcatSnapshotPrivate;
+	TempcatDepEdge *edges = NULL;
+	int			nedges = 0;
+	int			maxedges = 0;
+	dlist_iter	iter;
+
+	if (!TempcatRegistryExitHookRegistered)
+	{
+		/* The unpublish needs a live PGPROC for its LWLock. */
+		before_shmem_exit(tempcat_registry_unpublish_on_exit, 0);
+		TempcatRegistryExitHookRegistered = true;
+	}
+
+	if (snapshot != NULL)
+	{
+		dlist_foreach(iter, &snapshot->relationData)
+		{
+			TempcatSnapshotRelationData *entry =
+				dlist_container(TempcatSnapshotRelationData, node, iter.cur);
+			TupleDesc	tupDesc;
+			Oid			dbid;
+			dlist_iter	tupIter;
+
+			if (entry->relid == DependRelationId)
+			{
+				tupDesc = TempcatDepTupleDesc;
+				dbid = MyDatabaseId;
+			}
+			else if (entry->relid == SharedDependRelationId)
+			{
+				tupDesc = TempcatShdepTupleDesc;
+				dbid = InvalidOid;	/* pg_shdepend is cluster-wide */
+			}
+			else if (entry->relid == InheritsRelationId)
+			{
+				tupDesc = TempcatInheritsTupleDesc;
+				dbid = MyDatabaseId;
+			}
+			else
+				continue;
+
+			/* Rows not written by this backend have no cached descriptor. */
+			if (tupDesc == NULL)
+				continue;
+
+			dlist_foreach(tupIter, &entry->tuples)
+			{
+				DListHeapTuple *dlist_tup = (DListHeapTuple *) tupIter.cur;
+				HeapTuple	tup = dlist_tup->tup;
+				TempcatDepEdge *edge;
+
+				if (nedges >= maxedges)
+				{
+					maxedges = (maxedges == 0) ? 32 : maxedges * 2;
+					if (edges == NULL)
+						edges = palloc(maxedges * sizeof(TempcatDepEdge));
+					else
+						edges = repalloc(edges, maxedges * sizeof(TempcatDepEdge));
+				}
+				edge = &edges[nedges++];
+
+				edge->dbid = dbid;
+				edge->pgprocno = 0;	/* filled in by the publisher */
+				edge->pid = 0;
+
+				if (entry->relid == DependRelationId)
+				{
+					edge->classid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_depend_classid, tupDesc));
+					edge->objid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_depend_objid, tupDesc));
+					edge->objsubid = DatumGetInt32(TempcatGetAttrNotNull(tup, Anum_pg_depend_objsubid, tupDesc));
+					edge->refclassid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_depend_refclassid, tupDesc));
+					edge->refobjid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_depend_refobjid, tupDesc));
+					edge->refobjsubid = DatumGetInt32(TempcatGetAttrNotNull(tup, Anum_pg_depend_refobjsubid, tupDesc));
+					edge->deptype = DatumGetChar(TempcatGetAttrNotNull(tup, Anum_pg_depend_deptype, tupDesc));
+				}
+				else if (entry->relid == SharedDependRelationId)
+				{
+					edge->classid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_classid, tupDesc));
+					edge->objid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_objid, tupDesc));
+					edge->objsubid = DatumGetInt32(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_objsubid, tupDesc));
+					edge->refclassid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_refclassid, tupDesc));
+					edge->refobjid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_refobjid, tupDesc));
+					edge->refobjsubid = 0;	/* pg_shdepend has no refobjsubid */
+					edge->deptype = DatumGetChar(TempcatGetAttrNotNull(tup, Anum_pg_shdepend_deptype, tupDesc));
+				}
+				else
+				{
+					/* Plain inheritance records no pg_depend row. */
+					edge->classid = RelationRelationId;
+					edge->objid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_inherits_inhrelid, tupDesc));
+					edge->objsubid = 0;
+					edge->refclassid = RelationRelationId;
+					edge->refobjid = DatumGetObjectId(TempcatGetAttrNotNull(tup, Anum_pg_inherits_inhparent, tupDesc));
+					edge->refobjsubid = 0;
+					edge->deptype = DEPENDENCY_AUTO;
+				}
+			}
+		}
+	}
+
+	tempcat_registry_publish(nedges, edges);
+
+	if (edges != NULL)
+		pfree(edges);
+}
 
 /*****************************************************************************
 							UTILITY PROCEDURES
@@ -451,6 +605,16 @@ tempcat_end_transaction(void)
 	TempcatSnapshotPushFront(TempcatSnapshotPopBack());
 	/* 2) get rid of all snapshots except the root one */
 	TempcatSnapshotUnwind();
+
+	/*
+	 * 3) The committed dependency edges of this session's temporary objects
+	 * changed: re-publish them where every session can see them.
+	 */
+	if (TempcatPublishPending)
+	{
+		TempcatRegistrySyncFromCommitted();
+		TempcatPublishPending = false;
+	}
 }
 
 /*
@@ -471,6 +635,9 @@ tempcat_abort_transaction(void)
 #endif
 
 	TempcatSnapshotUnwind();
+
+	/* The uncommitted edges were never published; don't publish them now. */
+	TempcatPublishPending = false;
 }
 
 /*
@@ -698,6 +865,40 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	tempcat_mark_command_id_used();
 	pgstat_count_heap_insert(relation, 1);
 	TempcatDirtyFlag = true;
+
+	/*
+	 * Rows of these catalogs feed the shared-memory registry; deserialized
+	 * rows belong to the publishing session and must not be republished.
+	 */
+	if (RelationGetRelid(relation) == DependRelationId ||
+		RelationGetRelid(relation) == SharedDependRelationId ||
+		RelationGetRelid(relation) == InheritsRelationId)
+	{
+		TupleDesc  *desc;
+
+		switch (RelationGetRelid(relation))
+		{
+			case DependRelationId:
+				desc = &TempcatDepTupleDesc;
+				break;
+			case SharedDependRelationId:
+				desc = &TempcatShdepTupleDesc;
+				break;
+			default:
+				desc = &TempcatInheritsTupleDesc;
+				break;
+		}
+		if (*desc == NULL)
+		{
+			MemoryContext oldctx = MemoryContextSwitchTo(TopMemoryContext);
+
+			*desc = CreateTupleDescCopy(RelationGetDescr(relation));
+			MemoryContextSwitchTo(oldctx);
+		}
+
+		if (!TempcatDeserializing)
+			TempcatPublishPending = true;
+	}
 }
 
 /*
@@ -742,6 +943,10 @@ tempcat_delete(Relation relation, ItemPointer tid)
 #endif
 
 			TempcatDirtyFlag = true;
+			if (RelationGetRelid(relation) == DependRelationId ||
+				RelationGetRelid(relation) == SharedDependRelationId ||
+				RelationGetRelid(relation) == InheritsRelationId)
+				TempcatPublishPending = true;
 			return;
 		}
 	}
@@ -1128,6 +1333,8 @@ tempcat_deserialize(int len, const char *data)
 	Oid		last_reloid = InvalidOid;
 	Relation	rel = NULL;
 
+	TempcatDeserializing = true;
+
 	/* Clear any existing state: pop non-root snapshots and clear the root */
 	{
 		TempcatSnapshot sn;
@@ -1137,7 +1344,10 @@ tempcat_deserialize(int len, const char *data)
 	}
 
 	if (len < (int) sizeof(int32))
+	{
+		TempcatDeserializing = false;
 		return;
+	}
 
 	memcpy(&ntuples, ptr, sizeof(int32));
 	ptr += sizeof(int32);
@@ -1187,4 +1397,6 @@ tempcat_deserialize(int len, const char *data)
 
 	if (rel)
 		relation_close(rel, AccessShareLock);
+
+	TempcatDeserializing = false;
 }

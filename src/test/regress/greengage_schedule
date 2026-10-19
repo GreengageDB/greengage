@@ -20,6 +20,8 @@ test: test_setup
 
 test: temp_memory_catalog
 
+test: temp_memory_catalog_deps
+
 test: planhints rowhints joinhints
 
 test: pg_dump_binary_upgrade

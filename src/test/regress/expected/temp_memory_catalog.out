@@ -712,4 +712,3 @@ SELECT count(*) FROM tempcat_abort_prepared;
 DROP TABLE tempcat_abort_prepared;
 DROP TABLE tempcat_abort_src;
 RESET gp_enable_temp_memory_catalog;
-DROP EXTENSION gp_inject_fault;

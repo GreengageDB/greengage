@@ -31,7 +31,9 @@
 #include "catalog/gp_fastsequence_d.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_depend_d.h"
+#include "catalog/pg_inherits_d.h"
 #include "catalog/pg_shdepend_d.h"
+#include "catalog/objectaddress.h"
 #include "storage/itemptr.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -122,18 +124,17 @@ extern bool temp_table_scope;
  * yields wrong index scan results (see the invariant comment atop
  * gp_fastsequence.c).
  *
- * pg_depend and pg_shdepend are always excluded: their rows must be real
- * on-disk rows visible to every session, or another session could drop an
- * object (column type, index expression function, owner role) that some
- * session's temporary table depends on.  The depender side of such rows
- * may still be a virtual tempcat object; drop-time reporting copes with
- * that via getObjectDescriptionOrTemp().
+ * pg_depend and pg_shdepend rows of temporary objects are routed into the
+ * in-memory catalog with every other row of the object, but their edges
+ * are additionally published to the shared-memory registry
+ * (tempcat_registry.c) at commit, so that other sessions' drops and
+ * alters of the referenced shared objects are still blocked - see the
+ * consult sites in performDeletion(), shdepDropOwned(),
+ * shdepReassignOwned() and the domain/type walkers.
  */
 #define IsTempTableScopeFor(rel)  \
 	(temp_table_scope && IsCatalogRelation(rel) && \
-	 RelationGetRelid(rel) != FastSequenceRelationId && \
-	 RelationGetRelid(rel) != DependRelationId && \
-	 RelationGetRelid(rel) != SharedDependRelationId)
+	 RelationGetRelid(rel) != FastSequenceRelationId)
 
 /* Dirty tracking for tempcat versioning */
 extern bool tempcat_is_dirty(void);
@@ -155,12 +156,54 @@ extern bool tempcat_is_empty(void);
 extern void tempcat_serialize(int *len, char **data);
 
 /*
- * Deserialize tempcat state from a byte buffer, populating the
- * in-memory catalog.
+ * Deserialize tempcat state from a byte buffer, populating the in-memory
+ * catalog.
  *
- * Typically called on reader QEs to receive state serialized by
- * the writer QE on the same segment via SharedLocalSnapshotSlot.
+ * Typically called on reader QEs to receive state serialized by the writer
+ * QE on the same segment via SharedLocalSnapshotSlot.
  */
 extern void tempcat_deserialize(int len, const char *data);
+
+/*
+ * Shared-memory registry of dependency edges that temporary objects hold
+ * on shared objects (their pg_depend/pg_shdepend rows are virtual, so the
+ * cluster needs another place where every session can see the edges).
+ * See tempcat_registry.c.
+ */
+typedef struct TempcatDepEdge
+{
+	Oid			dbid;			/* MyDatabaseId; InvalidOid for pg_shdepend */
+	int			pgprocno;		/* owner backend identity, for liveness */
+	int			pid;
+	Oid			classid;		/* depender (the temporary object's row) */
+	Oid			objid;
+	int32		objsubid;
+	Oid			refclassid;		/* referenced shared object */
+	Oid			refobjid;
+	int32		refobjsubid;	/* its sub-object, when it has one */
+	char		deptype;			/* DEPENDENCY_* / SHARED_DEPENDENCY_* */
+} TempcatDepEdge;
+
+/* postmaster: create the registry in shared memory (ipci.c) */
+extern void tempcat_registry_init(void);
+extern Size tempcat_registry_shmem_size(void);
+
+/* replace this backend's published edges with the given set */
+extern void tempcat_registry_publish(int nedges, const TempcatDepEdge *edges);
+
+/* delete this backend's published edges (session end) */
+extern void tempcat_registry_unpublish(void);
+
+/* before_shmem_exit wrapper for tempcat_registry_unpublish() */
+extern void tempcat_registry_unpublish_on_exit(int code, Datum arg);
+
+/*
+ * True when some other live session's temporary objects depend on the
+ * given shared object.  deptype 0 matches any.  On true, *depender is set
+ * to the dependent temporary object's address, for the error message.
+ */
+extern bool tempcat_registry_has_dependents(const ObjectAddress *referenced,
+											char deptype,
+											ObjectAddress *depender);
 
 #endif   /* _TEMP_CAT_H */

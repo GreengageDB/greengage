@@ -17,10 +17,12 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_conversion.h"
@@ -66,6 +68,7 @@
 #include "utils/acl.h"
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 
@@ -104,6 +107,35 @@ static void storeObjectDescription(StringInfo descs,
 								   SharedDependencyType deptype,
 								   int count);
 static bool isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel);
+
+/*
+ * True when the depender's pg_shdepend row belongs in the temp memory
+ * catalog: a row on disk would outlive the owning session.
+ */
+static bool
+shdepDependerIsTempObject(const ObjectAddress *depender)
+{
+	switch (depender->classId)
+	{
+		case RelationRelationId:
+			{
+				Oid			namespaceId = get_rel_namespace(depender->objectId);
+
+				return isTempNamespace(namespaceId) ||
+					isTempToastNamespace(namespaceId);
+			}
+		case TypeRelationId:
+			{
+				/* Only the composite type of a relation can be temporary. */
+				Oid			relid = get_typ_typrelid(depender->objectId);
+
+				return OidIsValid(relid) &&
+					isTempNamespace(get_rel_namespace(relid));
+			}
+		default:
+			return false;
+	}
+}
 
 
 /*
@@ -145,10 +177,13 @@ recordSharedDependencyOn(ObjectAddress *depender,
 	if (!isSharedObjectPinned(referenced->classId, referenced->objectId,
 							  sdepRel))
 	{
-		shdepAddDependency(sdepRel, depender->classId, depender->objectId,
-						   depender->objectSubId,
-						   referenced->classId, referenced->objectId,
-						   deptype);
+		/* A temporary depender keeps the row in the temp memory catalog. */
+		BEGIN_TEMP_TABLE_SCOPE(shdepDependerIsTempObject(depender))
+			shdepAddDependency(sdepRel, depender->classId, depender->objectId,
+							   depender->objectSubId,
+							   referenced->classId, referenced->objectId,
+							   deptype);
+		END_TEMP_TABLE_SCOPE();
 	}
 
 	table_close(sdepRel, RowExclusiveLock);
@@ -499,50 +534,59 @@ updateAclDependencies(Oid classId, Oid objectId, int32 objsubId,
 
 	if (noldmembers > 0 || nnewmembers > 0)
 	{
-		sdepRel = table_open(SharedDependRelationId, RowExclusiveLock);
+		ObjectAddress depender;
 
-		/* Add new dependencies that weren't already present */
-		for (i = 0; i < nnewmembers; i++)
+		ObjectAddressSet(depender, classId, objectId);
+
+		/* A temporary depender keeps its ACL rows in the temp memory catalog. */
+		BEGIN_TEMP_TABLE_SCOPE(shdepDependerIsTempObject(&depender))
 		{
-			Oid			roleid = newmembers[i];
+			sdepRel = table_open(SharedDependRelationId, RowExclusiveLock);
 
-			/*
-			 * Skip the owner: he has an OWNER shdep entry instead. (This is
-			 * not just a space optimization; it makes ALTER OWNER easier. See
-			 * notes in changeDependencyOnOwner.)
-			 */
-			if (roleid == ownerId)
-				continue;
+			/* Add new dependencies that weren't already present */
+			for (i = 0; i < nnewmembers; i++)
+			{
+				Oid			roleid = newmembers[i];
 
-			/* Skip pinned roles; they don't need dependency entries */
-			if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
-				continue;
+				/*
+				 * Skip the owner: he has an OWNER shdep entry instead. (This is
+				 * not just a space optimization; it makes ALTER OWNER easier. See
+				 * notes in changeDependencyOnOwner.)
+				 */
+				if (roleid == ownerId)
+					continue;
 
-			shdepAddDependency(sdepRel, classId, objectId, objsubId,
-							   AuthIdRelationId, roleid,
-							   SHARED_DEPENDENCY_ACL);
+				/* Skip pinned roles; they don't need dependency entries */
+				if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
+					continue;
+
+				shdepAddDependency(sdepRel, classId, objectId, objsubId,
+								   AuthIdRelationId, roleid,
+								   SHARED_DEPENDENCY_ACL);
+			}
+
+			/* Drop no-longer-used old dependencies */
+			for (i = 0; i < noldmembers; i++)
+			{
+				Oid			roleid = oldmembers[i];
+
+				/* Skip the owner, same as above */
+				if (roleid == ownerId)
+					continue;
+
+				/* Skip pinned roles */
+				if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
+					continue;
+
+				shdepDropDependency(sdepRel, classId, objectId, objsubId,
+									false,	/* exact match on objsubId */
+									AuthIdRelationId, roleid,
+									SHARED_DEPENDENCY_ACL);
+			}
+
+			table_close(sdepRel, RowExclusiveLock);
 		}
-
-		/* Drop no-longer-used old dependencies */
-		for (i = 0; i < noldmembers; i++)
-		{
-			Oid			roleid = oldmembers[i];
-
-			/* Skip the owner, same as above */
-			if (roleid == ownerId)
-				continue;
-
-			/* Skip pinned roles */
-			if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
-				continue;
-
-			shdepDropDependency(sdepRel, classId, objectId, objsubId,
-								false,	/* exact match on objsubId */
-								AuthIdRelationId, roleid,
-								SHARED_DEPENDENCY_ACL);
-		}
-
-		table_close(sdepRel, RowExclusiveLock);
+		END_TEMP_TABLE_SCOPE();
 	}
 
 	if (oldmembers)
@@ -1197,7 +1241,7 @@ storeObjectDescription(StringInfo descs,
 					   SharedDependencyType deptype,
 					   int count)
 {
-	char	   *objdesc = getObjectDescriptionOrTemp(object);
+	char	   *objdesc = getObjectDescription(object);
 
 	/*
 	 * An object being dropped concurrently doesn't need to be reported.
@@ -1344,6 +1388,38 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 							getObjectDescription(&obj))));
 		}
 
+		/*
+		 * Live sessions' temporary objects owned by this role are not in
+		 * pg_shdepend (their rows are virtual); their ownership edges are
+		 * published to the shared-memory registry instead.
+		 */
+		{
+			ObjectAddress roleobj;
+			ObjectAddress tempDepender;
+
+			ObjectAddressSet(roleobj, AuthIdRelationId, roleid);
+			if (tempcat_registry_has_dependents(&roleobj,
+												SHARED_DEPENDENCY_OWNER,
+												&tempDepender))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop objects owned by %s because %s belongs to another session",
+								GetUserNameFromId(roleid, false),
+								getTempObjectDescription(&tempDepender)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+
+			/* The registry also carries the ACL edges of temporary objects. */
+			if (tempcat_registry_has_dependents(&roleobj,
+												SHARED_DEPENDENCY_ACL,
+												&tempDepender))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop objects owned by %s because privileges are granted on %s",
+								GetUserNameFromId(roleid, false),
+								getTempObjectDescription(&tempDepender)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+		}
+
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,
 					BTEqualStrategyNumber, F_OIDEQ,
@@ -1368,22 +1444,6 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 			if (sdepForm->dbid != MyDatabaseId &&
 				sdepForm->dbid != InvalidOid)
 				continue;
-
-			/*
-			 * A temporary object of another session can be neither dropped
-			 * nor have its ACL rewritten from here; its catalog rows live
-			 * only in the owning backend's temp memory catalog.
-			 */
-			obj.classId = sdepForm->classid;
-			obj.objectId = sdepForm->objid;
-			obj.objectSubId = sdepForm->objsubid;
-			if (isTempObjectOfOtherSession(&obj))
-				ereport(ERROR,
-						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-						 errmsg("cannot drop objects owned by %s because %s belongs to another session",
-								GetUserNameFromId(roleid, false),
-								getObjectDescriptionOrTemp(&obj)),
-						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
 
 			switch (sdepForm->deptype)
 			{
@@ -1509,6 +1569,28 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			 */
 		}
 
+		/*
+		 * Live sessions' temporary objects owned by this role are not in
+		 * pg_shdepend (their rows are virtual); their ownership edges are
+		 * published to the shared-memory registry instead.  The ALTER OWNER
+		 * routines below could not open them.
+		 */
+		{
+			ObjectAddress roleobj;
+			ObjectAddress tempDepender;
+
+			ObjectAddressSet(roleobj, AuthIdRelationId, roleid);
+			if (tempcat_registry_has_dependents(&roleobj,
+												SHARED_DEPENDENCY_OWNER,
+												&tempDepender))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot reassign objects owned by %s because %s belongs to another session",
+								GetUserNameFromId(roleid, false),
+								getTempObjectDescription(&tempDepender)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+		}
+
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,
 					BTEqualStrategyNumber, F_OIDEQ,
@@ -1542,26 +1624,6 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			/* We leave non-owner dependencies alone */
 			if (sdepForm->deptype != SHARED_DEPENDENCY_OWNER)
 				continue;
-
-			/*
-			 * The ALTER OWNER routines below would open the object, which
-			 * fails for a temporary object of another session: its catalog
-			 * rows live only in the owning backend's temp memory catalog.
-			 */
-			{
-				ObjectAddress obj;
-
-				obj.classId = sdepForm->classid;
-				obj.objectId = sdepForm->objid;
-				obj.objectSubId = sdepForm->objsubid;
-				if (isTempObjectOfOtherSession(&obj))
-					ereport(ERROR,
-							(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
-							 errmsg("cannot reassign objects owned by %s because %s belongs to another session",
-									GetUserNameFromId(roleid, false),
-									getObjectDescriptionOrTemp(&obj)),
-							 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
-			}
 
 			/*
 			 * The various ALTER OWNER routines tend to leak memory in

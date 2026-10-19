@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
@@ -333,6 +334,30 @@ performDeletion(const ObjectAddress *object,
 	ObjectAddresses *targetObjects;
 
 	/*
+	 * The target may be referenced by dependency edges of temporary objects
+	 * of another live session.  Those edges live in the temp memory catalog
+	 * of the owning backend and so cannot be found in the pg_depend walk
+	 * below; the shared-memory registry is the only place this session can
+	 * see them.  Refuse here: not even CASCADE could delete the dependent,
+	 * it belongs to the other session's memory.  The owning session skips
+	 * this: its own virtual rows are merged into its pg_depend scans, so
+	 * the normal walk below reports and handles them.
+	 */
+	{
+		ObjectAddress tempDepender;
+
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescription(object)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
+
+	/*
 	 * We save some cycles by opening pg_depend just once and passing the
 	 * Relation pointer down to all the recursive deletion steps.
 	 */
@@ -395,6 +420,26 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	/* No work if no objects... */
 	if (objects->numrefs <= 0)
 		return;
+
+	/*
+	 * Refuse when a temporary object of another live session depends on any
+	 * of the targets; see the matching check in performDeletion().
+	 */
+	for (i = 0; i < objects->numrefs; i++)
+	{
+		const ObjectAddress *object = &objects->refs[i];
+		ObjectAddress tempDepender;
+
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescription(object)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
 
 	/*
 	 * We save some cycles by opening pg_depend just once and passing the
@@ -1068,44 +1113,30 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 	int			i;
 
 	/*
-	 * Refuse to delete temporary objects that live in another session's
-	 * temp memory catalog.  Their dependency rows are real rows, so they do
-	 * reach this list when the referenced object is dropped from another
-	 * session, but their catalog tuples belong to the other backend and
-	 * cannot be deleted from here - not even with CASCADE, which in this
-	 * case would have to destroy the other session's temporary table.
-	 *
-	 * This must run before the quiet early-return below: internal callers
-	 * such as shdepDropOwned use PERFORM_DELETION_QUIETLY and would
-	 * otherwise walk into deleting a nonexistent object.
-	 *
-	 * Original deletion targets are skipped, like in the reporting loop
-	 * below: a target named by the user is visible by construction, while
-	 * the session-reset machinery (RemoveTempRelations) does delete its own
-	 * temp namespace even when its pg_namespace row has been rolled back
-	 * along with the temp table that first needed it.  Objects dropped in
-	 * the creating session itself are visible there (tempcat scans merge
-	 * the virtual rows), so they do not trip this check either.
+	 * Another live session's temporary dependents are invisible to the walk
+	 * above; consult the registry, before the quiet early-return.  Original
+	 * targets are already refused by the entry checks.
 	 */
 	for (i = 0; i < targetObjects->numrefs; i++)
 	{
 		const ObjectAddress *object = &targetObjects->refs[i];
 		const ObjectAddressExtra *extra = &targetObjects->extras[i];
+		ObjectAddress tempDepender;
 
 		if (extra->flags & DEPFLAG_ORIGINAL)
 			continue;
 
-		if (!isTempObjectOfOtherSession(object))
+		if (!tempcat_registry_has_dependents(object, 0, &tempDepender))
 			continue;
 
 		if (origObject)
 			ereport(ERROR,
 					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
-							getObjectDescriptionOrTemp(origObject)),
+							getObjectDescription(origObject)),
 					 errdetail("%s depends on %s",
-							   getObjectDescriptionOrTemp(object),
-							   getObjectDescriptionOrTemp(&extra->dependee)),
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
 					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
 		else
 			ereport(ERROR,
