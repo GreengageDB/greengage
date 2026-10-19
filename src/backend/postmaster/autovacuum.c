@@ -2168,18 +2168,10 @@ do_autovacuum(void)
 		bool		wraparound;
 
 		if (classForm->relkind != RELKIND_RELATION &&
-<<<<<<< HEAD
 			classForm->relkind != RELKIND_MATVIEW &&
-			classForm->relkind != RELKIND_PARTITIONED_TABLE &&
 			classForm->relkind != RELKIND_AOSEGMENTS &&
 			classForm->relkind != RELKIND_AOBLOCKDIR &&
 			classForm->relkind != RELKIND_AOVISIMAP)
-||||||| e1c1c30f635
-			classForm->relkind != RELKIND_MATVIEW &&
-			classForm->relkind != RELKIND_PARTITIONED_TABLE)
-=======
-			classForm->relkind != RELKIND_MATVIEW)
->>>>>>> 3b231596ccf
 			continue;
 
 		relid = classForm->oid;
@@ -2860,19 +2852,11 @@ extract_autovac_opts(HeapTuple tup, TupleDesc pg_class_desc)
 
 	Assert(((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_RELATION ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_MATVIEW ||
-<<<<<<< HEAD
-		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_PARTITIONED_TABLE ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOSEGMENTS ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_AOBLOCKDIR ||
 		   ((Form_pg_class) GETSTRUCT(tup))->relkind ==  RELKIND_AOVISIMAP);
 
-||||||| e1c1c30f635
-		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_PARTITIONED_TABLE ||
-		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE);
-=======
-		   ((Form_pg_class) GETSTRUCT(tup))->relkind == RELKIND_TOASTVALUE);
->>>>>>> 3b231596ccf
 
 	relopts = extractRelOptions(tup, pg_class_desc, NULL);
 	if (relopts == NULL)

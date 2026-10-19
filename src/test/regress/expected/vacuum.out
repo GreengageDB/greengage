@@ -219,19 +219,16 @@ VACUUM (FREEZE) vacparted;
 VACUUM ANALYZE vacparted(a,b,a);
 ERROR:  column "a" of relation "vacparted1" appears more than once
 ANALYZE vacparted(a,b,b);
-<<<<<<< HEAD
 ERROR:  column "b" of relation "vacparted1" appears more than once
-||||||| e1c1c30f635
-ERROR:  column "b" of relation "vacparted" appears more than once
-=======
-ERROR:  column "b" of relation "vacparted" appears more than once
 -- partitioned table with index
 CREATE TABLE vacparted_i (a int primary key, b varchar(100))
   PARTITION BY HASH (a);
 CREATE TABLE vacparted_i1 PARTITION OF vacparted_i
   FOR VALUES WITH (MODULUS 2, REMAINDER 0);
+NOTICE:  table has parent, setting distribution columns to match parent table
 CREATE TABLE vacparted_i2 PARTITION OF vacparted_i
   FOR VALUES WITH (MODULUS 2, REMAINDER 1);
+NOTICE:  table has parent, setting distribution columns to match parent table
 INSERT INTO vacparted_i SELECT i, 'test_'|| i from generate_series(1,10) i;
 VACUUM (ANALYZE) vacparted_i;
 VACUUM (FULL) vacparted_i;
@@ -247,7 +244,6 @@ SELECT relname, relhasindex FROM pg_class
 (3 rows)
 
 DROP TABLE vacparted_i;
->>>>>>> 3b231596ccf
 -- multiple tables specified
 VACUUM vaccluster, vactst;
 VACUUM vacparted, does_not_exist;

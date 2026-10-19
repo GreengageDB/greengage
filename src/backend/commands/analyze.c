@@ -930,18 +930,12 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 			MemoryContextResetAndDeleteChildren(col_context);
 		}
 
-<<<<<<< HEAD
 		/*
 		 * Datums exceeding WIDTH_THRESHOLD are masked as NULL in the sample, and
 		 * are used as is to evaluate index statistics. It is less likely to have
 		 * indexes on very wide columns, so the effect will be minimal.
 		 */
-		if (hasindex)
-||||||| e1c1c30f635
-		if (hasindex)
-=======
 		if (nindexes > 0)
->>>>>>> 3b231596ccf
 			compute_index_stats(onerel, totalrows,
 								indexdata, nindexes,
 								rows, numrows,
@@ -1078,34 +1072,10 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 	{
 		/*
 		 * Partitioned tables don't have storage, so we don't set any fields
-<<<<<<< HEAD
-		 * in their pg_class entries except for reltuples, which is necessary
-		 * for auto-analyze to work properly.
-		 *
-		 * We deliberately don't touch the parent's own indexes above (see
-		 * "Irel = NULL" for the inh case), so we don't know whether it
-		 * currently has any; pass through the existing relhasindex instead
-		 * of hard-coding false, which would otherwise make
-		 * vac_update_relstats() clear a true flag (partitioned tables can
-		 * have their own logical index, e.g. from CREATE INDEX on the
-		 * partitioned table) and hide all indexes on this table from the
-		 * planner.
-||||||| e1c1c30f635
-		 * in their pg_class entries except for reltuples, which is necessary
-		 * for auto-analyze to work properly.
-=======
 		 * in their pg_class entries except for reltuples and relhasindex.
->>>>>>> 3b231596ccf
 		 */
 		vac_update_relstats(onerel, -1, totalrows,
-<<<<<<< HEAD
-							0, onerel->rd_rel->relhasindex,
-							InvalidTransactionId,
-||||||| e1c1c30f635
-							0, false, InvalidTransactionId,
-=======
 							0, hasindex, InvalidTransactionId,
->>>>>>> 3b231596ccf
 							InvalidMultiXactId,
 							in_outer_xact, false);
 	}
@@ -1657,7 +1627,6 @@ acquire_sample_rows(Relation onerel, int elevel,
 	nblocks = BlockSampler_Init(&bs, totalblocks, targrows, randseed);
 
 #ifdef USE_PREFETCH
-<<<<<<< HEAD
 	/*
 	 * GPDB: for AO/AOCO relations, 'totalblocks' (and hence the block
 	 * numbers produced by the BlockSampler below) is actually a tuple
@@ -1670,12 +1639,7 @@ acquire_sample_rows(Relation onerel, int elevel,
 	 * fork's actual size. Skip prefetching for AO/AOCO relations.
 	 */
 	prefetch_maximum = RelationIsAppendOptimized(onerel) ?
-		0 : get_tablespace_io_concurrency(onerel->rd_rel->reltablespace);
-||||||| e1c1c30f635
-	prefetch_maximum = get_tablespace_io_concurrency(onerel->rd_rel->reltablespace);
-=======
-	prefetch_maximum = get_tablespace_maintenance_io_concurrency(onerel->rd_rel->reltablespace);
->>>>>>> 3b231596ccf
+		0 : get_tablespace_maintenance_io_concurrency(onerel->rd_rel->reltablespace);
 	/* Create another BlockSampler, using the same seed, for prefetching */
 	if (prefetch_maximum)
 		(void) BlockSampler_Init(&prefetch_bs, totalblocks, targrows, randseed);
