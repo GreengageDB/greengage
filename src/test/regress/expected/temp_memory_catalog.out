@@ -1909,6 +1909,71 @@ SELECT count(*) FROM tc_wrap0 JOIN tc_wrap3 USING (a);
     10
 (1 row)
 
+-- The labels of an enum get OIDs of their own (on the segments too): here
+-- of the next slice, while the type has one of the last.
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE TYPE pg_temp.tc_wrap_enum AS ENUM ('a', 'b', 'c', 'd');
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+SELECT count(DISTINCT (e.oid::bigint - 4026531840) >> 16) AS label_slices,
+       bool_and((e.oid::bigint - 4026531840) >> 16 <>
+                ('pg_temp.tc_wrap_enum'::regtype::oid::bigint - 4026531840) >> 16) AS other_slice
+  FROM pg_enum e WHERE e.enumtypid = 'pg_temp.tc_wrap_enum'::regtype;
+ label_slices | other_slice 
+--------------+-------------
+            1 | t
+(1 row)
+
+CREATE TEMP TABLE tc_wrap_e (a int, e pg_temp.tc_wrap_enum) DISTRIBUTED BY (a);
+INSERT INTO tc_wrap_e SELECT i, (ARRAY['a', 'b', 'c', 'd'])[i % 4 + 1]::pg_temp.tc_wrap_enum
+  FROM generate_series(1, 20) i;
+ALTER TYPE pg_temp.tc_wrap_enum ADD VALUE 'e';
+INSERT INTO tc_wrap_e VALUES (21, 'e');
+SELECT e, count(*) FROM tc_wrap_e GROUP BY e ORDER BY e;
+ e | count 
+---+-------
+ a |     5
+ b |     5
+ c |     5
+ d |     5
+ e |     1
+(5 rows)
+
+DROP TABLE tc_wrap_e;
+DROP TYPE pg_temp.tc_wrap_enum;
+-- A transaction that rolls back keeps the slice its OIDs came from, also
+-- one that created the temporary schema: only a slice that a segment
+-- refused is given up (see the isolation2 test).  Otherwise each rollback
+-- would use up a slice.
+\c
+SET gp_enable_temp_memory_catalog = on;
+BEGIN;
+CREATE TEMP TABLE tc_rb1 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_rb1'::regclass::oid::bigint - 4026531840) >> 16 AS slice1 \gset
+ROLLBACK;
+BEGIN;
+CREATE TEMP TABLE tc_rb2 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_rb2'::regclass::oid::bigint - 4026531840) >> 16 AS slice2 \gset
+ROLLBACK;
+CREATE TEMP TABLE tc_rb3 (a int) DISTRIBUTED BY (a);
+SELECT ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice1 AND
+       ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice2 AS same_slice;
+ same_slice 
+------------
+ t
+(1 row)
+
 -- When dynamic shared memory runs short for others (the fault pretends
 -- so), a new session keeps its temporary objects on disk.
 \c

@@ -67,6 +67,7 @@ extern void tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 										 const char *objname,
 										 Oid namespaceOid, Oid keyOid1,
 										 Oid keyOid2, bool temp, Oid oid);
+extern void tempcat_note_enum_label_oid(Relation enumrel, Oid typid, Oid oid);
 extern bool tempcat_owns_oid(Oid catalog, Oid oid);
 extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 
@@ -110,6 +111,7 @@ extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Other sessions */
 extern void tempcat_lock_out_users(Oid classId, Oid objectId);
+extern void tempcat_session_reset(void);
 extern void tempcat_warn_users(Oid classId, Oid objectId, const char *command);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);

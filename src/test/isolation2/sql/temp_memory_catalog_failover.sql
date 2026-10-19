@@ -16,20 +16,28 @@ CREATE TABLE tcf_sess (id int) DISTRIBUTED REPLICATED;
 
 -- 1. The writer QE of a session dies on segment 0: the gang is reset, and
 -- the session's temporary objects are gone, as on disk; it makes new ones.
+-- With OIDs of another slice: the old writer QE may hold its slice on the
+-- segment for a while on its way out (e.g. when the coordinator lost its
+-- connection to it), which the new one would have to wait for.
 CREATE TYPE tcf_comp AS (x int);
+CREATE TABLE tcf_slice (slice bigint) DISTRIBUTED REPLICATED;
 1: SET gp_enable_temp_memory_catalog = on;
 1: CREATE TEMP TABLE tcf_t (c tcf_comp, a int) DISTRIBUTED BY (a);
 1: INSERT INTO tcf_t SELECT ROW(i)::tcf_comp, i FROM generate_series(1, 30) i;
 1: INSERT INTO tcf_sess VALUES (current_setting('gp_session_id')::int);
+1: INSERT INTO tcf_slice SELECT ('tcf_t'::regclass::oid::bigint - 4026531840) >> 16;
 0U: SELECT bool_and(pg_terminate_backend(pid)) AS terminated FROM pg_stat_activity WHERE sess_id IN (SELECT id FROM tcf_sess);
 1: SELECT count(*) FROM tcf_t;
 1: SELECT to_regclass('tcf_t') IS NULL AS gone;
 1: CREATE TEMP TABLE tcf_t2 (a int) DISTRIBUTED BY (a);
 1: INSERT INTO tcf_t2 SELECT generate_series(1, 30);
-1: SELECT count(*), 'tcf_t2'::regclass::oid >= 4026531840 AS reserved FROM tcf_t2;
+1: SELECT count(*), 'tcf_t2'::regclass::oid >= 4026531840 AS reserved,
+     ('tcf_t2'::regclass::oid::bigint - 4026531840) >> 16 <> (SELECT slice FROM tcf_slice) AS new_slice
+     FROM tcf_t2;
 2: DROP TYPE tcf_comp;
 1q:
 DELETE FROM tcf_sess;
+DROP TABLE tcf_slice;
 
 -- 2. Segment 0 fails over to its mirror while a session keeps temporary
 -- objects in memory there: they are gone with the old primary, nothing of

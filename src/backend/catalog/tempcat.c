@@ -940,6 +940,9 @@ tempcat_attach(void)
 /* How long to wait for an earlier holder of a slice to go away */
 #define TEMPCAT_CLAIM_TIMEOUT_MS	60000
 
+/* The error a segment refuses a slice with; see tempcat_xact_callback() */
+#define TEMPCAT_SLICE_REFUSED		ERRCODE_OBJECT_IN_USE
+
 /*
  * Per slice of the reserved range, what this process knows about it: whether
  * it holds it, whether it ever gave an OID of it (on the coordinator, which
@@ -1026,6 +1029,12 @@ tempcat_hold_slice(int slice)
 	}
 	tc_slice_flags[slice] |= TCS_HELD;
 	TempcatShared->slices[slice].databaseId = MyDatabaseId;
+
+	/*
+	 * The row that the slice was taken for may never come (e.g. an error
+	 * stops it): let go of the slice then, see tempcat_release_unused_slices().
+	 */
+	tc_release_wanted = true;
 }
 
 /*
@@ -1158,7 +1167,7 @@ tempcat_claim_slice(int slice)
 #endif
 		if (waited >= TEMPCAT_CLAIM_TIMEOUT_MS)
 			ereport(ERROR,
-					(errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+					(errcode(TEMPCAT_SLICE_REFUSED),
 					 errmsg("an earlier session using the same temporary object OIDs is still running on this node"),
 					 errdetail("Process %d holds OIDs %u to %u.",
 							   ProcGlobal->allProcs[expected - 1].pid,
@@ -1299,7 +1308,10 @@ tempcat_count_slice_row(TempcatEntry *e, int delta)
 	if (!IsTempcatOid(oid))
 		return;
 	slice = tempcat_slice_of(oid);
-	/* (the OID's slice was taken before: tempcat_activate()) */
+	/*
+	 * (the OID's slice was taken before: tempcat_activate(), from
+	 * tempcat_note_preassigned_oid() or tempcat_note_enum_label_oid())
+	 */
 	Assert(tempcat_holds_slice(slice));
 	if (tc_slice_rows == NULL)
 		return;
@@ -1333,6 +1345,25 @@ tempcat_release_unused_slices(void)
 		if ((tc_slice_flags[slice] & TCS_HELD) && slice != tc_slice &&
 			tc_slice_rows[slice] == 0)
 			tempcat_let_go_of_slice(slice);
+	}
+}
+
+/*
+ * The session is reset (e.g. after its gang was lost): its writer QEs are
+ * replaced, and the old ones may hold the slice on the segments for a while
+ * as they drop their objects, which the new ones would wait for
+ * (tempcat_claim_slice()).  Take another slice for the next OIDs; the old
+ * one goes once the old objects are dropped on the coordinator too.  Only
+ * process-local state changes here: called from GpScheduleSessionReset()
+ * and friends, possibly out of a transaction.
+ */
+void
+tempcat_session_reset(void)
+{
+	if (tc_slice >= 0)
+	{
+		tc_slice = -1;
+		tc_release_wanted = true;
 	}
 }
 
@@ -1726,13 +1757,21 @@ tempcat_use_object(Oid classId, Oid objectId)
 	}
 	key.classId = classId;
 	key.objectId = objectId;
-	used = hash_search(tc_used, &key, HASH_ENTER, &found);
-	if (found)
-		return;
-	used->counted = false;
-	used->counted = tempcat_count_use(classId, objectId);
-
 	tempcat_used_locktag(&tag, classId, objectId);
+	used = hash_search(tc_used, &key, HASH_ENTER, &found);
+	if (!found)
+	{
+		used->counted = false;
+		used->counted = tempcat_count_use(classId, objectId);
+	}
+	else if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
+		return;
+
+	/*
+	 * (An object noted already but not locked: its lock was not granted,
+	 * e.g. as the wait was canceled in a subtransaction that rolled back,
+	 * and tempcat_recompute_used() has not looked at it yet.)
+	 */
 	(void) LockAcquire(&tag, TEMPCAT_USER_LOCKMODE, true, false);
 }
 
@@ -2291,6 +2330,23 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 		tempcat_remember_oid(catalog, oid);
 	}
+}
+
+/*
+ * A segment received the OID of a label of enum type 'typid', which comes
+ * with a preassignment of its own (GetPreassignedOidForEnum()).  For a label
+ * of a temporary enum of ours, do what tempcat_note_preassigned_oid() does:
+ * take the slice of the OID, and check that the OID is free on this node.
+ * (Labels are no objects of their own: their OIDs are not remembered.)
+ */
+void
+tempcat_note_enum_label_oid(Relation enumrel, Oid typid, Oid oid)
+{
+	if (IsBinaryUpgrade || !IsTempcatOid(oid) || tempcat_is_reader() ||
+		!tempcat_owns_oid(TypeRelationId, typid))
+		return;
+	tempcat_activate(oid);
+	tempcat_check_preassigned_oid(enumrel, EnumOidIndexId, Anum_pg_enum_oid, oid);
 }
 
 /* ----------------------------------------------------------------
@@ -3349,14 +3405,16 @@ tempcat_abort_subtransaction(void)
 }
 
 /*
- * The coordinator stops giving OIDs from a slice that a transaction started
- * to use, if it rolled back before any transaction that used the slice
- * committed: a segment may have refused it (its earlier holder's writer QE
- * lingers there, see tempcat_claim_slice()), and would fail every attempt of
- * the session with it.  The next attempt takes another one; the slice is let
- * go of once the rows of the transaction are gone (they are freed when the
+ * The coordinator stops giving OIDs from a slice that a segment refused (its
+ * earlier holder's writer QE lingers there, see tempcat_claim_slice()), if
+ * the transaction rolls back for that, before any transaction that used the
+ * slice committed: the segment would fail every attempt of the session with
+ * it for a while.  The next attempt takes another one; the slice is let go
+ * of once the rows of the transaction are gone (they are freed when the
  * session goes idle or starts its next transaction, and need the clog until
- * then, see tempcat_add_pending()).
+ * then, see tempcat_add_pending()).  Not for other rollbacks, which would
+ * use up a slice each (a session never takes one again, see the file
+ * header).
  *
  * After an error, the session may also have locked an object for a row in
  * memory that it did not get to add (e.g. as the area was full): look again
@@ -3374,7 +3432,9 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
-			if (tc_slice >= 0 && !tc_slice_kept)
+			/* (the error being handled, if any) */
+			if (tc_slice >= 0 && !tc_slice_kept &&
+				elog_geterrcode() == TEMPCAT_SLICE_REFUSED)
 			{
 				if (OidIsValid(tc_namespace_oid) &&
 					tempcat_slice_of(tc_namespace_oid) == tc_slice)

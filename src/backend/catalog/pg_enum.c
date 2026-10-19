@@ -167,6 +167,8 @@ EnumValuesCreate(Oid enumTypeOid, List *vals)
 			if (Gp_role == GP_ROLE_EXECUTE)
 			{
 				new_oid = GetPreassignedOidForEnum(enumTypeOid, lab);
+				/* GPDB: a label of a temporary enum kept in memory? */
+				tempcat_note_enum_label_oid(pg_enum, enumTypeOid, new_oid);
 				break;
 			}
 
@@ -452,6 +454,8 @@ restart:
 		 * In QE, the dispatcher has already allocated the OID for us.
 		 */
 		newOid = GetPreassignedOidForEnum(enumTypeOid, newVal);
+		/* GPDB: a label of a temporary enum kept in memory? */
+		tempcat_note_enum_label_oid(pg_enum, enumTypeOid, newOid);
 	}
 	else
 	{

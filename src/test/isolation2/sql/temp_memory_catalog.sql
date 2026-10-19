@@ -432,6 +432,32 @@ SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
 30q:
 DROP DATABASE tc_frozen;
 
+-- A session whose wait for the lock on an object it uses was canceled in a
+-- subtransaction that rolled back waits for it again at the next use in the
+-- transaction (here for a DROP in progress, of a session that used the
+-- object itself).
+CREATE TYPE tc_sub_comp AS (x int);
+32: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+32: SET gp_enable_temp_memory_catalog = on;
+32: CREATE TEMP TABLE tc_sx (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+32: BEGIN;
+32: DROP TYPE tc_sub_comp CASCADE;
+33: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+33: SET gp_enable_temp_memory_catalog = on;
+33: SET lock_timeout = '500ms';
+33: BEGIN;
+33: SAVEPOINT s1;
+33: CREATE TEMP TABLE tc_sa (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+33: ROLLBACK TO SAVEPOINT s1;
+33: CREATE TEMP TABLE tc_sb (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+33: ROLLBACK;
+32: ROLLBACK;
+33: CREATE TEMP TABLE tc_sb (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+33q:
+32q:
+4: CALL tc_wait_gone();
+DROP TYPE tc_sub_comp;
+
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose
 -- objects do not exist in the new database.
