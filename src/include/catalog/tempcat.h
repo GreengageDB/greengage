@@ -110,7 +110,7 @@ extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Other sessions */
-extern void tempcat_lock_out_users(Oid classId, Oid objectId);
+extern void tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId);
 extern void tempcat_session_reset(void);
 extern void tempcat_warn_users(Oid classId, Oid objectId, const char *command);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);

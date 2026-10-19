@@ -657,7 +657,7 @@ checkSharedDependencies(Oid classId, Oid objectId,
 	 * the object through rows that cannot be seen here: fail if any does
 	 * (see tempcat.c).
 	 */
-	tempcat_lock_out_users(classId, objectId);
+	tempcat_lock_out_users(classId, objectId, 0);
 
 	/*
 	 * We limit the number of dependencies reported to the client to

@@ -3030,7 +3030,7 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 	 * domain through rows that cannot be seen here: fail if any does (see
 	 * tempcat.c).
 	 */
-	tempcat_lock_out_users(TypeRelationId, domainOid);
+	tempcat_lock_out_users(TypeRelationId, domainOid, 0);
 
 	/*
 	 * We scan pg_depend to find those things that depend on the domain. (We

@@ -549,7 +549,8 @@ findDependentObjects(const ObjectAddress *object,
 	 * the object through rows that cannot be seen here: fail if any does
 	 * (see tempcat.c).
 	 */
-	tempcat_lock_out_users(object->classId, object->objectId);
+	tempcat_lock_out_users(object->classId, object->objectId,
+						   object->objectSubId);
 
 	/*
 	 * The target object might be internally dependent on some other object

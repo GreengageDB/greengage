@@ -7296,7 +7296,7 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 	 * type through rows that cannot be seen here: fail if any does (see
 	 * tempcat.c).
 	 */
-	tempcat_lock_out_users(TypeRelationId, typeOid);
+	tempcat_lock_out_users(TypeRelationId, typeOid, 0);
 
 	/*
 	 * We scan pg_depend to find those things that depend on the given type.
@@ -13683,10 +13683,10 @@ ATExecAlterColumnType(List **wqueue,
 	 * get confused.
 	 *
 	 * GPDB: temporary objects of other sessions kept in memory (e.g.
-	 * temporary views of the table) may use it through rows that cannot be
-	 * seen here: fail if any does (see tempcat.c).
+	 * temporary views of the table) may use the column through rows that
+	 * cannot be seen here: fail if any does (see tempcat.c).
 	 */
-	tempcat_lock_out_users(RelationRelationId, RelationGetRelid(rel));
+	tempcat_lock_out_users(RelationRelationId, RelationGetRelid(rel), attnum);
 	depRel = table_open(DependRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&key[0],

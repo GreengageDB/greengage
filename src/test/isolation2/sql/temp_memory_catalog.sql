@@ -58,8 +58,12 @@ GRANT ALL ON tc_ord TO tc_role;
 2: DROP OWNED BY tc_role;
 2: DROP ROLE tc_role;
 1: SELECT * FROM tc_t;
--- Other changes work.
+-- Other changes work, also of the columns that the objects do not use, as
+-- on disk.
 2: ALTER TYPE tc_comp RENAME ATTRIBUTE x TO x1;
+2: ALTER TABLE tc_ord ADD COLUMN c int;
+2: ALTER TABLE tc_ord ALTER COLUMN c TYPE bigint;
+2: ALTER TABLE tc_ord DROP COLUMN c;
 2: ALTER TABLE tc_ord ADD COLUMN c int;
 2: COMMENT ON FUNCTION tc_fn(int) IS 'used';
 

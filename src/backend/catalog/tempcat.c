@@ -608,6 +608,7 @@ typedef struct TempcatUsedObject
 	Oid			databaseId;		/* InvalidOid for shared objects */
 	Oid			classId;
 	Oid			objectId;
+	int32		objectSubId;	/* a column, or 0 for the whole object */
 } TempcatUsedObject;
 
 typedef struct TempcatUsedObjectEntry
@@ -1601,11 +1602,18 @@ tempcat_fold_frozen_horizon(TransactionId *frozenXid, MultiXactId *minMulti)
  * naming the sessions.  (CASCADE cannot drop objects in other sessions'
  * memory.)
  *
+ * Columns are told apart as on disk, where DROP COLUMN and ALTER COLUMN TYPE
+ * look at the dependencies on that column only, and DROP of the relation at
+ * all of them: a dependency on a column of a relation is locked as a use of
+ * the column and as a use of the relation.  So a temporary view does not
+ * keep other sessions from dropping or changing the columns it does not
+ * use.
+ *
  * The lock is a session-level lock of USER_LOCKMETHOD, as advisory locks
  * are: session-level locks of DEFAULT_LOCKMETHOD go when a transaction
- * aborts.  Its tag is that of a lock on the object itself, in the other lock
- * method, so it conflicts with no other lock.  It is taken on the
- * coordinator only, where all DDL starts.  At exit, it goes after the
+ * aborts.  Its tag is that of a lock on the object (or column) itself, in
+ * the other lock method, so it conflicts with no other lock.  It is taken on
+ * the coordinator only, where all DDL starts.  At exit, it goes after the
  * session's temporary objects (ShutdownPostgres() runs after
  * RemoveTempRelationsCallback()).
  *
@@ -1619,6 +1627,7 @@ typedef struct TempcatUsedKey
 {
 	Oid			classId;
 	Oid			objectId;
+	int32		objectSubId;	/* a column, or 0 for the whole object */
 } TempcatUsedKey;
 
 typedef struct TempcatUsed
@@ -1630,8 +1639,13 @@ typedef struct TempcatUsed
 /* Some of tc_used could not be counted, see tempcat_count_use() */
 static bool tc_used_overflow = false;
 
+/*
+ * Users share their locks; changers conflict with users, not with each
+ * other (concurrent changes are serialized by the locks on the objects
+ * themselves, if at all, as on disk).
+ */
 #define TEMPCAT_USER_LOCKMODE		ShareLock
-#define TEMPCAT_CHANGER_LOCKMODE	ExclusiveLock
+#define TEMPCAT_CHANGER_LOCKMODE	RowExclusiveLock
 
 static inline Oid
 tempcat_used_database(Oid classId)
@@ -1640,11 +1654,22 @@ tempcat_used_database(Oid classId)
 }
 
 static void
-tempcat_used_locktag(LOCKTAG *tag, Oid classId, Oid objectId)
+tempcat_used_locktag(LOCKTAG *tag, Oid classId, Oid objectId, int32 subId)
 {
 	SET_LOCKTAG_OBJECT(*tag, tempcat_used_database(classId),
-					   classId, objectId, 0);
+					   classId, objectId, subId);
 	tag->locktag_lockmethodid = USER_LOCKMETHOD;
+}
+
+static void
+tempcat_used_object_key(TempcatUsedObject *key,
+						Oid classId, Oid objectId, int32 subId)
+{
+	memset(key, 0, sizeof(*key));
+	key->databaseId = tempcat_used_database(classId);
+	key->classId = classId;
+	key->objectId = objectId;
+	key->objectSubId = subId;
 }
 
 /* Is it an object whose use tempcat_use_object() locks? */
@@ -1656,20 +1681,18 @@ tempcat_lockable_use(Oid classId, Oid objectId)
 }
 
 /*
- * Count the session's use of an object in TempcatUsedObjects.  Returns false
- * if it is full: then DROP and friends lock every object they check, as long
- * as the session lives.
+ * Count the session's use of an object (or column) in TempcatUsedObjects.
+ * Returns false if it is full: then DROP and friends lock every object they
+ * check, as long as the session lives.
  */
 static bool
-tempcat_count_use(Oid classId, Oid objectId)
+tempcat_count_use(Oid classId, Oid objectId, int32 subId)
 {
 	TempcatUsedObject key;
 	TempcatUsedObjectEntry *entry;
 	bool		found;
 
-	key.databaseId = tempcat_used_database(classId);
-	key.classId = classId;
-	key.objectId = objectId;
+	tempcat_used_object_key(&key, classId, objectId, subId);
 	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
 	entry = hash_search(TempcatUsedObjects, &key, HASH_ENTER_NULL, &found);
 	if (entry != NULL)
@@ -1695,9 +1718,8 @@ tempcat_uncount_use(TempcatUsed *used)
 
 	if (!used->counted)
 		return;
-	key.databaseId = tempcat_used_database(used->key.classId);
-	key.classId = used->key.classId;
-	key.objectId = used->key.objectId;
+	tempcat_used_object_key(&key, used->key.classId, used->key.objectId,
+							used->key.objectSubId);
 	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
 	entry = hash_search(TempcatUsedObjects, &key, HASH_FIND, NULL);
 	if (entry != NULL && --entry->nsessions <= 0)
@@ -1706,18 +1728,16 @@ tempcat_uncount_use(TempcatUsed *used)
 	used->counted = false;
 }
 
-/* May a session use the object?  See tempcat_count_use(). */
+/* May a session use the object (or column)?  See tempcat_count_use(). */
 static bool
-tempcat_maybe_used(Oid classId, Oid objectId)
+tempcat_maybe_used(Oid classId, Oid objectId, int32 subId)
 {
 	TempcatUsedObject key;
 	bool		found;
 
 	if (pg_atomic_read_u32(&TempcatShared->nused_overflow) > 0)
 		return true;
-	key.databaseId = tempcat_used_database(classId);
-	key.classId = classId;
-	key.objectId = objectId;
+	tempcat_used_object_key(&key, classId, objectId, subId);
 	LWLockAcquire(&TempcatShared->used_lock, LW_SHARED);
 	(void) hash_search(TempcatUsedObjects, &key, HASH_FIND, &found);
 	LWLockRelease(&TempcatShared->used_lock);
@@ -1725,25 +1745,20 @@ tempcat_maybe_used(Oid classId, Oid objectId)
 }
 
 /*
- * A temporary object of ours kept in memory comes to depend on an ordinary
- * object: lock it, if not locked yet.  Before the dependency is recorded, so
- * that a DROP of the object under way finishes first.  (As with any
- * dependency on an object that is being dropped, the recorded one may then
- * refer to an object that is gone.)  Counted before it is locked, so that a
- * DROP that does not see the count does not see the lock either; and noted
- * in tc_used first, so that an error on the way (e.g. a cancel of the wait
- * for the lock) leaves nothing that tempcat_recompute_used() does not undo.
+ * Lock one use, an object or one of its columns, if not locked yet.  Counted
+ * before it is locked, so that a DROP that does not see the count does not
+ * see the lock either; and noted in tc_used first, so that an error on the
+ * way (e.g. a cancel of the wait for the lock) leaves nothing that
+ * tempcat_recompute_used() does not undo.
  */
 static void
-tempcat_use_object(Oid classId, Oid objectId)
+tempcat_use_object_part(Oid classId, Oid objectId, int32 subId)
 {
 	TempcatUsedKey key;
 	TempcatUsed *used;
 	bool		found;
 	LOCKTAG		tag;
 
-	if (!tempcat_lockable_use(classId, objectId))
-		return;
 	if (tc_used == NULL)
 	{
 		HASHCTL		ctl;
@@ -1755,14 +1770,16 @@ tempcat_use_object(Oid classId, Oid objectId)
 		tc_used = hash_create("tempcat used objects", 64, &ctl,
 							  HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 	}
+	memset(&key, 0, sizeof(key));
 	key.classId = classId;
 	key.objectId = objectId;
-	tempcat_used_locktag(&tag, classId, objectId);
+	key.objectSubId = subId;
+	tempcat_used_locktag(&tag, classId, objectId, subId);
 	used = hash_search(tc_used, &key, HASH_ENTER, &found);
 	if (!found)
 	{
 		used->counted = false;
-		used->counted = tempcat_count_use(classId, objectId);
+		used->counted = tempcat_count_use(classId, objectId, subId);
 	}
 	else if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
 		return;
@@ -1775,6 +1792,24 @@ tempcat_use_object(Oid classId, Oid objectId)
 	(void) LockAcquire(&tag, TEMPCAT_USER_LOCKMODE, true, false);
 }
 
+/*
+ * A temporary object of ours kept in memory comes to depend on an ordinary
+ * object, or on a column of it ('subId'): lock its use, and that of the
+ * whole object for a column.  Before the dependency is recorded, so that a
+ * DROP of the object under way finishes first.  (As with any dependency on
+ * an object that is being dropped, the recorded one may then refer to an
+ * object that is gone.)
+ */
+static void
+tempcat_use_object(Oid classId, Oid objectId, int32 subId)
+{
+	if (!tempcat_lockable_use(classId, objectId))
+		return;
+	tempcat_use_object_part(classId, objectId, 0);
+	if (subId != 0)
+		tempcat_use_object_part(classId, objectId, subId);
+}
+
 /* A pg_depend or pg_shdepend row of ours goes to memory: see above. */
 static void
 tempcat_use_referenced(Relation rel, HeapTuple tup)
@@ -1782,11 +1817,19 @@ tempcat_use_referenced(Relation rel, HeapTuple tup)
 	TupleDesc	desc = RelationGetDescr(rel);
 
 	if (RelationGetRelid(rel) == DependRelationId)
+	{
+		bool		isnull;
+		Datum		subid = heap_getattr(tup, Anum_pg_depend_refobjsubid,
+										 desc, &isnull);
+
 		tempcat_use_object(tempcat_getoid(tup, desc, Anum_pg_depend_refclassid),
-						   tempcat_getoid(tup, desc, Anum_pg_depend_refobjid));
+						   tempcat_getoid(tup, desc, Anum_pg_depend_refobjid),
+						   isnull ? 0 : DatumGetInt32(subid));
+	}
 	else if (RelationGetRelid(rel) == SharedDependRelationId)
 		tempcat_use_object(tempcat_getoid(tup, desc, Anum_pg_shdepend_refclassid),
-						   tempcat_getoid(tup, desc, Anum_pg_shdepend_refobjid));
+						   tempcat_getoid(tup, desc, Anum_pg_shdepend_refobjid),
+						   0);
 }
 
 /*
@@ -1826,12 +1869,19 @@ tempcat_recompute_used(void)
 			HeapTupleHeader hdr = TCE_DATA(e);
 			TempcatUsedKey key;
 
+			memset(&key, 0, sizeof(key));
 			if (catalogs[i] == DependRelationId)
 			{
 				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
 
 				key.classId = form->refclassid;
 				key.objectId = form->refobjid;
+				if (form->refobjsubid != 0)
+				{
+					key.objectSubId = form->refobjsubid;
+					(void) hash_search(still, &key, HASH_ENTER, NULL);
+					key.objectSubId = 0;
+				}
 			}
 			else
 			{
@@ -1852,7 +1902,8 @@ tempcat_recompute_used(void)
 
 		if (hash_search(still, &used->key, HASH_FIND, NULL) != NULL)
 			continue;
-		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId);
+		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId,
+							 used->key.objectSubId);
 		if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
 			LockRelease(&tag, TEMPCAT_USER_LOCKMODE, true);
 		tempcat_uncount_use(used);
@@ -1904,7 +1955,8 @@ tempcat_relock_used(void)
 	{
 		LOCKTAG		tag;
 
-		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId);
+		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId,
+							 used->key.objectSubId);
 		if (!LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
 			(void) LockAcquire(&tag, TEMPCAT_USER_LOCKMODE, true, true);
 	}
@@ -1942,39 +1994,42 @@ tempcat_user_pids(const LOCKTAG *tag)
 }
 
 /*
- * Can the lock on an object that temporary objects use be taken in the
- * changer's mode?  Then, until the end of the transaction, no temporary
- * object of another session comes to use it.  (Our own session's locks do
- * not conflict, and its rows can be seen.)
+ * Can the lock on an object (or column) that temporary objects use be taken
+ * in the changer's mode?  Then, until the end of the transaction, no
+ * temporary object of another session comes to use it, if any used it
+ * when we looked (tempcat_maybe_used(); one that comes to use it later
+ * records a dependency on an object that may be gone, as in
+ * tempcat_use_object()).  Our own session's locks do not conflict, and its
+ * rows can be seen.
  */
 static bool
-tempcat_try_lock_out(Oid classId, Oid objectId, LOCKTAG *tag)
+tempcat_try_lock_out(Oid classId, Oid objectId, int32 subId, LOCKTAG *tag)
 {
 	if (TempcatShared == NULL || !tempcat_lockable_use(classId, objectId) ||
-		!tempcat_maybe_used(classId, objectId))
+		!tempcat_maybe_used(classId, objectId, subId))
 		return true;
-	tempcat_used_locktag(tag, classId, objectId);
+	tempcat_used_locktag(tag, classId, objectId, subId);
 	return LockAcquire(tag, TEMPCAT_CHANGER_LOCKMODE, false, true) !=
 		LOCKACQUIRE_NOT_AVAIL;
 }
 
 /*
- * The caller is about to drop an object, or to change it in a way that
- * objects using it must not miss: fail if temporary objects of other
- * sessions kept in memory use it (see tempcat_use_object()), as for dependent
- * objects on disk.  Otherwise, until the end of the transaction, none comes
- * to use it.
+ * The caller is about to drop an object, or a column of it ('subId'), or to
+ * change it in a way that objects using it must not miss: fail if temporary
+ * objects of other sessions kept in memory use it (see
+ * tempcat_use_object()), as for dependent objects on disk.  A whole object
+ * is used by them if they use any of its columns.
  */
 void
-tempcat_lock_out_users(Oid classId, Oid objectId)
+tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId)
 {
 	LOCKTAG		tag;
 	ObjectAddress object;
 	char	   *pids;
 
-	if (tempcat_try_lock_out(classId, objectId, &tag))
+	if (tempcat_try_lock_out(classId, objectId, subId, &tag))
 		return;
-	ObjectAddressSet(object, classId, objectId);
+	ObjectAddressSubSet(object, classId, objectId, subId);
 	pids = tempcat_user_pids(&tag);
 	ereport(ERROR,
 			(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
@@ -1997,7 +2052,7 @@ tempcat_warn_users(Oid classId, Oid objectId, const char *command)
 	ObjectAddress object;
 	char	   *pids;
 
-	if (tempcat_try_lock_out(classId, objectId, &tag))
+	if (tempcat_try_lock_out(classId, objectId, 0, &tag))
 		return;
 	ObjectAddressSet(object, classId, objectId);
 	pids = tempcat_user_pids(&tag);
