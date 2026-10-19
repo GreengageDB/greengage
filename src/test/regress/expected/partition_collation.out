@@ -11,6 +11,7 @@
 --
 create schema partition_collation;
 set search_path = partition_collation;
+set client_min_messages = warning;
 create collation coll_en (locale = 'en_US.utf8');
 --
 -- Routing.
@@ -22,8 +23,6 @@ distributed by (id)
 partition by range (k)
 (partition p1 start ('a') end ('c'),
  default partition other);
-NOTICE:  CREATE TABLE will create partition "rp_c_1_prt_other" for table "rp_c"
-NOTICE:  CREATE TABLE will create partition "rp_c_1_prt_p1" for table "rp_c"
 insert into rp_c values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
 -- The tableoid queries show which partition each row was stored in. A row in
 -- the wrong partition is still returned by queries on the parent table, so
@@ -44,8 +43,6 @@ distributed by (id)
 partition by range (k)
 (partition p1 start ('a') end ('c'),
  default partition other);
-NOTICE:  CREATE TABLE will create partition "rp_en_1_prt_other" for table "rp_en"
-NOTICE:  CREATE TABLE will create partition "rp_en_1_prt_p1" for table "rp_en"
 insert into rp_en values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
 select tableoid::regclass, * from rp_en order by id;
      tableoid      | id | k 
@@ -65,8 +62,6 @@ distributed by (id)
 partition by range (k)
 (partition p1 start ('B') end ('a'),
  partition p2 start ('a') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_c_bounds_1_prt_p1" for table "rp_c_bounds"
-NOTICE:  CREATE TABLE will create partition "rp_c_bounds_1_prt_p2" for table "rp_c_bounds"
 insert into rp_c_bounds values (1, 'B'), (2, 'b'), (3, 'Zz'), (4, 'a');
 select tableoid::regclass, * from rp_c_bounds order by id;
        tableoid       | id | k  
@@ -82,8 +77,6 @@ distributed by (id)
 partition by range (k)
 (partition p1 start ('a') end ('B'),
  partition p2 start ('B') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_en_bounds_1_prt_p1" for table "rp_en_bounds"
-NOTICE:  CREATE TABLE will create partition "rp_en_bounds_1_prt_p2" for table "rp_en_bounds"
 insert into rp_en_bounds values (1, 'aZ'), (2, 'Bb'), (3, 'c');
 select tableoid::regclass, * from rp_en_bounds order by id;
        tableoid        | id | k  
@@ -101,9 +94,7 @@ create table rp_c_add (id int, k text collate "C")
 distributed by (id)
 partition by range (k)
 (partition p2 start ('a') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_c_add_1_prt_p2" for table "rp_c_add"
 alter table rp_c_add add partition p1 start ('B') end ('a');
-NOTICE:  CREATE TABLE will create partition "rp_c_add_1_prt_p1" for table "rp_c_add"
 insert into rp_c_add values (1, 'B'), (2, 'b');
 select tableoid::regclass, * from rp_c_add order by id;
      tableoid      | id | k 
@@ -116,9 +107,7 @@ create table rp_en_add (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
 (partition p2 start ('B') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_en_add_1_prt_p2" for table "rp_en_add"
 alter table rp_en_add add partition p1 start ('a') end ('B');
-NOTICE:  CREATE TABLE will create partition "rp_en_add_1_prt_p1" for table "rp_en_add"
 insert into rp_en_add values (1, 'aZ'), (2, 'c');
 select tableoid::regclass, * from rp_en_add order by id;
       tableoid      | id | k  
@@ -137,13 +126,7 @@ distributed by (id)
 partition by range (k)
 (partition p1 start ('B') end ('a'),
  partition p2 start ('a') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1" for table "rp_c_split"
-NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p2" for table "rp_c_split"
 alter table rp_c_split split partition p1 at ('Q') into (partition p1a, partition p1b);
-NOTICE:  exchanged partition "p1" of relation "rp_c_split" with relation "pg_temp_73627"
-NOTICE:  dropped partition "p1" for relation "rp_c_split"
-NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1a" for table "rp_c_split"
-NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1b" for table "rp_c_split"
 insert into rp_c_split values (1, 'C'), (2, 'R'), (3, 'b');
 select tableoid::regclass, * from rp_c_split order by id;
        tableoid       | id | k 
@@ -157,18 +140,27 @@ create table rp_en_split (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
 (partition p1 start ('a') end ('z'));
-NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1" for table "rp_en_split"
 alter table rp_en_split split partition p1 at ('C') into (partition p1a, partition p1b);
-NOTICE:  exchanged partition "p1" of relation "rp_en_split" with relation "pg_temp_73670"
-NOTICE:  dropped partition "p1" for relation "rp_en_split"
-NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1a" for table "rp_en_split"
-NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1b" for table "rp_en_split"
 insert into rp_en_split values (1, 'b'), (2, 'D');
 select tableoid::regclass, * from rp_en_split order by id;
        tableoid        | id | k 
 -----------------------+----+---
  rp_en_split_1_prt_p1a |  1 | b
  rp_en_split_1_prt_p1b |  2 | D
+(2 rows)
+
+--
+-- Partition boundaries carry the collation of the partitioning key.
+--
+select tablename, partitionname, partitionrangestart, partitionrangeend
+from pg_partitions
+where schemaname = 'partition_collation' and tablename in ('rp_c', 'rp_en')
+  and not partitionisdefault
+order by tablename;
+ tablename | partitionname |    partitionrangestart    |     partitionrangeend     
+-----------+---------------+---------------------------+---------------------------
+ rp_c      | p1            | 'a'::text COLLATE "C"     | 'c'::text COLLATE "C"
+ rp_en     | p1            | 'a'::text COLLATE coll_en | 'c'::text COLLATE coll_en
 (2 rows)
 
 --
@@ -196,7 +188,6 @@ select pg_get_partition_def('rp_en'::regclass, true);
            )
 (1 row)
 
-set client_min_messages = warning;
 do $$
 begin
 	execute 'create table rp_c_copy (id int, k text collate "C") distributed by (id) '
@@ -205,7 +196,6 @@ begin
 		|| pg_get_partition_def('rp_en'::regclass);
 end
 $$;
-reset client_min_messages;
 insert into rp_c_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
 select tableoid::regclass, * from rp_c_copy order by id;
        tableoid        | id | k 
@@ -228,15 +218,4 @@ select tableoid::regclass, * from rp_en_copy order by id;
 
 reset search_path;
 drop schema partition_collation cascade;
-NOTICE:  drop cascades to 11 other objects
-DETAIL:  drop cascades to collation partition_collation.coll_en
-drop cascades to table partition_collation.rp_c
-drop cascades to table partition_collation.rp_en
-drop cascades to table partition_collation.rp_c_bounds
-drop cascades to table partition_collation.rp_en_bounds
-drop cascades to table partition_collation.rp_c_add
-drop cascades to table partition_collation.rp_en_add
-drop cascades to table partition_collation.rp_c_split
-drop cascades to table partition_collation.rp_en_split
-drop cascades to table partition_collation.rp_c_copy
-drop cascades to table partition_collation.rp_en_copy
+reset client_min_messages;
