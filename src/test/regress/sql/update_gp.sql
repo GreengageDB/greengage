@@ -393,7 +393,7 @@ create view v_insert_on_conflict_update_distkey as
 -- view on view, with renamed and reordered columns (view resno != table attnum)
 create view v2_insert_on_conflict_update_distkey as
   select c as cc, b, a as key from v_insert_on_conflict_update_distkey;
- 
+
 -- the following statements should error out because they modify the distkey through a view
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x') on conflict(a, b) do update set a = 5;
 insert into v2_insert_on_conflict_update_distkey values ('x', 1, 1) on conflict(key, b) do update set key = 5;
@@ -408,7 +408,7 @@ insert into v_insert_on_conflict_update_distkey values (1, 1, 'x')
 insert into v_insert_on_conflict_update_distkey values (1, 1, 'x')
   on conflict(a, b) do update set (b, c) = (select 1, 'multi');
 select * from t_insert_on_conflict_update_distkey_view;
- 
+
 -- the following statement should error out because a stored rule action is
 -- checked against the current policy: b became a distkey after the rule was created
 create table t_insert_on_conflict_update_distkey_rule(a int, b int, c text) distributed by (a);
