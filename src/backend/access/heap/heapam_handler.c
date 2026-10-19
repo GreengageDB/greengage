@@ -233,8 +233,9 @@ heapam_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
 	HeapScanDesc hscan = (HeapScanDesc) scan;
 
 	/* GPDB: a catalog row of a temporary object kept in memory */
-	if (ItemPointerIsValid(tid) && IsTempcatTid(tid))
-		return IsCatalogRelation(scan->rs_rd);
+	if (ItemPointerIsValid(tid) && IsTempcatTid(tid) &&
+		IsCatalogRelation(scan->rs_rd))
+		return true;
 
 	return ItemPointerIsValid(tid) &&
 		ItemPointerGetBlockNumber(tid) < hscan->rs_nblocks;

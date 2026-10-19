@@ -999,17 +999,19 @@ static Oid *tc_slice_gone_max_oid = NULL;
 /*
  * Coordinator: the slice the session takes its OIDs from (or -1), the next
  * OID to give and the last one it may give from it, whether a transaction
- * that gave OIDs of it to segments committed; the lowest nesting level of
- * the current transaction that gave any (or 0) and the start of the
- * statement that gave the first; and whether a segment refused it in the
- * current transaction (see tempcat_xact_callback()).
+ * that gave OIDs of it to segments committed; whether the current one gave
+ * any, the start of the statement that gave the first, and the lowest
+ * nesting level that gave any that did not roll back (or 0); and whether a
+ * segment refused it in the current transaction (see
+ * tempcat_xact_callback()).
  */
 static int	tc_slice = -1;
 static Oid	tc_next_oid = InvalidOid;
 static Oid	tc_slice_end = InvalidOid;
 static bool tc_slice_kept = false;
-static int	tc_slice_given_level = 0;
+static bool tc_slice_given = false;
 static TimestampTz tc_slice_given_stmt = 0;
+static int	tc_slice_given_level = 0;
 static bool tc_slice_refused = false;
 
 /* Slices may have been left without rows; see tempcat_release_unused_slices() */
@@ -1213,6 +1215,7 @@ tempcat_claim_free_slice(void)
 		tc_next_oid = start;
 		tc_slice_end = last;
 		tc_slice_kept = false;
+		tc_slice_given = false;
 		tc_slice_given_level = 0;
 		return true;
 	}
@@ -1485,6 +1488,7 @@ tempcat_drop_slice(void)
 		tempcat_slice_of(tc_namespace_oid) == tc_slice)
 		tc_namespace_oid = InvalidOid;
 	tc_slice = -1;
+	tc_slice_given = false;
 	tc_slice_given_level = 0;
 	tc_release_wanted = true;
 }
@@ -3810,8 +3814,11 @@ tempcat_note_given(void)
 {
 	int			level = GetCurrentTransactionNestLevel();
 
-	if (tc_slice_given_level == 0)
+	if (!tc_slice_given)
+	{
+		tc_slice_given = true;
 		tc_slice_given_stmt = GetCurrentStatementStartTimestamp();
+	}
 	if (tc_slice_given_level == 0 || level < tc_slice_given_level)
 		tc_slice_given_level = level;
 }
@@ -3822,11 +3829,13 @@ tempcat_note_given(void)
  * a SAVEPOINT) rolls back for that; or that a segment may have been waiting
  * for when the statement was canceled (e.g. by statement_timeout), if the
  * statement gave the first OIDs of it of the transaction (after an earlier
- * one did, all segments hold it); if no transaction that gave OIDs of it
+ * one did, all segments hold it; but the statements of one simple Query
+ * message share their start); if no transaction that gave OIDs of it
  * committed (then its writer QEs hold it everywhere): a segment would hold
- * up every attempt of the session with it for a while.  (A cancel that a
- * PL/pgSQL handler of query_canceled catches is not seen: the error is gone
- * by the time the subtransaction rolls back.)  The next attempt takes
+ * up every attempt of the session with it for a while.  A cancel is seen
+ * when the error reaches the transaction, as PL/pgSQL drops the error
+ * before it rolls back the subtransaction of an EXCEPTION block; not if a
+ * handler of query_canceled catches it.  The next attempt takes
  * another one; the slice is let go of once the rows of the transaction are
  * gone (they are freed when the session goes idle or starts its next
  * transaction, and need the clog until then, see tempcat_add_pending()).
@@ -3837,7 +3846,7 @@ static void
 tempcat_drop_refused_slice(void)
 {
 	/* (the error being handled, if any) */
-	if (tc_slice >= 0 && tc_slice_given_level > 0 && !tc_slice_kept &&
+	if (tc_slice >= 0 && tc_slice_given && !tc_slice_kept &&
 		(tc_slice_refused ||
 		 (elog_geterrcode() == ERRCODE_QUERY_CANCELED &&
 		  tc_slice_given_stmt == GetCurrentStatementStartTimestamp())))
@@ -3860,12 +3869,14 @@ tempcat_xact_callback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_COMMIT:
 			if (tc_slice >= 0 && tc_slice_given_level > 0)
 				tc_slice_kept = true;
+			tc_slice_given = false;
 			tc_slice_given_level = 0;
 			tc_slice_refused = false;
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
 			tempcat_drop_refused_slice();
+			tc_slice_given = false;
 			tc_slice_given_level = 0;
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;

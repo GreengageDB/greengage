@@ -190,12 +190,10 @@ INSERT 0 30
 -------+----------
  30    | t        
 (1 row)
+7: DROP TABLE tcf_sess;
+DROP TABLE
 7q: ... <quitting>
 
-DROP TABLE tcf_sess;
-server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
 (exited with code 0)
 !\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly;
 (exited with code 0)

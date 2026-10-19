@@ -399,10 +399,38 @@ SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
 42q:
 4: CALL tc_wait_gone();
 
+-- And when the cancel goes through a PL/pgSQL block with an exception
+-- handler of other errors, which rolls back its subtransaction first.
+43: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+43: SET gp_enable_temp_memory_catalog = on;
+43: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_release_slice', 'suspend', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+43q:
+SELECT gp_wait_until_triggered_fault('tempcat_release_slice', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM pg_stat_activity a JOIN tc_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'session did not end on the coordinator'; END $$;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+44: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+44: SET gp_enable_temp_memory_catalog = on;
+44: SET statement_timeout = '2s';
+44: DO $$ BEGIN CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a); EXCEPTION WHEN unique_violation THEN NULL; END $$;
+44: RESET statement_timeout;
+44: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
+44: SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved;
+SELECT gp_inject_fault('tempcat_release_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+SELECT gp_inject_fault('tempcat_claim_slice_again', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+44q:
+4: CALL tc_wait_gone();
+
 -- A writer QE whose prepared transaction started to use its slice is
--- rolled back (here as PREPARE fails on segment 1): the coordinator takes
--- the next slice, and the writer QE lets go of the first one once the rows
--- of the transaction are gone.
+-- rolled back (here as PREPARE fails on segment 1): it lets go of the slice
+-- once the rows of the transaction are gone, and takes it again with the
+-- next OIDs, which the coordinator keeps giving from it (only a slice that
+-- a segment refused is given up).
 SELECT gp_inject_fault('start_prepare', 'error', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
 23: SET gp_enable_temp_memory_catalog = on;

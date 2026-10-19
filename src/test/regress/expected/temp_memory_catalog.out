@@ -4,15 +4,13 @@
 -- With gp_enable_temp_memory_catalog on when the session's temporary schema
 -- is created, temporary objects get OIDs from the reserved range starting at
 -- 0xF0000000 (4026531840), and their catalog rows never reach the on-disk
--- catalogs, but for dependencies on ordinary objects.  Catalog lookups and
--- scans of the catalogs see the rows in memory.
+-- catalogs, not even their dependencies on ordinary objects.  Catalog
+-- lookups and scans of the catalogs see the rows in memory.
 --
 -- On-disk catalog rows that belong to objects with reserved OIDs, on the
--- coordinator and on the segments.  Scans see the rows in memory too, which
--- have TIDs with offsets from 0x8000 (32768) up.  Dependencies of such
--- objects on ordinary objects (a column of a user-defined type, ...) are
--- kept on disk on purpose, to protect the ordinary objects from DROP in
--- other sessions; they are not counted.
+-- coordinator and on the segments, in the catalogs that most objects have
+-- rows in.  Scans see the rows in memory too, which have TIDs with offsets
+-- from 0x8000 (32768) up.
 CREATE FUNCTION tc_disk_rows() RETURNS bigint LANGUAGE sql AS $$
   SELECT sum(n)::bigint FROM (
     SELECT count(*) AS n FROM pg_class
@@ -31,6 +29,32 @@ CREATE FUNCTION tc_disk_rows() RETURNS bigint LANGUAGE sql AS $$
      WHERE refobjid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
      WHERE refobjid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_depend
+     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
+     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_proc
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_proc')
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_constraint
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_constraint')
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_namespace
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_namespace')
+     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_index
+     WHERE indrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_index')
+     WHERE indrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_shdepend
+     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+       AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_shdepend')
+     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+       AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
   ) s
 $$;
 SET gp_enable_temp_memory_catalog = on;
@@ -233,19 +257,15 @@ SELECT count(*) = :ref_n AND sum(a1.attnum * a2.atttypid::int8) = :ref_s2 AS sam
  t
 (1 row)
 
-SELECT tc_explain($$SELECT count(*), sum(a1.atttypid::int8 * a2.attnum)
+SELECT bool_or(l LIKE '%Merge Join%') AS merge_join,
+       bool_or(l LIKE '%Index Only Scan%') AS index_only_scan
+  FROM tc_explain($$SELECT count(*), sum(a1.atttypid::int8 * a2.attnum)
   FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
- WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$);
-                                    tc_explain                                     
------------------------------------------------------------------------------------
- Aggregate
-   ->  Merge Join
-         Merge Cond: (a1.attrelid = pg_attribute.attrelid)
-         ->  Index Scan using pg_attribute_relid_attnum_index on pg_attribute a1
-               Index Cond: (attrelid = ANY ('{1259,N,1247,N}'::oid[]))
-         ->  Index Only Scan using pg_attribute_relid_attnum_index on pg_attribute
-               Index Cond: (attrelid = ANY ('{1259,N,1247,N}'::oid[]))
-(8 rows)
+ WHERE a1.attrelid IN ('pg_class'::regclass, 'tc_t'::regclass, 'pg_type'::regclass, 'tc_t_pkey'::regclass)$$) l;
+ merge_join | index_only_scan 
+------------+-----------------
+ t          | t
+(1 row)
 
 SELECT count(*) = :ref_n AND sum(a1.atttypid::int8 * a2.attnum) = :ref_s1 AS same
   FROM pg_attribute a1 JOIN (SELECT attrelid, attnum FROM pg_attribute) a2 ON a1.attrelid = a2.attrelid
@@ -529,13 +549,15 @@ SELECT count(*) FROM pg_init_privs WHERE objoid = 'tc_ip'::regclass;
 (1 row)
 
 DROP TABLE tc_ip;
--- A dependency on an ordinary object stays on disk.
+-- A dependency on an ordinary object is in memory too (other sessions are
+-- kept from dropping the object by the session's count of its users).
 CREATE TEMP TABLE tc_uses_ord (c tc_ord_comp) DISTRIBUTED RANDOMLY;
-SELECT classid::regclass, refobjid::regtype FROM pg_depend
+SELECT classid::regclass, refobjid::regtype, (ctid::text::point)[1] >= 32768 AS in_memory
+  FROM pg_depend
  WHERE objid = 'tc_uses_ord'::regclass AND refobjid = 'tc_ord_comp'::regtype;
- classid  |  refobjid   
-----------+-------------
- pg_class | tc_ord_comp
+ classid  |  refobjid   | in_memory 
+----------+-------------+-----------
+ pg_class | tc_ord_comp | t
 (1 row)
 
 -- Subtransactions and aborts
@@ -741,7 +763,8 @@ BEGIN
     EXECUTE 'DROP TABLE tc_cycle';
   END LOOP;
 END $$;
-SELECT count(*) FROM pg_class WHERE relpersistence = 't';
+SELECT count(*) FROM pg_class
+ WHERE relpersistence = 't' AND relnamespace = pg_my_temp_schema();
  count 
 -------
      0

@@ -89,9 +89,9 @@ CREATE TYPE tcf_comp AS (x int);
 7: CREATE TEMP TABLE tcf_c2 (a int) DISTRIBUTED BY (a);
 7: INSERT INTO tcf_c2 SELECT generate_series(1, 30);
 7: SELECT count(*), 'tcf_c2'::regclass::oid >= 4026531840 AS reserved FROM tcf_c2;
+7: DROP TABLE tcf_sess;
 7q:
 
-DROP TABLE tcf_sess;
 -- start_ignore
 !\retcode gpconfig -r gp_gang_creation_retry_count --skipvalidation --coordinatoronly;
 !\retcode gpconfig -r gp_gang_creation_retry_timer --skipvalidation --coordinatoronly;
