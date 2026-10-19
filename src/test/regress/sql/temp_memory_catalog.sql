@@ -223,6 +223,15 @@ SELECT count(*) FROM pg_depend
  WHERE objid = 'pg_temp.tc_f(pg_temp.tc_dom)'::regprocedure AND deptype = 'e';
 SELECT tc_disk_rows();
 ALTER EXTENSION plpgsql DROP FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+-- Its initial privileges are in memory too (pg_init_privs).
+CREATE TEMP TABLE tc_ip (a int) DISTRIBUTED BY (a);
+GRANT SELECT ON tc_ip TO PUBLIC;
+ALTER EXTENSION plpgsql ADD TABLE tc_ip;
+SELECT (ctid::text::point)[1] >= 32768 AS in_memory FROM pg_init_privs
+ WHERE objoid = 'tc_ip'::regclass;
+ALTER EXTENSION plpgsql DROP TABLE tc_ip;
+SELECT count(*) FROM pg_init_privs WHERE objoid = 'tc_ip'::regclass;
+DROP TABLE tc_ip;
 -- A dependency on an ordinary object stays on disk.
 CREATE TEMP TABLE tc_uses_ord (c tc_ord_comp) DISTRIBUTED RANDOMLY;
 SELECT classid::regclass, refobjid::regtype FROM pg_depend
@@ -1036,6 +1045,22 @@ CREATE TEMP TABLE tc_ru_d_t (a int, d pg_temp.tc_ru_d) DISTRIBUTED BY (a);
 INSERT INTO tc_ru_d_t VALUES (1, 1);
 INSERT INTO tc_ru_d_t VALUES (2, -1);
 SELECT * FROM tc_ru_d_t;
+
+-- Big values of rows kept in memory are compressed, as on disk: a function
+-- body of 3 MB fits a session that keeps up to 1 MB.
+\c
+SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_enable_temp_memory_catalog = on;
+DO $$
+BEGIN
+  EXECUTE format('CREATE FUNCTION pg_temp.tc_big() RETURNS int LANGUAGE sql AS %L',
+                 'SELECT length(' || quote_literal(repeat('abc', 1000000)) || ')');
+END $$;
+SELECT 'pg_temp.tc_big()'::regprocedure::oid >= 4026531840 AS reserved;
+SELECT pg_temp.tc_big();
+SELECT length(prosrc) FROM pg_proc WHERE oid = 'pg_temp.tc_big()'::regprocedure;
+SELECT count(*) FROM gp_dist_random('pg_proc') WHERE proname = 'tc_big';
+DROP FUNCTION pg_temp.tc_big();
 
 -- When dynamic shared memory runs short for others (the fault pretends
 -- so), a new session keeps its temporary objects on disk.

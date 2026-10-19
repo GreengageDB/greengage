@@ -169,7 +169,7 @@ extern int32 NextRecordTypmod;
 
 extern TypeCacheEntry *lookup_type_cache(Oid type_id, int flags);
 
-extern void TypeCacheForgetRange(Oid first, Oid last);
+extern void TypeCacheForgetRange(Oid first, Oid last, bool only_gone);
 
 extern void InitDomainConstraintRef(Oid type_id, DomainConstraintRef *ref,
 									MemoryContext refctx, bool need_exprstate);

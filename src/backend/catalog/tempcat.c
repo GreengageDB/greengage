@@ -128,6 +128,7 @@
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_index.h"
 #include "catalog/pg_inherits.h"
+#include "catalog/pg_init_privs.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_partitioned_table.h"
@@ -267,6 +268,10 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{SecLabelRelationId, Anum_pg_seclabel_objoid, InvalidOid,
 		Anum_pg_seclabel_classoid,
 	{Anum_pg_seclabel_objoid, 0}, {TCK_OID, TCK_NONE}},
+	/* initial privileges of extension members (recordExtensionInitPriv()) */
+	{InitPrivsRelationId, Anum_pg_init_privs_objoid, InvalidOid,
+		Anum_pg_init_privs_classoid,
+	{Anum_pg_init_privs_objoid, 0}, {TCK_OID, TCK_NONE}},
 	/* GPDB's DDL tracking (MetaTrackAddObject() and friends) */
 	{StatLastOpRelationId, Anum_pg_stat_last_operation_objid, InvalidOid,
 		Anum_pg_stat_last_operation_classid,
@@ -639,6 +644,8 @@ typedef struct TempcatSharedData
 	LWLock		used_lock;		/* protects TempcatUsedObjects */
 	/* sessions that use objects missing from it, as it was full */
 	pg_atomic_uint32 nused_overflow;
+	/* its entries, so that DROP looks at it only when it has any */
+	pg_atomic_uint32 nused_entries;
 	int			nprocs;
 	pg_atomic_uint32 next_slice;	/* coordinator: see tempcat_claim_free_slice() */
 	TempcatSliceState slices[TEMPCAT_NSLICES];
@@ -699,6 +706,7 @@ TempcatShmemInit(void)
 	TempcatShared->tranche_id = LWLockNewTrancheId();
 	LWLockInitialize(&TempcatShared->used_lock, TempcatShared->tranche_id);
 	pg_atomic_init_u32(&TempcatShared->nused_overflow, 0);
+	pg_atomic_init_u32(&TempcatShared->nused_entries, 0);
 	/*
 	 * Start the search for free slices at a random point, not where the
 	 * coordinator before a restart or a failover started: writer QEs of its
@@ -980,9 +988,11 @@ static int32 *tc_slice_rows = NULL;
 
 /*
  * The highest OID of each slice that this process took hold of for a row in
- * memory: one not above it was given before, see tempcat_activate().
+ * memory, and the highest it had when it last let go of the slice: one not
+ * above that comes back, see tempcat_activate().
  */
 static Oid *tc_slice_max_oid = NULL;
+static Oid *tc_slice_gone_max_oid = NULL;
 
 /*
  * Coordinator: the slice the session takes its OIDs from (or -1), the next
@@ -1056,6 +1066,8 @@ tempcat_hold_slice(int slice)
 											   sizeof(int32) * TEMPCAT_NSLICES);
 		tc_slice_max_oid = MemoryContextAllocZero(TopMemoryContext,
 												  sizeof(Oid) * TEMPCAT_NSLICES);
+		tc_slice_gone_max_oid = MemoryContextAllocZero(TopMemoryContext,
+													   sizeof(Oid) * TEMPCAT_NSLICES);
 	}
 	tc_slice_flags[slice] |= TCS_HELD;
 	TempcatShared->slices[slice].databaseId = MyDatabaseId;
@@ -1320,13 +1332,20 @@ tempcat_activate(Oid oid)
 	}
 
 	/*
-	 * The coordinator gives the OIDs of a slice in ascending order: one not
-	 * above the highest this process saw of it comes back (or comes out of
-	 * order to a writer QE, which costs a needless flush of its caches).
+	 * The coordinator gives the OIDs of a slice in ascending order, and
+	 * starts a slice it takes again at its start: an OID not above the
+	 * highest this process had of a slice it let go of comes back.  (Not the
+	 * highest so far: a writer QE lets go of a slice that the coordinator
+	 * still gives OIDs from as soon as none of its rows has one, and may get
+	 * them out of order.)
 	 */
-	if (oid <= tc_slice_max_oid[slice])
+	if (oid <= tc_slice_gone_max_oid[slice])
+	{
 		tempcat_forget_cached_oids(slice);
-	tc_slice_max_oid[slice] = oid;
+		tc_slice_gone_max_oid[slice] = InvalidOid;
+	}
+	if (oid > tc_slice_max_oid[slice])
+		tc_slice_max_oid[slice] = oid;
 
 	if (!tc_activated)
 	{
@@ -1358,7 +1377,9 @@ tempcat_forget_cached_oids(int slice)
 	elog(DEBUG1, "tempcat: OIDs %u to %u come back, forgetting cached data",
 		 tempcat_slice_base(slice), tempcat_slice_last(slice));
 	InvalidateSystemCaches();
-	TypeCacheForgetRange(tempcat_slice_base(slice), tempcat_slice_last(slice));
+	/* (ordinary objects with OIDs of the slice may exist and be in use) */
+	TypeCacheForgetRange(tempcat_slice_base(slice), tempcat_slice_last(slice),
+						 true);
 	if (tc_root != NULL)
 		pg_atomic_fetch_add_u32(&tc_root->cache_epoch, 1);
 }
@@ -1486,6 +1507,8 @@ tempcat_let_go_of_slice(int slice)
 	pg_write_barrier();
 	pg_atomic_write_u32(&ss->holder, 0);
 	tc_slice_flags[slice] &= ~TCS_HELD;
+	if (tc_slice_max_oid[slice] > tc_slice_gone_max_oid[slice])
+		tc_slice_gone_max_oid[slice] = tc_slice_max_oid[slice];
 	if (slice == tc_slice)
 		tc_slice = -1;
 	if (!proc_exit_inprogress)
@@ -1798,6 +1821,7 @@ tempcat_count_use(Oid classId, Oid objectId, int32 subId)
 			for (i = 0; i < TEMPCAT_USED_PROCS; i++)
 				entry->procs[i] = -1;
 			entry->changer_xid = InvalidTransactionId;
+			pg_atomic_fetch_add_u32(&TempcatShared->nused_entries, 1);
 		}
 		else if (tempcat_changer_active(entry))
 			changer = entry->changer_xid;
@@ -1841,7 +1865,10 @@ tempcat_uncount_use(TempcatUsed *used)
 				entry->procs[i] = -1;
 		}
 		if (--entry->nsessions <= 0)
+		{
 			(void) hash_search(TempcatUsedObjects, &key, HASH_REMOVE, NULL);
+			pg_atomic_fetch_sub_u32(&TempcatShared->nused_entries, 1);
+		}
 	}
 	LWLockRelease(&TempcatShared->used_lock);
 	used->counted = false;
@@ -2166,9 +2193,22 @@ tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
 		}
 	}
 
+	/*
+	 * Most objects nobody uses, and nobody uses any while the feature is not
+	 * used: look without a lock, then in shared mode, before taking it in
+	 * exclusive mode, as DROP comes here for every object it drops.
+	 */
+	if (pg_atomic_read_u32(&TempcatShared->nused_entries) == 0)
+		return used;
+	tempcat_used_object_key(&key, classId, objectId, subId);
+	LWLockAcquire(&TempcatShared->used_lock, LW_SHARED);
+	entry = hash_search(TempcatUsedObjects, &key, HASH_FIND, NULL);
+	LWLockRelease(&TempcatShared->used_lock);
+	if (entry == NULL)
+		return used;
+
 	if (mark)
 		xid = GetCurrentTransactionId();
-	tempcat_used_object_key(&key, classId, objectId, subId);
 	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
 	entry = hash_search(TempcatUsedObjects, &key, HASH_FIND, NULL);
 	if (entry != NULL)
@@ -3555,7 +3595,8 @@ tempcat_start_transaction(void)
 	{
 		tc_seen_cache_epoch = pg_atomic_read_u32(&tc_root->cache_epoch);
 		InvalidateSystemCaches();
-		TypeCacheForgetRange(FirstTempcatObjectId, LastTempcatObjectId);
+		/* (at the start of a transaction, nothing uses any of them) */
+		TypeCacheForgetRange(FirstTempcatObjectId, LastTempcatObjectId, false);
 	}
 
 	if (tempcat_is_reader() || tc_area == NULL)
@@ -3818,8 +3859,16 @@ tempcat_before_exit(int code, Datum arg)
 		ep = e->next;
 	}
 
-	/* Now, before the slices are let go of (tempcat_proc_exit()) */
-	pgstat_report_stat(true);
+	/*
+	 * Now, before the slices are let go of (tempcat_proc_exit()); but not in
+	 * a transaction, whose counts are not settled yet (ShutdownPostgres()
+	 * rolls it back later, e.g. when the connection went away before the
+	 * transaction that created the temporary schema ended, and
+	 * RemoveTempRelationsCallback() was not registered to end it):
+	 * pgstat_beshutdown_hook() sends them then.
+	 */
+	if (!IsTransactionOrTransactionBlock())
+		pgstat_report_stat(true);
 }
 
 /* ----------------------------------------------------------------
@@ -3858,10 +3907,20 @@ tempcat_route_insert(Relation rel, HeapTuple tup)
 		return false;
 	def = &tempcat_catalogs[catidx];
 
-	/* pg_shdepend: rows of this database (of our objects, see below) */
+	/*
+	 * pg_shdepend: rows of this database (of our objects, see below).  A row
+	 * of one of our objects for another database would point at an object
+	 * that does not exist there, and outlive the session on disk (see
+	 * copyTemplateDependencies()): refuse it.
+	 */
 	if (relid == SharedDependRelationId &&
 		tempcat_getoid(tup, desc, Anum_pg_shdepend_dbid) != MyDatabaseId)
+	{
+		if (tempcat_owner_is_temp(tup, desc, def->owner, def->ownerclass,
+								  def->ownerclassattr))
+			elog(ERROR, "tempcat: pg_shdepend row of a temporary object kept in memory for another database");
 		return false;
+	}
 
 	if (relid == ConstraintRelationId &&
 		!OidIsValid(tempcat_getoid(tup, desc, Anum_pg_constraint_conrelid)))
@@ -3952,30 +4011,74 @@ tempcat_sql_insert(Relation rel, HeapTuple tup)
 }
 
 /*
- * Refuse a row that would not fit on disk, as heap_insert() and
+ * The row to keep in memory for a catalog row: with the values that live
+ * out of line (TOAST pointers, e.g. of a row that SQL UPDATE built from
+ * another row) brought in, which could otherwise be dropped under it, and,
+ * if it is big, its values compressed as heap_insert() would compress them
+ * (statistics, function bodies, rules), so that they do not take the
+ * session's memory at full size.  Nothing goes out of line: there is no
+ * TOAST table of ours.  Returns 'tup' itself if nothing changes.
+ *
+ * Then refuse a row that would not fit on disk, as heap_insert() and
  * heap_update() would: in a catalog without a TOAST table, one that
  * compression does not bring under MaxHeapTupleSize (e.g. a long column
  * default in pg_attribute, long options in pg_class).
  */
-static void
-tempcat_check_row_size(Relation rel, HeapTuple tup)
+static HeapTuple
+tempcat_prepare_row(Relation rel, HeapTuple tup)
 {
-	HeapTuple	compressed;
+	TupleDesc	desc = RelationGetDescr(rel);
+	HeapTuple	row = tup;
 	Size		len;
 
-	if (tup->t_len <= MaxHeapTupleSize ||
-		OidIsValid(rel->rd_rel->reltoastrelid))
-		return;
-	/* (without a TOAST table, this only compresses values in place) */
-	compressed = toast_insert_or_update(rel, tup, NULL, TOAST_TUPLE_TARGET, 0);
-	len = MAXALIGN(compressed->t_len);
-	if (compressed != tup)
-		heap_freetuple(compressed);
-	if (len > MaxHeapTupleSize)
+	if (HeapTupleHasExternal(row))
+		row = toast_flatten_tuple(row, desc);
+
+	if (row->t_len > TOAST_TUPLE_THRESHOLD)
+	{
+		Datum	   *values = palloc(sizeof(Datum) * desc->natts);
+		bool	   *nulls = palloc(sizeof(bool) * desc->natts);
+		bool		compressed = false;
+		int			i;
+
+		heap_deform_tuple(row, desc, values, nulls);
+		for (i = 0; i < desc->natts; i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(desc, i);
+			Datum		cvalue;
+
+			if (nulls[i] || att->attlen != -1 ||
+				(att->attstorage != 'x' && att->attstorage != 'm') ||
+				!VARATT_IS_4B_U(DatumGetPointer(values[i])))
+				continue;
+			cvalue = toast_compress_datum(values[i]);
+			if (DatumGetPointer(cvalue) != NULL)
+			{
+				values[i] = cvalue;
+				compressed = true;
+			}
+		}
+		if (compressed)
+		{
+			HeapTuple	crow = heap_form_tuple(desc, values, nulls);
+
+			crow->t_self = tup->t_self;
+			crow->t_tableOid = tup->t_tableOid;
+			if (row != tup)
+				heap_freetuple(row);
+			row = crow;
+		}
+		pfree(values);
+		pfree(nulls);
+	}
+
+	len = MAXALIGN(row->t_len);
+	if (len > MaxHeapTupleSize && !OidIsValid(rel->rd_rel->reltoastrelid))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("row is too big: size %zu, maximum size %zu",
 						len, MaxHeapTupleSize)));
+	return row;
 }
 
 /* The area is full even after freeing what could be freed. */
@@ -4014,12 +4117,13 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	TransactionId xid;
 	CommandId	cid;
 	dsa_pointer ep;
+	HeapTuple	row;
 
 	Assert(catidx >= 0);
 	Assert(!tempcat_is_reader() && tc_area != NULL);
 	/* as heap_insert() does; see tempcat_delete() */
 	gp_expand_protect_catalog_changes(rel);
-	tempcat_check_row_size(rel, tup);
+	row = tempcat_prepare_row(rel, tup);
 
 	tempcat_use_referenced(rel, tup);
 
@@ -4028,7 +4132,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
-	ep = tempcat_entry_create_or_reclaim(catidx, tup, RelationGetDescr(rel),
+	ep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
 										 xid, cid);
 	if (DsaPointerIsValid(ep))
 		tempcat_add_pending(ep);
@@ -4036,6 +4140,8 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	if (!DsaPointerIsValid(ep))
 		tempcat_report_full();
+	if (row != tup)
+		heap_freetuple(row);
 
 	tempcat_set_caller_tuple(tup, rel, TC_ADDR(ep));
 	if (RelationGetRelid(rel) == RelationRelationId)
@@ -4120,6 +4226,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	dsa_pointer newep;
 	TempcatEntry *olde;
 	HeapTuple	oldtup;
+	HeapTuple	row;
 	TransactionId xid;
 	CommandId	cid;
 
@@ -4127,7 +4234,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	Assert(!tempcat_is_reader());
 	/* as heap_update() does; see tempcat_delete() */
 	gp_expand_protect_catalog_changes(rel);
-	tempcat_check_row_size(rel, newtup);
+	row = tempcat_prepare_row(rel, newtup);
 
 	olde = tempcat_lookup_tid(rel, otid, &oldep);
 	tempcat_check_deletable(olde);
@@ -4140,7 +4247,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 
 	tempcat_reserve_pending(2);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
-	newep = tempcat_entry_create_or_reclaim(catidx, newtup, RelationGetDescr(rel),
+	newep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
 											xid, cid);
 	if (!DsaPointerIsValid(newep))
 	{
@@ -4150,6 +4257,8 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 	tempcat_mark_deleted(olde, oldep, xid, cid);
 	tempcat_add_pending(newep);
 	LWLockRelease(&tc_root->lock);
+	if (row != newtup)
+		heap_freetuple(row);
 
 	tempcat_set_caller_tuple(newtup, rel, TC_ADDR(newep));
 	if (RelationGetRelid(rel) == RelationRelationId)

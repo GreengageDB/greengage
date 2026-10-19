@@ -233,3 +233,21 @@ SELECT n AS purged FROM oid_seg_inserted(:st_oid) WHERE seg = 0;
 DROP TABLE oid_tc8_first;
 DROP FUNCTION oid_seg_inserted(oid);
 DROP FUNCTION oid_seg_flush();
+
+-- Scenario 9: creating a relation on a QE advances its OID counter to the
+-- relation's OID, but not to one reserved for temporary objects kept in
+-- memory: from above about 0x70000000, the counter would jump into the
+-- range, the coordinator follow it when it syncs with the segments (CREATE
+-- TABLE), and both wrap around early.
+SELECT gp_set_next_oid_master(3000000000);
+SELECT gp_set_next_oid_segments(3000000000);
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE oid_tc9 (a int) DISTRIBUTED BY (a);
+SELECT 'oid_tc9'::regclass::oid >= 4026531840 AS reserved;
+CREATE TABLE oid_tc9_ord (a int) DISTRIBUTED BY (a);
+SELECT o BETWEEN 3000000000 AND 4026531839 AS segments_in_place
+  FROM gp_get_next_oid_segments() o;
+SELECT o BETWEEN 3000000000 AND 4026531839 AS master_in_place
+  FROM gp_get_next_oid_master() o;
+DROP TABLE oid_tc9, oid_tc9_ord;

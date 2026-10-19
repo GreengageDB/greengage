@@ -77,40 +77,40 @@ INSERT 0 1
 -- reach into the session's memory.
 2: DROP TYPE tc_comp;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: DROP TYPE tc_comp CASCADE;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: DROP DOMAIN tc_dom CASCADE;
 ERROR:  temporary objects of other sessions depend on type tc_dom
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: DROP FUNCTION tc_fn(int) CASCADE;
 ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: DROP TABLE tc_ord CASCADE;
 ERROR:  temporary objects of other sessions depend on table tc_ord
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: ALTER TABLE tc_ord DROP COLUMN b CASCADE;
 ERROR:  temporary objects of other sessions depend on column b of table tc_ord
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 -- Nor change it so that the objects would not work any more.
 2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_check CHECK (VALUE > 0);
 ERROR:  temporary objects of other sessions depend on type tc_dom
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: ALTER TABLE tc_ord ALTER COLUMN b TYPE text;
 ERROR:  temporary objects of other sessions depend on column b of table tc_ord
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 -- Nor drop the roles owning them or granted privileges on them.  DROP
 -- OWNED and REASSIGN OWNED leave them to their session, with a warning.
 2: DROP ROLE tc_role;
 ERROR:  temporary objects of other sessions depend on role tc_role
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: DROP ROLE tc_grantee;
 ERROR:  temporary objects of other sessions depend on role tc_grantee
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 2: REASSIGN OWNED BY tc_role TO CURRENT_USER;
 REASSIGN OWNED
 1: SELECT * FROM tc_t;
@@ -127,7 +127,7 @@ REASSIGN OWNED
 DROP OWNED
 2: DROP ROLE tc_role;
 ERROR:  temporary objects of other sessions depend on role tc_role
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 1: SELECT * FROM tc_t;
  c     | d | e 
 -------+---+---
@@ -158,7 +158,7 @@ ERROR:  division by zero
 ROLLBACK
 2: DROP TYPE tc_comp;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 -- They go with the last object using what they lock, once the session goes
 -- idle, also when its creation rolled back.
 1: DROP VIEW tc_v;
@@ -190,7 +190,7 @@ DROP DOMAIN
 (1 row)
 2: DROP FUNCTION tc_fn(int);
 ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
-DETAIL:  The sessions of processes 377866 keep them in memory.
+DETAIL:  The sessions of processes 480791 keep them in memory.
 
 -- Once the session is gone, so is all of that.
 1q: ... <quitting>
@@ -697,7 +697,7 @@ SET
 ERROR:  an earlier session using the same temporary object OIDs is still running on this node
 LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
                           ^
-DETAIL:  Process 378153 holds OIDs 4041474048 to 4041539583.
+DETAIL:  Process 481073 holds OIDs 4079419392 to 4079484927.
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 CREATE TABLE
 20: INSERT INTO tc_t SELECT generate_series(1, 10);
@@ -829,7 +829,7 @@ BEGIN
 DROP TABLE
 28: DROP TYPE tc_wait_comp;
 ERROR:  temporary objects of other sessions depend on type tc_wait_comp
-DETAIL:  The sessions of processes 378230 keep them in memory.
+DETAIL:  The sessions of processes 481157 keep them in memory.
 27: COMMIT;
 COMMIT
 28: DROP TYPE tc_wait_comp;
@@ -1007,13 +1007,35 @@ SELECT gp_inject_fault('tempcat_used_objects_full', 'reset', dbid) FROM gp_segme
 (1 row)
 37: DROP TYPE tc_full_comp;
 ERROR:  temporary objects of other sessions depend on type tc_full_comp
-DETAIL:  The sessions of processes 378327 keep them in memory.
+DETAIL:  The sessions of processes 481257 keep them in memory.
 36: DROP TABLE tc_full_t;
 DROP TABLE
 37: DROP TYPE tc_full_comp;
 DROP TYPE
 36q: ... <quitting>
 37q: ... <quitting>
+
+-- A session that goes away in the middle of the transaction that made its
+-- temporary schema, with changes of catalogs on disk in it too, ends
+-- cleanly (the statistics are sent once the transaction is rolled back).
+38: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+38: SET gp_enable_temp_memory_catalog = on;
+SET
+38: BEGIN;
+BEGIN
+38: CREATE TEMP TABLE tc_gone (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+38: CREATE TABLE tc_gone_ord (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+38q: ... <quitting>
+4: CALL tc_wait_gone();
+CALL
+4: SELECT to_regclass('tc_gone_ord') IS NULL AS rolled_back;
+ rolled_back 
+-------------
+ t           
+(1 row)
 
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose

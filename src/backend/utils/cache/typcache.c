@@ -779,10 +779,13 @@ lookup_type_cache(Oid type_id, int flags)
 	 * If requested, get information about a range type
 	 */
 	if ((flags & TYPECACHE_RANGE_INFO) &&
-		typentry->rngelemtype == NULL &&
 		typentry->typtype == TYPTYPE_RANGE)
 	{
-		load_rangetype_info(typentry);
+		if (typentry->rngelemtype == NULL)
+			load_rangetype_info(typentry);
+		/* GPDB: an element entry emptied meanwhile, as in PostgreSQL 13 */
+		else if (!(typentry->rngelemtype->flags & TCFLAGS_HAVE_PG_TYPE_DATA))
+			(void) lookup_type_cache(typentry->rngelemtype->type_id, 0);
 	}
 
 	/*
@@ -2249,11 +2252,14 @@ TypeCacheOpcCallback(Datum arg, int cacheid, uint32 hashvalue)
  * 'last', which may be given to other types now (see tempcat.c, which gives
  * OIDs of temporary objects kept in memory again only after this).  The
  * entries stay, as there may be pointers to them; the next lookup fills them
- * in again from pg_type.  Only for types that are gone, or at a point where
- * nothing in progress uses them.
+ * in again from pg_type.  Pointers kept elsewhere (fn_extra of functions,
+ * domain constraint references) do not look up again: if 'only_gone', in
+ * the middle of a command, forget only the types that no longer exist, which
+ * nothing can use; otherwise only call it where nothing in progress uses any
+ * of them.
  */
 void
-TypeCacheForgetRange(Oid first, Oid last)
+TypeCacheForgetRange(Oid first, Oid last, bool only_gone)
 {
 	HASH_SEQ_STATUS status;
 	TypeCacheEntry *typentry;
@@ -2267,6 +2273,9 @@ TypeCacheForgetRange(Oid first, Oid last)
 		TypeCacheEntry *nextDomain = typentry->nextDomain;
 
 		if (type_id < first || type_id > last)
+			continue;
+		if (only_gone &&
+			SearchSysCacheExists1(TYPEOID, ObjectIdGetDatum(type_id)))
 			continue;
 		if (typentry->tupDesc != NULL &&
 			--typentry->tupDesc->tdrefcount == 0)

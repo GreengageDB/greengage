@@ -495,6 +495,18 @@ SELECT gp_inject_fault('tempcat_used_objects_full', 'reset', dbid)
 36q:
 37q:
 
+-- A session that goes away in the middle of the transaction that made its
+-- temporary schema, with changes of catalogs on disk in it too, ends
+-- cleanly (the statistics are sent once the transaction is rolled back).
+38: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+38: SET gp_enable_temp_memory_catalog = on;
+38: BEGIN;
+38: CREATE TEMP TABLE tc_gone (a int) DISTRIBUTED BY (a);
+38: CREATE TABLE tc_gone_ord (a int) DISTRIBUTED BY (a);
+38q:
+4: CALL tc_wait_gone();
+4: SELECT to_regclass('tc_gone_ord') IS NULL AS rolled_back;
+
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose
 -- objects do not exist in the new database.

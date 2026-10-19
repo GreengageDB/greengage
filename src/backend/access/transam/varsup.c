@@ -694,6 +694,15 @@ GetNewObjectId(void)
 void
 AdvanceObjectId(Oid newOid)
 {
+	/*
+	 * GPDB: not to an OID reserved for temporary objects kept in memory (see
+	 * tempcat.c): a QE creating such a relation, or the coordinator syncing
+	 * with a QE's counter, would move the counter into the range, which it
+	 * then wraps around from at once.
+	 */
+	if (IsTempcatOid(newOid))
+		return;
+
 	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 
 	if (OidFollowsNextOid(newOid))
