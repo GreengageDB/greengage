@@ -225,15 +225,24 @@ SET SESSION AUTHORIZATION pgcron_cront;
 
 CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now());
 
-CREATE FUNCTION public.evil_eq(int8, int8) RETURNS bool LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.evil_eq_int(int8, int8) RETURNS bool LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO public.pwned(note, cur_user, is_super)
-    VALUES ('ran inside pg_cron worker', current_user,
+    VALUES ('ran inside pg_cron worker (int)', current_user,
             (SELECT rolsuper FROM pg_roles WHERE rolname = current_user));
   RETURN pg_catalog.int8eq($1, $2);
 END $$;
 
-CREATE OPERATOR public.= (LEFTARG = int8, RIGHTARG = int8, PROCEDURE = public.evil_eq);
+CREATE FUNCTION public.evil_eq_str(text, text) RETURNS bool LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.pwned(note, cur_user, is_super)
+    VALUES ('ran inside pg_cron worker (text)', current_user,
+            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user));
+  RETURN pg_catalog.texteq($1, $2);
+END $$;
+
+CREATE OPERATOR public.= (LEFTARG = int8, RIGHTARG = int8, PROCEDURE = public.evil_eq_int);
+CREATE OPERATOR public.= (LEFTARG = text, RIGHTARG = text, PROCEDURE = public.evil_eq_str);
 
 ALTER DATABASE contrib_regression SET search_path = public, pg_catalog;
 
@@ -248,14 +257,17 @@ RESET SESSION AUTHORIZATION;
 
 SELECT pg_sleep(5);
 
-SELECT count(*) = 0 FROM public.pwned WHERE note = 'ran inside pg_cron worker' AND is_super;
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)';
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)';
 
 ALTER DATABASE contrib_regression OWNER TO gpadmin;
 
 -- cleaning
 DROP EXTENSION pg_cron;
 drop operator public.=(int8, int8);
-drop function public.evil_eq(int8, int8);
+drop operator public.=(text, text);
+drop function public.evil_eq_int(int8, int8);
+drop function public.evil_eq_str(text, text);
 drop table public.pwned;
 drop user pgcron_cront;
 drop user "CaseOwner";
