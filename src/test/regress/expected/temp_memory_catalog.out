@@ -474,12 +474,27 @@ CREATE TEMP TABLE tc_of OF tc_ord_comp;
 ERROR:  temporary tables kept in memory cannot be typed tables of ordinary type tc_ord_comp
 CREATE CAST (pg_temp.tc_comp AS text) WITH INOUT;
 ERROR:  casts are not supported for temporary objects kept in memory
-ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
-ERROR:  extension members are not supported for temporary objects kept in memory
 CREATE STATISTICS pg_temp.tc_stx ON a FROM tc_ord_parent;
 ERROR:  statistics object on an ordinary table cannot be in a temporary schema kept in memory
 CREATE TEMP TABLE tc_inh_parent (a int) DISTRIBUTED BY (a);
 CREATE TEMP TABLE tc_inh_child () INHERITS (tc_inh_parent);
+-- A temporary object can be a member of an extension (e.g. one that the
+-- extension's script creates), as on disk: the membership is in memory.
+ALTER EXTENSION plpgsql ADD FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
+SELECT count(*) FROM pg_depend
+ WHERE objid = 'pg_temp.tc_f(pg_temp.tc_dom)'::regprocedure AND deptype = 'e';
+ count 
+-------
+     1
+(1 row)
+
+SELECT tc_disk_rows();
+ tc_disk_rows 
+--------------
+            0
+(1 row)
+
+ALTER EXTENSION plpgsql DROP FUNCTION pg_temp.tc_f(pg_temp.tc_dom);
 -- A dependency on an ordinary object stays on disk.
 CREATE TEMP TABLE tc_uses_ord (c tc_ord_comp) DISTRIBUTED RANDOMLY;
 SELECT classid::regclass, refobjid::regtype FROM pg_depend
