@@ -974,6 +974,69 @@ CREATE TEMP TABLE tc_rb3 (a int) DISTRIBUTED BY (a);
 SELECT ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice1 AND
        ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice2 AS same_slice;
 
+-- A session takes a slice it used before only when no other is free (the
+-- first fault pretends so; the second starts slices at their start): its
+-- OIDs come back then, and what was cached about them is forgotten first.
+-- Here a domain gets the OID of an enum type that the type cache knew: it
+-- checks its constraint.
+\c
+SET gp_enable_temp_memory_catalog = on;
+CREATE TEMP TABLE tc_ru_keep (a int) DISTRIBUTED BY (a);
+-- (functions taking one OID each, up to the last but one of the slice)
+CREATE FUNCTION pg_temp.tc_ru_fill(p text) RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  o oid;
+  i int := 0;
+BEGIN
+  LOOP
+    i := i + 1;
+    EXECUTE format('CREATE FUNCTION pg_temp.tc_ru_%s_%s() RETURNS int LANGUAGE sql AS %L', p, i, 'SELECT 1');
+    EXECUTE format('SELECT %L::regprocedure::oid', 'pg_temp.tc_ru_' || p || '_' || i || '()') INTO o;
+    EXIT WHEN (o::bigint - 4026531840) % 65536 = 65534 OR i > 10;
+  END LOOP;
+END $$;
+SELECT gp_inject_fault_infinite('tempcat_slice_from_base', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT pg_temp.tc_ru_fill('a');
+-- (its array type takes the last OID, it the first of the next slice)
+CREATE TYPE pg_temp.tc_ru_e AS ENUM ('x', 'y');
+-- (the sort operators come from the type cache)
+SELECT e FROM (VALUES ('y'::pg_temp.tc_ru_e), ('x')) v(e) ORDER BY e;
+SELECT 'pg_temp.tc_ru_e'::regtype::oid AS ru_enum \gset
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT pg_temp.tc_ru_fill('b');
+CREATE FUNCTION pg_temp.tc_ru_c1() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION pg_temp.tc_ru_c2() RETURNS int LANGUAGE sql AS 'SELECT 1';
+-- (nothing has OIDs of that slice any more: it is let go of)
+DROP TYPE pg_temp.tc_ru_e;
+DROP FUNCTION pg_temp.tc_ru_b_1(), pg_temp.tc_ru_c1();
+SELECT gp_inject_fault_infinite('tempcat_reuse_slice', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT pg_temp.tc_ru_fill('d');
+CREATE DOMAIN pg_temp.tc_ru_d AS int CHECK (VALUE > 0);
+SELECT 'pg_temp.tc_ru_d'::regtype::oid = :ru_enum AS same_oid;
+SELECT (-1)::pg_temp.tc_ru_d;
+SELECT 5::pg_temp.tc_ru_d;
+SELECT gp_inject_fault('tempcat_reuse_slice', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_from_base', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TEMP TABLE tc_ru_d_t (a int, d pg_temp.tc_ru_d) DISTRIBUTED BY (a);
+INSERT INTO tc_ru_d_t VALUES (1, 1);
+INSERT INTO tc_ru_d_t VALUES (2, -1);
+SELECT * FROM tc_ru_d_t;
+
 -- When dynamic shared memory runs short for others (the fault pretends
 -- so), a new session keeps its temporary objects on disk.
 \c

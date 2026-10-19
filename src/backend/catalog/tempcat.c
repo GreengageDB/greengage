@@ -31,13 +31,16 @@
  *   any of them has an OID of it (see tempcat_claim_free_slice(),
  *   tempcat_claim_slice() and tempcat_release_unused_slices()).
  *
- * - A session never gives an OID twice: it goes through a slice in
- *   ascending order, then takes another one, never one it took before.
- *   Backend-local caches keyed by OID (the type cache, cached plans, PL/pgSQL
- *   casts, ...) assume that an OID does not come back soon, which upstream's
- *   OID counter, wrapping around after 2^32 OIDs, makes true; a slice going
- *   round in a long session would not.  Another session may take a slice
- *   that was let go of: its processes are new, and so are their caches.
+ * - A session does not give an OID again soon: it goes through a slice in
+ *   ascending order, then takes another one, one it used before only when
+ *   no other is free (after 2^28 OIDs at the least).  Backend-local caches
+ *   keyed by OID (the type cache, cached plans, PL/pgSQL casts, ...) assume
+ *   that an OID does not come back soon, which upstream's OID counter,
+ *   wrapping around after 2^32 OIDs, makes true; a slice going round in a
+ *   long session would not.  When OIDs of a slice do come back, the
+ *   session's processes forget what they cached first
+ *   (tempcat_forget_cached_oids()).  Another session may take a slice that
+ *   was let go of: its processes are new, and so are their caches.
  *
  * - A row inserted into one of the catalogs listed in tempcat_catalogs[] is
  *   kept in memory if its owner column (pg_attribute.attrelid,
@@ -173,6 +176,7 @@
 #include "utils/sharedsnapshot.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 #include "utils/vmem_tracker.h"
 
 /* GUCs */
@@ -346,6 +350,7 @@ typedef struct TempcatRoot
 {
 	LWLock		lock;
 	int			writer_pgprocno;	/* the writer's, see tempcat_writer_state() */
+	pg_atomic_uint32 cache_epoch;	/* see tempcat_forget_cached_oids() */
 	uint64		next_tid;
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
@@ -383,6 +388,9 @@ typedef struct TempcatEntry
  */
 static dsa_area *tc_area = NULL;
 static TempcatRoot *tc_root = NULL;
+
+/* Readers: the writer's cache_epoch when we last caught up with it */
+static uint32 tc_seen_cache_epoch = 0;
 
 /*
  * Writer only: entries inserted or deleted by transactions whose outcome
@@ -471,6 +479,7 @@ static bool tempcat_slice_crowded(int slice);
 static void tempcat_let_go_of_slice(int slice);
 static void tempcat_count_slice_row(TempcatEntry *e, int delta);
 static void tempcat_forget_used_objects(void);
+static void tempcat_forget_cached_oids(int slice);
 
 /* OIDs assigned by this session to its temporary objects, see below */
 static HTAB *tc_owned = NULL;
@@ -848,6 +857,7 @@ tempcat_create_area(bool headroom)
 	rootptr = dsa_allocate0(area, sizeof(TempcatRoot));
 	tc_root = dsa_get_address(area, rootptr);
 	LWLockInitialize(&tc_root->lock, tempcat_tranche_id());
+	pg_atomic_init_u32(&tc_root->cache_epoch, 0);
 	tc_root->writer_pgprocno = MyProc->pgprocno;
 	tc_area = area;
 
@@ -931,6 +941,7 @@ tempcat_attach(void)
 	MemoryContextSwitchTo(oldcxt);
 
 	tc_root = dsa_get_address(tc_area, rootptr);
+	tc_seen_cache_epoch = pg_atomic_read_u32(&tc_root->cache_epoch);
 	return true;
 }
 
@@ -957,6 +968,12 @@ tempcat_attach(void)
 
 static uint8 *tc_slice_flags = NULL;
 static int32 *tc_slice_rows = NULL;
+
+/*
+ * The highest OID of each slice that this process took hold of for a row in
+ * memory: one not above it was given before, see tempcat_activate().
+ */
+static Oid *tc_slice_max_oid = NULL;
 
 /*
  * Coordinator: the slice the session takes its OIDs from (or -1), the next
@@ -1028,6 +1045,8 @@ tempcat_hold_slice(int slice)
 												sizeof(uint8) * TEMPCAT_NSLICES);
 		tc_slice_rows = MemoryContextAllocZero(TopMemoryContext,
 											   sizeof(int32) * TEMPCAT_NSLICES);
+		tc_slice_max_oid = MemoryContextAllocZero(TopMemoryContext,
+												  sizeof(Oid) * TEMPCAT_NSLICES);
 	}
 	tc_slice_flags[slice] |= TCS_HELD;
 	TempcatShared->slices[slice].databaseId = MyDatabaseId;
@@ -1042,13 +1061,15 @@ tempcat_hold_slice(int slice)
 /*
  * The coordinator takes hold of a free slice to give its session's OIDs
  * from, when it needs the first one or has given all of the last one (which
- * it keeps holding while objects have OIDs of it).  It takes none it gave
- * OIDs of before: they would come back (see the file header).  It looks for
- * one from where the last search stopped, so that a slice let go of is
- * taken again only after all others were: the writer QEs of the session
- * that held it may still be dropping their objects on the segments, where a
- * new holder would wait for them (tempcat_claim_slice()).  It passes over
- * slices whose OIDs ordinary objects of its database take too many of
+ * it keeps holding while objects have OIDs of it).  It takes one it gave
+ * OIDs of before only if no other is free: they come back then, and
+ * tempcat_activate() makes the processes of the session forget what they
+ * cached about them first (see the file header).  It looks for one from
+ * where the last search stopped, so that a slice let go of is taken again
+ * only after all others were: the writer QEs of the session that held it may
+ * still be dropping their objects on the segments, where a new holder would
+ * wait for them (tempcat_claim_slice()).  It passes over slices whose OIDs
+ * ordinary objects of its database take too many of
  * (tempcat_slice_crowded()).  Returns false if no slice is left.
  *
  * The session starts where the one that held the slice before stopped, so
@@ -1056,18 +1077,28 @@ tempcat_hold_slice(int slice)
  * OIDs; at a random point if no session has used it since the node started,
  * rather than where its users before a restart or a failover started, whose
  * objects may still be kept in writer QEs on the segments.  But if little of
- * the slice is left from there, from its start.
+ * the slice is left from there, or if the session used it before, from its
+ * start.
  */
 static bool
 tempcat_claim_free_slice(void)
 {
 	uint32		me = MyProc->pgprocno + 1;
+	bool		reuse_only = false;
+	bool		from_base = false;
+	int			pass;
 	int			i;
 
 #ifdef FAULT_INJECTOR
 	/* Test hook: other sessions hold all slices. */
 	if (SIMPLE_FAULT_INJECTOR("tempcat_no_free_slice") == FaultInjectorTypeSkip)
 		return false;
+	/* Test hook: other sessions hold all slices but those we used. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_reuse_slice") == FaultInjectorTypeSkip)
+		reuse_only = true;
+	/* Test hook: start at the start of the slice. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_slice_from_base") == FaultInjectorTypeSkip)
+		from_base = true;
 #endif
 	tempcat_register_callbacks();
 #ifdef FAULT_INJECTOR
@@ -1079,6 +1110,8 @@ tempcat_claim_free_slice(void)
 	if (SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_again") == FaultInjectorTypeSkip)
 		pg_atomic_fetch_sub_u32(&TempcatShared->next_slice, 1);
 #endif
+	/* (first the slices the session did not use, then any) */
+	for (pass = 0; pass < 2; pass++)
 	for (i = 0; i < TEMPCAT_NSLICES; i++)
 	{
 		int			slice = pg_atomic_fetch_add_u32(&TempcatShared->next_slice, 1) %
@@ -1086,11 +1119,13 @@ tempcat_claim_free_slice(void)
 		TempcatSliceState *ss = &TempcatShared->slices[slice];
 		uint32		expected = 0;
 		bool		crowded;
+		bool		used;
 		Oid			base;
 		Oid			last;
 		Oid			start;
 
-		if (tc_slice_flags != NULL && (tc_slice_flags[slice] & TCS_USED))
+		used = tc_slice_flags != NULL && (tc_slice_flags[slice] & TCS_USED);
+		if ((used && pass == 0) || (!used && reuse_only))
 			continue;
 		if (!pg_atomic_compare_exchange_u32(&ss->holder, &expected, me))
 			continue;
@@ -1122,7 +1157,7 @@ tempcat_claim_free_slice(void)
 		if (!OidIsValid(start))
 			start = base + (Oid) (random() % (last - base + 1));
 		if (start < base || start > last ||
-			last - start < (last - base) / 4)
+			last - start < (last - base) / 4 || used || from_base)
 			start = base;
 
 		/* (the last one, holding OIDs of ours, is let go of once it has none) */
@@ -1275,6 +1310,15 @@ tempcat_activate(Oid oid)
 		tempcat_claim_slice(slice);
 	}
 
+	/*
+	 * The coordinator gives the OIDs of a slice in ascending order: one not
+	 * above the highest this process saw of it comes back (or comes out of
+	 * order to a writer QE, which costs a needless flush of its caches).
+	 */
+	if (oid <= tc_slice_max_oid[slice])
+		tempcat_forget_cached_oids(slice);
+	tc_slice_max_oid[slice] = oid;
+
 	if (!tc_activated)
 	{
 		TempcatProcState *st = tempcat_my_state();
@@ -1288,6 +1332,26 @@ tempcat_activate(Oid oid)
 		}
 		st->databaseId = MyDatabaseId;
 	}
+}
+
+/*
+ * OIDs of 'slice' that this process saw before come back: forget all that it
+ * cached about them, with all its system caches (cached plans, PL/pgSQL
+ * casts, operators, ...) and the entries of the type cache in the slice,
+ * which no invalidation resets (see TypeCacheForgetRange()).  The objects
+ * that had them are gone, as the slice was let go of.  The readers of the
+ * session do the same at the start of their next transaction
+ * (tempcat_start_transaction()).
+ */
+static void
+tempcat_forget_cached_oids(int slice)
+{
+	elog(DEBUG1, "tempcat: OIDs %u to %u come back, forgetting cached data",
+		 tempcat_slice_base(slice), tempcat_slice_last(slice));
+	InvalidateSystemCaches();
+	TypeCacheForgetRange(tempcat_slice_base(slice), tempcat_slice_last(slice));
+	if (tc_root != NULL)
+		pg_atomic_fetch_add_u32(&tc_root->cache_epoch, 1);
 }
 
 /*
@@ -2290,8 +2354,8 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("out of OIDs for temporary objects kept in memory"),
-				 errdetail("Other sessions hold all ranges of OIDs for temporary objects kept in memory that this session did not use up already."),
-				 errhint("Retry in a new session.")));
+				 errdetail("Other sessions hold all ranges of OIDs for temporary objects kept in memory."),
+				 errhint("Retry once some of them have ended.")));
 	return oid;
 }
 
@@ -3343,6 +3407,15 @@ tempcat_start_transaction(void)
 			tc_area = NULL;
 			tc_root = NULL;
 		}
+	}
+
+	/* (see tempcat_forget_cached_oids()) */
+	if (tempcat_is_reader() && tc_area != NULL &&
+		pg_atomic_read_u32(&tc_root->cache_epoch) != tc_seen_cache_epoch)
+	{
+		tc_seen_cache_epoch = pg_atomic_read_u32(&tc_root->cache_epoch);
+		InvalidateSystemCaches();
+		TypeCacheForgetRange(FirstTempcatObjectId, LastTempcatObjectId);
 	}
 
 	if (tempcat_is_reader() || tc_area == NULL)
