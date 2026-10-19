@@ -3,9 +3,10 @@
 --
 -- All their catalog rows are in their session's memory, also their
 -- dependencies on ordinary objects: other sessions cannot see the objects.
--- The session holds a lock on each ordinary object they use instead, which
--- keeps other sessions from dropping or changing it: they fail, as they
--- would on dependent objects they could see, naming the session's process.
+-- The session counts itself among the users of each ordinary object they
+-- use instead, in shared memory, which keeps other sessions from dropping
+-- or changing it: they fail, as they would on dependent objects they could
+-- see, naming the session's process.
 
 -- Sessions that quit are gone only once their processes on all nodes are.
 CREATE TABLE tc_sess (id int) DISTRIBUTED REPLICATED;
@@ -67,14 +68,13 @@ GRANT ALL ON tc_ord TO tc_role;
 2: ALTER TABLE tc_ord ADD COLUMN c int;
 2: COMMENT ON FUNCTION tc_fn(int) IS 'used';
 
--- The locks survive errors of the session's transactions (session-level
--- locks of DEFAULT_LOCKMETHOD would go with the rollback).
+-- The counts survive errors of the session's transactions.
 1: BEGIN;
 1: SELECT 1/0;
 1: ROLLBACK;
 2: DROP TYPE tc_comp;
--- They go with the last object using what they lock, once the session goes
--- idle, also when its creation rolled back.
+-- They go with the last object using what they count, once the session
+-- goes idle, also when its creation rolled back.
 1: DROP VIEW tc_v;
 2: DROP TABLE tc_ord;
 1: BEGIN;
@@ -445,8 +445,8 @@ DROP TABLE tc_slices;
 
 -- DROP of what a temporary object of another session depends on fails
 -- also while that session is dropping the object (here in a transaction in
--- progress), and works once the object is gone: the session lets go of the
--- lock when it goes idle, before it reports the end of the transaction.
+-- progress), and works once the object is gone: the session counts itself
+-- out when it goes idle, before it reports the end of the transaction.
 CREATE TYPE tc_wait_comp AS (x int);
 27: SET gp_enable_temp_memory_catalog = on;
 27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
@@ -458,10 +458,10 @@ CREATE TYPE tc_wait_comp AS (x int);
 27q:
 28q:
 
--- A transaction that started to use the slice rolls back: the session gives
--- up the slice, but its rows are freed only when it goes idle, also in
--- the aborted transaction, or starts its next one (here freeing them at
--- idle fails, as the fault makes it).  Until then their xids keep
+-- A transaction that made temporary objects rolls back: their rows are
+-- freed only when the session goes idle, also in the aborted transaction,
+-- or starts its next one (here freeing them at idle fails, as the fault
+-- makes it).  Until then their xids keep
 -- datfrozenxid, and so clog truncation, from passing them.
 CREATE DATABASE tc_frozen;
 30:@db_name tc_frozen: VACUUM FREEZE;
@@ -492,9 +492,9 @@ SELECT gp_inject_fault('tempcat_resolve_pending', 'reset', dbid)
 30q:
 DROP DATABASE tc_frozen;
 
--- A session whose wait for the lock on an object it uses was canceled in a
--- subtransaction that rolled back waits for it again at the next use in the
--- transaction (here for a DROP in progress, of a session that used the
+-- A session whose wait for a DROP in progress of an object it uses was
+-- canceled in a subtransaction that rolled back waits for it again at the
+-- next use in the transaction (here for a DROP in progress, of a session that used the
 -- object itself).
 CREATE TYPE tc_sub_comp AS (x int);
 32: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);

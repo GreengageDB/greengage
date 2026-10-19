@@ -977,7 +977,8 @@ tempcat_attach(void)
 /*
  * Per slice of the reserved range, what this process knows about it: whether
  * it holds it, whether it ever gave an OID of it (on the coordinator, which
- * then never takes it again), and how many of its rows in memory, of any
+ * then takes it again only when no other is free, see
+ * tempcat_claim_free_slice()), and how many of its rows in memory, of any
  * visibility, have an OID of it (see tempcat_count_slice_row()).  Allocated
  * when the process takes its first slice.
  */
