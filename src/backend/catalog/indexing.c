@@ -18,6 +18,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/tempcat.h"
@@ -295,10 +296,10 @@ CatalogTupleUpdateTempcat(Relation heapRel, ItemPointer otid, HeapTuple tup,
 	if (IsTempcatTid(otid))
 	{
 		if (in_memory)
-			tempcat_update(heapRel, otid, tup);
+			tempcat_update(heapRel, otid, tup, GetCurrentCommandId(true));
 		else
 		{
-			tempcat_delete(heapRel, otid);
+			tempcat_delete(heapRel, otid, GetCurrentCommandId(true));
 			simple_heap_insert(heapRel, tup);
 			if (indstate != NULL)
 				CatalogIndexInsert(indstate, tup);

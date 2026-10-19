@@ -365,7 +365,7 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 	 */
 	if (IsTempcatTid(tid))
 	{
-		TM_Result	result = tempcat_self_modified(relation, tid, tmfd);
+		TM_Result	result = tempcat_self_modified(relation, tid, cid, tmfd);
 
 		if (result == TM_Invisible)
 			ereport(ERROR,
@@ -373,7 +373,7 @@ heapam_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					 errmsg("attempted to delete invisible tuple")));
 		if (result != TM_Ok)
 			return result;
-		tempcat_delete(relation, tid);
+		tempcat_delete(relation, tid, cid);
 		return TM_Ok;
 	}
 
@@ -404,7 +404,7 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	if (IsTempcatTid(otid))
 	{
 		tempcat_sql_check(relation, tuple);
-		result = tempcat_self_modified(relation, otid, tmfd);
+		result = tempcat_self_modified(relation, otid, cid, tmfd);
 		if (result == TM_Invisible)
 			ereport(ERROR,
 					(errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -418,13 +418,13 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		if (tempcat_route_insert(relation, tuple))
 		{
 			tempcat_sql_update_check(relation, otid, tuple);
-			tempcat_update(relation, otid, tuple);
+			tempcat_update(relation, otid, tuple, cid);
 			*update_indexes = false;	/* not in the catalog's indexes */
 		}
 		else
 		{
 			/* the new version goes to disk */
-			tempcat_delete(relation, otid);
+			tempcat_delete(relation, otid, cid);
 			heap_insert(relation, tuple, cid, 0, NULL, GetCurrentTransactionId());
 			*update_indexes = true;
 		}

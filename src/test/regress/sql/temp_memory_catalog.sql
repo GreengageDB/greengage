@@ -656,6 +656,15 @@ BEGIN;
 UPDATE gp_distribution_policy p SET numsegments = 2 FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
 SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
 ROLLBACK;
+-- Also when the command counter moves on in between (here as a function
+-- runs a query): the row was changed by the command itself.
+CREATE FUNCTION pg_temp.tc_bump() RETURNS int LANGUAGE plpgsql VOLATILE
+  AS $$ BEGIN PERFORM 1 FROM pg_class LIMIT 1; RETURN 2; END $$;
+BEGIN;
+UPDATE gp_distribution_policy p SET numsegments = pg_temp.tc_bump() FROM generate_series(1, 2) g WHERE p.localoid = 'tc_dml'::regclass;
+SELECT numsegments FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass;
+ROLLBACK;
+DROP FUNCTION pg_temp.tc_bump();
 -- DELETE ... RETURNING fetches the old row by its TID
 BEGIN;
 DELETE FROM gp_distribution_policy WHERE localoid = 'tc_dml'::regclass RETURNING numsegments;
@@ -984,8 +993,10 @@ DROP TYPE pg_temp.tc_wrap_enum;
 
 -- A transaction that rolls back keeps the slice its OIDs came from, also
 -- one that created the temporary schema: only a slice that a segment
--- refused is given up (see the isolation2 test).  Otherwise each rollback
--- would use up a slice.
+-- refused is given up (see the isolation2 test), or one that a statement
+-- canceled as it gave the first OIDs of the slice of its transaction (not
+-- here, where an earlier statement gave them, so the segments hold the
+-- slice).  Otherwise each rollback would use up a slice.
 \c
 SET gp_enable_temp_memory_catalog = on;
 BEGIN;
@@ -995,6 +1006,11 @@ ROLLBACK;
 BEGIN;
 CREATE TEMP TABLE tc_rb2 (a int) DISTRIBUTED BY (a);
 SELECT ('tc_rb2'::regclass::oid::bigint - 4026531840) >> 16 AS slice2 \gset
+ROLLBACK;
+BEGIN;
+CREATE TEMP TABLE tc_rb4 (a int) DISTRIBUTED BY (a);
+SET LOCAL statement_timeout = '200ms';
+SELECT pg_sleep(5);
 ROLLBACK;
 CREATE TEMP TABLE tc_rb3 (a int) DISTRIBUTED BY (a);
 SELECT ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice1 AND

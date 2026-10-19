@@ -74,11 +74,12 @@ extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 /* Catalog DML */
 extern bool tempcat_route_insert(Relation rel, HeapTuple tup);
 extern void tempcat_insert(Relation rel, HeapTuple tup);
-extern void tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup);
-extern void tempcat_delete(Relation rel, ItemPointer tid);
+extern void tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
+						   CommandId cid);
+extern void tempcat_delete(Relation rel, ItemPointer tid, CommandId cid);
 extern void tempcat_inplace_update(Relation rel, HeapTuple tup);
 extern void tempcat_freeze(Relation rel, HeapTuple tup);
-extern int	tempcat_self_modified(Relation rel, ItemPointer tid,
+extern int	tempcat_self_modified(Relation rel, ItemPointer tid, CommandId cid,
 								  struct TM_FailureData *tmfd);
 extern void tempcat_sql_check(Relation rel, HeapTuple tup);
 extern void tempcat_sql_insert(Relation rel, HeapTuple tup);

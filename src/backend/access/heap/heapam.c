@@ -3129,7 +3129,7 @@ simple_heap_delete(Relation relation, ItemPointer tid)
 	/* GPDB: a catalog row of a temporary object kept in memory */
 	if (IsTempcatTid(tid))
 	{
-		tempcat_delete(relation, tid);
+		tempcat_delete(relation, tid, GetCurrentCommandId(true));
 		return;
 	}
 
@@ -4388,7 +4388,7 @@ simple_heap_update(Relation relation, ItemPointer otid, HeapTuple tup)
 	{
 		if (!tempcat_route_insert(relation, tup))
 			elog(ERROR, "new version of a catalog row kept in memory does not belong there");
-		tempcat_update(relation, otid, tup);
+		tempcat_update(relation, otid, tup, GetCurrentCommandId(true));
 		return;
 	}
 
