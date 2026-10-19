@@ -217,8 +217,46 @@ DELETE FROM cron.job_run_details
 DROP ROLE pg_cron_hba_test;
 DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
+ALTER DATABASE contrib_regression OWNER TO pgcron_cront;
+GRANT EXECUTE ON FUNCTION cron.schedule(text, text) TO public;
+GRANT USAGE ON SCHEMA cron TO pgcron_cront;
+
+SET SESSION AUTHORIZATION pgcron_cront;
+
+CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now());
+
+CREATE FUNCTION public.evil_eq(int8, int8) RETURNS bool LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO public.pwned(note, cur_user, is_super)
+    VALUES ('ran inside pg_cron worker', current_user,
+            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user));
+  RETURN pg_catalog.int8eq($1, $2);
+END $$;
+
+CREATE OPERATOR public.= (LEFTARG = int8, RIGHTARG = int8, PROCEDURE = public.evil_eq);
+
+ALTER DATABASE contrib_regression SET search_path = public, pg_catalog;
+
+SELECT cron.schedule('1 seconds', 'SELECT 1');
+
+RESET SESSION AUTHORIZATION;
+
+-- start_ignore
+\! gpstop -ra -M fast
+-- end_ignore
+\c
+
+SELECT pg_sleep(5);
+
+SELECT count(*) = 0 FROM public.pwned WHERE note = 'ran inside pg_cron worker' AND is_super;
+
+ALTER DATABASE contrib_regression OWNER TO gpadmin;
+
 -- cleaning
 DROP EXTENSION pg_cron;
+drop operator public.=(int8, int8);
+drop function public.evil_eq(int8, int8);
+drop table public.pwned;
 drop user pgcron_cront;
 drop user "CaseOwner";
 drop user caseowner;
