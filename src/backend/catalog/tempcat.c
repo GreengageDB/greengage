@@ -933,7 +933,9 @@ tempcat_attach(void)
 	}
 	else
 	{
-		if (SharedLocalSnapshotSlot == NULL)
+		/* (a slot that another session took over is not ours) */
+		if (SharedLocalSnapshotSlot == NULL ||
+			SharedLocalSnapshotSlot->slotid != gp_session_id)
 			return false;
 		handle = SharedLocalSnapshotSlot->tempcat_handle;
 		if (handle == DSM_HANDLE_INVALID)
@@ -2031,6 +2033,24 @@ tempcat_recompute_used(void)
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
 	hash_destroy(still);
+
+	/* Nothing locked instead of counted any more: DROP need not try locks */
+	if (tc_used_overflow)
+	{
+		bool		locked = false;
+
+		hash_seq_init(&seq, tc_used);
+		while ((used = hash_seq_search(&seq)) != NULL)
+		{
+			if (used->locked)
+				locked = true;
+		}
+		if (!locked)
+		{
+			pg_atomic_fetch_sub_u32(&TempcatShared->nused_overflow, 1);
+			tc_used_overflow = false;
+		}
+	}
 }
 
 /*
@@ -2491,10 +2511,15 @@ tempcat_take_namespace_oid(void)
 	table_close(rel, AccessShareLock);
 
 	if (!OidIsValid(tc_namespace_oid))
+	{
+		/* (if nothing has OIDs of it) */
+		if (tc_slice >= 0 && tc_slice_rows[tc_slice] == 0)
+			tempcat_let_go_of_slice(tc_slice);
 		ereport(WARNING,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("out of OIDs for temporary objects kept in memory"),
 				 errdetail("Ordinary objects have all OIDs that the session could give its temporary objects; it keeps them on disk.")));
+	}
 	return OidIsValid(tc_namespace_oid);
 }
 
@@ -3416,7 +3441,10 @@ tempcat_cursors_see_command_range(CommandId cmin, CommandId cmax)
  * only rows that no snapshot of ours still in use can see
  * (SnapshotsSeeCommandRange()): an older snapshot of the transaction, e.g.
  * that of the outer query or of a cursor, still sees rows deleted after it
- * was taken.  Scans copy the rows they return when they start.
+ * was taken.  Scans through an index copy the rows they return when they
+ * start; other scans keep only their TIDs then, and copy each row when they
+ * return it, which they can as long as their snapshot keeps it from being
+ * freed here.
  */
 static int
 tempcat_reclaim_dead(void)
@@ -3747,8 +3775,9 @@ tempcat_unlink_files(Form_pg_class form)
  * that cleanup is not applied to the rows any more (tempcat_forget_if_gone()
  * would purge them), and pgstat_vacuum_stat() keeps the statistics of the
  * OIDs of a slice as long as a session holds it (tempcat_oid_maybe_live()),
- * which the next session to take it may do before.  (pgstat_beshutdown_hook()
- * runs later, and sends the purges after the counts still pending.)
+ * which the next session to take it may do before: send them now, after
+ * the counts still pending, rather than in pgstat_beshutdown_hook(), which
+ * runs after the slices are let go of.
  */
 static void
 tempcat_before_exit(int code, Datum arg)
@@ -3788,6 +3817,9 @@ tempcat_before_exit(int code, Datum arg)
 		pgstat_purge_function(tempcat_entry_oid(e));
 		ep = e->next;
 	}
+
+	/* Now, before the slices are let go of (tempcat_proc_exit()) */
+	pgstat_report_stat(true);
 }
 
 /* ----------------------------------------------------------------
@@ -5014,6 +5046,9 @@ tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid)
 	tc_ndisk_drops++;
 }
 
+/* Readers: the slices we saw the writer hold, see tempcat_stats_object_gone() */
+static Bitmapset *tc_reader_slices_seen = NULL;
+
 /* See tempcat_stats_object_gone(). */
 static bool
 tempcat_stats_object_gone_guts(int catidx, Oid oid)
@@ -5062,7 +5097,8 @@ tempcat_stats_object_gone_guts(int catidx, Oid oid)
  * writer purged those of what it dropped (tempcat_forget_if_gone()), and a
  * reader's counts still pending, sent later, would bring them back.  Out of
  * a transaction: the rows in memory tell, with an OID of a slice the writer
- * holds that no live row has.  (The counts of an ordinary object that has
+ * holds that no live row has; and any OID of a slice that the writer held
+ * when we looked before, and let go of since.  (The counts of an ordinary object that has
  * an OID of the slice, which no row in memory has, are lost too.)
  *
  * Out of a transaction, an error would not release the locks (ours, and
@@ -5073,6 +5109,7 @@ tempcat_stats_object_gone(Oid catalog, Oid oid)
 {
 	MemoryContext oldcxt = CurrentMemoryContext;
 	TempcatProcState *st;
+	int			slice;
 	int			catidx;
 	volatile bool gone = false;
 
@@ -5081,10 +5118,26 @@ tempcat_stats_object_gone(Oid catalog, Oid oid)
 		!tempcat_is_reader() || tc_area == NULL)
 		return false;
 	st = tempcat_writer_state();
-	if (st == NULL ||
-		pg_atomic_read_u32(&TempcatShared->slices[tempcat_slice_of(oid)].holder) !=
-		(uint32) (st - TempcatShared->procs) + 1)
+	if (st == NULL)
 		return false;
+	slice = tempcat_slice_of(oid);
+	if (pg_atomic_read_u32(&TempcatShared->slices[slice].holder) !=
+		(uint32) (st - TempcatShared->procs) + 1)
+	{
+		/*
+		 * The writer let go of a slice we saw it hold: none of its objects
+		 * has an OID of it any more, and our counts are of dropped ones.
+		 */
+		return tc_reader_slices_seen != NULL &&
+			bms_is_member(slice, tc_reader_slices_seen);
+	}
+	if (!bms_is_member(slice, tc_reader_slices_seen))
+	{
+		MemoryContext cxt = MemoryContextSwitchTo(TopMemoryContext);
+
+		tc_reader_slices_seen = bms_add_member(tc_reader_slices_seen, slice);
+		MemoryContextSwitchTo(cxt);
+	}
 	catidx = tempcat_catalog_index(catalog);
 	if (catidx < 0)
 		return false;

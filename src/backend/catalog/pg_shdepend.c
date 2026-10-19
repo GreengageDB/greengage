@@ -1344,12 +1344,6 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 		SysScanDesc scan;
 		HeapTuple	tuple;
 
-		/*
-		 * GPDB: temporary objects of other sessions kept in memory are out
-		 * of reach (see tempcat.c): say so.
-		 */
-		tempcat_warn_users(AuthIdRelationId, roleid, "DROP OWNED");
-
 		/* Doesn't work for pinned objects */
 		if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
 		{
@@ -1365,6 +1359,12 @@ shdepDropOwned(List *roleids, DropBehavior behavior)
 							"required by the database system",
 							getObjectDescription(&obj))));
 		}
+
+		/*
+		 * GPDB: temporary objects of other sessions kept in memory are out
+		 * of reach (see tempcat.c): say so.
+		 */
+		tempcat_warn_users(AuthIdRelationId, roleid, "DROP OWNED");
 
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,
@@ -1495,9 +1495,6 @@ shdepReassignOwned(List *roleids, Oid newrole)
 		HeapTuple	tuple;
 		Oid			roleid = lfirst_oid(cell);
 
-		/* GPDB: see shdepDropOwned() */
-		tempcat_warn_users(AuthIdRelationId, roleid, "REASSIGN OWNED");
-
 		/* Refuse to work on pinned roles */
 		if (isSharedObjectPinned(AuthIdRelationId, roleid, sdepRel))
 		{
@@ -1517,6 +1514,9 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			 * didn't track these dependencies at all ...
 			 */
 		}
+
+		/* GPDB: see shdepDropOwned() */
+		tempcat_warn_users(AuthIdRelationId, roleid, "REASSIGN OWNED");
 
 		ScanKeyInit(&key[0],
 					Anum_pg_shdepend_refclassid,
