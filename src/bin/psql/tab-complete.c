@@ -2201,14 +2201,7 @@ psql_completion(const char *text, int start, int end)
 					  "TABLESPACE", "UNLOGGED", "WITH", "WITHOUT");
 
 	/*
-<<<<<<< HEAD
-	 * If we have ALTER TABLE <smt> SET ACCESS METHOD provide a list of table
-||||||| e1c1c30f635
-		COMPLETE_WITH("(", "LOGGED", "SCHEMA", "TABLESPACE", "UNLOGGED",
-					  "WITH", "WITHOUT");
-=======
 	 * If we have ALTER TABLE <sth> SET ACCESS METHOD provide a list of table
->>>>>>> 3b231596ccf
 	 * AMs.
 	 */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "ACCESS", "METHOD"))

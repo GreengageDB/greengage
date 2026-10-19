@@ -72,7 +72,8 @@ $primary->safe_psql('postgres', 'SELECT pg_switch_wal()');
 my $backup_path2 = $primary->backup_dir . '/test_tli';
 # The base backup run below does a checkpoint, that removes the first segment
 # of the current timeline.
-$primary->command_ok([ 'pg_basebackup', '-D', $backup_path2, '--no-sync' ],
+$primary->command_ok([ 'pg_basebackup', '-D', $backup_path2, '--no-sync',
+						'--target-gp-dbid', '1' ],
 	"base backup 2 ok");
 command_ok(
 	[ 'pg_verifybackup', $backup_path2 ],

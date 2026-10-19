@@ -688,41 +688,28 @@ main(int argc, char **argv)
 				dosync = false;
                 break;
 
-<<<<<<< HEAD
-            case 8:
-                have_extra_float_digits = true;
-                extra_float_digits = atoi(optarg);
-                if (extra_float_digits < -15 || extra_float_digits > 3)
-                {
-                    pg_log_error("extra_float_digits must be in range -15..3");
-                    exit_nicely(1);
-                }
-                break;
+			case 8:
+				have_extra_float_digits = true;
+				if (!option_parse_int(optarg, "--extra-float-digits", -15, 3,
+									  &extra_float_digits))
+					exit_nicely(1);
+				break;
 
-            case 9:				/* inserts */
+			case 9:				/* inserts */
 
-                /*
-                 * dump_inserts also stores --rows-per-insert, careful not to
-                 * overwrite that.
-                 */
-                if (dopt.dump_inserts == 0)
-                    dopt.dump_inserts = DUMP_DEFAULT_ROWS_PER_INSERT;
-                break;
+				/*
+				 * dump_inserts also stores --rows-per-insert, careful not to
+				 * overwrite that.
+				 */
+				if (dopt.dump_inserts == 0)
+					dopt.dump_inserts = DUMP_DEFAULT_ROWS_PER_INSERT;
+				break;
 
-            case 10:			/* rows per insert */
-                errno = 0;
-                rowsPerInsert = strtol(optarg, &endptr, 10);
-
-                if (endptr == optarg || *endptr != '\0' ||
-                        rowsPerInsert <= 0 || rowsPerInsert > INT_MAX ||
-                        errno == ERANGE)
-                {
-                    pg_log_error("rows-per-insert must be in range %d..%d",
-                                 1, INT_MAX);
-                    exit_nicely(1);
-                }
-                dopt.dump_inserts = (int) rowsPerInsert;
-                break;
+			case 10:			/* rows per insert */
+				if (!option_parse_int(optarg, "--rows-per-insert", 1, INT_MAX,
+									  &dopt.dump_inserts))
+					exit_nicely(1);
+				break;
 
 			case 1000:				/* gp-syntax */
 				if (gp_syntax_option != GPS_NOT_SPECIFIED)
@@ -731,25 +718,8 @@ main(int argc, char **argv)
 					exit(1);
 				}
 				gp_syntax_option = GPS_ENABLED;
-||||||| e1c1c30f635
-			case 8:
-				have_extra_float_digits = true;
-				extra_float_digits = atoi(optarg);
-				if (extra_float_digits < -15 || extra_float_digits > 3)
-				{
-					pg_log_error("extra_float_digits must be in range -15..3");
-					exit_nicely(1);
-				}
-=======
-			case 8:
-				have_extra_float_digits = true;
-				if (!option_parse_int(optarg, "--extra-float-digits", -15, 3,
-									  &extra_float_digits))
-					exit_nicely(1);
->>>>>>> 3b231596ccf
 				break;
 
-<<<<<<< HEAD
 			case 1001:				/* no-gp-syntax */
 				if (gp_syntax_option != GPS_NOT_SPECIFIED)
 				{
@@ -767,46 +737,6 @@ main(int argc, char **argv)
 			case 1003:
 				simple_string_list_append(&relid_string_list, optarg);
 				dopt.include_everything = false;
-||||||| e1c1c30f635
-			case 9:				/* inserts */
-
-				/*
-				 * dump_inserts also stores --rows-per-insert, careful not to
-				 * overwrite that.
-				 */
-				if (dopt.dump_inserts == 0)
-					dopt.dump_inserts = DUMP_DEFAULT_ROWS_PER_INSERT;
-				break;
-
-			case 10:			/* rows per insert */
-				errno = 0;
-				rowsPerInsert = strtol(optarg, &endptr, 10);
-
-				if (endptr == optarg || *endptr != '\0' ||
-					rowsPerInsert <= 0 || rowsPerInsert > INT_MAX ||
-					errno == ERANGE)
-				{
-					pg_log_error("rows-per-insert must be in range %d..%d",
-								 1, INT_MAX);
-					exit_nicely(1);
-				}
-				dopt.dump_inserts = (int) rowsPerInsert;
-=======
-			case 9:				/* inserts */
-
-				/*
-				 * dump_inserts also stores --rows-per-insert, careful not to
-				 * overwrite that.
-				 */
-				if (dopt.dump_inserts == 0)
-					dopt.dump_inserts = DUMP_DEFAULT_ROWS_PER_INSERT;
-				break;
-
-			case 10:			/* rows per insert */
-				if (!option_parse_int(optarg, "--rows-per-insert", 1, INT_MAX,
-									  &dopt.dump_inserts))
-					exit_nicely(1);
->>>>>>> 3b231596ccf
 				break;
 
 			case 11:			/* include foreign data */

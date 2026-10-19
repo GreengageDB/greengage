@@ -617,14 +617,7 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 	}
 
 	/* verify that we got all the mandatory pg_control data */
-<<<<<<< HEAD
 	if (!got_xid || !got_gxid || !got_oid ||
-||||||| e1c1c30f635
-	if (!got_xid || !got_oid ||
-		!got_multi ||
-=======
-	if (!got_xid || !got_oid ||
->>>>>>> 3b231596ccf
 		!got_multi || !got_oldestxid ||
 		(!got_oldestmulti &&
 		 cluster->controldata.cat_ver >= MULTIXACT_FORMATCHANGE_CAT_VER) ||

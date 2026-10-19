@@ -453,14 +453,8 @@ free_readfile(char **optlines)
 static pgpid_t
 start_postmaster(void)
 {
-<<<<<<< HEAD
 	char		launcher[MAXPGPATH] = "";
-	char		cmd[MAXPGPATH];
-||||||| e1c1c30f635
-	char		cmd[MAXPGPATH];
-=======
 	char	   *cmd;
->>>>>>> 3b231596ccf
 
 #ifndef WIN32
 	pgpid_t		pm_pid;
@@ -513,30 +507,12 @@ start_postmaster(void)
 	 * has the same PID as the current child process.
 	 */
 	if (log_file != NULL)
-<<<<<<< HEAD
-		snprintf(cmd, MAXPGPATH, "exec %s \"%s\" %s%s < \"%s\" >> \"%s\" 2>&1",
-				 launcher, exec_path, pgdata_opt, post_opts,
-				 DEVNULL, log_file);
-||||||| e1c1c30f635
-		snprintf(cmd, MAXPGPATH, "exec \"%s\" %s%s < \"%s\" >> \"%s\" 2>&1",
-				 exec_path, pgdata_opt, post_opts,
-				 DEVNULL, log_file);
-=======
-		cmd = psprintf("exec \"%s\" %s%s < \"%s\" >> \"%s\" 2>&1",
-					   exec_path, pgdata_opt, post_opts,
+		cmd = psprintf("exec %s \"%s\" %s%s < \"%s\" >> \"%s\" 2>&1",
+					   launcher, exec_path, pgdata_opt, post_opts,
 					   DEVNULL, log_file);
->>>>>>> 3b231596ccf
 	else
-<<<<<<< HEAD
-		snprintf(cmd, MAXPGPATH, "exec %s \"%s\" %s%s < \"%s\" 2>&1",
-				 launcher, exec_path, pgdata_opt, post_opts, DEVNULL);
-||||||| e1c1c30f635
-		snprintf(cmd, MAXPGPATH, "exec \"%s\" %s%s < \"%s\" 2>&1",
-				 exec_path, pgdata_opt, post_opts, DEVNULL);
-=======
-		cmd = psprintf("exec \"%s\" %s%s < \"%s\" 2>&1",
-					   exec_path, pgdata_opt, post_opts, DEVNULL);
->>>>>>> 3b231596ccf
+		cmd = psprintf("exec %s \"%s\" %s%s < \"%s\" 2>&1",
+					   launcher, exec_path, pgdata_opt, post_opts, DEVNULL);
 
 	(void) execl("/bin/sh", "/bin/sh", "-c", cmd, (char *) NULL);
 
