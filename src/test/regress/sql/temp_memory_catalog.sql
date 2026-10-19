@@ -172,6 +172,16 @@ TRUNCATE tc_t;
 COMMENT ON TABLE tc_t IS 'kept in memory';
 SELECT obj_description('tc_t'::regclass, 'pg_class');
 SELECT tc_disk_rows();
+-- An index that CREATE INDEX builds over a broken HOT chain on a segment is
+-- marked so on the coordinator too, which plans with it.
+CREATE TEMP TABLE tc_hot (a int, c char) DISTRIBUTED BY (a);
+INSERT INTO tc_hot VALUES (1, '#');
+BEGIN;
+UPDATE tc_hot SET c = '$';
+CREATE INDEX tc_hot_c ON tc_hot (c);
+SELECT indcheckxmin FROM pg_index WHERE indexrelid = 'tc_hot_c'::regclass;
+COMMIT;
+DROP TABLE tc_hot;
 
 -- Other kinds of temporary objects
 CREATE TEMP SEQUENCE tc_seq;
@@ -276,6 +286,13 @@ INSERT INTO pg_description VALUES ('tc_t'::regclass, 'pg_class'::regclass, 1, 'x
 UPDATE pg_description SET description = 'updated'
  WHERE objoid = 'tc_t'::regclass AND objsubid = 0;
 SELECT obj_description('tc_t'::regclass, 'pg_class');
+-- Nor can SQL change the columns of the catalog's unique indexes in them:
+-- no index entries refuse a duplicate.
+COMMENT ON COLUMN tc_t.a IS 'column a';
+UPDATE pg_description SET objsubid = 0
+ WHERE objoid = 'tc_t'::regclass AND objsubid = 1;
+SELECT objsubid, description FROM pg_description
+ WHERE objoid = 'tc_t'::regclass ORDER BY 1;
 RESET allow_system_table_mods;
 
 -- Plans made before the session kept temporary objects in memory see them

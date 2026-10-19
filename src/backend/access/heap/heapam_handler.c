@@ -417,6 +417,7 @@ heapam_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 		}
 		if (tempcat_route_insert(relation, tuple))
 		{
+			tempcat_sql_update_check(relation, otid, tuple);
 			tempcat_update(relation, otid, tuple);
 			*update_indexes = false;	/* not in the catalog's indexes */
 		}

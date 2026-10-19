@@ -1885,6 +1885,10 @@ pgstat_init_function_usage(FunctionCallInfo fcinfo,
 									  HASH_ELEM | HASH_BLOBS);
 	}
 
+	/* GPDB: see tempcat_stats_object_gone() */
+	if (IsTempcatOid(fcinfo->flinfo->fn_oid))
+		tempcat_stats_note_use(fcinfo->flinfo->fn_oid);
+
 	/* Get the stats entry for this function, create if necessary */
 	htabent = hash_search(pgStatFunctions, &fcinfo->flinfo->fn_oid,
 						  HASH_ENTER, &found);
@@ -2020,6 +2024,10 @@ pgstat_initstats(Relation rel)
 	if (rel->pgstat_info != NULL &&
 		rel->pgstat_info->t_id == rel_id)
 		return;
+
+	/* GPDB: see tempcat_stats_object_gone() */
+	if (IsTempcatOid(rel_id))
+		tempcat_stats_note_use(rel_id);
 
 	/* Else find or make the PgStat_TableStatus entry, and update link */
 	rel->pgstat_info = get_tabstat_entry(rel_id, rel->rd_rel->relisshared);

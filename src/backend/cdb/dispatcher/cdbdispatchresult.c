@@ -19,6 +19,7 @@
 #include "libpq-fe.h"		/* prerequisite for libpq-int.h */
 #include "libpq-int.h"		/* PQExpBufferData */
 
+#include "catalog/tempcat.h"
 #include "utils/guc.h"			/* log_min_messages */
 
 #include "cdb/cdbconn.h"		/* SegmentDatabaseDescriptor */
@@ -588,6 +589,7 @@ cdbdisp_get_PQerror(PGresult *pgresult)
 	if (fld)
 		qe_errcode = sqlstate_to_errcode(fld);
 	errcode(qe_errcode);
+	tempcat_note_qe_error(qe_errcode, funcname);
 
 	whoami = PQresultErrorField(pgresult, PG_DIAG_GP_PROCESS_TAG);
 	fld = PQresultErrorField(pgresult, PG_DIAG_MESSAGE_PRIMARY);

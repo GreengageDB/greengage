@@ -35,7 +35,6 @@
 #include "catalog/pg_opfamily.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
-#include "catalog/tempcat.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -1758,12 +1757,8 @@ DefineIndex(Oid relationId,
 	{
 		dispatch_create_index(stmt, root_save_userid, root_save_sec_context);
 
-		/*
-		 * Set indcheckxmin in the coordinator, if it was set on any segment.
-		 * The segments answer with a SQL query on pg_index, which cannot see
-		 * in-memory rows of temporary indexes; skip those.
-		 */
-		if (!indexInfo->ii_BrokenHotChain && !tempcat_owns_oid(RelationRelationId, indexRelationId))
+		/* Set indcheckxmin in the coordinator, if it was set on any segment */
+		if (!indexInfo->ii_BrokenHotChain)
 			cdb_sync_indcheckxmin_with_segments(indexRelationId);
 	}
 

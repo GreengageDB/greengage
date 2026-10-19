@@ -82,6 +82,8 @@ extern int	tempcat_self_modified(Relation rel, ItemPointer tid,
 								  struct TM_FailureData *tmfd);
 extern void tempcat_sql_check(Relation rel, HeapTuple tup);
 extern void tempcat_sql_insert(Relation rel, HeapTuple tup);
+extern void tempcat_sql_update_check(Relation rel, ItemPointer otid,
+									 HeapTuple newtup);
 
 /* Catalog scans */
 extern TempcatScan tempcat_beginscan(Relation rel, Relation irel,
@@ -112,9 +114,11 @@ extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 /* Other sessions */
 extern void tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId);
 extern void tempcat_session_reset(void);
+extern void tempcat_note_qe_error(int sqlerrcode, const char *funcname);
 extern void tempcat_warn_users(Oid classId, Oid objectId, const char *command);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
 extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);
+extern void tempcat_stats_note_use(Oid oid);
 extern void tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid);
 extern void tempcat_finish_prepared(TransactionId xid, bool isCommit);
 
