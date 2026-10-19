@@ -916,13 +916,12 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 															 CStringGetDatum(trigname));
 	values[Anum_pg_trigger_tgfoid - 1] = ObjectIdGetDatum(funcoid);
 	values[Anum_pg_trigger_tgtype - 1] = Int16GetDatum(tgtype);
-<<<<<<< HEAD
 	
 	/*
 	 * Special for Greenplum Database: Ignore foreign keys for now. Create
 	 * the triggers to back them as 'disabled'.
 	 */
-	char		tgenabled = TRIGGER_FIRES_ON_ORIGIN;
+	char		tgenabled = trigger_fires_when;
 	if (isInternal)
 	{
 		if (RI_FKey_trigger_type(funcoid))
@@ -940,11 +939,6 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 			elog(WARNING, "unrecognized internal trigger function %u", funcoid);
 	}
 	values[Anum_pg_trigger_tgenabled - 1] = CharGetDatum(tgenabled);
-||||||| e1c1c30f635
-	values[Anum_pg_trigger_tgenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
-=======
-	values[Anum_pg_trigger_tgenabled - 1] = trigger_fires_when;
->>>>>>> 3b231596ccf
 	values[Anum_pg_trigger_tgisinternal - 1] = BoolGetDatum(isInternal || in_partition);
 	values[Anum_pg_trigger_tgconstrrelid - 1] = ObjectIdGetDatum(constrrelid);
 	values[Anum_pg_trigger_tgconstrindid - 1] = ObjectIdGetDatum(indexOid);
@@ -1654,9 +1648,11 @@ renametrig_internal(Relation tgrel, Relation targetrel, HeapTuple trigtup,
 	 * If the trigger has a name different from what we expected, let the user
 	 * know. (We can proceed anyway, since we must have reached here following
 	 * a tgparentid link.)
+	 *
+	 * GPDB: QEs repeat the rename, report it from the QD only.
 	 */
 	if (strcmp(NameStr(tgform->tgname), expected_name) != 0)
-		ereport(NOTICE,
+		ereport((Gp_role == GP_ROLE_EXECUTE) ? DEBUG1 : NOTICE,
 				errmsg("renamed trigger \"%s\" on relation \"%s\"",
 					   NameStr(tgform->tgname),
 					   RelationGetRelationName(targetrel)));
