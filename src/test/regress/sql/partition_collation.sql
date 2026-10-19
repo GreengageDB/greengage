@@ -86,5 +86,29 @@ alter table rp_en_add add partition p1 start ('a') end ('B');
 insert into rp_en_add values (1, 'aZ'), (2, 'c');
 select tableoid::regclass, * from rp_en_add order by id;
 
+--
+-- SPLIT PARTITION AT must check that the AT value is inside the partition
+-- with the key's collation. These used to fail with "AT clause parameter is
+-- not a member of the target partition specification".
+--
+create table rp_c_split (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('B') end ('a'),
+ partition p2 start ('a') end ('z'));
+
+alter table rp_c_split split partition p1 at ('Q') into (partition p1a, partition p1b);
+insert into rp_c_split values (1, 'C'), (2, 'R'), (3, 'b');
+select tableoid::regclass, * from rp_c_split order by id;
+
+create table rp_en_split (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('a') end ('z'));
+
+alter table rp_en_split split partition p1 at ('C') into (partition p1a, partition p1b);
+insert into rp_en_split values (1, 'b'), (2, 'D');
+select tableoid::regclass, * from rp_en_split order by id;
+
 reset search_path;
 drop schema partition_collation cascade;

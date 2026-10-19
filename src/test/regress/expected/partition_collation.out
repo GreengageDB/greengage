@@ -127,9 +127,53 @@ select tableoid::regclass, * from rp_en_add order by id;
  rp_en_add_1_prt_p2 |  2 | c
 (2 rows)
 
+--
+-- SPLIT PARTITION AT must check that the AT value is inside the partition
+-- with the key's collation. These used to fail with "AT clause parameter is
+-- not a member of the target partition specification".
+--
+create table rp_c_split (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('B') end ('a'),
+ partition p2 start ('a') end ('z'));
+NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1" for table "rp_c_split"
+NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p2" for table "rp_c_split"
+alter table rp_c_split split partition p1 at ('Q') into (partition p1a, partition p1b);
+NOTICE:  exchanged partition "p1" of relation "rp_c_split" with relation "pg_temp_21062"
+NOTICE:  dropped partition "p1" for relation "rp_c_split"
+NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1a" for table "rp_c_split"
+NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1b" for table "rp_c_split"
+insert into rp_c_split values (1, 'C'), (2, 'R'), (3, 'b');
+select tableoid::regclass, * from rp_c_split order by id;
+       tableoid       | id | k 
+----------------------+----+---
+ rp_c_split_1_prt_p1a |  1 | C
+ rp_c_split_1_prt_p1b |  2 | R
+ rp_c_split_1_prt_p2  |  3 | b
+(3 rows)
+
+create table rp_en_split (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('a') end ('z'));
+NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1" for table "rp_en_split"
+alter table rp_en_split split partition p1 at ('C') into (partition p1a, partition p1b);
+NOTICE:  exchanged partition "p1" of relation "rp_en_split" with relation "pg_temp_21105"
+NOTICE:  dropped partition "p1" for relation "rp_en_split"
+NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1a" for table "rp_en_split"
+NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1b" for table "rp_en_split"
+insert into rp_en_split values (1, 'b'), (2, 'D');
+select tableoid::regclass, * from rp_en_split order by id;
+       tableoid        | id | k 
+-----------------------+----+---
+ rp_en_split_1_prt_p1a |  1 | b
+ rp_en_split_1_prt_p1b |  2 | D
+(2 rows)
+
 reset search_path;
 drop schema partition_collation cascade;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 9 other objects
 DETAIL:  drop cascades to collation partition_collation.coll_en
 drop cascades to table partition_collation.rp_c
 drop cascades to table partition_collation.rp_en
@@ -137,3 +181,5 @@ drop cascades to table partition_collation.rp_c_bounds
 drop cascades to table partition_collation.rp_en_bounds
 drop cascades to table partition_collation.rp_c_add
 drop cascades to table partition_collation.rp_en_add
+drop cascades to table partition_collation.rp_c_split
+drop cascades to table partition_collation.rp_en_split
