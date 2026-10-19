@@ -2086,7 +2086,10 @@ GlobalVisHorizonKindForRel(Relation rel)
 	Assert(!rel ||
 		   rel->rd_rel->relkind == RELKIND_RELATION ||
 		   rel->rd_rel->relkind == RELKIND_MATVIEW ||
-		   rel->rd_rel->relkind == RELKIND_TOASTVALUE);
+		   rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
+		   rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
+		   rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
+		   rel->rd_rel->relkind == RELKIND_AOVISIMAP);
 
 	if (rel == NULL || rel->rd_rel->relisshared || RecoveryInProgress())
 		return VISHORIZON_SHARED;
@@ -5034,32 +5037,6 @@ GlobalVisTestFor(Relation rel)
 
 	switch (GlobalVisHorizonKindForRel(rel))
 	{
-<<<<<<< HEAD
-		/*
-		 * Other kinds currently don't contain xids, nor always the necessary
-		 * logical decoding markers.
-		 */
-		Assert(rel->rd_rel->relkind == RELKIND_RELATION ||
-			   rel->rd_rel->relkind == RELKIND_MATVIEW ||
-			   rel->rd_rel->relkind == RELKIND_TOASTVALUE ||
-			   rel->rd_rel->relkind == RELKIND_AOSEGMENTS ||
-			   rel->rd_rel->relkind == RELKIND_AOBLOCKDIR ||
-			   rel->rd_rel->relkind == RELKIND_AOVISIMAP);
-
-		need_shared = rel->rd_rel->relisshared || RecoveryInProgress();
-		need_catalog = IsCatalogRelation(rel) || RelationIsAccessibleInLogicalDecoding(rel);
-||||||| e1c1c30f635
-		/*
-		 * Other kinds currently don't contain xids, nor always the necessary
-		 * logical decoding markers.
-		 */
-		Assert(rel->rd_rel->relkind == RELKIND_RELATION ||
-			   rel->rd_rel->relkind == RELKIND_MATVIEW ||
-			   rel->rd_rel->relkind == RELKIND_TOASTVALUE);
-
-		need_shared = rel->rd_rel->relisshared || RecoveryInProgress();
-		need_catalog = IsCatalogRelation(rel) || RelationIsAccessibleInLogicalDecoding(rel);
-=======
 		case VISHORIZON_SHARED:
 			state = &GlobalVisSharedRels;
 			break;
@@ -5072,7 +5049,6 @@ GlobalVisTestFor(Relation rel)
 		case VISHORIZON_TEMP:
 			state = &GlobalVisTempRels;
 			break;
->>>>>>> 3b231596ccf
 	}
 
 	Assert(FullTransactionIdIsValid(state->definitely_needed) &&
