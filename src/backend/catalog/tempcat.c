@@ -54,15 +54,15 @@
  * - Dependencies of temporary objects on ordinary objects (pg_depend and
  *   pg_shdepend rows: types of their columns, functions of their defaults,
  *   their owners, ...) are kept in memory too.  Other sessions cannot see
- *   them, so a session takes a lock that stands in for them instead: a
- *   session-level lock on each ordinary object its temporary objects use
- *   (see tempcat_use_object()), which DROP and the ALTERs that check for
+ *   them, so a session counts itself among the users of each ordinary
+ *   object its temporary objects use in shared memory instead (see
+ *   tempcat_use_object()), which DROP and the ALTERs that check for
  *   dependent objects fail on, as they would on the dependent objects
- *   themselves (tempcat_lock_out_users()).  The locks go
- *   with the session, also when it crashes: nothing of a temporary object
- *   kept in memory is ever on disk, and there is nothing to clean up after
- *   it.  Ordinary objects cannot depend on temporary objects in memory at
- *   all (tempcat_check_dependency()).
+ *   themselves (tempcat_lock_out_users()).  The counts go with the session,
+ *   also when it crashes (shared memory is reset then): nothing of a
+ *   temporary object kept in memory is ever on disk, and there is nothing to
+ *   clean up after it.  Ordinary objects cannot depend on temporary objects
+ *   in memory at all (tempcat_check_dependency()).
  *
  * The rows live in a dynamic shared memory area owned by the session's
  * writer process.  Its handle is published in the writer's
@@ -610,9 +610,13 @@ typedef struct TempcatSliceState
 } TempcatSliceState;
 
 /*
- * An ordinary object that temporary objects of sessions use, with the number
- * of sessions (see tempcat_use_object()).
+ * An ordinary object (or column) that temporary objects of sessions use, with
+ * the number of sessions, the processes of some of them, and the
+ * (sub)transaction of a DROP or ALTER of it in progress, if any (see
+ * tempcat_use_object() and tempcat_lock_out_users()).
  */
+#define TEMPCAT_USED_PROCS	4
+
 typedef struct TempcatUsedObject
 {
 	Oid			databaseId;		/* InvalidOid for shared objects */
@@ -625,6 +629,8 @@ typedef struct TempcatUsedObjectEntry
 {
 	TempcatUsedObject key;
 	int			nsessions;
+	int			procs[TEMPCAT_USED_PROCS];	/* pgprocnos, or -1 */
+	TransactionId changer_xid;	/* or InvalidTransactionId */
 } TempcatUsedObjectEntry;
 
 typedef struct TempcatSharedData
@@ -651,7 +657,7 @@ tempcat_total_procs(void)
 static inline long
 tempcat_used_objects_size(void)
 {
-	return Max(1024, (long) MaxBackends * 8);
+	return Max(4096, (long) MaxBackends * 32);
 }
 
 Size
@@ -678,7 +684,8 @@ TempcatShmemInit(void)
 	TempcatUsedObjects = ShmemInitHash("Temporary catalog used objects",
 									   tempcat_used_objects_size(),
 									   tempcat_used_objects_size(),
-									   &info, HASH_ELEM | HASH_BLOBS);
+									   &info,
+									   HASH_ELEM | HASH_BLOBS | HASH_FIXED_SIZE);
 
 	TempcatShared = ShmemInitStruct("Temporary catalog data",
 									offsetof(TempcatSharedData, procs) +
@@ -1660,31 +1667,31 @@ tempcat_fold_frozen_horizon(TransactionId *frozenXid, MultiXactId *minMulti)
  * Temporary objects kept in memory depend on ordinary objects (the types of
  * their columns, the functions of their defaults, their owners, ...) through
  * pg_depend and pg_shdepend rows in memory, which other sessions cannot see.
- * Instead, the session holds a lock on each such object for as long as its
- * rows refer to it, which DROP and the ALTERs that look for dependent
- * objects try to take in a conflicting mode (tempcat_lock_out_users()): they
- * fail if they cannot, as they would on dependent objects they could see,
- * naming the sessions.  (CASCADE cannot drop objects in other sessions'
- * memory.)
+ * Instead, the session counts itself among the users of each such object in
+ * shared memory (TempcatUsedObjects) for as long as its rows refer to it.
+ * DROP and the ALTERs that look for dependent objects
+ * (tempcat_lock_out_users()) fail if other sessions use the object, as they
+ * would on dependent objects they could see, naming the sessions.
+ * (CASCADE cannot drop objects in other sessions' memory.)  Otherwise they
+ * mark the object with their transaction, which a session that comes to
+ * use it meanwhile waits for, as for a lock.  All on the coordinator only,
+ * where all DDL starts.
  *
  * Columns are told apart as on disk, where DROP COLUMN and ALTER COLUMN TYPE
  * look at the dependencies on that column only, and DROP of the relation at
- * all of them: a dependency on a column of a relation is locked as a use of
- * the column and as a use of the relation.  So a temporary view does not
- * keep other sessions from dropping or changing the columns it does not
- * use.
+ * all of them: a dependency on a column counts as a use of the column and as
+ * a use of the relation.  So a temporary view does not keep other sessions
+ * from dropping or changing the columns it does not use.
  *
- * The lock is a session-level lock of USER_LOCKMETHOD, as advisory locks
- * are: session-level locks of DEFAULT_LOCKMETHOD go when a transaction
- * aborts.  Its tag is that of a lock on the object (or column) itself, in
- * the other lock method, so it conflicts with no other lock.  It is taken on
- * the coordinator only, where all DDL starts.  At exit, it goes after the
- * session's temporary objects (ShutdownPostgres() runs after
- * RemoveTempRelationsCallback()).
- *
- * The objects are also counted in shared memory (TempcatUsedObjects), so
- * that DROP takes a lock only on those that a session uses: every object of
- * a large DROP ... CASCADE would need one more lock otherwise.
+ * Nothing of this takes room in the lock table, which a session using many
+ * objects for a long time would fill.  Only when TempcatUsedObjects is full
+ * does a session lock the objects it cannot count there instead: with a
+ * session-level lock of USER_LOCKMETHOD (session-level locks of
+ * DEFAULT_LOCKMETHOD go when a transaction aborts), whose tag is that of a
+ * lock on the object itself in the other lock method; and DROP and friends
+ * try to lock every object they check, as long as such a session lives.  At
+ * exit, the session counts itself out after its temporary objects are
+ * dropped (tempcat_proc_exit() runs after RemoveTempRelationsCallback()).
  * ----------------------------------------------------------------
  */
 
@@ -1698,17 +1705,14 @@ typedef struct TempcatUsedKey
 typedef struct TempcatUsed
 {
 	TempcatUsedKey key;
-	bool		counted;		/* in TempcatUsedObjects, see below */
+	bool		counted;		/* in TempcatUsedObjects */
+	bool		locked;			/* or locked instead, see above */
 } TempcatUsed;
 
-/* Some of tc_used could not be counted, see tempcat_count_use() */
+/* Some of tc_used could not be counted, see above */
 static bool tc_used_overflow = false;
 
-/*
- * Users share their locks; changers conflict with users, not with each
- * other (concurrent changes are serialized by the locks on the objects
- * themselves, if at all, as on disk).
- */
+/* The lock modes when TempcatUsedObjects is full: users share theirs */
 #define TEMPCAT_USER_LOCKMODE		ShareLock
 #define TEMPCAT_CHANGER_LOCKMODE	RowExclusiveLock
 
@@ -1737,7 +1741,7 @@ tempcat_used_object_key(TempcatUsedObject *key,
 	key->objectSubId = subId;
 }
 
-/* Is it an object whose use tempcat_use_object() locks? */
+/* Is it an object whose use tempcat_use_object() counts? */
 static bool
 tempcat_lockable_use(Oid classId, Oid objectId)
 {
@@ -1745,34 +1749,73 @@ tempcat_lockable_use(Oid classId, Oid objectId)
 		!tempcat_owns_oid(classId, objectId);
 }
 
+/* Is a DROP or ALTER of another (sub)transaction in progress marked? */
+static bool
+tempcat_changer_active(TempcatUsedObjectEntry *entry)
+{
+	return TransactionIdIsValid(entry->changer_xid) &&
+		!TransactionIdIsCurrentTransactionId(entry->changer_xid) &&
+		TransactionIdIsInProgress(entry->changer_xid);
+}
+
 /*
- * Count the session's use of an object (or column) in TempcatUsedObjects.
- * Returns false if it is full: then DROP and friends lock every object they
- * check, as long as the session lives.
+ * Count the session among the users of an object (or column) in
+ * TempcatUsedObjects; after waiting for a DROP or ALTER of it in progress,
+ * if any (the recorded dependency may then refer to an object that is gone,
+ * as with any dependency on an object that is being dropped).  Returns false
+ * if TempcatUsedObjects is full.
  */
 static bool
 tempcat_count_use(Oid classId, Oid objectId, int32 subId)
 {
 	TempcatUsedObject key;
-	TempcatUsedObjectEntry *entry;
-	bool		found;
 
+#ifdef FAULT_INJECTOR
+	/* Test hook: TempcatUsedObjects is full. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_used_objects_full") == FaultInjectorTypeSkip)
+		return false;
+#endif
 	tempcat_used_object_key(&key, classId, objectId, subId);
-	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
-	entry = hash_search(TempcatUsedObjects, &key, HASH_ENTER_NULL, &found);
-	if (entry != NULL)
+	for (;;)
 	{
+		TempcatUsedObjectEntry *entry;
+		TransactionId changer = InvalidTransactionId;
+		bool		found;
+		int			i;
+
+		LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
+		entry = hash_search(TempcatUsedObjects, &key, HASH_ENTER_NULL, &found);
+		if (entry == NULL)
+		{
+			LWLockRelease(&TempcatShared->used_lock);
+			return false;
+		}
 		if (!found)
+		{
 			entry->nsessions = 0;
-		entry->nsessions++;
+			for (i = 0; i < TEMPCAT_USED_PROCS; i++)
+				entry->procs[i] = -1;
+			entry->changer_xid = InvalidTransactionId;
+		}
+		else if (tempcat_changer_active(entry))
+			changer = entry->changer_xid;
+		if (!TransactionIdIsValid(changer))
+		{
+			entry->nsessions++;
+			for (i = 0; i < TEMPCAT_USED_PROCS; i++)
+			{
+				if (entry->procs[i] < 0)
+				{
+					entry->procs[i] = MyProc->pgprocno;
+					break;
+				}
+			}
+		}
+		LWLockRelease(&TempcatShared->used_lock);
+		if (!TransactionIdIsValid(changer))
+			return true;
+		XactLockTableWait(changer, NULL, NULL, XLTW_None);
 	}
-	LWLockRelease(&TempcatShared->used_lock);
-	if (entry == NULL && !tc_used_overflow)
-	{
-		tc_used_overflow = true;
-		pg_atomic_fetch_add_u32(&TempcatShared->nused_overflow, 1);
-	}
-	return entry != NULL;
 }
 
 static void
@@ -1780,6 +1823,7 @@ tempcat_uncount_use(TempcatUsed *used)
 {
 	TempcatUsedObject key;
 	TempcatUsedObjectEntry *entry;
+	int			i;
 
 	if (!used->counted)
 		return;
@@ -1787,34 +1831,28 @@ tempcat_uncount_use(TempcatUsed *used)
 							used->key.objectSubId);
 	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
 	entry = hash_search(TempcatUsedObjects, &key, HASH_FIND, NULL);
-	if (entry != NULL && --entry->nsessions <= 0)
-		(void) hash_search(TempcatUsedObjects, &key, HASH_REMOVE, NULL);
+	if (entry != NULL)
+	{
+		for (i = 0; i < TEMPCAT_USED_PROCS; i++)
+		{
+			if (entry->procs[i] == MyProc->pgprocno)
+				entry->procs[i] = -1;
+		}
+		if (--entry->nsessions <= 0)
+			(void) hash_search(TempcatUsedObjects, &key, HASH_REMOVE, NULL);
+	}
 	LWLockRelease(&TempcatShared->used_lock);
 	used->counted = false;
 }
 
-/* May a session use the object (or column)?  See tempcat_count_use(). */
-static bool
-tempcat_maybe_used(Oid classId, Oid objectId, int32 subId)
-{
-	TempcatUsedObject key;
-	bool		found;
-
-	if (pg_atomic_read_u32(&TempcatShared->nused_overflow) > 0)
-		return true;
-	tempcat_used_object_key(&key, classId, objectId, subId);
-	LWLockAcquire(&TempcatShared->used_lock, LW_SHARED);
-	(void) hash_search(TempcatUsedObjects, &key, HASH_FIND, &found);
-	LWLockRelease(&TempcatShared->used_lock);
-	return found;
-}
-
 /*
- * Lock one use, an object or one of its columns, if not locked yet.  Counted
- * before it is locked, so that a DROP that does not see the count does not
- * see the lock either; and noted in tc_used first, so that an error on the
- * way (e.g. a cancel of the wait for the lock) leaves nothing that
- * tempcat_recompute_used() does not undo.
+ * Count the use of an object, or of one of its columns, if not counted yet;
+ * or lock it if TempcatUsedObjects is full.  Noted in tc_used first, so that
+ * an error on the way (e.g. a cancel of the wait for a DROP in progress, see
+ * tempcat_count_use()) leaves nothing that tempcat_recompute_used() does not
+ * undo.  An object noted already but neither counted nor locked is one
+ * whose wait failed in a subtransaction that rolled back, which
+ * tempcat_recompute_used() has not looked at yet.
  */
 static void
 tempcat_use_object_part(Oid classId, Oid objectId, int32 subId)
@@ -1839,31 +1877,37 @@ tempcat_use_object_part(Oid classId, Oid objectId, int32 subId)
 	key.classId = classId;
 	key.objectId = objectId;
 	key.objectSubId = subId;
-	tempcat_used_locktag(&tag, classId, objectId, subId);
 	used = hash_search(tc_used, &key, HASH_ENTER, &found);
 	if (!found)
 	{
 		used->counted = false;
-		used->counted = tempcat_count_use(classId, objectId, subId);
+		used->locked = false;
 	}
-	else if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
+	tempcat_used_locktag(&tag, classId, objectId, subId);
+	if (used->counted || (used->locked && LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE)))
 		return;
 
-	/*
-	 * (An object noted already but not locked: its lock was not granted,
-	 * e.g. as the wait was canceled in a subtransaction that rolled back,
-	 * and tempcat_recompute_used() has not looked at it yet.)
-	 */
+	if (!used->locked && tempcat_count_use(classId, objectId, subId))
+	{
+		used->counted = true;
+		return;
+	}
+
+	/* TempcatUsedObjects is full: lock it instead, see above */
+	if (!tc_used_overflow)
+	{
+		tc_used_overflow = true;
+		pg_atomic_fetch_add_u32(&TempcatShared->nused_overflow, 1);
+	}
+	used->locked = true;
 	(void) LockAcquire(&tag, TEMPCAT_USER_LOCKMODE, true, false);
 }
 
 /*
  * A temporary object of ours kept in memory comes to depend on an ordinary
- * object, or on a column of it ('subId'): lock its use, and that of the
+ * object, or on a column of it ('subId'): count its use, and that of the
  * whole object for a column.  Before the dependency is recorded, so that a
- * DROP of the object under way finishes first.  (As with any dependency on
- * an object that is being dropped, the recorded one may then refer to an
- * object that is gone.)
+ * DROP of the object under way finishes first.
  */
 static void
 tempcat_use_object(Oid classId, Oid objectId, int32 subId)
@@ -1897,11 +1941,29 @@ tempcat_use_referenced(Relation rel, HeapTuple tup)
 						   0);
 }
 
+/* The session uses the object no more. */
+static void
+tempcat_unuse(TempcatUsed *used)
+{
+	LOCKTAG		tag;
+
+	tempcat_uncount_use(used);
+	if (used->locked)
+	{
+		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId,
+							 used->key.objectSubId);
+		if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
+			LockRelease(&tag, TEMPCAT_USER_LOCKMODE, true);
+		used->locked = false;
+	}
+}
+
 /*
- * Let go of the objects that our pg_depend and pg_shdepend rows in memory,
- * of any visibility, no longer refer to: after some of the rows went away,
- * or after an error, which may have come after an object was locked and
- * before its row was added (e.g. as the area was full).
+ * Count the session out of the users of the objects that our pg_depend and
+ * pg_shdepend rows in memory, of any visibility, no longer refer to: after
+ * some of the rows went away, or after an error, which may have come after an
+ * object was counted and before its row was added (e.g. as the area was
+ * full).
  */
 static void
 tempcat_recompute_used(void)
@@ -1963,23 +2025,17 @@ tempcat_recompute_used(void)
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
 	{
-		LOCKTAG		tag;
-
 		if (hash_search(still, &used->key, HASH_FIND, NULL) != NULL)
 			continue;
-		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId,
-							 used->key.objectSubId);
-		if (LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
-			LockRelease(&tag, TEMPCAT_USER_LOCKMODE, true);
-		tempcat_uncount_use(used);
+		tempcat_unuse(used);
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
 	hash_destroy(still);
 }
 
 /*
- * At exit: the session uses nothing any more.  (Its locks went with
- * ShutdownPostgres().)
+ * At exit: the session uses nothing any more.  (Locks taken instead went
+ * with ShutdownPostgres().)
  */
 static void
 tempcat_forget_used_objects(void)
@@ -2002,10 +2058,11 @@ tempcat_forget_used_objects(void)
 
 /*
  * Take the locks again that pg_advisory_unlock_all() released, which
- * releases all session-level locks of USER_LOCKMETHOD.  (DISCARD ALL does
- * too, but drops the temporary objects right after.)  When the session goes
- * idle, as it may do so only after such a call; without waiting, as a DROP
- * that took a lock meanwhile cannot be stopped any more.
+ * releases all session-level locks of USER_LOCKMETHOD, of the objects locked
+ * instead of counted (see above).  (DISCARD ALL does too, but drops the
+ * temporary objects right after.)  When the session goes idle, as it may do
+ * so only after such a call; without waiting, as a DROP that took a lock
+ * meanwhile cannot be stopped any more.
  */
 static void
 tempcat_relock_used(void)
@@ -2013,13 +2070,15 @@ tempcat_relock_used(void)
 	HASH_SEQ_STATUS seq;
 	TempcatUsed *used;
 
-	if (tc_used == NULL)
+	if (!tc_used_overflow)
 		return;
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
 	{
 		LOCKTAG		tag;
 
+		if (!used->locked)
+			continue;
 		tempcat_used_locktag(&tag, used->key.classId, used->key.objectId,
 							 used->key.objectSubId);
 		if (!LockHeldByMe(&tag, TEMPCAT_USER_LOCKMODE))
@@ -2027,19 +2086,13 @@ tempcat_relock_used(void)
 	}
 }
 
-/*
- * The processes of the sessions holding the lock on an object that
- * temporary objects use, other than ours, as a list for a message.  Empty
- * if they let go of it meanwhile.
- */
-static char *
-tempcat_user_pids(const LOCKTAG *tag)
+/* Append the processes that hold the lock on an object instead, but ours. */
+static void
+tempcat_locker_pids(const LOCKTAG *tag, StringInfo pids)
 {
 	LockData   *data = GetLockStatusData();
-	StringInfoData pids;
 	int			i;
 
-	initStringInfo(&pids);
 	for (i = 0; i < data->nelements; i++)
 	{
 		LockInstanceData *inst = &data->locks[i];
@@ -2053,29 +2106,84 @@ tempcat_user_pids(const LOCKTAG *tag)
 			inst->locktag.locktag_type != tag->locktag_type ||
 			inst->locktag.locktag_lockmethodid != tag->locktag_lockmethodid)
 			continue;
-		appendStringInfo(&pids, "%s%d", pids.len > 0 ? ", " : "", inst->pid);
+		appendStringInfo(pids, "%s%d", pids->len > 0 ? ", " : "", inst->pid);
 	}
-	return pids.data;
 }
 
 /*
- * Can the lock on an object (or column) that temporary objects use be taken
- * in the changer's mode?  Then, until the end of the transaction, no
- * temporary object of another session comes to use it, if any used it
- * when we looked (tempcat_maybe_used(); one that comes to use it later
- * records a dependency on an object that may be gone, as in
- * tempcat_use_object()).  Our own session's locks do not conflict, and its
- * rows can be seen.
+ * Do temporary objects of other sessions use the object (or column)?  If
+ * not, and 'mark', mark it with the current (sub)transaction: until it ends,
+ * no temporary object of another session comes to use it (one coming
+ * meanwhile waits, see tempcat_count_use()).  If they do, return the
+ * processes of some of those sessions in 'pids'.  Our own uses do not count,
+ * and our rows can be seen.  (A session that comes to use an object nobody
+ * used when we looked records a dependency on an object that may be gone,
+ * as on disk for objects that are not locked while used, like types.)
  */
 static bool
-tempcat_try_lock_out(Oid classId, Oid objectId, int32 subId, LOCKTAG *tag)
+tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
+				   StringInfo pids)
 {
-	if (TempcatShared == NULL || !tempcat_lockable_use(classId, objectId) ||
-		!tempcat_maybe_used(classId, objectId, subId))
-		return true;
-	tempcat_used_locktag(tag, classId, objectId, subId);
-	return LockAcquire(tag, TEMPCAT_CHANGER_LOCKMODE, false, true) !=
-		LOCKACQUIRE_NOT_AVAIL;
+	TempcatUsedObject key;
+	TempcatUsedObjectEntry *entry;
+	TransactionId xid = InvalidTransactionId;
+	bool		used = false;
+
+	if (TempcatShared == NULL || !tempcat_lockable_use(classId, objectId))
+		return false;
+
+	/* Objects that sessions could not count, but locked instead */
+	if (pg_atomic_read_u32(&TempcatShared->nused_overflow) > 0)
+	{
+		LOCKTAG		tag;
+
+		tempcat_used_locktag(&tag, classId, objectId, subId);
+		if (LockAcquire(&tag, TEMPCAT_CHANGER_LOCKMODE, false, true) ==
+			LOCKACQUIRE_NOT_AVAIL)
+		{
+			tempcat_locker_pids(&tag, pids);
+			used = true;
+		}
+	}
+
+	if (mark)
+		xid = GetCurrentTransactionId();
+	tempcat_used_object_key(&key, classId, objectId, subId);
+	LWLockAcquire(&TempcatShared->used_lock, LW_EXCLUSIVE);
+	entry = hash_search(TempcatUsedObjects, &key, HASH_FIND, NULL);
+	if (entry != NULL)
+	{
+		TempcatUsedKey ukey;
+		TempcatUsed *mine = NULL;
+		int			others;
+		int			i;
+
+		if (tc_used != NULL)
+		{
+			memset(&ukey, 0, sizeof(ukey));
+			ukey.classId = classId;
+			ukey.objectId = objectId;
+			ukey.objectSubId = subId;
+			mine = hash_search(tc_used, &ukey, HASH_FIND, NULL);
+		}
+		others = entry->nsessions - ((mine != NULL && mine->counted) ? 1 : 0);
+		if (others > 0)
+		{
+			for (i = 0; i < TEMPCAT_USED_PROCS; i++)
+			{
+				int			procno = entry->procs[i];
+
+				if (procno >= 0 && procno != MyProc->pgprocno)
+					appendStringInfo(pids, "%s%d", pids->len > 0 ? ", " : "",
+									 ProcGlobal->allProcs[procno].pid);
+			}
+			used = true;
+		}
+		else if (mark && !used)
+			entry->changer_xid = xid;
+	}
+	LWLockRelease(&TempcatShared->used_lock);
+	return used;
 }
 
 /*
@@ -2088,20 +2196,22 @@ tempcat_try_lock_out(Oid classId, Oid objectId, int32 subId, LOCKTAG *tag)
 void
 tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId)
 {
-	LOCKTAG		tag;
+	StringInfoData pids;
 	ObjectAddress object;
-	char	   *pids;
 
-	if (tempcat_try_lock_out(classId, objectId, subId, &tag))
+	initStringInfo(&pids);
+	if (!tempcat_others_use(classId, objectId, subId, true, &pids))
+	{
+		pfree(pids.data);
 		return;
+	}
 	ObjectAddressSubSet(object, classId, objectId, subId);
-	pids = tempcat_user_pids(&tag);
 	ereport(ERROR,
 			(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 			 errmsg("temporary objects of other sessions depend on %s",
 					getObjectDescription(&object)),
-			 pids[0] != '\0' ?
-			 errdetail("The sessions of processes %s keep them in memory.", pids) : 0,
+			 pids.len > 0 ?
+			 errdetail("The sessions of processes %s keep them in memory.", pids.data) : 0,
 			 errhint("Retry once those sessions have dropped them, or have ended.")));
 }
 
@@ -2113,22 +2223,24 @@ tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId)
 void
 tempcat_warn_users(Oid classId, Oid objectId, const char *command)
 {
-	LOCKTAG		tag;
+	StringInfoData pids;
 	ObjectAddress object;
-	char	   *pids;
 
-	if (tempcat_try_lock_out(classId, objectId, 0, &tag))
+	initStringInfo(&pids);
+	if (!tempcat_others_use(classId, objectId, 0, false, &pids))
+	{
+		pfree(pids.data);
 		return;
+	}
 	ObjectAddressSet(object, classId, objectId);
-	pids = tempcat_user_pids(&tag);
 	ereport(WARNING,
 			(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
 			 errmsg("%s does not reach the temporary objects of other sessions that depend on %s",
 					command, getObjectDescription(&object)),
-			 pids[0] != '\0' ?
-			 errdetail("The sessions of processes %s keep them in memory.", pids) : 0));
+			 pids.len > 0 ?
+			 errdetail("The sessions of processes %s keep them in memory.", pids.data) : 0));
+	pfree(pids.data);
 }
-
 /* ----------------------------------------------------------------
  * OID assignment
  * ----------------------------------------------------------------

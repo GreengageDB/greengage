@@ -83,8 +83,8 @@ GRANT ALL ON tc_ord TO tc_role;
 1: ROLLBACK TO SAVEPOINT s1;
 1: COMMIT;
 2: DROP DOMAIN tc_rb;
--- pg_advisory_unlock_all() releases them too, but the session takes them
--- again when it goes idle.
+-- They take no room in the lock table, nor go with pg_advisory_unlock_all().
+2: SELECT count(*) FROM pg_locks WHERE locktype = 'object' AND objid = 'tc_fn(int)'::regprocedure;
 1: SELECT pg_advisory_unlock_all();
 2: DROP FUNCTION tc_fn(int);
 
@@ -477,6 +477,23 @@ DROP TYPE tc_sub_comp;
 34: DROP TABLE tc_exp;
 34q:
 35q:
+
+-- When the shared table counting the objects that sessions use is full (the
+-- fault pretends so), a session locks them instead: DROP fails the same.
+CREATE TYPE tc_full_comp AS (x int);
+36: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+36: SET gp_enable_temp_memory_catalog = on;
+SELECT gp_inject_fault_infinite('tempcat_used_objects_full', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+36: CREATE TEMP TABLE tc_full_t (c tc_full_comp) DISTRIBUTED RANDOMLY;
+SELECT gp_inject_fault('tempcat_used_objects_full', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+37: SELECT count(*) FROM pg_locks WHERE locktype = 'object' AND objid = 'tc_full_comp'::regtype AND mode = 'ShareLock';
+37: DROP TYPE tc_full_comp;
+36: DROP TABLE tc_full_t;
+37: DROP TYPE tc_full_comp;
+36q:
+37q:
 
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose
