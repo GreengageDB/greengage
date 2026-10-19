@@ -4050,7 +4050,9 @@ compare_partn_opfuncid(PartitionNode *partnode,
 			}
 
 			opfuncid = cdb_retrieve_btree_op(opclass, lhsid, rhsid, strategy);
-			res = OidFunctionCall2Coll(opfuncid, c->constcollid, c->constvalue, d);
+			res = OidFunctionCall2Coll(opfuncid,
+									   get_partition_key_collation(part, ii),
+									   c->constvalue, d);
 
 			if (!DatumGetBool(res))
 				return false;
@@ -4062,6 +4064,30 @@ compare_partn_opfuncid(PartitionNode *partnode,
 
 	return true;
 }								/* end compare_partn_opfuncid */
+
+/*
+ * get_partition_key_collation
+ *   Return the collation of a partitioning key column.
+ *
+ * Partition bounds must be compared using the collation of the key column,
+ * not the collation stored in the bound's Const, as tables created by old
+ * versions may have the database default collation stored there.
+ */
+Oid
+get_partition_key_collation(Partition *part, int keyno)
+{
+	Oid			typid;
+	int32		typmod;
+	Oid			collid;
+
+	Assert(part != NULL);
+	Assert(keyno >= 0 && keyno < part->parnatts);
+
+	get_atttypetypmodcoll(part->parrelid, part->paratts[keyno],
+						  &typid, &typmod, &collid);
+
+	return collid;
+}
 
 /*
  *	Given a partition-by-list PartitionNode, search for
@@ -4385,7 +4411,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangestartincl /* strictly_less */ , false /* is_direct */ );
-		res = FunctionCall2Coll(finfo, c->constcollid, c->constvalue, tupval);
+		res = FunctionCall2Coll(finfo, rs->keycollations[keyno], c->constvalue, tupval);
 
 		if (!DatumGetBool(res))
 			return -1;
@@ -4407,7 +4433,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangeendincl /* strictly_less */ , true /* is_direct */ );
-		res = FunctionCall2Coll(finfo, c->constcollid, tupval, c->constvalue);
+		res = FunctionCall2Coll(finfo, rs->keycollations[keyno], tupval, c->constvalue);
 
 		if (!DatumGetBool(res))
 		{
@@ -4455,6 +4481,9 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		rs->ltfuncs_direct = palloc0(sizeof(FmgrInfo) * natts);
 		rs->lefuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
 		rs->ltfuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
+		rs->keycollations = palloc(sizeof(Oid) * natts);
+		for (int keyno = 0; keyno < natts; keyno++)
+			rs->keycollations[keyno] = get_partition_key_collation(partnode->part, keyno);
 
 		/*
 		 * Unrolling the rules into an array currently works for the top level
