@@ -163,6 +163,7 @@
 #include "utils/dsa.h"
 #include "utils/faultinjector.h"
 #include "utils/fmgroids.h"
+#include "utils/gpexpand.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
@@ -3799,6 +3800,8 @@ tempcat_insert(Relation rel, HeapTuple tup)
 
 	Assert(catidx >= 0);
 	Assert(!tempcat_is_reader() && tc_area != NULL);
+	/* as heap_insert() does; see tempcat_delete() */
+	gp_expand_protect_catalog_changes(rel);
 	tempcat_check_row_size(rel, tup);
 
 	tempcat_use_referenced(rel, tup);
@@ -3905,6 +3908,8 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup)
 
 	Assert(catidx >= 0);
 	Assert(!tempcat_is_reader());
+	/* as heap_update() does; see tempcat_delete() */
+	gp_expand_protect_catalog_changes(rel);
 	tempcat_check_row_size(rel, newtup);
 
 	olde = tempcat_lookup_tid(rel, otid, &oldep);
@@ -3950,6 +3955,16 @@ tempcat_delete(Relation rel, ItemPointer tid)
 	CommandId	cid;
 
 	Assert(!tempcat_is_reader());
+
+	/*
+	 * As heap_delete() does: while gpexpand runs, and once it has added
+	 * segments, the session's catalog rows change as little as on disk.  Rows
+	 * in memory are not copied to new segments, but the session still has
+	 * the old segments in its gangs and in the numsegments of new tables
+	 * (cdbcomponent_getCdbComponents() is not refreshed while it has a
+	 * temporary namespace): a new connection should be made.
+	 */
+	gp_expand_protect_catalog_changes(rel);
 
 	e = tempcat_lookup_tid(rel, tid, &ep);
 	tempcat_check_deletable(e);

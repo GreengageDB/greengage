@@ -462,6 +462,22 @@ CREATE TYPE tc_sub_comp AS (x int);
 4: CALL tc_wait_gone();
 DROP TYPE tc_sub_comp;
 
+-- While gpexpand runs (here its catalog lock is taken as it does), a
+-- session cannot change its temporary objects kept in memory, as on disk:
+-- its gangs and the numsegments of its new tables are those of the cluster
+-- before.
+34: SET gp_enable_temp_memory_catalog = on;
+34: CREATE TEMP TABLE tc_exp (a int) DISTRIBUTED BY (a);
+35: BEGIN;
+35: SELECT gp_expand_lock_catalog();
+34: CREATE TEMP TABLE tc_exp2 (a int) DISTRIBUTED BY (a);
+34: DROP TABLE tc_exp;
+35: END;
+34: CREATE TEMP TABLE tc_exp2 (a int) DISTRIBUTED BY (a);
+34: DROP TABLE tc_exp;
+34q:
+35q:
+
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose
 -- objects do not exist in the new database.

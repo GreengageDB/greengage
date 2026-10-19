@@ -77,40 +77,40 @@ INSERT 0 1
 -- reach into the session's memory.
 2: DROP TYPE tc_comp;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: DROP TYPE tc_comp CASCADE;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: DROP DOMAIN tc_dom CASCADE;
 ERROR:  temporary objects of other sessions depend on type tc_dom
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: DROP FUNCTION tc_fn(int) CASCADE;
 ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: DROP TABLE tc_ord CASCADE;
 ERROR:  temporary objects of other sessions depend on table tc_ord
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: ALTER TABLE tc_ord DROP COLUMN b CASCADE;
 ERROR:  temporary objects of other sessions depend on column b of table tc_ord
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 -- Nor change it so that the objects would not work any more.
 2: ALTER TYPE tc_comp ALTER ATTRIBUTE y TYPE text;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: ALTER DOMAIN tc_dom ADD CONSTRAINT tc_dom_check CHECK (VALUE > 0);
 ERROR:  temporary objects of other sessions depend on type tc_dom
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: ALTER TABLE tc_ord ALTER COLUMN b TYPE text;
 ERROR:  temporary objects of other sessions depend on column b of table tc_ord
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 -- Nor drop the roles owning them or granted privileges on them.  DROP
 -- OWNED and REASSIGN OWNED leave them to their session, with a warning.
 2: DROP ROLE tc_role;
 ERROR:  temporary objects of other sessions depend on role tc_role
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: DROP ROLE tc_grantee;
 ERROR:  temporary objects of other sessions depend on role tc_grantee
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 2: REASSIGN OWNED BY tc_role TO CURRENT_USER;
 REASSIGN OWNED
 1: SELECT * FROM tc_t;
@@ -127,7 +127,7 @@ REASSIGN OWNED
 DROP OWNED
 2: DROP ROLE tc_role;
 ERROR:  temporary objects of other sessions depend on role tc_role
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 1: SELECT * FROM tc_t;
  c     | d | e 
 -------+---+---
@@ -158,7 +158,7 @@ ERROR:  division by zero
 ROLLBACK
 2: DROP TYPE tc_comp;
 ERROR:  temporary objects of other sessions depend on type tc_comp
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 -- They go with the last object using what they lock, once the session goes
 -- idle, also when its creation rolled back.
 1: DROP VIEW tc_v;
@@ -186,7 +186,7 @@ DROP DOMAIN
 (1 row)
 2: DROP FUNCTION tc_fn(int);
 ERROR:  temporary objects of other sessions depend on function tc_fn(integer)
-DETAIL:  The sessions of processes 256853 keep them in memory.
+DETAIL:  The sessions of processes 292942 keep them in memory.
 
 -- Once the session is gone, so is all of that.
 1q: ... <quitting>
@@ -693,7 +693,7 @@ SET
 ERROR:  an earlier session using the same temporary object OIDs is still running on this node
 LINE 1: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
                           ^
-DETAIL:  Process 257121 holds OIDs 4078370816 to 4078436351.
+DETAIL:  Process 293218 holds OIDs 4105633792 to 4105699327.
 20: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 CREATE TABLE
 20: INSERT INTO tc_t SELECT generate_series(1, 10);
@@ -825,7 +825,7 @@ BEGIN
 DROP TABLE
 28: DROP TYPE tc_wait_comp;
 ERROR:  temporary objects of other sessions depend on type tc_wait_comp
-DETAIL:  The sessions of processes 257207 keep them in memory.
+DETAIL:  The sessions of processes 293305 keep them in memory.
 27: COMMIT;
 COMMIT
 28: DROP TYPE tc_wait_comp;
@@ -947,6 +947,34 @@ CREATE TABLE
 CALL
 DROP TYPE tc_sub_comp;
 DROP TYPE
+
+-- While gpexpand runs (here its catalog lock is taken as it does), a
+-- session cannot change its temporary objects kept in memory, as on disk:
+-- its gangs and the numsegments of its new tables are those of the cluster
+-- before.
+34: SET gp_enable_temp_memory_catalog = on;
+SET
+34: CREATE TEMP TABLE tc_exp (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+35: BEGIN;
+BEGIN
+35: SELECT gp_expand_lock_catalog();
+ gp_expand_lock_catalog 
+------------------------
+                        
+(1 row)
+34: CREATE TEMP TABLE tc_exp2 (a int) DISTRIBUTED BY (a);
+ERROR:  gpexpand in progress, catalog changes are disallowed.
+34: DROP TABLE tc_exp;
+ERROR:  gpexpand in progress, catalog changes are disallowed.
+35: END;
+COMMIT
+34: CREATE TEMP TABLE tc_exp2 (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+34: DROP TABLE tc_exp;
+DROP TABLE
+34q: ... <quitting>
+35q: ... <quitting>
 
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose
