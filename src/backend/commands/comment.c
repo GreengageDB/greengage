@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "access/relation.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_description.h"
@@ -27,6 +28,7 @@
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 #include "cdb/cdbvars.h"
@@ -173,6 +175,9 @@ CreateComments(Oid oid, Oid classoid, int32 subid, const char *comment)
 	bool		replaces[Natts_pg_description];
 	int			i;
 
+	BEGIN_TEMP_TABLE_SCOPE(classoid == RelationRelationId &&
+						  get_rel_persistence(oid) == RELPERSISTENCE_TEMP);
+
 	/* Reduce empty-string to NULL case */
 	if (comment != NULL && strlen(comment) == 0)
 		comment = NULL;
@@ -244,6 +249,7 @@ CreateComments(Oid oid, Oid classoid, int32 subid, const char *comment)
 	/* Done */
 
 	table_close(description, NoLock);
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*

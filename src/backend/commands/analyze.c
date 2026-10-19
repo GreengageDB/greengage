@@ -72,6 +72,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/tupconvert.h"
 #include "access/tuptoaster.h"
@@ -2751,6 +2752,8 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 	if (natts <= 0)
 		return;					/* nothing to do */
 
+	BEGIN_TEMP_TABLE_SCOPE(get_rel_persistence(relid) == RELPERSISTENCE_TEMP);
+
 	sd = table_open(StatisticRelationId, RowExclusiveLock);
 
 	for (attno = 0; attno < natts; attno++)
@@ -2873,6 +2876,7 @@ update_attstats(Oid relid, bool inh, int natts, VacAttrStats **vacattrstats)
 	}
 
 	table_close(sd, RowExclusiveLock);
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*

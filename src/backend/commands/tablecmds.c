@@ -672,6 +672,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	namespaceId =
 		RangeVarGetAndCheckCreationNamespace(stmt->relation, NoLock, NULL);
 
+	BEGIN_TEMP_TABLE_SCOPE(stmt->relation->relpersistence == RELPERSISTENCE_TEMP);
+
 	/*
 	 * Security check: disallow creating temp tables from security-restricted
 	 * code.  This is needed because calling code might not expect untrusted
@@ -1571,6 +1573,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * visible to anyone else anyway, until commit).
 	 */
 	relation_close(rel, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return address;
 }

@@ -19,6 +19,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
@@ -776,6 +777,8 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 		return InvalidObjectAddress;
 	}
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	/*
 	 * If it's a user-entered CREATE CONSTRAINT TRIGGER command, make a
 	 * corresponding pg_constraint entry.
@@ -1282,6 +1285,8 @@ CreateTriggerFiringOn(CreateTrigStmt *stmt, const char *queryString,
 
 	/* Keep lock on target rel until end of xact */
 	table_close(rel, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return myself;
 }
