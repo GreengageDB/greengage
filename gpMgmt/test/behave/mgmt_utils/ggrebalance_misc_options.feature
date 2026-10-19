@@ -1187,3 +1187,25 @@ Feature: ggrebalance behave tests (misc options scenarios)
          And ggrebalance should not print "Rolled back steps:" to logfile with latest timestamp
          And ggrebalance should not print "Cancelled steps:" to logfile with latest timestamp
          And ggrebalance should not print " WARNINGS " to logfile with latest timestamp
+
+    Scenario: test 22. Check ggrebalance interruption with '--detailed-progress' options during shrink.
+        Given the database is not running
+         And a working directory of the test as '/data/gpdata/ggrebalance'
+         And a cluster is created with mirrors on "cdw" and "sdw1"
+         And all files in gpAdminLogs directory are deleted
+         And database "test_db_1" exists
+         And schema "test_schema_1" exists in "test_db_1"
+         And there is a "heap" table "test_schema_1.test_table" in "test_db_1" with "100" rows
+         And the user connects to "test_db_1" with named connection "test_connection"
+         And the user executes "BEGIN; LOCK TABLE test_schema_1.test_table;" with named connection "test_connection"
+        When the user asynchronously runs "ggrebalance -x 1 --skip-rebalance --non-interactive-mode --detailed-progress" and the process is saved
+         And the user waits till ggrebalance prints "Updated target segment count to 1" in the logs (with timeout of "60" sec)
+         And waiting "5" seconds
+         And the user asynchronously sets up to end ggrebalance process with SIGINT
+        Then the user waits till ggrebalance prints "Shrink was interrupted" in the logs (with timeout of "60" sec)
+         And the user executes "ROLLBACK;" with named connection "test_connection"
+         And the user drops the named connection "test_connection"
+        When the user runs "ggrebalance -c --non-interactive-mode"
+        Then ggrebalance should return a return code of 0
+         And ggrebalance should print "Reset numsegments to default is done." to logfile with latest timestamp
+         And ggrebalance should print "Cleanup is complete" to logfile with latest timestamp
