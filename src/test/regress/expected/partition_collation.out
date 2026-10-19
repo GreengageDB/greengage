@@ -140,7 +140,7 @@ partition by range (k)
 NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1" for table "rp_c_split"
 NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p2" for table "rp_c_split"
 alter table rp_c_split split partition p1 at ('Q') into (partition p1a, partition p1b);
-NOTICE:  exchanged partition "p1" of relation "rp_c_split" with relation "pg_temp_21062"
+NOTICE:  exchanged partition "p1" of relation "rp_c_split" with relation "pg_temp_73627"
 NOTICE:  dropped partition "p1" for relation "rp_c_split"
 NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1a" for table "rp_c_split"
 NOTICE:  CREATE TABLE will create partition "rp_c_split_1_prt_p1b" for table "rp_c_split"
@@ -159,7 +159,7 @@ partition by range (k)
 (partition p1 start ('a') end ('z'));
 NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1" for table "rp_en_split"
 alter table rp_en_split split partition p1 at ('C') into (partition p1a, partition p1b);
-NOTICE:  exchanged partition "p1" of relation "rp_en_split" with relation "pg_temp_21105"
+NOTICE:  exchanged partition "p1" of relation "rp_en_split" with relation "pg_temp_73670"
 NOTICE:  dropped partition "p1" for relation "rp_en_split"
 NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1a" for table "rp_en_split"
 NOTICE:  CREATE TABLE will create partition "rp_en_split_1_prt_p1b" for table "rp_en_split"
@@ -171,9 +171,64 @@ select tableoid::regclass, * from rp_en_split order by id;
  rp_en_split_1_prt_p1b |  2 | D
 (2 rows)
 
+--
+-- The partition definition is printed in the CREATE TABLE syntax, which has
+-- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
+-- output, then create a copy of each table from it and insert the same rows.
+--
+select pg_get_partition_def('rp_c'::regclass, true);
+                    pg_get_partition_def                    
+------------------------------------------------------------
+ PARTITION BY RANGE(k)                                     +
+           (                                               +
+           PARTITION p1 START ('a'::text) END ('c'::text), +
+           DEFAULT PARTITION other                         +
+           )
+(1 row)
+
+select pg_get_partition_def('rp_en'::regclass, true);
+                    pg_get_partition_def                    
+------------------------------------------------------------
+ PARTITION BY RANGE(k)                                     +
+           (                                               +
+           PARTITION p1 START ('a'::text) END ('c'::text), +
+           DEFAULT PARTITION other                         +
+           )
+(1 row)
+
+set client_min_messages = warning;
+do $$
+begin
+	execute 'create table rp_c_copy (id int, k text collate "C") distributed by (id) '
+		|| pg_get_partition_def('rp_c'::regclass);
+	execute 'create table rp_en_copy (id int, k text collate coll_en) distributed by (id) '
+		|| pg_get_partition_def('rp_en'::regclass);
+end
+$$;
+reset client_min_messages;
+insert into rp_c_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+select tableoid::regclass, * from rp_c_copy order by id;
+       tableoid        | id | k 
+-----------------------+----+---
+ rp_c_copy_1_prt_other |  1 | B
+ rp_c_copy_1_prt_p1    |  2 | a
+ rp_c_copy_1_prt_p1    |  3 | b
+ rp_c_copy_1_prt_other |  4 | d
+(4 rows)
+
+insert into rp_en_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+select tableoid::regclass, * from rp_en_copy order by id;
+        tableoid        | id | k 
+------------------------+----+---
+ rp_en_copy_1_prt_p1    |  1 | B
+ rp_en_copy_1_prt_p1    |  2 | a
+ rp_en_copy_1_prt_p1    |  3 | b
+ rp_en_copy_1_prt_other |  4 | d
+(4 rows)
+
 reset search_path;
 drop schema partition_collation cascade;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 11 other objects
 DETAIL:  drop cascades to collation partition_collation.coll_en
 drop cascades to table partition_collation.rp_c
 drop cascades to table partition_collation.rp_en
@@ -183,3 +238,5 @@ drop cascades to table partition_collation.rp_c_add
 drop cascades to table partition_collation.rp_en_add
 drop cascades to table partition_collation.rp_c_split
 drop cascades to table partition_collation.rp_en_split
+drop cascades to table partition_collation.rp_c_copy
+drop cascades to table partition_collation.rp_en_copy

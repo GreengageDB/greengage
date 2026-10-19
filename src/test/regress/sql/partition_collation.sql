@@ -110,5 +110,30 @@ alter table rp_en_split split partition p1 at ('C') into (partition p1a, partiti
 insert into rp_en_split values (1, 'b'), (2, 'D');
 select tableoid::regclass, * from rp_en_split order by id;
 
+--
+-- The partition definition is printed in the CREATE TABLE syntax, which has
+-- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
+-- output, then create a copy of each table from it and insert the same rows.
+--
+select pg_get_partition_def('rp_c'::regclass, true);
+select pg_get_partition_def('rp_en'::regclass, true);
+
+set client_min_messages = warning;
+do $$
+begin
+	execute 'create table rp_c_copy (id int, k text collate "C") distributed by (id) '
+		|| pg_get_partition_def('rp_c'::regclass);
+	execute 'create table rp_en_copy (id int, k text collate coll_en) distributed by (id) '
+		|| pg_get_partition_def('rp_en'::regclass);
+end
+$$;
+reset client_min_messages;
+
+insert into rp_c_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+select tableoid::regclass, * from rp_c_copy order by id;
+
+insert into rp_en_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+select tableoid::regclass, * from rp_en_copy order by id;
+
 reset search_path;
 drop schema partition_collation cascade;
