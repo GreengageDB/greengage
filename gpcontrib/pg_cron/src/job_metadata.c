@@ -1576,7 +1576,7 @@ GetCronStatus(CronStatus cronstatus)
 		break;
 	case CRON_STATUS_SUCCEEDED:
 		statusDesc = "succeeded";
-		break; 
+		break;
 	case CRON_STATUS_FAILED:
 		statusDesc = "failed";
 		break;
