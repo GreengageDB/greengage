@@ -91,6 +91,15 @@ CJoinStatsProcessor::JoinHistograms(
 			{
 				join_histogram->SetNDVScaled();
 			}
+			// a join can't undo either side's unsupported-predicate
+			// imprecision on this column - carry it forward so a deeper
+			// LASJ consuming this join's output still knows not to trust
+			// this histogram's bucket content
+			if (histogram1->IsUnsupportedPredDerived() ||
+				histogram2->IsUnsupportedPredDerived())
+			{
+				join_histogram->SetUnsupportedPredDerived();
+			}
 			*result_hist1 = join_histogram;
 			*result_hist2 = (*result_hist1)->CopyHistogram();
 			if (histogram2->WereNDVsScaled())
@@ -440,12 +449,8 @@ CJoinStatsProcessor::SetResultingJoinStats(
 	}
 
 
-	// finalize output_is_empty: for LASJ, empty only if every AND-ed
-	// predicate independently showed complete coverage (AND across
-	// predicates); for other join types, keep the OR-accumulated
-	// per-predicate result plus the (unchanged) outer-empty rule.
-	output_is_empty = IsLASJ ? lasj_all_preds_fully_covered
-							 : (output_is_empty || (outer_stats->IsEmpty()));
+	output_is_empty = outer_stats->IsEmpty() ||
+					  (IsLASJ ? lasj_all_preds_fully_covered : output_is_empty);
 
 	num_join_rows = CStatistics::MinRows;
 	if (!output_is_empty)
