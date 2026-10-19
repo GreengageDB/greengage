@@ -437,6 +437,9 @@ static HTAB *tc_used = NULL;
 /* tc_used may include objects not used any more. */
 static bool tc_used_dirty = false;
 
+/* The transaction changed our pg_depend or pg_shdepend rows in memory */
+static bool tc_depend_changed = false;
+
 struct TempcatScanData
 {
 	/*
@@ -2004,6 +2007,9 @@ tempcat_use_referenced(Relation rel, HeapTuple tup)
 {
 	TupleDesc	desc = RelationGetDescr(rel);
 
+	if (RelationGetRelid(rel) == DependRelationId ||
+		RelationGetRelid(rel) == SharedDependRelationId)
+		tc_depend_changed = true;
 	if (RelationGetRelid(rel) == DependRelationId)
 	{
 		bool		isnull;
@@ -2039,33 +2045,70 @@ tempcat_unuse(TempcatUsed *used)
 
 /*
  * Count the session out of the users of the objects that our pg_depend and
- * pg_shdepend rows in memory, of any visibility, no longer refer to: after
- * some of the rows went away, or after an error, which may have come after an
- * object was counted and before its row was added (e.g. as the area was
- * full).  After an error here (e.g. out of memory), the next try does it.
+ * pg_shdepend rows in memory no longer refer to: after some of the rows went
+ * away, or after an error, which may have come after an object was counted
+ * and before its row was added (e.g. as the area was full).  Rows count of
+ * any visibility, unless their insert rolled back or their delete committed;
+ * when 'committing', also if the transaction ending now deleted them.
+ *
+ * Also at the end of a transaction, or of a subtransaction that rolls back,
+ * that changed such rows (tempcat_xact_callback()): before its locks go, so
+ * that a DROP that waited for them does not find the session among the
+ * users any more.  Without raising an error, which an abort could not
+ * handle: if memory runs short, the next try does it (at idle, or at the
+ * start of the next transaction), as after any other error here.
  */
+static int
+tempcat_used_key_cmp(const void *a, const void *b)
+{
+	return memcmp(a, b, sizeof(TempcatUsedKey));
+}
+
+static bool
+tempcat_entry_gone(TempcatEntry *e, bool committing)
+{
+	if (!(e->flags & TCE_XMIN_COMMITTED) && TransactionIdIsNormal(e->xmin) &&
+		!TransactionIdIsCurrentTransactionId(e->xmin) &&
+		!TransactionIdIsInProgress(e->xmin) && !TransactionIdDidCommit(e->xmin))
+		return true;
+	if (TransactionIdIsValid(e->xmax))
+	{
+		if (TransactionIdIsCurrentTransactionId(e->xmax))
+			return committing;
+		if (!TransactionIdIsInProgress(e->xmax) &&
+			TransactionIdDidCommit(e->xmax))
+			return true;
+	}
+	return false;
+}
+
 static void
-tempcat_recompute_used(void)
+tempcat_recompute_used(bool committing)
 {
 	static const Oid catalogs[] = {DependRelationId, SharedDependRelationId};
-	HTAB	   *still;
-	HASHCTL		ctl;
+	TempcatUsedKey *still;
+	int			nstill = 0;
+	int			maxstill = 0;
 	HASH_SEQ_STATUS seq;
 	TempcatUsed *used;
 	int			i;
 
-	if (tc_used == NULL || hash_get_num_entries(tc_used) == 0)
+	if (tc_used == NULL || hash_get_num_entries(tc_used) == 0 || tc_area == NULL)
 	{
 		tc_used_dirty = false;
 		return;
 	}
 
-	memset(&ctl, 0, sizeof(ctl));
-	ctl.keysize = sizeof(TempcatUsedKey);
-	ctl.entrysize = sizeof(TempcatUsedKey);
-	ctl.hcxt = CurrentMemoryContext;
-	still = hash_create("tempcat objects still used", 64, &ctl,
-						HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+	for (i = 0; i < lengthof(catalogs); i++)
+		maxstill += 2 * tc_root->catalogs[tempcat_catalog_index(catalogs[i])].nentries;
+	still = MemoryContextAllocExtended(CurrentMemoryContext,
+									   sizeof(TempcatUsedKey) * Max(maxstill, 1),
+									   MCXT_ALLOC_NO_OOM);
+	if (still == NULL)
+	{
+		tc_used_dirty = true;
+		return;
+	}
 	for (i = 0; i < lengthof(catalogs); i++)
 	{
 		int			catidx = tempcat_catalog_index(catalogs[i]);
@@ -2075,43 +2118,53 @@ tempcat_recompute_used(void)
 		{
 			TempcatEntry *e = TC_ADDR(ep);
 			HeapTupleHeader hdr = TCE_DATA(e);
-			TempcatUsedKey key;
+			TempcatUsedKey *key;
 
-			memset(&key, 0, sizeof(key));
+			ep = e->next;
+			if (tempcat_entry_gone(e, committing))
+				continue;
+			key = &still[nstill++];
+			memset(key, 0, sizeof(*key));
 			if (catalogs[i] == DependRelationId)
 			{
 				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
 
-				key.classId = form->refclassid;
-				key.objectId = form->refobjid;
+				key->classId = form->refclassid;
+				key->objectId = form->refobjid;
 				if (form->refobjsubid != 0)
 				{
-					key.objectSubId = form->refobjsubid;
-					(void) hash_search(still, &key, HASH_ENTER, NULL);
-					key.objectSubId = 0;
+					still[nstill] = *key;
+					still[nstill++].objectSubId = form->refobjsubid;
 				}
 			}
 			else
 			{
 				Form_pg_shdepend form = (Form_pg_shdepend) ((char *) hdr + hdr->t_hoff);
 
-				key.classId = form->refclassid;
-				key.objectId = form->refobjid;
+				key->classId = form->refclassid;
+				key->objectId = form->refobjid;
 			}
-			(void) hash_search(still, &key, HASH_ENTER, NULL);
-			ep = e->next;
 		}
 	}
+	Assert(nstill <= maxstill);
+	qsort(still, nstill, sizeof(TempcatUsedKey), tempcat_used_key_cmp);
 
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
 	{
-		if (hash_search(still, &used->key, HASH_FIND, NULL) != NULL)
+		TempcatUsedKey key;
+
+		memset(&key, 0, sizeof(key));
+		key.classId = used->key.classId;
+		key.objectId = used->key.objectId;
+		key.objectSubId = used->key.objectSubId;
+		if (bsearch(&key, still, nstill, sizeof(TempcatUsedKey),
+					tempcat_used_key_cmp) != NULL)
 			continue;
 		tempcat_unuse(used);
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
-	hash_destroy(still);
+	pfree(still);
 
 	/* Nothing locked instead of counted any more: DROP need not try locks */
 	if (tc_used_overflow)
@@ -3684,7 +3737,7 @@ tempcat_start_transaction(void)
 	if (tc_horizon_dirty)
 		tempcat_recompute_horizon();
 	if (tc_used_dirty)
-		tempcat_recompute_used();
+		tempcat_recompute_used(false);
 	if (tc_release_wanted)
 		tempcat_release_unused_slices();
 }
@@ -3719,7 +3772,7 @@ tempcat_idle(void)
 		if (tc_horizon_dirty)
 			tempcat_recompute_horizon();
 		if (tc_used_dirty)
-			tempcat_recompute_used();
+			tempcat_recompute_used(false);
 		tempcat_relock_used();
 		if (tc_release_wanted)
 			tempcat_release_unused_slices();
@@ -3814,7 +3867,8 @@ tempcat_note_given(void)
 {
 	int			level = GetCurrentTransactionNestLevel();
 
-	if (!tc_slice_given)
+	/* (the first again after the subtransactions that gave any rolled back) */
+	if (!tc_slice_given || tc_slice_given_level == 0)
 	{
 		tc_slice_given = true;
 		tc_slice_given_stmt = GetCurrentStatementStartTimestamp();
@@ -3858,7 +3912,8 @@ tempcat_drop_refused_slice(void)
  * See tempcat_drop_refused_slice().  After an error, the session may also
  * have locked an object for a row in memory that it did not get to add
  * (e.g. as the area was full): look again at what its rows use
- * (tempcat_recompute_used()).
+ * (tempcat_recompute_used()); and at the end of a transaction that changed
+ * such rows, before its locks go.
  */
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
@@ -3872,6 +3927,9 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			tc_slice_given = false;
 			tc_slice_given_level = 0;
 			tc_slice_refused = false;
+			if (tc_depend_changed)
+				tempcat_recompute_used(true);
+			tc_depend_changed = false;
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
@@ -3880,6 +3938,9 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			tc_slice_given_level = 0;
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;
+			if (tc_depend_changed)
+				tempcat_recompute_used(false);
+			tc_depend_changed = false;
 			break;
 		default:
 			break;
@@ -3903,6 +3964,8 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 			tc_slice_given_level = 0;
 		if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 			tc_used_dirty = true;
+		if (tc_depend_changed)
+			tempcat_recompute_used(false);
 	}
 
 	/* A committed subtransaction's changes are its parent's now. */
@@ -4194,6 +4257,38 @@ tempcat_sql_update_check(Relation rel, ItemPointer otid, HeapTuple newtup)
 }
 
 /*
+ * A new pg_constraint row in memory: refuse a name its relation or domain
+ * has already, as the catalog's unique index does for rows on disk, which
+ * rows in memory have no entries in.  Code that makes constraints checks the
+ * names first, but for constraint triggers (CreateTrigger()), which counts
+ * on the index.
+ */
+static void
+tempcat_check_constraint_name(Relation rel, HeapTuple tup)
+{
+	Form_pg_constraint form = (Form_pg_constraint) GETSTRUCT(tup);
+	ScanKeyData key[3];
+	SysScanDesc scan;
+	bool		found;
+
+	ScanKeyInit(&key[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber,
+				F_OIDEQ, ObjectIdGetDatum(form->conrelid));
+	ScanKeyInit(&key[1], Anum_pg_constraint_contypid, BTEqualStrategyNumber,
+				F_OIDEQ, ObjectIdGetDatum(form->contypid));
+	ScanKeyInit(&key[2], Anum_pg_constraint_conname, BTEqualStrategyNumber,
+				F_NAMEEQ, NameGetDatum(&form->conname));
+	scan = systable_beginscan(rel, ConstraintRelidTypidNameIndexId, true,
+							  SnapshotSelf, 3, key);
+	found = HeapTupleIsValid(systable_getnext(scan));
+	systable_endscan(scan);
+	if (found)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNIQUE_VIOLATION),
+				 errmsg("duplicate key value violates unique constraint \"%s\"",
+						"pg_constraint_conrelid_contypid_conname_index")));
+}
+
+/*
  * The row to keep in memory for a catalog row: with the values that live
  * out of line (TOAST pointers, e.g. of a row that SQL UPDATE built from
  * another row) brought in, which could otherwise be dropped under it, and,
@@ -4268,6 +4363,21 @@ tempcat_prepare_row(Relation rel, HeapTuple tup)
 static void
 tempcat_report_full(void)
 {
+	size_t		limit = (size_t) gp_temp_memory_catalog_max_size * 1024;
+	size_t		total = dsa_get_total_size(tc_area);
+
+	/*
+	 * (well short of the limit, by more than the last segment could have
+	 * been: the room left to others, or the session's vmem, see
+	 * tempcat_create_area())
+	 */
+	if (total < limit - limit / 8)
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("out of room for the catalog rows of temporary objects"),
+				 errdetail("The session keeps them in %zu kB of memory, as dynamic shared memory left to others or the memory limit of the session does not let it take up to %d kB.",
+						   total / 1024, gp_temp_memory_catalog_max_size),
+				 errhint("Drop temporary objects.")));
 	ereport(ERROR,
 			(errcode(ERRCODE_OUT_OF_MEMORY),
 			 errmsg("out of room for the catalog rows of temporary objects"),
@@ -4306,6 +4416,8 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	Assert(!tempcat_is_reader() && tc_area != NULL);
 	/* as heap_insert() does; see tempcat_delete() */
 	gp_expand_protect_catalog_changes(rel);
+	if (RelationGetRelid(rel) == ConstraintRelationId)
+		tempcat_check_constraint_name(rel, tup);
 	row = tempcat_prepare_row(rel, tup);
 
 	tempcat_use_referenced(rel, tup);
@@ -4399,6 +4511,9 @@ tempcat_mark_deleted(TempcatEntry *e, dsa_pointer ep,
 	e->cmax = cid;
 	tempcat_add_pending(ep);
 	tc_ndeletions++;
+	if (tempcat_catalogs[e->catidx].relid == DependRelationId ||
+		tempcat_catalogs[e->catidx].relid == SharedDependRelationId)
+		tc_depend_changed = true;
 }
 
 /* Replace a row in memory by a new version, in memory, by command 'cid'. */

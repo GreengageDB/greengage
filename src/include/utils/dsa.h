@@ -115,6 +115,7 @@ extern void dsa_detach(dsa_area *area);
 extern void dsa_pin(dsa_area *area);
 extern void dsa_unpin(dsa_area *area);
 extern void dsa_set_size_limit(dsa_area *area, size_t limit);
+extern size_t dsa_get_total_size(dsa_area *area);
 extern void dsa_set_min_free_space(dsa_area *area, size_t bytes);
 extern void dsa_set_min_free_slots(dsa_area *area, uint32 nslots);
 extern void dsa_set_vmem_tracked(dsa_area *area);

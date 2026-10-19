@@ -764,7 +764,10 @@ BEGIN
   END LOOP;
 END $$;
 SELECT count(*) FROM pg_class
- WHERE relpersistence = 't' AND relnamespace = pg_my_temp_schema();
+ WHERE relpersistence = 't' AND relnamespace IN
+  (pg_my_temp_schema(),
+   (SELECT oid FROM pg_namespace
+     WHERE nspname = 'pg_toast_temp_' || substr(pg_my_temp_schema()::regnamespace::text, 9)));
  count 
 -------
      0
@@ -1252,6 +1255,21 @@ SELECT d.stxdndistinct IS NOT NULL AS has_ndistinct
  t
 (1 row)
 
+-- A constraint trigger cannot take the name of a constraint of its table,
+-- which the catalog's unique index refuses on disk; rows in memory are not
+-- in it.
+CREATE TEMP TABLE tc_dupc (a int CONSTRAINT tc_c CHECK (a > 0)) DISTRIBUTED BY (a);
+CREATE FUNCTION pg_temp.tc_trf() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
+CREATE CONSTRAINT TRIGGER tc_c AFTER INSERT ON tc_dupc FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trf();
+ERROR:  duplicate key value violates unique constraint "pg_constraint_conrelid_contypid_conname_index"
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_dupc'::regclass;
+ conname | contype 
+---------+---------
+ tc_c    | c
+(1 row)
+
+DROP TABLE tc_dupc;
+DROP FUNCTION pg_temp.tc_trf();
 -- Row-level security policies, external tables and type encodings.
 CREATE TEMP TABLE tc_rls (a int, b int) DISTRIBUTED BY (a);
 INSERT INTO tc_rls SELECT i, i FROM generate_series(1, 10) i;
@@ -1259,6 +1277,20 @@ CREATE POLICY tc_rls_pol ON tc_rls USING (a > 5);
 ALTER TABLE tc_rls ENABLE ROW LEVEL SECURITY;
 CREATE ROLE tc_rls_user;
 GRANT SELECT ON tc_rls TO tc_rls_user;
+-- (the grantee's pg_shdepend row is in memory too)
+SELECT count(*) AS shdepend_rows FROM pg_shdepend
+ WHERE objid = 'tc_rls'::regclass AND refobjid = 'tc_rls_user'::regrole;
+ shdepend_rows 
+---------------
+             1
+(1 row)
+
+SELECT tc_disk_rows();
+ tc_disk_rows 
+--------------
+            0
+(1 row)
+
 SET ROLE tc_rls_user;
 SELECT count(*) AS visible_rows FROM tc_rls;
  visible_rows 

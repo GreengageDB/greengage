@@ -474,7 +474,7 @@ DROP TABLE tc_slices;
 -- DROP of what a temporary object of another session depends on fails
 -- also while that session is dropping the object (here in a transaction in
 -- progress), and works once the object is gone: the session counts itself
--- out when it goes idle, before it reports the end of the transaction.
+-- out at the end of the transaction, before its locks go.
 CREATE TYPE tc_wait_comp AS (x int);
 27: SET gp_enable_temp_memory_catalog = on;
 27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
@@ -483,6 +483,26 @@ CREATE TYPE tc_wait_comp AS (x int);
 28: DROP TYPE tc_wait_comp;
 27: COMMIT;
 28: DROP TYPE tc_wait_comp;
+27q:
+28q:
+
+-- So a DROP that waited for the locks of such a transaction works once it
+-- rolls back, and one after a rollback to a savepoint works right away.
+CREATE TYPE tc_wait_comp AS (x int);
+27: SET gp_enable_temp_memory_catalog = on;
+27: CREATE TEMP TABLE tc_warm (x int) DISTRIBUTED BY (x);
+27: BEGIN;
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+28&: DROP TYPE tc_wait_comp;
+27: ROLLBACK;
+28<:
+CREATE TYPE tc_wait_comp AS (x int);
+27: BEGIN;
+27: SAVEPOINT s1;
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+27: ROLLBACK TO SAVEPOINT s1;
+28: DROP TYPE tc_wait_comp;
+27: COMMIT;
 27q:
 28q:
 

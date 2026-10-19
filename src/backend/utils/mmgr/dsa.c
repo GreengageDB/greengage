@@ -1072,6 +1072,19 @@ dsa_set_size_limit(dsa_area *area, size_t limit)
 	LWLockRelease(DSA_AREA_LOCK(area));
 }
 
+/* Return the total size of all active segments (from PostgreSQL 17) */
+size_t
+dsa_get_total_size(dsa_area *area)
+{
+	size_t		size;
+
+	LWLockAcquire(DSA_AREA_LOCK(area), LW_SHARED);
+	size = area->control->total_segment_size;
+	LWLockRelease(DSA_AREA_LOCK(area));
+
+	return size;
+}
+
 /*
  * GPDB: do not grow the area by creating segments that would leave less than
  * 'bytes' free where dynamic shared memory lives: allocations fail instead

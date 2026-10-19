@@ -1571,6 +1571,14 @@ heap_create_with_catalog(const char *relname,
 	}
 
 	/*
+	 * GPDB: an error log of COPY ... LOG ERRORS that a session which did not
+	 * exit cleanly left under this reserved OID of a temporary table kept in
+	 * memory: no catalog row of it was left to drop it with (see tempcat.c).
+	 */
+	if (tempcat_owns_oid(RelationRelationId, relid))
+		ErrorLogDelete(MyDatabaseId, relid);
+
+	/*
 	 * Other sessions' catalog scans can't find this until we commit.  Hence,
 	 * it doesn't hurt to hold AccessExclusiveLock.  Do it here so callers
 	 * can't accidentally vary in their lock mode or acquisition timing.

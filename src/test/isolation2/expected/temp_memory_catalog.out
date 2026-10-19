@@ -994,7 +994,7 @@ DROP TABLE
 -- DROP of what a temporary object of another session depends on fails
 -- also while that session is dropping the object (here in a transaction in
 -- progress), and works once the object is gone: the session counts itself
--- out when it goes idle, before it reports the end of the transaction.
+-- out at the end of the transaction, before its locks go.
 CREATE TYPE tc_wait_comp AS (x int);
 CREATE TYPE
 27: SET gp_enable_temp_memory_catalog = on;
@@ -1012,6 +1012,40 @@ DETAIL:  The sessions of processes 481157 keep them in memory.
 COMMIT
 28: DROP TYPE tc_wait_comp;
 DROP TYPE
+27q: ... <quitting>
+28q: ... <quitting>
+
+-- So a DROP that waited for the locks of such a transaction works once it
+-- rolls back, and one after a rollback to a savepoint works right away.
+CREATE TYPE tc_wait_comp AS (x int);
+CREATE TYPE
+27: SET gp_enable_temp_memory_catalog = on;
+SET
+27: CREATE TEMP TABLE tc_warm (x int) DISTRIBUTED BY (x);
+CREATE TABLE
+27: BEGIN;
+BEGIN
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+28&: DROP TYPE tc_wait_comp;  <waiting ...>
+27: ROLLBACK;
+ROLLBACK
+28<:  <... completed>
+DROP TYPE
+CREATE TYPE tc_wait_comp AS (x int);
+CREATE TYPE
+27: BEGIN;
+BEGIN
+27: SAVEPOINT s1;
+SAVEPOINT
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+CREATE TABLE
+27: ROLLBACK TO SAVEPOINT s1;
+ROLLBACK
+28: DROP TYPE tc_wait_comp;
+DROP TYPE
+27: COMMIT;
+COMMIT
 27q: ... <quitting>
 28q: ... <quitting>
 
