@@ -22,13 +22,9 @@ extern bool pg_krb_caseins_users;
 extern char *pg_krb_realm;
 
 extern void ClientAuthentication(Port *port);
-<<<<<<< HEAD
 extern void FakeClientAuthentication(Port *port);  /* GPDB only */
-||||||| e1c1c30f635
-=======
 extern void sendAuthRequest(Port *port, AuthRequest areq, const char *extradata,
 							int extralen);
->>>>>>> 3b231596ccf
 
 /* Hook for plugins to get control in ClientAuthentication() */
 typedef void (*ClientAuthentication_hook_type) (Port *, int);
