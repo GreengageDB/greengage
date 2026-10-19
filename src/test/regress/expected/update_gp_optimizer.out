@@ -799,8 +799,6 @@ create table t_insert_on_conflict_update_distkey(a int, b int) distributed repli
 create unique index uidx_t_insert_on_conflict_update_distkey on t_insert_on_conflict_update_distkey(a, b);
 -- the following statement should succeed because replicated table does not contain distkey
 insert into t_insert_on_conflict_update_distkey values (1, 1) on conflict(a, b) do update set a = 1;
-drop index uidx_t_insert_on_conflict_update_distkey;
-drop table t_insert_on_conflict_update_distkey;
 -- Some tests on a partitioned table.
 CREATE TABLE update_gp_rangep (a int, b int, orig_a int) DISTRIBUTED BY (b) PARTITION BY RANGE (a);
 CREATE TABLE update_gp_rangep_1_to_10  PARTITION OF update_gp_rangep FOR VALUES FROM  (1) TO (10);
