@@ -44,6 +44,13 @@ jobs:
   behave-tests:
     needs: build  # Wait for build to complete
     if: github.event_name == 'pull_request'  # Only for PR
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_os: ubuntu
+          - target_os: ubuntu
+            target_os_version: "24.04"
     permissions:
       contents: read  # Explicit for default behavior
       packages: read  # Explicit for GHCR access clarity
@@ -51,8 +58,8 @@ jobs:
     uses: greengagedb/greengage-ci/.github/workflows/greengage-reusable-tests-behave.yml@v61
     with:
       version: 7
-      target_os: ubuntu
-      target_os_version: "24.04"
+      target_os: ${{ matrix.target_os }}
+      target_os_version: ${{ matrix.target_os_version }}
     secrets:
       ghcr_token: ${{ secrets.GITHUB_TOKEN }}
 
