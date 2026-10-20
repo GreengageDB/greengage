@@ -4171,7 +4171,17 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 			else
 				initValue = GetAggInitVal(textInitVal, aggtranstype);
 
-			if (DO_AGGSPLIT_COMBINE(aggstate->aggsplit))
+			/*
+			 * GPDB: check aggref->aggsplit, not aggstate->aggsplit, to match
+			 * the per-aggref combinefn choice made above.  ORCA can put
+			 * aggregates of different stages into one Agg node (e.g. a
+			 * combining sum next to a single-stage count over deduplicated
+			 * input), so the node-level split is not authoritative; using it
+			 * here would build the combining aggref through the plain-transfn
+			 * path and then reject it in the strict/NULL-initval input-type
+			 * check below.
+			 */
+			if (DO_AGGSPLIT_COMBINE(aggref->aggsplit))
 			{
 				Oid			combineFnInputTypes[] = {aggtranstype,
 				aggtranstype};
@@ -4384,17 +4394,6 @@ build_pertrans_for_aggref(AggStatePerTrans pertrans,
 	 * Set up infrastructure for calling the transfn.  Note that invtrans is
 	 * not needed here.
 	 */
-<<<<<<< HEAD
-	if (DO_AGGSPLIT_COMBINE(aggref->aggsplit))
-	{
-		Expr	   *combinefnexpr;
-		size_t		numTransArgs;
-||||||| e1c1c30f635
-	if (DO_AGGSPLIT_COMBINE(aggstate->aggsplit))
-	{
-		Expr	   *combinefnexpr;
-		size_t		numTransArgs;
-=======
 	build_aggregate_transfn_expr(inputTypes,
 								 numArguments,
 								 numDirectArgs,
@@ -4405,7 +4404,6 @@ build_pertrans_for_aggref(AggStatePerTrans pertrans,
 								 InvalidOid,
 								 &transfnexpr,
 								 NULL);
->>>>>>> 3b231596ccf
 
 	fmgr_info(transfn_oid, &pertrans->transfn);
 	fmgr_info_set_expr((Node *) transfnexpr, &pertrans->transfn);
@@ -4507,8 +4505,11 @@ build_pertrans_for_aggref(AggStatePerTrans pertrans,
 		 */
 		Assert(aggstate->aggstrategy != AGG_HASHED && aggstate->aggstrategy != AGG_MIXED);
 
-		/* ORDER BY aggregates are not supported with partial aggregation */
-		Assert(!DO_AGGSPLIT_COMBINE(aggstate->aggsplit));
+		/*
+		 * ORDER BY aggregates are not supported with partial aggregation.
+		 * GPDB: test the aggref's own split; the Agg node may mix stages.
+		 */
+		Assert(!DO_AGGSPLIT_COMBINE(aggref->aggsplit));
 
 		/* If we have only one input, we need its len/byval info. */
 		if (numInputs == 1)
