@@ -409,20 +409,50 @@ SELECT count(*) FROM pg_class
   (pg_my_temp_schema(),
    (SELECT oid FROM pg_namespace
      WHERE nspname = 'pg_toast_temp_' || substr(pg_my_temp_schema()::regnamespace::text, 9)));
--- Once the rows are gone, rows of other sizes find room again.
+
+-- Room that dropped objects left serves rows of any size: fill the area
+-- with wide tables and append-optimized ones in turn, drop the wide ones,
+-- and many more append-optimized tables fit than there were.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '4MB';
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_wide%s (%s) DISTRIBUTED BY (c0)', i,
+                     (SELECT string_agg('c' || g || ' int', ', ')
+                        FROM generate_series(0, 199) g));
+      EXECUTE format('CREATE TEMP TABLE tc_ao%s (a int, b text, c numeric) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT count(*) AS tc_ao_kept FROM pg_class
+ WHERE relname ~ '^tc_ao[0-9]+$' AND relnamespace = pg_my_temp_schema() \gset
+SELECT :tc_ao_kept > 10 AS filled;
 DO $$
 DECLARE r record;
 BEGIN
   FOR r IN SELECT relname FROM pg_class
-            WHERE relname LIKE 'tc\_full%' AND relkind = 'r'
+            WHERE relname ~ '^tc_wide[0-9]+$'
               AND relnamespace = pg_my_temp_schema() LOOP
     EXECUTE 'DROP TABLE ' || r.relname;
   END LOOP;
 END $$;
-CREATE TEMP TABLE tc_full_ao (a int) WITH (appendonly=true) DISTRIBUTED BY (a);
-CREATE TYPE pg_temp.tc_full_rg AS RANGE (subtype = int4);
-CREATE TEMP TABLE tc_full_p (a int, b int) DISTRIBUTED BY (a)
- PARTITION BY RANGE (b) (START (0) END (2) EVERY (1));
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_more%s (a int, b text, c numeric) WITH (appendonly=true, orientation=column) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT count(*) > 2 * :tc_ao_kept AS room_reused FROM pg_class
+ WHERE relname ~ '^tc_more[0-9]+$' AND relnamespace = pg_my_temp_schema();
 
 -- More of what temporary objects kept in memory do as those on disk do.
 \c
@@ -658,6 +688,10 @@ SELECT d.stxdndistinct IS NOT NULL AS has_ndistinct
 -- A constraint trigger cannot take the name of a constraint of its table,
 -- which the catalog's unique index refuses on disk; rows in memory are not
 -- in it.
+-- start_matchsubs
+-- m/^DETAIL:  Key \(conrelid, contypid, conname\)=\(\d+, /
+-- s/\(\d+, /(###, /
+-- end_matchsubs
 CREATE TEMP TABLE tc_dupc (a int CONSTRAINT tc_c CHECK (a > 0)) DISTRIBUTED BY (a);
 CREATE FUNCTION pg_temp.tc_trf() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
 CREATE CONSTRAINT TRIGGER tc_c AFTER INSERT ON tc_dupc FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trf();
@@ -680,6 +714,8 @@ SET ROLE tc_rls_user;
 SELECT count(*) AS visible_rows FROM tc_rls;
 RESET ROLE;
 SELECT oid AS tc_rls_pol_oid FROM pg_policy WHERE polname = 'tc_rls_pol' \gset
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :tc_rls_pol_oid;
 DROP POLICY tc_rls_pol ON tc_rls;
 -- (its row of pg_stat_last_operation, in memory, goes with it)
 SELECT count(*) FROM pg_stat_last_operation

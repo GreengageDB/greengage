@@ -33,7 +33,8 @@
  *
  * - A session does not give an OID again soon: it goes through a slice in
  *   ascending order, then takes another one, one it used before only when
- *   no other is free (after 2^28 OIDs at the least).  Backend-local caches
+ *   no other is free (after it went through all slices free then, 64K OIDs
+ *   each, which are few when other sessions hold most).  Backend-local caches
  *   keyed by OID (the type cache, cached plans, PL/pgSQL casts, ...) assume
  *   that an OID does not come back soon, which upstream's OID counter,
  *   wrapping around after 2^32 OIDs, makes true; a slice going round in a
@@ -154,6 +155,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "port/atomics.h"
+#include "port/pg_bitutils.h"
 #include "storage/dsm.h"
 #include "storage/dsm_impl.h"
 #include "storage/ipc.h"
@@ -352,6 +354,9 @@ typedef struct TempcatCatalog
 	TempcatHash keys[TEMPCAT_NKEYS];
 } TempcatCatalog;
 
+/* Free chunks of the blocks of rows by size, see tempcat_alloc() */
+#define TEMPCAT_NBINS		12
+
 typedef struct TempcatRoot
 {
 	LWLock		lock;
@@ -360,6 +365,7 @@ typedef struct TempcatRoot
 	uint64		next_tid;
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
+	dsa_pointer bins[TEMPCAT_NBINS];
 } TempcatRoot;
 
 /* xmin is known to be committed (or frozen) */
@@ -1487,6 +1493,20 @@ tempcat_release_unused_slices(void)
 {
 	int			slice;
 
+	/*
+	 * The statistics of the objects dropped go before their OIDs can go to
+	 * another session (see tempcat_forget_if_gone()): send them now, after
+	 * the counts still pending for them, which only works out of a
+	 * transaction; in one, leave the slices to the next time the session
+	 * goes idle.
+	 */
+	if (pgstat_have_purges())
+	{
+		if (IsTransactionOrTransactionBlock())
+			return;
+		pgstat_report_stat(true);
+	}
+
 	tc_release_wanted = false;
 	if (tc_slice_flags == NULL)
 		return;
@@ -1787,7 +1807,8 @@ tempcat_fold_frozen_horizon(TransactionId *frozenXid, MultiXactId *minMulti)
  * session-level lock of USER_LOCKMETHOD (session-level locks of
  * DEFAULT_LOCKMETHOD go when a transaction aborts), whose tag is that of a
  * lock on the object itself in the other lock method; and DROP and friends
- * try to lock every object they check, as long as such a session lives.  At
+ * try to lock every object they check, as long as such a session has an
+ * object locked instead of counted (tempcat_recompute_used()).  At
  * exit, the session counts itself out after its temporary objects are
  * dropped (tempcat_proc_exit() runs after RemoveTempRelationsCallback()).
  * ----------------------------------------------------------------
@@ -2103,6 +2124,9 @@ tempcat_entry_gone(TempcatEntry *e, bool committing)
 	return false;
 }
 
+/* the array of tempcat_recompute_used(), if an error left it */
+static TempcatUsedKey *tc_recount_keys = NULL;
+
 static void
 tempcat_recompute_used(bool committing)
 {
@@ -2127,7 +2151,9 @@ tempcat_recompute_used(bool committing)
 	 * from raising an error when vmem or the resource group's memory runs
 	 * short (gp_failed_to_alloc()).
 	 */
-	still = malloc(sizeof(TempcatUsedKey) * Max(maxstill, 1));
+	if (tc_recount_keys != NULL)
+		free(tc_recount_keys);
+	still = tc_recount_keys = malloc(sizeof(TempcatUsedKey) * Max(maxstill, 1));
 	if (still == NULL)
 	{
 		tc_used_dirty = true;
@@ -2189,6 +2215,7 @@ tempcat_recompute_used(bool committing)
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
 	free(still);
+	tc_recount_keys = NULL;
 
 	/* Nothing locked instead of counted any more: DROP need not try locks */
 	if (tc_used_overflow)
@@ -2265,11 +2292,16 @@ tempcat_relock_used(void)
 	}
 }
 
-/* Append the processes that hold the lock on an object instead, but ours. */
-static void
-tempcat_locker_pids(const LOCKTAG *tag, StringInfo pids)
+/*
+ * Append the processes that hold the lock on an object instead, but ours;
+ * only those connected to our database if 'this_db'.  Returns whether it
+ * found any.
+ */
+static bool
+tempcat_locker_pids(const LOCKTAG *tag, bool this_db, StringInfo pids)
 {
 	LockData   *data = GetLockStatusData();
+	bool		found = false;
 	int			i;
 
 	for (i = 0; i < data->nelements; i++)
@@ -2285,14 +2317,25 @@ tempcat_locker_pids(const LOCKTAG *tag, StringInfo pids)
 			inst->locktag.locktag_type != tag->locktag_type ||
 			inst->locktag.locktag_lockmethodid != tag->locktag_lockmethodid)
 			continue;
+		if (this_db)
+		{
+			PGPROC	   *proc = BackendPidGetProc(inst->pid);
+
+			if (proc == NULL || proc->databaseId != MyDatabaseId)
+				continue;
+		}
 		appendStringInfo(pids, "%s%d", pids->len > 0 ? ", " : "", inst->pid);
+		found = true;
 	}
+	return found;
 }
 
 /*
  * Do temporary objects of other sessions use the object (or column)?  If
  * they do, return the processes of some of those sessions in 'pids'.  Our
- * own uses do not count, and our rows can be seen.  If not, and 'mark', and
+ * own uses do not count, and our rows can be seen.  With 'this_db', only
+ * sessions connected to our database count, as far as can be told (only
+ * some processes of the sessions are noted).  If not, and 'mark', and
  * our session uses it, mark it with the current (sub)transaction: until it
  * ends, a session that comes to use it waits (see tempcat_count_use()).  An
  * object that nobody uses, as most are, is not marked, so that DROP does not
@@ -2302,7 +2345,7 @@ tempcat_locker_pids(const LOCKTAG *tag, StringInfo pids)
  */
 static bool
 tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
-				   StringInfo pids)
+				   bool this_db, StringInfo pids)
 {
 	TempcatUsedObject key;
 	TempcatUsedObjectEntry *entry;
@@ -2319,11 +2362,9 @@ tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
 
 		tempcat_used_locktag(&tag, classId, objectId, subId);
 		if (LockAcquire(&tag, TEMPCAT_CHANGER_LOCKMODE, false, true) ==
-			LOCKACQUIRE_NOT_AVAIL)
-		{
-			tempcat_locker_pids(&tag, pids);
+			LOCKACQUIRE_NOT_AVAIL &&
+			(tempcat_locker_pids(&tag, this_db, pids) || !this_db))
 			used = true;
-		}
 	}
 
 	/*
@@ -2362,15 +2403,27 @@ tempcat_others_use(Oid classId, Oid objectId, int32 subId, bool mark,
 		others = entry->nsessions - ((mine != NULL && mine->counted) ? 1 : 0);
 		if (others > 0)
 		{
+			int			noted = 0;
+			int			here = 0;
+
 			for (i = 0; i < TEMPCAT_USED_PROCS; i++)
 			{
 				int			procno = entry->procs[i];
+				PGPROC	   *proc;
 
-				if (procno >= 0 && procno != MyProc->pgprocno)
-					appendStringInfo(pids, "%s%d", pids->len > 0 ? ", " : "",
-									 ProcGlobal->allProcs[procno].pid);
+				if (procno < 0 || procno == MyProc->pgprocno)
+					continue;
+				noted++;
+				proc = &ProcGlobal->allProcs[procno];
+				if (this_db && proc->databaseId != MyDatabaseId)
+					continue;
+				here++;
+				appendStringInfo(pids, "%s%d", pids->len > 0 ? ", " : "",
+								 proc->pid);
 			}
-			used = true;
+			/* (sessions not noted may be connected to any database) */
+			if (!this_db || here > 0 || others > noted)
+				used = true;
 		}
 		else if (mark && !used)
 			entry->changer_xid = xid;
@@ -2393,7 +2446,7 @@ tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId)
 	ObjectAddress object;
 
 	initStringInfo(&pids);
-	if (!tempcat_others_use(classId, objectId, subId, true, &pids))
+	if (!tempcat_others_use(classId, objectId, subId, true, false, &pids))
 	{
 		pfree(pids.data);
 		return;
@@ -2410,8 +2463,9 @@ tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId)
 
 /*
  * DROP OWNED and REASSIGN OWNED ('command') do not reach the temporary
- * objects of other sessions kept in memory: warn if any depend on the role.
- * (DROP ROLE then fails, see tempcat_lock_out_users().)
+ * objects of other sessions kept in memory: warn if any of a session
+ * connected to our database depend on the role, as these commands act in
+ * our database only.  (DROP ROLE then fails, see tempcat_lock_out_users().)
  */
 void
 tempcat_warn_users(Oid classId, Oid objectId, const char *command)
@@ -2420,7 +2474,7 @@ tempcat_warn_users(Oid classId, Oid objectId, const char *command)
 	ObjectAddress object;
 
 	initStringInfo(&pids);
-	if (!tempcat_others_use(classId, objectId, 0, false, &pids))
+	if (!tempcat_others_use(classId, objectId, 0, false, true, &pids))
 	{
 		pfree(pids.data);
 		return;
@@ -2891,6 +2945,216 @@ tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what)
 }
 
 /* ----------------------------------------------------------------
+ * Memory for rows
+ *
+ * Rows, with their hash nodes, and the bucket arrays of the hash tables do
+ * not come from the size classes of the area: DSA keeps objects of each
+ * size class in superblocks of 64 kB, so rows of the objects that stay
+ * would keep the superblocks of those dropped from going back, and the
+ * room these left would serve rows of the same size only.  They are cut
+ * instead out of blocks of 64 kB that the area hands out as whole pages
+ * (more than its largest size class), first fit, with the size of each
+ * chunk and of the one before it in its header, so that free neighbours
+ * merge; a block that empties goes back to the area, whose pages serve any
+ * size.  Bigger ones come from the area directly.  The writer allocates
+ * and frees under the exclusive lock.
+ * ----------------------------------------------------------------
+ */
+#define TEMPCAT_BLOCK_SIZE	(64 * 1024)
+
+#define TCC_INUSE	0x1
+#define TCC_BIG		0x2			/* from the area itself, not a block */
+#define TCC_FLAGS	0x7
+
+typedef struct TempcatChunk
+{
+	uint32		size;			/* with this header, | TCC_*; the end of a
+								 * block has one of size 0, in use */
+	uint32		prev_size;		/* of the chunk before it, 0 if first */
+} TempcatChunk;
+
+typedef struct TempcatFreeChunk
+{
+	TempcatChunk hdr;
+	dsa_pointer next;			/* in its bin */
+	dsa_pointer prev;
+} TempcatFreeChunk;
+
+#define TCC_HDR		MAXALIGN(sizeof(TempcatChunk))
+#define TCC_MIN		MAXALIGN(sizeof(TempcatFreeChunk))
+#define TCC_SIZE(c)	((c)->size & ~TCC_FLAGS)
+
+/* How many chunks of its own bin a search looks at before going up */
+#define TEMPCAT_BIN_SEARCH	32
+
+StaticAssertDecl(TCC_HDR == sizeof(TempcatChunk), "chunk header padded");
+
+/* bins of sizes 24-31, 32-63, 64-127, ..., 32 kB and more */
+static inline int
+tempcat_bin(uint32 size)
+{
+	return Min(TEMPCAT_NBINS - 1, pg_leftmost_one_pos32(size) - 4);
+}
+
+static void
+tempcat_bin_push(dsa_pointer cp)
+{
+	TempcatFreeChunk *c = TC_ADDR(cp);
+	dsa_pointer *head = &tc_root->bins[tempcat_bin(TCC_SIZE(&c->hdr))];
+
+	c->prev = InvalidDsaPointer;
+	c->next = *head;
+	if (DsaPointerIsValid(*head))
+		((TempcatFreeChunk *) TC_ADDR(*head))->prev = cp;
+	*head = cp;
+}
+
+static void
+tempcat_bin_unlink(dsa_pointer cp)
+{
+	TempcatFreeChunk *c = TC_ADDR(cp);
+
+	if (DsaPointerIsValid(c->prev))
+		((TempcatFreeChunk *) TC_ADDR(c->prev))->next = c->next;
+	else
+		tc_root->bins[tempcat_bin(TCC_SIZE(&c->hdr))] = c->next;
+	if (DsaPointerIsValid(c->next))
+		((TempcatFreeChunk *) TC_ADDR(c->next))->prev = c->prev;
+}
+
+/*
+ * Allocate 'size' bytes for rows (see above).  Returns InvalidDsaPointer if
+ * the area is out of memory.
+ */
+static dsa_pointer
+tempcat_alloc(Size size)
+{
+	Size		need = MAXALIGN(size) + TCC_HDR;
+	dsa_pointer cp = InvalidDsaPointer;
+	TempcatChunk *c;
+	uint32		csize;
+	int			bin;
+
+	if (need < TCC_MIN)
+		need = TCC_MIN;
+
+	/* (a block keeps room for the header that ends it) */
+	if (need > TEMPCAT_BLOCK_SIZE - TCC_HDR)
+	{
+		cp = dsa_allocate_extended(tc_area, need, DSA_ALLOC_NO_OOM);
+		if (!DsaPointerIsValid(cp))
+			return InvalidDsaPointer;
+		c = TC_ADDR(cp);
+		c->size = TCC_BIG | TCC_INUSE;
+		c->prev_size = 0;
+		return cp + TCC_HDR;
+	}
+
+	/* first fit: in the bin of the size, then any chunk of a bigger one */
+	for (bin = tempcat_bin(need);
+		 bin < TEMPCAT_NBINS && !DsaPointerIsValid(cp); bin++)
+	{
+		dsa_pointer fp = tc_root->bins[bin];
+		int			n = 0;
+
+		while (DsaPointerIsValid(fp) && n++ < TEMPCAT_BIN_SEARCH)
+		{
+			TempcatFreeChunk *f = TC_ADDR(fp);
+
+			if (TCC_SIZE(&f->hdr) >= need)
+			{
+				cp = fp;
+				break;
+			}
+			fp = f->next;
+		}
+	}
+
+	if (!DsaPointerIsValid(cp))
+	{
+		TempcatChunk *end;
+
+		cp = dsa_allocate_extended(tc_area, TEMPCAT_BLOCK_SIZE,
+								   DSA_ALLOC_NO_OOM);
+		if (!DsaPointerIsValid(cp))
+			return InvalidDsaPointer;
+		c = TC_ADDR(cp);
+		c->size = TEMPCAT_BLOCK_SIZE - TCC_HDR;
+		c->prev_size = 0;
+		end = TC_ADDR(cp + TEMPCAT_BLOCK_SIZE - TCC_HDR);
+		end->size = TCC_INUSE;
+		end->prev_size = TEMPCAT_BLOCK_SIZE - TCC_HDR;
+		tempcat_bin_push(cp);
+	}
+
+	tempcat_bin_unlink(cp);
+	c = TC_ADDR(cp);
+	csize = TCC_SIZE(c);
+	if (csize - need >= TCC_MIN)
+	{
+		dsa_pointer rp = cp + need;
+		TempcatChunk *r = TC_ADDR(rp);
+
+		r->size = csize - need;
+		r->prev_size = need;
+		((TempcatChunk *) TC_ADDR(rp + r->size))->prev_size = r->size;
+		tempcat_bin_push(rp);
+		csize = need;
+	}
+	c->size = csize | TCC_INUSE;
+	return cp + TCC_HDR;
+}
+
+/* Free what tempcat_alloc() returned. */
+static void
+tempcat_free(dsa_pointer dp)
+{
+	dsa_pointer cp = dp - TCC_HDR;
+	TempcatChunk *c = TC_ADDR(cp);
+	TempcatChunk *next;
+	uint32		size;
+
+	Assert(c->size & TCC_INUSE);
+	if (c->size & TCC_BIG)
+	{
+		dsa_free(tc_area, cp);
+		return;
+	}
+
+	size = TCC_SIZE(c);
+	next = TC_ADDR(cp + size);
+	if (!(next->size & TCC_INUSE))
+	{
+		tempcat_bin_unlink(cp + size);
+		size += TCC_SIZE(next);
+	}
+	if (c->prev_size != 0)
+	{
+		dsa_pointer pp = cp - c->prev_size;
+		TempcatChunk *p = TC_ADDR(pp);
+
+		if (!(p->size & TCC_INUSE))
+		{
+			tempcat_bin_unlink(pp);
+			size += TCC_SIZE(p);
+			cp = pp;
+			c = p;
+		}
+	}
+	c->size = size;
+	next = TC_ADDR(cp + size);
+	next->prev_size = size;
+
+	/* the whole block: give it back */
+	if (c->prev_size == 0 && TCC_SIZE(next) == 0)
+	{
+		dsa_free(tc_area, cp);
+		return;
+	}
+	tempcat_bin_push(cp);
+}
+
+/* ----------------------------------------------------------------
  * Hash tables in the area
  * ----------------------------------------------------------------
  */
@@ -2908,13 +3172,13 @@ tempcat_hash_grow(TempcatHash *h)
 	dsa_pointer *newarr;
 	uint32		i;
 
-	newb = dsa_allocate_extended(tc_area, sizeof(dsa_pointer) * newn,
-								 DSA_ALLOC_ZERO | DSA_ALLOC_NO_OOM);
+	newb = tempcat_alloc(sizeof(dsa_pointer) * newn);
 	if (!DsaPointerIsValid(newb))
 		return;
 
 	oldarr = TC_ADDR(h->buckets);
 	newarr = TC_ADDR(newb);
+	memset(newarr, 0, sizeof(dsa_pointer) * newn);
 	for (i = 0; i < h->nbuckets; i++)
 	{
 		dsa_pointer np = oldarr[i];
@@ -2931,7 +3195,7 @@ tempcat_hash_grow(TempcatHash *h)
 		}
 	}
 
-	dsa_free(tc_area, h->buckets);
+	tempcat_free(h->buckets);
 	h->buckets = newb;
 	h->nbuckets = newn;
 }
@@ -2942,10 +3206,10 @@ tempcat_hash_prepare(TempcatHash *h)
 {
 	if (h->nbuckets == 0)
 	{
-		h->buckets = dsa_allocate_extended(tc_area, sizeof(dsa_pointer) * 64,
-										   DSA_ALLOC_ZERO | DSA_ALLOC_NO_OOM);
+		h->buckets = tempcat_alloc(sizeof(dsa_pointer) * 64);
 		if (!DsaPointerIsValid(h->buckets))
 			return false;
+		memset(TC_ADDR(h->buckets), 0, sizeof(dsa_pointer) * 64);
 		h->nbuckets = 64;
 	}
 	else if (h->nentries >= h->nbuckets * 2)
@@ -2953,7 +3217,10 @@ tempcat_hash_prepare(TempcatHash *h)
 	return true;
 }
 
-/* Link a preallocated node.  The table must have been prepared. */
+/*
+ * Link a node, which is part of the entry's allocation (see
+ * tempcat_entry_create()).  The table must have been prepared.
+ */
 static void
 tempcat_hash_link(TempcatHash *h, dsa_pointer np, uint32 hash, dsa_pointer entry)
 {
@@ -2981,10 +3248,7 @@ tempcat_hash_remove(TempcatHash *h, uint32 hash, dsa_pointer entry)
 
 		if (node->entry == entry)
 		{
-			dsa_pointer np = *link;
-
 			*link = node->next;
-			dsa_free(tc_area, np);
 			h->nentries--;
 			return;
 		}
@@ -3097,40 +3361,40 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
 	TempcatCatalog *cat = &tc_root->catalogs[catidx];
 	dsa_pointer ep;
-	dsa_pointer nodes[TEMPCAT_NKEYS + 1];
+	dsa_pointer np;
 	TempcatEntry *e;
 	HeapTupleHeader hdr;
-	int			nnodes = 0;
+	int			nnodes = 1;		/* the TID's */
 	int			k;
 
-	/* Allocate everything up front, so that running out changes nothing. */
-	ep = dsa_allocate_extended(tc_area,
-							   MAXALIGN(sizeof(TempcatEntry)) + tup->t_len,
-							   DSA_ALLOC_NO_OOM);
-	if (!DsaPointerIsValid(ep))
-		return InvalidDsaPointer;
+	/*
+	 * Allocate everything up front, so that running out changes nothing (but
+	 * empty bucket arrays): the entry, the tuple, and the nodes of the hash
+	 * tables, which come and go with the entry.
+	 */
 	for (k = 0; k <= TEMPCAT_NKEYS; k++)
 	{
 		if (k < TEMPCAT_NKEYS && def->keytype[k] == TCK_NONE)
 			continue;
 		if ((k < TEMPCAT_NKEYS && !tempcat_hash_prepare(&cat->keys[k])) ||
 			(k == TEMPCAT_NKEYS && !tempcat_hash_prepare(&tc_root->tids)))
-			goto oom;
-		nodes[nnodes] = dsa_allocate_extended(tc_area, sizeof(TempcatHashNode),
-											  DSA_ALLOC_NO_OOM);
-#ifdef FAULT_INJECTOR
-		/* Test hook: the area runs full in the middle of adding a row. */
-		if (DsaPointerIsValid(nodes[nnodes]) &&
-			SIMPLE_FAULT_INJECTOR("tempcat_hash_node_alloc") == FaultInjectorTypeSkip)
-		{
-			dsa_free(tc_area, nodes[nnodes]);
-			nodes[nnodes] = InvalidDsaPointer;
-		}
-#endif
-		if (!DsaPointerIsValid(nodes[nnodes]))
-			goto oom;
-		nnodes++;
+			return InvalidDsaPointer;
+		if (k < TEMPCAT_NKEYS)
+			nnodes++;
 	}
+	ep = tempcat_alloc(MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
+					   nnodes * sizeof(TempcatHashNode));
+#ifdef FAULT_INJECTOR
+	/* Test hook: the area runs full in the middle of adding a row. */
+	if (DsaPointerIsValid(ep) &&
+		SIMPLE_FAULT_INJECTOR("tempcat_hash_node_alloc") == FaultInjectorTypeSkip)
+	{
+		tempcat_free(ep);
+		ep = InvalidDsaPointer;
+	}
+#endif
+	if (!DsaPointerIsValid(ep))
+		return InvalidDsaPointer;
 
 	e = TC_ADDR(ep);
 	memset(e, 0, sizeof(TempcatEntry));
@@ -3167,23 +3431,19 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	cat->head = ep;
 	cat->nentries++;
 
-	nnodes = 0;
+	np = ep + MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len);
 	for (k = 0; k < TEMPCAT_NKEYS; k++)
 	{
-		if (def->keytype[k] != TCK_NONE)
-			tempcat_hash_link(&cat->keys[k], nodes[nnodes++], e->keyhash[k], ep);
+		if (def->keytype[k] == TCK_NONE)
+			continue;
+		tempcat_hash_link(&cat->keys[k], np, e->keyhash[k], ep);
+		np += sizeof(TempcatHashNode);
 	}
-	tempcat_hash_link(&tc_root->tids, nodes[nnodes], e->tidhash, ep);
+	tempcat_hash_link(&tc_root->tids, np, e->tidhash, ep);
 
 	tempcat_count_slice_row(e, 1);
 
 	return ep;
-
-oom:
-	while (nnodes > 0)
-		dsa_free(tc_area, nodes[--nnodes]);
-	dsa_free(tc_area, ep);
-	return InvalidDsaPointer;
 }
 
 /* Caller holds the exclusive lock. */
@@ -3216,7 +3476,7 @@ tempcat_entry_remove(dsa_pointer ep)
 	}
 	tempcat_hash_remove(&tc_root->tids, e->tidhash, ep);
 
-	dsa_free(tc_area, ep);
+	tempcat_free(ep);
 }
 
 /* Build a palloc'd HeapTuple from an entry, with its header filled in. */
@@ -4315,7 +4575,9 @@ tempcat_check_constraint_name(Relation rel, HeapTuple tup)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNIQUE_VIOLATION),
 				 errmsg("duplicate key value violates unique constraint \"%s\"",
-						"pg_constraint_conrelid_contypid_conname_index")));
+						"pg_constraint_conrelid_contypid_conname_index"),
+				 errdetail("Key (conrelid, contypid, conname)=(%u, %u, %s) already exists.",
+						   form->conrelid, form->contypid, NameStr(form->conname))));
 }
 
 /*
@@ -4421,10 +4683,7 @@ tempcat_report_full(uint32 len)
 
 /*
  * Create an entry, freeing dead rows of the current transaction if the area
- * is full, and then the empty superblocks that dsa_free() keeps, one per
- * size class: once rows of many sizes came and went, those can take up the
- * whole area, and rows of a size class that has none get no room.  Caller
- * holds the exclusive lock, and releases it on error.
+ * is full.  Caller holds the exclusive lock, and releases it on error.
  */
 static dsa_pointer
 tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
@@ -4435,11 +4694,6 @@ tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
 	ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
 	if (!DsaPointerIsValid(ep) && tempcat_reclaim_dead() > 0)
 		ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
-	if (!DsaPointerIsValid(ep))
-	{
-		dsa_trim(tc_area);
-		ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
-	}
 	return ep;
 }
 

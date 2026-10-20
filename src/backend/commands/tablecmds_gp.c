@@ -27,6 +27,7 @@
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_opclass.h"
+#include "catalog/tempcat.h"
 #include "catalog/heap.h"
 #include "cdb/cdbvars.h"
 #include "cdb/memquota.h"
@@ -615,6 +616,13 @@ AtExecGPSplitPartition(Relation rel, AlterTableCmd *cmd)
 		partrelid = GpFindTargetPartition(rel, pid, false);
 		Assert(OidIsValid(partrelid));
 		partrel = table_open(partrelid, AccessShareLock);
+
+		/*
+		 * The partition is dropped below under a temporary name: fail now,
+		 * under its own, if temporary objects of other sessions kept in
+		 * memory use it (see tempcat_lock_out_users()).
+		 */
+		tempcat_lock_out_users(RelationRelationId, partrelid, 0);
 
 		if (partrelid == get_default_oid_from_partdesc(RelationRetrievePartitionDesc(rel)))
 			defaultpartname = pstrdup(RelationGetRelationName(partrel));

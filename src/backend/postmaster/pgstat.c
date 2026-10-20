@@ -1104,6 +1104,13 @@ pgstat_purge_add(PgStatPurgeList *list, Oid oid)
 	list->oids[list->n++] = oid;
 }
 
+/* GPDB: are purges queued by pgstat_purge_relation() and _function()? */
+bool
+pgstat_have_purges(void)
+{
+	return pgStatPurgeTables.n > 0 || pgStatPurgeFunctions.n > 0;
+}
+
 /* GPDB: send the purges queued by pgstat_purge_relation() and _function() */
 static void
 pgstat_send_purges(void)

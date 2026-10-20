@@ -3138,10 +3138,6 @@ struct config_bool ConfigureNamesBool_gp[] =
 
 struct config_int ConfigureNamesInt_gp[] =
 {
-	/*
-	 * (at least 4MB: each size class of DSA that has a row takes up a
-	 * superblock of 64 kB, and there are 38 of them)
-	 */
 	{
 		{"gp_temp_memory_catalog_max_size", PGC_SUSET, RESOURCES_MEM,
 			gettext_noop("Maximum memory for the catalog rows of temporary objects, per process."),
@@ -3152,7 +3148,7 @@ struct config_int ConfigureNamesInt_gp[] =
 			GUC_UNIT_KB | GUC_NOT_IN_SAMPLE
 		},
 		&gp_temp_memory_catalog_max_size,
-		16384, 4096, MAX_KILOBYTES,
+		16384, 1024, MAX_KILOBYTES,
 		NULL, NULL, NULL
 	},
 
