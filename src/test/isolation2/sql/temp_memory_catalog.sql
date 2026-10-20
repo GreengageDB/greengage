@@ -503,6 +503,15 @@ CREATE TYPE tc_wait_comp AS (x int);
 27: ROLLBACK TO SAVEPOINT s1;
 28: DROP TYPE tc_wait_comp;
 27: COMMIT;
+-- And one that waited for a transaction that made and dropped such an
+-- object works once it commits.
+CREATE TYPE tc_wait_comp AS (x int);
+27: BEGIN;
+27: CREATE TEMP TABLE tc_w (c tc_wait_comp) DISTRIBUTED RANDOMLY;
+27: DROP TABLE tc_w;
+28&: DROP TYPE tc_wait_comp;
+27: COMMIT;
+28<:
 27q:
 28q:
 

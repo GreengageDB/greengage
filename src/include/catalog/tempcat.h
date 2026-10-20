@@ -139,6 +139,7 @@ extern void tempcat_fold_frozen_horizon(TransactionId *frozenXid,
 /* Shared memory */
 extern Size TempcatShmemSize(void);
 extern void TempcatShmemInit(void);
+extern bool tempcat_areas_created(void);
 
 /* Transaction support */
 extern void tempcat_start_transaction(void);

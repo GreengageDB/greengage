@@ -88,12 +88,11 @@ CREATE TABLE mdt_all_types (
   col040 timestamp
 )
 WITH (appendonly=true);
-NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'a' as the Greengage Database data distribution key for this table.
-HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
 SELECT * FROM pg_stat_last_operation_testview WHERE actionname = 'CREATE';
                   objname                  | actionname | subtype  
 -------------------------------------------+------------+----------
  pg_stat_last_operation_testview           | CREATE     | VIEW
+ pg_stat_last_operation_testview_schema    | CREATE     | VIEW
  pg_stat_last_operation_test               | CREATE     | TABLE
  mdt_test_part1                            | CREATE     | TABLE
  mdt_test_part1_1_prt_1                    | CREATE     | TABLE
@@ -105,12 +104,10 @@ SELECT * FROM pg_stat_last_operation_testview WHERE actionname = 'CREATE';
  mdt_all_types_col021_seq                  | CREATE     | SEQUENCE
  mdt_all_types_col023_seq                  | CREATE     | SEQUENCE
  mdt_all_types                             | CREATE     | TABLE
- pg_stat_last_operation_testview_schema    | CREATE     | VIEW
 (13 rows)
 
 -- CREATE TABLE .. PARTITION OF
 CREATE TABLE mdt_test_newpart PARTITION OF mdt_test_part1 FOR VALUES IN ('X');
-NOTICE:  table has parent, setting distribution columns to match parent table
 -- ATTACH PARTITION
 CREATE TABLE mdt_test_newpart2 (
   id int,
@@ -121,7 +118,6 @@ DISTRIBUTED BY (id, gender, year);
 ALTER TABLE mdt_test_part1 ATTACH PARTITION mdt_test_newpart2 FOR VALUES IN ('Y');
 -- DETACH PARTITION
 CREATE TABLE mdt_test_detach PARTITION OF mdt_test_part1 FOR VALUES IN ('Z');
-NOTICE:  table has parent, setting distribution columns to match parent table
 ALTER TABLE mdt_test_part1 DETACH PARTITION mdt_test_detach;
 -- DROP PARTITION
 ALTER TABLE mdt_test_part1 DROP PARTITION FOR ('Y');
@@ -270,3 +266,23 @@ SELECT * FROM pg_stat_last_operation_testview_schema WHERE nspname LIKE 'mdt_%';
  CREATE        | SCHEMA     | mdt_test
 (1 row)
 
+-- POLICY
+CREATE TABLE mdt_policy_t (a int) DISTRIBUTED BY (a);
+CREATE POLICY mdt_policy ON mdt_policy_t USING (a > 0);
+SELECT oid AS mdt_policy_oid FROM pg_policy WHERE polname = 'mdt_policy' \gset
+SELECT staactionname, stasubtype FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :mdt_policy_oid;
+ staactionname | stasubtype 
+---------------+------------
+ CREATE        | POLICY
+(1 row)
+
+DROP POLICY mdt_policy ON mdt_policy_t;
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :mdt_policy_oid;
+ count 
+-------
+     0
+(1 row)
+
+DROP TABLE mdt_policy_t;

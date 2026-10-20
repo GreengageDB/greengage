@@ -655,6 +655,7 @@ typedef struct TempcatSharedData
 	pg_atomic_uint32 nused_entries;
 	int			nprocs;
 	pg_atomic_uint32 next_slice;	/* coordinator: see tempcat_claim_free_slice() */
+	bool		areas_created;	/* see tempcat_areas_created() */
 	TempcatSliceState slices[TEMPCAT_NSLICES];
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
@@ -714,6 +715,7 @@ TempcatShmemInit(void)
 	LWLockInitialize(&TempcatShared->used_lock, TempcatShared->tranche_id);
 	pg_atomic_init_u32(&TempcatShared->nused_overflow, 0);
 	pg_atomic_init_u32(&TempcatShared->nused_entries, 0);
+	TempcatShared->areas_created = false;
 	/*
 	 * Start the search for free slices at a random point, not where the
 	 * coordinator before a restart or a failover started: writer QEs of its
@@ -809,6 +811,20 @@ tempcat_memory_bytes(void)
 	return (size_t) gp_temp_memory_catalog_max_size * 1024;
 }
 
+/* The limit of the session's area, as set when it was created */
+static size_t tc_area_limit = 0;
+
+/*
+ * Did any session keep its temporary objects in memory since the shared
+ * memory was set up?  Then the postmaster removes temporary files after a
+ * crash (see PostmasterStateMachine()).
+ */
+bool
+tempcat_areas_created(void)
+{
+	return TempcatShared != NULL && TempcatShared->areas_created;
+}
+
 /*
  * Create the session's area (writer only).  Returns false if it cannot be
  * created: no slot of the DSM control segment to spare, or no space.
@@ -842,6 +858,7 @@ tempcat_create_area(bool headroom)
 
 	if (VmemTracker_ReserveVmem(TEMPCAT_DSA_FIRST_SEGMENT) != MemoryAllocation_Success)
 		return false;
+	TempcatShared->areas_created = true;
 	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
 	PG_TRY();
 	{
@@ -862,7 +879,8 @@ tempcat_create_area(bool headroom)
 
 	dsa_pin_mapping(area);
 	dsa_set_vmem_tracked(area);
-	dsa_set_size_limit(area, tempcat_memory_bytes());
+	tc_area_limit = tempcat_memory_bytes();
+	dsa_set_size_limit(area, tc_area_limit);
 	{
 		Size		free_bytes;
 		Size		total_bytes;
@@ -4371,30 +4389,33 @@ tempcat_prepare_row(Relation rel, HeapTuple tup)
 	return row;
 }
 
-/* The area is full even after freeing what could be freed. */
+/*
+ * The area is full even after freeing what could be freed, for a row of
+ * 'len' bytes.
+ */
 static void
-tempcat_report_full(void)
+tempcat_report_full(uint32 len)
 {
-	size_t		limit = (size_t) gp_temp_memory_catalog_max_size * 1024;
+	size_t		limit = tc_area_limit;
 	size_t		total = dsa_get_total_size(tc_area);
 
 	/*
 	 * (well short of the limit, by more than the last segment could have
-	 * been: the room left to others, or the session's vmem, see
-	 * tempcat_create_area())
+	 * been and than the row needs: the room left to others, or the session's
+	 * vmem, see tempcat_create_area())
 	 */
-	if (total < limit - limit / 8)
+	if (total + MAXALIGN(sizeof(TempcatEntry)) + len < limit - limit / 8)
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("out of room for the catalog rows of temporary objects"),
-				 errdetail("The session keeps them in %zu kB of memory, as dynamic shared memory left to others or the memory limit of the session does not let it take up to %d kB.",
-						   total / 1024, gp_temp_memory_catalog_max_size),
+				 errdetail("The session keeps them in %zu kB of memory, as dynamic shared memory left to others or the memory limit of the session does not let it take up to %zu kB.",
+						   total / 1024, limit / 1024),
 				 errhint("Drop temporary objects.")));
 	ereport(ERROR,
 			(errcode(ERRCODE_OUT_OF_MEMORY),
 			 errmsg("out of room for the catalog rows of temporary objects"),
-			 errdetail("The session keeps them in up to %d kB of memory.",
-					   gp_temp_memory_catalog_max_size),
+			 errdetail("The session keeps them in up to %zu kB of memory.",
+					   limit / 1024),
 			 errhint("Drop temporary objects, or raise gp_temp_memory_catalog_max_size for new sessions.")));
 }
 
@@ -4454,7 +4475,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	LWLockRelease(&tc_root->lock);
 
 	if (!DsaPointerIsValid(ep))
-		tempcat_report_full();
+		tempcat_report_full(row->t_len);
 	if (row != tup)
 		heap_freetuple(row);
 
@@ -4570,7 +4591,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
 	if (!DsaPointerIsValid(newep))
 	{
 		LWLockRelease(&tc_root->lock);
-		tempcat_report_full();
+		tempcat_report_full(row->t_len);
 	}
 	tempcat_mark_deleted(olde, oldep, xid, cid);
 	tempcat_add_pending(newep);

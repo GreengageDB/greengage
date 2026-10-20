@@ -679,7 +679,11 @@ SELECT tc_disk_rows();
 SET ROLE tc_rls_user;
 SELECT count(*) AS visible_rows FROM tc_rls;
 RESET ROLE;
+SELECT oid AS tc_rls_pol_oid FROM pg_policy WHERE polname = 'tc_rls_pol' \gset
 DROP POLICY tc_rls_pol ON tc_rls;
+-- (its row of pg_stat_last_operation, in memory, goes with it)
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :tc_rls_pol_oid;
 SET ROLE tc_rls_user;
 SELECT count(*) AS visible_rows FROM tc_rls;
 RESET ROLE;
