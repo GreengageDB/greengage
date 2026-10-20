@@ -44,6 +44,43 @@ insert into rp_en values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
 select tableoid::regclass, * from rp_en order by id;
 
 --
+-- COPY, and UPDATE of the partitioning key, must route rows the same way.
+--
+create table rp_c_dml (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('a') end ('c'),
+ default partition other);
+
+copy rp_c_dml from stdin;
+1	B
+2	a
+\.
+select tableoid::regclass, * from rp_c_dml order by id;
+
+-- Row 1 moves into p1 and row 2 moves into the default partition.
+update rp_c_dml set k = 'b' where id = 1;
+update rp_c_dml set k = 'B' where id = 2;
+select tableoid::regclass, * from rp_c_dml order by id;
+
+create table rp_en_dml (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('a') end ('c'),
+ default partition other);
+
+copy rp_en_dml from stdin;
+1	B
+2	d
+\.
+select tableoid::regclass, * from rp_en_dml order by id;
+
+-- Row 1 moves into the default partition and row 2 moves into p1.
+update rp_en_dml set k = 'd' where id = 1;
+update rp_en_dml set k = 'B' where id = 2;
+select tableoid::regclass, * from rp_en_dml order by id;
+
+--
 -- CREATE with bounds that are only ordered correctly under the key's
 -- collation. These used to fail with "START greater than END".
 --
@@ -112,6 +149,79 @@ insert into rp_en_split values (1, 'b'), (2, 'D');
 select tableoid::regclass, * from rp_en_split order by id;
 
 --
+-- SPLIT DEFAULT PARTITION must check the new bounds with the key's collation
+-- and move the matching rows out of the default partition.
+--
+create table rp_c_split_def (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p2 start ('a') end ('z'),
+ default partition other);
+
+insert into rp_c_split_def values (1, 'B'), (2, 'zz');
+alter table rp_c_split_def split default partition start ('B') end ('a')
+into (partition other, partition p1);
+select tableoid::regclass, * from rp_c_split_def order by id;
+
+create table rp_en_split_def (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p2 start ('B') end ('z'),
+ default partition other);
+
+insert into rp_en_split_def values (1, 'aZ'), (2, 'zz');
+alter table rp_en_split_def split default partition start ('a') end ('B')
+into (partition other, partition p1);
+select tableoid::regclass, * from rp_en_split_def order by id;
+
+--
+-- PARTITION FOR (value) must find the partition with the key's collation.
+-- Both collations order these bounds the same way, but 'C' sorts before 'b'
+-- in "C" and after 'b' in en_US.utf8.
+--
+create table rp_c_for (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('0') end ('b'),
+ partition p2 start ('b') end ('z'));
+
+insert into rp_c_for values (1, 'a'), (2, 'x');
+-- 'C' is in p1, so only row 1 is removed.
+alter table rp_c_for truncate partition for ('C');
+select tableoid::regclass, * from rp_c_for order by id;
+
+create table rp_en_for (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('0') end ('b'),
+ partition p2 start ('b') end ('z'));
+
+insert into rp_en_for values (1, 'a'), (2, 'x');
+-- 'C' is in p2, so only row 2 is removed.
+alter table rp_en_for truncate partition for ('C');
+select tableoid::regclass, * from rp_en_for order by id;
+
+--
+-- Each partitioning level must use the collation of its own key column. Here
+-- the first level has a "C" key and the second level an en_US.utf8 key, with
+-- the same bounds on both levels: 'C' sorts before 'b' in "C" and after 'b'
+-- in en_US.utf8.
+--
+create table rp_sub (id int, k1 text collate "C", k2 text collate coll_en)
+distributed by (id)
+partition by range (k1)
+subpartition by range (k2)
+subpartition template
+(subpartition s1 start ('0') end ('b'),
+ subpartition s2 start ('b') end ('z'))
+(partition p1 start ('0') end ('b'),
+ partition p2 start ('b') end ('z'));
+
+-- Row 1 belongs to p1 and s2, row 2 to p2 and s1.
+insert into rp_sub values (1, 'C', 'C'), (2, 'x', 'a');
+select tableoid::regclass, * from rp_sub order by id;
+
+--
 -- Partition boundaries carry the collation of the partitioning key.
 --
 select tablename, partitionname, partitionrangestart, partitionrangeend
@@ -120,6 +230,18 @@ where schemaname = 'partition_collation' and tablename in ('rp_c', 'rp_en')
   and not partitionisdefault
 order by tablename;
 
+-- Each subpartition level, and the subpartition template, carries the
+-- collation of its own key.
+select partitionlevel, partitiontablename, partitionrangestart, partitionrangeend
+from pg_partitions
+where schemaname = 'partition_collation' and tablename = 'rp_sub'
+order by partitionlevel, partitiontablename;
+
+select partitionlevel, partitionname, partitionrangestart, partitionrangeend
+from pg_partition_templates
+where schemaname = 'partition_collation' and tablename = 'rp_sub'
+order by partitionname;
+
 --
 -- The partition definition is printed in the CREATE TABLE syntax, which has
 -- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
@@ -127,6 +249,8 @@ order by tablename;
 --
 select pg_get_partition_def('rp_c'::regclass, true);
 select pg_get_partition_def('rp_en'::regclass, true);
+select pg_get_partition_def('rp_sub'::regclass, true);
+select pg_get_partition_template_def('rp_sub'::regclass, true, false);
 
 do $$
 begin
@@ -134,6 +258,8 @@ begin
 		|| pg_get_partition_def('rp_c'::regclass);
 	execute 'create table rp_en_copy (id int, k text collate coll_en) distributed by (id) '
 		|| pg_get_partition_def('rp_en'::regclass);
+	execute 'create table rp_sub_copy (id int, k1 text collate "C", k2 text collate coll_en) distributed by (id) '
+		|| pg_get_partition_def('rp_sub'::regclass);
 end
 $$;
 
@@ -142,6 +268,9 @@ select tableoid::regclass, * from rp_c_copy order by id;
 
 insert into rp_en_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
 select tableoid::regclass, * from rp_en_copy order by id;
+
+insert into rp_sub_copy values (1, 'C', 'C'), (2, 'x', 'a');
+select tableoid::regclass, * from rp_sub_copy order by id;
 
 reset search_path;
 drop schema partition_collation cascade;
