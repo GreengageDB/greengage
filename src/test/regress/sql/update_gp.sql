@@ -421,6 +421,41 @@ create rule r_insert_on_conflict_update_distkey as
 alter table t_insert_on_conflict_update_distkey_rule set distributed by (b);
 insert into t_insert_on_conflict_update_distkey_rule_src values (1, 1, 'x');
 
+create table t_insert_on_conflict_update_distkey_multi(a int, b int, c text) distributed by (a, b);
+create unique index uidx_t_insert_on_conflict_update_distkey_multi on t_insert_on_conflict_update_distkey_multi(a, b);
+create view v_insert_on_conflict_update_distkey_multi as select * from t_insert_on_conflict_update_distkey_multi;
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'one');
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on conflict(a, b) do update set a = 2; -- fails
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on conflict(a, b) do update set b = 2; -- fails
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'four') on conflict(a, b) do update set c = 'five'; -- succeds
+select * from v_insert_on_conflict_update_distkey_multi;
+
+-- partitioned base table: the check uses the policy of the partitioned root
+-- (all partitions share it); a view on a single partition targets that partition
+create table t_insert_on_conflict_update_distkey_part(a int, b int, c text) distributed by (a) partition by range (b);
+create table t_insert_on_conflict_update_distkey_part_1 partition of t_insert_on_conflict_update_distkey_part for values from (0) to (10);
+create table t_insert_on_conflict_update_distkey_part_2 partition of t_insert_on_conflict_update_distkey_part for values from (10) to (20);
+create unique index uidx_t_insert_on_conflict_update_distkey_part on t_insert_on_conflict_update_distkey_part(a, b);
+insert into t_insert_on_conflict_update_distkey_part values (1, 1, 'orig'), (1, 11, 'orig');
+create view v_insert_on_conflict_update_distkey_part as select * from t_insert_on_conflict_update_distkey_part;
+create view v_insert_on_conflict_update_distkey_part_2 as select * from t_insert_on_conflict_update_distkey_part_2;
+-- the following statements should error out because they modify the distkey
+insert into v_insert_on_conflict_update_distkey_part values (1, 1, 'x') on conflict(a, b) do update set a = 5;
+insert into v_insert_on_conflict_update_distkey_part_2 values (1, 11, 'x') on conflict(a, b) do update set a = 5;
+-- the following statements should succeed because they only modify non-distkey columns
+insert into v_insert_on_conflict_update_distkey_part values (1, 1, 'x') on conflict(a, b) do update set c = 'root';
+insert into v_insert_on_conflict_update_distkey_part_2 values (1, 11, 'x') on conflict(a, b) do update set c = 'leaf';
+select * from t_insert_on_conflict_update_distkey_part order by b;
+
+-- following statement should error because it modifies columns in a replicated
+-- table using volatile function
+create table t_insert_on_conflict_update_distkey_repl(a int, b float) distributed replicated;
+create unique index uidx_t_insert_on_conflict_update_distkey_repl on t_insert_on_conflict_update_distkey_repl(a);
+create view v_insert_on_conflict_update_distkey_repl as select * from t_insert_on_conflict_update_distkey_repl;
+insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = random(); -- fails
+insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = 2; -- succeds
+select * from v_insert_on_conflict_update_distkey_repl;
+
 -- Test for update with LASJ_NOTIN
 -- See Issue: https://github.com/GreengageDB/greengage/issues/13265
 -- Actually main branch does not have the above issue even main
@@ -512,4 +547,11 @@ drop table t_insert_on_conflict_update_distkey_view;
 drop table t_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_rule_src;
 drop table t_insert_on_conflict_update_distkey_rule;
+drop view v_insert_on_conflict_update_distkey_multi;
+drop table t_insert_on_conflict_update_distkey_multi;
+drop view v_insert_on_conflict_update_distkey_part;
+drop view v_insert_on_conflict_update_distkey_part_2;
+drop table t_insert_on_conflict_update_distkey_part
+drop view v_insert_on_conflict_update_distkey_repl;
+drop table t_insert_on_conflict_update_distkey_repl;
 -- end_ignore
