@@ -58,9 +58,12 @@ copy rp_c_dml from stdin;
 \.
 select tableoid::regclass, * from rp_c_dml order by id;
 
--- Row 1 moves into p1 and row 2 moves into the default partition.
+-- Row 1 moves into p1 and row 2 moves into the default partition. Moving a
+-- row to another partition with UPDATE is only supported by GPORCA.
+set optimizer = on;
 update rp_c_dml set k = 'b' where id = 1;
 update rp_c_dml set k = 'B' where id = 2;
+reset optimizer;
 select tableoid::regclass, * from rp_c_dml order by id;
 
 create table rp_en_dml (id int, k text collate coll_en)
@@ -76,8 +79,10 @@ copy rp_en_dml from stdin;
 select tableoid::regclass, * from rp_en_dml order by id;
 
 -- Row 1 moves into the default partition and row 2 moves into p1.
+set optimizer = on;
 update rp_en_dml set k = 'd' where id = 1;
 update rp_en_dml set k = 'B' where id = 2;
+reset optimizer;
 select tableoid::regclass, * from rp_en_dml order by id;
 
 --
