@@ -5385,7 +5385,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_ADD_COL;
 			break;
 		case AT_SetColumnEncoding: /* ALTER COLUMN SET ENCODING */
-			ATSimplePermissions(rel,ATT_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE);
 			ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
 			pass = AT_PASS_MISC;
 			break;
@@ -5475,14 +5475,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_DropColumn:		/* DROP COLUMN */
-<<<<<<< HEAD
 		case AT_DropColumnRecurse:
-			ATSimplePermissions(rel,
-||||||| e1c1c30f635
-			ATSimplePermissions(rel,
-=======
 			ATSimplePermissions(cmd->subtype, rel,
->>>>>>> 3b231596ccf
 								ATT_TABLE | ATT_COMPOSITE_TYPE | ATT_FOREIGN_TABLE);
 			ATPrepDropColumn(wqueue, rel, recurse, recursing, cmd,
 							 lockmode, context);
@@ -5507,7 +5501,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			/* Parent/Base CHECK constraints apply to child/part tables here.
 			 * No need for ATPartitionCheck
 			 */
-			ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE);
 			pass = AT_PASS_ADD_CONSTR;
 			break;
 		case AT_AddIndexConstraint: /* ADD CONSTRAINT USING INDEX */
@@ -5636,23 +5630,15 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		case AT_SetRelOptions:	/* SET (...) */
 		case AT_ResetRelOptions:	/* RESET (...) */
 		case AT_ReplaceRelOptions:	/* reset them all, then set just these */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_VIEW | ATT_MATVIEW | ATT_INDEX);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_VIEW | ATT_MATVIEW | ATT_INDEX);
 			/* GPDB: recurse when setting reloptions of root partition w/o 'ONLY' keyword. */
 			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 				ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
-||||||| e1c1c30f635
-			ATSimplePermissions(rel, ATT_TABLE | ATT_VIEW | ATT_MATVIEW | ATT_INDEX);
-			/* This command never recurses */
-=======
-			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_VIEW | ATT_MATVIEW | ATT_INDEX);
-			/* This command never recurses */
->>>>>>> 3b231596ccf
 			/* No command-specific prep needed */
 			pass = AT_PASS_MISC;
 			break;
 		case AT_SetDistributedBy:	/* SET DISTRIBUTED BY */
-			ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE);
 
 			if ( !recursing ) /* MPP-5772, MPP-5784 */
 			{
@@ -5722,7 +5708,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_MISC;
 			break;
 		case AT_ExpandTable:
-			ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
 
 			if (!recursing)
 			{
@@ -5750,7 +5736,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			break;
 
 		case AT_ExpandPartitionTablePrepare:
-			ATSimplePermissions(rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
+			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_FOREIGN_TABLE | ATT_MATVIEW);
 
 			if (!recursing)
 			{
@@ -7871,6 +7857,32 @@ alter_table_type_to_string(AlterTableType cmdtype)
 			return "ALTER COLUMN ... DROP IDENTITY";
 		case AT_ReAddStatistics:
 			return NULL;		/* not real grammar */
+
+		/* GPDB-specific subcommands */
+		case AT_SetColumnEncoding:
+			return "ALTER COLUMN ... SET ENCODING";
+		case AT_SetDistributedBy:
+			return "SET DISTRIBUTED ... or SET WITH (REORGANIZE)";
+		case AT_ExpandTable:
+			return "EXPAND TABLE";
+		case AT_ExpandPartitionTablePrepare:
+			return "EXPAND PARTITION PREPARE";
+		case AT_PartAdd:
+			return "ADD PARTITION";
+		case AT_PartAlter:
+			return "ALTER PARTITION";
+		case AT_PartDrop:
+			return "DROP PARTITION";
+		case AT_PartExchange:
+			return "EXCHANGE PARTITION";
+		case AT_PartRename:
+			return "RENAME PARTITION";
+		case AT_PartSetTemplate:
+			return "SET SUBPARTITION TEMPLATE";
+		case AT_PartSplit:
+			return "SPLIT PARTITION";
+		case AT_PartTruncate:
+			return "TRUNCATE PARTITION";
 	}
 
 	return NULL;
@@ -20908,6 +20920,14 @@ RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid, Oid oldrelid,
 					 errmsg("cannot change schema of TOAST table \"%s\"",
 							rv->relname),
 					 errhint("Change the schema of the table instead.")));
+		/* GPDB: AO auxiliary tables always live in pg_aoseg */
+		else if (relkind == RELKIND_AOSEGMENTS ||
+				 relkind == RELKIND_AOBLOCKDIR ||
+				 relkind == RELKIND_AOVISIMAP)
+			ereport(ERROR,
+					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+					 errmsg("cannot change schema of append-optimized auxiliary table \"%s\"",
+							rv->relname)));
 	}
 
 	ReleaseSysCache(tuple);

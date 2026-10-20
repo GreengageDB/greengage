@@ -583,7 +583,8 @@ FORMAT 'text'
 )
 ;
 CREATE INDEX index ON ext_lineitem (L_ORDERKEY);
-ERROR:  cannot create index on foreign table "ext_lineitem"
+ERROR:  cannot create index on relation "ext_lineitem"
+DETAIL:  This operation is not supported for foreign tables.
 TRUNCATE ext_lineitem;
 ERROR:  cannot truncate foreign table "ext_lineitem"
 DELETE FROM ext_lineitem where L_ORDERKEY > 10;
