@@ -260,16 +260,8 @@ ok($failed, 'check that replication has been broken');
 $node_primary->stop;
 $node_standby->stop;
 
-<<<<<<< HEAD
-my $node_primary2 = get_new_node('primary2');
-$node_primary2->init(allows_streaming => 1, extra => ['--wal-segsize=16']);
-||||||| e1c1c30f635
-my $node_primary2 = get_new_node('primary2');
-$node_primary2->init(allows_streaming => 1);
-=======
 my $node_primary2 = PostgresNode->new('primary2');
-$node_primary2->init(allows_streaming => 1);
->>>>>>> 3b231596ccf
+$node_primary2->init(allows_streaming => 1, extra => ['--wal-segsize=16']);
 $node_primary2->append_conf(
 	'postgresql.conf', qq(
 min_wal_size = 32MB

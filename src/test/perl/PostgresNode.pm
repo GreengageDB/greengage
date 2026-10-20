@@ -146,85 +146,6 @@ INIT
 
 =over
 
-<<<<<<< HEAD
-=item PostgresNode::new($class, $name, $pghost, $pgport)
-
-Create a new PostgresNode instance. Does not initdb or start it.
-
-You should generally prefer to use get_new_node() instead since it takes care
-of finding port numbers, registering instances for cleanup, etc.
-
-=cut
-
-sub new
-{
-	my ($class, $name, $pghost, $pgport) = @_;
-	my $testname = basename($0);
-	$testname =~ s/\.[^.]+$//;
-
-	# GPDB needs unique dbid for each node for certain operations
-	$last_dbid = $last_dbid + 1;
-
-	my $self = {
-		_port    => $pgport,
-		_host    => $pghost,
-		_dbid    => $last_dbid,
-		_basedir => "$TestLib::tmp_check/t_${testname}_${name}_data",
-		_name    => $name,
-		_logfile_generation => 0,
-		_logfile_base       => "$TestLib::log_path/${testname}_${name}",
-		_logfile            => "$TestLib::log_path/${testname}_${name}.log"
-	};
-
-	bless $self, $class;
-	mkdir $self->{_basedir}
-	  or
-	  BAIL_OUT("could not create data directory \"$self->{_basedir}\": $!");
-	$self->dump_info;
-
-	return $self;
-}
-
-=pod
-
-||||||| e1c1c30f635
-=item PostgresNode::new($class, $name, $pghost, $pgport)
-
-Create a new PostgresNode instance. Does not initdb or start it.
-
-You should generally prefer to use get_new_node() instead since it takes care
-of finding port numbers, registering instances for cleanup, etc.
-
-=cut
-
-sub new
-{
-	my ($class, $name, $pghost, $pgport) = @_;
-	my $testname = basename($0);
-	$testname =~ s/\.[^.]+$//;
-	my $self = {
-		_port    => $pgport,
-		_host    => $pghost,
-		_basedir => "$TestLib::tmp_check/t_${testname}_${name}_data",
-		_name    => $name,
-		_logfile_generation => 0,
-		_logfile_base       => "$TestLib::log_path/${testname}_${name}",
-		_logfile            => "$TestLib::log_path/${testname}_${name}.log"
-	};
-
-	bless $self, $class;
-	mkdir $self->{_basedir}
-	  or
-	  BAIL_OUT("could not create data directory \"$self->{_basedir}\": $!");
-	$self->dump_info;
-
-	return $self;
-}
-
-=pod
-
-=======
->>>>>>> 3b231596ccf
 =item $node->port()
 
 Get the port number assigned to the host. This won't necessarily be a TCP port
@@ -958,19 +879,11 @@ sub start
 
 	# Note: We set the cluster_name here, not in postgresql.conf (in
 	# sub init) so that it does not get copied to standbys.
-<<<<<<< HEAD
-	$ret = TestLib::system_log('pg_ctl', '-D', $self->data_dir, '-l',
-		$self->logfile, '-o', "--cluster-name=$name -c gp_role=utility --gp_dbid=$self->{_dbid} --gp_contentid=0",
-		'start');
-||||||| e1c1c30f635
-	$ret = TestLib::system_log('pg_ctl', '-D', $self->data_dir, '-l',
-		$self->logfile, '-o', "--cluster-name=$name", 'start');
-=======
 	# -w is now the default but having it here does no harm and helps
 	# compatibility with older versions.
 	$ret = TestLib::system_log('pg_ctl', '-w', '-D', $self->data_dir, '-l',
-		$self->logfile, '-o', "--cluster-name=$name", 'start');
->>>>>>> 3b231596ccf
+		$self->logfile, '-o', "--cluster-name=$name -c gp_role=utility --gp_dbid=$self->{_dbid} --gp_contentid=0",
+		'start');
 
 	if ($ret != 0)
 	{
@@ -1359,9 +1272,14 @@ sub new
 
 	my $testname = basename($0);
 	$testname =~ s/\.[^.]+$//;
+
+	# GPDB needs unique dbid for each node for certain operations
+	$last_dbid = $last_dbid + 1;
+
 	my $node = {
 		_port    => $port,
 		_host    => $host,
+		_dbid    => $last_dbid,
 		_basedir => "$TestLib::tmp_check/t_${testname}_${name}_data",
 		_name    => $name,
 		_logfile_generation => 0,
