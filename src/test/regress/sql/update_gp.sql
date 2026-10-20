@@ -541,16 +541,14 @@ drop table into_table;
 drop table from_table;
 drop view v2_insert_on_conflict_update_distkey;
 drop view v_insert_on_conflict_update_distkey;
-drop view v_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_view;
-drop table t_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_rule_src;
 drop table t_insert_on_conflict_update_distkey_rule;
 drop view v_insert_on_conflict_update_distkey_multi;
 drop table t_insert_on_conflict_update_distkey_multi;
 drop view v_insert_on_conflict_update_distkey_part;
 drop view v_insert_on_conflict_update_distkey_part_2;
-drop table t_insert_on_conflict_update_distkey_part
+drop table t_insert_on_conflict_update_distkey_part;
 drop view v_insert_on_conflict_update_distkey_repl;
 drop table t_insert_on_conflict_update_distkey_repl;
 -- end_ignore
