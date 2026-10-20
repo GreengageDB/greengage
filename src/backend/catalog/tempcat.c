@@ -1489,20 +1489,20 @@ tempcat_count_slice_row(TempcatEntry *e, int delta)
  * session can take it meanwhile.
  */
 static void
-tempcat_release_unused_slices(void)
+tempcat_release_unused_slices(bool xact_start)
 {
 	int			slice;
 
 	/*
 	 * The statistics of the objects dropped go before their OIDs can go to
 	 * another session (see tempcat_forget_if_gone()): send them now, after
-	 * the counts still pending for them, which only works out of a
-	 * transaction; in one, leave the slices to the next time the session
-	 * goes idle.
+	 * the counts still pending for them, which works out of a transaction or
+	 * at its start, before it counts anything; in an aborted one, leave the
+	 * slices to the next time the session goes idle.
 	 */
 	if (pgstat_have_purges())
 	{
-		if (IsTransactionOrTransactionBlock())
+		if (!xact_start && IsTransactionOrTransactionBlock())
 			return;
 		pgstat_report_stat(true);
 	}
@@ -3070,6 +3070,24 @@ tempcat_alloc(Size size)
 		}
 	}
 
+	/* (and the whole bin of the size, before taking another block) */
+	if (!DsaPointerIsValid(cp))
+	{
+		dsa_pointer fp = tc_root->bins[tempcat_bin(need)];
+
+		while (DsaPointerIsValid(fp))
+		{
+			TempcatFreeChunk *f = TC_ADDR(fp);
+
+			if (TCC_SIZE(&f->hdr) >= need)
+			{
+				cp = fp;
+				break;
+			}
+			fp = f->next;
+		}
+	}
+
 	if (!DsaPointerIsValid(cp))
 	{
 		TempcatChunk *end;
@@ -3385,9 +3403,9 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	ep = tempcat_alloc(MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
 					   nnodes * sizeof(TempcatHashNode));
 #ifdef FAULT_INJECTOR
-	/* Test hook: the area runs full in the middle of adding a row. */
+	/* Test hook: the area runs full for a row. */
 	if (DsaPointerIsValid(ep) &&
-		SIMPLE_FAULT_INJECTOR("tempcat_hash_node_alloc") == FaultInjectorTypeSkip)
+		SIMPLE_FAULT_INJECTOR("tempcat_row_alloc") == FaultInjectorTypeSkip)
 	{
 		tempcat_free(ep);
 		ep = InvalidDsaPointer;
@@ -4023,7 +4041,7 @@ tempcat_start_transaction(void)
 	if (tc_used_dirty)
 		tempcat_recompute_used(false);
 	if (tc_release_wanted)
-		tempcat_release_unused_slices();
+		tempcat_release_unused_slices(true);
 }
 
 /*
@@ -4059,7 +4077,7 @@ tempcat_idle(void)
 			tempcat_recompute_used(false);
 		tempcat_relock_used();
 		if (tc_release_wanted)
-			tempcat_release_unused_slices();
+			tempcat_release_unused_slices(false);
 	}
 	PG_CATCH();
 	{

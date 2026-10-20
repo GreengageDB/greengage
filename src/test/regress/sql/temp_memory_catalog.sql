@@ -930,20 +930,20 @@ CREATE EXTENSION IF NOT EXISTS gp_inject_fault;
 RESET client_min_messages;
 SET gp_enable_temp_memory_catalog = on;
 \set VERBOSITY terse
--- Allocations failing in the middle of adding a row (here from the tenth
--- hash node of the statement on) fail the statement, and leave nothing
--- behind; so do those failing for a new version of a row.
+-- Allocations failing for a row (here from the tenth row of the statement
+-- on), after the hash tables made room for it, fail the statement, and
+-- leave nothing behind; so do those failing for a new version of a row.
 CREATE TEMP TABLE tc_f0 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_hash_node_alloc', 'skip', '', '', '', 10, -1, 0, dbid)
+SELECT gp_inject_fault('tempcat_row_alloc', 'skip', '', '', '', 10, -1, 0, dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_row_alloc', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT count(*) FROM pg_class WHERE relname = 'tc_oom';
-SELECT gp_inject_fault_infinite('tempcat_hash_node_alloc', 'skip', dbid)
+SELECT gp_inject_fault_infinite('tempcat_row_alloc', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 ALTER TABLE tc_f0 ALTER COLUMN a SET STATISTICS 5;
-SELECT gp_inject_fault('tempcat_hash_node_alloc', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_row_alloc', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 SELECT attname, attstattarget FROM pg_attribute WHERE attrelid = 'tc_f0'::regclass AND attnum > 0;
 CREATE TEMP TABLE tc_oom (a int, b text) DISTRIBUTED BY (a);

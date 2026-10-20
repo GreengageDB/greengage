@@ -422,6 +422,8 @@ static bool ensure_active_superblock(dsa_area *area, dsa_area_pool *pool,
 static dsa_segment_map *get_segment_by_index(dsa_area *area,
 											 dsa_segment_index index);
 static void destroy_superblock(dsa_area *area, dsa_pointer span_pointer);
+static void free_segment_if_empty(dsa_area *area,
+								  dsa_segment_map *segment_map);
 static void unlink_span(dsa_area *area, dsa_area_span *span);
 static void add_span_to_fullness_class(dsa_area *area, dsa_area_span *span,
 									   dsa_pointer span_pointer, int fclass);
@@ -914,8 +916,17 @@ dsa_free(dsa_area *area, dsa_pointer dp)
 						   DSA_EXTRACT_OFFSET(span->start) / FPM_PAGE_SIZE,
 						   span->npages);
 
+		/*
+		 * GPDB: and the segment to the OS if it is now entirely free, as
+		 * destroy_superblock() does (tempcat.c keeps its rows in large
+		 * objects).
+		 */
+		check_for_freed_segments_locked(area);
+		free_segment_if_empty(area, segment_map);
+
 		/* Move segment to appropriate bin if necessary. */
-		rebin_segment(area, segment_map);
+		if (segment_map->header != NULL)
+			rebin_segment(area, segment_map);
 		LWLockRelease(DSA_AREA_LOCK(area));
 
 		/* Unlink span. */
@@ -1953,35 +1964,7 @@ destroy_superblock(dsa_area *area, dsa_pointer span_pointer)
 	FreePageManagerPut(segment_map->fpm,
 					   DSA_EXTRACT_OFFSET(span->start) / FPM_PAGE_SIZE,
 					   span->npages);
-	/* Check if the segment is now entirely free. */
-	if (fpm_largest(segment_map->fpm) == segment_map->header->usable_pages)
-	{
-		dsa_segment_index index = get_segment_index(area, segment_map);
-
-		/* If it's not the segment with extra control data, free it. */
-		if (index != 0)
-		{
-			/*
-			 * Give it back to the OS, and allow other backends to detect that
-			 * they need to detach.
-			 */
-			unlink_segment(area, segment_map);
-			segment_map->header->freed = true;
-			Assert(area->control->total_segment_size >=
-				   segment_map->header->size);
-			area->control->total_segment_size -=
-				segment_map->header->size;
-			if (segment_map->header->vmem_pid == MyProcPid)
-				VmemTracker_ReleaseVmem(segment_map->header->size);
-			dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
-			dsm_detach(segment_map->segment);
-			area->control->segment_handles[index] = DSM_HANDLE_INVALID;
-			++area->control->freed_segment_counter;
-			segment_map->segment = NULL;
-			segment_map->header = NULL;
-			segment_map->mapped_address = NULL;
-		}
-	}
+	free_segment_if_empty(area, segment_map);
 
 	/* Move segment to appropriate bin if necessary. */
 	if (segment_map->header != NULL)
@@ -1999,6 +1982,40 @@ destroy_superblock(dsa_area *area, dsa_pointer span_pointer)
 	 */
 	if (size_class != DSA_SCLASS_BLOCK_OF_SPANS)
 		dsa_free(area, span_pointer);
+}
+
+/*
+ * Give a segment that is now entirely free back to the OS, unless it is the
+ * one with extra control data.  Caller holds the area lock.
+ */
+static void
+free_segment_if_empty(dsa_area *area, dsa_segment_map *segment_map)
+{
+	dsa_segment_index index;
+
+	if (fpm_largest(segment_map->fpm) != segment_map->header->usable_pages)
+		return;
+	index = get_segment_index(area, segment_map);
+	if (index == 0)
+		return;
+
+	/*
+	 * Give it back to the OS, and allow other backends to detect that they
+	 * need to detach.
+	 */
+	unlink_segment(area, segment_map);
+	segment_map->header->freed = true;
+	Assert(area->control->total_segment_size >= segment_map->header->size);
+	area->control->total_segment_size -= segment_map->header->size;
+	if (segment_map->header->vmem_pid == MyProcPid)
+		VmemTracker_ReleaseVmem(segment_map->header->size);
+	dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
+	dsm_detach(segment_map->segment);
+	area->control->segment_handles[index] = DSM_HANDLE_INVALID;
+	++area->control->freed_segment_counter;
+	segment_map->segment = NULL;
+	segment_map->header = NULL;
+	segment_map->mapped_address = NULL;
 }
 
 static void
