@@ -4400,7 +4400,10 @@ tempcat_report_full(void)
 
 /*
  * Create an entry, freeing dead rows of the current transaction if the area
- * is full.  Caller holds the exclusive lock, and releases it on error.
+ * is full, and then the empty superblocks that dsa_free() keeps, one per
+ * size class: once rows of many sizes came and went, those can take up the
+ * whole area, and rows of a size class that has none get no room.  Caller
+ * holds the exclusive lock, and releases it on error.
  */
 static dsa_pointer
 tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
@@ -4411,6 +4414,11 @@ tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
 	ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
 	if (!DsaPointerIsValid(ep) && tempcat_reclaim_dead() > 0)
 		ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
+	if (!DsaPointerIsValid(ep))
+	{
+		dsa_trim(tc_area);
+		ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
+	}
 	return ep;
 }
 

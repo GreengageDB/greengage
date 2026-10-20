@@ -389,10 +389,10 @@ SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_many%';
 
 \c
 SET gp_enable_temp_memory_catalog = on;
-SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_temp_memory_catalog_max_size = '4MB';
 DO $$
 BEGIN
-  FOR i IN 1..500 LOOP
+  FOR i IN 1..1000 LOOP
     EXECUTE format('CREATE TEMP TABLE tc_full%s (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)', i);
   END LOOP;
 END $$;
@@ -409,6 +409,20 @@ SELECT count(*) FROM pg_class
   (pg_my_temp_schema(),
    (SELECT oid FROM pg_namespace
      WHERE nspname = 'pg_toast_temp_' || substr(pg_my_temp_schema()::regnamespace::text, 9)));
+-- Once the rows are gone, rows of other sizes find room again.
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT relname FROM pg_class
+            WHERE relname LIKE 'tc\_full%' AND relkind = 'r'
+              AND relnamespace = pg_my_temp_schema() LOOP
+    EXECUTE 'DROP TABLE ' || r.relname;
+  END LOOP;
+END $$;
+CREATE TEMP TABLE tc_full_ao (a int) WITH (appendonly=true) DISTRIBUTED BY (a);
+CREATE TYPE pg_temp.tc_full_rg AS RANGE (subtype = int4);
+CREATE TEMP TABLE tc_full_p (a int, b int) DISTRIBUTED BY (a)
+ PARTITION BY RANGE (b) (START (0) END (2) EVERY (1));
 
 -- More of what temporary objects kept in memory do as those on disk do.
 \c
@@ -1126,14 +1140,14 @@ INSERT INTO tc_ru_d_t VALUES (2, -1);
 SELECT * FROM tc_ru_d_t;
 
 -- Big values of rows kept in memory are compressed, as on disk: a function
--- body of 3 MB fits a session that keeps up to 1 MB.
+-- body of 6 MB fits a session that keeps up to 4 MB.
 \c
-SET gp_temp_memory_catalog_max_size = '1MB';
+SET gp_temp_memory_catalog_max_size = '4MB';
 SET gp_enable_temp_memory_catalog = on;
 DO $$
 BEGIN
   EXECUTE format('CREATE FUNCTION pg_temp.tc_big() RETURNS int LANGUAGE sql AS %L',
-                 'SELECT length(' || quote_literal(repeat('abc', 1000000)) || ')');
+                 'SELECT length(' || quote_literal(repeat('abc', 2000000)) || ')');
 END $$;
 SELECT 'pg_temp.tc_big()'::regprocedure::oid >= 4026531840 AS reserved;
 SELECT pg_temp.tc_big();
