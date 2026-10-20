@@ -41,11 +41,17 @@ Follow [appropriate linux steps](README.Linux.md) for getting your system ready 
 
 ```sh
 git submodule update --init --recursive --force
-make devel -C gpAux PARALLEL_MAKE_OPTS=-j"$(nproc)"
-source ~/greengage-db-devel/greengage_path.sh
-make create-demo-cluster
-source gpAux/gpdemo/gpdemo-env.sh
 ```
+
+On Linux, build and install with the `gpAux` build system.
+
+```sh
+make devel -C gpAux GPROOT="$HOME" PARALLEL_MAKE_OPTS=-j"$(nproc)"
+```
+
+The installation directory is `$GPROOT/$GPDIR`. These commands install into
+`~/greengage-db-devel`. To use another directory, set `GPROOT` to its parent
+and `GPDIR` to its name, and source `greengage_path.sh` from that directory.
 
 The directory, the TCP ports, the number of segments, and the existence of
 standbys for segments and coordinator for the demo cluster can be changed
@@ -109,11 +115,11 @@ PGPORT=5555 make installcheck-world
 
 ### Building GPDB without GPORCA
 
-Currently, GPDB is built with GPORCA by default. If you want to build GPDB
-without GPORCA, pass the `--disable-orca` flag through `CONFIGURE_FLAGS`.
+Currently, GPDB is built with GPORCA by default. On Linux, build GPDB
+without GPORCA by passing `--disable-orca` through `CONFIGURE_FLAGS`.
 ```sh
 make distclean
-CONFIGURE_FLAGS=--disable-orca make devel -C gpAux PARALLEL_MAKE_OPTS=-j"$(nproc)"
+CONFIGURE_FLAGS=--disable-orca make devel -C gpAux GPROOT="$HOME" PARALLEL_MAKE_OPTS=-j"$(nproc)"
 ```
 
 ### Building GPDB with Python3 enabled
