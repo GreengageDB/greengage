@@ -300,9 +300,10 @@ END $$;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_loop%';
 
 -- Creating and dropping temporary tables leaves no dead rows behind in the
--- on-disk catalogs.
-SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS ins_before \gset
+-- on-disk catalogs.  (The count is taken in the transaction: the counts not
+-- sent yet go when the session lets go of a slice at its start.)
 BEGIN;
+SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS ins_before \gset
 CREATE TEMP TABLE tc_churn (a int PRIMARY KEY, b text) DISTRIBUTED BY (a);
 DROP TABLE tc_churn;
 SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) - :ins_before AS pg_class_inserts;
