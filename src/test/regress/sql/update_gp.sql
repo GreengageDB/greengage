@@ -538,8 +538,6 @@ drop table t1_13265;
 drop table t2_13265;
 drop table into_table;
 drop table from_table;
-drop index uidx_t_insert_on_conflict_update_distkey;
-drop table t_insert_on_conflict_update_distkey;
 drop view v2_insert_on_conflict_update_distkey;
 drop view v_insert_on_conflict_update_distkey;
 drop view v_insert_on_conflict_update_distkey_repl;
