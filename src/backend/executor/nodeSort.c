@@ -118,35 +118,12 @@ ExecSort(PlanState *pstate)
 		outerNode = outerPlanState(node);
 		tupDesc = ExecGetResultType(outerNode);
 
-<<<<<<< HEAD
-		tuplesortstate = tuplesort_begin_heap(//&node->ss,
-											  tupDesc,
-											  plannode->numCols,
-											  plannode->sortColIdx,
-											  plannode->sortOperators,
-											  plannode->collations,
-											  plannode->nullsFirst,
-											  PlanStateOperatorMemKB((PlanState *) node),
-											  NULL,
-											  node->randomAccess);
-
-||||||| e1c1c30f635
-		tuplesortstate = tuplesort_begin_heap(tupDesc,
-											  plannode->numCols,
-											  plannode->sortColIdx,
-											  plannode->sortOperators,
-											  plannode->collations,
-											  plannode->nullsFirst,
-											  work_mem,
-											  NULL,
-											  node->randomAccess);
-=======
 		if (node->datumSort)
 			tuplesortstate = tuplesort_begin_datum(TupleDescAttr(tupDesc, 0)->atttypid,
 												   plannode->sortOperators[0],
 												   plannode->collations[0],
 												   plannode->nullsFirst[0],
-												   work_mem,
+												   PlanStateOperatorMemKB((PlanState *) node),
 												   NULL,
 												   node->randomAccess);
 		else
@@ -156,10 +133,9 @@ ExecSort(PlanState *pstate)
 												  plannode->sortOperators,
 												  plannode->collations,
 												  plannode->nullsFirst,
-												  work_mem,
+												  PlanStateOperatorMemKB((PlanState *) node),
 												  NULL,
 												  node->randomAccess);
->>>>>>> 3b231596ccf
 		if (node->bounded)
 			tuplesort_set_bound(tuplesortstate, node->bound);
 		node->tuplesortstate = (void *) tuplesortstate;
@@ -247,20 +223,6 @@ ExecSort(PlanState *pstate)
 			   "retrieving tuple from tuplesort");
 
 	slot = node->ss.ps.ps_ResultTupleSlot;
-<<<<<<< HEAD
-	(void) tuplesort_gettupleslot(tuplesortstate,
-								  ScanDirectionIsForward(dir),
-								  false, slot, NULL);
-
-	if (TupIsNull(slot) && !node->delayEagerFree)
-	{
-		ExecEagerFreeSort(node);
-	}
-||||||| e1c1c30f635
-	(void) tuplesort_gettupleslot(tuplesortstate,
-								  ScanDirectionIsForward(dir),
-								  false, slot, NULL);
-=======
 
 	/*
 	 * Fetch the next sorted item from the appropriate tuplesort function. For
@@ -280,7 +242,11 @@ ExecSort(PlanState *pstate)
 		(void) tuplesort_gettupleslot(tuplesortstate,
 									  ScanDirectionIsForward(dir),
 									  false, slot, NULL);
->>>>>>> 3b231596ccf
+
+	if (TupIsNull(slot) && !node->delayEagerFree)
+	{
+		ExecEagerFreeSort(node);
+	}
 
 	return slot;
 }
