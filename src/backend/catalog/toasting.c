@@ -283,17 +283,9 @@ create_toast_table(Relation rel, Oid toastOid, Oid toastIndexOid,
 										   false,
 										   true,
 										   true,
-<<<<<<< HEAD
-										   InvalidOid,
+										   OIDOldToast,
 										   NULL,
 										   /* valid_opts */ false);
-||||||| e1c1c30f635
-										   InvalidOid,
-										   NULL);
-=======
-										   OIDOldToast,
-										   NULL);
->>>>>>> 3b231596ccf
 	Assert(toast_relid != InvalidOid);
 
 	/* make the toast relation visible, else table_open will fail */

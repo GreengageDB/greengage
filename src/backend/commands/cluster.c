@@ -909,15 +909,8 @@ make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
 									 &isNull);
 		if (isNull)
 			reloptions = (Datum) 0;
-<<<<<<< HEAD
-		NewHeapCreateToastTable(OIDNewHeap, reloptions, lockmode);
-||||||| e1c1c30f635
-
-		NewHeapCreateToastTable(OIDNewHeap, reloptions, lockmode);
-=======
 
 		NewHeapCreateToastTable(OIDNewHeap, reloptions, lockmode, toastid);
->>>>>>> 3b231596ccf
 
 		ReleaseSysCache(tuple);
 	}
