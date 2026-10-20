@@ -3263,8 +3263,8 @@ final_cost_nestloop(PlannerInfo *root, NestPath *path,
 	if (inner_path_rows <= 0)
 		inner_path_rows = 1;
 
-	if (CdbPathLocus_IsPartitioned(path->path.locus))
-		numsegments = CdbPathLocus_NumSegments(path->path.locus);
+	if (CdbPathLocus_IsPartitioned(path->jpath.path.locus))
+		numsegments = CdbPathLocus_NumSegments(path->jpath.path.locus);
 	else
 		numsegments = 1;
 
@@ -3272,14 +3272,8 @@ final_cost_nestloop(PlannerInfo *root, NestPath *path,
 	if (path->jpath.path.param_info)
 		path->jpath.path.rows = path->jpath.path.param_info->ppi_rows;
 	else
-<<<<<<< HEAD
-		path->path.rows = path->path.parent->rows;
-	path->path.rows /= numsegments;
-||||||| e1c1c30f635
-		path->path.rows = path->path.parent->rows;
-=======
 		path->jpath.path.rows = path->jpath.path.parent->rows;
->>>>>>> 3b231596ccf
+	path->jpath.path.rows /= numsegments;
 
 	/* For partial paths, scale row estimate. */
 	if (path->jpath.path.parallel_workers > 0)

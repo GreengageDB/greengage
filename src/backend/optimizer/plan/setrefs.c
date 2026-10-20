@@ -665,34 +665,24 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 	 */
 	switch (nodeTag(plan))
 	{
-		case T_SeqScan: /* Rely on structure equivalence */
+		case T_SeqScan:
 			{
-				Scan    *splan = (Scan *) plan;
+				SeqScan    *splan = (SeqScan *) plan;
 
 				if (cdb_expr_requires_full_eval((Node *)plan->targetlist))
 					return cdb_insert_result_node(root, plan, rtoffset);
 
-<<<<<<< HEAD
-				splan->scanrelid += rtoffset;
+				splan->scan.scanrelid += rtoffset;
 
 				/* If the scan appears below a shareinput, we hit this assert. */
 #ifdef USE_ASSERT_CHECKING
-				Assert(splan->scanrelid <= list_length(root->glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
-				RangeTblEntry *rte = rt_fetch(splan->scanrelid, root->glob->finalrtable);
+				Assert(splan->scan.scanrelid <= list_length(root->glob->finalrtable) && "Scan node's relid is outside the finalrtable!");
+				RangeTblEntry *rte = rt_fetch(splan->scan.scanrelid, root->glob->finalrtable);
 				Assert((rte->rtekind == RTE_RELATION || rte->rtekind == RTE_CTE) && "Scan plan should refer to a scan relation");
 #endif
 
-				splan->plan.targetlist =
-					fix_scan_list(root, splan->plan.targetlist,
-||||||| e1c1c30f635
-				splan->scanrelid += rtoffset;
-				splan->plan.targetlist =
-					fix_scan_list(root, splan->plan.targetlist,
-=======
-				splan->scan.scanrelid += rtoffset;
 				splan->scan.plan.targetlist =
 					fix_scan_list(root, splan->scan.plan.targetlist,
->>>>>>> 3b231596ccf
 								  rtoffset, NUM_EXEC_TLIST(plan));
 				splan->scan.plan.qual =
 					fix_scan_list(root, splan->scan.plan.qual,

@@ -134,7 +134,7 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 	 * get the relation object id from the relid'th entry in the range table,
 	 * open that relation and acquire appropriate lock on it.
 	 */
-	currentRelation = ExecOpenScanRelation(estate, node->scanrelid, eflags);
+	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
 
 	return ExecInitSeqScanForPartition(node, estate, currentRelation);
 }
@@ -170,19 +170,7 @@ ExecInitSeqScanForPartition(SeqScan *node, EState *estate,
 	/*
 	 * open the scan relation
 	 */
-<<<<<<< HEAD
 	scanstate->ss.ss_currentRelation = currentRelation;
-||||||| e1c1c30f635
-	scanstate->ss.ss_currentRelation =
-		ExecOpenScanRelation(estate,
-							 node->scanrelid,
-							 eflags);
-=======
-	scanstate->ss.ss_currentRelation =
-		ExecOpenScanRelation(estate,
-							 node->scan.scanrelid,
-							 eflags);
->>>>>>> 3b231596ccf
 
 	/* and create slot with the appropriate rowtype */
 	ExecInitScanTupleSlot(estate, &scanstate->ss,

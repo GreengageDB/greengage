@@ -3757,24 +3757,12 @@ create_nestloop_path(PlannerInfo *root,
 		restrict_clauses = jclauses;
 	}
 
-<<<<<<< HEAD
 
 	pathnode = makeNode(NestPath);
-	pathnode->path.pathtype = T_NestLoop;
-	pathnode->path.parent = joinrel;
-	pathnode->path.pathtarget = joinrel->reltarget;
-	pathnode->path.param_info =
-||||||| e1c1c30f635
-	pathnode->path.pathtype = T_NestLoop;
-	pathnode->path.parent = joinrel;
-	pathnode->path.pathtarget = joinrel->reltarget;
-	pathnode->path.param_info =
-=======
 	pathnode->jpath.path.pathtype = T_NestLoop;
 	pathnode->jpath.path.parent = joinrel;
 	pathnode->jpath.path.pathtarget = joinrel->reltarget;
 	pathnode->jpath.path.param_info =
->>>>>>> 3b231596ccf
 		get_joinrel_parampathinfo(root,
 								  joinrel,
 								  outer_path,
@@ -3794,13 +3782,13 @@ create_nestloop_path(PlannerInfo *root,
 	pathnode->jpath.innerjoinpath = inner_path;
 	pathnode->jpath.joinrestrictinfo = restrict_clauses;
 
-	pathnode->path.locus = join_locus;
-	pathnode->path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
+	pathnode->jpath.path.locus = join_locus;
+	pathnode->jpath.path.motionHazard = outer_path->motionHazard || inner_path->motionHazard;
 
 	/* we're only as rescannable as our child plans */
-	pathnode->path.rescannable = outer_path->rescannable && inner_path->rescannable;
+	pathnode->jpath.path.rescannable = outer_path->rescannable && inner_path->rescannable;
 
-	pathnode->path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
+	pathnode->jpath.path.sameslice_relids = bms_union(inner_path->sameslice_relids, outer_path->sameslice_relids);
 
 	/*
 	 * inner_path & outer_path are possibly modified above. Let's recalculate
@@ -3818,7 +3806,7 @@ create_nestloop_path(PlannerInfo *root,
 		return (Path *) create_unique_rowid_path(root,
 												 joinrel,
 												 (Path *) pathnode,
-												 pathnode->innerjoinpath->parent->relids,
+												 pathnode->jpath.innerjoinpath->parent->relids,
 												 rowidexpr_id);
 	}
 
@@ -3841,7 +3829,7 @@ create_nestloop_path(PlannerInfo *root,
 	 */
 	return turn_volatile_seggen_to_singleqe(root,
 											(Path *) pathnode,
-											(Node *) (pathnode->joinrestrictinfo));
+											(Node *) (pathnode->jpath.joinrestrictinfo));
 }
 
 /*
