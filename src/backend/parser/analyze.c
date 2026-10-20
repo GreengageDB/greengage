@@ -2415,10 +2415,7 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 		 * We will do another coercion at the top, after processing the second
 		 * branch.
 		 */
-<<<<<<< HEAD
-		if (isTopLevel &&
-			pstate->p_parent_cte &&
-			pstate->p_parent_cte->cterecursive)
+		if (isTopLevel && recursive)
 		{
 			List *ltargetlist;
 			List *selected_types;
@@ -2428,13 +2425,6 @@ transformSetOperationTree_internal(ParseState *pstate, SelectStmt *stmt,
 
 			coerceSetOpTypes(pstate, op->larg, selected_types, selected_typmods, &ltargetlist);
 
-||||||| e1c1c30f635
-		if (isTopLevel &&
-			pstate->p_parent_cte &&
-			pstate->p_parent_cte->cterecursive)
-=======
-		if (isTopLevel && recursive)
->>>>>>> 3b231596ccf
 			determineRecursiveColTypes(pstate, op->larg, ltargetlist);
 		}
 
@@ -2496,6 +2486,8 @@ coerceSetOpTypes(ParseState *pstate, Node *sop,
 		ListCell   *pct;
 		ListCell   *pcm;
 		const char *context;
+		bool		recursive = (pstate->p_parent_cte &&
+								 pstate->p_parent_cte->cterecursive);
 
 		Assert(IsA(op, SetOperationStmt));
 

@@ -697,12 +697,14 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1
    ->  Sort
          Sort Key: "*VALUES*".column1
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) union select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -724,7 +726,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (va
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) intersect select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -744,7 +747,8 @@ select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (value
                      ->  Values Scan on "*VALUES*"
                ->  Subquery Scan on "*SELECT* 2"
                      ->  Values Scan on "*VALUES*_1"
-(8 rows)
+ Optimizer: Postgres query optimizer
+(9 rows)
 
 select x from (values (row(1, 2)), (row(1, 3))) _(x) except select x from (values (row(1, 2)), (row(1, 4))) _(x);
    x   
@@ -760,12 +764,14 @@ select x from (values (row(100::money)), (row(200::money))) _(x) union select x 
                   QUERY PLAN                   
 -----------------------------------------------
  Unique
+   Group Key: "*VALUES*".column1
    ->  Sort
          Sort Key: "*VALUES*".column1
          ->  Append
                ->  Values Scan on "*VALUES*"
                ->  Values Scan on "*VALUES*_1"
-(6 rows)
+ Optimizer: Postgres query optimizer
+(8 rows)
 
 select x from (values (row(100::money)), (row(200::money))) _(x) union select x from (values (row(100::money)), (row(300::money))) _(x);
      x     
