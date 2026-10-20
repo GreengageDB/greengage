@@ -437,8 +437,11 @@ static HTAB *tc_used = NULL;
 /* tc_used may include objects not used any more. */
 static bool tc_used_dirty = false;
 
-/* The transaction changed our pg_depend or pg_shdepend rows in memory */
-static bool tc_depend_changed = false;
+/*
+ * The deepest subtransaction level that changed our pg_depend or pg_shdepend
+ * rows in memory, 0 if none: see tempcat_xact_callback().
+ */
+static int	tc_depend_level = 0;
 
 struct TempcatScanData
 {
@@ -2009,7 +2012,7 @@ tempcat_use_referenced(Relation rel, HeapTuple tup)
 
 	if (RelationGetRelid(rel) == DependRelationId ||
 		RelationGetRelid(rel) == SharedDependRelationId)
-		tc_depend_changed = true;
+		tc_depend_level = Max(tc_depend_level, GetCurrentTransactionNestLevel());
 	if (RelationGetRelid(rel) == DependRelationId)
 	{
 		bool		isnull;
@@ -3930,9 +3933,9 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			tc_slice_given = false;
 			tc_slice_given_level = 0;
 			tc_slice_refused = false;
-			if (tc_depend_changed)
+			if (tc_depend_level > 0)
 				tempcat_recompute_used(true);
-			tc_depend_changed = false;
+			tc_depend_level = 0;
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
@@ -3941,9 +3944,9 @@ tempcat_xact_callback(XactEvent event, void *arg)
 			tc_slice_given_level = 0;
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;
-			if (tc_depend_changed)
+			if (tc_depend_level > 0)
 				tempcat_recompute_used(false);
-			tc_depend_changed = false;
+			tc_depend_level = 0;
 			break;
 		default:
 			break;
@@ -3967,8 +3970,12 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 			tc_slice_given_level = 0;
 		if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 			tc_used_dirty = true;
-		if (tc_depend_changed)
+		/* only if it changed such rows: not at every exception block */
+		if (tc_depend_level >= level)
+		{
 			tempcat_recompute_used(false);
+			tc_depend_level = level - 1;
+		}
 	}
 
 	/* A committed subtransaction's changes are its parent's now. */
@@ -3978,6 +3985,8 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 		tc_change_level = level - 1;
 	if (tc_slice_given_level >= level)
 		tc_slice_given_level = level - 1;
+	if (tc_depend_level >= level)
+		tc_depend_level = level - 1;
 }
 
 /*
@@ -4516,7 +4525,7 @@ tempcat_mark_deleted(TempcatEntry *e, dsa_pointer ep,
 	tc_ndeletions++;
 	if (tempcat_catalogs[e->catidx].relid == DependRelationId ||
 		tempcat_catalogs[e->catidx].relid == SharedDependRelationId)
-		tc_depend_changed = true;
+		tc_depend_level = Max(tc_depend_level, GetCurrentTransactionNestLevel());
 }
 
 /* Replace a row in memory by a new version, in memory, by command 'cid'. */
