@@ -2101,9 +2101,12 @@ tempcat_recompute_used(bool committing)
 
 	for (i = 0; i < lengthof(catalogs); i++)
 		maxstill += 2 * tc_root->catalogs[tempcat_catalog_index(catalogs[i])].nentries;
-	still = MemoryContextAllocExtended(CurrentMemoryContext,
-									   sizeof(TempcatUsedKey) * Max(maxstill, 1),
-									   MCXT_ALLOC_NO_OOM);
+	/*
+	 * malloc(), not palloc(): MCXT_ALLOC_NO_OOM does not keep gp_malloc()
+	 * from raising an error when vmem or the resource group's memory runs
+	 * short (gp_failed_to_alloc()).
+	 */
+	still = malloc(sizeof(TempcatUsedKey) * Max(maxstill, 1));
 	if (still == NULL)
 	{
 		tc_used_dirty = true;
@@ -2164,7 +2167,7 @@ tempcat_recompute_used(bool committing)
 		tempcat_unuse(used);
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
-	pfree(still);
+	free(still);
 
 	/* Nothing locked instead of counted any more: DROP need not try locks */
 	if (tc_used_overflow)
