@@ -2067,6 +2067,29 @@ select count(distinct a) filter (where a > 3), count(distinct b) from dqa_f1;
     13 |     5
 (1 row)
 
+-- filter of a non-first DQA must not see columns nulled out by the previous
+-- split of the same input tuple
+select count(distinct b), count(distinct a) filter (where a > 3) from dqa_f1;
+ count | count 
+-------+-------
+     5 |    13
+(1 row)
+
+select count(distinct a), count(distinct b) filter (where b > 3) from dqa_f1;
+ count | count 
+-------+-------
+    17 |     1
+(1 row)
+
+select c, count(distinct b) from dqa_f1 group by c
+  having count(distinct a) filter (where a > 3) > 1 order by c;
+ c | count 
+---+-------
+ 0 |     5
+ 1 |     5
+ 2 |     5
+(3 rows)
+
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
                                               QUERY PLAN                                              
 ------------------------------------------------------------------------------------------------------

@@ -353,6 +353,13 @@ select count(distinct a) filter (where a > 3),count( distinct b) filter (where a
 -- fix hang of multi-dqa with filter (https://github.com/GreengageDB/greengage/issues/14728)
 select count(distinct a) filter (where a > 3), count(distinct b) from dqa_f1;
 
+-- filter of a non-first DQA must not see columns nulled out by the previous
+-- split of the same input tuple
+select count(distinct b), count(distinct a) filter (where a > 3) from dqa_f1;
+select count(distinct a), count(distinct b) filter (where b > 3) from dqa_f1;
+select c, count(distinct b) from dqa_f1 group by c
+  having count(distinct a) filter (where a > 3) > 1 order by c;
+
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1;
 
 explain select sum(distinct a) filter (where a > 0), sum(distinct b) filter (where a > 0) from dqa_f1 group by b;
