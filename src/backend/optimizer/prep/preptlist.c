@@ -51,6 +51,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
+#include "parser/analyze.h"
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
 #include "partitioning/partdesc.h"
@@ -60,7 +61,6 @@
 #include "catalog/gp_distribution_policy.h"     /* CDB: POLICYTYPE_PARTITIONED */
 #include "catalog/pg_inherits.h"
 #include "optimizer/plancat.h"
-#include "parser/analyze.h"
 #include "parser/parse_relation.h"
 #include "utils/lsyscache.h"
 
