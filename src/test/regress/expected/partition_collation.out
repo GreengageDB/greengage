@@ -329,6 +329,38 @@ order by partitionname;
               1 | s2            | 'b'::text COLLATE coll_en | 'z'::text COLLATE coll_en
 (2 rows)
 
+-- LIST values carry the collation of the partitioning key too, including
+-- values added by ADD PARTITION and SPLIT PARTITION.
+create table lp_c (id int, k text collate "C")
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ partition p2 values ('c', 'd'));
+alter table lp_c add partition p3 values ('e');
+alter table lp_c split partition p2 at ('c') into (partition p2a, partition p2b);
+create table lp_en (id int, k text collate coll_en)
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ partition p2 values ('c', 'd'));
+alter table lp_en add partition p3 values ('e');
+alter table lp_en split partition p2 at ('c') into (partition p2a, partition p2b);
+select tablename, partitionname, partitionlistvalues
+from pg_partitions
+where schemaname = 'partition_collation' and tablename in ('lp_c', 'lp_en')
+order by tablename, partitionname;
+ tablename | partitionname |                 partitionlistvalues                  
+-----------+---------------+------------------------------------------------------
+ lp_c      | p1            | 'a'::text COLLATE "C", 'b'::text COLLATE "C"
+ lp_c      | p2a           | 'd'::text COLLATE "C"
+ lp_c      | p2b           | 'c'::text COLLATE "C"
+ lp_c      | p3            | 'e'::text COLLATE "C"
+ lp_en     | p1            | 'a'::text COLLATE coll_en, 'b'::text COLLATE coll_en
+ lp_en     | p2a           | 'd'::text COLLATE coll_en
+ lp_en     | p2b           | 'c'::text COLLATE coll_en
+ lp_en     | p3            | 'e'::text COLLATE coll_en
+(8 rows)
+
 --
 -- The partition definition is printed in the CREATE TABLE syntax, which has
 -- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
@@ -383,6 +415,30 @@ select pg_get_partition_template_def('rp_sub'::regclass, true, false);
            SUBPARTITION s2 START ('b'::text) END ('z'::text)  +
            )                                                  +
  
+(1 row)
+
+select pg_get_partition_def('lp_c'::regclass, true);
+           pg_get_partition_def            
+-------------------------------------------
+ PARTITION BY LIST(k)                     +
+           (                              +
+           PARTITION p1 VALUES('a', 'b'), +
+           PARTITION p2a VALUES('d'),     +
+           PARTITION p3 VALUES('e'),      +
+           PARTITION p2b VALUES('c')      +
+           )
+(1 row)
+
+select pg_get_partition_def('lp_en'::regclass, true);
+           pg_get_partition_def            
+-------------------------------------------
+ PARTITION BY LIST(k)                     +
+           (                              +
+           PARTITION p1 VALUES('a', 'b'), +
+           PARTITION p2a VALUES('d'),     +
+           PARTITION p3 VALUES('e'),      +
+           PARTITION p2b VALUES('c')      +
+           )
 (1 row)
 
 do $$

@@ -242,6 +242,31 @@ from pg_partition_templates
 where schemaname = 'partition_collation' and tablename = 'rp_sub'
 order by partitionname;
 
+-- LIST values carry the collation of the partitioning key too, including
+-- values added by ADD PARTITION and SPLIT PARTITION.
+create table lp_c (id int, k text collate "C")
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ partition p2 values ('c', 'd'));
+
+alter table lp_c add partition p3 values ('e');
+alter table lp_c split partition p2 at ('c') into (partition p2a, partition p2b);
+
+create table lp_en (id int, k text collate coll_en)
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ partition p2 values ('c', 'd'));
+
+alter table lp_en add partition p3 values ('e');
+alter table lp_en split partition p2 at ('c') into (partition p2a, partition p2b);
+
+select tablename, partitionname, partitionlistvalues
+from pg_partitions
+where schemaname = 'partition_collation' and tablename in ('lp_c', 'lp_en')
+order by tablename, partitionname;
+
 --
 -- The partition definition is printed in the CREATE TABLE syntax, which has
 -- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
@@ -251,6 +276,8 @@ select pg_get_partition_def('rp_c'::regclass, true);
 select pg_get_partition_def('rp_en'::regclass, true);
 select pg_get_partition_def('rp_sub'::regclass, true);
 select pg_get_partition_template_def('rp_sub'::regclass, true, false);
+select pg_get_partition_def('lp_c'::regclass, true);
+select pg_get_partition_def('lp_en'::regclass, true);
 
 do $$
 begin

@@ -3990,6 +3990,7 @@ validate_list_partition(partValidationState *vstate)
 	Node	   *n = vstate->spec;
 	ListCell   *lc;
 	List	   *coltypes = NIL;
+	List	   *colcollations = NIL;
 
 	/* just recreate attnum references */
 	foreach(lc, vstate->pBy->keys)
@@ -3998,6 +3999,7 @@ validate_list_partition(partValidationState *vstate)
 		char	   *colname = strVal(lfirst(lc));
 		bool		found = false;
 		TypeName   *typname = NULL;
+		Oid			colcollation = InvalidOid;
 
 		foreach(llc2, vstate->cxt->columns)
 		{
@@ -4013,11 +4015,13 @@ validate_list_partition(partValidationState *vstate)
 										 &column->typeName->typemod);
 				}
 				typname = column->typeName;
+				colcollation = GetColumnDefCollation(NULL, column, column->typeName->typeOid);
 				break;
 			}
 		}
 		Assert(found);
 		coltypes = lappend(coltypes, typname);
+		colcollations = lappend_oid(colcollations, colcollation);
 	}
 
 	if (!PointerIsValid(n))
@@ -4056,6 +4060,7 @@ validate_list_partition(partValidationState *vstate)
 			int			nvals;
 			int			nparts = list_length(vstate->pBy->keys);
 			ListCell   *llc2;
+			ListCell   *llccoll;
 
 			nvals = list_length(vals);
 
@@ -4077,26 +4082,35 @@ validate_list_partition(partValidationState *vstate)
 			 * Transform expressions
 			 */
 			llc2 = list_head(coltypes);
+			llccoll = list_head(colcollations);
 			foreach(lc_val, vals)
 			{
 				Node	   *node = transformExpr(pstate,
 												 (Node *) lfirst(lc_val),
 												 EXPR_KIND_PARTITION_EXPRESSION);
 				TypeName   *type = lfirst(llc2);
+				Oid			collation = lfirst_oid(llccoll);
 				int32		typmod;
 				Oid			typid;
 
 				typenameTypeIdAndMod(pstate, type, &typid, &typmod);
-				node = coerce_partition_value_to_const(pstate,
-													   node, typid, typmod,
-													   PARTTYP_LIST);
+				node = coerce_partition_value_to_collated_const(pstate,
+																node, typid, typmod,
+																PARTTYP_LIST,
+																collation);
 
 				tvals = lappend(tvals, node);
 
 				if (lnext(llc2))
+				{
 					llc2 = lnext(llc2);
+					llccoll = lnext(llccoll);
+				}
 				else
+				{
 					llc2 = list_head(coltypes); /* circular */
+					llccoll = list_head(colcollations);
+				}
 			}
 			Assert(list_length(tvals) == nvals);
 

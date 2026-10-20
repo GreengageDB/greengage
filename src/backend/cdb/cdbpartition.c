@@ -3930,14 +3930,15 @@ magic_expr_to_datum(Relation rel, PartitionNode *partnode,
 
 			if (lhsid != c1->consttype)
 			{
-				/* see coerce_partition_value_to_const */
+				/* see coerce_partition_value_to_collated_const */
 				Node	   *out;
 
-				out = coerce_partition_value_to_const(NULL,
-													  n1,
-													  lhsid,
-													  attribute->atttypmod,
-													  char_to_parttype(partnode->part->parkind));
+				out = coerce_partition_value_to_collated_const(NULL,
+															   n1,
+															   lhsid,
+															   attribute->atttypmod,
+															   char_to_parttype(partnode->part->parkind),
+															   attribute->attcollation);
 				if (!out)
 					ereport(ERROR,
 							(errcode(ERRCODE_DATATYPE_MISMATCH),
