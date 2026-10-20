@@ -661,7 +661,10 @@ my %tests = (
 		create_order => 100,
 		create_sql =>
 		  'ALTER SCHEMA public OWNER TO "regress_quoted  \"" role";',
-		regexp => qr/^(GRANT|REVOKE)/m,
+		# GPDB: every Greengage dump grants SELECT on the gp_* catalog views
+		# from cdb_schema.sql (they have no pg_init_privs entries), so ignore
+		# those.
+		regexp => qr/^(GRANT|REVOKE) (?!SELECT ON TABLE pg_catalog\.gp_)/m,
 		unlike => { defaults_public_owner => 1 },
 	},
 
@@ -1005,7 +1008,10 @@ my %tests = (
 	'COMMENT ON SCHEMA public' => {
 		regexp => qr/^COMMENT ON SCHEMA public IS .+;/m,
 		# regress_public_owner emits this, due to create_sql of next test
+		# GPDB: binary upgrade drops and re-creates the public schema to
+		# preserve its OID, so its comment is dumped too.
 		like => {
+			binary_upgrade     => 1,
 			pg_dumpall_dbprivs => 1,
 			pg_dumpall_exclude => 1,
 		},
@@ -3595,7 +3601,17 @@ my %tests = (
 			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
 			/xm,
 		like => { %full_runs, section_pre_data => 1, },
-		unlike => { no_privs => 1, },
+		unlike => { binary_upgrade => 1, no_privs => 1, },
+	},
+
+	# GPDB: binary upgrade re-creates the public schema, so its ACL is dumped
+	# relative to the CREATE SCHEMA default, which has no PUBLIC privileges.
+	'REVOKE CREATE ON SCHEMA public FROM public (binary upgrade)' => {
+		regexp => qr/^
+			\QREVOKE ALL ON SCHEMA public FROM "regress_quoted  \E\\""\ role";
+			\n\QGRANT USAGE ON SCHEMA public TO PUBLIC;\E
+			/xm,
+		like => { binary_upgrade => 1, },
 	},
 
 	'REVOKE USAGE ON LANGUAGE plpgsql FROM public' => {

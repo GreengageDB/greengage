@@ -319,7 +319,10 @@ my %tests = (
 
 	'CREATE SCHEMA public' => {
 		regexp => qr/^CREATE SCHEMA public;/m,
+		# GPDB: binary upgrade drops and re-creates the public schema to
+		# preserve its OID.
 		like   => {
+			binary_upgrade                    => 1,
 			extension_schema                  => 1,
 			without_extension_explicit_schema => 1,
 		},

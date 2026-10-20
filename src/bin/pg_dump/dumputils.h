@@ -52,21 +52,6 @@ extern void buildShSecLabelQuery(const char *catalog_name,
 extern void emitShSecLabels(PGconn *conn, PGresult *res,
 							PQExpBuffer buffer, const char *objtype, const char *objname);
 
-<<<<<<< HEAD
-||||||| e1c1c30f635
-extern void buildACLQueries(PQExpBuffer acl_subquery, PQExpBuffer racl_subquery,
-							PQExpBuffer init_acl_subquery, PQExpBuffer init_racl_subquery,
-							const char *acl_column, const char *acl_owner,
-							const char *obj_kind, bool binary_upgrade);
-
-=======
-extern void buildACLQueries(PQExpBuffer acl_subquery, PQExpBuffer racl_subquery,
-							PQExpBuffer init_acl_subquery, PQExpBuffer init_racl_subquery,
-							const char *acl_column, const char *acl_owner,
-							const char *initprivs_expr,
-							const char *obj_kind, bool binary_upgrade);
-
->>>>>>> 3b231596ccf
 extern bool variable_is_guc_list_quote(const char *name);
 
 extern bool SplitGUCList(char *rawstring, char separator,
