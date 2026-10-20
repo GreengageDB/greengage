@@ -421,6 +421,7 @@ create rule r_insert_on_conflict_update_distkey as
 alter table t_insert_on_conflict_update_distkey_rule set distributed by (b);
 insert into t_insert_on_conflict_update_distkey_rule_src values (1, 1, 'x');
 
+-- multi-column distkey: setting any distkey column should error out
 create table t_insert_on_conflict_update_distkey_multi(a int, b int, c text) distributed by (a, b);
 create unique index uidx_t_insert_on_conflict_update_distkey_multi on t_insert_on_conflict_update_distkey_multi(a, b);
 create view v_insert_on_conflict_update_distkey_multi as select * from t_insert_on_conflict_update_distkey_multi;
