@@ -4041,6 +4041,7 @@ compare_partn_opfuncid(PartitionNode *partnode,
 		{
 			Oid			lhsid = tupdesc->attrs[attno - 1]->atttypid;
 			Oid			rhsid = lhsid;
+			Oid			collation = tupdesc->attrs[attno - 1]->attcollation;
 			Oid			opfuncid;
 			Datum		res;
 			Datum		d = values[attno - 1];
@@ -4051,9 +4052,7 @@ compare_partn_opfuncid(PartitionNode *partnode,
 			}
 
 			opfuncid = cdb_retrieve_btree_op(opclass, lhsid, rhsid, strategy);
-			res = OidFunctionCall2Coll(opfuncid,
-									   get_partition_key_collation(part, ii),
-									   c->constvalue, d);
+			res = OidFunctionCall2Coll(opfuncid, collation, c->constvalue, d);
 
 			if (!DatumGetBool(res))
 				return false;
