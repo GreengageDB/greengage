@@ -961,13 +961,7 @@ subplan_is_hashable(PlannerInfo *root, Plan *plan)
 	 */
 	subquery_size = plan->plan_rows *
 		(MAXALIGN(plan->plan_width) + MAXALIGN(SizeofHeapTupleHeader));
-<<<<<<< HEAD
 	if (subquery_size > global_work_mem(root))
-||||||| e1c1c30f635
-	if (subquery_size > hash_mem * 1024L)
-=======
-	if (subquery_size > get_hash_memory_limit())
->>>>>>> 3b231596ccf
 		return false;
 
 	return true;
@@ -991,13 +985,7 @@ subpath_is_hashable(PlannerInfo *root, Path *path)
 	 */
 	subquery_size = path->rows *
 		(MAXALIGN(path->pathtarget->width) + MAXALIGN(SizeofHeapTupleHeader));
-<<<<<<< HEAD
 	if (subquery_size > global_work_mem(root))
-||||||| e1c1c30f635
-	if (subquery_size > hash_mem * 1024L)
-=======
-	if (subquery_size > get_hash_memory_limit())
->>>>>>> 3b231596ccf
 		return false;
 
 	return true;

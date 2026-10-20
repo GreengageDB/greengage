@@ -1854,31 +1854,21 @@ hash_agg_set_limits(AggState *aggstate, double hashentrysize, double input_group
 {
 	int			npartitions;
 	Size		partition_mem;
-<<<<<<< HEAD
-	uint64		hash_mem = get_hash_mem();
-||||||| e1c1c30f635
-	int			hash_mem = get_hash_mem();
-=======
 	Size		hash_mem_limit = get_hash_memory_limit();
->>>>>>> 3b231596ccf
 
-<<<<<<< HEAD
+	/*
+	 * GPDB: additionally cap hash_mem_limit by the operator's
+	 * statement_mem-derived memory budget.
+	 */
 	if (aggstate)
 	{
-		uint64		operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);
-		if (operator_mem < hash_mem)
-			hash_mem = operator_mem;
+		Size		operator_mem = (Size) PlanStateOperatorMemKB((PlanState *) aggstate) * 1024L;
+		if (operator_mem < hash_mem_limit)
+			hash_mem_limit = operator_mem;
 	}
 
-	/* if not expected to spill, use all of work_mem */
-	if (input_groups * hashentrysize < hash_mem * 1024L)
-||||||| e1c1c30f635
-	/* if not expected to spill, use all of hash_mem */
-	if (input_groups * hashentrysize < hash_mem * 1024L)
-=======
 	/* if not expected to spill, use all of hash_mem */
 	if (input_groups * hashentrysize <= hash_mem_limit)
->>>>>>> 3b231596ccf
 	{
 		if (num_partitions != NULL)
 			*num_partitions = 0;
@@ -2084,19 +2074,17 @@ hash_choose_num_partitions(AggState *aggstate, double input_groups, double hashe
 	double		dpartitions;
 	int			npartitions;
 	int			partition_bits;
-<<<<<<< HEAD
-	uint64		hash_mem = get_hash_mem();
 
+	/*
+	 * GPDB: additionally cap hash_mem_limit by the operator's
+	 * statement_mem-derived memory budget.
+	 */
 	if (aggstate)
 	{
-		uint64		operator_mem = PlanStateOperatorMemKB((PlanState *) aggstate);
-		if (operator_mem < hash_mem)
-			hash_mem = operator_mem;
+		Size		operator_mem = (Size) PlanStateOperatorMemKB((PlanState *) aggstate) * 1024L;
+		if (operator_mem < hash_mem_limit)
+			hash_mem_limit = operator_mem;
 	}
-||||||| e1c1c30f635
-	int			hash_mem = get_hash_mem();
-=======
->>>>>>> 3b231596ccf
 
 	/*
 	 * Avoid creating so many partitions that the memory requirements of the

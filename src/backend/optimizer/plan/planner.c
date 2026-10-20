@@ -4264,14 +4264,8 @@ consider_groupingsets_paths(PlannerInfo *root,
 							double dNumGroupsTotal)
 {
 	Query	   *parse = root->parse;
-<<<<<<< HEAD
 	double		dNumGroups;
-	int			hash_mem = get_hash_mem();
-||||||| e1c1c30f635
-	int			hash_mem = get_hash_mem();
-=======
 	Size		hash_mem_limit = get_hash_memory_limit();
->>>>>>> 3b231596ccf
 
 	/*
 	 * If we're not being offered sorted input, then only consider plans that

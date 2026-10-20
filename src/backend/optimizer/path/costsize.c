@@ -4149,14 +4149,6 @@ final_cost_hashjoin(PlannerInfo *root, HashPath *path,
 	Cost		run_cost = workspace->run_cost;
 	int			numbuckets = workspace->numbuckets;
 	int			numbatches = workspace->numbatches;
-<<<<<<< HEAD
-	int			hash_mem;
-||||||| e1c1c30f635
-	int			hash_mem;
-	Cost		cpu_per_tuple;
-=======
-	Cost		cpu_per_tuple;
->>>>>>> 3b231596ccf
 	QualCost	hash_qual_cost;
 	QualCost	qp_qual_cost;
 	double		hashjointuples;
