@@ -75,19 +75,11 @@ PL/pgSQL function inline_code_block line 2 at assignment
 insert into onecol values(array[11]);
 do $$ declare a int[];
 begin a := f1 from onecol; raise notice 'a = %', a; end$$;
-<<<<<<< HEAD
-ERROR:  query "a := f1 from onecol" returned more than one row
-CONTEXT:  PL/pgSQL function inline_code_block line 2 at assignment
--- GGDB: ORDER BY is used for case with the two rows spread across segments,
--- LIMIT alone returns whichever segment answers first.
-||||||| e1c1c30f635
-ERROR:  query "a := f1 from onecol" returned more than one row
-CONTEXT:  PL/pgSQL function inline_code_block line 2 at assignment
-=======
 ERROR:  query returned more than one row
 CONTEXT:  query: a := f1 from onecol
 PL/pgSQL function inline_code_block line 2 at assignment
->>>>>>> 3b231596ccf
+-- GGDB: ORDER BY is used for case with the two rows spread across segments,
+-- LIMIT alone returns whichever segment answers first.
 do $$ declare a int[];
 begin a := f1 from onecol order by 1 limit 1; raise notice 'a = %', a; end$$;
 NOTICE:  a = {1,2}
