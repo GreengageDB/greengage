@@ -338,7 +338,12 @@ typedef struct TempcatHash
 	uint32		nbuckets;		/* power of two, or 0 if not allocated */
 	uint32		nentries;
 	dsa_pointer buckets;		/* dsa_pointer[nbuckets] */
+	dsa_pointer home;			/* the buckets while there are
+								 * TEMPCAT_HASH_MIN, in the root */
 } TempcatHash;
+
+/* Buckets of a hash table at the least, see tempcat_hash_shrink() */
+#define TEMPCAT_HASH_MIN	64
 
 typedef struct TempcatHashNode
 {
@@ -366,6 +371,8 @@ typedef struct TempcatRoot
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
 	dsa_pointer bins[TEMPCAT_NBINS];
+	/* the home buckets of the hash tables: of the catalogs', then 'tids' */
+	dsa_pointer home_buckets[TEMPCAT_NCATALOGS * TEMPCAT_NKEYS + 1][TEMPCAT_HASH_MIN];
 } TempcatRoot;
 
 /* xmin is known to be committed (or frozen) */
@@ -902,6 +909,21 @@ tempcat_create_area(bool headroom)
 	/* (in the first segment, which has room for it) */
 	rootptr = dsa_allocate0(area, sizeof(TempcatRoot));
 	tc_root = dsa_get_address(area, rootptr);
+	{
+		dsa_pointer home = rootptr + offsetof(TempcatRoot, home_buckets);
+		int			c;
+		int			k;
+
+		for (c = 0; c < TEMPCAT_NCATALOGS; c++)
+		{
+			for (k = 0; k < TEMPCAT_NKEYS; k++)
+			{
+				tc_root->catalogs[c].keys[k].home = home;
+				home += sizeof(tc_root->home_buckets[0]);
+			}
+		}
+		tc_root->tids.home = home;
+	}
 	LWLockInitialize(&tc_root->lock, tempcat_tranche_id());
 	pg_atomic_init_u32(&tc_root->cache_epoch, 0);
 	tc_root->writer_pgprocno = MyProc->pgprocno;
@@ -2947,8 +2969,9 @@ tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what)
 /* ----------------------------------------------------------------
  * Memory for rows
  *
- * Rows, with their hash nodes, and the bucket arrays of the hash tables do
- * not come from the size classes of the area: DSA keeps objects of each
+ * Rows, with their hash nodes, and the bucket arrays of the hash tables
+ * (but the smallest ones, which are in the root, see tempcat_hash_shrink())
+ * do not come from the size classes of the area: DSA keeps objects of each
  * size class in superblocks of 64 kB, so rows of the objects that stay
  * would keep the superblocks of those dropped from going back, and the
  * room these left would serve rows of the same size only.  They are cut
@@ -3023,11 +3046,12 @@ tempcat_bin_unlink(dsa_pointer cp)
 }
 
 /*
- * Allocate 'size' bytes for rows (see above).  Returns InvalidDsaPointer if
- * the area is out of memory.
+ * Allocate 'size' bytes for rows (see above), taking another block for it
+ * only if 'new_block'.  Returns InvalidDsaPointer if the area is out of
+ * memory.
  */
 static dsa_pointer
-tempcat_alloc(Size size)
+tempcat_alloc_ext(Size size, bool new_block)
 {
 	Size		need = MAXALIGN(size) + TCC_HDR;
 	dsa_pointer cp = InvalidDsaPointer;
@@ -3092,6 +3116,8 @@ tempcat_alloc(Size size)
 	{
 		TempcatChunk *end;
 
+		if (!new_block)
+			return InvalidDsaPointer;
 		cp = dsa_allocate_extended(tc_area, TEMPCAT_BLOCK_SIZE,
 								   DSA_ALLOC_NO_OOM);
 		if (!DsaPointerIsValid(cp))
@@ -3121,6 +3147,12 @@ tempcat_alloc(Size size)
 	}
 	c->size = csize | TCC_INUSE;
 	return cp + TCC_HDR;
+}
+
+static inline dsa_pointer
+tempcat_alloc(Size size)
+{
+	return tempcat_alloc_ext(size, true);
 }
 
 /* Free what tempcat_alloc() returned. */
@@ -3213,6 +3245,57 @@ tempcat_hash_grow(TempcatHash *h)
 		}
 	}
 
+	if (h->buckets != h->home)
+		tempcat_free(h->buckets);
+	h->buckets = newb;
+	h->nbuckets = newn;
+}
+
+/*
+ * Halve the number of buckets of a table that has a quarter as many entries,
+ * so that the buckets of a table that was big once do not keep the memory
+ * (and, scattered in the blocks, keep blocks from going back to the area):
+ * back to its home buckets in the root at the least.  Only from free room
+ * of the blocks taken already, as it is to give memory back.
+ */
+static void
+tempcat_hash_shrink(TempcatHash *h)
+{
+	uint32		newn = h->nbuckets / 2;
+	dsa_pointer newb;
+	dsa_pointer *oldarr;
+	dsa_pointer *newarr;
+	uint32		i;
+
+	Assert(newn >= TEMPCAT_HASH_MIN && h->buckets != h->home);
+	if (newn == TEMPCAT_HASH_MIN)
+		newb = h->home;
+	else
+	{
+		newb = tempcat_alloc_ext(sizeof(dsa_pointer) * newn, false);
+		if (!DsaPointerIsValid(newb))
+			return;
+	}
+
+	oldarr = TC_ADDR(h->buckets);
+	newarr = TC_ADDR(newb);
+	memset(newarr, 0, sizeof(dsa_pointer) * newn);
+	for (i = 0; i < h->nbuckets; i++)
+	{
+		dsa_pointer np = oldarr[i];
+
+		while (DsaPointerIsValid(np))
+		{
+			TempcatHashNode *node = TC_ADDR(np);
+			dsa_pointer next = node->next;
+			uint32		idx = node->hash & (newn - 1);
+
+			node->next = newarr[idx];
+			newarr[idx] = np;
+			np = next;
+		}
+	}
+
 	tempcat_free(h->buckets);
 	h->buckets = newb;
 	h->nbuckets = newn;
@@ -3224,11 +3307,9 @@ tempcat_hash_prepare(TempcatHash *h)
 {
 	if (h->nbuckets == 0)
 	{
-		h->buckets = tempcat_alloc(sizeof(dsa_pointer) * 64);
-		if (!DsaPointerIsValid(h->buckets))
-			return false;
-		memset(TC_ADDR(h->buckets), 0, sizeof(dsa_pointer) * 64);
-		h->nbuckets = 64;
+		h->buckets = h->home;
+		memset(TC_ADDR(h->buckets), 0, sizeof(dsa_pointer) * TEMPCAT_HASH_MIN);
+		h->nbuckets = TEMPCAT_HASH_MIN;
 	}
 	else if (h->nentries >= h->nbuckets * 2)
 		tempcat_hash_grow(h);
@@ -3268,6 +3349,8 @@ tempcat_hash_remove(TempcatHash *h, uint32 hash, dsa_pointer entry)
 		{
 			*link = node->next;
 			h->nentries--;
+			if (h->nbuckets > TEMPCAT_HASH_MIN && h->nentries < h->nbuckets / 4)
+				tempcat_hash_shrink(h);
 			return;
 		}
 		link = &node->next;

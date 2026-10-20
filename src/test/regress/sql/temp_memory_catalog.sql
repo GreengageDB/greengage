@@ -453,6 +453,37 @@ BEGIN
 END $$;
 SELECT count(*) > 2 * :tc_ao_kept AS room_reused FROM pg_class
  WHERE relname ~ '^tc_more[0-9]+$' AND relnamespace = pg_my_temp_schema();
+-- The hash tables of a catalog that had many rows once give their buckets
+-- back: as many tables fit after a peak of enum labels as before it.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+CREATE FUNCTION pg_temp.tc_fill(kind text) RETURNS int LANGUAGE plpgsql AS $$
+DECLARE n int := 0;
+BEGIN
+  LOOP
+    BEGIN
+      IF kind = 'table' THEN
+        EXECUTE format('CREATE TEMP TABLE tc_peak%s (a int) DISTRIBUTED BY (a)', n);
+      ELSE
+        EXECUTE format('CREATE TYPE pg_temp.tc_peak%s AS ENUM (%s)', n,
+                       (SELECT string_agg(quote_literal('l' || g), ',')
+                          FROM generate_series(1, 50) g));
+      END IF;
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+    n := n + 1;
+  END LOOP;
+  FOR i IN 0 .. n - 1 LOOP
+    EXECUTE format('DROP %s pg_temp.tc_peak%s',
+                   CASE kind WHEN 'table' THEN 'TABLE' ELSE 'TYPE' END, i);
+  END LOOP;
+  RETURN n;
+END $$;
+SELECT pg_temp.tc_fill('table') AS tc_tables_fresh \gset
+SELECT pg_temp.tc_fill('enum') > 10 AS enums;
+SELECT pg_temp.tc_fill('table') >= :tc_tables_fresh - 2 AS tables_after_peak;
 
 -- More of what temporary objects kept in memory do as those on disk do.
 \c
