@@ -7354,13 +7354,6 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 	}
 
 	/* Make sure files supposed to be dropped are dropped */
-<<<<<<< HEAD
-	DropRelationFiles(parsed->xnodes, parsed->nrels, true);
-	DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
-	DoTablespaceDeletionForRedoXlog(parsed->tablespace_oid_to_delete_on_abort);
-||||||| e1c1c30f635
-	DropRelationFiles(parsed->xnodes, parsed->nrels, true);
-=======
 	if (parsed->nrels > 0)
 	{
 		/*
@@ -7371,7 +7364,15 @@ xact_redo_abort(xl_xact_parsed_abort *parsed, TransactionId xid,
 
 		DropRelationFiles(parsed->xnodes, parsed->nrels, true);
 	}
->>>>>>> 3b231596ccf
+
+	if (parsed->ndeldbs > 0)
+	{
+		XLogFlush(lsn);
+
+		DropDatabaseDirectories(parsed->deldbs, parsed->ndeldbs, true);
+	}
+
+	DoTablespaceDeletionForRedoXlog(parsed->tablespace_oid_to_delete_on_abort);
 }
 
 void

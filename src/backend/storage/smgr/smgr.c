@@ -19,18 +19,12 @@
  */
 #include "postgres.h"
 
-<<<<<<< HEAD
 #include "access/aomd.h"
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
-||||||| e1c1c30f635
-#include "access/xlog.h"
-=======
-#include "access/xlogutils.h"
->>>>>>> 3b231596ccf
 #include "lib/ilist.h"
 #include "postmaster/postmaster.h"
 #include "storage/bufmgr.h"

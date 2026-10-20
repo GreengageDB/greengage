@@ -39,15 +39,10 @@
 
 #include "access/transam.h"
 #include "access/twophase.h"
-<<<<<<< HEAD
 #include "access/xact.h"
+#include "access/xlogutils.h"
 #include "catalog/namespace.h" /* TempNamespaceOidIsValid */
 #include "commands/async.h"
-||||||| e1c1c30f635
-#include "access/xact.h"
-=======
-#include "access/xlogutils.h"
->>>>>>> 3b231596ccf
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/autovacuum.h"
