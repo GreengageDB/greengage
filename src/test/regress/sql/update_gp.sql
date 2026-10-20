@@ -428,7 +428,7 @@ create view v_insert_on_conflict_update_distkey_multi as select * from t_insert_
 insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'one');
 insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on conflict(a, b) do update set a = 2; -- fails
 insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on conflict(a, b) do update set b = 2; -- fails
-insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'four') on conflict(a, b) do update set c = 'five'; -- succeds
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'four') on conflict(a, b) do update set c = 'five'; -- succeeds
 select * from v_insert_on_conflict_update_distkey_multi;
 
 -- partitioned base table: the check uses the policy of the partitioned root
@@ -454,7 +454,7 @@ create table t_insert_on_conflict_update_distkey_repl(a int, b float) distribute
 create unique index uidx_t_insert_on_conflict_update_distkey_repl on t_insert_on_conflict_update_distkey_repl(a);
 create view v_insert_on_conflict_update_distkey_repl as select * from t_insert_on_conflict_update_distkey_repl;
 insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = random(); -- fails
-insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = 2; -- succeds
+insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = 2; -- succeeds
 select * from v_insert_on_conflict_update_distkey_repl;
 
 -- Test for update with LASJ_NOTIN

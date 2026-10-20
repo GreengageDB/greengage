@@ -884,7 +884,7 @@ insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on 
 ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'three') on conflict(a, b) do update set b = 2; -- fails
 ERROR:  modification of distribution columns in OnConflictUpdate is not supported
-insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'four') on conflict(a, b) do update set c = 'five'; -- succeds
+insert into v_insert_on_conflict_update_distkey_multi values (1, 1, 'four') on conflict(a, b) do update set c = 'five'; -- succeeds
 select * from v_insert_on_conflict_update_distkey_multi;
  a | b |  c   
 ---+---+------
@@ -922,7 +922,7 @@ create unique index uidx_t_insert_on_conflict_update_distkey_repl on t_insert_on
 create view v_insert_on_conflict_update_distkey_repl as select * from t_insert_on_conflict_update_distkey_repl;
 insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = random(); -- fails
 ERROR:  modification of replicated tables containing volatile functions in OnConflictUpdate is not supported
-insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = 2; -- succeds
+insert into v_insert_on_conflict_update_distkey_repl values (1, 1) on conflict(a) do update set b = 2; -- succeeds
 select * from v_insert_on_conflict_update_distkey_repl;
  a | b 
 ---+---
