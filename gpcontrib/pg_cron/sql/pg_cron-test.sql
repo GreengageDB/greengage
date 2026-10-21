@@ -217,7 +217,10 @@ DELETE FROM cron.job_run_details
 DROP ROLE pg_cron_hba_test;
 DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
-ALTER DATABASE contrib_regression OWNER TO pgcron_cront;
+SELECT pg_get_userbyid(datdba) AS pgcron_regress_original_owner
+FROM pg_database WHERE datname = current_database() \gset
+
+ALTER DATABASE :"DBNAME" OWNER TO pgcron_cront;
 GRANT EXECUTE ON FUNCTION cron.schedule(text, text) TO public;
 GRANT USAGE ON SCHEMA cron TO pgcron_cront;
 
@@ -244,7 +247,7 @@ END $$;
 CREATE OPERATOR public.= (LEFTARG = int8, RIGHTARG = int8, PROCEDURE = public.evil_eq_int);
 CREATE OPERATOR public.= (LEFTARG = text, RIGHTARG = text, PROCEDURE = public.evil_eq_str);
 
-ALTER DATABASE contrib_regression SET search_path = public, pg_catalog;
+ALTER DATABASE :"DBNAME" SET search_path = public, pg_catalog;
 
 SELECT cron.schedule('1 seconds', 'SELECT 1');
 
@@ -255,12 +258,17 @@ RESET SESSION AUTHORIZATION;
 -- end_ignore
 \c
 
+SELECT clock_timestamp() AS pgron_test_start_time \gset
+
 SELECT pg_sleep(5);
+
+select count(*) <> 0 from cron.job_run_details where command OPERATOR(pg_catalog.=) 'SELECT 1' and end_time > :'pgron_test_start_time'::timestamptz;
 
 SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)';
 SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)';
 
-ALTER DATABASE contrib_regression OWNER TO gpadmin;
+ALTER DATABASE :"DBNAME" OWNER TO :"pgcron_regress_original_owner";
+ALTER DATABASE :"DBNAME" RESET search_path;
 
 -- cleaning
 DROP EXTENSION pg_cron;
@@ -274,3 +282,5 @@ drop user "CaseOwner";
 drop user caseowner;
 drop database pgcron_dbno;
 drop database pgcron_dbyes;
+\unset pgron_test_start_time
+\unset pgcron_regress_original_owner
