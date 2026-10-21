@@ -26,7 +26,16 @@ $$;
 CREATE FUNCTION tc_disk_rows() RETURNS bigint LANGUAGE sql AS $$
   WITH m AS (SELECT * FROM tc_mem_oids() o)
   SELECT sum(n)::bigint FROM (
+    -- (objects in the session's temporary schemas, also any gone to disk)
     SELECT count(*) AS n FROM pg_class
+     WHERE relnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM gp_dist_random('pg_class')
+     WHERE relnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_type
+     WHERE typnamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_proc
+     WHERE pronamespace IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+    UNION ALL SELECT count(*) FROM pg_class
      WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_class')
      WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
@@ -1106,29 +1115,25 @@ SELECT * FROM tc_sy1;
 DROP TABLE tc_sy1;
 
 -- A session takes the OIDs of its temporary objects from the OID counter
--- in runs to the end of a block of 4096 OIDs, so that each is given once:
--- at the end of a run (the fault puts the session near it) it takes another
--- one.  Ordinary objects get the OIDs after the run.
+-- in runs (of 16 OIDs first, twice as many each time after, within blocks
+-- of 4096), so that each is given once: at the end of a run (the fault puts
+-- the session near it) it takes another one.  Ordinary objects get the OIDs
+-- after the run.
 \c
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tc_wrap0 (a int) DISTRIBUTED BY (a);
 CREATE TABLE tc_wrap_ord0 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_block_near_end', 'skip', dbid)
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_block_near_end', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
 CREATE TABLE tc_wrap_ord2 (a int) DISTRIBUTED BY (a);
-SELECT 'tc_wrap0'::regclass::oid::bigint / 4096 =
-       'tc_wrap1'::regclass::oid::bigint / 4096 AS same_block1,
-       'tc_wrap0'::regclass::oid::bigint / 4096 =
-       'tc_wrap2'::regclass::oid::bigint / 4096 AS same_block2,
-       'tc_wrap0'::regclass::oid < 'tc_wrap2'::regclass::oid AS ascending,
-       'tc_wrap_ord0'::regclass::oid::bigint / 4096 >
-       'tc_wrap0'::regclass::oid::bigint / 4096 AS ordinary_after_run0,
-       'tc_wrap_ord2'::regclass::oid::bigint / 4096 >
-       'tc_wrap2'::regclass::oid::bigint / 4096 AS ordinary_after_run2,
+SELECT 'tc_wrap0'::regclass::oid < 'tc_wrap_ord0'::regclass::oid AS ordinary_after_run,
+       'tc_wrap1'::regclass::oid < 'tc_wrap_ord0'::regclass::oid AS end_of_first_run,
+       'tc_wrap_ord0'::regclass::oid < 'tc_wrap2'::regclass::oid AS next_run,
+       'tc_wrap2'::regclass::oid < 'tc_wrap_ord2'::regclass::oid AS ordinary_after_next_run,
        tc_in_memory('tc_wrap2') AS in_memory;
 INSERT INTO tc_wrap0 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
@@ -1137,14 +1142,14 @@ SELECT count(*) FROM tc_wrap0 JOIN tc_wrap1 USING (a) JOIN tc_wrap2 USING (a);
 DROP TABLE tc_wrap_ord0, tc_wrap_ord2;
 -- The labels of an enum get OIDs of their own (on the segments too): here
 -- of the next run, while the type has one of the last.
-SELECT gp_inject_fault('tempcat_block_near_end', 'skip', dbid)
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TYPE pg_temp.tc_wrap_enum AS ENUM ('a', 'b', 'c', 'd');
-SELECT gp_inject_fault('tempcat_block_near_end', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT count(DISTINCT e.oid::bigint / 4096) AS label_blocks,
-       bool_and(e.oid::bigint / 4096 <>
-                'pg_temp.tc_wrap_enum'::regtype::oid::bigint / 4096) AS other_block
+SELECT count(*) AS labels,
+       bool_and(e.oid > 'pg_temp.tc_wrap_enum'::regtype::oid) AS after_type,
+       bool_and((e.ctid::text::point)[1] >= 32768) AS in_memory
   FROM pg_enum e WHERE e.enumtypid = 'pg_temp.tc_wrap_enum'::regtype;
 SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
  WHERE s.enumtypid = 'pg_temp.tc_wrap_enum'::regtype

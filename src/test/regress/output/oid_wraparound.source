@@ -118,21 +118,21 @@ SELECT gp_get_next_oid_segments();
 (3 rows)
 
 -- Scenario 3: a session keeping its temporary objects in memory takes their
--- OIDs from the counter in runs to the end of a block of 4096 OIDs (see
--- tempcat.c), and holds the block: once the counter wrapped around (here it
--- is put back), it skips the block, and objects created meanwhile get none
--- of its OIDs.
+-- OIDs from the counter in runs within blocks of 4096 OIDs (see tempcat.c),
+-- and holds the blocks: once the counter wrapped around (here it is put
+-- back), it skips a held block when it comes to it, and objects created
+-- meanwhile get none of its OIDs.
 CREATE EXTENSION gp_inject_fault;
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE oid_tc_first (a int) DISTRIBUTED BY (a);
 SELECT 'oid_tc_first'::regclass::oid AS first_oid \gset
-SELECT gp_get_next_oid_master()::bigint / 4096 > :first_oid::bigint / 4096 AS counter_after_block;
- counter_after_block 
----------------------
+SELECT gp_get_next_oid_master() > :first_oid AS counter_after_run;
+ counter_after_run 
+-------------------
  t
 (1 row)
 
-SELECT gp_set_next_oid_master(:first_oid + 1);
+SELECT gp_set_next_oid_master((:first_oid::bigint / 4096 * 4096 - 2)::oid);
  gp_set_next_oid_master 
 ------------------------
  
@@ -159,7 +159,105 @@ SELECT count(*) FROM oid_tc_second;
 (1 row)
 
 DROP TABLE oid_skip, oid_tc_first, oid_tc_second;
--- Scenario 4: an ordinary object can have an OID of a session's run, from
+-- Scenario 4: a session lets go of a block once none of its objects has an
+-- OID of it, but the block of its current run: the counter, back at it,
+-- does not skip it then.  (The fault makes the session use up its run, so
+-- that the next object takes the next one, from where the counter is put.)
+SELECT ((gp_get_next_oid_master()::bigint / 4096) + 2) * 4096 AS rel_oid \gset
+SELECT gp_set_next_oid_master(:rel_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE FUNCTION pg_temp.oid_rel_f1() RETURNS int LANGUAGE sql AS 'SELECT 1';
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE FUNCTION pg_temp.oid_rel_f2() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE TEMP TABLE oid_rel_t (a int) DISTRIBUTED BY (a);
+SELECT 'oid_rel_t'::regclass::oid::bigint / 4096 = :rel_oid::bigint / 4096 AS in_new_block;
+ in_new_block 
+--------------
+ t
+(1 row)
+
+SELECT ((gp_get_next_oid_master()::bigint / 4096) + 2) * 4096 AS cur_oid \gset
+SELECT gp_set_next_oid_master(:cur_oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE FUNCTION pg_temp.oid_rel_f3() RETURNS int LANGUAGE sql AS 'SELECT 1';
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+ gp_inject_fault 
+-----------------
+ Success:
+(1 row)
+
+CREATE FUNCTION pg_temp.oid_rel_f4() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE TEMP TABLE oid_rel_u (a int) DISTRIBUTED BY (a);
+SELECT 'oid_rel_u'::regclass::oid::bigint / 4096 = :cur_oid::bigint / 4096 AS in_current_block;
+ in_current_block 
+------------------
+ t
+(1 row)
+
+DROP TABLE oid_rel_t;
+DROP FUNCTION pg_temp.oid_rel_f3(), pg_temp.oid_rel_f4();
+SELECT gp_set_next_oid_master((:rel_oid - 2)::oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_rel_ord (a int) DISTRIBUTED BY (a);
+SELECT count(*) > 0 AS released_block_used FROM (
+	SELECT oid FROM pg_class WHERE oid = 'oid_rel_ord'::regclass
+	UNION ALL SELECT oid FROM pg_type WHERE typrelid = 'oid_rel_ord'::regclass
+	UNION ALL SELECT t.typarray FROM pg_type t WHERE t.typrelid = 'oid_rel_ord'::regclass
+) o WHERE oid::bigint / 4096 = :rel_oid::bigint / 4096;
+ released_block_used 
+---------------------
+ t
+(1 row)
+
+SELECT gp_set_next_oid_master((:cur_oid - 2)::oid);
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE oid_rel_ord2 (a int) DISTRIBUTED BY (a);
+SELECT count(*) = 0 AS current_block_skipped FROM (
+	SELECT oid FROM pg_class WHERE oid = 'oid_rel_ord2'::regclass
+	UNION ALL SELECT oid FROM pg_type WHERE typrelid = 'oid_rel_ord2'::regclass
+	UNION ALL SELECT t.typarray FROM pg_type t WHERE t.typrelid = 'oid_rel_ord2'::regclass
+) o WHERE oid::bigint / 4096 = :cur_oid::bigint / 4096;
+ current_block_skipped 
+-----------------------
+ t
+(1 row)
+
+DROP TABLE oid_rel_ord, oid_rel_ord2, oid_rel_u;
+DROP FUNCTION pg_temp.oid_rel_f1(), pg_temp.oid_rel_f2();
+-- Scenario 5: an ordinary object can have an OID of a session's run, from
 -- before the counter wrapped around (here it is put back): the session must
 -- skip it, and leave its rows on disk (rows in memory have TIDs with offsets
 -- from 0x8000 (32768) up).
@@ -236,7 +334,7 @@ SELECT count(*) FROM oid_legacy;
 (1 row)
 
 DROP TABLE oid_legacy;
--- Scenario 5: a segment can keep dead catalog rows with OIDs that the
+-- Scenario 6: a segment can keep dead catalog rows with OIDs that the
 -- coordinator vacuumed away (here an ordinary table dropped before the
 -- counter wrapped around, and only the coordinator's catalogs vacuumed).
 -- When the coordinator gives such an OID to a temporary object, the segment
@@ -271,14 +369,14 @@ SELECT gp_set_next_oid_master(:dead_oid);
  
 (1 row)
 
-SELECT gp_inject_fault('tempcat_block_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
  Success:
 (1 row)
 
 CREATE FUNCTION pg_temp.oid_tc5_f1() RETURNS int LANGUAGE sql AS 'SELECT 1';
-SELECT gp_inject_fault('tempcat_block_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
  gp_inject_fault 
 -----------------
  Success:

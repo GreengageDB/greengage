@@ -174,7 +174,7 @@ SELECT gp_inject_fault('start_prepare', 'reset', dbid)
 14q:
 DROP TABLE tc_perm;
 
--- Concurrent sessions get OIDs from separate blocks: same names, different
+-- Concurrent sessions get OIDs of separate runs: same names, different
 -- OIDs, and locks on their own temporary tables do not conflict.
 CREATE TABLE tc_oids (session int, reloid oid) DISTRIBUTED REPLICATED;
 15: SET gp_enable_temp_memory_catalog = on;
@@ -185,7 +185,7 @@ CREATE TABLE tc_oids (session int, reloid oid) DISTRIBUTED REPLICATED;
 16: INSERT INTO tc_conc SELECT generate_series(1, 20);
 15: INSERT INTO tc_oids SELECT 1, 'tc_conc'::regclass;
 16: INSERT INTO tc_oids SELECT 2, 'tc_conc'::regclass;
-SELECT count(DISTINCT reloid) AS distinct_oids, count(DISTINCT reloid::bigint / 4096) AS distinct_blocks FROM tc_oids;
+SELECT count(DISTINCT reloid) AS distinct_oids FROM tc_oids;
 15: BEGIN;
 15: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
 16: BEGIN;
@@ -259,8 +259,7 @@ DROP TABLE tc_ref_oid;
 
 -- The writer QE of a session that is gone may still be on its way out,
 -- holding the blocks of its OIDs (here, on segment 0, a fault holds it
--- there): the next session does not wait for it, as it gets OIDs of other
--- blocks.
+-- there): the next session does not wait for it, as it gets later OIDs.
 CREATE TABLE tc_old_oid (o oid) DISTRIBUTED REPLICATED;
 12: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 12: SET gp_enable_temp_memory_catalog = on;
@@ -277,7 +276,7 @@ SELECT gp_wait_until_triggered_fault('tempcat_release_blocks', 1, dbid)
 13: CREATE TEMP TABLE tc_t (a int) DISTRIBUTED BY (a);
 13: INSERT INTO tc_t SELECT generate_series(1, 10);
 13: SELECT count(*), tc_in_memory('tc_t') AS in_memory,
-      'tc_t'::regclass::oid::bigint / 4096 <> (SELECT o::bigint / 4096 FROM tc_old_oid) AS other_block FROM tc_t;
+      'tc_t'::regclass::oid > (SELECT o FROM tc_old_oid) AS later_oid FROM tc_t;
 SELECT gp_inject_fault('tempcat_release_blocks', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 13q:
@@ -459,6 +458,41 @@ SELECT gp_inject_fault('tempcat_used_objects_full', 'reset', dbid)
 38q:
 4: CALL tc_wait_gone();
 4: SELECT to_regclass('tc_gone_ord') IS NULL AS rolled_back;
+
+-- After a gang reset, the writer QE of the session that is gone may still
+-- hold the blocks of its OIDs on a segment as it exits (here a fault keeps
+-- it there, on segment 0), and the new one gets OIDs of the same blocks:
+-- both hold them then, and the rows of the session's objects stay in
+-- memory once the old one let go of them.
+CREATE TABLE tc_gr (sess int, o oid) DISTRIBUTED REPLICATED;
+46: SET gp_enable_temp_memory_catalog = on;
+46: CREATE TEMP TABLE tc_gr1 (a int) DISTRIBUTED BY (a);
+46: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+46: INSERT INTO tc_gr VALUES (current_setting('gp_session_id')::int, 0);
+SELECT gp_inject_fault('tempcat_release_blocks', 'suspend', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+1U: SELECT bool_and(pg_terminate_backend(pid)) AS terminated FROM pg_stat_activity WHERE sess_id IN (SELECT sess FROM tc_gr);
+46: SELECT count(*) FROM tc_gr1;
+SELECT gp_wait_until_triggered_fault('tempcat_release_blocks', 1, dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+46: CREATE TEMP TABLE tc_gr2 (a int) DISTRIBUTED BY (a);
+46: UPDATE tc_gr SET o = 'tc_gr2'::regclass;
+SELECT gp_inject_fault('tempcat_release_blocks', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
+0U: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF (SELECT count(*) FROM pg_stat_activity WHERE sess_id = (SELECT sess FROM tc_gr)) <= 1 THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the old writer QE did not end'; END $$;
+0Uq:
+46: ALTER TABLE tc_gr2 ADD COLUMN b int;
+46: COMMENT ON TABLE tc_gr2 IS 'after the reset';
+46: CREATE TEMP TABLE tc_gr3 (a int) DISTRIBUTED BY (a);
+SELECT count(*) AS on_disk FROM gp_dist_random('pg_attribute')
+ WHERE attrelid = (SELECT o FROM tc_gr) AND (ctid::text::point)[1] < 32768;
+SELECT count(*) AS on_disk FROM gp_dist_random('pg_description')
+ WHERE objoid = (SELECT o FROM tc_gr) AND (ctid::text::point)[1] < 32768;
+SELECT count(*) AS on_disk FROM gp_dist_random('pg_class')
+ WHERE relname IN ('tc_gr2', 'tc_gr3') AND (ctid::text::point)[1] < 32768;
+46q:
+4: CALL tc_wait_gone();
+DROP TABLE tc_gr;
 
 -- CREATE DATABASE copies the template's pg_shdepend rows, but not those of
 -- temporary objects kept in memory of the session connected to it, whose

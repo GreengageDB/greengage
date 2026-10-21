@@ -23,13 +23,13 @@
  *   dispatches them to the segments as usual, marked as such
  *   (OidAssignment.tempcat), so all nodes agree on them.
  *
- * - Their OIDs come from the ordinary OID counter, in runs to the end of a
- *   block of OIDs (see "Blocks of OIDs"), so they are given once until the
- *   counter wraps around, like all OIDs: backend-local caches keyed by OID
- *   (the type cache, cached plans, PL/pgSQL casts, ...) rely on that.  The
- *   processes keeping the session's objects hold the blocks, so that the
- *   counter skips them once it wrapped around, and the statistics of their
- *   objects are kept.
+ * - Their OIDs come from the ordinary OID counter, in runs within blocks of
+ *   OIDs (see "Blocks of OIDs"), so they are given once until the counter
+ *   wraps around, like all OIDs: backend-local caches keyed by OID (the type
+ *   cache, cached plans, PL/pgSQL casts, ...) rely on that.  The processes
+ *   keeping the session's objects hold the blocks while their objects have
+ *   OIDs of them, so that the counter skips them once it wrapped around,
+ *   and the statistics of their objects are kept.
  *
  * - A row inserted into one of the catalogs listed in tempcat_catalogs[] is
  *   kept in memory if its owner column (pg_attribute.attrelid,
@@ -616,6 +616,8 @@ typedef struct TempcatSharedData
 	pg_atomic_uint32 nused_entries;
 	int			nprocs;
 	bool		areas_created;	/* see tempcat_areas_created() */
+	/* where the OID counter went on from the last time, under OidGenLock */
+	Oid			counter_next;
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
 
@@ -691,6 +693,7 @@ TempcatShmemInit(void)
 	pg_atomic_init_u32(&TempcatShared->nused_overflow, 0);
 	pg_atomic_init_u32(&TempcatShared->nused_entries, 0);
 	TempcatShared->areas_created = false;
+	TempcatShared->counter_next = InvalidOid;
 	TempcatShared->nprocs = tempcat_total_procs();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
@@ -966,30 +969,51 @@ tempcat_attach(void)
  * Blocks of OIDs
  *
  * The OIDs of a session's temporary objects come from the ordinary OID
- * counter, in runs: the coordinator takes the OIDs from the counter to the
- * end of its block of TEMPCAT_OID_BLOCK_SIZE OIDs at once
- * (GetNewObjectIdsToBlockEnd()), and gives them out in turn.  So they are
- * given once, like all OIDs, until the counter wraps around, and no other
- * object gets them meanwhile.  The process keeping the session's objects on
- * each node (the coordinator backend, or the writer QE on a segment) holds
- * the blocks of the OIDs it has, in TempcatBlocks, until it exits; then
- * GetNewObjectId() skips them once it wrapped around, and
- * pgstat_vacuum_stat() keeps the statistics of their objects, which it
- * cannot see (tempcat_oid_maybe_live()).
+ * counter, in runs that the coordinator takes at once
+ * (GetNewObjectIdsInBlock()) and gives out in turn: TEMPCAT_FIRST_RUN OIDs
+ * first, twice as many each time after, up to TEMPCAT_OID_BLOCK_SIZE, and
+ * never past the end of the counter's block of TEMPCAT_OID_BLOCK_SIZE OIDs.
+ * So they are given once, like all OIDs, until the counter wraps around.
  *
- * On a segment, the writer QE of a session that is gone may still hold a
- * block whose OIDs the coordinator gives again (only after the counter
- * wrapped around): the new holder shares the block then, and does without
- * what holding it gives.
+ * The processes that keep the session's objects (the coordinator backend,
+ * and the writer QE on each segment) hold the blocks of the OIDs they have:
+ * TempcatBlocks counts the holders of each block.  When the counter comes
+ * to a held block again, after it wrapped around, it skips it
+ * (tempcat_skip_held_blocks()); pgstat_vacuum_stat() keeps the statistics
+ * of the OIDs of held blocks, as it cannot see the objects
+ * (tempcat_oid_maybe_live()).  A process lets go of a block once none of
+ * its rows in memory, of any visibility, has an OID of it, but the block of
+ * the coordinator's current run (tempcat_release_unused_blocks()), and of
+ * all of them at exit.
+ *
+ * After a gang reset, the writer QEs of the session that are gone may still
+ * hold blocks whose OIDs the new ones get, until they exit: a block has two
+ * holders then.  (The coordinator takes a new run after a reset, see
+ * tempcat_session_reset().)
  * ----------------------------------------------------------------
  */
+#define TEMPCAT_FIRST_RUN	16
 
-/* Does a process hold the block of 'oid'? */
-bool
-tempcat_oid_block_held(Oid oid)
+/* A block of OIDs that this process holds */
+typedef struct TempcatBlock
 {
-	return TempcatBlocks != NULL && TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS] != 0;
-}
+	uint32		block;			/* the OID >> TEMPCAT_OID_BLOCK_BITS */
+	int32		rows;			/* our rows in memory with an OID of it */
+} TempcatBlock;
+
+static HTAB *tc_blocks = NULL;
+
+/* Blocks may have been left without rows; see tempcat_release_unused_blocks() */
+static bool tc_release_wanted = false;
+
+/*
+ * Coordinator: the next OID to give from the run taken from the counter,
+ * and the last one, or InvalidOid if none is left; and the size of the next
+ * run.
+ */
+static Oid	tc_next_oid = InvalidOid;
+static Oid	tc_last_oid = InvalidOid;
+static uint32 tc_run_size = TEMPCAT_FIRST_RUN;
 
 /* The last OID of the block of 'oid' */
 Oid
@@ -998,15 +1022,46 @@ tempcat_oid_block_last(Oid oid)
 	return oid | (TEMPCAT_OID_BLOCK_SIZE - 1);
 }
 
-/* Does this process hold any blocks? */
-static bool tc_holds_blocks = false;
-
 /*
- * Coordinator: the next OID to give from the run taken from the counter,
- * and the last one, or InvalidOid if none is left.
+ * The OID counter is at 'nextOid' (caller holds OidGenLock): if it came to
+ * another block since it went on from an OID given (see
+ * tempcat_note_oid_counter()), or jumped (it wrapped around, or was moved),
+ * skip the blocks that processes hold.  Returns the OID to go on from, and
+ * sets *skipped if it differs.
  */
-static Oid	tc_next_oid = InvalidOid;
-static Oid	tc_last_oid = InvalidOid;
+Oid
+tempcat_skip_held_blocks(Oid nextOid, bool *skipped)
+{
+	uint32		nskipped = 0;
+
+	*skipped = false;
+	if (TempcatBlocks == NULL ||
+		(nextOid == TempcatShared->counter_next &&
+		 (nextOid & (TEMPCAT_OID_BLOCK_SIZE - 1)) != 0))
+		return nextOid;
+	while (TempcatBlocks[nextOid >> TEMPCAT_OID_BLOCK_BITS] != 0)
+	{
+		if (++nskipped >= TEMPCAT_NOID_BLOCKS)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("out of OIDs"),
+					 errdetail("Sessions that keep their temporary objects in memory hold all blocks of OIDs.")));
+		nextOid = tempcat_oid_block_last(nextOid) + 1;
+		/* (only processes under the postmaster hold blocks) */
+		if (nextOid < (Oid) FirstNormalObjectId)
+			nextOid = FirstNormalObjectId;
+		*skipped = true;
+	}
+	return nextOid;
+}
+
+/* The OID counter goes on from 'nextOid' (caller holds OidGenLock). */
+void
+tempcat_note_oid_counter(Oid nextOid)
+{
+	if (TempcatShared != NULL)
+		TempcatShared->counter_next = nextOid;
+}
 
 static void tempcat_proc_exit(int code, Datum arg);
 static void tempcat_before_exit(int code, Datum arg);
@@ -1034,35 +1089,74 @@ tempcat_register_callbacks(void)
 	registered = true;
 }
 
-/* Hold the block of 'oid', unless another process does. */
-static void
+/* Hold the block of 'oid', if we do not yet. */
+static TempcatBlock *
 tempcat_hold_block(Oid oid)
 {
-	uint16	   *holder = &TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS];
-	uint16		me = MyProc->pgprocno + 1;
+	uint32		block = oid >> TEMPCAT_OID_BLOCK_BITS;
+	TempcatBlock *b;
+	bool		found;
 
-	if (*holder == me)
-		return;
-	tempcat_register_callbacks();
-	tc_holds_blocks = true;
-	if (*holder == 0)
+	if (tc_blocks == NULL)
 	{
-		/* (our database first, see tempcat_oid_maybe_live()) */
-		pg_write_barrier();
-		*holder = me;
+		HASHCTL		ctl;
+
+		memset(&ctl, 0, sizeof(ctl));
+		ctl.keysize = sizeof(uint32);
+		ctl.entrysize = sizeof(TempcatBlock);
+		ctl.hcxt = TopMemoryContext;
+		tc_blocks = hash_create("tempcat blocks", 16, &ctl,
+								HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
 	}
+	b = hash_search(tc_blocks, &block, HASH_FIND, NULL);
+	if (b != NULL)
+		return b;
+
+	/* (what lets go of it first, then nothing that can fail after it) */
+	tempcat_register_callbacks();
+	b = hash_search(tc_blocks, &block, HASH_ENTER, &found);
+	b->rows = 0;
+	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+	Assert(TempcatBlocks[block] < PG_UINT16_MAX);
+	TempcatBlocks[block]++;
+	LWLockRelease(OidGenLock);
+	return b;
+}
+
+/* Let go of a block; the caller removes it from tc_blocks. */
+static void
+tempcat_let_go_of_block(TempcatBlock *b)
+{
+	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+	Assert(TempcatBlocks[b->block] > 0);
+	TempcatBlocks[b->block]--;
+	LWLockRelease(OidGenLock);
 }
 
 /*
- * Coordinator: take the OIDs from the counter to the end of its block, and
- * hold the block.
+ * Coordinator: take the next run of OIDs from the counter, and hold its
+ * block.
  */
 static void
-tempcat_take_block(void)
+tempcat_take_run(void)
 {
-	tempcat_register_callbacks();
-	tc_next_oid = GetNewObjectIdsToBlockEnd(&tc_last_oid);
-	tempcat_hold_block(tc_next_oid);
+	tc_next_oid = GetNewObjectIdsInBlock(tc_run_size, &tc_last_oid);
+	tc_run_size = Min(tc_run_size * 2, TEMPCAT_OID_BLOCK_SIZE);
+	(void) tempcat_hold_block(tc_next_oid);
+}
+
+/*
+ * The session is reset (e.g. after its gang was lost): its writer QEs are
+ * replaced, and the old ones may hold the blocks on the segments for a
+ * while as they drop their objects.  Give the next OIDs from a new run.
+ * Only process-local state changes here: called from
+ * GpScheduleSessionReset() and friends, possibly out of a transaction.
+ */
+void
+tempcat_session_reset(void)
+{
+	tc_next_oid = InvalidOid;
+	tc_release_wanted = true;
 }
 
 /*
@@ -1086,7 +1180,38 @@ tempcat_activate(Oid oid)
 		}
 		st->databaseId = MyDatabaseId;
 	}
-	tempcat_hold_block(oid);
+	(void) tempcat_hold_block(oid);
+}
+
+/*
+ * A row in memory with an object OID ('delta' 1) is added, or goes away
+ * (-1): count it for the block of the OID, which we hold as long as such
+ * rows are left.  Enum labels count too: they get OIDs of their own, though
+ * they belong to their type.
+ */
+static void
+tempcat_count_block_row(TempcatEntry *e, int delta)
+{
+	uint32		block;
+	TempcatBlock *b;
+
+	if (!tempcat_catalog_has_oid(e->catidx) &&
+		tempcat_catalogs[e->catidx].relid != EnumRelationId)
+		return;
+	if (delta > 0)
+		b = tempcat_hold_block(tempcat_entry_oid(e));
+	else
+	{
+		block = tempcat_entry_oid(e) >> TEMPCAT_OID_BLOCK_BITS;
+		b = tc_blocks != NULL ?
+			hash_search(tc_blocks, &block, HASH_FIND, NULL) : NULL;
+		if (b == NULL)
+			return;
+	}
+	b->rows += delta;
+	Assert(b->rows >= 0);
+	if (b->rows == 0)
+		tc_release_wanted = true;
 }
 
 /*
@@ -1098,8 +1223,8 @@ static void
 tempcat_proc_exit(int code, Datum arg)
 {
 	TempcatProcState *st = tempcat_my_state();
-	uint16		me = MyProc->pgprocno + 1;
-	uint32		i;
+	HASH_SEQ_STATUS seq;
+	TempcatBlock *b;
 
 	pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
 	pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
@@ -1107,17 +1232,17 @@ tempcat_proc_exit(int code, Datum arg)
 
 	tempcat_forget_used_objects();
 
-	if (!tc_holds_blocks)
+	if (tc_blocks == NULL)
 		return;
 #ifdef FAULT_INJECTOR
 	/* Test hook: hold on to the blocks on the way out (with 'suspend'). */
 	SIMPLE_FAULT_INJECTOR("tempcat_release_blocks");
 #endif
-	for (i = 0; i < TEMPCAT_NOID_BLOCKS; i++)
-	{
-		if (TempcatBlocks[i] == me)
-			TempcatBlocks[i] = 0;
-	}
+	hash_seq_init(&seq, tc_blocks);
+	while ((b = hash_seq_search(&seq)) != NULL)
+		tempcat_let_go_of_block(b);
+	hash_destroy(tc_blocks);
+	tc_blocks = NULL;
 }
 
 /* ----------------------------------------------------------------
@@ -1176,12 +1301,56 @@ tempcat_owns_oid(Oid catalog, Oid oid)
 {
 	TempcatOwnedKey key;
 
-	/* (an OID of ours is in a block that a process holds) */
-	if (tc_owned == NULL || !tempcat_oid_block_held(oid))
+	if (tc_owned == NULL)
 		return false;
 	key.catalog = catalog;
 	key.oid = oid;
 	return hash_search(tc_owned, &key, HASH_FIND, NULL) != NULL;
+}
+
+/*
+ * Let go of the blocks that none of our rows in memory has an OID of any
+ * more, but the block of the coordinator's current run, and forget the OIDs
+ * of them that we owned (given to objects whose creation did not get as far
+ * as their rows, if any).  When the session goes idle, or starts its next
+ * transaction, after the outcome of the finished ones was applied to the
+ * rows: no OID that was given is waiting for its row then.
+ */
+static void
+tempcat_release_unused_blocks(void)
+{
+	uint32		current = OidIsValid(tc_next_oid) ?
+		tc_next_oid >> TEMPCAT_OID_BLOCK_BITS : PG_UINT32_MAX;
+	HASH_SEQ_STATUS seq;
+	TempcatBlock *b;
+	bool		released = false;
+
+	tc_release_wanted = false;
+	if (tc_blocks == NULL)
+		return;
+	hash_seq_init(&seq, tc_blocks);
+	while ((b = hash_seq_search(&seq)) != NULL)
+	{
+		if (b->rows > 0 || b->block == current)
+			continue;
+		tempcat_let_go_of_block(b);
+		(void) hash_search(tc_blocks, &b->block, HASH_REMOVE, NULL);
+		released = true;
+	}
+
+	if (released && tc_owned != NULL)
+	{
+		TempcatOwnedKey *owned;
+
+		hash_seq_init(&seq, tc_owned);
+		while ((owned = hash_seq_search(&seq)) != NULL)
+		{
+			uint32		block = owned->oid >> TEMPCAT_OID_BLOCK_BITS;
+
+			if (hash_search(tc_blocks, &block, HASH_FIND, NULL) == NULL)
+				(void) hash_search(tc_owned, owned, HASH_REMOVE, NULL);
+		}
+	}
 }
 
 /* ----------------------------------------------------------------
@@ -2084,11 +2253,12 @@ tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		SysScanDesc scan;
 		bool		collides;
 
+		CHECK_FOR_INTERRUPTS();
 		if (!OidIsValid(tc_next_oid))
-			tempcat_take_block();
+			tempcat_take_run();
 #ifdef FAULT_INJECTOR
 		/* Test hook: go near the end of the run, to take another one soon. */
-		if (SIMPLE_FAULT_INJECTOR("tempcat_block_near_end") == FaultInjectorTypeSkip)
+		if (SIMPLE_FAULT_INJECTOR("tempcat_run_near_end") == FaultInjectorTypeSkip)
 			tc_next_oid = Max(tc_next_oid, tc_last_oid - 1);
 #endif
 		oid = tc_next_oid;
@@ -2160,7 +2330,11 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 	if (IsBinaryUpgrade || tempcat_is_reader())
 		return;
 	if (TempcatBlocks == NULL)
-		elog(ERROR, "temporary objects cannot be kept in memory on this node");
+		ereport(ERROR,
+				(errcode(ERRCODE_CONFIGURATION_LIMIT_EXCEEDED),
+				 errmsg("temporary objects cannot be kept in memory on this node"),
+				 errdetail("The node allows more than %d processes.", PG_UINT16_MAX - 1),
+				 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
 
 	if (tc_area == NULL && !tempcat_create_area(false))
 		ereport(ERROR,
@@ -2818,6 +2992,10 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	int			nnodes = 1;		/* the TID's */
 	int			k;
 
+	/* (the block of its OID first, see tempcat_count_block_row()) */
+	if (tempcat_catalog_has_oid(catidx) || def->relid == EnumRelationId)
+		(void) tempcat_hold_block(tempcat_getoid(tup, desc, 1));
+
 	/*
 	 * Allocate everything up front, so that running out changes nothing (but
 	 * the bucket arrays that grew): the entry, the tuple, and the nodes of
@@ -2890,6 +3068,8 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	}
 	tempcat_hash_link(&tc_root->tids, np, e->tidhash, ep);
 
+	tempcat_count_block_row(e, 1);
+
 	return ep;
 }
 
@@ -2905,6 +3085,7 @@ tempcat_entry_remove(dsa_pointer ep)
 	/* (see tempcat_recompute_used()) */
 	if (def->relid == DependRelationId || def->relid == SharedDependRelationId)
 		tc_used_dirty = true;
+	tempcat_count_block_row(e, -1);
 
 	if (DsaPointerIsValid(e->prev))
 		((TempcatEntry *) TC_ADDR(e->prev))->next = e->next;
@@ -3451,6 +3632,8 @@ tempcat_start_transaction(void)
 		tempcat_recompute_horizon();
 	if (tc_used_dirty)
 		tempcat_recompute_used(false);
+	if (tc_release_wanted)
+		tempcat_release_unused_blocks();
 }
 
 /*
@@ -3458,8 +3641,9 @@ tempcat_start_transaction(void)
  * already: apply the outcome of its finished transactions to the pending
  * rows now, rather than at the start of its next transaction, let the
  * published horizon rise (see tempcat_add_pending()), let go of the
- * objects its rows no longer use (tempcat_recompute_used()), and give the
- * segments of the area that emptied back to the OS (not as soon as
+ * objects its rows no longer use (tempcat_recompute_used()) and of the
+ * blocks of OIDs they no longer have (tempcat_release_unused_blocks()), and
+ * give the segments of the area that emptied back to the OS (not as soon as
  * they empty, see dsa_trim()), once more than half of the area is free: a
  * session at the edge of a segment that creates and drops an object in
  * turn would create and free the segment every time.  The next transaction
@@ -3487,7 +3671,7 @@ tempcat_idle(void)
 		return;
 	}
 	if (tc_npending == 0 && !tc_horizon_dirty && !tc_used_dirty &&
-		!tc_used_overflow && !tc_trim_wanted)
+		!tc_used_overflow && !tc_trim_wanted && !tc_release_wanted)
 		return;
 
 	PG_TRY();
@@ -3498,6 +3682,8 @@ tempcat_idle(void)
 		if (tc_used_dirty)
 			tempcat_recompute_used(false);
 		tempcat_relock_used();
+		if (tc_release_wanted)
+			tempcat_release_unused_blocks();
 		if (tc_trim_wanted)
 		{
 			size_t		total = dsa_get_total_size(tc_area);
@@ -4928,13 +5114,7 @@ tempcat_check_sample_scan(Relation rel, Snapshot snapshot)
 bool
 tempcat_oid_maybe_live(Oid oid, Oid dbid)
 {
-	uint16		holder;
-
-	if (TempcatBlocks == NULL)
-		return false;
-	holder = TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS];
-	if (holder == 0)
-		return false;
-	pg_read_barrier();
-	return TempcatShared->procs[holder - 1].databaseId == dbid;
+	/* (of any database: the holders are not known) */
+	return TempcatBlocks != NULL &&
+		TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS] != 0;
 }

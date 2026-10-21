@@ -599,16 +599,15 @@ GetNewObjectIdUnderLock(void)
 	 * GPDB: skip the blocks of OIDs that sessions keeping their temporary
 	 * objects in memory hold (see tempcat.c).  The counter left them behind
 	 * when they were taken, and comes back to them only after it wrapped
-	 * around (to FirstNormalObjectId: only processes under the postmaster
-	 * hold blocks).
+	 * around.
 	 */
-	while (tempcat_oid_block_held(ShmemVariableCache->nextOid))
 	{
+		bool		skipped;
+
 		ShmemVariableCache->nextOid =
-			tempcat_oid_block_last(ShmemVariableCache->nextOid) + 1;
-		if (ShmemVariableCache->nextOid < ((Oid) FirstNormalObjectId))
-			ShmemVariableCache->nextOid = FirstNormalObjectId;
-		ShmemVariableCache->oidCount = 0;
+			tempcat_skip_held_blocks(ShmemVariableCache->nextOid, &skipped);
+		if (skipped)
+			ShmemVariableCache->oidCount = 0;
 	}
 
 	/* If we run out of logged for use oids then we must log more */
@@ -622,6 +621,7 @@ GetNewObjectIdUnderLock(void)
 
 	(ShmemVariableCache->nextOid)++;
 	(ShmemVariableCache->oidCount)--;
+	tempcat_note_oid_counter(ShmemVariableCache->nextOid);	/* GPDB */
 
 #ifdef FAULT_INJECTOR
 	if (SIMPLE_FAULT_INJECTOR("bump_oid") == FaultInjectorTypeSkip)
@@ -666,20 +666,22 @@ GetNewObjectId(void)
 }
 
 /*
- * GPDB: allocate the OIDs from the counter to the end of its block of OIDs
- * (see tempcat.c), for temporary objects kept in memory.  Returns the first;
- * *last is set to the last.
+ * GPDB: allocate up to 'n' OIDs at once, but not past the end of the
+ * counter's block of OIDs (see tempcat.c), for temporary objects kept in
+ * memory.  Returns the first; *last is set to the last.
  */
 Oid
-GetNewObjectIdsToBlockEnd(Oid *last)
+GetNewObjectIdsInBlock(uint32 n, Oid *last)
 {
 	Oid			result;
-	uint32		n;
 
+	Assert(n > 0);
 	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 
 	result = GetNewObjectIdUnderLock();
 	*last = tempcat_oid_block_last(result);
+	if (*last - result >= n)
+		*last = result + (n - 1);
 	n = *last - result;
 	if (n > 0)
 	{
@@ -692,6 +694,7 @@ GetNewObjectIdsToBlockEnd(Oid *last)
 		ShmemVariableCache->nextOid += n;
 		ShmemVariableCache->oidCount -= n;
 	}
+	tempcat_note_oid_counter(ShmemVariableCache->nextOid);
 
 	LWLockRelease(OidGenLock);
 
