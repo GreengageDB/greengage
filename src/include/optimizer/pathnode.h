@@ -89,26 +89,7 @@ extern GroupResultPath *create_group_result_path(PlannerInfo *root,
 												 RelOptInfo *rel,
 												 PathTarget *target,
 												 List *havingqual);
-<<<<<<< HEAD
 extern MaterialPath *create_material_path(PlannerInfo *root, RelOptInfo *rel, Path *subpath);
-extern ResultCachePath *create_resultcache_path(PlannerInfo *root,
-												RelOptInfo *rel,
-												Path *subpath,
-												List *param_exprs,
-												List *hash_operators,
-												bool singlerow,
-												double calls);
-||||||| e1c1c30f635
-extern MaterialPath *create_material_path(RelOptInfo *rel, Path *subpath);
-extern ResultCachePath *create_resultcache_path(PlannerInfo *root,
-												RelOptInfo *rel,
-												Path *subpath,
-												List *param_exprs,
-												List *hash_operators,
-												bool singlerow,
-												double calls);
-=======
-extern MaterialPath *create_material_path(RelOptInfo *rel, Path *subpath);
 extern MemoizePath *create_memoize_path(PlannerInfo *root,
 										RelOptInfo *rel,
 										Path *subpath,
@@ -116,7 +97,6 @@ extern MemoizePath *create_memoize_path(PlannerInfo *root,
 										List *hash_operators,
 										bool singlerow,
 										double calls);
->>>>>>> 3b231596ccf
 extern UniquePath *create_unique_path(PlannerInfo *root, RelOptInfo *rel,
 									  Path *subpath, SpecialJoinInfo *sjinfo);
 extern UniquePath *create_unique_rowid_path(PlannerInfo *root,

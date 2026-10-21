@@ -367,10 +367,10 @@ plan_tree_walker(Node *node,
 				return true;
 			break;
 
-		case T_ResultCache:
+		case T_Memoize:
 			if (walk_plan_node_fields((Plan *) node, walker, context))
 				return true;
-			if (walker((Node *) ((ResultCache *) node)->param_exprs, context))
+			if (walker((Node *) ((Memoize *) node)->param_exprs, context))
 				return true;
 			break;
 

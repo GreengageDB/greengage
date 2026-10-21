@@ -2676,7 +2676,6 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		case T_Hash:
 			show_hash_info(castNode(HashState, planstate), es);
 			break;
-<<<<<<< HEAD
 		case T_Motion:
 			{
 				Motion	   *pMotion = (Motion *) plan;
@@ -2705,18 +2704,9 @@ ExplainNode(PlanState *planstate, List *ancestors,
 		case T_Append:
 			show_join_pruning_info(((Append *) plan)->join_prune_paramids, es);
 			break;
-		case T_ResultCache:
-			show_resultcache_info(castNode(ResultCacheState, planstate),
-								  ancestors, es);
-||||||| e1c1c30f635
-		case T_ResultCache:
-			show_resultcache_info(castNode(ResultCacheState, planstate),
-								  ancestors, es);
-=======
 		case T_Memoize:
 			show_memoize_info(castNode(MemoizeState, planstate), ancestors,
 							  es);
->>>>>>> 3b231596ccf
 			break;
 		default:
 			break;

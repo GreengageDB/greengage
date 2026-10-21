@@ -1987,28 +1987,12 @@ consider_parallel_nestloop(PlannerInfo *root,
 			 * Try generating a memoize path and see if that makes the nested
 			 * loop any cheaper.
 			 */
-<<<<<<< HEAD
-			rcpath = get_resultcache_path(root, innerrel, outerrel,
-										  innerpath, outerpath, jointype,
-										  extra);
-			if (rcpath != NULL)
-				try_partial_nestloop_path(root, joinrel, outerpath, rcpath,
-										  pathkeys, jointype, save_jointype, extra);
-||||||| e1c1c30f635
-			rcpath = get_resultcache_path(root, innerrel, outerrel,
-										  innerpath, outerpath, jointype,
-										  extra);
-			if (rcpath != NULL)
-				try_partial_nestloop_path(root, joinrel, outerpath, rcpath,
-										  pathkeys, jointype, extra);
-=======
 			mpath = get_memoize_path(root, innerrel, outerrel,
 									 innerpath, outerpath, jointype,
 									 extra);
 			if (mpath != NULL)
 				try_partial_nestloop_path(root, joinrel, outerpath, mpath,
-										  pathkeys, jointype, extra);
->>>>>>> 3b231596ccf
+										  pathkeys, jointype, save_jointype, extra);
 		}
 	}
 }

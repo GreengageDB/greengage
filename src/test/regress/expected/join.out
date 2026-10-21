@@ -3871,7 +3871,6 @@ select * from tenk1 t1 left join
   (tenk1 t2 join tenk1 t3 on t2.thousand = t3.unique2)
   on t1.hundred = t2.hundred and t1.ten = t3.ten
 where t1.unique1 = 1;
-<<<<<<< HEAD
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Gather Motion 3:1  (slice1; segments: 3)
@@ -3893,41 +3892,6 @@ where t1.unique1 = 1;
                      Index Cond: (unique1 = 1)
  Optimizer: Postgres query optimizer
 (18 rows)
-||||||| e1c1c30f635
-                          QUERY PLAN                          
---------------------------------------------------------------
- Nested Loop Left Join
-   ->  Index Scan using tenk1_unique1 on tenk1 t1
-         Index Cond: (unique1 = 1)
-   ->  Nested Loop
-         Join Filter: (t1.ten = t3.ten)
-         ->  Bitmap Heap Scan on tenk1 t2
-               Recheck Cond: (t1.hundred = hundred)
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = t1.hundred)
-         ->  Result Cache
-               Cache Key: t2.thousand
-               ->  Index Scan using tenk1_unique2 on tenk1 t3
-                     Index Cond: (unique2 = t2.thousand)
-(13 rows)
-=======
-                          QUERY PLAN                          
---------------------------------------------------------------
- Nested Loop Left Join
-   ->  Index Scan using tenk1_unique1 on tenk1 t1
-         Index Cond: (unique1 = 1)
-   ->  Nested Loop
-         Join Filter: (t1.ten = t3.ten)
-         ->  Bitmap Heap Scan on tenk1 t2
-               Recheck Cond: (t1.hundred = hundred)
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = t1.hundred)
-         ->  Memoize
-               Cache Key: t2.thousand
-               ->  Index Scan using tenk1_unique2 on tenk1 t3
-                     Index Cond: (unique2 = t2.thousand)
-(13 rows)
->>>>>>> 3b231596ccf
 
 explain (costs off)
 select * from tenk1 t1 left join
@@ -3940,7 +3904,6 @@ where t1.unique1 = 1;
    ->  Hash Right Join
          Hash Cond: (t2.hundred = t1.hundred)
          Join Filter: ((t1.ten + t2.ten) = t3.ten)
-<<<<<<< HEAD
          ->  Redistribute Motion 3:3  (slice2; segments: 3)
                Hash Key: 1
                ->  Hash Join
@@ -3957,27 +3920,6 @@ where t1.unique1 = 1;
                      Index Cond: (unique1 = 1)
  Optimizer: Postgres query optimizer
 (19 rows)
-||||||| e1c1c30f635
-         ->  Bitmap Heap Scan on tenk1 t2
-               Recheck Cond: (t1.hundred = hundred)
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = t1.hundred)
-         ->  Result Cache
-               Cache Key: t2.thousand
-               ->  Index Scan using tenk1_unique2 on tenk1 t3
-                     Index Cond: (unique2 = t2.thousand)
-(13 rows)
-=======
-         ->  Bitmap Heap Scan on tenk1 t2
-               Recheck Cond: (t1.hundred = hundred)
-               ->  Bitmap Index Scan on tenk1_hundred
-                     Index Cond: (hundred = t1.hundred)
-         ->  Memoize
-               Cache Key: t2.thousand
-               ->  Index Scan using tenk1_unique2 on tenk1 t3
-                     Index Cond: (unique2 = t2.thousand)
-(13 rows)
->>>>>>> 3b231596ccf
 
 explain (costs off)
 select count(*) from
@@ -5514,7 +5456,6 @@ select count(*) from tenk1 a, lateral generate_series(1,two) g;
 
 explain (costs off)
   select count(*) from tenk1 a, lateral generate_series(1,two) g;
-<<<<<<< HEAD
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Finalize Aggregate
@@ -5522,36 +5463,14 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)
-||||||| e1c1c30f635
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Result Cache
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
-=======
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Memoize
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
->>>>>>> 3b231596ccf
 
 explain (costs off)
   select count(*) from tenk1 a cross join lateral generate_series(1,two) g;
-<<<<<<< HEAD
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Finalize Aggregate
@@ -5559,37 +5478,15 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)
-||||||| e1c1c30f635
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Result Cache
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
-=======
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Memoize
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
->>>>>>> 3b231596ccf
 
 -- don't need the explicit LATERAL keyword for functions
 explain (costs off)
   select count(*) from tenk1 a, generate_series(1,two) g;
-<<<<<<< HEAD
                             QUERY PLAN                            
 ------------------------------------------------------------------
  Finalize Aggregate
@@ -5597,32 +5494,11 @@ explain (costs off)
          ->  Partial Aggregate
                ->  Nested Loop
                      ->  Seq Scan on tenk1 a
-                     ->  Result Cache
+                     ->  Memoize
                            Cache Key: a.two
                            ->  Function Scan on generate_series g
  Optimizer: Postgres query optimizer
 (9 rows)
-||||||| e1c1c30f635
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Result Cache
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
-=======
-                      QUERY PLAN                      
-------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on tenk1 a
-         ->  Memoize
-               Cache Key: a.two
-               ->  Function Scan on generate_series g
-(6 rows)
->>>>>>> 3b231596ccf
 
 -- lateral with UNION ALL subselect
 -- start_ignore
@@ -5693,7 +5569,6 @@ select count(*) from tenk1 a,
 explain (costs off)
   select count(*) from tenk1 a,
     tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
-<<<<<<< HEAD
                                   QUERY PLAN                                  
 ------------------------------------------------------------------------------
  Finalize Aggregate
@@ -5712,33 +5587,6 @@ explain (costs off)
                                  ->  Seq Scan on tenk1 b
  Optimizer: Postgres query optimizer
 (15 rows)
-||||||| e1c1c30f635
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Nested Loop
-               ->  Index Only Scan using tenk1_unique1 on tenk1 a
-               ->  Values Scan on "*VALUES*"
-         ->  Result Cache
-               Cache Key: "*VALUES*".column1
-               ->  Index Only Scan using tenk1_unique2 on tenk1 b
-                     Index Cond: (unique2 = "*VALUES*".column1)
-(9 rows)
-=======
-                            QUERY PLAN                            
-------------------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Nested Loop
-               ->  Index Only Scan using tenk1_unique1 on tenk1 a
-               ->  Values Scan on "*VALUES*"
-         ->  Memoize
-               Cache Key: "*VALUES*".column1
-               ->  Index Only Scan using tenk1_unique2 on tenk1 b
-                     Index Cond: (unique2 = "*VALUES*".column1)
-(9 rows)
->>>>>>> 3b231596ccf
 
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
@@ -6787,11 +6635,11 @@ where f.c = 1;
                            Index Cond: (c = 1)
                      ->  Index Only Scan using fkest1_pkey on fkest1 f1
                            Index Cond: ((a = f.a) AND (b = f.b))
-               ->  Result Cache
+               ->  Memoize
                      Cache Key: f.a, f.b
                      ->  Index Only Scan using fkest1_pkey on fkest1 f2
                            Index Cond: ((a = f.a) AND (b = f.b))
-         ->  Result Cache
+         ->  Memoize
                Cache Key: f.a, f.b
                ->  Index Only Scan using fkest1_pkey on fkest1 f3
                      Index Cond: ((a = f.a) AND (b = f.b))

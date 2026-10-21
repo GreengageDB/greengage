@@ -620,17 +620,17 @@ plan_tree_mutator(Node *node,
 			}
 			break;
 
-		case T_ResultCache:
+		case T_Memoize:
 			{
-				ResultCache *resultcache = (ResultCache *) node;
-				ResultCache *newresultcache;
+				Memoize    *memoize = (Memoize *) node;
+				Memoize    *newmemoize;
 
-				FLATCOPY(newresultcache, resultcache, ResultCache);
-				PLANMUTATE(newresultcache, resultcache);
-				COPYARRAY(newresultcache, resultcache, numKeys, hashOperators);
-				COPYARRAY(newresultcache, resultcache, numKeys, collations);
-				MUTATE(newresultcache->param_exprs, resultcache->param_exprs, List *);
-				return (Node *) newresultcache;
+				FLATCOPY(newmemoize, memoize, Memoize);
+				PLANMUTATE(newmemoize, memoize);
+				COPYARRAY(newmemoize, memoize, numKeys, hashOperators);
+				COPYARRAY(newmemoize, memoize, numKeys, collations);
+				MUTATE(newmemoize->param_exprs, memoize->param_exprs, List *);
+				return (Node *) newmemoize;
 			}
 			break;
 

@@ -35,8 +35,7 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.twenty
 WHERE t2.unique1 < 1000;', false);
-<<<<<<< HEAD:src/test/regress/expected/resultcache.out
-                                          explain_resultcache                                          
+                                            explain_memoize                                            
 -------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
@@ -47,44 +46,13 @@ WHERE t2.unique1 < 1000;', false);
                            ->  Seq Scan on tenk1 t2 (actual rows=340 loops=N)
                                  Filter: (unique1 < 1000)
                                  Rows Removed by Filter: 2906
-                     ->  Result Cache (actual rows=1 loops=N)
+                     ->  Memoize (actual rows=1 loops=N)
                            Cache Key: t2.twenty
                            ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
                                  Index Cond: (unique1 = t2.twenty)
                                  Heap Fetches: N
  Optimizer: Postgres query optimizer
 (15 rows)
-||||||| e1c1c30f635:src/test/regress/expected/resultcache.out
-                                    explain_resultcache                                    
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1000 loops=N)
-         ->  Seq Scan on tenk1 t2 (actual rows=1000 loops=N)
-               Filter: (unique1 < 1000)
-               Rows Removed by Filter: 9000
-         ->  Result Cache (actual rows=1 loops=N)
-               Cache Key: t2.twenty
-               Hits: 980  Misses: 20  Evictions: Zero  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t2.twenty)
-                     Heap Fetches: N
-(11 rows)
-=======
-                                      explain_memoize                                      
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1000 loops=N)
-         ->  Seq Scan on tenk1 t2 (actual rows=1000 loops=N)
-               Filter: (unique1 < 1000)
-               Rows Removed by Filter: 9000
-         ->  Memoize (actual rows=1 loops=N)
-               Cache Key: t2.twenty
-               Hits: 980  Misses: 20  Evictions: Zero  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t2.twenty)
-                     Heap Fetches: N
-(11 rows)
->>>>>>> 3b231596ccf:src/test/regress/expected/memoize.out
 
 -- And check we get the expected results.
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
@@ -100,8 +68,7 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t2.unique1) FROM tenk1 t1,
 LATERAL (SELECT t2.unique1 FROM tenk1 t2 WHERE t1.twenty = t2.unique1) t2
 WHERE t1.unique1 < 1000;', false);
-<<<<<<< HEAD:src/test/regress/expected/resultcache.out
-                                          explain_resultcache                                          
+                                            explain_memoize                                            
 -------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
@@ -112,44 +79,13 @@ WHERE t1.unique1 < 1000;', false);
                            ->  Seq Scan on tenk1 t1 (actual rows=340 loops=N)
                                  Filter: (unique1 < 1000)
                                  Rows Removed by Filter: 2906
-                     ->  Result Cache (actual rows=1 loops=N)
+                     ->  Memoize (actual rows=1 loops=N)
                            Cache Key: t1.twenty
                            ->  Index Only Scan using tenk1_unique1 on tenk1 t2 (actual rows=1 loops=N)
                                  Index Cond: (unique1 = t1.twenty)
                                  Heap Fetches: N
  Optimizer: Postgres query optimizer
 (15 rows)
-||||||| e1c1c30f635:src/test/regress/expected/resultcache.out
-                                    explain_resultcache                                    
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1000 loops=N)
-         ->  Seq Scan on tenk1 t1 (actual rows=1000 loops=N)
-               Filter: (unique1 < 1000)
-               Rows Removed by Filter: 9000
-         ->  Result Cache (actual rows=1 loops=N)
-               Cache Key: t1.twenty
-               Hits: 980  Misses: 20  Evictions: Zero  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t2 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t1.twenty)
-                     Heap Fetches: N
-(11 rows)
-=======
-                                      explain_memoize                                      
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1000 loops=N)
-         ->  Seq Scan on tenk1 t1 (actual rows=1000 loops=N)
-               Filter: (unique1 < 1000)
-               Rows Removed by Filter: 9000
-         ->  Memoize (actual rows=1 loops=N)
-               Cache Key: t1.twenty
-               Hits: 980  Misses: 20  Evictions: Zero  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t2 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t1.twenty)
-                     Heap Fetches: N
-(11 rows)
->>>>>>> 3b231596ccf:src/test/regress/expected/memoize.out
 
 -- And check we get the expected results.
 SELECT COUNT(*),AVG(t2.unique1) FROM tenk1 t1,
@@ -160,16 +96,16 @@ WHERE t1.unique1 < 1000;
   1000 | 9.5000000000000000
 (1 row)
 
--- Reduce work_mem so that we see some cache evictions.  Result Cache sizes its
--- cache from get_hash_mem() (work_mem * hash_mem_multiplier), so work_mem is the
--- knob here, not statement_mem.  GPDB note: the eviction counters are computed
--- on the segments and not sent to the QD, so we can only check the plan shape
--- here, not the Hits/Misses/Evictions line.
+-- Reduce work_mem so that we see some cache evictions.  Memoize sizes its
+-- cache from get_hash_memory_limit() (work_mem * hash_mem_multiplier), so
+-- work_mem is the knob here, not statement_mem.  GPDB note: the eviction
+-- counters are computed on the segments and not sent to the QD, so we can
+-- only check the plan shape here, not the Hits/Misses/Evictions line.
 SET work_mem TO '64kB';
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
 SET enable_mergejoin TO off;
 -- GPDB: also disable sort, otherwise a distributed Merge Join is chosen over the
--- Nested Loop + Result Cache plan this test needs.
+-- Nested Loop + Memoize plan this test needs.
 SET enable_sort TO off;
 -- Ensure we get some evictions.  We're unable to validate the hits and misses
 -- here as the number of entries that fit in the cache at once will vary
@@ -178,8 +114,7 @@ SELECT explain_memoize('
 SELECT COUNT(*),AVG(t1.unique1) FROM tenk1 t1
 INNER JOIN tenk1 t2 ON t1.unique1 = t2.thousand
 WHERE t2.unique1 < 1200;', true);
-<<<<<<< HEAD:src/test/regress/expected/resultcache.out
-                                          explain_resultcache                                          
+                                            explain_memoize                                            
 -------------------------------------------------------------------------------------------------------
  Finalize Aggregate (actual rows=1 loops=N)
    ->  Gather Motion 3:1  (slice1; segments: 3) (actual rows=3 loops=N)
@@ -190,68 +125,27 @@ WHERE t2.unique1 < 1200;', true);
                            ->  Seq Scan on tenk1 t2 (actual rows=407 loops=N)
                                  Filter: (unique1 < 1200)
                                  Rows Removed by Filter: 2961
-                     ->  Result Cache (actual rows=1 loops=N)
+                     ->  Memoize (actual rows=1 loops=N)
                            Cache Key: t2.thousand
                            ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
                                  Index Cond: (unique1 = t2.thousand)
                                  Heap Fetches: N
  Optimizer: Postgres query optimizer
 (15 rows)
-||||||| e1c1c30f635:src/test/regress/expected/resultcache.out
-                                    explain_resultcache                                    
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1200 loops=N)
-         ->  Seq Scan on tenk1 t2 (actual rows=1200 loops=N)
-               Filter: (unique1 < 1200)
-               Rows Removed by Filter: 8800
-         ->  Result Cache (actual rows=1 loops=N)
-               Cache Key: t2.thousand
-               Hits: N  Misses: N  Evictions: N  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t2.thousand)
-                     Heap Fetches: N
-(11 rows)
-=======
-                                      explain_memoize                                      
--------------------------------------------------------------------------------------------
- Aggregate (actual rows=1 loops=N)
-   ->  Nested Loop (actual rows=1200 loops=N)
-         ->  Seq Scan on tenk1 t2 (actual rows=1200 loops=N)
-               Filter: (unique1 < 1200)
-               Rows Removed by Filter: 8800
-         ->  Memoize (actual rows=1 loops=N)
-               Cache Key: t2.thousand
-               Hits: N  Misses: N  Evictions: N  Overflows: 0  Memory Usage: NkB
-               ->  Index Only Scan using tenk1_unique1 on tenk1 t1 (actual rows=1 loops=N)
-                     Index Cond: (unique1 = t2.thousand)
-                     Heap Fetches: N
-(11 rows)
->>>>>>> 3b231596ccf:src/test/regress/expected/memoize.out
 
 RESET enable_sort;
 RESET enable_mergejoin;
 RESET work_mem;
-<<<<<<< HEAD:src/test/regress/expected/resultcache.out
 WARNING:  "work_mem": setting is deprecated, and may be removed in a future release.
--- Test Result Cache plans.  GPDB has no intra-segment parallel workers, so
+-- Test Memoize plans.  GPDB has no intra-segment parallel workers, so
 -- upstream's "parallel plan" is just the ordinary distributed plan here.  We
 -- keep enable_hashjoin/enable_bitmapscan off (see above) so the planner sticks
--- to the Nested Loop + Result Cache shape.
-||||||| e1c1c30f635:src/test/regress/expected/resultcache.out
-RESET enable_bitmapscan;
-RESET enable_hashjoin;
--- Test parallel plans with Result Cache.
-=======
-RESET enable_bitmapscan;
-RESET enable_hashjoin;
--- Test parallel plans with Memoize
->>>>>>> 3b231596ccf:src/test/regress/expected/memoize.out
+-- to the Nested Loop + Memoize shape.
 SET min_parallel_table_scan_size TO 0;
 SET parallel_setup_cost TO 0;
 SET parallel_tuple_cost TO 0;
 SET max_parallel_workers_per_gather TO 2;
--- Ensure we get a Result Cache plan.
+-- Ensure we get a Memoize plan.
 EXPLAIN (COSTS OFF)
 SELECT COUNT(*),AVG(t2.unique1) FROM tenk1 t1,
 LATERAL (SELECT t2.unique1 FROM tenk1 t2 WHERE t1.twenty = t2.unique1) t2
@@ -262,25 +156,11 @@ WHERE t1.unique1 < 1000;
    ->  Gather Motion 3:1  (slice1; segments: 3)
          ->  Partial Aggregate
                ->  Nested Loop
-<<<<<<< HEAD:src/test/regress/expected/resultcache.out
                      ->  Redistribute Motion 3:3  (slice2; segments: 3)
                            Hash Key: t1.twenty
                            ->  Seq Scan on tenk1 t1
                                  Filter: (unique1 < 1000)
-                     ->  Result Cache
-||||||| e1c1c30f635:src/test/regress/expected/resultcache.out
-                     ->  Parallel Bitmap Heap Scan on tenk1 t1
-                           Recheck Cond: (unique1 < 1000)
-                           ->  Bitmap Index Scan on tenk1_unique1
-                                 Index Cond: (unique1 < 1000)
-                     ->  Result Cache
-=======
-                     ->  Parallel Bitmap Heap Scan on tenk1 t1
-                           Recheck Cond: (unique1 < 1000)
-                           ->  Bitmap Index Scan on tenk1_unique1
-                                 Index Cond: (unique1 < 1000)
                      ->  Memoize
->>>>>>> 3b231596ccf:src/test/regress/expected/memoize.out
                            Cache Key: t1.twenty
                            ->  Index Only Scan using tenk1_unique1 on tenk1 t2
                                  Index Cond: (unique1 = t1.twenty)

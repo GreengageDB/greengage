@@ -1107,7 +1107,6 @@ select sum(o.four), sum(ss.a) from
     select * from x
   ) ss
 where o.ten = 1;
-<<<<<<< HEAD
                           QUERY PLAN                           
 ---------------------------------------------------------------
  Finalize Aggregate
@@ -1117,7 +1116,7 @@ where o.ten = 1;
                      ->  Seq Scan on onek o
                            Filter: (ten = 1)
                      ->  Materialize
-                           ->  Result Cache
+                           ->  Memoize
                                  Cache Key: o.four
                                  ->  Recursive Union
                                        ->  Result
@@ -1125,39 +1124,6 @@ where o.ten = 1;
                                              Filter: (a < 10)
  Optimizer: Postgres query optimizer
 (14 rows)
-||||||| e1c1c30f635
-                       QUERY PLAN                        
----------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on onek o
-               Filter: (ten = 1)
-         ->  Result Cache
-               Cache Key: o.four
-               ->  CTE Scan on x
-                     CTE x
-                       ->  Recursive Union
-                             ->  Result
-                             ->  WorkTable Scan on x x_1
-                                   Filter: (a < 10)
-(12 rows)
-=======
-                       QUERY PLAN                        
----------------------------------------------------------
- Aggregate
-   ->  Nested Loop
-         ->  Seq Scan on onek o
-               Filter: (ten = 1)
-         ->  Memoize
-               Cache Key: o.four
-               ->  CTE Scan on x
-                     CTE x
-                       ->  Recursive Union
-                             ->  Result
-                             ->  WorkTable Scan on x x_1
-                                   Filter: (a < 10)
-(12 rows)
->>>>>>> 3b231596ccf
 
 select sum(o.four), sum(ss.a) from
   onek o cross join lateral (

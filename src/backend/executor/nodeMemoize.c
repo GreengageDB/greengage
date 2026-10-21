@@ -905,14 +905,8 @@ ExecInitMemoize(Memoize *node, EState *estate, int eflags)
 	mstate->mem_used = 0;
 
 	/* Limit the total memory consumed by the cache to this */
-<<<<<<< HEAD:src/backend/executor/nodeResultCache.c
 	/* GPDB_14_MERGE_FIXME: Do we want use PlanStateOperatorMemKB instead? */
-	rcstate->mem_limit = get_hash_mem() * 1024L;
-||||||| e1c1c30f635:src/backend/executor/nodeResultCache.c
-	rcstate->mem_limit = get_hash_mem() * 1024L;
-=======
 	mstate->mem_limit = get_hash_memory_limit();
->>>>>>> 3b231596ccf:src/backend/executor/nodeMemoize.c
 
 	/* A memory context dedicated for the cache */
 	mstate->tableContext = AllocSetContextCreate(CurrentMemoryContext,

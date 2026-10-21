@@ -138,16 +138,8 @@ bool		enable_hashagg = true;
 bool		enable_groupagg = true;
 bool		enable_nestloop = false;
 bool		enable_material = true;
-<<<<<<< HEAD
-bool		enable_resultcache = true;
-bool		enable_mergejoin = false;
-||||||| e1c1c30f635
-bool		enable_resultcache = true;
-bool		enable_mergejoin = true;
-=======
 bool		enable_memoize = true;
-bool		enable_mergejoin = true;
->>>>>>> 3b231596ccf
+bool		enable_mergejoin = false;
 bool		enable_hashjoin = true;
 bool		enable_gathermerge = true;
 bool		enable_partitionwise_join = false;

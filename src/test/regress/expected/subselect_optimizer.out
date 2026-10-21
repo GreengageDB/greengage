@@ -1169,7 +1169,7 @@ where o.ten = 1;
                      ->  Seq Scan on onek o
                            Filter: (ten = 1)
                      ->  Materialize
-                           ->  Result Cache
+                           ->  Memoize
                                  Cache Key: o.four
                                  ->  Recursive Union
                                        ->  Result

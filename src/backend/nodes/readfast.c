@@ -2673,8 +2673,8 @@ readNodeBinary(void)
 			case T_RowIdentityVarInfo:
 				return_value = _readRowIdentityVarInfo();
 				break;
-			case T_ResultCache:
-				return_value = _readResultCache();
+			case T_Memoize:
+				return_value = _readMemoize();
 				break;
 			case T_ReturnStmt:
 				return_value = _readReturnStmt();

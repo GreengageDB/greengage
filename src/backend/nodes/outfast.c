@@ -1868,8 +1868,8 @@ _outNode(StringInfo str, void *obj)
 			case T_RowIdentityVarInfo:
 				_outRowIdentityVarInfo(str, obj);
 				break;
-			case T_ResultCache:
-				_outResultCache(str, obj);
+			case T_Memoize:
+				_outMemoize(str, obj);
 				break;
 			case T_ReturnStmt:
 				_outReturnStmt(str, obj);

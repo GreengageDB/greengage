@@ -5856,19 +5856,11 @@ outNode(StringInfo str, const void *obj)
 			case T_Material:
 				_outMaterial(str, obj);
 				break;
-<<<<<<< HEAD
 			case T_ShareInputScan:
 				_outShareInputScan(str, obj);
 				break;
-			case T_ResultCache:
-				_outResultCache(str, obj);
-||||||| e1c1c30f635
-			case T_ResultCache:
-				_outResultCache(str, obj);
-=======
 			case T_Memoize:
 				_outMemoize(str, obj);
->>>>>>> 3b231596ccf
 				break;
 			case T_Sort:
 				_outSort(str, obj);
