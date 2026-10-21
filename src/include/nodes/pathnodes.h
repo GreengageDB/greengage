@@ -1664,7 +1664,6 @@ typedef struct TidPath
 } TidPath;
 
 /*
-<<<<<<< HEAD
  * CdbMotionPath represents transmission of the child Path results
  * from a set of sending processes to a set of receiving processes.
  *
@@ -1683,12 +1682,7 @@ typedef struct CdbMotionPath
 } CdbMotionPath;
 
 /*
- * TidRangePath represents a scan by a continguous range of TIDs
-||||||| e1c1c30f635
- * TidRangePath represents a scan by a continguous range of TIDs
-=======
  * TidRangePath represents a scan by a contiguous range of TIDs
->>>>>>> 3b231596ccf
  *
  * tidrangequals is an implicitly AND'ed list of qual expressions of the form
  * "CTID relop pseudoconstant", where relop is one of >,>=,<,<=.
