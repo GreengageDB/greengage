@@ -33,8 +33,6 @@
   net.core.rmem_default = 2097152
   net.core.rmem_max = 16777216
   net.core.wmem_max = 16777216
-  vm.overcommit_memory = 2
-  vm.overcommit_ratio = 95
   EOF
   sudo sysctl -p /etc/sysctl.d/90-greengage.conf
   ```
@@ -45,13 +43,20 @@
   sudo tee /etc/security/limits.d/90-greengage.conf << EOF
   * soft nofile 1048576
   * hard nofile 1048576
-  * soft nproc 1048576
-  * hard nproc 1048576
   EOF
   ```
 
   The limits are applied to new login sessions. Log in again before you
   create the demo cluster.
+
+  These settings are enough for the demo cluster on a workstation. Dedicated
+  database hosts need additional settings for memory overcommit and the
+  process limit. They are described in the installation guide on
+  [docs.greengagedb.org](https://docs.greengagedb.org). Most evidently:
+  ```bash
+  vm.overcommit_memory = 2
+  vm.overcommit_ratio = 95
+  ```
 
 ## Common Platform Tasks:
 
