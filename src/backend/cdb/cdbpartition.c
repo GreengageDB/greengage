@@ -20,11 +20,13 @@
 #include "access/genam.h"
 #include "access/hash.h"
 #include "access/heapam.h"
+#include "access/nbtree.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_exttable.h"
 #include "catalog/pg_inherits.h"
@@ -4443,6 +4445,116 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 	return 0;
 }
 
+/* Element of SortedRangeRules->rules */
+typedef struct SortedRangeRule
+{
+	PartitionRule *rule;
+	int			ruleno;			/* position of rule in partnode->rules */
+} SortedRangeRule;
+
+/* Entry of PartitionRangeState->sortedrules_cache */
+typedef struct SortedRangeRules
+{
+	PartitionNode *partnode;	/* hash key */
+	SortedRangeRule *rules;		/* partnode->rules, sorted by START */
+} SortedRangeRules;
+
+typedef struct RangeRuleSortContext
+{
+	FmgrInfo	cmpfunc;
+	Oid			collation;
+} RangeRuleSortContext;
+
+/* qsort_arg comparator of range rules by START, see get_sorted_range_rules() */
+static int
+range_rule_start_cmp(const void *a, const void *b, void *arg)
+{
+	PartitionRule *rulea = ((const SortedRangeRule *) a)->rule;
+	PartitionRule *ruleb = ((const SortedRangeRule *) b)->rule;
+	RangeRuleSortContext *cxt = (RangeRuleSortContext *) arg;
+	bool		hasstarta = PointerIsValid(rulea->parrangestart);
+	bool		hasstartb = PointerIsValid(ruleb->parrangestart);
+	int			cmp;
+
+	/* a rule with no START comes first */
+	if (!hasstarta || !hasstartb)
+		cmp = (int) hasstarta - (int) hasstartb;
+	else
+	{
+		Const	   *starta = (Const *) linitial((List *) rulea->parrangestart);
+		Const	   *startb = (Const *) linitial((List *) ruleb->parrangestart);
+
+		cmp = DatumGetInt32(FunctionCall2Coll(&cxt->cmpfunc, cxt->collation,
+											  starta->constvalue,
+											  startb->constvalue));
+	}
+
+	if (cmp != 0)
+		return cmp;
+
+	return rulea->parruleord - ruleb->parruleord;
+}
+
+/*
+ * get_sorted_range_rules
+ *   Return the rules of a range partitioning level as an array sorted by
+ *   START, using the collation of the partitioning key.
+ *
+ * The rules are stored in the order of parruleord. Tables created by older
+ * versions ordered them using the database default collation, which differs
+ * from the key's collation if the key has a non-default one, while the binary
+ * search in selectRangePartition() needs them in the key's order. Only such
+ * keys are sorted; for any other key the stored order is already right.
+ */
+static SortedRangeRule *
+get_sorted_range_rules(PartitionNode *partnode, PartitionRangeState *rs)
+{
+	SortedRangeRules *entry;
+	bool		found;
+
+	entry = (SortedRangeRules *) hash_search(rs->sortedrules_cache, &partnode,
+											 HASH_ENTER, &found);
+	if (!found)
+	{
+		Oid			collation = rs->keycollations[0];
+		SortedRangeRule *rules;
+		ListCell   *lc;
+		int			i = 0;
+
+		entry->rules = NULL;
+
+		rules = palloc(sizeof(SortedRangeRule) * list_length(partnode->rules));
+		foreach(lc, partnode->rules)
+		{
+			rules[i].rule = (PartitionRule *) lfirst(lc);
+			rules[i].ruleno = i;
+			i++;
+		}
+
+		if (OidIsValid(collation) && collation != DEFAULT_COLLATION_OID)
+		{
+			Oid			opclass = partnode->part->parclass[0];
+			Oid			opcintype = get_opclass_input_type(opclass);
+			Oid			cmpproc;
+			RangeRuleSortContext cxt;
+
+			cmpproc = get_opfamily_proc(get_opclass_family(opclass), opcintype,
+										opcintype, BTORDER_PROC);
+			if (!OidIsValid(cmpproc))
+				elog(ERROR, "missing support function %d(%u,%u) for operator class %u",
+					 BTORDER_PROC, opcintype, opcintype, opclass);
+			fmgr_info(cmpproc, &cxt.cmpfunc);
+			cxt.collation = collation;
+
+			qsort_arg(rules, i, sizeof(SortedRangeRule), range_rule_start_cmp, &cxt);
+		}
+
+		entry->rules = rules;
+	}
+
+	return entry->rules;
+}
+
 /*
  * Given a partition specific part, a tuple as represented by values, isnull and
  * tupdesc tuple descriptor and a list of rules.
@@ -4462,6 +4574,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 	PartitionRule *rule = NULL;
 	PartitionNode *pNode = NULL;
 	PartitionRangeState *rs = NULL;
+	SortedRangeRule *sortedrules;
 	MemoryContext oldcxt = NULL;
 
 	Assert(partnode->part->parkind == 'r');
@@ -4472,6 +4585,8 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 	}
 	else
 	{
+		HASHCTL		hashctl;
+
 		/*
 		 * We're still in our caller's memory context so the memory will
 		 * persist long enough for us.
@@ -4486,21 +4601,18 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 			rs->keycollations[keyno] = get_partition_key_collation(partnode->part, keyno);
 
 		/*
-		 * Unrolling the rules into an array currently works for the top level
-		 * partition only
+		 * The rules are sorted on first use for each PartitionNode of this
+		 * level, see get_sorted_range_rules().
 		 */
-		if (partnode->part->parlevel == 0)
-		{
-			int			i = 0;
-			ListCell   *lc;
-
-			rs->rules = palloc(sizeof(PartitionRule *) * list_length(rules));
-
-			foreach(lc, rules)
-				rs->rules[i++] = (PartitionRule *) lfirst(lc);
-		}
-		else
-			rs->rules = NULL;
+		rs->rules = NULL;
+		MemSet(&hashctl, 0, sizeof(hashctl));
+		hashctl.keysize = sizeof(PartitionNode *);
+		hashctl.entrysize = sizeof(SortedRangeRules);
+		hashctl.hash = tag_hash;
+		hashctl.hcxt = CurrentMemoryContext;
+		rs->sortedrules_cache = hash_create("sorted range partition rules", 16,
+											&hashctl,
+											HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 	}
 
 	/*
@@ -4514,6 +4626,9 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		rs->lefuncs_inverse[keyno].fn_oid = InvalidOid;
 		rs->ltfuncs_inverse[keyno].fn_oid = InvalidOid;
 	}
+
+	/* The sorted rules are cached, so keep them out of part_cxt */
+	sortedrules = get_sorted_range_rules(partnode, rs);
 
 	if (accessMethods && accessMethods->part_cxt)
 		oldcxt = MemoryContextSwitchTo(accessMethods->part_cxt);
@@ -4548,10 +4663,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 
 		mid = low + (high - low) / 2;
 
-		if (rs->rules)
-			rule = rs->rules[mid];
-		else
-			rule = (PartitionRule *) list_nth(rules, mid);
+		rule = sortedrules[mid].rule;
 
 		if (isnull[attno - 1])
 		{
@@ -4612,7 +4724,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				Oid			dTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 
 				if (j != mid)
-					rule = (PartitionRule *) list_nth(rules, j);
+					rule = sortedrules[j].rule;
 
 				if (isnull[attno - 1])
 				{
@@ -4665,7 +4777,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				int			ret;
 				Oid			dTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 
-				rule = (PartitionRule *) list_nth(rules, j);
+				rule = sortedrules[j].rule;
 
 				if (isnull[attno - 1])
 				{
@@ -4708,7 +4820,15 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 
 l_fin_range:
 	if (pSearch)
+	{
+		/*
+		 * searchpoint is a position in sortedrules, callers expect one in
+		 * rules. The rules are empty if there is only a default partition.
+		 */
+		if (searchpoint < list_length(rules))
+			searchpoint = sortedrules[searchpoint].ruleno;
 		*pSearch = searchpoint;
+	}
 
 	if (oldcxt)
 		MemoryContextSwitchTo(oldcxt);
