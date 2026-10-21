@@ -1521,8 +1521,6 @@ RemoveFunctionById(Oid funcOid)
 	prokind = ((Form_pg_proc) GETSTRUCT(tup))->prokind;
 
 	CatalogTupleDelete(relation, &tup->t_self);
-	/* GPDB: see tempcat_note_disk_drop() */
-	tempcat_note_disk_drop(ProcedureRelationId, funcOid, &tup->t_self);
 
 	ReleaseSysCache(tup);
 

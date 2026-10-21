@@ -1450,7 +1450,6 @@ extern void pgstat_report_stat(bool force);
 extern void pgstat_vacuum_stat(void);
 extern void pgstat_purge_relation(Oid relid);
 extern void pgstat_purge_function(Oid funcid);
-extern bool pgstat_have_purges(void);
 extern void pgstat_report_queuestat(void); /* GPDB */
 
 extern void pgstat_drop_database(Oid databaseid);

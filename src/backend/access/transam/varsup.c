@@ -596,22 +596,18 @@ GetNewObjectIdUnderLock(void)
 	}
 
 	/*
-	 * GPDB: OIDs from FirstTempcatObjectId up are reserved for temporary
-	 * objects kept in the in-memory catalog (see tempcat.c); wrap around
-	 * before reaching them, in every mode.  Bootstrap never gets that far.
+	 * GPDB: skip the blocks of OIDs that sessions keeping their temporary
+	 * objects in memory hold (see tempcat.c).  The counter left them behind
+	 * when they were taken, and comes back to them only after it wrapped
+	 * around (to FirstNormalObjectId: only processes under the postmaster
+	 * hold blocks).
 	 */
-	if (ShmemVariableCache->nextOid >= FirstTempcatObjectId
-#ifdef FAULT_INJECTOR
-	/*
-	 * Test hook: hand out OIDs from the reserved range, as an older version
-	 * did, to create the ordinary objects with such OIDs that a cluster
-	 * upgraded from it can have.
-	 */
-		&& SIMPLE_FAULT_INJECTOR("oid_keep_reserved_range") != FaultInjectorTypeSkip
-#endif
-		)
+	while (tempcat_oid_block_held(ShmemVariableCache->nextOid))
 	{
-		ShmemVariableCache->nextOid = FirstNormalObjectId;
+		ShmemVariableCache->nextOid =
+			tempcat_oid_block_last(ShmemVariableCache->nextOid) + 1;
+		if (ShmemVariableCache->nextOid < ((Oid) FirstNormalObjectId))
+			ShmemVariableCache->nextOid = FirstNormalObjectId;
 		ShmemVariableCache->oidCount = 0;
 	}
 
@@ -635,18 +631,9 @@ GetNewObjectIdUnderLock(void)
 		 * have some test-utils to verify logic under larger oid.
 		 */
 		if (result <= PG_INT32_MAX) {
-			result = PG_INT32_MAX + result % (FirstTempcatObjectId - PG_INT32_MAX - 1) + 1;
+			result = PG_INT32_MAX + result % (PG_UINT32_MAX - PG_INT32_MAX) + 1;
 		}
 	}
-
-	/*
-	 * Test hook: hand out an OID from the range reserved for in-memory
-	 * temporary objects, as ordinary objects created before the range was
-	 * reserved may have.  Use the tail of the range, whose slices sessions
-	 * take last; they skip OIDs that ordinary objects have anyway.
-	 */
-	if (SIMPLE_FAULT_INJECTOR("oid_in_tempcat_range") == FaultInjectorTypeSkip)
-		result = LastTempcatObjectId - 100000 + result % 100000;
 #endif
 
 	return result;
@@ -679,6 +666,39 @@ GetNewObjectId(void)
 }
 
 /*
+ * GPDB: allocate the OIDs from the counter to the end of its block of OIDs
+ * (see tempcat.c), for temporary objects kept in memory.  Returns the first;
+ * *last is set to the last.
+ */
+Oid
+GetNewObjectIdsToBlockEnd(Oid *last)
+{
+	Oid			result;
+	uint32		n;
+
+	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+
+	result = GetNewObjectIdUnderLock();
+	*last = tempcat_oid_block_last(result);
+	n = *last - result;
+	if (n > 0)
+	{
+		/* (log them all as used, as GetNewObjectIdUnderLock() does) */
+		if (ShmemVariableCache->oidCount < n)
+		{
+			XLogPutNextOid(ShmemVariableCache->nextOid + n + VAR_OID_PREFETCH);
+			ShmemVariableCache->oidCount = n + VAR_OID_PREFETCH;
+		}
+		ShmemVariableCache->nextOid += n;
+		ShmemVariableCache->oidCount -= n;
+	}
+
+	LWLockRelease(OidGenLock);
+
+	return result;
+}
+
+/*
  * AdvanceObjectId -- advance object id counter for QD and QE nodes
  *
  * When advancing the Oid counter of a QD, it should only be for the purpose
@@ -694,15 +714,6 @@ GetNewObjectId(void)
 void
 AdvanceObjectId(Oid newOid)
 {
-	/*
-	 * GPDB: not to an OID reserved for temporary objects kept in memory (see
-	 * tempcat.c): a QE creating such a relation, or the coordinator syncing
-	 * with a QE's counter, would move the counter into the range, which it
-	 * then wraps around from at once.
-	 */
-	if (IsTempcatOid(newOid))
-		return;
-
 	LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 
 	if (OidFollowsNextOid(newOid))

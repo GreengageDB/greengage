@@ -20,7 +20,6 @@
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
-#include "catalog/tempcat.h"
 #include "commands/variable.h"
 #include "common/ip.h"
 #include "nodes/execnodes.h"	/* CdbProcess, Slice, SliceTable */
@@ -897,9 +896,6 @@ GpScheduleSessionResetInternal(bool primaryGangLoss)
 		 * Reset will happen on the next GpResetSessionIfNeeded call.
 		 */
 		NeedResetSession = true;
-
-		/* GPDB: new OIDs for temporary objects kept in memory, see tempcat.c */
-		tempcat_session_reset();
 
 		/*
 		 * Keep this check away from transaction/catalog access, as we are

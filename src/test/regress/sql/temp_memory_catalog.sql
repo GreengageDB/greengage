@@ -2,59 +2,71 @@
 -- Catalog rows of temporary objects kept in memory (catalog/tempcat.c).
 --
 -- With gp_enable_temp_memory_catalog on when the session's temporary schema
--- is created, temporary objects get OIDs from the reserved range starting at
--- 0xF0000000 (4026531840), and their catalog rows never reach the on-disk
+-- is created, the catalog rows of temporary objects never reach the on-disk
 -- catalogs, not even their dependencies on ordinary objects.  Catalog
 -- lookups and scans of the catalogs see the rows in memory.
 --
 
--- On-disk catalog rows that belong to objects with reserved OIDs, on the
--- coordinator and on the segments, in the catalogs that most objects have
--- rows in.  Scans see the rows in memory too, which have TIDs with offsets
--- from 0x8000 (32768) up.
+-- Scans see the rows in memory, which have TIDs with offsets from 0x8000
+-- (32768) up: those of the temporary objects of the session.
+CREATE FUNCTION tc_mem_oids() RETURNS SETOF oid LANGUAGE sql AS $$
+  SELECT oid FROM pg_class WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_type WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_proc WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_namespace WHERE (ctid::text::point)[1] >= 32768
+  UNION SELECT oid FROM pg_constraint WHERE (ctid::text::point)[1] >= 32768
+$$;
+CREATE FUNCTION tc_in_memory(regclass) RETURNS bool LANGUAGE sql AS $$
+  SELECT (ctid::text::point)[1] >= 32768 FROM pg_class WHERE oid = $1
+$$;
+
+-- On-disk catalog rows that belong to the temporary objects of the session
+-- in memory, on the coordinator and on the segments, in the catalogs that
+-- most objects have rows in.
 CREATE FUNCTION tc_disk_rows() RETURNS bigint LANGUAGE sql AS $$
+  WITH m AS (SELECT * FROM tc_mem_oids() o)
   SELECT sum(n)::bigint FROM (
     SELECT count(*) AS n FROM pg_class
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_class')
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_type
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_type')
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_attribute
-     WHERE attrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE attrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_attribute')
-     WHERE attrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE attrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_depend
-     WHERE refobjid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE refobjid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
-     WHERE refobjid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE refobjid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_depend
-     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_depend')
-     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_proc
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_proc')
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_constraint
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_constraint')
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_namespace
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_namespace')
-     WHERE oid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE oid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_index
-     WHERE indrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE indrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_index')
-     WHERE indrelid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE indrelid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
     UNION ALL SELECT count(*) FROM pg_shdepend
-     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
        AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
     UNION ALL SELECT count(*) FROM gp_dist_random('pg_shdepend')
-     WHERE objid >= 4026531840 AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
+     WHERE objid IN (SELECT o FROM m) AND (ctid::text::point)[1] < 32768 AND gp_segment_id >= -1
        AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
   ) s
 $$;
@@ -64,8 +76,9 @@ SET optimizer = off;
 
 CREATE TEMP TABLE tc_t (a int PRIMARY KEY, b text DEFAULT 'x' CHECK (b <> ''))
   DISTRIBUTED BY (a);
-SELECT 'tc_t'::regclass::oid >= 4026531840 AS reserved,
-       pg_my_temp_schema()::oid >= 4026531840 AS reserved_namespace;
+SELECT tc_in_memory('tc_t') AS in_memory,
+       (SELECT (ctid::text::point)[1] >= 32768 FROM pg_namespace
+         WHERE oid = pg_my_temp_schema()) AS namespace_in_memory;
 SELECT relname, relkind, relpersistence FROM pg_class
  WHERE relnamespace = pg_my_temp_schema() ORDER BY relname;
 SELECT attname, atttypid::regtype FROM pg_attribute
@@ -76,13 +89,13 @@ SELECT column_name, data_type FROM information_schema.columns
 SELECT indisprimary, indisunique, indkey FROM pg_index WHERE indexrelid = 'tc_t_pkey'::regclass;
 -- Index, index-only and bitmap scans of the catalogs in plans see the rows
 -- in memory too: index and index-only scans in index order, also for merge
--- joins, which mark and restore positions.  (tc_explain() hides reserved
--- OIDs, which differ from run to run.)
+-- joins, which mark and restore positions.  (tc_explain() hides OIDs,
+-- which differ from run to run.)
 CREATE FUNCTION tc_explain(q text) RETURNS SETOF text LANGUAGE plpgsql AS $$
 DECLARE l text;
 BEGIN
   FOR l IN EXECUTE 'EXPLAIN (costs off) ' || q LOOP
-    RETURN NEXT regexp_replace(l, '\m4[0-9]{9}\M', 'N', 'g');
+    RETURN NEXT regexp_replace(l, '''[0-9]+''::oid', '''N''::oid', 'g');
   END LOOP;
 END $$;
 SET enable_seqscan = off;
@@ -163,7 +176,7 @@ SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname IN ('tc_t', 'tc_t_
 -- And nothing of them is on disk.
 SELECT tc_disk_rows();
 SELECT count(*) AS in_memory FROM pg_class
- WHERE oid >= 4026531840 AND (ctid::text::point)[1] >= 32768 AND gp_segment_id >= -1;
+ WHERE (ctid::text::point)[1] >= 32768 AND gp_segment_id >= -1;
 
 INSERT INTO tc_t SELECT g, g::text FROM generate_series(1, 100) g;
 INSERT INTO tc_t VALUES (1, 'dup');
@@ -300,8 +313,7 @@ END $$;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_loop%';
 
 -- Creating and dropping temporary tables leaves no dead rows behind in the
--- on-disk catalogs.  (The count is taken in the transaction: the counts not
--- sent yet go when the session lets go of a slice at its start.)
+-- on-disk catalogs.
 BEGIN;
 SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS ins_before \gset
 CREATE TEMP TABLE tc_churn (a int PRIMARY KEY, b text) DISTRIBUTED BY (a);
@@ -360,10 +372,10 @@ DROP FUNCTION tc_make(int);
 \c
 SET gp_enable_temp_memory_catalog = off;
 CREATE TEMP TABLE tc_disk (a int) DISTRIBUTED BY (a);
-SELECT 'tc_disk'::regclass::oid >= 4026531840 AS reserved;
+SELECT tc_in_memory('tc_disk') AS in_memory;
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
-SELECT 'tc_disk2'::regclass::oid >= 4026531840 AS reserved;
+SELECT tc_in_memory('tc_disk2') AS in_memory;
 
 -- The area grows, segment by segment, up to gp_temp_memory_catalog_max_size;
 -- beyond, the session runs out of room.
@@ -726,7 +738,7 @@ CREATE OPERATOR pg_temp.>>>> (PROCEDURE = int4gt, LEFTARG = int, RIGHTARG = int,
                               COMMUTATOR = OPERATOR(public.<<<<));
 DROP OPERATOR public.<<<< (int, int);
 -- Enum labels are read by ordered catalog scans, forward and backward;
--- they get reserved OIDs too, the same on the segments.
+-- they are kept in memory too, with the same OIDs on the segments.
 CREATE TYPE pg_temp.tc_mood AS ENUM ('sad', 'ok', 'happy');
 ALTER TYPE pg_temp.tc_mood ADD VALUE 'meh' AFTER 'sad';
 CREATE TEMP TABLE tc_moods (m pg_temp.tc_mood) DISTRIBUTED RANDOMLY;
@@ -734,7 +746,7 @@ INSERT INTO tc_moods VALUES ('happy'), ('sad'), ('meh'), ('ok');
 SELECT m FROM tc_moods ORDER BY m;
 SELECT enum_first(NULL::pg_temp.tc_mood), enum_last(NULL::pg_temp.tc_mood),
        enum_range(NULL::pg_temp.tc_mood);
-SELECT count(*) AS labels, bool_and(oid >= 4026531840) AS reserved
+SELECT count(*) AS labels, bool_and((ctid::text::point)[1] >= 32768) AS in_memory
   FROM pg_enum WHERE enumtypid = 'pg_temp.tc_mood'::regtype;
 SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
  WHERE s.enumtypid = 'pg_temp.tc_mood'::regtype
@@ -975,7 +987,7 @@ COMMIT;
 SET gp_enable_temp_memory_catalog = off;
 SELECT count(*) FROM tc_basic x JOIN tc_basic y ON x.a = y.a + 1;
 CREATE TEMP TABLE tc_after_off (a int) DISTRIBUTED BY (a);
-SELECT 'tc_after_off'::regclass::oid >= 4026531840 AS reserved;
+SELECT tc_in_memory('tc_after_off') AS in_memory;
 SET gp_enable_temp_memory_catalog = on;
 SELECT tc_disk_rows();
 DISCARD TEMP;
@@ -1080,70 +1092,50 @@ INSERT INTO tc_sy1 VALUES (1);
 SELECT * FROM tc_sy1;
 DROP TABLE tc_sy1;
 
--- When ordinary objects take every OID of the session's slice of the
--- reserved range (the fault pretends so), the session keeps its temporary
--- objects on disk, with a warning.
-\c
-SET gp_enable_temp_memory_catalog = on;
-\set VERBOSITY terse
-SELECT gp_inject_fault_infinite('tempcat_oid_exhausted', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_noid (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_oid_exhausted', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_noid2 (a int) DISTRIBUTED BY (a);
-SELECT 'tc_noid'::regclass::oid >= 4026531840 AS reserved,
-       'tc_noid2'::regclass::oid >= 4026531840 AS reserved2;
-
--- A session gives each OID once (caches keyed by OID count on it): at the
--- end of its slice (the fault puts the session near it) it takes another
--- one, and keeps the first one as long as its objects have OIDs of it.
+-- A session takes the OIDs of its temporary objects from the OID counter
+-- in runs to the end of a block of 4096 OIDs, so that each is given once:
+-- at the end of a run (the fault puts the session near it) it takes another
+-- one.  Ordinary objects get the OIDs after the run.
 \c
 SET gp_enable_temp_memory_catalog = on;
 CREATE TEMP TABLE tc_wrap0 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+CREATE TABLE tc_wrap_ord0 (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_block_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_wrap1 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_block_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_wrap2 (a int) DISTRIBUTED BY (a);
-SELECT ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
-       ('tc_wrap1'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice1,
-       ('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16 =
-       ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16 AS same_slice2,
-       'tc_wrap2'::regclass::oid >= 4026531840 AS reserved;
+CREATE TABLE tc_wrap_ord2 (a int) DISTRIBUTED BY (a);
+SELECT 'tc_wrap0'::regclass::oid::bigint / 4096 =
+       'tc_wrap1'::regclass::oid::bigint / 4096 AS same_block1,
+       'tc_wrap0'::regclass::oid::bigint / 4096 =
+       'tc_wrap2'::regclass::oid::bigint / 4096 AS same_block2,
+       'tc_wrap0'::regclass::oid < 'tc_wrap2'::regclass::oid AS ascending,
+       'tc_wrap_ord0'::regclass::oid::bigint / 4096 >
+       'tc_wrap0'::regclass::oid::bigint / 4096 AS ordinary_after_run0,
+       'tc_wrap_ord2'::regclass::oid::bigint / 4096 >
+       'tc_wrap2'::regclass::oid::bigint / 4096 AS ordinary_after_run2,
+       tc_in_memory('tc_wrap2') AS in_memory;
 INSERT INTO tc_wrap0 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap1 SELECT generate_series(1, 10);
 INSERT INTO tc_wrap2 SELECT generate_series(1, 10);
 SELECT count(*) FROM tc_wrap0 JOIN tc_wrap1 USING (a) JOIN tc_wrap2 USING (a);
--- With no slice left to take (the fault pretends so), it runs out of OIDs.
--- Then it goes on with another slice.
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
-SELECT gp_inject_fault('tempcat_no_free_slice', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_wrap3 (a int) DISTRIBUTED BY (a);
-SELECT ('tc_wrap3'::regclass::oid::bigint - 4026531840) >> 16 NOT IN
-       (('tc_wrap0'::regclass::oid::bigint - 4026531840) >> 16,
-        ('tc_wrap2'::regclass::oid::bigint - 4026531840) >> 16) AS third_slice;
-INSERT INTO tc_wrap3 SELECT generate_series(1, 10);
-SELECT count(*) FROM tc_wrap0 JOIN tc_wrap3 USING (a);
+DROP TABLE tc_wrap_ord0, tc_wrap_ord2;
 -- The labels of an enum get OIDs of their own (on the segments too): here
--- of the next slice, while the type has one of the last.
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
+-- of the next run, while the type has one of the last.
+SELECT gp_inject_fault('tempcat_block_near_end', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TYPE pg_temp.tc_wrap_enum AS ENUM ('a', 'b', 'c', 'd');
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
+SELECT gp_inject_fault('tempcat_block_near_end', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT count(DISTINCT (e.oid::bigint - 4026531840) >> 16) AS label_slices,
-       bool_and((e.oid::bigint - 4026531840) >> 16 <>
-                ('pg_temp.tc_wrap_enum'::regtype::oid::bigint - 4026531840) >> 16) AS other_slice
+SELECT count(DISTINCT e.oid::bigint / 4096) AS label_blocks,
+       bool_and(e.oid::bigint / 4096 <>
+                'pg_temp.tc_wrap_enum'::regtype::oid::bigint / 4096) AS other_block
   FROM pg_enum e WHERE e.enumtypid = 'pg_temp.tc_wrap_enum'::regtype;
+SELECT count(*) AS seg_labels_differing FROM gp_dist_random('pg_enum') s
+ WHERE s.enumtypid = 'pg_temp.tc_wrap_enum'::regtype
+   AND s.oid NOT IN (SELECT oid FROM pg_enum WHERE enumtypid = 'pg_temp.tc_wrap_enum'::regtype);
 CREATE TEMP TABLE tc_wrap_e (a int, e pg_temp.tc_wrap_enum) DISTRIBUTED BY (a);
 INSERT INTO tc_wrap_e SELECT i, (ARRAY['a', 'b', 'c', 'd'])[i % 4 + 1]::pg_temp.tc_wrap_enum
   FROM generate_series(1, 20) i;
@@ -1153,93 +1145,21 @@ SELECT e, count(*) FROM tc_wrap_e GROUP BY e ORDER BY e;
 DROP TABLE tc_wrap_e;
 DROP TYPE pg_temp.tc_wrap_enum;
 
--- A transaction that rolls back keeps the slice its OIDs came from, also
--- one that created the temporary schema: only a slice that a segment
--- refused is given up (see the isolation2 test), or one that a statement
--- canceled as it gave the first OIDs of the slice of its transaction (not
--- here, where an earlier statement gave them, so the segments hold the
--- slice).  Otherwise each rollback would use up a slice.
+-- The OIDs of objects whose creation rolled back are not given again, also
+-- after a rollback of the transaction that created the temporary schema.
 \c
 SET gp_enable_temp_memory_catalog = on;
 BEGIN;
 CREATE TEMP TABLE tc_rb1 (a int) DISTRIBUTED BY (a);
-SELECT ('tc_rb1'::regclass::oid::bigint - 4026531840) >> 16 AS slice1 \gset
+SELECT 'tc_rb1'::regclass::oid AS rb1 \gset
 ROLLBACK;
 BEGIN;
 CREATE TEMP TABLE tc_rb2 (a int) DISTRIBUTED BY (a);
-SELECT ('tc_rb2'::regclass::oid::bigint - 4026531840) >> 16 AS slice2 \gset
-ROLLBACK;
-BEGIN;
-CREATE TEMP TABLE tc_rb4 (a int) DISTRIBUTED BY (a);
-SET LOCAL statement_timeout = '200ms';
-SELECT pg_sleep(5);
+SELECT 'tc_rb2'::regclass::oid AS rb2 \gset
 ROLLBACK;
 CREATE TEMP TABLE tc_rb3 (a int) DISTRIBUTED BY (a);
-SELECT ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice1 AND
-       ('tc_rb3'::regclass::oid::bigint - 4026531840) >> 16 = :slice2 AS same_slice;
-
--- A session takes a slice it used before only when no other is free (the
--- first fault pretends so; the second starts slices at their start): its
--- OIDs come back then, and what was cached about them is forgotten first.
--- Here a domain gets the OID of an enum type that the type cache knew: it
--- checks its constraint.
-\c
-SET gp_enable_temp_memory_catalog = on;
-CREATE TEMP TABLE tc_ru_keep (a int) DISTRIBUTED BY (a);
--- (functions taking one OID each, up to the last but one of the slice)
-CREATE FUNCTION pg_temp.tc_ru_fill(p text) RETURNS void LANGUAGE plpgsql AS $$
-DECLARE
-  o oid;
-  i int := 0;
-BEGIN
-  LOOP
-    i := i + 1;
-    EXECUTE format('CREATE FUNCTION pg_temp.tc_ru_%s_%s() RETURNS int LANGUAGE sql AS %L', p, i, 'SELECT 1');
-    EXECUTE format('SELECT %L::regprocedure::oid', 'pg_temp.tc_ru_' || p || '_' || i || '()') INTO o;
-    EXIT WHEN (o::bigint - 4026531840) % 65536 = 65534 OR i > 10;
-  END LOOP;
-END $$;
-SELECT gp_inject_fault_infinite('tempcat_slice_from_base', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT pg_temp.tc_ru_fill('a');
--- (its array type takes the last OID, it the first of the next slice)
-CREATE TYPE pg_temp.tc_ru_e AS ENUM ('x', 'y');
--- (the sort operators come from the type cache)
-SELECT e FROM (VALUES ('y'::pg_temp.tc_ru_e), ('x')) v(e) ORDER BY e;
-SELECT 'pg_temp.tc_ru_e'::regtype::oid AS ru_enum \gset
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT pg_temp.tc_ru_fill('b');
-CREATE FUNCTION pg_temp.tc_ru_c1() RETURNS int LANGUAGE sql AS 'SELECT 1';
-CREATE FUNCTION pg_temp.tc_ru_c2() RETURNS int LANGUAGE sql AS 'SELECT 1';
--- (nothing has OIDs of that slice any more: it is let go of)
-DROP TYPE pg_temp.tc_ru_e;
-DROP FUNCTION pg_temp.tc_ru_b_1(), pg_temp.tc_ru_c1();
-SELECT gp_inject_fault_infinite('tempcat_reuse_slice', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT pg_temp.tc_ru_fill('d');
-CREATE DOMAIN pg_temp.tc_ru_d AS int CHECK (VALUE > 0);
-SELECT 'pg_temp.tc_ru_d'::regtype::oid = :ru_enum AS same_oid;
-SELECT (-1)::pg_temp.tc_ru_d;
-SELECT 5::pg_temp.tc_ru_d;
-SELECT gp_inject_fault('tempcat_reuse_slice', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_from_base', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-SELECT gp_inject_fault('tempcat_slice_near_end', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_ru_d_t (a int, d pg_temp.tc_ru_d) DISTRIBUTED BY (a);
-INSERT INTO tc_ru_d_t VALUES (1, 1);
-INSERT INTO tc_ru_d_t VALUES (2, -1);
-SELECT * FROM tc_ru_d_t;
+SELECT :rb1 < :rb2 AND :rb2 < 'tc_rb3'::regclass::oid AS ascending,
+       tc_in_memory('tc_rb3') AS in_memory;
 
 -- Big values of rows kept in memory are compressed, as on disk: a function
 -- body of 6 MB fits a session that keeps up to 4 MB.
@@ -1251,7 +1171,8 @@ BEGIN
   EXECUTE format('CREATE FUNCTION pg_temp.tc_big() RETURNS int LANGUAGE sql AS %L',
                  'SELECT length(' || quote_literal(repeat('abc', 2000000)) || ')');
 END $$;
-SELECT 'pg_temp.tc_big()'::regprocedure::oid >= 4026531840 AS reserved;
+SELECT (ctid::text::point)[1] >= 32768 AS in_memory FROM pg_proc
+ WHERE oid = 'pg_temp.tc_big()'::regprocedure;
 SELECT pg_temp.tc_big();
 SELECT length(prosrc) FROM pg_proc WHERE oid = 'pg_temp.tc_big()'::regprocedure;
 SELECT count(*) FROM gp_dist_random('pg_proc') WHERE proname = 'tc_big';
@@ -1264,43 +1185,13 @@ SET gp_enable_temp_memory_catalog = on;
 SELECT gp_inject_fault_infinite('tempcat_dsm_space_low', 'skip', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
 CREATE TEMP TABLE tc_low (a int) DISTRIBUTED BY (a);
-SELECT 'tc_low'::regclass::oid >= 4026531840 AS reserved;
+SELECT tc_in_memory('tc_low') AS in_memory;
 SELECT gp_inject_fault('tempcat_dsm_space_low', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
--- So does a session that finds no free slice (the fault pretends so).
-\c
-SET gp_enable_temp_memory_catalog = on;
-SELECT gp_inject_fault_infinite('tempcat_no_free_slice', 'skip', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-CREATE TEMP TABLE tc_noslice (a int) DISTRIBUTED BY (a);
-SELECT 'tc_noslice'::regclass::oid >= 4026531840 AS reserved;
-SELECT gp_inject_fault('tempcat_no_free_slice', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
-
--- A reader that fails as it checks, at idle, whether a table it counted
--- was dropped (the fault, with the area's lock held) logs it, and lets go
--- of the lock: the writer goes on.  (A reader sends the counts of a query
--- at idle after the next one.)
-\c
-SET gp_enable_temp_memory_catalog = on;
-CREATE TEMP TABLE tc_rs (a int, b int) DISTRIBUTED BY (a);
-INSERT INTO tc_rs SELECT i, i + 1 FROM generate_series(1, 100) i;
-SELECT gp_inject_fault_infinite('tempcat_stats_object_gone', 'error', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
-SELECT pg_sleep(0.6);
-SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
-SELECT gp_wait_until_triggered_fault('tempcat_stats_object_gone', 1, dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-SELECT gp_inject_fault('tempcat_stats_object_gone', 'reset', dbid)
-  FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
-CREATE TEMP TABLE tc_rs2 (a int) DISTRIBUTED BY (a);
-INSERT INTO tc_rs2 SELECT generate_series(1, 10);
-SELECT count(*) FROM tc_rs2;
-SELECT count(*) FROM tc_rs x JOIN tc_rs y ON x.a = y.b;
-
 
 \c
 DROP FUNCTION tc_disk_rows();
+DROP FUNCTION tc_in_memory(regclass);
+DROP FUNCTION tc_mem_oids();
 DROP TYPE tc_ord_comp;
 DROP TABLE tc_ord_parent;

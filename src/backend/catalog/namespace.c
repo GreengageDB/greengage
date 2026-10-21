@@ -4215,8 +4215,8 @@ InitTempTableNamespace(void)
 
 	/*
 	 * GPDB: persistent error logs of COPY ... LOG ERRORS that a session which
-	 * did not exit cleanly left under this reserved OID of a temporary
-	 * namespace kept in memory (see heap_create_with_catalog()).
+	 * did not exit cleanly left under this OID of a temporary namespace kept
+	 * in memory (see heap_create_with_catalog()).
 	 */
 	if (tempcat_owns_oid(NamespaceRelationId, namespaceId))
 		PersistentErrorLogDelete(MyDatabaseId, namespaceId, NULL);

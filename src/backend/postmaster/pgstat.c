@@ -900,10 +900,8 @@ allow_immediate_pgstat_restart(void)
  *	Must be called by processes that performs DML: tcop/postgres.c, logical
  *	receiver processes, SPI worker, etc. to send the so far collected
  *	per-table and function usage statistics to the collector.  Note that this
- *	is called only when not within a transaction (GPDB: or at the start of
- *	one, before it counts anything, see tempcat_release_unused_slices()), so
- *	it is fair to use transaction stop time as an approximation of current
- *	time.
+ *	is called only when not within a transaction, so it is fair to use
+ *	transaction stop time as an approximation of current time.
  * ----------
  */
 void
@@ -975,10 +973,6 @@ pgstat_report_stat(bool force)
 			 */
 			if (memcmp(&entry->t_counts, &all_zeroes,
 					   sizeof(PgStat_TableCounts)) == 0)
-				continue;
-
-			/* GPDB: nor those of tables dropped meanwhile, see tempcat.c */
-			if (tempcat_stats_object_gone(RelationRelationId, entry->t_id))
 				continue;
 
 			/*
@@ -1106,13 +1100,6 @@ pgstat_purge_add(PgStatPurgeList *list, Oid oid)
 	list->oids[list->n++] = oid;
 }
 
-/* GPDB: are purges queued by pgstat_purge_relation() and _function()? */
-bool
-pgstat_have_purges(void)
-{
-	return pgStatPurgeTables.n > 0 || pgStatPurgeFunctions.n > 0;
-}
-
 /* GPDB: send the purges queued by pgstat_purge_relation() and _function() */
 static void
 pgstat_send_purges(void)
@@ -1190,13 +1177,6 @@ pgstat_send_funcstats(void)
 		if (memcmp(&entry->f_counts, &all_zeroes,
 				   sizeof(PgStat_FunctionCounts)) == 0)
 			continue;
-
-		/* GPDB: nor those of functions dropped meanwhile, see tempcat.c */
-		if (tempcat_stats_object_gone(ProcedureRelationId, entry->f_id))
-		{
-			MemSet(&entry->f_counts, 0, sizeof(PgStat_FunctionCounts));
-			continue;
-		}
 
 		/* need to convert format of time accumulators */
 		m_ent = &msg.m_entry[msg.m_nentries];
@@ -1894,10 +1874,6 @@ pgstat_init_function_usage(FunctionCallInfo fcinfo,
 									  HASH_ELEM | HASH_BLOBS);
 	}
 
-	/* GPDB: see tempcat_stats_object_gone() */
-	if (IsTempcatOid(fcinfo->flinfo->fn_oid))
-		tempcat_stats_note_use(fcinfo->flinfo->fn_oid);
-
 	/* Get the stats entry for this function, create if necessary */
 	htabent = hash_search(pgStatFunctions, &fcinfo->flinfo->fn_oid,
 						  HASH_ENTER, &found);
@@ -2033,10 +2009,6 @@ pgstat_initstats(Relation rel)
 	if (rel->pgstat_info != NULL &&
 		rel->pgstat_info->t_id == rel_id)
 		return;
-
-	/* GPDB: see tempcat_stats_object_gone() */
-	if (IsTempcatOid(rel_id))
-		tempcat_stats_note_use(rel_id);
 
 	/* Else find or make the PgStat_TableStatus entry, and update link */
 	rel->pgstat_info = get_tabstat_entry(rel_id, rel->rd_rel->relisshared);

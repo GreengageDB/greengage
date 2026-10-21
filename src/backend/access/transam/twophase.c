@@ -113,7 +113,6 @@
 #include "access/twophase_xlog.h"
 #include "catalog/storage_database.h"
 #include "catalog/storage_tablespace.h"
-#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "access/distributedlog.h"
 #include "utils/faultinjector.h"
@@ -1807,9 +1806,6 @@ FinishPreparedTransaction(const char *gid, bool isCommit, bool raiseErrorIfNotFo
 
 	/* Count the prepared xact as committed or aborted */
 	AtEOXact_PgStat(isCommit, false);
-
-	/* GPDB: and purge the statistics it dropped, see tempcat_note_disk_drop() */
-	tempcat_finish_prepared(xid, isCommit);
 
 	/*
 	 * And now we can clean up any files we may have left.

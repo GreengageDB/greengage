@@ -397,6 +397,7 @@ GetPreassignedOid(OidAssignment *searchkey)
 #endif
 
 			oid = p->oid;
+			searchkey->tempcat = p->tempcat;
 			preassigned_oids = list_delete_cell(preassigned_oids, cur_item, prev_item);
 			pfree(p);
 			return oid;
@@ -431,7 +432,9 @@ GetNewOrPreassignedOid(Relation relation, Oid indexId, AttrNumber oidcolumn,
 
 /*
  * 'temp' says that the object is known to be a temporary object kept in the
- * in-memory catalog even if the key does not tell (see tempcat.c).
+ * in-memory catalog even if the key does not tell (see tempcat.c).  The
+ * coordinator tells the segments which OIDs it gave such objects
+ * (OidAssignment.tempcat).
  */
 static Oid
 GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
@@ -443,15 +446,12 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 
 	if (Gp_role == GP_ROLE_EXECUTE || IsBinaryUpgrade)
 	{
+		searchkey->tempcat = false;
 		oid = GetPreassignedOid(searchkey);
 
 		/* A temporary object of this session in the in-memory catalog? */
-		if (!IsBinaryUpgrade && IsTempcatOid(oid))
-			tempcat_note_preassigned_oid(relation, indexId, oidcolumn,
-										 searchkey->objname,
-										 searchkey->namespaceOid,
-										 searchkey->keyOid1, searchkey->keyOid2,
-										 temp, oid);
+		if (!IsBinaryUpgrade && searchkey->tempcat)
+			tempcat_note_preassigned_oid(relation, indexId, oidcolumn, oid);
 
 		/*
 		 * During normal operation, all OIDs are preassigned unless the object
@@ -486,9 +486,11 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 
 		/* Assign a new oid, and memorize it in the list of OIDs to dispatch */
 		tempcat_check_namespace_object(searchkey->catalog, searchkey->namespaceOid);
-		if (temp || tempcat_want_temp_oid(searchkey->catalog, searchkey->objname,
-								  searchkey->namespaceOid,
-								  searchkey->keyOid1, searchkey->keyOid2))
+		searchkey->tempcat =
+			temp || tempcat_want_temp_oid(searchkey->catalog, searchkey->objname,
+										  searchkey->namespaceOid,
+										  searchkey->keyOid1, searchkey->keyOid2);
+		if (searchkey->tempcat)
 			oid = tempcat_allocate_oid(relation, indexId, oidcolumn);
 		else
 			oid = GetNewOidWithIndex(relation, indexId, oidcolumn);

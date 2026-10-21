@@ -89,11 +89,10 @@ CheckEnumLabelsUnique(List *vals)
 
 /*
  * GPDB: a new OID for a label of enum type 'enumTypeOid'.  The labels of a
- * temporary enum type kept in memory get one from the reserved range, like
- * the type (see tempcat.c): their rows are visible to their session only,
- * so other sessions could not avoid ordinary OIDs they took, and once the
- * OID counter wrapped around, a label of another session could get the
- * same one.
+ * temporary enum type kept in memory get one from the session's blocks of
+ * OIDs, like the type (see tempcat.c): their rows are visible to their
+ * session only, so once the OID counter wrapped around, other sessions
+ * could not avoid the ordinary OIDs they took.
  */
 static Oid
 GetNewEnumOid(Relation pg_enum, Oid enumTypeOid)

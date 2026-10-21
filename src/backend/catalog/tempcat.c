@@ -14,43 +14,28 @@
  * path that writes them:
  *
  * - When gp_enable_temp_memory_catalog is on at the moment the session's
- *   temporary namespace is created, the namespace gets an OID from the
- *   reserved range FirstTempcatObjectId..LastTempcatObjectId.  Relations,
- *   types, functions and operators created in such a namespace, and the
- *   attribute defaults, constraints, rules, triggers and policies of such
- *   relations, get OIDs from the same range (see tempcat_want_temp_oid(),
- *   called from oid_dispatch.c).  The coordinator assigns the OIDs and
- *   dispatches them to the segments as usual, so all nodes agree on them.
+ *   temporary namespace is created, the namespace is kept in memory.
+ *   Relations, types, functions and operators created in such a namespace,
+ *   and the attribute defaults, constraints, rules, triggers and policies of
+ *   such relations, are kept in memory too (see tempcat_want_temp_oid(),
+ *   called from oid_dispatch.c).  The coordinator assigns their OIDs and
+ *   dispatches them to the segments as usual, marked as such
+ *   (OidAssignment.tempcat), so all nodes agree on them.
  *
- * - The range is split into slices of TEMPCAT_SLICE_SIZE OIDs.  A session
- *   takes its OIDs from slices of its own, which its coordinator backend
- *   takes (the first when it creates the temporary namespace), so OIDs of
- *   concurrent sessions never collide and lock tags stay unique.  On every
- *   node, the process keeping the session's objects (the coordinator
- *   backend, or the writer QE on a segment) holds each slice for as long as
- *   any of them has an OID of it (see tempcat_claim_free_slice(),
- *   tempcat_claim_slice() and tempcat_release_unused_slices()).
- *
- * - A session does not give an OID again soon: it goes through a slice in
- *   ascending order, then takes another one, one it used before only when
- *   no other is free (after it went through all slices free then, 64K OIDs
- *   each, which are few when other sessions hold most).  Backend-local caches
- *   keyed by OID (the type cache, cached plans, PL/pgSQL casts, ...) assume
- *   that an OID does not come back soon, which upstream's OID counter,
- *   wrapping around after 2^32 OIDs, makes true; a slice going round in a
- *   long session would not.  When OIDs of a slice do come back, the
- *   session's processes forget what they cached first
- *   (tempcat_forget_cached_oids()).  Another session may take a slice that
- *   was let go of: its processes are new, and so are their caches.
+ * - Their OIDs come from the ordinary OID counter, in runs to the end of a
+ *   block of OIDs (see "Blocks of OIDs"), so they are given once until the
+ *   counter wraps around, like all OIDs: backend-local caches keyed by OID
+ *   (the type cache, cached plans, PL/pgSQL casts, ...) rely on that.  The
+ *   processes keeping the session's objects hold the blocks, so that the
+ *   counter skips them once it wrapped around, and the statistics of their
+ *   objects are kept.
  *
  * - A row inserted into one of the catalogs listed in tempcat_catalogs[] is
  *   kept in memory if its owner column (pg_attribute.attrelid,
  *   pg_index.indrelid, ...) holds an OID that this session assigned to a
  *   temporary object.  Ownership is tracked per (catalog, OID) in a
  *   backend-local set, filled when the OID is allocated (coordinator) or
- *   received from the coordinator (segments), so ordinary objects that
- *   happen to have OIDs in the reserved range (created before the range was
- *   reserved, or carried over by pg_upgrade) are never affected.
+ *   received from the coordinator (segments).
  *
  * - Dependencies of temporary objects on ordinary objects (pg_depend and
  *   pg_shdepend rows: types of their columns, functions of their defaults,
@@ -307,24 +292,6 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 
 #define TEMPCAT_NCATALOGS lengthof(tempcat_catalogs)
 
-/*
- * Catalogs whose objects get reserved OIDs (see tempcat_slice_crowded()).
- */
-static const Oid tempcat_object_classes[] =
-{
-	RelationRelationId,
-	TypeRelationId,
-	NamespaceRelationId,
-	ProcedureRelationId,
-	OperatorRelationId,
-	ConstraintRelationId,
-	AttrDefaultRelationId,
-	RewriteRelationId,
-	TriggerRelationId,
-	PolicyRelationId,
-	StatisticExtRelationId,
-};
-
 /* ----------------------------------------------------------------
  * Structures in the session's area
  *
@@ -367,8 +334,6 @@ typedef struct TempcatCatalog
 typedef struct TempcatRoot
 {
 	LWLock		lock;
-	int			writer_pgprocno;	/* the writer's, see tempcat_writer_state() */
-	pg_atomic_uint32 cache_epoch;	/* see tempcat_forget_cached_oids() */
 	uint64		next_tid;
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
@@ -413,9 +378,6 @@ typedef struct TempcatEntry
  */
 static dsa_area *tc_area = NULL;
 static TempcatRoot *tc_root = NULL;
-
-/* Readers: the writer's cache_epoch when we last caught up with it */
-static uint32 tc_seen_cache_epoch = 0;
 
 /*
  * Writer only: entries inserted or deleted by transactions whose outcome
@@ -508,21 +470,10 @@ static void tempcat_activate(Oid oid);
 static void tempcat_forget_if_gone(int catidx, Oid objoid);
 static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
-static bool tempcat_take_namespace_oid(void);
-static bool tempcat_slice_crowded(int slice);
-static void tempcat_let_go_of_slice(int slice);
-static void tempcat_count_slice_row(TempcatEntry *e, int delta);
 static void tempcat_forget_used_objects(void);
-static void tempcat_forget_cached_oids(int slice);
 
 /* OIDs assigned by this session to its temporary objects, see below */
 static HTAB *tc_owned = NULL;
-
-/*
- * The OID of the session's temporary namespace, taken before it decided to
- * keep it in memory (see tempcat_want_temp_oid()).
- */
-static Oid	tc_namespace_oid = InvalidOid;
 
 /*
  * Reader processes (reader gangs, entry-db readers, and parallel retrieve
@@ -614,20 +565,14 @@ tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno)
  * tables of the session using it, which stand in for the pg_class rows that
  * vac_update_datfrozenxid() cannot see.
  *
- * Per slice of the reserved range: the process of this node holding it, its
- * database, and, on the coordinator, the next OID to assign.  And where the
- * coordinator looks for a free slice next (tempcat_claim_free_slice()), and
- * which ordinary objects the temporary objects of sessions use
- * (tempcat_use_object()).
+ * Per block of OIDs: the process of this node holding it (pgprocno + 1, or
+ * 0; see "Blocks of OIDs").  And which ordinary objects the temporary
+ * objects of sessions use (tempcat_use_object()).
  * ----------------------------------------------------------------
  */
-#define TEMPCAT_SLICE_BITS	16
-#define TEMPCAT_SLICE_SIZE	((Oid) 1 << TEMPCAT_SLICE_BITS)
-#define TEMPCAT_NSLICES \
-	((int) ((((uint64) LastTempcatObjectId - FirstTempcatObjectId) >> TEMPCAT_SLICE_BITS) + 1))
-
-#define tempcat_slice_of(oid) \
-	((int) (((Oid) (oid) - FirstTempcatObjectId) >> TEMPCAT_SLICE_BITS))
+#define TEMPCAT_OID_BLOCK_BITS	12
+#define TEMPCAT_OID_BLOCK_SIZE	((Oid) 1 << TEMPCAT_OID_BLOCK_BITS)
+#define TEMPCAT_NOID_BLOCKS		((uint32) 1 << (32 - TEMPCAT_OID_BLOCK_BITS))
 
 typedef struct TempcatProcState
 {
@@ -635,13 +580,6 @@ typedef struct TempcatProcState
 	pg_atomic_uint32 frozenXid; /* or InvalidTransactionId */
 	pg_atomic_uint32 minMulti;	/* or InvalidMultiXactId */
 } TempcatProcState;
-
-typedef struct TempcatSliceState
-{
-	pg_atomic_uint32 holder;	/* pgprocno + 1, or 0 */
-	Oid			databaseId;		/* the holder's database */
-	Oid			nextOid;		/* coordinator: next OID to assign */
-} TempcatSliceState;
 
 /*
  * An ordinary object (or column) that temporary objects of sessions use, with
@@ -676,14 +614,15 @@ typedef struct TempcatSharedData
 	/* its entries, so that DROP looks at it only when it has any */
 	pg_atomic_uint32 nused_entries;
 	int			nprocs;
-	pg_atomic_uint32 next_slice;	/* coordinator: see tempcat_claim_free_slice() */
 	bool		areas_created;	/* see tempcat_areas_created() */
-	TempcatSliceState slices[TEMPCAT_NSLICES];
 	TempcatProcState procs[FLEXIBLE_ARRAY_MEMBER];
 } TempcatSharedData;
 
 static TempcatSharedData *TempcatShared = NULL;
 static HTAB *TempcatUsedObjects = NULL;
+
+/* The holders of the blocks of OIDs; NULL if pgprocnos do not fit */
+static uint16 *TempcatBlocks = NULL;
 
 static inline int
 tempcat_total_procs(void)
@@ -704,6 +643,8 @@ TempcatShmemSize(void)
 
 	size = add_size(offsetof(TempcatSharedData, procs),
 					mul_size(tempcat_total_procs(), sizeof(TempcatProcState)));
+	if (tempcat_total_procs() < PG_UINT16_MAX)
+		size = add_size(size, mul_size(TEMPCAT_NOID_BLOCKS, sizeof(uint16)));
 	return add_size(size, hash_estimate_size(tempcat_used_objects_size(),
 											 sizeof(TempcatUsedObjectEntry)));
 }
@@ -729,6 +670,17 @@ TempcatShmemInit(void)
 									mul_size(tempcat_total_procs(),
 											 sizeof(TempcatProcState)),
 									&found);
+	if (tempcat_total_procs() < PG_UINT16_MAX)
+	{
+		bool		found_blocks;
+
+		TempcatBlocks = ShmemInitStruct("Temporary catalog OID blocks",
+										mul_size(TEMPCAT_NOID_BLOCKS,
+												 sizeof(uint16)),
+										&found_blocks);
+		if (!found_blocks)
+			memset(TempcatBlocks, 0, TEMPCAT_NOID_BLOCKS * sizeof(uint16));
+	}
 	if (found)
 		return;
 
@@ -738,28 +690,6 @@ TempcatShmemInit(void)
 	pg_atomic_init_u32(&TempcatShared->nused_overflow, 0);
 	pg_atomic_init_u32(&TempcatShared->nused_entries, 0);
 	TempcatShared->areas_created = false;
-	/*
-	 * Start the search for free slices at a random point, not where the
-	 * coordinator before a restart or a failover started: writer QEs of its
-	 * sessions may still hold their slices on the segments for a while (until
-	 * they notice that their coordinator is gone), where new holders would
-	 * wait for them (tempcat_claim_slice()).
-	 */
-	{
-		uint32		start;
-
-		if (!pg_strong_random(&start, sizeof(start)))
-			start = (uint32) (GetCurrentTimestamp() ^ MyProcPid);
-		pg_atomic_init_u32(&TempcatShared->next_slice, start % TEMPCAT_NSLICES);
-	}
-	for (i = 0; i < TEMPCAT_NSLICES; i++)
-	{
-		TempcatSliceState *ss = &TempcatShared->slices[i];
-
-		pg_atomic_init_u32(&ss->holder, 0);
-		ss->databaseId = InvalidOid;
-		ss->nextOid = InvalidOid;
-	}
 	TempcatShared->nprocs = tempcat_total_procs();
 	for (i = 0; i < TempcatShared->nprocs; i++)
 	{
@@ -944,8 +874,6 @@ tempcat_create_area(bool headroom)
 		tc_root->tids.home = home;
 	}
 	LWLockInitialize(&tc_root->lock, tempcat_tranche_id());
-	pg_atomic_init_u32(&tc_root->cache_epoch, 0);
-	tc_root->writer_pgprocno = MyProc->pgprocno;
 	tc_area = area;
 
 	/* Publish the area to the readers of this session. */
@@ -1030,86 +958,54 @@ tempcat_attach(void)
 	MemoryContextSwitchTo(oldcxt);
 
 	tc_root = dsa_get_address(tc_area, rootptr);
-	tc_seen_cache_epoch = pg_atomic_read_u32(&tc_root->cache_epoch);
 	return true;
 }
 
 /* ----------------------------------------------------------------
- * Slices
+ * Blocks of OIDs
+ *
+ * The OIDs of a session's temporary objects come from the ordinary OID
+ * counter, in runs: the coordinator takes the OIDs from the counter to the
+ * end of its block of TEMPCAT_OID_BLOCK_SIZE OIDs at once
+ * (GetNewObjectIdsToBlockEnd()), and gives them out in turn.  So they are
+ * given once, like all OIDs, until the counter wraps around, and no other
+ * object gets them meanwhile.  The process keeping the session's objects on
+ * each node (the coordinator backend, or the writer QE on a segment) holds
+ * the blocks of the OIDs it has, in TempcatBlocks, until it exits; then
+ * GetNewObjectId() skips them once it wrapped around, and
+ * pgstat_vacuum_stat() keeps the statistics of their objects, which it
+ * cannot see (tempcat_oid_maybe_live()).
+ *
+ * On a segment, the writer QE of a session that is gone may still hold a
+ * block whose OIDs the coordinator gives again (only after the counter
+ * wrapped around): the new holder shares the block then, and does without
+ * what holding it gives.
  * ----------------------------------------------------------------
  */
 
-/* How long to wait for an earlier holder of a slice to go away */
-#define TEMPCAT_CLAIM_TIMEOUT_MS	60000
+/* Does a process hold the block of 'oid'? */
+bool
+tempcat_oid_block_held(Oid oid)
+{
+	return TempcatBlocks != NULL && TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS] != 0;
+}
 
-/* The error a segment refuses a slice with; see tempcat_xact_callback() */
-#define TEMPCAT_SLICE_REFUSED		ERRCODE_OBJECT_IN_USE
+/* The last OID of the block of 'oid' */
+Oid
+tempcat_oid_block_last(Oid oid)
+{
+	return oid | (TEMPCAT_OID_BLOCK_SIZE - 1);
+}
 
-/*
- * Per slice of the reserved range, what this process knows about it: whether
- * it holds it, whether it ever gave an OID of it (on the coordinator, which
- * then takes it again only when no other is free, see
- * tempcat_claim_free_slice()), and how many of its rows in memory, of any
- * visibility, have an OID of it (see tempcat_count_slice_row()).  Allocated
- * when the process takes its first slice.
- */
-#define TCS_HELD		0x01
-#define TCS_USED		0x02
-
-static uint8 *tc_slice_flags = NULL;
-static int32 *tc_slice_rows = NULL;
+/* Does this process hold any blocks? */
+static bool tc_holds_blocks = false;
 
 /*
- * The highest OID of each slice that this process took hold of for a row in
- * memory, and the highest it had when it last let go of the slice: one not
- * above that comes back, see tempcat_activate().
+ * Coordinator: the next OID to give from the run taken from the counter,
+ * and the last one, or InvalidOid if none is left.
  */
-static Oid *tc_slice_max_oid = NULL;
-static Oid *tc_slice_gone_max_oid = NULL;
-
-/*
- * Coordinator: the slice the session takes its OIDs from (or -1), the next
- * OID to give and the last one it may give from it, whether a transaction
- * that gave OIDs of it to segments committed; whether the current one gave
- * any, the start of the statement that gave the first, and the lowest
- * nesting level that gave any that did not roll back (or 0); and whether a
- * segment refused it in the current transaction (see
- * tempcat_xact_callback()).
- */
-static int	tc_slice = -1;
 static Oid	tc_next_oid = InvalidOid;
-static Oid	tc_slice_end = InvalidOid;
-static bool tc_slice_kept = false;
-static bool tc_slice_given = false;
-static TimestampTz tc_slice_given_stmt = 0;
-static int	tc_slice_given_level = 0;
-static bool tc_slice_refused = false;
-
-/* Slices may have been left without rows; see tempcat_release_unused_slices() */
-static bool tc_release_wanted = false;
-
-/* The statistics to send at exit wait for the transaction to roll back */
-static bool tc_stats_deferred = false;
-
-static inline Oid
-tempcat_slice_base(int slice)
-{
-	return FirstTempcatObjectId + ((Oid) slice << TEMPCAT_SLICE_BITS);
-}
-
-static inline Oid
-tempcat_slice_last(int slice)
-{
-	Oid			base = tempcat_slice_base(slice);
-
-	return Min((uint64) base + TEMPCAT_SLICE_SIZE - 1, (uint64) LastTempcatObjectId);
-}
-
-static inline bool
-tempcat_holds_slice(int slice)
-{
-	return tc_slice_flags != NULL && (tc_slice_flags[slice] & TCS_HELD) != 0;
-}
+static Oid	tc_last_oid = InvalidOid;
 
 static void tempcat_proc_exit(int code, Datum arg);
 static void tempcat_before_exit(int code, Datum arg);
@@ -1118,12 +1014,10 @@ static void tempcat_subxact_callback(SubXactEvent event,
 									 SubTransactionId mySubid,
 									 SubTransactionId parentSubid,
 									 void *arg);
-static void tempcat_forget_slice_oids(int slice);
-static void tempcat_note_given(void);
 
 /*
- * Register what lets go of the slices and settles the session's rows: before
- * taking a slice, so that it cannot be kept for good.
+ * Register what lets go of the blocks and settles the session's rows: before
+ * taking a block, so that it cannot be kept for good.
  */
 static void
 tempcat_register_callbacks(void)
@@ -1139,315 +1033,45 @@ tempcat_register_callbacks(void)
 	registered = true;
 }
 
-/*
- * Before taking hold of a slice: register what lets go of it, and allocate
- * what the process knows per slice, in one piece.  An error once a slice is
- * ours in shared memory, before its flag is set here, would leave it held
- * for good (tempcat_proc_exit() goes by the flags).
- */
+/* Hold the block of 'oid', unless another process does. */
 static void
-tempcat_prepare_to_hold(void)
+tempcat_hold_block(Oid oid)
 {
-	char	   *chunk;
+	uint16	   *holder = &TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS];
+	uint16		me = MyProc->pgprocno + 1;
 
-	tempcat_register_callbacks();
-	if (tc_slice_flags != NULL)
+	if (*holder == me)
 		return;
-	chunk = MemoryContextAllocZero(TopMemoryContext,
-								   (sizeof(int32) + 2 * sizeof(Oid) + sizeof(uint8)) *
-								   TEMPCAT_NSLICES);
-	tc_slice_rows = (int32 *) chunk;
-	tc_slice_max_oid = (Oid *) (tc_slice_rows + TEMPCAT_NSLICES);
-	tc_slice_gone_max_oid = tc_slice_max_oid + TEMPCAT_NSLICES;
-	tc_slice_flags = (uint8 *) (tc_slice_gone_max_oid + TEMPCAT_NSLICES);
-}
-
-/* Note that this process took hold of 'slice'. */
-static void
-tempcat_hold_slice(int slice)
-{
-	Assert(tc_slice_flags != NULL);
-	tc_slice_flags[slice] |= TCS_HELD;
-	TempcatShared->slices[slice].databaseId = MyDatabaseId;
-
-	/*
-	 * The row that the slice was taken for may never come (e.g. an error
-	 * stops it): let go of the slice then, see tempcat_release_unused_slices().
-	 */
-	tc_release_wanted = true;
-}
-
-/*
- * The coordinator takes hold of a free slice to give its session's OIDs
- * from, when it needs the first one or has given all of the last one (which
- * it keeps holding while objects have OIDs of it).  It takes one it gave
- * OIDs of before only if no other is free: they come back then, and
- * tempcat_activate() makes the processes of the session forget what they
- * cached about them first (see the file header).  It looks for one from
- * where the last search stopped, so that a slice let go of is taken again
- * only after all others were: the writer QEs of the session that held it may
- * still be dropping their objects on the segments, where a new holder would
- * wait for them (tempcat_claim_slice()).  It passes over slices whose OIDs
- * ordinary objects of its database take too many of
- * (tempcat_slice_crowded()).  Returns false if no slice is left.
- *
- * The session starts where the one that held the slice before stopped, so
- * that consecutive sessions keep moving forward rather than reusing recent
- * OIDs; at a random point if no session has used it since the node started,
- * rather than where its users before a restart or a failover started, whose
- * objects may still be kept in writer QEs on the segments.  But if little of
- * the slice is left from there, or if the session used it before, from its
- * start.
- */
-static bool
-tempcat_claim_free_slice(void)
-{
-	uint32		me = MyProc->pgprocno + 1;
-	bool		reuse_only = false;
-	bool		from_base = false;
-	int			pass;
-	int			i;
-
-#ifdef FAULT_INJECTOR
-	/* Test hook: other sessions hold all slices. */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_no_free_slice") == FaultInjectorTypeSkip)
-		return false;
-	/* Test hook: other sessions hold all slices but those we used. */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_reuse_slice") == FaultInjectorTypeSkip)
-		reuse_only = true;
-	/* Test hook: start at the start of the slice. */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_slice_from_base") == FaultInjectorTypeSkip)
-		from_base = true;
-#endif
-	tempcat_prepare_to_hold();
-#ifdef FAULT_INJECTOR
-	/*
-	 * Test hook: start the search at the slice taken last, as if all others
-	 * had been taken since, to take it again once its holder let go of it
-	 * here (see tempcat_claim_slice()).
-	 */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_again") == FaultInjectorTypeSkip)
-		pg_atomic_fetch_sub_u32(&TempcatShared->next_slice, 1);
-#endif
-	/* (first the slices the session did not use, then any) */
-	for (pass = 0; pass < 2; pass++)
-	for (i = 0; i < TEMPCAT_NSLICES; i++)
+	tempcat_register_callbacks();
+	tc_holds_blocks = true;
+	if (*holder == 0)
 	{
-		int			slice = pg_atomic_fetch_add_u32(&TempcatShared->next_slice, 1) %
-		TEMPCAT_NSLICES;
-		TempcatSliceState *ss = &TempcatShared->slices[slice];
-		uint32		expected = 0;
-		bool		crowded;
-		bool		used;
-		Oid			base;
-		Oid			last;
-		Oid			start;
-
-		used = tc_slice_flags != NULL && (tc_slice_flags[slice] & TCS_USED);
-		if ((used && pass == 0) || (!used && reuse_only))
-			continue;
-		if (!pg_atomic_compare_exchange_u32(&ss->holder, &expected, me))
-			continue;
-
-		/*
-		 * Ours already while it is checked: an error there, or the exit of
-		 * the process (tempcat_proc_exit()), lets go of it.
-		 */
-		tempcat_hold_slice(slice);
-		PG_TRY();
-		{
-			crowded = tempcat_slice_crowded(slice);
-		}
-		PG_CATCH();
-		{
-			tempcat_let_go_of_slice(slice);
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-		if (crowded)
-		{
-			tempcat_let_go_of_slice(slice);
-			continue;
-		}
-
-		base = tempcat_slice_base(slice);
-		last = tempcat_slice_last(slice);
-		start = ss->nextOid;
-		if (!OidIsValid(start))
-			start = base + (Oid) (random() % (last - base + 1));
-		if (start < base || start > last ||
-			last - start < (last - base) / 4 || used || from_base)
-			start = base;
-
-		/* (the last one, holding OIDs of ours, is let go of once it has none) */
-		if (tc_slice >= 0)
-			tc_release_wanted = true;
-		tc_slice = slice;
-		tc_next_oid = start;
-		tc_slice_end = last;
-		tc_slice_kept = false;
-		tc_slice_given = false;
-		tc_slice_given_level = 0;
-		return true;
+		/* (our database first, see tempcat_oid_maybe_live()) */
+		pg_write_barrier();
+		*holder = me;
 	}
-	return false;
 }
 
 /*
- * A writer QE takes hold of the slice of the OIDs its coordinator assigns,
- * on this node, for as long as its objects have OIDs of it.  The writer QE
- * of an earlier session that held the slice may still be on its way out
- * (e.g. dropping its temporary objects): wait for it.
+ * Coordinator: take the OIDs from the counter to the end of its block, and
+ * hold the block.
  */
 static void
-tempcat_claim_slice(int slice)
+tempcat_take_block(void)
 {
-	TempcatSliceState *ss = &TempcatShared->slices[slice];
-	uint32		me = MyProc->pgprocno + 1;
-	int			waited = 0;
-
-	for (;;)
-	{
-		uint32		expected = 0;
-
-		if (pg_atomic_compare_exchange_u32(&ss->holder, &expected, me))
-			break;
-		if (expected == me)
-			break;
-#ifdef FAULT_INJECTOR
-		/* Test hook: report the wait for the earlier holder. */
-		if (waited == 0)
-			SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_wait");
-		/* Test hook: give up at once. */
-		if (waited == 0 &&
-			SIMPLE_FAULT_INJECTOR("tempcat_claim_slice_timeout") == FaultInjectorTypeSkip)
-			waited = TEMPCAT_CLAIM_TIMEOUT_MS;
-#endif
-		/* (the coordinator knows the error by its function, see tempcat_note_qe_error()) */
-		if (waited >= TEMPCAT_CLAIM_TIMEOUT_MS)
-			ereport(ERROR,
-					(errcode(TEMPCAT_SLICE_REFUSED),
-					 errmsg("an earlier session using the same temporary object OIDs is still running on this node"),
-					 errdetail("Process %d holds OIDs %u to %u.",
-							   ProcGlobal->allProcs[expected - 1].pid,
-							   tempcat_slice_base(slice),
-							   tempcat_slice_last(slice)),
-					 errhint("Retry once that session has ended.")));
-		CHECK_FOR_INTERRUPTS();
-		pg_usleep(10000L);
-		waited += 10;
-	}
-	tempcat_hold_slice(slice);
-}
-
-/* The OID column and index of the objects of catalog 'classId', if known */
-static bool
-tempcat_object_oid_index(Oid classId, AttrNumber *oidattr, Oid *indexId)
-{
-	/* (not in objectaddress.c's ObjectProperty in this version) */
-	if (classId == AttrDefaultRelationId)
-	{
-		*oidattr = Anum_pg_attrdef_oid;
-		*indexId = AttrDefaultOidIndexId;
-	}
-	else if (is_objectclass_supported(classId))
-	{
-		*oidattr = get_object_attnum_oid(classId);
-		*indexId = get_object_oid_index(classId);
-	}
-	else
-		return false;
-	return true;
+	tempcat_register_callbacks();
+	tc_next_oid = GetNewObjectIdsToBlockEnd(&tc_last_oid);
+	tempcat_hold_block(tc_next_oid);
 }
 
 /*
- * Do ordinary objects of this database (created before the range was
- * reserved, or carried over by pg_upgrade) take so many OIDs of the slice in
- * one of the catalogs whose objects can be temporary objects in memory that
- * the session could run out of them?  Then it takes another slice.  The
- * scans of the OID indexes over the slice usually find nothing.
- */
-#define TEMPCAT_SLICE_CROWDED	(TEMPCAT_SLICE_SIZE / 2)
-
-static bool
-tempcat_slice_crowded(int slice)
-{
-	Oid			lo = tempcat_slice_base(slice);
-	Oid			hi = tempcat_slice_last(slice);
-	int			limit = TEMPCAT_SLICE_CROWDED;
-	int			i;
-
-#ifdef FAULT_INJECTOR
-	/* Test hook: one ordinary object is too many. */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_slice_crowded") == FaultInjectorTypeSkip)
-		limit = 0;
-#endif
-
-	for (i = 0; i < lengthof(tempcat_object_classes); i++)
-	{
-		Oid			classId = tempcat_object_classes[i];
-		AttrNumber	oidattr;
-		Oid			indexId;
-		Relation	rel;
-		ScanKeyData key[2];
-		SysScanDesc scan;
-		HeapTuple	tup;
-		int			n = 0;
-
-		if (!tempcat_object_oid_index(classId, &oidattr, &indexId))
-			continue;
-		rel = table_open(classId, AccessShareLock);
-		ScanKeyInit(&key[0], oidattr, BTGreaterEqualStrategyNumber,
-					F_OIDGE, ObjectIdGetDatum(lo));
-		ScanKeyInit(&key[1], oidattr, BTLessEqualStrategyNumber,
-					F_OIDLE, ObjectIdGetDatum(hi));
-		scan = systable_beginscan(rel, indexId, true, NULL, 2, key);
-		while (n <= limit && HeapTupleIsValid(tup = systable_getnext(scan)))
-		{
-			if (!IsTempcatTid(&tup->t_self))
-				n++;
-		}
-		systable_endscan(scan);
-		table_close(rel, AccessShareLock);
-		if (n > limit)
-			return true;
-	}
-	return false;
-}
-
-/*
- * The session gets a reserved OID of slice 'slice(oid)' for one of its
- * temporary objects: on the coordinator when it assigns one, on a segment
- * when it receives one.  Take hold of the slice, if not held yet (the
- * coordinator holds the slices it gives OIDs from).
+ * The session gets an OID for one of its temporary objects: on the
+ * coordinator when it assigns one, on a segment when it receives one.  Hold
+ * its block, and note that the session keeps temporary objects in memory.
  */
 static void
 tempcat_activate(Oid oid)
 {
-	int			slice = tempcat_slice_of(oid);
-
-	if (!tempcat_holds_slice(slice))
-	{
-		tempcat_prepare_to_hold();
-		tempcat_claim_slice(slice);
-	}
-
-	/*
-	 * The coordinator gives the OIDs of a slice in ascending order, and
-	 * starts a slice it takes again at its start: an OID not above the
-	 * highest this process had of a slice it let go of comes back.  (Not the
-	 * highest so far: a writer QE lets go of a slice that the coordinator
-	 * still gives OIDs from as soon as none of its rows has one, and may get
-	 * them out of order.)
-	 */
-	if (oid <= tc_slice_gone_max_oid[slice])
-	{
-		tempcat_forget_cached_oids(slice);
-		tc_slice_gone_max_oid[slice] = InvalidOid;
-	}
-	if (oid > tc_slice_max_oid[slice])
-		tc_slice_max_oid[slice] = oid;
-
 	if (!tc_activated)
 	{
 		TempcatProcState *st = tempcat_my_state();
@@ -1461,142 +1085,11 @@ tempcat_activate(Oid oid)
 		}
 		st->databaseId = MyDatabaseId;
 	}
+	tempcat_hold_block(oid);
 }
 
 /*
- * OIDs of 'slice' that this process saw before come back: forget all that it
- * cached about them, with all its system caches (cached plans, PL/pgSQL
- * casts, operators, ...) and the entries of the type cache in the slice,
- * which no invalidation resets (see TypeCacheForgetRange()).  The objects
- * that had them are gone, as the slice was let go of.  The readers of the
- * session do the same at the start of their next transaction
- * (tempcat_start_transaction()).
- */
-static void
-tempcat_forget_cached_oids(int slice)
-{
-	elog(DEBUG1, "tempcat: OIDs %u to %u come back, forgetting cached data",
-		 tempcat_slice_base(slice), tempcat_slice_last(slice));
-	InvalidateSystemCaches();
-	/* (ordinary objects with OIDs of the slice may exist and be in use) */
-	TypeCacheForgetRange(tempcat_slice_base(slice), tempcat_slice_last(slice),
-						 true);
-	if (tc_root != NULL)
-		pg_atomic_fetch_add_u32(&tc_root->cache_epoch, 1);
-}
-
-/*
- * A row in memory with an object OID ('delta' 1) is added, or goes away
- * (-1): count it for the slice of the OID.  A slice that none of our rows
- * has an OID of any more is let go of, see tempcat_release_unused_slices().
- * Enum labels count too: they get OIDs of the slice, though they belong to
- * their type.
- */
-static void
-tempcat_count_slice_row(TempcatEntry *e, int delta)
-{
-	Oid			oid;
-	int			slice;
-
-	if (!tempcat_catalog_has_oid(e->catidx) &&
-		tempcat_catalogs[e->catidx].relid != EnumRelationId)
-		return;
-	oid = tempcat_entry_oid(e);
-	if (!IsTempcatOid(oid))
-		return;
-	slice = tempcat_slice_of(oid);
-	/*
-	 * (the OID's slice was taken before: tempcat_activate(), from
-	 * tempcat_note_preassigned_oid() or tempcat_note_enum_label_oid())
-	 */
-	Assert(tempcat_holds_slice(slice));
-	if (tc_slice_rows == NULL)
-		return;
-	tc_slice_rows[slice] += delta;
-	Assert(tc_slice_rows[slice] >= 0);
-	if (tc_slice_rows[slice] == 0)
-		tc_release_wanted = true;
-}
-
-/*
- * Let go of the slices that none of our rows in memory has an OID of any
- * more, but the one the coordinator gives OIDs from: its objects were
- * dropped, or their creation rolled back.  When the session goes idle, or
- * starts its next transaction, after the outcome of the finished ones was
- * applied to the rows: no OID that was given is waiting for its row then.
- *
- * A writer QE may let go of a slice its coordinator still gives OIDs from;
- * it takes it again with the next one (tempcat_activate()), as no other
- * session can take it meanwhile.
- */
-static void
-tempcat_release_unused_slices(bool xact_start)
-{
-	int			slice;
-
-	/*
-	 * The statistics of the objects dropped go before their OIDs can go to
-	 * another session (see tempcat_forget_if_gone()): send them now, after
-	 * the counts still pending for them, which works out of a transaction or
-	 * at its start, before it counts anything (PostgreSQL 15 asserts that
-	 * pgstat_report_stat() runs out of a transaction: the purges will have to
-	 * go alone then); in an aborted one, leave the slices to the next time
-	 * the session goes idle.
-	 */
-	if (pgstat_have_purges())
-	{
-		if (!xact_start && IsTransactionOrTransactionBlock())
-			return;
-		pgstat_report_stat(true);
-	}
-
-	tc_release_wanted = false;
-	if (tc_slice_flags == NULL)
-		return;
-	for (slice = 0; slice < TEMPCAT_NSLICES; slice++)
-	{
-		if ((tc_slice_flags[slice] & TCS_HELD) && slice != tc_slice &&
-			tc_slice_rows[slice] == 0)
-			tempcat_let_go_of_slice(slice);
-	}
-}
-
-/*
- * Coordinator: give the next OIDs from another slice.  The current one is
- * let go of once nothing has OIDs of it, see tempcat_release_unused_slices();
- * with the OID of the temporary namespace taken from it ahead, if unused.
- */
-static void
-tempcat_drop_slice(void)
-{
-	if (tc_slice < 0)
-		return;
-	if (OidIsValid(tc_namespace_oid) &&
-		tempcat_slice_of(tc_namespace_oid) == tc_slice)
-		tc_namespace_oid = InvalidOid;
-	tc_slice = -1;
-	tc_slice_given = false;
-	tc_slice_given_level = 0;
-	tc_release_wanted = true;
-}
-
-/*
- * The session is reset (e.g. after its gang was lost): its writer QEs are
- * replaced, and the old ones may hold the slice on the segments for a while
- * as they drop their objects, which the new ones would wait for
- * (tempcat_claim_slice()).  Take another slice for the next OIDs; the old
- * one goes once the old objects are dropped on the coordinator too.  Only
- * process-local state changes here: called from GpScheduleSessionReset()
- * and friends, possibly out of a transaction.
- */
-void
-tempcat_session_reset(void)
-{
-	tempcat_drop_slice();
-}
-
-/*
- * Let go of our slices, after the cleanup of our temporary objects at exit
+ * Let go of our blocks, after the cleanup of our temporary objects at exit
  * (RemoveTempRelationsCallback() runs earlier).  The locks on the objects
  * they used went with ShutdownPostgres(), after that cleanup too.
  */
@@ -1604,7 +1097,8 @@ static void
 tempcat_proc_exit(int code, Datum arg)
 {
 	TempcatProcState *st = tempcat_my_state();
-	int			slice;
+	uint16		me = MyProc->pgprocno + 1;
+	uint32		i;
 
 	pg_atomic_write_u32(&st->frozenXid, InvalidTransactionId);
 	pg_atomic_write_u32(&st->minMulti, InvalidMultiXactId);
@@ -1612,43 +1106,17 @@ tempcat_proc_exit(int code, Datum arg)
 
 	tempcat_forget_used_objects();
 
-	/* (the transaction is rolled back by now, see tempcat_before_exit()) */
-	if (tc_stats_deferred)
-		pgstat_report_stat(true);
-
-	if (tc_slice_flags == NULL)
+	if (!tc_holds_blocks)
 		return;
 #ifdef FAULT_INJECTOR
-	/* Test hook: hold on to the slices on the way out (with 'suspend'). */
-	SIMPLE_FAULT_INJECTOR("tempcat_release_slice");
+	/* Test hook: hold on to the blocks on the way out (with 'suspend'). */
+	SIMPLE_FAULT_INJECTOR("tempcat_release_blocks");
 #endif
-	for (slice = 0; slice < TEMPCAT_NSLICES; slice++)
+	for (i = 0; i < TEMPCAT_NOID_BLOCKS; i++)
 	{
-		if (tc_slice_flags[slice] & TCS_HELD)
-			tempcat_let_go_of_slice(slice);
+		if (TempcatBlocks[i] == me)
+			TempcatBlocks[i] = 0;
 	}
-}
-
-/*
- * Let go of a slice, and of the OIDs of it that we owned (given to objects
- * whose creation did not get as far as their rows, if any).
- */
-static void
-tempcat_let_go_of_slice(int slice)
-{
-	TempcatSliceState *ss = &TempcatShared->slices[slice];
-
-	Assert(tempcat_holds_slice(slice));
-	ss->databaseId = InvalidOid;
-	pg_write_barrier();
-	pg_atomic_write_u32(&ss->holder, 0);
-	tc_slice_flags[slice] &= ~TCS_HELD;
-	if (tc_slice_max_oid[slice] > tc_slice_gone_max_oid[slice])
-		tc_slice_gone_max_oid[slice] = tc_slice_max_oid[slice];
-	if (slice == tc_slice)
-		tc_slice = -1;
-	if (!proc_exit_inprogress)
-		tempcat_forget_slice_oids(slice);
 }
 
 /* ----------------------------------------------------------------
@@ -1698,23 +1166,6 @@ tempcat_forget_oid(Oid catalog, Oid oid)
 	return hash_search(tc_owned, &key, HASH_REMOVE, NULL) != NULL;
 }
 
-/* Forget the OIDs of 'slice' that we owned; see tempcat_let_go_of_slice(). */
-static void
-tempcat_forget_slice_oids(int slice)
-{
-	HASH_SEQ_STATUS seq;
-	TempcatOwnedKey *owned;
-
-	if (tc_owned == NULL)
-		return;
-	hash_seq_init(&seq, tc_owned);
-	while ((owned = hash_seq_search(&seq)) != NULL)
-	{
-		if (IsTempcatOid(owned->oid) && tempcat_slice_of(owned->oid) == slice)
-			(void) hash_search(tc_owned, owned, HASH_REMOVE, NULL);
-	}
-}
-
 /*
  * Did this session assign 'oid' to one of its temporary objects in
  * 'catalog'?
@@ -1724,27 +1175,12 @@ tempcat_owns_oid(Oid catalog, Oid oid)
 {
 	TempcatOwnedKey key;
 
-	if (tc_owned == NULL || !IsTempcatOid(oid))
+	/* (an OID of ours is in a block that a process holds) */
+	if (tc_owned == NULL || !tempcat_oid_block_held(oid))
 		return false;
 	key.catalog = catalog;
 	key.oid = oid;
 	return hash_search(tc_owned, &key, HASH_FIND, NULL) != NULL;
-}
-
-/*
- * The state of the writer whose area a reader looks at: NULL if not known
- * (a parallel retrieve connection to a session without an area).
- */
-static TempcatProcState *
-tempcat_writer_state(void)
-{
-	if (am_cursor_retrieve_handler)
-		return tempcat_attach() ?
-			&TempcatShared->procs[tc_root->writer_pgprocno] : NULL;
-	if (SharedLocalSnapshotSlot == NULL ||
-		SharedLocalSnapshotSlot->writer_proc == NULL)
-		return NULL;
-	return &TempcatShared->procs[SharedLocalSnapshotSlot->writer_proc->pgprocno];
 }
 
 /* ----------------------------------------------------------------
@@ -2582,34 +2018,17 @@ tempcat_can_start(void)
 {
 	/*
 	 * A utility-mode session on a segment keeps its temporary objects on
-	 * disk: OIDs from the reserved range could be the ones that the
-	 * coordinator gives the temporary objects of its sessions on this
-	 * segment.
+	 * disk: its OID counter is not the coordinator's, whose OIDs the
+	 * temporary objects of its sessions on this segment have.
 	 */
 	if (Gp_role == GP_ROLE_UTILITY && !IS_QUERY_DISPATCHER())
 		return false;
-	if (IsBinaryUpgrade || !IsUnderPostmaster || TempcatShared == NULL)
+	if (IsBinaryUpgrade || !IsUnderPostmaster || TempcatShared == NULL ||
+		TempcatBlocks == NULL)
 		return false;
 
-	/*
-	 * A slice of the reserved range, and the memory to keep them in: the
-	 * slice first, so that no area is made for nothing when there is none,
-	 * and if no area can be made, the slice goes back unused.
-	 */
-	if (tc_slice < 0 && !tempcat_claim_free_slice())
-	{
-		ereport(WARNING,
-				(errcode(ERRCODE_CONFIGURATION_LIMIT_EXCEEDED),
-				 errmsg("no range of OIDs for temporary objects kept in memory is free"),
-				 errdetail("Other sessions hold all %d ranges, or ordinary objects take too many of their OIDs; the session keeps its temporary objects on disk.",
-						   TEMPCAT_NSLICES)));
-		return false;
-	}
 	if (tc_area == NULL && !tempcat_create_area(true))
 	{
-		/* (no area, so nothing has OIDs of the slice) */
-		if (tc_slice >= 0)
-			tempcat_let_go_of_slice(tc_slice);
 		ereport(WARNING,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("could not create the in-memory catalog of temporary objects"),
@@ -2620,9 +2039,9 @@ tempcat_can_start(void)
 }
 
 /*
- * Should a new object get an OID from the reserved range?  Called on the
- * coordinator by oid_dispatch.c with the same key it dispatches to the
- * segments.
+ * Is a new object a temporary object to keep in memory, to get its OID from
+ * tempcat_allocate_oid()?  Called on the coordinator by oid_dispatch.c with
+ * the same key it dispatches to the segments.
  */
 bool
 tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
@@ -2644,16 +2063,7 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 			tempcat_key_is_temp(catalog, objname, namespaceOid,
 								keyOid1, keyOid2,
 								gp_enable_temp_memory_catalog) &&
-			tempcat_can_start() &&
-			tempcat_take_namespace_oid();
-
-		/*
-		 * A temporary namespace on disk, after one in memory rolled back:
-		 * the slice taken for it goes (see tempcat_release_unused_slices()).
-		 */
-		if (!namespace_in_memory && objname != NULL &&
-			strncmp(objname, "pg_temp_", 8) == 0)
-			tempcat_drop_slice();
+			tempcat_can_start();
 		return namespace_in_memory;
 	}
 	return tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1,
@@ -2686,24 +2096,18 @@ tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
 }
 
 /*
- * Allocate an OID for a new temporary object in 'relation' from this
- * session's slice of the reserved range, taking another slice when it is
- * used up.  Returns InvalidOid if no slice is left.
+ * Allocate an OID for a new temporary object in 'relation' from the run of
+ * OIDs the session took from the counter, taking another run when it is used
+ * up (see "Blocks of OIDs").
  *
  * Like GetNewOidWithIndex(), make sure the OID is not used in the catalog
- * yet: ordinary objects may have OIDs in the range (see the file header).
- * The SnapshotAny scan sees them, and the rows in memory, which have none of
- * the OIDs still to give (they are given once).
+ * yet: an ordinary object may have it from before the counter wrapped
+ * around.  The SnapshotAny scan sees it, and the rows in memory, which have
+ * none of the OIDs still to give.
  */
-static Oid
-tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
+Oid
+tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 {
-#ifdef FAULT_INJECTOR
-	/* Test hook: ordinary objects take every OID of the slices. */
-	if (SIMPLE_FAULT_INJECTOR("tempcat_oid_exhausted") == FaultInjectorTypeSkip)
-		return InvalidOid;
-#endif
-
 	for (;;)
 	{
 		Oid			oid;
@@ -2711,24 +2115,15 @@ tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		SysScanDesc scan;
 		bool		collides;
 
-		if (tc_slice < 0 || tc_next_oid > tc_slice_end ||
-			!OidIsValid(tc_next_oid))
-		{
-			if (!tempcat_claim_free_slice())
-				return InvalidOid;
-		}
+		if (!OidIsValid(tc_next_oid))
+			tempcat_take_block();
 #ifdef FAULT_INJECTOR
-		/* Test hook: go near the end of the slice, to use it up soon. */
-		if (SIMPLE_FAULT_INJECTOR("tempcat_slice_near_end") == FaultInjectorTypeSkip)
-			tc_next_oid = Max(tc_next_oid, tc_slice_end - 1);
+		/* Test hook: go near the end of the run, to take another one soon. */
+		if (SIMPLE_FAULT_INJECTOR("tempcat_block_near_end") == FaultInjectorTypeSkip)
+			tc_next_oid = Max(tc_next_oid, tc_last_oid - 1);
 #endif
-		oid = tc_next_oid++;
-		TempcatShared->slices[tc_slice].nextOid = tc_next_oid;
-		tc_slice_flags[tc_slice] |= TCS_USED;
-		/* (statistics objects are made on the coordinator only) */
-		if (RelationGetRelid(relation) != StatisticExtRelationId)
-			tempcat_note_given();
-
+		oid = tc_next_oid;
+		tc_next_oid = (oid == tc_last_oid) ? InvalidOid : oid + 1;
 		tempcat_activate(oid);
 
 		ScanKeyInit(&key, oidcolumn, BTEqualStrategyNumber, F_OIDEQ,
@@ -2751,64 +2146,8 @@ tempcat_try_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	}
 }
 
-
-Oid
-tempcat_allocate_oid(Relation relation, Oid indexId, AttrNumber oidcolumn)
-{
-	Oid			oid;
-
-	if (RelationGetRelid(relation) == NamespaceRelationId &&
-		OidIsValid(tc_namespace_oid))
-	{
-		oid = tc_namespace_oid;
-		tc_namespace_oid = InvalidOid;
-		return oid;
-	}
-
-	oid = tempcat_try_allocate_oid(relation, indexId, oidcolumn);
-	if (!OidIsValid(oid))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("out of OIDs for temporary objects kept in memory"),
-				 errdetail("Other sessions hold all ranges of OIDs for temporary objects kept in memory."),
-				 errhint("Retry once some of them have ended.")));
-	return oid;
-}
-
 /*
- * Take the OID of the session's temporary namespace from its slice.  If
- * ordinary objects took every OID of the slices left (created before the
- * range was reserved, or carried over by pg_upgrade), the session keeps its
- * temporary objects on disk.
- */
-static bool
-tempcat_take_namespace_oid(void)
-{
-	Relation	rel;
-
-	/* (taken already by an attempt that failed later) */
-	if (OidIsValid(tc_namespace_oid))
-		return true;
-	rel = table_open(NamespaceRelationId, AccessShareLock);
-	tc_namespace_oid = tempcat_try_allocate_oid(rel, NamespaceOidIndexId,
-												Anum_pg_namespace_oid);
-	table_close(rel, AccessShareLock);
-
-	if (!OidIsValid(tc_namespace_oid))
-	{
-		/* (if nothing has OIDs of it) */
-		if (tc_slice >= 0 && tc_slice_rows[tc_slice] == 0)
-			tempcat_let_go_of_slice(tc_slice);
-		ereport(WARNING,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("out of OIDs for temporary objects kept in memory"),
-				 errdetail("Ordinary objects have all OIDs that the session could give its temporary objects; it keeps them on disk.")));
-	}
-	return OidIsValid(tc_namespace_oid);
-}
-
-/*
- * A segment received a reserved OID for a temporary object of ours.  The
+ * A segment received an OID for a temporary object of ours.  The
  * coordinator checked that no object of its catalog has it, but an ordinary
  * object can exist on this node alone (created in utility mode, or left by
  * a broken catalog), and two rows with one OID would corrupt the catalog:
@@ -2840,50 +2179,42 @@ tempcat_check_preassigned_oid(Relation relation, Oid indexId,
 }
 
 /*
- * A segment received a pre-assigned OID from the coordinator.  If the
- * coordinator gave a temporary object of this session a reserved OID ('temp'
- * says that the object is one even if the key does not tell), take its
- * slice, check that the OID is free on this node, then remember that we own
- * it.
+ * A segment received a pre-assigned OID that the coordinator gave a
+ * temporary object of this session kept in memory (OidAssignment.tempcat):
+ * hold its block, check that the OID is free on this node, then remember
+ * that we own it.
  */
 void
 tempcat_note_preassigned_oid(Relation relation, Oid indexId,
-							 AttrNumber oidcolumn, const char *objname,
-							 Oid namespaceOid, Oid keyOid1, Oid keyOid2,
-							 bool temp, Oid oid)
+							 AttrNumber oidcolumn, Oid oid)
 {
-	Oid			catalog = RelationGetRelid(relation);
-
-	if (IsBinaryUpgrade || !IsTempcatOid(oid) || tempcat_is_reader())
+	if (IsBinaryUpgrade || tempcat_is_reader())
 		return;
+	if (TempcatBlocks == NULL)
+		elog(ERROR, "temporary objects cannot be kept in memory on this node");
 
-	if (temp ||
-		tempcat_key_is_temp(catalog, objname, namespaceOid, keyOid1, keyOid2,
-							true))
-	{
-		if (tc_area == NULL && !tempcat_create_area(false))
-			ereport(ERROR,
-					(errcode(ERRCODE_OUT_OF_MEMORY),
-					 errmsg("could not create the in-memory catalog of temporary objects on this node"),
-					 errdetail("Dynamic shared memory, or slots for its segments, ran out."),
-					 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
-		tempcat_activate(oid);
-		tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
-		tempcat_remember_oid(catalog, oid);
-	}
+	if (tc_area == NULL && !tempcat_create_area(false))
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("could not create the in-memory catalog of temporary objects on this node"),
+				 errdetail("Dynamic shared memory, or slots for its segments, ran out."),
+				 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
+	tempcat_activate(oid);
+	tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
+	tempcat_remember_oid(RelationGetRelid(relation), oid);
 }
 
 /*
  * A segment received the OID of a label of enum type 'typid', which comes
  * with a preassignment of its own (GetPreassignedOidForEnum()).  For a label
  * of a temporary enum of ours, do what tempcat_note_preassigned_oid() does:
- * take the slice of the OID, and check that the OID is free on this node.
+ * hold the block of the OID, and check that the OID is free on this node.
  * (Labels are no objects of their own: their OIDs are not remembered.)
  */
 void
 tempcat_note_enum_label_oid(Relation enumrel, Oid typid, Oid oid)
 {
-	if (IsBinaryUpgrade || !IsTempcatOid(oid) || tempcat_is_reader() ||
+	if (IsBinaryUpgrade || tempcat_is_reader() ||
 		!tempcat_owns_oid(TypeRelationId, typid))
 		return;
 	tempcat_activate(oid);
@@ -3590,8 +2921,6 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	}
 	tempcat_hash_link(&tc_root->tids, np, e->tidhash, ep);
 
-	tempcat_count_slice_row(e, 1);
-
 	return ep;
 }
 
@@ -3607,8 +2936,6 @@ tempcat_entry_remove(dsa_pointer ep)
 	/* (see tempcat_recompute_used()) */
 	if (def->relid == DependRelationId || def->relid == SharedDependRelationId)
 		tc_used_dirty = true;
-
-	tempcat_count_slice_row(e, -1);
 
 	if (DsaPointerIsValid(e->prev))
 		((TempcatEntry *) TC_ADDR(e->prev))->next = e->next;
@@ -4120,8 +3447,6 @@ tempcat_reclaim_dead(void)
 void
 tempcat_start_transaction(void)
 {
-	bool		forget = false;
-
 	tc_xact_changed = false;
 	tc_change_level = 0;
 
@@ -4129,8 +3454,8 @@ tempcat_start_transaction(void)
 	 * A retrieve connection can outlive the writer of the cursor session it
 	 * serves, which ends or is replaced (e.g. after its gang was reset).
 	 * Detach from that writer's area then, and forget what we cached about
-	 * its objects: the next writer gives their OIDs to its own.  The next
-	 * lookup attaches to the session's current area, if any.
+	 * its objects.  The next lookup attaches to the session's current area,
+	 * if any.
 	 */
 	if (am_cursor_retrieve_handler && tc_area != NULL)
 	{
@@ -4145,22 +3470,8 @@ tempcat_start_transaction(void)
 			dsa_detach(tc_area);
 			tc_area = NULL;
 			tc_root = NULL;
-			forget = true;
+			InvalidateSystemCaches();
 		}
-	}
-
-	/* (see tempcat_forget_cached_oids()) */
-	if (tempcat_is_reader() && tc_area != NULL &&
-		pg_atomic_read_u32(&tc_root->cache_epoch) != tc_seen_cache_epoch)
-	{
-		tc_seen_cache_epoch = pg_atomic_read_u32(&tc_root->cache_epoch);
-		forget = true;
-	}
-	if (forget)
-	{
-		InvalidateSystemCaches();
-		/* (at the start of a transaction, nothing uses any of them) */
-		TypeCacheForgetRange(FirstTempcatObjectId, LastTempcatObjectId, false);
 	}
 
 	if (tempcat_is_reader() || tc_area == NULL)
@@ -4171,18 +3482,15 @@ tempcat_start_transaction(void)
 		tempcat_recompute_horizon();
 	if (tc_used_dirty)
 		tempcat_recompute_used(false);
-	if (tc_release_wanted)
-		tempcat_release_unused_slices(true);
 }
 
 /*
  * The session goes idle, out of any transaction or in one that rolled back
  * already: apply the outcome of its finished transactions to the pending
  * rows now, rather than at the start of its next transaction, let the
- * published horizon rise (see tempcat_add_pending()), and let go of the
- * objects its rows no longer use (tempcat_recompute_used()) and of the
- * slices they no longer have OIDs of (tempcat_release_unused_slices()), and
- * give the segments of the area that emptied back to the OS (not as soon as
+ * published horizon rise (see tempcat_add_pending()), let go of the
+ * objects its rows no longer use (tempcat_recompute_used()), and give the
+ * segments of the area that emptied back to the OS (not as soon as
  * they empty, see dsa_trim()), once more than half of the area is free: a
  * session at the edge of a segment that creates and drops an object in
  * turn would create and free the segment every time.  The next transaction
@@ -4210,7 +3518,7 @@ tempcat_idle(void)
 		return;
 	}
 	if (tc_npending == 0 && !tc_horizon_dirty && !tc_used_dirty &&
-		!tc_release_wanted && !tc_used_overflow && !tc_trim_wanted)
+		!tc_used_overflow && !tc_trim_wanted)
 		return;
 
 	PG_TRY();
@@ -4221,8 +3529,6 @@ tempcat_idle(void)
 		if (tc_used_dirty)
 			tempcat_recompute_used(false);
 		tempcat_relock_used();
-		if (tc_release_wanted)
-			tempcat_release_unused_slices(false);
 		if (tc_trim_wanted)
 		{
 			size_t		total = dsa_get_total_size(tc_area);
@@ -4301,74 +3607,10 @@ tempcat_abort_subtransaction(void)
 }
 
 /*
- * Coordinator: a segment refused the slice of the OIDs it received (the
- * writer QE of the slice's earlier holder lingers there, see
- * tempcat_claim_slice()).  Called with the error of the QE that the
- * dispatcher turns into an error here, which PL/pgSQL may catch: the first
- * one, which is the refusal, as the segment that refuses is the last one
- * still at work by then.
- */
-void
-tempcat_note_qe_error(int sqlerrcode, const char *funcname)
-{
-	if (sqlerrcode == TEMPCAT_SLICE_REFUSED && funcname != NULL &&
-		strcmp(funcname, "tempcat_claim_slice") == 0)
-		tc_slice_refused = true;
-}
-
-/* Coordinator: an OID of the slice goes to segments. */
-static void
-tempcat_note_given(void)
-{
-	int			level = GetCurrentTransactionNestLevel();
-
-	/* (the first again after the subtransactions that gave any rolled back) */
-	if (!tc_slice_given || tc_slice_given_level == 0)
-	{
-		tc_slice_given = true;
-		tc_slice_given_stmt = GetCurrentStatementStartTimestamp();
-	}
-	if (tc_slice_given_level == 0 || level < tc_slice_given_level)
-		tc_slice_given_level = level;
-}
-
-/*
- * The coordinator stops giving OIDs from a slice that a segment refused, if
- * the transaction or subtransaction (e.g. of a PL/pgSQL EXCEPTION block, or
- * a SAVEPOINT) rolls back for that; or that a segment may have been waiting
- * for when the statement was canceled (e.g. by statement_timeout), if the
- * statement gave the first OIDs of it of the transaction (after an earlier
- * one did, all segments hold it; but the statements of one simple Query
- * message share their start); if no transaction that gave OIDs of it
- * committed (then its writer QEs hold it everywhere): a segment would hold
- * up every attempt of the session with it for a while.  A cancel is seen
- * when the error reaches the transaction, as PL/pgSQL drops the error
- * before it rolls back the subtransaction of an EXCEPTION block; not if a
- * handler of query_canceled catches it.  The next attempt takes
- * another one; the slice is let go of once the rows of the transaction are
- * gone (they are freed when the session goes idle or starts its next
- * transaction, and need the clog until then, see tempcat_add_pending()).
- * Not for other rollbacks, which would use up a slice each (a session takes
- * one again only when no other is free, see the file header).
- */
-static void
-tempcat_drop_refused_slice(void)
-{
-	/* (the error being handled, if any) */
-	if (tc_slice >= 0 && tc_slice_given && !tc_slice_kept &&
-		(tc_slice_refused ||
-		 (elog_geterrcode() == ERRCODE_QUERY_CANCELED &&
-		  tc_slice_given_stmt == GetCurrentStatementStartTimestamp())))
-		tempcat_drop_slice();
-	tc_slice_refused = false;
-}
-
-/*
- * See tempcat_drop_refused_slice().  After an error, the session may also
- * have locked an object for a row in memory that it did not get to add
- * (e.g. as the area was full): look again at what its rows use
- * (tempcat_recompute_used()); and at the end of a transaction that changed
- * such rows, before its locks go.
+ * After an error, the session may have locked an object for a row in memory
+ * that it did not get to add (e.g. as the area was full): look again at
+ * what its rows use (tempcat_recompute_used()); and at the end of a
+ * transaction that changed such rows, before its locks go.
  */
 static void
 tempcat_xact_callback(XactEvent event, void *arg)
@@ -4377,20 +3619,12 @@ tempcat_xact_callback(XactEvent event, void *arg)
 	{
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PARALLEL_COMMIT:
-			if (tc_slice >= 0 && tc_slice_given_level > 0)
-				tc_slice_kept = true;
-			tc_slice_given = false;
-			tc_slice_given_level = 0;
-			tc_slice_refused = false;
 			if (tc_depend_level > 0)
 				tempcat_recompute_used(true);
 			tc_depend_level = 0;
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
-			tempcat_drop_refused_slice();
-			tc_slice_given = false;
-			tc_slice_given_level = 0;
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;
 			if (tc_depend_level > 0)
@@ -4408,15 +3642,9 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 {
 	int			level = GetCurrentTransactionNestLevel();
 
-	/*
-	 * (see tempcat_xact_callback()) The OIDs that a subtransaction gave did
-	 * not reach the segments for good if it rolls back.
-	 */
+	/* (see tempcat_xact_callback()) */
 	if (event == SUBXACT_EVENT_ABORT_SUB)
 	{
-		tempcat_drop_refused_slice();
-		if (tc_slice_given_level >= level)
-			tc_slice_given_level = 0;
 		if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 			tc_used_dirty = true;
 		/* only if it changed such rows: not at every exception block */
@@ -4432,8 +3660,6 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 		return;
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
-	if (tc_slice_given_level >= level)
-		tc_slice_given_level = level - 1;
 	if (tc_depend_level >= level)
 		tc_depend_level = level - 1;
 }
@@ -4473,11 +3699,7 @@ tempcat_unlink_files(Form_pg_class form)
  *
  * And purge the statistics of all our tables and functions: the outcome of
  * that cleanup is not applied to the rows any more (tempcat_forget_if_gone()
- * would purge them), and pgstat_vacuum_stat() keeps the statistics of the
- * OIDs of a slice as long as a session holds it (tempcat_oid_maybe_live()),
- * which the next session to take it may do before: send them now, after
- * the counts still pending, rather than in pgstat_beshutdown_hook(), which
- * runs after the slices are let go of.
+ * would purge them).  pgstat_beshutdown_hook() sends the purges.
  */
 static void
 tempcat_before_exit(int code, Datum arg)
@@ -4517,19 +3739,6 @@ tempcat_before_exit(int code, Datum arg)
 		pgstat_purge_function(tempcat_entry_oid(e));
 		ep = e->next;
 	}
-
-	/*
-	 * Now, before the slices are let go of (tempcat_proc_exit()); but not in
-	 * a transaction, whose counts are not settled yet (ShutdownPostgres()
-	 * rolls it back later, e.g. when the connection went away before the
-	 * transaction that created the temporary schema ended, and
-	 * RemoveTempRelationsCallback() was not registered to end it):
-	 * tempcat_proc_exit() sends them then, still before.
-	 */
-	if (IsTransactionOrTransactionBlock())
-		tc_stats_deferred = true;
-	else
-		pgstat_report_stat(true);
 }
 
 /* ----------------------------------------------------------------
@@ -5754,326 +4963,19 @@ tempcat_check_sample_scan(Relation rel, Snapshot snapshot)
 }
 
 /*
- * Ordinary tables and functions with reserved OIDs (created before the
- * range was reserved, or carried over by pg_upgrade) dropped by the current
- * transaction, at subtransaction nesting levels.  pgstat_vacuum_stat() keeps
- * their statistics as long as a live session holds the slice of their OIDs
- * (tempcat_oid_maybe_live()): purge them at commit.
- */
-typedef struct TempcatDiskDrop
-{
-	Oid			catalog;
-	Oid			oid;
-	int			level;
-} TempcatDiskDrop;
-
-static TempcatDiskDrop *tc_disk_drops = NULL;
-static int	tc_ndisk_drops = 0;
-static int	tc_max_disk_drops = 0;
-
-/*
- * Those of the transaction this process prepared last, until it finishes it
- * (FinishPreparedTransaction(), on a QE in the same process): purge them
- * only if it commits.  If another process finishes it, e.g. after a
- * restart, they are not purged, as before this was done.
- */
-static TempcatDiskDrop *tc_prepared_drops = NULL;
-static int	tc_nprepared_drops = 0;
-static TransactionId tc_prepared_drops_xid = InvalidTransactionId;
-static TransactionId tc_preparing_xid = InvalidTransactionId;
-
-static void
-tempcat_purge_disk_drops(TempcatDiskDrop *drops, int n)
-{
-	int			i;
-
-	for (i = 0; i < n; i++)
-	{
-		if (drops[i].catalog == RelationRelationId)
-			pgstat_purge_relation(drops[i].oid);
-		else
-			pgstat_purge_function(drops[i].oid);
-	}
-}
-
-static void
-tempcat_disk_drop_xact_callback(XactEvent event, void *arg)
-{
-	switch (event)
-	{
-		case XACT_EVENT_COMMIT:
-			tempcat_purge_disk_drops(tc_disk_drops, tc_ndisk_drops);
-			tc_ndisk_drops = 0;
-			break;
-		case XACT_EVENT_ABORT:
-			tc_ndisk_drops = 0;
-			break;
-		case XACT_EVENT_PRE_PREPARE:
-			tc_preparing_xid = GetTopTransactionIdIfAny();
-			break;
-		case XACT_EVENT_PREPARE:
-			/* (a transaction prepared earlier and not finished here: lost) */
-			if (tc_prepared_drops != NULL)
-				pfree(tc_prepared_drops);
-			tc_prepared_drops = NULL;
-			tc_nprepared_drops = 0;
-			tc_prepared_drops_xid = InvalidTransactionId;
-			if (tc_ndisk_drops > 0 && TransactionIdIsValid(tc_preparing_xid))
-			{
-				tc_prepared_drops = MemoryContextAlloc(TopMemoryContext,
-													   sizeof(TempcatDiskDrop) * tc_ndisk_drops);
-				memcpy(tc_prepared_drops, tc_disk_drops,
-					   sizeof(TempcatDiskDrop) * tc_ndisk_drops);
-				tc_nprepared_drops = tc_ndisk_drops;
-				tc_prepared_drops_xid = tc_preparing_xid;
-			}
-			tc_ndisk_drops = 0;
-			tc_preparing_xid = InvalidTransactionId;
-			break;
-		default:
-			break;
-	}
-}
-
-/*
- * The prepared transaction 'xid' is committed or rolled back, by this
- * process (on a QE, the writer that prepared it), or by another one.  Apply
- * the outcome to what this process noted for it at PREPARE: the statistics
- * of ordinary objects it dropped.  (The slices of the rows of a prepared
- * transaction that rolled back are let go of with the rows, see
- * tempcat_release_unused_slices().)
- */
-void
-tempcat_finish_prepared(TransactionId xid, bool isCommit)
-{
-	if (!TransactionIdIsValid(xid))
-		return;
-
-	if (tc_nprepared_drops == 0 || !TransactionIdEquals(xid, tc_prepared_drops_xid))
-		return;
-	if (isCommit)
-		tempcat_purge_disk_drops(tc_prepared_drops, tc_nprepared_drops);
-	pfree(tc_prepared_drops);
-	tc_prepared_drops = NULL;
-	tc_nprepared_drops = 0;
-	tc_prepared_drops_xid = InvalidTransactionId;
-}
-
-static void
-tempcat_disk_drop_subxact_callback(SubXactEvent event,
-								   SubTransactionId mySubid,
-								   SubTransactionId parentSubid, void *arg)
-{
-	int			level = GetCurrentTransactionNestLevel();
-	int			i;
-
-	if (event == SUBXACT_EVENT_ABORT_SUB)
-	{
-		while (tc_ndisk_drops > 0 &&
-			   tc_disk_drops[tc_ndisk_drops - 1].level >= level)
-			tc_ndisk_drops--;
-	}
-	else if (event == SUBXACT_EVENT_COMMIT_SUB)
-	{
-		for (i = 0; i < tc_ndisk_drops; i++)
-		{
-			if (tc_disk_drops[i].level >= level)
-				tc_disk_drops[i].level = level - 1;
-		}
-	}
-}
-
-/* An on-disk pg_class or pg_proc row at 'tid' with OID 'oid' is deleted. */
-void
-tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid)
-{
-	static bool registered = false;
-
-	Assert(catalog == RelationRelationId || catalog == ProcedureRelationId);
-	if (!IsTempcatOid(oid) || IsTempcatTid(tid) || IsBinaryUpgrade)
-		return;
-
-	if (!registered)
-	{
-		RegisterXactCallback(tempcat_disk_drop_xact_callback, NULL);
-		RegisterSubXactCallback(tempcat_disk_drop_subxact_callback, NULL);
-		registered = true;
-	}
-	if (tc_ndisk_drops >= tc_max_disk_drops)
-	{
-		int			newmax = Max(16, tc_max_disk_drops * 2);
-
-		if (tc_disk_drops == NULL)
-			tc_disk_drops = MemoryContextAlloc(TopMemoryContext,
-											   sizeof(TempcatDiskDrop) * newmax);
-		else
-			tc_disk_drops = repalloc(tc_disk_drops,
-									 sizeof(TempcatDiskDrop) * newmax);
-		tc_max_disk_drops = newmax;
-	}
-	tc_disk_drops[tc_ndisk_drops].catalog = catalog;
-	tc_disk_drops[tc_ndisk_drops].oid = oid;
-	tc_disk_drops[tc_ndisk_drops].level = GetCurrentTransactionNestLevel();
-	tc_ndisk_drops++;
-}
-
-/*
- * Readers: the slices that the writer held when we used a table or function
- * with an OID of them, see tempcat_stats_object_gone()
- */
-static Bitmapset *tc_reader_slices_seen = NULL;
-
-/*
- * A reader process uses a table or function with a reserved OID, and may
- * send statistics of it later (pgstat_initstats(),
- * pgstat_init_function_usage()).  If our writer holds the slice of the OID,
- * it is one of the writer's temporary objects kept in memory, whose counts
- * are not to come back once it is dropped.
- */
-void
-tempcat_stats_note_use(Oid oid)
-{
-	TempcatProcState *st;
-	int			slice;
-	MemoryContext oldcxt;
-
-	if (TempcatShared == NULL || !tempcat_is_reader() || proc_exit_inprogress)
-		return;
-	slice = tempcat_slice_of(oid);
-	if (bms_is_member(slice, tc_reader_slices_seen))
-		return;
-	st = tempcat_writer_state();
-	if (st == NULL ||
-		pg_atomic_read_u32(&TempcatShared->slices[slice].holder) !=
-		(uint32) (st - TempcatShared->procs) + 1)
-		return;
-	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
-	tc_reader_slices_seen = bms_add_member(tc_reader_slices_seen, slice);
-	MemoryContextSwitchTo(oldcxt);
-}
-
-/* See tempcat_stats_object_gone(). */
-static bool
-tempcat_stats_object_gone_guts(int catidx, Oid oid)
-{
-	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
-	uint32		hash = DatumGetUInt32(hash_uint32(oid));
-	bool		gone = true;
-	int			k;
-
-	LWLockAcquire(&tc_root->lock, LW_SHARED);
-	for (k = 0; k < TEMPCAT_NKEYS && gone; k++)
-	{
-		TempcatHash *h = &tc_root->catalogs[catidx].keys[k];
-		dsa_pointer np;
-
-		/* the oid column is always attribute 1 */
-		if (def->keyattr[k] != 1 || h->nbuckets == 0)
-			continue;
-		np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
-		while (DsaPointerIsValid(np) && gone)
-		{
-			TempcatHashNode *node = TC_ADDR(np);
-			TempcatEntry *e = TC_ADDR(node->entry);
-
-			if (node->hash == hash && tempcat_entry_oid(e) == oid)
-			{
-#ifdef FAULT_INJECTOR
-				/* Test hook: fail with the lock held (with 'error'). */
-				SIMPLE_FAULT_INJECTOR("tempcat_stats_object_gone");
-#endif
-				if (!(TransactionIdIsValid(e->xmax) &&
-					  tempcat_xid_status(e->xmax) == TCX_COMMITTED))
-					gone = false;
-			}
-			np = node->next;
-		}
-	}
-	LWLockRelease(&tc_root->lock);
-	return gone;
-}
-
-/*
- * Is 'oid' that of a table or function (by 'catalog') of the writer's
- * temporary objects kept in memory, which a committed transaction dropped?
- * For a reader process sending statistics (pgstat_report_stat()): the
- * writer purged those of what it dropped (tempcat_forget_if_gone()), and a
- * reader's counts still pending, sent later, would bring them back.  It is
- * one of the writer's if the writer held its slice when we used it
- * (tempcat_stats_note_use()).  Out of a transaction: the rows in memory
- * tell, if the writer holds the slice still, with an OID that no live row
- * has; if it let go of the slice, or is gone, none of its objects has an OID
- * of it any more.  At exit, when the area may be detached already, our
- * counts of the writer's objects are dropped, also of live ones: temporary
- * tables need none for autovacuum.  (The counts of an ordinary object with
- * an OID of such a slice, which no row in memory has, are lost too.)
- *
- * Out of a transaction, an error would not release the locks (ours, and
- * the clog's): as in tempcat_idle(), log it instead, and keep the counts.
- */
-bool
-tempcat_stats_object_gone(Oid catalog, Oid oid)
-{
-	MemoryContext oldcxt = CurrentMemoryContext;
-	TempcatProcState *st;
-	int			slice;
-	int			catidx;
-	volatile bool gone = false;
-
-	if (!IsTempcatOid(oid) || TempcatShared == NULL || !tempcat_is_reader())
-		return false;
-	slice = tempcat_slice_of(oid);
-	if (!bms_is_member(slice, tc_reader_slices_seen))
-		return false;
-	/* (a retrieve connection detaches from the area of a writer that is gone) */
-	if (proc_exit_inprogress || tc_area == NULL)
-		return true;
-	st = tempcat_writer_state();
-	if (st == NULL ||
-		pg_atomic_read_u32(&TempcatShared->slices[slice].holder) !=
-		(uint32) (st - TempcatShared->procs) + 1)
-		return true;
-	catidx = tempcat_catalog_index(catalog);
-	if (catidx < 0)
-		return false;
-
-	PG_TRY();
-	{
-		gone = tempcat_stats_object_gone_guts(catidx, oid);
-	}
-	PG_CATCH();
-	{
-		ErrorData  *edata;
-
-		LWLockReleaseAll();
-		pgstat_report_wait_end();
-		MemoryContextSwitchTo(oldcxt);
-		edata = CopyErrorData();
-		FlushErrorState();
-		ereport(LOG,
-				(errmsg("could not check whether a temporary object kept in memory was dropped: %s",
-						edata->message)));
-		FreeErrorData(edata);
-		gone = false;
-	}
-	PG_END_TRY();
-	return gone;
-}
-
-/*
  * May 'oid' be that of a temporary object that a live session of database
  * 'dbid' keeps in memory?  For pgstat_vacuum_stat(), which cannot see them.
  */
 bool
 tempcat_oid_maybe_live(Oid oid, Oid dbid)
 {
-	TempcatSliceState *ss;
+	uint16		holder;
 
-	if (TempcatShared == NULL || !IsTempcatOid(oid))
+	if (TempcatBlocks == NULL)
 		return false;
-	ss = &TempcatShared->slices[tempcat_slice_of(oid)];
-	if (pg_atomic_read_u32(&ss->holder) == 0)
+	holder = TempcatBlocks[oid >> TEMPCAT_OID_BLOCK_BITS];
+	if (holder == 0)
 		return false;
 	pg_read_barrier();
-	return ss->databaseId == dbid;
+	return TempcatShared->procs[holder - 1].databaseId == dbid;
 }

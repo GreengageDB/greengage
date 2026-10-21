@@ -8,3 +8,4 @@ IndexScanDescData
 struct IndexScanDescData
 BitmapHeapScanState
 struct BitmapHeapScanState
+OidAssignment

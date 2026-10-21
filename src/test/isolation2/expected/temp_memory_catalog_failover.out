@@ -14,16 +14,22 @@
 
 CREATE TABLE tcf_sess (id int) DISTRIBUTED REPLICATED;
 CREATE TABLE
+-- The OIDs of a session's objects kept in memory (whose rows have TIDs with
+-- offsets from 0x8000 (32768) up), noted for later.
+CREATE TABLE tcf_mem (o oid) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE FUNCTION tcf_note_mem() RETURNS void LANGUAGE sql AS $$ INSERT INTO tcf_mem SELECT oid FROM pg_class WHERE (ctid::text::point)[1] >= 32768 UNION SELECT oid FROM pg_type WHERE (ctid::text::point)[1] >= 32768 $$;
+CREATE FUNCTION
+CREATE FUNCTION tcf_in_memory(regclass) RETURNS bool LANGUAGE sql AS $$ SELECT (ctid::text::point)[1] >= 32768 FROM pg_class WHERE oid = $1 $$;
+CREATE FUNCTION
 
 -- 1. The writer QE of a session dies on segment 0: the gang is reset, and
 -- the session's temporary objects are gone, as on disk; it makes new ones.
--- With OIDs of another slice: the old writer QE may hold its slice on the
--- segment for a while on its way out (e.g. when the coordinator lost its
--- connection to it), which the new one would have to wait for.
+-- With later OIDs, of the same block: the old writer QE may hold the block
+-- on the segment for a while on its way out (e.g. when the coordinator lost
+-- its connection to it), which the new one shares then.
 CREATE TYPE tcf_comp AS (x int);
 CREATE TYPE
-CREATE TABLE tcf_slice (slice bigint) DISTRIBUTED REPLICATED;
-CREATE TABLE
 1: SET gp_enable_temp_memory_catalog = on;
 SET
 1: CREATE TEMP TABLE tcf_t (c tcf_comp, a int) DISTRIBUTED BY (a);
@@ -32,8 +38,11 @@ CREATE TABLE
 INSERT 0 30
 1: INSERT INTO tcf_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
-1: INSERT INTO tcf_slice SELECT ('tcf_t'::regclass::oid::bigint - 4026531840) >> 16;
-INSERT 0 1
+1: SELECT tcf_note_mem();
+ tcf_note_mem 
+--------------
+              
+(1 row)
 0U: SELECT bool_and(pg_terminate_backend(pid)) AS terminated FROM pg_stat_activity WHERE sess_id IN (SELECT id FROM tcf_sess);
  terminated 
 ------------
@@ -50,18 +59,18 @@ ERROR:  terminating connection due to administrator command
 CREATE TABLE
 1: INSERT INTO tcf_t2 SELECT generate_series(1, 30);
 INSERT 0 30
-1: SELECT count(*), 'tcf_t2'::regclass::oid >= 4026531840 AS reserved, ('tcf_t2'::regclass::oid::bigint - 4026531840) >> 16 <> (SELECT slice FROM tcf_slice) AS new_slice FROM tcf_t2;
- count | reserved | new_slice 
--------+----------+-----------
- 30    | t        | t         
+1: SELECT count(*), tcf_in_memory('tcf_t2') AS in_memory, 'tcf_t2'::regclass::oid > (SELECT max(o) FROM tcf_mem) AS later_oid FROM tcf_t2;
+ count | in_memory | later_oid 
+-------+-----------+-----------
+ 30    | t         | t         
 (1 row)
 2: DROP TYPE tcf_comp;
 DROP TYPE
 1q: ... <quitting>
 DELETE FROM tcf_sess;
 DELETE 1
-DROP TABLE tcf_slice;
-DROP TABLE
+DELETE FROM tcf_mem;
+DELETE 5
 
 -- 2. Segment 0 fails over to its mirror while a session keeps temporary
 -- objects in memory there: they are gone with the old primary, nothing of
@@ -74,6 +83,11 @@ SET
 CREATE TABLE
 3: INSERT INTO tcf_m SELECT ROW(i)::tcf_comp, i FROM generate_series(1, 30) i;
 INSERT 0 30
+3: SELECT tcf_note_mem();
+ tcf_note_mem 
+--------------
+              
+(1 row)
 3: CHECKPOINT;
 CHECKPOINT
 -1U: SELECT pg_ctl((SELECT datadir FROM gp_segment_configuration c WHERE c.role = 'p' AND c.content = 0), 'stop', 'immediate');
@@ -92,7 +106,7 @@ CHECKPOINT
  m    | p              
  p    | m              
 (2 rows)
-4: SELECT count(*) AS on_disk FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND objid >= 4026531840;
+4: SELECT count(*) AS on_disk FROM gp_dist_random('pg_depend') WHERE gp_segment_id = 0 AND objid IN (SELECT o FROM tcf_mem);
  on_disk 
 ---------
  0       
@@ -110,10 +124,10 @@ DROP TYPE
 CREATE TABLE
 3: INSERT INTO tcf_m2 SELECT generate_series(1, 30);
 INSERT 0 30
-3: SELECT count(*), 'tcf_m2'::regclass::oid >= 4026531840 AS reserved FROM tcf_m2;
- count | reserved 
--------+----------
- 30    | t        
+3: SELECT count(*), tcf_in_memory('tcf_m2') AS in_memory FROM tcf_m2;
+ count | in_memory 
+-------+-----------
+ 30    | t         
 (1 row)
 3q: ... <quitting>
 4q: ... <quitting>
@@ -150,6 +164,13 @@ SET
 CREATE TABLE
 5: INSERT INTO tcf_c SELECT ROW(i)::tcf_comp, i FROM generate_series(1, 30) i;
 INSERT 0 30
+5: DELETE FROM tcf_mem;
+DELETE 5
+5: SELECT tcf_note_mem();
+ tcf_note_mem 
+--------------
+              
+(1 row)
 5: INSERT INTO tcf_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
 6&: SELECT wait_till_master_shutsdown();  <waiting ...>
@@ -172,7 +193,7 @@ server closed the connection unexpectedly
 6q: ... <quitting>
 7: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF NOT EXISTS (SELECT 1 FROM gp_dist_random('pg_stat_activity') a JOIN tcf_sess s ON a.sess_id = s.id) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the writer QEs did not end'; END $$;
 DO
-7: SELECT count(*) AS on_disk FROM pg_depend WHERE objid >= 4026531840;
+7: SELECT count(*) AS on_disk FROM pg_depend WHERE objid IN (SELECT o FROM tcf_mem);
  on_disk 
 ---------
  0       
@@ -185,12 +206,18 @@ SET
 CREATE TABLE
 7: INSERT INTO tcf_c2 SELECT generate_series(1, 30);
 INSERT 0 30
-7: SELECT count(*), 'tcf_c2'::regclass::oid >= 4026531840 AS reserved FROM tcf_c2;
- count | reserved 
--------+----------
- 30    | t        
+7: SELECT count(*), tcf_in_memory('tcf_c2') AS in_memory FROM tcf_c2;
+ count | in_memory 
+-------+-----------
+ 30    | t         
 (1 row)
 7: DROP TABLE tcf_sess;
+DROP TABLE
+7: DROP FUNCTION tcf_note_mem();
+DROP FUNCTION
+7: DROP FUNCTION tcf_in_memory(regclass);
+DROP FUNCTION
+7: DROP TABLE tcf_mem;
 DROP TABLE
 7q: ... <quitting>
 

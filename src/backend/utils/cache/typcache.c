@@ -100,8 +100,6 @@ static TypeCacheEntry *firstDomainTypeEntry = NULL;
 #define TCFLAGS_HAVE_FIELD_COMPARE			0x008000
 #define TCFLAGS_CHECKED_DOMAIN_CONSTRAINTS	0x010000
 #define TCFLAGS_DOMAIN_BASE_IS_COMPOSITE	0x020000
-/* GPDB: the fields from pg_type are filled in, see TypeCacheForgetRange() */
-#define TCFLAGS_HAVE_PG_TYPE_DATA			0x040000
 
 /*
  * Data stored about a domain type's constraints.  Note that we do not create
@@ -359,8 +357,7 @@ lookup_type_cache(Oid type_id, int flags)
 	typentry = (TypeCacheEntry *) hash_search(TypeCacheHash,
 											  (void *) &type_id,
 											  HASH_FIND, NULL);
-	/* GPDB: or one that TypeCacheForgetRange() emptied */
-	if (typentry == NULL || !(typentry->flags & TCFLAGS_HAVE_PG_TYPE_DATA))
+	if (typentry == NULL)
 	{
 		/*
 		 * If we didn't find one, we want to make one.  But first look up the
@@ -384,18 +381,14 @@ lookup_type_cache(Oid type_id, int flags)
 					 errmsg("type \"%s\" is only a shell",
 							NameStr(typtup->typname))));
 
-		/* Now make the typcache entry, if it's not there */
-		if (typentry == NULL)
-		{
-			typentry = (TypeCacheEntry *) hash_search(TypeCacheHash,
-													  (void *) &type_id,
-													  HASH_ENTER, &found);
-			Assert(!found);		/* it wasn't there a moment ago */
+		/* Now make the typcache entry */
+		typentry = (TypeCacheEntry *) hash_search(TypeCacheHash,
+												  (void *) &type_id,
+												  HASH_ENTER, &found);
+		Assert(!found);			/* it wasn't there a moment ago */
 
-			MemSet(typentry, 0, sizeof(TypeCacheEntry));
-			typentry->type_id = type_id;
-		}
-		typentry->flags |= TCFLAGS_HAVE_PG_TYPE_DATA;
+		MemSet(typentry, 0, sizeof(TypeCacheEntry));
+		typentry->type_id = type_id;
 		typentry->typlen = typtup->typlen;
 		typentry->typbyval = typtup->typbyval;
 		typentry->typalign = typtup->typalign;
@@ -405,24 +398,11 @@ lookup_type_cache(Oid type_id, int flags)
 		typentry->typelem = typtup->typelem;
 		typentry->typcollation = typtup->typcollation;
 
-		/*
-		 * If it's a domain, immediately thread it into the domain cache list
-		 * (GPDB: unless it is there already, as an emptied entry can be)
-		 */
+		/* If it's a domain, immediately thread it into the domain cache list */
 		if (typentry->typtype == TYPTYPE_DOMAIN)
 		{
-			TypeCacheEntry *e;
-
-			for (e = firstDomainTypeEntry; e != NULL; e = e->nextDomain)
-			{
-				if (e == typentry)
-					break;
-			}
-			if (e == NULL)
-			{
-				typentry->nextDomain = firstDomainTypeEntry;
-				firstDomainTypeEntry = typentry;
-			}
+			typentry->nextDomain = firstDomainTypeEntry;
+			firstDomainTypeEntry = typentry;
 		}
 
 		ReleaseSysCache(tp);
@@ -779,13 +759,10 @@ lookup_type_cache(Oid type_id, int flags)
 	 * If requested, get information about a range type
 	 */
 	if ((flags & TYPECACHE_RANGE_INFO) &&
+		typentry->rngelemtype == NULL &&
 		typentry->typtype == TYPTYPE_RANGE)
 	{
-		if (typentry->rngelemtype == NULL)
-			load_rangetype_info(typentry);
-		/* GPDB: an element entry emptied meanwhile, as in PostgreSQL 13 */
-		else if (!(typentry->rngelemtype->flags & TCFLAGS_HAVE_PG_TYPE_DATA))
-			(void) lookup_type_cache(typentry->rngelemtype->type_id, 0);
+		load_rangetype_info(typentry);
 	}
 
 	/*
@@ -2243,54 +2220,7 @@ TypeCacheOpcCallback(Datum arg, int cacheid, uint32 hashvalue)
 	while ((typentry = (TypeCacheEntry *) hash_seq_search(&status)) != NULL)
 	{
 		/* Reset equality/comparison/hashing validity information */
-		typentry->flags &= TCFLAGS_HAVE_PG_TYPE_DATA;
-	}
-}
-
-/*
- * GPDB: forget all that is cached about the types with OIDs from 'first' to
- * 'last', which may be given to other types now (see tempcat.c, which gives
- * OIDs of temporary objects kept in memory again only after this).  The
- * entries stay, as there may be pointers to them; the next lookup fills them
- * in again from pg_type.  Pointers kept elsewhere (fn_extra of functions,
- * domain constraint references) do not look up again: if 'only_gone', in
- * the middle of a command, forget only the types that no longer exist, which
- * nothing can use; otherwise only call it where nothing in progress uses any
- * of them.
- */
-void
-TypeCacheForgetRange(Oid first, Oid last, bool only_gone)
-{
-	HASH_SEQ_STATUS status;
-	TypeCacheEntry *typentry;
-
-	if (TypeCacheHash == NULL)
-		return;
-	hash_seq_init(&status, TypeCacheHash);
-	while ((typentry = (TypeCacheEntry *) hash_seq_search(&status)) != NULL)
-	{
-		Oid			type_id = typentry->type_id;
-		TypeCacheEntry *nextDomain = typentry->nextDomain;
-
-		if (type_id < first || type_id > last)
-			continue;
-		if (only_gone &&
-			SearchSysCacheExists1(TYPEOID, ObjectIdGetDatum(type_id)))
-			continue;
-		if (typentry->tupDesc != NULL &&
-			--typentry->tupDesc->tdrefcount == 0)
-			FreeTupleDesc(typentry->tupDesc);
-		if (typentry->domainData != NULL)
-			decr_dcc_refcount(typentry->domainData);
-		if (typentry->enumData != NULL)
-		{
-			bms_free(typentry->enumData->sorted_values);
-			pfree(typentry->enumData);
-		}
-		/* (it stays in the domain list, see lookup_type_cache()) */
-		MemSet(typentry, 0, sizeof(TypeCacheEntry));
-		typentry->type_id = type_id;
-		typentry->nextDomain = nextDomain;
+		typentry->flags = 0;
 	}
 }
 

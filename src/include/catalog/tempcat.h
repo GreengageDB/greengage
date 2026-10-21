@@ -4,11 +4,11 @@
  *	  In-memory catalog rows for temporary objects.
  *
  * Objects created in a temporary namespace that was itself created with
- * gp_enable_temp_memory_catalog enabled get OIDs from a reserved range
- * (FirstTempcatObjectId..LastTempcatObjectId).  Catalog rows whose owner
- * column holds such an OID are kept in a per-session dynamic shared memory
- * area instead of the on-disk catalog, so creating and dropping temporary
- * tables leaves no dead tuples behind.  See tempcat.c for details.
+ * gp_enable_temp_memory_catalog enabled are this session's temporary objects
+ * kept in memory.  Catalog rows whose owner column holds the OID of one are
+ * kept in a per-session dynamic shared memory area instead of the on-disk
+ * catalog, so creating and dropping temporary tables leaves no dead tuples
+ * behind.  See tempcat.c for details.
  *
  * Portions Copyright (c) 2026, Greengage Development Group
  *
@@ -25,19 +25,6 @@
 #include "storage/itemptr.h"
 #include "utils/relcache.h"
 #include "utils/snapshot.h"
-
-/*
- * OIDs reserved for temporary objects whose catalog rows live in memory.
- * The ordinary OID counter skips this range, but ordinary objects created
- * before it was reserved (or restored by pg_upgrade) may still use it, so
- * being in the range alone does not make an object temporary; see
- * tempcat_owns_oid().
- */
-#define FirstTempcatObjectId	((Oid) 0xF0000000)
-#define LastTempcatObjectId		((Oid) 0xFFFFFFFE)
-
-#define IsTempcatOid(oid) \
-	((Oid) (oid) >= FirstTempcatObjectId && (Oid) (oid) <= LastTempcatObjectId)
 
 /*
  * Rows in memory get TIDs with this bit set in the offset number.  Heap
@@ -63,12 +50,11 @@ extern bool tempcat_want_temp_oid(Oid catalog, const char *objname,
 extern Oid	tempcat_allocate_oid(Relation relation, Oid indexId,
 								 AttrNumber oidcolumn);
 extern void tempcat_note_preassigned_oid(Relation relation, Oid indexId,
-										 AttrNumber oidcolumn,
-										 const char *objname,
-										 Oid namespaceOid, Oid keyOid1,
-										 Oid keyOid2, bool temp, Oid oid);
+										 AttrNumber oidcolumn, Oid oid);
 extern void tempcat_note_enum_label_oid(Relation enumrel, Oid typid, Oid oid);
 extern bool tempcat_owns_oid(Oid catalog, Oid oid);
+extern bool tempcat_oid_block_held(Oid oid);
+extern Oid	tempcat_oid_block_last(Oid oid);
 extern void tempcat_check_namespace_object(Oid catalog, Oid namespaceOid);
 
 /* Catalog DML */
@@ -114,14 +100,8 @@ extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
 
 /* Other sessions */
 extern void tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId);
-extern void tempcat_session_reset(void);
-extern void tempcat_note_qe_error(int sqlerrcode, const char *funcname);
 extern void tempcat_warn_users(Oid classId, Oid objectId, const char *command);
 extern bool tempcat_oid_maybe_live(Oid oid, Oid dbid);
-extern bool tempcat_stats_object_gone(Oid catalog, Oid oid);
-extern void tempcat_stats_note_use(Oid oid);
-extern void tempcat_note_disk_drop(Oid catalog, Oid oid, ItemPointer tid);
-extern void tempcat_finish_prepared(TransactionId xid, bool isCommit);
 
 /* Object restrictions */
 extern void tempcat_check_inheritance(Oid relid, Oid parentid);
