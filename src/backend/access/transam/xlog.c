@@ -6464,8 +6464,7 @@ UpdateCatalogForStandbyPromotion(void)
 	/*
 	 * NOTE: AuxiliaryProcessMain has already called:
 	 * NOTE:      BaseInit,
-	 * NOTE:      InitAuxiliaryProcess instead of InitProcess, and
-	 * NOTE:      InitBufferPoolBackend.
+	 * NOTE:      InitAuxiliaryProcess instead of InitProcess.
 	 */
 
 	InitXLOGAccess();
@@ -6495,11 +6494,6 @@ UpdateCatalogForStandbyPromotion(void)
 
 	if (MyBackendId > MaxBackends || MyBackendId <= 0)
 			elog(FATAL, "bad backend id: %d", MyBackendId);
-
-	/*
-	 * bufmgr needs another initialization call too
-	 */
-	InitBufferPoolBackend();
 
 	/* Start transaction locally */
 	old_role = Gp_role;
@@ -7845,10 +7839,10 @@ StartupXLOG(void)
 						(xlogRecInfo == XLOG_CHECKPOINT_SHUTDOWN ||
 						 xlogRecInfo == XLOG_CHECKPOINT_ONLINE))
 					{
-						if (bgwriterLaunched)
+						if (IsUnderPostmaster)
 							RequestCheckpoint(CHECKPOINT_IMMEDIATE | CHECKPOINT_WAIT);
 						else
-							elog(LOG, "Skipping CreateRestartPoint() as bgwriter is not launched.");
+							elog(LOG, "Skipping CreateRestartPoint() as not running under postmaster (standalone mode).");
 					}
 				}
 

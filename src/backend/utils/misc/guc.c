@@ -2375,11 +2375,6 @@ static struct config_int ConfigureNamesInt[] =
 			GUC_UNIT_BLOCKS
 		},
 		&NBuffers,
-<<<<<<< HEAD
-		4096, 16, INT_MAX / 2,
-||||||| e1c1c30f635
-		1024, 16, INT_MAX / 2,
-=======
 		16384, 16, INT_MAX / 2,
 		NULL, NULL, NULL
 	},
@@ -2392,7 +2387,6 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&shared_memory_size_mb,
 		0, 0, INT_MAX,
->>>>>>> 3b231596ccf
 		NULL, NULL, NULL
 	},
 

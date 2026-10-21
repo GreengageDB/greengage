@@ -513,6 +513,7 @@
 		"session_replication_role",
 		"min_dynamic_shared_memory",
 		"shared_buffers",
+		"shared_memory_size",
 		"shared_memory_type",
 		"shared_preload_libraries",
 		"sql_inheritance",

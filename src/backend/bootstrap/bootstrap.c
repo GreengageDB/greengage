@@ -308,83 +308,15 @@ BootstrapModeMain(int argc, char *argv[], bool check_only)
 		proc_exit(1);
 	}
 
-<<<<<<< HEAD
-	switch (MyAuxProcType)
-	{
-		case StartupProcess:
-			MyBackendType = B_STARTUP;
-			break;
-		case ArchiverProcess:
-			MyBackendType = B_ARCHIVER;
-			break;
-		case BgWriterProcess:
-			MyBackendType = B_BG_WRITER;
-			break;
-		case CheckpointerProcess:
-			MyBackendType = B_CHECKPOINTER;
-			break;
-		case WalWriterProcess:
-			MyBackendType = B_WAL_WRITER;
-			break;
-		case WalReceiverProcess:
-			MyBackendType = B_WAL_RECEIVER;
-			break;
-		default:
-			MyBackendType = B_INVALID;
-	}
-	if (IsUnderPostmaster)
-		init_ps_display(NULL);
-
-	/* Acquire configuration parameters, unless inherited from postmaster */
-	if (!IsUnderPostmaster)
-	{
-		if (!SelectConfigFiles(userDoption, progname))
-			proc_exit(1);
-	}
-	if (userDoption)
-	{
-		/* userDoption isn't used any more */
-		free(userDoption);
-		userDoption = NULL;
-	}
-||||||| e1c1c30f635
-	switch (MyAuxProcType)
-	{
-		case StartupProcess:
-			MyBackendType = B_STARTUP;
-			break;
-		case ArchiverProcess:
-			MyBackendType = B_ARCHIVER;
-			break;
-		case BgWriterProcess:
-			MyBackendType = B_BG_WRITER;
-			break;
-		case CheckpointerProcess:
-			MyBackendType = B_CHECKPOINTER;
-			break;
-		case WalWriterProcess:
-			MyBackendType = B_WAL_WRITER;
-			break;
-		case WalReceiverProcess:
-			MyBackendType = B_WAL_RECEIVER;
-			break;
-		default:
-			MyBackendType = B_INVALID;
-	}
-	if (IsUnderPostmaster)
-		init_ps_display(NULL);
-
-	/* Acquire configuration parameters, unless inherited from postmaster */
-	if (!IsUnderPostmaster)
-	{
-		if (!SelectConfigFiles(userDoption, progname))
-			proc_exit(1);
-	}
-=======
 	/* Acquire configuration parameters */
 	if (!SelectConfigFiles(userDoption, progname))
 		proc_exit(1);
->>>>>>> 3b231596ccf
+	if (userDoption)
+	{
+		/* userDoption isn't used any more */
+		pfree(userDoption);
+		userDoption = NULL;
+	}
 
 	/*
 	 * Validate we have been given a reasonable-looking DataDir and change

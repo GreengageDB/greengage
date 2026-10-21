@@ -429,11 +429,13 @@ static BackgroundWorker PMAuxProcList[MaxPMAuxProc] =
 
 #ifdef ENABLE_IC_PROXY
 	{"ic proxy process", "ic proxy process",
-#ifdef FAULT_INJECTOR
+	 /*
+	  * GPDB: the ic proxy used to run without shared memory access in
+	  * builds without FAULT_INJECTOR, but background workers that are not
+	  * connected to shared memory are no longer supported (upstream
+	  * 80a8f95b3bc); RegisterBackgroundWorker() would reject it.
+	  */
 	 BGWORKER_SHMEM_ACCESS,
-#else
-	 0,
-#endif
 	 BgWorkerStart_RecoveryFinished,
 	 0, /* restart immediately if ic proxy process exits with non-zero code */
 	 "postgres", "ICProxyMain", 0, {0}, 0,
@@ -5489,15 +5491,9 @@ SubPostmasterMain(int argc, char *argv[])
 	if (strcmp(argv[1], "--forkbackend") == 0   ||
 		strcmp(argv[1], "--forkavlauncher") == 0 ||
 		strcmp(argv[1], "--forkavworker") == 0 ||
-<<<<<<< HEAD
 		strcmp(argv[1], "--forkautovac") == 0   ||
 		strcmp(argv[1], "--forkglobaldeadlockdetector") == 0 ||
-		strcmp(argv[1], "--forkboot") == 0 ||
-||||||| e1c1c30f635
-		strcmp(argv[1], "--forkboot") == 0 ||
-=======
 		strcmp(argv[1], "--forkaux") == 0 ||
->>>>>>> 3b231596ccf
 		strncmp(argv[1], "--forkbgworker=", 15) == 0)
 		PGSharedMemoryReAttach();
 	else
@@ -5738,6 +5734,7 @@ sigusr1_handler(SIGNAL_ARGS)
 	{
 		/* WAL redo has started. We're out of reinitialization. */
 		bool		promotion_requested = false;
+		bool		crash_recovery;
 
 		FatalError = false;
 		AbortStartTime = 0;
@@ -5771,6 +5768,20 @@ sigusr1_handler(SIGNAL_ARGS)
 			promotion_requested = true;
 
 		/*
+		 * GPDB: since upstream 7ff23c6d277 the startup process sends
+		 * RECOVERY_STARTED in crash recovery too, not only in archive
+		 * recovery.  Crash recovery ends with the server accepting
+		 * connections, so don't report PM_STATUS_STANDBY for it either.
+		 * Without a recovery signal file this is crash recovery.
+		 */
+		{
+			struct stat stat_buf;
+
+			crash_recovery = (stat(STANDBY_SIGNAL_FILE, &stat_buf) != 0 &&
+							  stat(RECOVERY_SIGNAL_FILE, &stat_buf) != 0);
+		}
+
+		/*
 		 * If we aren't planning to enter hot standby mode later, treat
 		 * RECOVERY_STARTED as meaning we're out of startup, and report status
 		 * accordingly.
@@ -5780,7 +5791,7 @@ sigusr1_handler(SIGNAL_ARGS)
 		 * PM_STATUS_READY state instead. PM_STATUS_STANDBY will incorrectly show
 		 * database is ready to accept connections during promotion.
 		 */
-		if (!EnableHotStandby && !promotion_requested)
+		if (!EnableHotStandby && !promotion_requested && !crash_recovery)
 		{
 			AddToDataDirLockFile(LOCK_FILE_LINE_PM_STATUS, PM_STATUS_STANDBY);
 #ifdef USE_SYSTEMD

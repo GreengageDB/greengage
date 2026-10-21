@@ -1015,13 +1015,7 @@ count_usable_fds(int max_to_probe, int *usable_fds, int *already_open)
 		{
 			/* Expect EMFILE or ENFILE, else it's fishy */
 			if (errno != EMFILE && errno != ENFILE)
-<<<<<<< HEAD
-				ereport(WARNING, (errmsg("dup(0) failed after %d successes: %m", used)));
-||||||| e1c1c30f635
-				elog(WARNING, "dup(0) failed after %d successes: %m", used);
-=======
-				elog(WARNING, "duplicating stderr file descriptor failed after %d successes: %m", used);
->>>>>>> 3b231596ccf
+				ereport(WARNING, (errmsg("duplicating stderr file descriptor failed after %d successes: %m", used)));
 			break;
 		}
 

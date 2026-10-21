@@ -319,14 +319,6 @@ static List *pending_write_requests = NIL;
 static instr_time total_func_time;
 
 /*
-<<<<<<< HEAD
- * Total time charged to functions so far in the current backend.
- * We use this to help separate "self" and "other" time charges.
- * (We assume this initializes to zero.)
- */
-static instr_time total_func_time;
-||||||| e1c1c30f635
-=======
  * For assertions that check pgstat is not used before initialization / after
  * shutdown.
  */
@@ -334,7 +326,6 @@ static instr_time total_func_time;
 static bool pgstat_is_initialized = false;
 static bool pgstat_is_shutdown = false;
 #endif
->>>>>>> 3b231596ccf
 
 
 /* ----------
