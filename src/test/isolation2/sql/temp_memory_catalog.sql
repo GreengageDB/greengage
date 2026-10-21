@@ -325,7 +325,8 @@ CREATE TYPE tc_wait_comp AS (x int);
 28q:
 
 -- So a DROP that waited for the locks of such a transaction works once it
--- rolls back, and one after a rollback to a savepoint works right away.
+-- rolls back.  After a rollback to a savepoint, the session counts itself
+-- out when its transaction ends.
 CREATE TYPE tc_wait_comp AS (x int);
 27: SET gp_enable_temp_memory_catalog = on;
 27: CREATE TEMP TABLE tc_warm (x int) DISTRIBUTED BY (x);
@@ -341,6 +342,7 @@ CREATE TYPE tc_wait_comp AS (x int);
 27: ROLLBACK TO SAVEPOINT s1;
 28: DROP TYPE tc_wait_comp;
 27: COMMIT;
+28: DROP TYPE tc_wait_comp;
 -- And one that waited for a transaction that made and dropped such an
 -- object works once it commits.
 CREATE TYPE tc_wait_comp AS (x int);

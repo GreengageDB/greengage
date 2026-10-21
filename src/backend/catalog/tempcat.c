@@ -422,10 +422,10 @@ static HTAB *tc_used = NULL;
 static bool tc_used_dirty = false;
 
 /*
- * The deepest subtransaction level that changed our pg_depend or pg_shdepend
- * rows in memory, 0 if none: see tempcat_xact_callback().
+ * The current transaction changed our pg_depend or pg_shdepend rows in
+ * memory: see tempcat_xact_callback().
  */
-static int	tc_depend_level = 0;
+static bool tc_depend_changed = false;
 
 struct TempcatScanData
 {
@@ -1305,6 +1305,7 @@ typedef struct TempcatUsed
 	TempcatUsedKey key;
 	bool		counted;		/* in TempcatUsedObjects */
 	bool		locked;			/* or locked instead, see above */
+	bool		seen;			/* see tempcat_recompute_used() */
 } TempcatUsed;
 
 /* Some of tc_used could not be counted, see above */
@@ -1530,7 +1531,7 @@ tempcat_use_referenced(Relation rel, HeapTuple tup)
 
 	if (RelationGetRelid(rel) == DependRelationId ||
 		RelationGetRelid(rel) == SharedDependRelationId)
-		tc_depend_level = Max(tc_depend_level, GetCurrentTransactionNestLevel());
+		tc_depend_changed = true;
 	if (RelationGetRelid(rel) == DependRelationId)
 	{
 		bool		isnull;
@@ -1572,19 +1573,14 @@ tempcat_unuse(TempcatUsed *used)
  * any visibility, unless their insert rolled back or their delete committed;
  * when 'committing', also if the transaction ending now deleted them.
  *
- * Also at the end of a transaction, or of a subtransaction that rolls back,
- * that changed such rows (tempcat_xact_callback()): before its locks go, so
- * that a DROP that waited for them does not find the session among the
- * users any more.  Without raising an error, which an abort could not
- * handle: if memory runs short, the next try does it (at idle, or at the
- * start of the next transaction), as after any other error here.
+ * Also at the end of a transaction that changed such rows
+ * (tempcat_xact_callback()): before its locks go, so that a DROP that waited
+ * for them does not find the session among the users any more.  (Not at the
+ * rollback of a subtransaction: a DROP that waited for its locks finds the
+ * session there until the transaction ends.)  So it must not raise an
+ * error, which a commit or an abort could not handle: it allocates nothing,
+ * marking the objects still used in tc_used itself.
  */
-static int
-tempcat_used_key_cmp(const void *a, const void *b)
-{
-	return memcmp(a, b, sizeof(TempcatUsedKey));
-}
-
 static bool
 tempcat_entry_gone(TempcatEntry *e, bool committing)
 {
@@ -1603,41 +1599,38 @@ tempcat_entry_gone(TempcatEntry *e, bool committing)
 	return false;
 }
 
-/* the array of tempcat_recompute_used(), if an error left it */
-static TempcatUsedKey *tc_recount_keys = NULL;
+/* Mark the object (or column) as still used, see above. */
+static void
+tempcat_see_used(Oid classId, Oid objectId, int32 subId)
+{
+	TempcatUsedKey key;
+	TempcatUsed *used;
+
+	memset(&key, 0, sizeof(key));
+	key.classId = classId;
+	key.objectId = objectId;
+	key.objectSubId = subId;
+	used = hash_search(tc_used, &key, HASH_FIND, NULL);
+	if (used != NULL)
+		used->seen = true;
+}
 
 static void
 tempcat_recompute_used(bool committing)
 {
 	static const Oid catalogs[] = {DependRelationId, SharedDependRelationId};
-	TempcatUsedKey *still;
-	int			nstill = 0;
-	int			maxstill = 0;
 	HASH_SEQ_STATUS seq;
 	TempcatUsed *used;
+	bool		locked = false;
 	int			i;
 
+	tc_used_dirty = false;
 	if (tc_used == NULL || hash_get_num_entries(tc_used) == 0 || tc_area == NULL)
-	{
-		tc_used_dirty = false;
 		return;
-	}
 
-	for (i = 0; i < lengthof(catalogs); i++)
-		maxstill += 2 * tc_root->catalogs[tempcat_catalog_index(catalogs[i])].nentries;
-	/*
-	 * malloc(), not palloc(): MCXT_ALLOC_NO_OOM does not keep gp_malloc()
-	 * from raising an error when vmem or the resource group's memory runs
-	 * short (gp_failed_to_alloc()).
-	 */
-	if (tc_recount_keys != NULL)
-		free(tc_recount_keys);
-	still = tc_recount_keys = malloc(sizeof(TempcatUsedKey) * Max(maxstill, 1));
-	if (still == NULL)
-	{
-		tc_used_dirty = true;
-		return;
-	}
+	hash_seq_init(&seq, tc_used);
+	while ((used = hash_seq_search(&seq)) != NULL)
+		used->seen = false;
 	for (i = 0; i < lengthof(catalogs); i++)
 	{
 		int			catidx = tempcat_catalog_index(catalogs[i]);
@@ -1647,73 +1640,46 @@ tempcat_recompute_used(bool committing)
 		{
 			TempcatEntry *e = TC_ADDR(ep);
 			HeapTupleHeader hdr = TCE_DATA(e);
-			TempcatUsedKey *key;
 
 			ep = e->next;
 			if (tempcat_entry_gone(e, committing))
 				continue;
-			key = &still[nstill++];
-			memset(key, 0, sizeof(*key));
 			if (catalogs[i] == DependRelationId)
 			{
 				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
 
-				key->classId = form->refclassid;
-				key->objectId = form->refobjid;
+				tempcat_see_used(form->refclassid, form->refobjid, 0);
 				if (form->refobjsubid != 0)
-				{
-					still[nstill] = *key;
-					still[nstill++].objectSubId = form->refobjsubid;
-				}
+					tempcat_see_used(form->refclassid, form->refobjid,
+									 form->refobjsubid);
 			}
 			else
 			{
 				Form_pg_shdepend form = (Form_pg_shdepend) ((char *) hdr + hdr->t_hoff);
 
-				key->classId = form->refclassid;
-				key->objectId = form->refobjid;
+				tempcat_see_used(form->refclassid, form->refobjid, 0);
 			}
 		}
 	}
-	Assert(nstill <= maxstill);
-	qsort(still, nstill, sizeof(TempcatUsedKey), tempcat_used_key_cmp);
 
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
 	{
-		TempcatUsedKey key;
-
-		memset(&key, 0, sizeof(key));
-		key.classId = used->key.classId;
-		key.objectId = used->key.objectId;
-		key.objectSubId = used->key.objectSubId;
-		if (bsearch(&key, still, nstill, sizeof(TempcatUsedKey),
-					tempcat_used_key_cmp) != NULL)
+		if (used->seen)
+		{
+			locked |= used->locked;
 			continue;
+		}
 		tempcat_unuse(used);
 		(void) hash_search(tc_used, &used->key, HASH_REMOVE, NULL);
 	}
-	free(still);
-	tc_recount_keys = NULL;
 
 	/* Nothing locked instead of counted any more: DROP need not try locks */
-	if (tc_used_overflow)
+	if (tc_used_overflow && !locked)
 	{
-		bool		locked = false;
-
-		hash_seq_init(&seq, tc_used);
-		while ((used = hash_seq_search(&seq)) != NULL)
-		{
-			if (used->locked)
-				locked = true;
-		}
-		if (!locked)
-		{
-			pg_atomic_fetch_sub_u32(&TempcatShared->nused_overflow, 1);
-			tc_used_overflow = false;
-		}
+		pg_atomic_fetch_sub_u32(&TempcatShared->nused_overflow, 1);
+		tc_used_overflow = false;
 	}
-	tc_used_dirty = false;
 }
 
 /*
@@ -3619,17 +3585,17 @@ tempcat_xact_callback(XactEvent event, void *arg)
 	{
 		case XACT_EVENT_COMMIT:
 		case XACT_EVENT_PARALLEL_COMMIT:
-			if (tc_depend_level > 0)
+			if (tc_depend_changed)
 				tempcat_recompute_used(true);
-			tc_depend_level = 0;
+			tc_depend_changed = false;
 			break;
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
 			if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
 				tc_used_dirty = true;
-			if (tc_depend_level > 0)
+			if (tc_depend_changed)
 				tempcat_recompute_used(false);
-			tc_depend_level = 0;
+			tc_depend_changed = false;
 			break;
 		default:
 			break;
@@ -3642,26 +3608,16 @@ tempcat_subxact_callback(SubXactEvent event, SubTransactionId mySubid,
 {
 	int			level = GetCurrentTransactionNestLevel();
 
-	/* (see tempcat_xact_callback()) */
-	if (event == SUBXACT_EVENT_ABORT_SUB)
-	{
-		if (tc_used != NULL && hash_get_num_entries(tc_used) > 0)
-			tc_used_dirty = true;
-		/* only if it changed such rows: not at every exception block */
-		if (tc_depend_level >= level)
-		{
-			tempcat_recompute_used(false);
-			tc_depend_level = level - 1;
-		}
-	}
+	/* (see tempcat_xact_callback(); counted out when the transaction ends) */
+	if (event == SUBXACT_EVENT_ABORT_SUB &&
+		tc_used != NULL && hash_get_num_entries(tc_used) > 0)
+		tc_used_dirty = true;
 
 	/* A committed subtransaction's changes are its parent's now. */
 	if (event != SUBXACT_EVENT_COMMIT_SUB)
 		return;
 	if (tc_change_level >= level)
 		tc_change_level = level - 1;
-	if (tc_depend_level >= level)
-		tc_depend_level = level - 1;
 }
 
 /*
@@ -4188,7 +4144,7 @@ tempcat_mark_deleted(TempcatEntry *e, dsa_pointer ep,
 	tc_ndeletions++;
 	if (tempcat_catalogs[e->catidx].relid == DependRelationId ||
 		tempcat_catalogs[e->catidx].relid == SharedDependRelationId)
-		tc_depend_level = Max(tc_depend_level, GetCurrentTransactionNestLevel());
+		tc_depend_changed = true;
 }
 
 /* Replace a row in memory by a new version, in memory, by command 'cid'. */
