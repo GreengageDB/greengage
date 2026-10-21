@@ -14,7 +14,8 @@
  * path that writes them:
  *
  * - When gp_enable_temp_memory_catalog is on at the moment the session's
- *   temporary namespace is created, the namespace is kept in memory.
+ *   temporary namespace is created, the namespace is kept in memory, and so
+ *   is any the session makes later (after a rollback).
  *   Relations, types, functions and operators created in such a namespace,
  *   and the attribute defaults, constraints, rules, triggers and policies of
  *   such relations, are kept in memory too (see tempcat_want_temp_oid(),
@@ -2016,7 +2017,9 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 	/*
 	 * The temporary namespace decides, and the temporary toast namespace,
 	 * created right after it, goes where it went: its relations belong to
-	 * the other's.
+	 * the other's.  A session that kept one in memory, and has its area
+	 * since, keeps them in memory for good, also when it makes them again
+	 * after a rollback with the setting off.
 	 */
 	static bool namespace_in_memory = false;
 
@@ -2028,7 +2031,7 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 		namespace_in_memory =
 			tempcat_key_is_temp(catalog, objname, namespaceOid,
 								keyOid1, keyOid2,
-								gp_enable_temp_memory_catalog) &&
+								gp_enable_temp_memory_catalog || tc_area != NULL) &&
 			tempcat_can_start();
 		return namespace_in_memory;
 	}

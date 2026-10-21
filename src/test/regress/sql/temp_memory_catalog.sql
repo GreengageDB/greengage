@@ -997,6 +997,19 @@ INSERT INTO tc_after_discard VALUES (1);
 SELECT count(*) FROM tc_after_discard;
 SELECT tc_disk_rows();
 
+-- A session that kept its temporary schema in memory keeps it there, also
+-- when it makes it again after a rollback with the setting off.
+\c
+SET gp_enable_temp_memory_catalog = on;
+BEGIN;
+CREATE TEMP TABLE tc_sticky0 (a int) DISTRIBUTED BY (a);
+ROLLBACK;
+SET gp_enable_temp_memory_catalog = off;
+CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
+INSERT INTO tc_sticky VALUES (1);
+SELECT count(*), tc_in_memory('tc_sticky') AS in_memory FROM tc_sticky;
+SELECT tc_disk_rows();
+
 -- Failures, made by faults on the coordinator.
 \c
 SET client_min_messages = warning;

@@ -638,9 +638,9 @@ struct config_bool ConfigureNamesBool_gp[] =
 		{"gp_enable_temp_memory_catalog", PGC_USERSET, CLIENT_CONN_STATEMENT,
 			gettext_noop("Keep catalog rows of temporary objects in memory."),
 			gettext_noop("Takes effect when the session's temporary schema is "
-						 "created: objects in it then get OIDs from a reserved "
-						 "range and their catalog rows are kept in session "
-						 "memory instead of the on-disk catalog."),
+						 "created: the catalog rows of objects in it are then "
+						 "kept in session memory instead of the on-disk "
+						 "catalog, for the rest of the session."),
 			GUC_NOT_IN_SAMPLE
 		},
 		&gp_enable_temp_memory_catalog,
