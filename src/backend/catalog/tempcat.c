@@ -999,8 +999,7 @@ tempcat_attach(void)
  *
  * After a gang reset, the writer QEs of the session that are gone may still
  * hold blocks whose OIDs the new ones get, until they exit: a block has two
- * holders then.  (The coordinator takes a new run after a reset, see
- * tempcat_session_reset().)
+ * holders then.
  * ----------------------------------------------------------------
  */
 #define TEMPCAT_FIRST_RUN	16
@@ -1048,18 +1047,24 @@ tempcat_skip_held_blocks(Oid nextOid, bool *skipped)
 {
 	Oid			counter_next;
 	uint32		nskipped = 0;
+	bool		all_held = false;
 
 	*skipped = false;
 	if (TempcatBlocks == NULL || Gp_role == GP_ROLE_EXECUTE)
 		return nextOid;
+#ifdef FAULT_INJECTOR
+	/* Test hook: take all blocks for held. */
+	if (SIMPLE_FAULT_INJECTOR("tempcat_all_blocks_held") == FaultInjectorTypeSkip)
+		all_held = true;
+#endif
 	counter_next = TempcatShared->counter_next;
-	if (IS_QUERY_DISPATCHER() &&
+	if (!all_held && IS_QUERY_DISPATCHER() &&
 		(counter_next & (TEMPCAT_OID_BLOCK_SIZE - 1)) != 0 &&
 		(nextOid >> TEMPCAT_OID_BLOCK_BITS) ==
 		(counter_next >> TEMPCAT_OID_BLOCK_BITS) &&
 		nextOid >= counter_next)
 		return nextOid;
-	while (TempcatBlocks[nextOid >> TEMPCAT_OID_BLOCK_BITS] != 0)
+	while (all_held || TempcatBlocks[nextOid >> TEMPCAT_OID_BLOCK_BITS] != 0)
 	{
 		if (++nskipped >= TEMPCAT_NOID_BLOCKS)
 			ereport(ERROR,
@@ -1165,20 +1170,6 @@ tempcat_take_run(void)
 	tc_next_oid = GetNewObjectIdsInBlock(tc_run_size, &tc_last_oid);
 	tc_run_size = Min(tc_run_size * 2, TEMPCAT_OID_BLOCK_SIZE);
 	(void) tempcat_hold_block(tc_next_oid);
-}
-
-/*
- * The session is reset (e.g. after its gang was lost): its writer QEs are
- * replaced, and the old ones may hold the blocks on the segments for a
- * while as they drop their objects.  Give the next OIDs from a new run.
- * Only process-local state changes here: called from
- * GpScheduleSessionReset() and friends, possibly out of a transaction.
- */
-void
-tempcat_session_reset(void)
-{
-	tc_next_oid = InvalidOid;
-	tc_release_wanted = true;
 }
 
 /*

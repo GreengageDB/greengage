@@ -1195,6 +1195,17 @@ INSERT INTO tc_wrap_e VALUES (21, 'e');
 SELECT e, count(*) FROM tc_wrap_e GROUP BY e ORDER BY e;
 DROP TABLE tc_wrap_e;
 DROP TYPE pg_temp.tc_wrap_enum;
+-- When the sessions keeping their temporary objects in memory hold all
+-- blocks of OIDs (the fault makes the counter take them all for held),
+-- getting an OID fails, and leaves nothing behind.
+SELECT gp_inject_fault('tempcat_all_blocks_held', 'skip', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+CREATE TABLE tc_no_oids (a int) DISTRIBUTED BY (a);
+SELECT gp_inject_fault('tempcat_all_blocks_held', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
+SELECT to_regclass('tc_no_oids') IS NULL AS not_created;
+CREATE TABLE tc_no_oids (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_no_oids;
 
 -- The OIDs of objects whose creation rolled back are not given again, also
 -- after a rollback of the transaction that created the temporary schema.

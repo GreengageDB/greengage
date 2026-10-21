@@ -521,14 +521,14 @@ CREATE TABLE tc_perm2 (a int) DISTRIBUTED BY (a);
 
 -- After a gang reset, the writer QE of the session that is gone may still
 -- hold the blocks of its OIDs on a segment as it exits (here a fault keeps
--- it there, on segment 0), and the new one gets OIDs of the same blocks:
--- both hold them then, and the rows of the session's objects stay in
--- memory once the old one let go of them.
-CREATE TABLE tc_gr (sess int, o oid) DISTRIBUTED REPLICATED;
+-- it there, on segment 0), and the new one gets OIDs of the same blocks
+-- (the coordinator goes on with its run): both hold them then, and the rows
+-- of the session's objects stay in memory once the old one let go of them.
+CREATE TABLE tc_gr (sess int, o oid, o1 oid) DISTRIBUTED REPLICATED;
 46: SET gp_enable_temp_memory_catalog = on;
 46: CREATE TEMP TABLE tc_gr1 (a int) DISTRIBUTED BY (a);
 46: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
-46: INSERT INTO tc_gr VALUES (current_setting('gp_session_id')::int, 0);
+46: INSERT INTO tc_gr VALUES (current_setting('gp_session_id')::int, 0, 'tc_gr1'::regclass);
 SELECT gp_inject_fault('tempcat_release_blocks', 'suspend', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 1U: SELECT bool_and(pg_terminate_backend(pid)) AS terminated FROM pg_stat_activity WHERE sess_id IN (SELECT sess FROM tc_gr);
@@ -537,6 +537,9 @@ SELECT gp_wait_until_triggered_fault('tempcat_release_blocks', 1, dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 46: CREATE TEMP TABLE tc_gr2 (a int) DISTRIBUTED BY (a);
 46: UPDATE tc_gr SET o = 'tc_gr2'::regclass;
+-- (unless the run of tc_gr1 came to the end of its block)
+SELECT CASE WHEN o1::bigint % 4096 >= 4096 - 32 THEN true
+            ELSE o::bigint / 4096 = o1::bigint / 4096 END AS same_block FROM tc_gr;
 SELECT gp_inject_fault('tempcat_release_blocks', 'reset', dbid)
   FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
 0U: DO $$ BEGIN FOR i IN 1..600 LOOP PERFORM pg_stat_clear_snapshot(); IF (SELECT count(*) FROM pg_stat_activity WHERE sess_id = (SELECT sess FROM tc_gr)) <= 1 THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the old writer QE did not end'; END $$;
