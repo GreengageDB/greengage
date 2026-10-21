@@ -238,7 +238,8 @@ SELECT * FROM rw_view15;
   3 | UNSPECIFIED
 (6 rows)
 
-INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set a = excluded.a; -- succeeds
+INSERT INTO rw_view15 (a) VALUES (3) ON CONFLICT (a) DO UPDATE set a = excluded.a; -- fails
+ERROR:  modification of distribution columns in OnConflictUpdate is not supported
 SELECT * FROM rw_view15;
  a  |    upper    
 ----+-------------
