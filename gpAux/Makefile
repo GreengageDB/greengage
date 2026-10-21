@@ -165,8 +165,8 @@ $(GPPGDIR)/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd $(GPPGDIR) && \
                      CFLAGS=$(INSTCFLAGS) 					  \
                      ./configure $(CONFIGFLAGS)               \
-                         --prefix=$(DISTPATH)                  \
-                         --mandir=$(DISTPATH)/man
+                         --prefix=$(INSTPREFIX)                  \
+                         --mandir=$(INSTPREFIX)/man
 
 Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -175,8 +175,8 @@ Debug/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Debug && \
                 CFLAGS=$(INSTCFLAGS) 						 \
                 ./configure $(CONFIGFLAGS)                   \
-                    --prefix=$(DISTPATH)                      \
-                    --mandir=$(DISTPATH)/man
+                    --prefix=$(INSTPREFIX)                      \
+                    --mandir=$(INSTPREFIX)/man
 
 Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	rm -rf $(INSTLOC)
@@ -185,8 +185,8 @@ Release/GNUmakefile : $(GPPGDIR)/configure  env.sh
 	cd Release && \
                   CFLAGS=$(INSTCFLAGS) 					    \
                   ./configure $(CONFIGFLAGS)                \
-                      --prefix=$(DISTPATH)                   \
-                      --mandir=$(DISTPATH)/man
+                      --prefix=$(INSTPREFIX)                   \
+                      --mandir=$(INSTPREFIX)/man
 
 #---------------------------------------------------------------------
 # autoconf
@@ -278,6 +278,7 @@ endif
 
 devel : INSTCFLAGS=$(DEBUGFLAGS)
 devel : INSTLOC=$(DESTDIR)$(DEVPATH)
+devel : INSTPREFIX=$(DEVPATH)
 devel : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDEVPATH)
 devel : CONFIGFLAGS+= --enable-cassert --enable-debug --enable-depend
 ifdef ENABLE_VPATH_BUILD
@@ -295,6 +296,7 @@ endif
 
 dist : INSTCFLAGS=$(OPTFLAGS)
 dist : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist : INSTPREFIX=$(DISTPATH)
 dist : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist : BUILDDIR=Release
@@ -307,6 +309,7 @@ endif
 
 dist_prof : INSTCFLAGS=$(PROFFLAGS)
 dist_prof : INSTLOC=$(DESTDIR)$(DISTPATH)
+dist_prof : INSTPREFIX=$(DISTPATH)
 dist_prof : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_prof : BUILDDIR=Release
@@ -318,6 +321,7 @@ dist_prof : GPROOTDEP RECONFIG $(ISCONFIG)
 endif
 	$(BUILD_STEPS)
 
+dist_faultinj : INSTPREFIX=$(DISTPATH)
 dist_faultinj : CLIENTSINSTLOC=$(DESTDIR)$(CLIENTSDISTPATH)
 ifdef ENABLE_VPATH_BUILD
 dist_faultinj : BUILDDIR=Release
