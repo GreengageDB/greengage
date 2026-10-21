@@ -335,11 +335,13 @@ static const Oid tempcat_object_classes[] =
  */
 typedef struct TempcatHash
 {
-	uint32		nbuckets;		/* power of two, or 0 if not allocated */
+	uint32		nbuckets;		/* power of two, or 0 if not used yet */
 	uint32		nentries;
+	uint32		shrink_below;	/* shrink when nentries drops below it */
 	dsa_pointer buckets;		/* dsa_pointer[nbuckets] */
 	dsa_pointer home;			/* the buckets while there are
-								 * TEMPCAT_HASH_MIN, in the root */
+								 * TEMPCAT_HASH_MIN, in the root (invalid
+								 * for an unused key) */
 } TempcatHash;
 
 /* Buckets of a hash table at the least, see tempcat_hash_shrink() */
@@ -371,8 +373,12 @@ typedef struct TempcatRoot
 	TempcatHash tids;
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
 	dsa_pointer bins[TEMPCAT_NBINS];
-	/* the home buckets of the hash tables: of the catalogs', then 'tids' */
-	dsa_pointer home_buckets[TEMPCAT_NCATALOGS * TEMPCAT_NKEYS + 1][TEMPCAT_HASH_MIN];
+	Size		taken;			/* of the area for blocks and big chunks */
+	/*
+	 * the home buckets of the hash tables, TEMPCAT_HASH_MIN each: of the
+	 * catalogs' keys in use, then of 'tids'
+	 */
+	dsa_pointer home_buckets[FLEXIBLE_ARRAY_MEMBER];
 } TempcatRoot;
 
 /* xmin is known to be committed (or frozen) */
@@ -428,6 +434,9 @@ static TransactionId tc_reclaim_xid = InvalidTransactionId;
 static CommandId tc_reclaim_cid = InvalidCommandId;
 static uint64 tc_reclaim_ndeletions = 0;
 static bool tc_reclaim_waiting = false;	/* rows left for a later command */
+
+/* Memory went back to the area; see tempcat_idle() */
+static bool tc_trim_wanted = false;
 
 /* The current transaction changed rows in memory; see tempcat_check_prepare() */
 static bool tc_xact_changed = false;
@@ -907,19 +916,29 @@ tempcat_create_area(bool headroom)
 	}
 
 	/* (in the first segment, which has room for it) */
-	rootptr = dsa_allocate0(area, sizeof(TempcatRoot));
-	tc_root = dsa_get_address(area, rootptr);
 	{
-		dsa_pointer home = rootptr + offsetof(TempcatRoot, home_buckets);
+		int			nhomes = 1;	/* tids' */
+		dsa_pointer home;
 		int			c;
 		int			k;
 
 		for (c = 0; c < TEMPCAT_NCATALOGS; c++)
+			for (k = 0; k < TEMPCAT_NKEYS; k++)
+				if (tempcat_catalogs[c].keytype[k] != TCK_NONE)
+					nhomes++;
+		rootptr = dsa_allocate0(area, offsetof(TempcatRoot, home_buckets) +
+								sizeof(dsa_pointer) * TEMPCAT_HASH_MIN * nhomes);
+		tc_root = dsa_get_address(area, rootptr);
+
+		home = rootptr + offsetof(TempcatRoot, home_buckets);
+		for (c = 0; c < TEMPCAT_NCATALOGS; c++)
 		{
 			for (k = 0; k < TEMPCAT_NKEYS; k++)
 			{
+				if (tempcat_catalogs[c].keytype[k] == TCK_NONE)
+					continue;
 				tc_root->catalogs[c].keys[k].home = home;
-				home += sizeof(tc_root->home_buckets[0]);
+				home += sizeof(dsa_pointer) * TEMPCAT_HASH_MIN;
 			}
 		}
 		tc_root->tids.home = home;
@@ -1519,8 +1538,10 @@ tempcat_release_unused_slices(bool xact_start)
 	 * The statistics of the objects dropped go before their OIDs can go to
 	 * another session (see tempcat_forget_if_gone()): send them now, after
 	 * the counts still pending for them, which works out of a transaction or
-	 * at its start, before it counts anything; in an aborted one, leave the
-	 * slices to the next time the session goes idle.
+	 * at its start, before it counts anything (PostgreSQL 15 asserts that
+	 * pgstat_report_stat() runs out of a transaction: the purges will have to
+	 * go alone then); in an aborted one, leave the slices to the next time
+	 * the session goes idle.
 	 */
 	if (pgstat_have_purges())
 	{
@@ -3046,15 +3067,17 @@ tempcat_bin_unlink(dsa_pointer cp)
 }
 
 /*
- * Allocate 'size' bytes for rows (see above), taking another block for it
- * only if 'new_block'.  Returns InvalidDsaPointer if the area is out of
- * memory.
+ * Allocate 'size' bytes for rows (see above).  Unless 'grow', only from free
+ * room the session has already: of the blocks taken, or, for a size bigger
+ * than a block, of the segments of the area.  Returns InvalidDsaPointer if
+ * the area is out of memory.
  */
 static dsa_pointer
-tempcat_alloc_ext(Size size, bool new_block)
+tempcat_alloc_ext(Size size, bool grow)
 {
 	Size		need = MAXALIGN(size) + TCC_HDR;
 	dsa_pointer cp = InvalidDsaPointer;
+	dsa_pointer rest = InvalidDsaPointer;
 	TempcatChunk *c;
 	uint32		csize;
 	int			bin;
@@ -3065,12 +3088,14 @@ tempcat_alloc_ext(Size size, bool new_block)
 	/* (a block keeps room for the header that ends it) */
 	if (need > TEMPCAT_BLOCK_SIZE - TCC_HDR)
 	{
-		cp = dsa_allocate_extended(tc_area, need, DSA_ALLOC_NO_OOM);
+		cp = dsa_allocate_extended(tc_area, need, DSA_ALLOC_NO_OOM |
+								   (grow ? 0 : DSA_ALLOC_NO_GROW));
 		if (!DsaPointerIsValid(cp))
 			return InvalidDsaPointer;
 		c = TC_ADDR(cp);
-		c->size = TCC_BIG | TCC_INUSE;
+		c->size = need | TCC_BIG | TCC_INUSE;
 		c->prev_size = 0;
+		tc_root->taken += need;
 		return cp + TCC_HDR;
 	}
 
@@ -3092,12 +3117,14 @@ tempcat_alloc_ext(Size size, bool new_block)
 			}
 			fp = f->next;
 		}
+		if (bin == tempcat_bin(need))
+			rest = fp;
 	}
 
-	/* (and the whole bin of the size, before taking another block) */
+	/* (and the rest of the bin of the size, before taking another block) */
 	if (!DsaPointerIsValid(cp))
 	{
-		dsa_pointer fp = tc_root->bins[tempcat_bin(need)];
+		dsa_pointer fp = rest;
 
 		while (DsaPointerIsValid(fp))
 		{
@@ -3116,7 +3143,7 @@ tempcat_alloc_ext(Size size, bool new_block)
 	{
 		TempcatChunk *end;
 
-		if (!new_block)
+		if (!grow)
 			return InvalidDsaPointer;
 		cp = dsa_allocate_extended(tc_area, TEMPCAT_BLOCK_SIZE,
 								   DSA_ALLOC_NO_OOM);
@@ -3129,6 +3156,7 @@ tempcat_alloc_ext(Size size, bool new_block)
 		end->size = TCC_INUSE;
 		end->prev_size = TEMPCAT_BLOCK_SIZE - TCC_HDR;
 		tempcat_bin_push(cp);
+		tc_root->taken += TEMPCAT_BLOCK_SIZE;
 	}
 
 	tempcat_bin_unlink(cp);
@@ -3167,7 +3195,9 @@ tempcat_free(dsa_pointer dp)
 	Assert(c->size & TCC_INUSE);
 	if (c->size & TCC_BIG)
 	{
+		tc_root->taken -= TCC_SIZE(c);
 		dsa_free(tc_area, cp);
+		tc_trim_wanted = true;
 		return;
 	}
 
@@ -3198,7 +3228,9 @@ tempcat_free(dsa_pointer dp)
 	/* the whole block: give it back */
 	if (c->prev_size == 0 && TCC_SIZE(next) == 0)
 	{
+		tc_root->taken -= TEMPCAT_BLOCK_SIZE;
 		dsa_free(tc_area, cp);
+		tc_trim_wanted = true;
 		return;
 	}
 	tempcat_bin_push(cp);
@@ -3249,14 +3281,17 @@ tempcat_hash_grow(TempcatHash *h)
 		tempcat_free(h->buckets);
 	h->buckets = newb;
 	h->nbuckets = newn;
+	h->shrink_below = newn / 4;
 }
 
 /*
- * Halve the number of buckets of a table that has a quarter as many entries,
- * so that the buckets of a table that was big once do not keep the memory
- * (and, scattered in the blocks, keep blocks from going back to the area):
- * back to its home buckets in the root at the least.  Only from free room
- * of the blocks taken already, as it is to give memory back.
+ * Shrink the buckets of a table that has fewer than a quarter as many
+ * entries, so that the buckets of a table that was big once do not keep the
+ * memory (and, scattered in the blocks, keep blocks from going back to the
+ * area): to one or two buckets per entry, its home buckets in the root at
+ * the least.  Only from free room the session has already, as it is
+ * to give memory back; failing that, to the home buckets if there are few
+ * enough entries for them, or else try again once the entries have halved.
  */
 static void
 tempcat_hash_shrink(TempcatHash *h)
@@ -3268,13 +3303,24 @@ tempcat_hash_shrink(TempcatHash *h)
 	uint32		i;
 
 	Assert(newn >= TEMPCAT_HASH_MIN && h->buckets != h->home);
+	while (newn > TEMPCAT_HASH_MIN && h->nentries < newn / 2)
+		newn /= 2;
 	if (newn == TEMPCAT_HASH_MIN)
 		newb = h->home;
 	else
 	{
 		newb = tempcat_alloc_ext(sizeof(dsa_pointer) * newn, false);
 		if (!DsaPointerIsValid(newb))
-			return;
+		{
+			if (h->nentries >= TEMPCAT_HASH_MIN * 2)
+			{
+				h->shrink_below = Max(h->nentries / 2, TEMPCAT_HASH_MIN * 2);
+				return;
+			}
+			/* (not a load to grow at, see tempcat_hash_prepare()) */
+			newn = TEMPCAT_HASH_MIN;
+			newb = h->home;
+		}
 	}
 
 	oldarr = TC_ADDR(h->buckets);
@@ -3299,21 +3345,25 @@ tempcat_hash_shrink(TempcatHash *h)
 	tempcat_free(h->buckets);
 	h->buckets = newb;
 	h->nbuckets = newn;
+	h->shrink_below = newn / 4;
 }
 
-/* Make sure the table has buckets.  Returns false if out of memory. */
-static bool
+/*
+ * Make sure the table has buckets, and more of them if it has twice as many
+ * entries (failing to allocate them is not an error).
+ */
+static void
 tempcat_hash_prepare(TempcatHash *h)
 {
 	if (h->nbuckets == 0)
 	{
+		Assert(DsaPointerIsValid(h->home));
 		h->buckets = h->home;
 		memset(TC_ADDR(h->buckets), 0, sizeof(dsa_pointer) * TEMPCAT_HASH_MIN);
 		h->nbuckets = TEMPCAT_HASH_MIN;
 	}
 	else if (h->nentries >= h->nbuckets * 2)
 		tempcat_hash_grow(h);
-	return true;
 }
 
 /*
@@ -3349,7 +3399,7 @@ tempcat_hash_remove(TempcatHash *h, uint32 hash, dsa_pointer entry)
 		{
 			*link = node->next;
 			h->nentries--;
-			if (h->nbuckets > TEMPCAT_HASH_MIN && h->nentries < h->nbuckets / 4)
+			if (h->nbuckets > TEMPCAT_HASH_MIN && h->nentries < h->shrink_below)
 				tempcat_hash_shrink(h);
 			return;
 		}
@@ -3470,19 +3520,17 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 
 	/*
 	 * Allocate everything up front, so that running out changes nothing (but
-	 * empty bucket arrays): the entry, the tuple, and the nodes of the hash
-	 * tables, which come and go with the entry.
+	 * the bucket arrays that grew): the entry, the tuple, and the nodes of
+	 * the hash tables, which come and go with the entry.
 	 */
-	for (k = 0; k <= TEMPCAT_NKEYS; k++)
+	for (k = 0; k < TEMPCAT_NKEYS; k++)
 	{
-		if (k < TEMPCAT_NKEYS && def->keytype[k] == TCK_NONE)
+		if (def->keytype[k] == TCK_NONE)
 			continue;
-		if ((k < TEMPCAT_NKEYS && !tempcat_hash_prepare(&cat->keys[k])) ||
-			(k == TEMPCAT_NKEYS && !tempcat_hash_prepare(&tc_root->tids)))
-			return InvalidDsaPointer;
-		if (k < TEMPCAT_NKEYS)
-			nnodes++;
+		tempcat_hash_prepare(&cat->keys[k]);
+		nnodes++;
 	}
+	tempcat_hash_prepare(&tc_root->tids);
 	ep = tempcat_alloc(MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
 					   nnodes * sizeof(TempcatHashNode));
 #ifdef FAULT_INJECTOR
@@ -4133,8 +4181,17 @@ tempcat_start_transaction(void)
  * rows now, rather than at the start of its next transaction, let the
  * published horizon rise (see tempcat_add_pending()), and let go of the
  * objects its rows no longer use (tempcat_recompute_used()) and of the
- * slices they no longer have OIDs of (tempcat_release_unused_slices()).  The
- * next transaction may be long in coming, especially for a writer QE.
+ * slices they no longer have OIDs of (tempcat_release_unused_slices()), and
+ * give the segments of the area that emptied back to the OS (not as soon as
+ * they empty, see dsa_trim()), once more than half of the area is free: a
+ * session at the edge of a segment that creates and drops an object in
+ * turn would create and free the segment every time.  The next transaction
+ * may be long in coming, especially for a writer QE.
+ *
+ * A reader lets go of its mappings of the segments of the area: it may stay
+ * idle long after the writer gave some back (e.g. in the gang of a cursor
+ * that the transaction closed), which would stay in /dev/shm until it
+ * detached from them.
  *
  * Out of a transaction, an error would not release the lock, and could
  * repeat at every return here: log it instead, and leave the rows to the
@@ -4145,10 +4202,15 @@ tempcat_idle(void)
 {
 	MemoryContext oldcxt = CurrentMemoryContext;
 
-	if (tc_area == NULL || tempcat_is_reader())
+	if (tc_area == NULL)
 		return;
+	if (tempcat_is_reader())
+	{
+		dsa_unmap_segments(tc_area);
+		return;
+	}
 	if (tc_npending == 0 && !tc_horizon_dirty && !tc_used_dirty &&
-		!tc_release_wanted && !tc_used_overflow)
+		!tc_release_wanted && !tc_used_overflow && !tc_trim_wanted)
 		return;
 
 	PG_TRY();
@@ -4161,6 +4223,14 @@ tempcat_idle(void)
 		tempcat_relock_used();
 		if (tc_release_wanted)
 			tempcat_release_unused_slices(false);
+		if (tc_trim_wanted)
+		{
+			size_t		total = dsa_get_total_size(tc_area);
+
+			tc_trim_wanted = false;
+			if (total - Min(tc_root->taken, total) > total / 2)
+				dsa_trim(tc_area);
+		}
 	}
 	PG_CATCH();
 	{

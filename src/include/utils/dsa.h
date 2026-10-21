@@ -73,6 +73,8 @@ typedef pg_atomic_uint64 dsa_pointer_atomic;
 #define DSA_ALLOC_HUGE		0x01	/* allow huge allocation (> 1 GB) */
 #define DSA_ALLOC_NO_OOM	0x02	/* no failure if out-of-memory */
 #define DSA_ALLOC_ZERO		0x04	/* zero allocated memory */
+#define DSA_ALLOC_NO_GROW	0x08	/* GPDB: fail rather than add a segment
+										 * (with DSA_ALLOC_NO_OOM) */
 
 /* A sentinel value for dsa_pointer used to indicate failure to allocate. */
 #define InvalidDsaPointer ((dsa_pointer) 0)
@@ -125,6 +127,7 @@ extern dsa_pointer dsa_allocate_extended(dsa_area *area, size_t size, int flags)
 extern void dsa_free(dsa_area *area, dsa_pointer dp);
 extern void *dsa_get_address(dsa_area *area, dsa_pointer dp);
 extern void dsa_trim(dsa_area *area);
+extern void dsa_unmap_segments(dsa_area *area);
 extern void dsa_dump(dsa_area *area);
 
 #endif							/* DSA_H */

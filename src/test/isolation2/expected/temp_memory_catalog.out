@@ -1289,8 +1289,8 @@ CREATE DATABASE
 -------
  0     
 (1 row)
-4: DO $$ BEGIN INSERT INTO tc_sess SELECT DISTINCT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl' AND sess_id > 0; END $$;
-DO
+4: INSERT INTO tc_sess SELECT DISTINCT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl' AND sess_id > 0;
+INSERT 0 1
 31q: ... <quitting>
 4: CALL tc_wait_gone();
 CALL

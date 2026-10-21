@@ -633,7 +633,7 @@ CREATE ROLE tc_copy_role;
       AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
 31: SELECT count(*) FROM gp_dist_random('pg_shdepend') WHERE refobjid = 'tc_copy_role'::regrole
       AND dbid = (SELECT oid FROM pg_database WHERE datname = 'tc_copy');
-4: DO $$ BEGIN INSERT INTO tc_sess SELECT DISTINCT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl' AND sess_id > 0; END $$;
+4: INSERT INTO tc_sess SELECT DISTINCT sess_id FROM pg_stat_activity WHERE datname = 'tc_tmpl' AND sess_id > 0;
 31q:
 4: CALL tc_wait_gone();
 DROP DATABASE tc_copy;

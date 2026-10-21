@@ -386,6 +386,12 @@ struct dsa_area
 	bool		no_oom;
 
 	/*
+	 * GPDB: the current allocation was made with DSA_ALLOC_NO_GROW: fail
+	 * rather than create a new segment.
+	 */
+	bool		no_grow;
+
+	/*
 	 * GPDB: do not create segments that would leave less than this many
 	 * bytes free for other users of dynamic shared memory (0: no limit).
 	 */
@@ -711,6 +717,9 @@ dsa_pin_mapping(dsa_area *area)
  * DSA_ALLOC_ZERO causes the allocated memory to be zeroed.  Otherwise, the
  * contents of newly-allocated memory are indeterminate.
  *
+ * GPDB: DSA_ALLOC_NO_GROW, which requires DSA_ALLOC_NO_OOM, causes this
+ * function to return InvalidDsaPointer rather than create a new segment.
+ *
  * These flags correspond to similarly named flags used by
  * MemoryContextAllocExtended().  See also the macros dsa_allocate and
  * dsa_allocate0 which expand to a call to this function with commonly used
@@ -724,8 +733,10 @@ dsa_allocate_extended(dsa_area *area, size_t size, int flags)
 	dsa_segment_map *segment_map;
 	dsa_pointer result;
 
-	/* GPDB: see dsa_area.no_oom */
+	/* GPDB: see dsa_area.no_oom and no_grow */
 	area->no_oom = (flags & DSA_ALLOC_NO_OOM) != 0;
+	area->no_grow = (flags & DSA_ALLOC_NO_GROW) != 0;
+	Assert(!area->no_grow || area->no_oom);
 
 	Assert(size > 0);
 
@@ -916,17 +927,8 @@ dsa_free(dsa_area *area, dsa_pointer dp)
 						   DSA_EXTRACT_OFFSET(span->start) / FPM_PAGE_SIZE,
 						   span->npages);
 
-		/*
-		 * GPDB: and the segment to the OS if it is now entirely free, as
-		 * destroy_superblock() does (tempcat.c keeps its rows in large
-		 * objects).
-		 */
-		check_for_freed_segments_locked(area);
-		free_segment_if_empty(area, segment_map);
-
 		/* Move segment to appropriate bin if necessary. */
-		if (segment_map->header != NULL)
-			rebin_segment(area, segment_map);
+		rebin_segment(area, segment_map);
 		LWLockRelease(DSA_AREA_LOCK(area));
 
 		/* Unlink span. */
@@ -1139,6 +1141,7 @@ void
 dsa_trim(dsa_area *area)
 {
 	int			size_class;
+	dsa_segment_index index;
 
 	/*
 	 * Trim in reverse pool order so we get to the spans-of-spans last, just
@@ -1151,7 +1154,7 @@ dsa_trim(dsa_area *area)
 
 		if (size_class == DSA_SCLASS_SPAN_LARGE)
 		{
-			/* Large object frees give back segments aggressively already. */
+			/* Large objects have no superblocks (GPDB: see below). */
 			continue;
 		}
 
@@ -1173,6 +1176,48 @@ dsa_trim(dsa_area *area)
 			span_pointer = next;
 		}
 		LWLockRelease(DSA_SCLASS_LOCK(area, size_class));
+	}
+
+	/*
+	 * GPDB: and the segments that frees of large objects left entirely free,
+	 * which dsa_free() does not give back, unlike those of superblocks: an
+	 * area that stays at its size would create and free a segment at its
+	 * edge with every allocation and free of a large object there.
+	 */
+	LWLockAcquire(DSA_AREA_LOCK(area), LW_EXCLUSIVE);
+	check_for_freed_segments_locked(area);
+	for (index = 1; index < DSA_MAX_SEGMENTS; ++index)
+	{
+		if (area->control->segment_handles[index] != DSM_HANDLE_INVALID)
+			free_segment_if_empty(area, get_segment_by_index(area, index));
+	}
+	LWLockRelease(DSA_AREA_LOCK(area));
+}
+
+/*
+ * GPDB: let go of this backend's mappings of the segments of the area but
+ * the first; they are mapped again when used.  A backend that leaves an area
+ * unused for long would otherwise keep the segments that other backends
+ * free meanwhile, as it detaches from those only when it uses the area
+ * next (see check_for_freed_segments()).  The caller must not hold
+ * addresses in them.
+ */
+void
+dsa_unmap_segments(dsa_area *area)
+{
+	dsa_segment_index index;
+
+	for (index = 1; index <= area->high_segment_index; ++index)
+	{
+		dsa_segment_map *segment_map = &area->segment_maps[index];
+
+		if (segment_map->segment != NULL)
+		{
+			dsm_detach(segment_map->segment);
+			segment_map->segment = NULL;
+			segment_map->header = NULL;
+			segment_map->mapped_address = NULL;
+		}
 	}
 }
 
@@ -1376,6 +1421,7 @@ create_internal(void *place, size_t size,
 	area->control = control;
 	area->mapping_pinned = false;
 	area->no_oom = false;
+	area->no_grow = false;
 	area->min_free_space = 0;
 	area->min_free_slots = 0;
 	area->vmem_tracked = false;
@@ -1436,6 +1482,7 @@ attach_internal(void *place, dsm_segment *segment, dsa_handle handle)
 	area->control = control;
 	area->mapping_pinned = false;
 	area->no_oom = false;
+	area->no_grow = false;
 	area->min_free_space = 0;
 	area->min_free_slots = 0;
 	area->vmem_tracked = false;
@@ -2277,6 +2324,10 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 	bool		vmem;
 
 	Assert(LWLockHeldByMe(DSA_AREA_LOCK(area)));
+
+	/* GPDB: see dsa_area.no_grow */
+	if (area->no_grow)
+		return NULL;
 
 	/* Find a segment slot that is not in use (linearly for now). */
 	for (new_index = 1; new_index < DSA_MAX_SEGMENTS; ++new_index)

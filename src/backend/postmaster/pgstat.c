@@ -900,8 +900,10 @@ allow_immediate_pgstat_restart(void)
  *	Must be called by processes that performs DML: tcop/postgres.c, logical
  *	receiver processes, SPI worker, etc. to send the so far collected
  *	per-table and function usage statistics to the collector.  Note that this
- *	is called only when not within a transaction, so it is fair to use
- *	transaction stop time as an approximation of current time.
+ *	is called only when not within a transaction (GPDB: or at the start of
+ *	one, before it counts anything, see tempcat_release_unused_slices()), so
+ *	it is fair to use transaction stop time as an approximation of current
+ *	time.
  * ----------
  */
 void

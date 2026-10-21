@@ -462,7 +462,7 @@ SET gp_temp_memory_catalog_max_size = '1MB';
 CREATE FUNCTION pg_temp.tc_fill(kind text) RETURNS int LANGUAGE plpgsql AS $$
 DECLARE n int := 0;
 BEGIN
-  LOOP
+  WHILE n < 1000 LOOP
     BEGIN
       IF kind = 'table' THEN
         EXECUTE format('CREATE TEMP TABLE tc_peak%s (a int) DISTRIBUTED BY (a)', n);
@@ -485,6 +485,36 @@ END $$;
 SELECT pg_temp.tc_fill('table') AS tc_tables_fresh \gset
 SELECT pg_temp.tc_fill('enum') > 10 AS enums;
 SELECT pg_temp.tc_fill('table') >= :tc_tables_fresh - 2 AS tables_after_peak;
+
+-- Segments of the area that empty go back to the OS when the session goes
+-- idle: its memory falls by most of the area (bodies that do not compress).
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '8MB';
+CREATE FUNCTION pg_temp.tc_vmem() RETURNS int LANGUAGE sql AS $$
+  SELECT vmem_mb FROM gp_toolkit.resgroup_session_level_memory_consumption
+   WHERE sess_id = current_setting('gp_session_id')::int AND segid = -1 $$;
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE FUNCTION pg_temp.tc_seg%s() RETURNS text LANGUAGE sql AS %L',
+                     i, 'SELECT ' || quote_literal((SELECT string_agg(md5(i || '.' || g), '')
+                                                     FROM generate_series(1, 600) g)));
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+SELECT pg_temp.tc_vmem() AS tc_vmem_full \gset
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid FROM pg_proc WHERE proname ~ '^tc_seg[0-9]+$' LOOP
+    EXECUTE 'DROP FUNCTION ' || r.oid::regprocedure;
+  END LOOP;
+END $$;
+SELECT :tc_vmem_full - pg_temp.tc_vmem() >= 4 AS segments_given_back;
 
 -- More of what temporary objects kept in memory do as those on disk do.
 \c
