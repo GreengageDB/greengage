@@ -72,8 +72,12 @@ Five workflows are described below.
 Use a native build when the host is a Linux system with the dependencies
 installed. Use the repository Docker files to reproduce a CI job. Use
 `envman` or `gpdb.docker` when the host lacks the dependencies and a long-lived
-development container is wanted. Reproduce a reported bug in the environment
-described in [Reproduction environment](#reproduction-environment).
+development container is wanted. A container keeps the installed binaries,
+the demo cluster data, and cgroup changes off the host, and a script that
+kills server processes reaches only the processes in that container. Prefer a
+container when a task runs such scripts. Reproduce a reported bug
+in the environment described in
+[Reproduction environment](#reproduction-environment).
 
 The `envman`, `gpdb.docker`, and `arenadata.sh` helpers are personal projects
 outside this repository. Check whether a helper is installed before using it.
