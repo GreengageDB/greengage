@@ -666,6 +666,147 @@ SELECT functest_gp_paramref_atomic(41);
                           42
 (1 row)
 
+-- GPDB: every node type that can appear in the raw parse tree of a
+-- SQL-standard function body must have a binary serializer and deserializer,
+-- since the tree is dispatched to the segments.
+CREATE TABLE functest_gp_t (a int PRIMARY KEY, b int) DISTRIBUTED BY (a);
+INSERT INTO functest_gp_t SELECT i, i % 3 FROM generate_series(1, 6) i;
+-- WindowDef
+CREATE FUNCTION functest_gp_win() RETURNS SETOF bigint LANGUAGE sql
+BEGIN ATOMIC
+  SELECT sum(a) OVER (PARTITION BY b ORDER BY a
+                      ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW)
+  FROM functest_gp_t;
+END;
+-- RangeSubselect
+CREATE FUNCTION functest_gp_sub() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT x FROM (SELECT a AS x FROM functest_gp_t) s;
+END;
+-- RangeFunction
+CREATE FUNCTION functest_gp_rf() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT g FROM generate_series(1, 3) g;
+END;
+-- RangeTableSample
+CREATE FUNCTION functest_gp_ts() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT a FROM functest_gp_t TABLESAMPLE system (50);
+END;
+-- RangeTableFunc, RangeTableFuncCol
+CREATE FUNCTION functest_gp_xt() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT x FROM xmltable('/r' PASSING (xml '<r>1</r>') COLUMNS x int PATH '.');
+END;
+-- XmlSerialize
+CREATE FUNCTION functest_gp_xml() RETURNS text LANGUAGE sql
+BEGIN ATOMIC
+  SELECT xmlserialize(CONTENT '<a/>'::xml AS text);
+END;
+-- LockingClause, including its wait policy
+CREATE FUNCTION functest_gp_lock() RETURNS SETOF int LANGUAGE sql
+BEGIN ATOMIC
+  SELECT a FROM functest_gp_t FOR UPDATE SKIP LOCKED;
+END;
+WARNING:  Upgrade the lockmode to ExclusiveLock on table(functest_gp_t) and ingore the wait policy.
+-- OnConflictClause, InferClause
+CREATE FUNCTION functest_gp_oc() RETURNS void LANGUAGE sql
+BEGIN ATOMIC
+  INSERT INTO functest_gp_t VALUES (1, 1) ON CONFLICT (a) DO UPDATE SET b = 2;
+END;
+-- InsertStmt: OVERRIDING clause
+CREATE FUNCTION functest_gp_ov() RETURNS void LANGUAGE sql
+BEGIN ATOMIC
+  INSERT INTO functest_gp_t OVERRIDING SYSTEM VALUE VALUES (3, 3);
+END;
+SELECT * FROM functest_gp_win() ORDER BY 1;
+ functest_gp_win 
+-----------------
+               1
+               2
+               3
+               4
+               5
+               6
+(6 rows)
+
+SELECT * FROM functest_gp_sub() ORDER BY 1;
+ functest_gp_sub 
+-----------------
+               1
+               2
+               3
+               4
+               5
+               6
+(6 rows)
+
+SELECT * FROM functest_gp_rf() ORDER BY 1;
+ functest_gp_rf 
+----------------
+              1
+              2
+              3
+(3 rows)
+
+SELECT count(*) <= 6 AS sampled FROM functest_gp_ts();
+ sampled 
+---------
+ t
+(1 row)
+
+SELECT * FROM functest_gp_xt();
+ functest_gp_xt 
+----------------
+              1
+(1 row)
+
+SELECT functest_gp_xml();
+ functest_gp_xml 
+-----------------
+ <a/>
+(1 row)
+
+SELECT * FROM functest_gp_lock() ORDER BY 1;
+ functest_gp_lock 
+------------------
+                1
+                2
+                3
+                4
+                5
+                6
+(6 rows)
+
+SELECT functest_gp_oc();
+ functest_gp_oc 
+----------------
+ 
+(1 row)
+
+SELECT * FROM functest_gp_t WHERE a = 1;
+ a | b 
+---+---
+ 1 | 2
+(1 row)
+
+-- The stored bodies must be identical on the coordinator and on the segments.
+-- The coordinator's text has to be computed on the coordinator (hence
+-- MATERIALIZED), otherwise both sides are evaluated against the segment's
+-- catalog and always match.
+WITH q AS MATERIALIZED
+    (SELECT proname, pg_get_functiondef(oid) AS def FROM pg_proc
+     WHERE pronamespace = 'temp_func_test'::regnamespace AND proname LIKE 'functest\_gp\_%')
+SELECT q.proname, s.gp_segment_id
+FROM q JOIN (SELECT proname, gp_segment_id, pg_get_functiondef(oid) AS def
+             FROM gp_dist_random('pg_proc')
+             WHERE pronamespace = 'temp_func_test'::regnamespace) s USING (proname)
+WHERE q.def <> s.def
+ORDER BY 1, 2;
+ proname | gp_segment_id 
+---------+---------------
+(0 rows)
+
 -- Cleanup
 DROP SCHEMA temp_func_test CASCADE;
 NOTICE:  drop cascades to 32 other objects
@@ -701,5 +842,15 @@ drop cascades to function voidtest4(integer)
 drop cascades to function voidtest5(integer)
 drop cascades to function functest_gp_paramref(integer)
 drop cascades to function functest_gp_paramref_atomic(integer)
+drop cascades to table functest_gp_t
+drop cascades to function functest_gp_win()
+drop cascades to function functest_gp_sub()
+drop cascades to function functest_gp_rf()
+drop cascades to function functest_gp_ts()
+drop cascades to function functest_gp_xt()
+drop cascades to function functest_gp_xml()
+drop cascades to function functest_gp_lock()
+drop cascades to function functest_gp_oc()
+drop cascades to function functest_gp_ov()
 DROP USER regress_unpriv_user;
 RESET search_path;

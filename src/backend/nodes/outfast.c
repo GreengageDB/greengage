@@ -1549,6 +1549,30 @@ _outNode(StringInfo str, void *obj)
 			case T_SortBy:
 				_outSortBy(str, obj);
 				break;
+			case T_WindowDef:
+				_outWindowDef(str, obj);
+				break;
+			case T_RangeSubselect:
+				_outRangeSubselect(str, obj);
+				break;
+			case T_RangeFunction:
+				_outRangeFunction(str, obj);
+				break;
+			case T_RangeTableSample:
+				_outRangeTableSample(str, obj);
+				break;
+			case T_RangeTableFunc:
+				_outRangeTableFunc(str, obj);
+				break;
+			case T_RangeTableFuncCol:
+				_outRangeTableFuncCol(str, obj);
+				break;
+			case T_InferClause:
+				_outInferClause(str, obj);
+				break;
+			case T_OnConflictClause:
+				_outOnConflictClause(str, obj);
+				break;
 			case T_TypeCast:
 				_outTypeCast(str, obj);
 				break;
