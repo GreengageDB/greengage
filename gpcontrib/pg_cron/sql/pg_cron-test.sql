@@ -177,7 +177,8 @@ DECLARE
 BEGIN
     FOR i IN 1..30 LOOP
         SELECT status INTO v_status FROM cron.job_run_details
-            WHERE jobid = p_jobid AND status IN ('succeeded', 'failed')
+            WHERE jobid OPERATOR(pg_catalog.=) p_jobid 
+            AND status OPERATOR(pg_catalog.=) ANY(ARRAY['succeeded', 'failed'])
         ORDER BY runid DESC LIMIT 1;
         IF v_status IS NOT NULL THEN
             RETURN v_status;
@@ -215,7 +216,6 @@ WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
 DELETE FROM cron.job_run_details
     WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
 DROP ROLE pg_cron_hba_test;
-DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
 SELECT pg_get_userbyid(datdba) AS pgcron_regress_original_owner
 FROM pg_database WHERE datname = current_database() \gset
@@ -226,7 +226,7 @@ GRANT USAGE ON SCHEMA cron TO pgcron_cront;
 
 SET SESSION AUTHORIZATION pgcron_cront;
 
-CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now());
+CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now()) DISTRIBUTED RANDOMLY;
 
 CREATE FUNCTION public.evil_eq_int(int8, int8) RETURNS bool LANGUAGE plpgsql AS $$
 BEGIN
@@ -249,7 +249,7 @@ CREATE OPERATOR public.= (LEFTARG = text, RIGHTARG = text, PROCEDURE = public.ev
 
 ALTER DATABASE :"DBNAME" SET search_path = public, pg_catalog;
 
-SELECT cron.schedule('1 seconds', 'SELECT 1');
+SELECT cron.schedule('1 seconds', 'SELECT 2') AS evil_exec_jobid \gset
 
 RESET SESSION AUTHORIZATION;
 
@@ -258,11 +258,9 @@ RESET SESSION AUTHORIZATION;
 -- end_ignore
 \c
 
-SELECT clock_timestamp() AS pgron_test_start_time \gset
+SELECT public.pg_cron_wait_for_job(:evil_exec_jobid);
 
-SELECT pg_sleep(5);
-
-select count(*) <> 0 from cron.job_run_details where command OPERATOR(pg_catalog.=) 'SELECT 1' and end_time > :'pgron_test_start_time'::timestamptz;
+select count(*) <> 0 from cron.job_run_details where command OPERATOR(pg_catalog.=) 'SELECT 2';
 
 SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)';
 SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)';
@@ -271,6 +269,7 @@ ALTER DATABASE :"DBNAME" OWNER TO :"pgcron_regress_original_owner";
 ALTER DATABASE :"DBNAME" RESET search_path;
 
 -- cleaning
+DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 DROP EXTENSION pg_cron;
 drop operator public.=(int8, int8);
 drop operator public.=(text, text);
@@ -284,3 +283,4 @@ drop database pgcron_dbno;
 drop database pgcron_dbyes;
 \unset pgron_test_start_time
 \unset pgcron_regress_original_owner
+\unset evil_exec_jobid
