@@ -28,9 +28,9 @@ package-has-unnecessary-activation-of-ldconfig-trigger
 # This is standard PostgreSQL behavior, not a packaging error.
 package-contains-hardlink opt/greengagedb/greengage8/share/postgresql/timezone/*
 
-# plperl.so is linked against libperl5.34 (pinned in shlibs:Depends).
+# plperl.so is linked against libperl<version> (pinned in shlibs:Depends).
 # The versioned RUNPATH matches the exact Perl version this package depends on.
-custom-library-search-path RUNPATH /usr/lib/x86_64-linux-gnu/perl/5.34/CORE [opt/greengagedb/greengage8/lib/postgresql/plperl.so]
+custom-library-search-path RUNPATH /usr/lib/x86_64-linux-gnu/perl/*/CORE [opt/greengagedb/greengage8/lib/postgresql/plperl.so]
 
 # gp_zstd_compression.so does not use any libc symbols. It is loaded into
 # postgres, which already links libc.
