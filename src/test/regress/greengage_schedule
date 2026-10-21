@@ -307,8 +307,8 @@ test: psql_gp_commands pg_resetwal dropdb_check_shared_buffer_cache gp_upgrade_c
 
 test: temp_relation
 # Injects faults on the coordinator that any session would hit, and counts
-# on-disk catalog rows of objects with reserved OIDs, so it relies on no
-# other test using gp_enable_temp_memory_catalog at the same time
+# on-disk catalog rows of objects in temporary schemas kept in memory, so it
+# relies on no other test using gp_enable_temp_memory_catalog at the same time
 test: temp_memory_catalog
 test: alter_db_set_tablespace
 

@@ -42,10 +42,6 @@ s/requested \d+ bytes//
 m/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./
 s/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./DETAIL:  Process PID waits for ShareLock on transaction XID; blocked by process PID./
 
-# a segment refusing a slice of temporary object OIDs (tempcat.c)
-m/^DETAIL:  Process \d+ holds OIDs \d+ to \d+\./
-s/^DETAIL:  Process \d+ holds OIDs \d+ to \d+\./DETAIL:  Process PID holds OIDs OID to OID./
-
 # sessions whose temporary objects use an object (tempcat.c)
 m/^DETAIL:  The sessions of processes [\d, ]+ keep them in memory\./
 s/^DETAIL:  The sessions of processes [\d, ]+ keep them in memory\./DETAIL:  The sessions of processes PIDS keep them in memory./

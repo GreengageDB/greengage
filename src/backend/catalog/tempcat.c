@@ -3940,6 +3940,16 @@ tempcat_before_exit(int code, Datum arg)
 		return;
 
 	/*
+	 * Before the transaction that made the temporary schema committed,
+	 * RemoveTempRelationsCallback() is not there yet to end the one we may
+	 * exit in: its buffer pins would make dropping the buffers of its
+	 * relations fail.  (Its relations' files go with its abort.)
+	 */
+	AbortOutOfAnyTransaction();
+	if (tc_area == NULL)
+		return;
+
+	/*
 	 * Readers that come later, e.g. retrieve connections, must not attach to
 	 * an area that is going away with us.
 	 */
@@ -5189,6 +5199,22 @@ tempcat_check_sample_scan(Relation rel, Snapshot snapshot)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot sample catalog \"%s\", which holds rows of temporary objects kept in memory",
 						RelationGetRelationName(rel))));
+}
+
+/*
+ * The rows in memory take a transaction that is not ours for visible once
+ * it committed, as only this session changes them, one transaction after
+ * another (tempcat_entry_visible()).  A snapshot that another session took
+ * before our last transactions ended would see their changes all the same:
+ * refuse to import one once the session has rows in memory.
+ */
+void
+tempcat_check_import_snapshot(void)
+{
+	if (tc_area != NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("cannot import a snapshot in a session that keeps its temporary objects in memory")));
 }
 
 /*

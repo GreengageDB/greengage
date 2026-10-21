@@ -497,15 +497,29 @@ dsa_create_with_flags(int tranche_id, int dsm_flags)
 	 */
 	dsm_pin_segment(segment);
 
-	/* Create a new DSA area with the control object in this segment. */
-	area = create_internal(dsm_segment_address(segment),
-						   DSA_INITIAL_SEGMENT_SIZE,
-						   tranche_id,
-						   dsm_segment_handle(segment), segment);
+	/*
+	 * GPDB: until the callback below is there, nothing would unpin the
+	 * segment if we fail (e.g. out of local memory): it would stay until the
+	 * node restarts.
+	 */
+	PG_TRY();
+	{
+		/* Create a new DSA area with the control object in this segment. */
+		area = create_internal(dsm_segment_address(segment),
+							   DSA_INITIAL_SEGMENT_SIZE,
+							   tranche_id,
+							   dsm_segment_handle(segment), segment);
 
-	/* Clean up when the control segment detaches. */
-	on_dsm_detach(segment, &dsa_on_dsm_detach_release_in_place,
-				  PointerGetDatum(dsm_segment_address(segment)));
+		/* Clean up when the control segment detaches. */
+		on_dsm_detach(segment, &dsa_on_dsm_detach_release_in_place,
+					  PointerGetDatum(dsm_segment_address(segment)));
+	}
+	PG_CATCH();
+	{
+		dsm_unpin_segment(dsm_segment_handle(segment));
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	return area;
 }

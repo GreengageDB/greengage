@@ -1052,6 +1052,11 @@ CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_sticky VALUES (1);
 SELECT count(*), tc_in_memory('tc_sticky') AS in_memory FROM tc_sticky;
 SELECT tc_disk_rows();
+-- Such a session cannot import a snapshot: the rows in memory would not
+-- follow it.
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SET TRANSACTION SNAPSHOT '00000003-0000001B-1';
+ROLLBACK;
 
 -- Failures, made by faults on the coordinator.
 \c

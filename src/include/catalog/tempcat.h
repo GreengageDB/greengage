@@ -101,6 +101,7 @@ extern HeapTuple tempcat_index_columns(TempcatScan scan, HeapTuple tup,
 extern int	tempcat_scan_getpos(TempcatScan scan);
 extern void tempcat_scan_setpos(TempcatScan scan, int pos);
 extern void tempcat_check_sample_scan(Relation rel, Snapshot snapshot);
+extern void tempcat_check_import_snapshot(void);
 
 /* Other sessions */
 extern void tempcat_lock_out_users(Oid classId, Oid objectId, int32 subId);

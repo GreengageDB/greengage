@@ -2005,6 +2005,12 @@ SELECT tc_disk_rows();
             0
 (1 row)
 
+-- Such a session cannot import a snapshot: the rows in memory would not
+-- follow it.
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SET TRANSACTION SNAPSHOT '00000003-0000001B-1';
+ERROR:  cannot import a snapshot in a session that keeps its temporary objects in memory
+ROLLBACK;
 -- Failures, made by faults on the coordinator.
 \c
 SET client_min_messages = warning;

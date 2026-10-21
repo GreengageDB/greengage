@@ -1022,9 +1022,9 @@ DETAIL:  The sessions of processes 2774408 keep them in memory.
 -- pg_dump and gpcheckcat work meanwhile, and see nothing of them.
 47: CREATE TEMP VIEW tc_uses_v AS SELECT a FROM tc_uses;
 CREATE VIEW
-!\retcode pg_dump -s isolation2test | grep -c 'tc_uses' || true;
+!\retcode out=$(pg_dump -s isolation2test) && ! echo "$out" | grep -q 'tc_uses';
 (exited with code 0)
-!\retcode gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1;
+!\retcode d=$(mktemp -d) && (cd "$d" && gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1); rc=$?; rm -rf "$d"; exit $rc;
 (exited with code 0)
 -- A session that ends while another one has a transaction open does not
 -- disturb it.

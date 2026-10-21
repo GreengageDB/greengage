@@ -53,6 +53,7 @@
 #include "access/xact.h"
 #include "access/xlog.h"
 #include "catalog/catalog.h"
+#include "catalog/tempcat.h"
 #include "lib/pairingheap.h"
 #include "miscadmin.h"
 #include "storage/predicate.h"
@@ -1722,6 +1723,9 @@ ImportSnapshot(const char *idstr)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("a snapshot-importing transaction must have isolation level SERIALIZABLE or REPEATABLE READ")));
+
+	/* GPDB: not with rows of temporary objects in memory, see tempcat.c */
+	tempcat_check_import_snapshot();
 
 	/*
 	 * Verify the identifier: only 0-9, A-F and hyphens are allowed.  We do

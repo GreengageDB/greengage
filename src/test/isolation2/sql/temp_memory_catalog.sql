@@ -502,8 +502,8 @@ CREATE TABLE tc_perm2 (a int) DISTRIBUTED BY (a);
 2: DROP SCHEMA tc_sch CASCADE;
 -- pg_dump and gpcheckcat work meanwhile, and see nothing of them.
 47: CREATE TEMP VIEW tc_uses_v AS SELECT a FROM tc_uses;
-!\retcode pg_dump -s isolation2test | grep -c 'tc_uses' || true;
-!\retcode gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1;
+!\retcode out=$(pg_dump -s isolation2test) && ! echo "$out" | grep -q 'tc_uses';
+!\retcode d=$(mktemp -d) && (cd "$d" && gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1); rc=$?; rm -rf "$d"; exit $rc;
 -- A session that ends while another one has a transaction open does not
 -- disturb it.
 48: BEGIN;
