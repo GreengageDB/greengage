@@ -1050,7 +1050,8 @@ tempcat_skip_held_blocks(Oid nextOid, bool *skipped)
 	bool		all_held = false;
 
 	*skipped = false;
-	if (TempcatBlocks == NULL || Gp_role == GP_ROLE_EXECUTE)
+	if (TempcatBlocks == NULL ||
+		(Gp_role == GP_ROLE_EXECUTE && !IS_QUERY_DISPATCHER()))
 		return nextOid;
 #ifdef FAULT_INJECTOR
 	/* Test hook: take all blocks for held. */
@@ -2247,10 +2248,12 @@ tempcat_settled_in_memory(void)
 
 /*
  * Check hook of gp_enable_temp_memory_catalog: a SET that cannot change
- * where the session keeps its temporary objects any more says so.  On the
- * coordinator only (the segments get the SET too), and for a SET in the
- * session, not for the values of the configuration, the role or the
- * database.
+ * where the session keeps its temporary objects any more says so, and
+ * leaves the setting at where they go, so that it is what SHOW, SET ... FROM
+ * CURRENT and the like see.  On the coordinator only (the segments get the
+ * SET too), and for a SET in the session, not for the values of the
+ * configuration, the role or the database.  (RESET, and the end of SET
+ * LOCAL, do not come here: the show hook covers them.)
  */
 bool
 tempcat_check_enable(bool *newval, void **extra, GucSource source)
@@ -2262,11 +2265,15 @@ tempcat_check_enable(bool *newval, void **extra, GucSource source)
 		return true;
 	settled = tempcat_settled_in_memory();
 	if (settled >= 0 && *newval != (settled == 1))
+	{
 		ereport(WARNING,
 				(settled == 1 ?
 				 errmsg("the session keeps its temporary objects in memory until it ends") :
 				 errmsg("the session keeps its temporary objects on disk until it ends"),
-				 errdetail("gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema.")));
+				 errdetail("gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema; it stays %s.",
+						   settled == 1 ? "on" : "off")));
+		*newval = (settled == 1);
+	}
 	return true;
 }
 
@@ -2411,14 +2418,14 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 				(errcode(ERRCODE_CONFIGURATION_LIMIT_EXCEEDED),
 				 errmsg("temporary objects cannot be kept in memory on this node"),
 				 errdetail("The node allows more than %d processes.", PG_UINT16_MAX - 1),
-				 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 
 	if (tc_area == NULL && !tempcat_create_area(false))
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("could not create the in-memory catalog of temporary objects on this node"),
 				 errdetail("Dynamic shared memory, or slots for its segments, ran out."),
-				 errhint("Turn off gp_enable_temp_memory_catalog to keep the session's temporary objects on disk.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 	tempcat_activate(oid);
 	tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
 	tempcat_remember_oid(RelationGetRelid(relation), oid);

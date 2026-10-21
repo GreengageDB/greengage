@@ -390,8 +390,7 @@ DROP FUNCTION tc_kind_rel(name);
 DROP FUNCTION tc_make(int);
 
 -- The setting has no effect on a session whose temporary schema is on disk
--- (SET says so, and SHOW shows where its temporary objects go); before
--- that, it decides.
+-- (SET says so, and leaves it off); before that, it decides.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SHOW gp_enable_temp_memory_catalog;
@@ -1021,8 +1020,8 @@ FETCH ALL FROM tc_xc;
 COMMIT;
 
 -- Turning the setting off does not affect the session's temporary objects:
--- they stay in memory, and new ones join them (SET says so, and SHOW shows
--- it).  DISCARD TEMP drops them.
+-- they stay in memory, and new ones join them (SET says so, and leaves it
+-- on).  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;
 SHOW gp_enable_temp_memory_catalog;
 SELECT current_setting('gp_enable_temp_memory_catalog');
@@ -1039,14 +1038,16 @@ SELECT count(*) FROM tc_after_discard;
 SELECT tc_disk_rows();
 
 -- A session that kept its temporary schema in memory keeps it there, also
--- when it makes it again after a rollback with the setting off.
+-- when it makes it again after a rollback with the setting reset to off
+-- (RESET does not warn; SHOW shows where the objects go).
 \c
 SET gp_enable_temp_memory_catalog = on;
 BEGIN;
 CREATE TEMP TABLE tc_sticky0 (a int) DISTRIBUTED BY (a);
 ROLLBACK;
-SET gp_enable_temp_memory_catalog = off;
+RESET gp_enable_temp_memory_catalog;
 SHOW gp_enable_temp_memory_catalog;
+SELECT reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
 CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_sticky VALUES (1);
 SELECT count(*), tc_in_memory('tc_sticky') AS in_memory FROM tc_sticky;

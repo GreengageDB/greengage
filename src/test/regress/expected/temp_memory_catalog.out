@@ -717,8 +717,7 @@ DROP FUNCTION tc_count_rel(name);
 DROP FUNCTION tc_kind_rel(name);
 DROP FUNCTION tc_make(int);
 -- The setting has no effect on a session whose temporary schema is on disk
--- (SET says so, and SHOW shows where its temporary objects go); before
--- that, it decides.
+-- (SET says so, and leaves it off); before that, it decides.
 \c
 SET gp_enable_temp_memory_catalog = on;
 SHOW gp_enable_temp_memory_catalog;
@@ -743,7 +742,7 @@ SELECT tc_in_memory('tc_disk') AS in_memory;
 
 SET gp_enable_temp_memory_catalog = on;
 WARNING:  the session keeps its temporary objects on disk until it ends
-DETAIL:  gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema.
+DETAIL:  gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema; it stays off.
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
 -------------------------------
@@ -1484,7 +1483,7 @@ CREATE TEMP TABLE tc_dupc (a int CONSTRAINT tc_c CHECK (a > 0)) DISTRIBUTED BY (
 CREATE FUNCTION pg_temp.tc_trf() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NULL; END';
 CREATE CONSTRAINT TRIGGER tc_c AFTER INSERT ON tc_dupc FOR EACH ROW EXECUTE FUNCTION pg_temp.tc_trf();
 ERROR:  duplicate key value violates unique constraint "pg_constraint_conrelid_contypid_conname_index"
-DETAIL:  Key (conrelid, contypid, conname)=(147566, 0, tc_c) already exists.
+DETAIL:  Key (conrelid, contypid, conname)=(107111, 0, tc_c) already exists.
 SELECT conname, contype FROM pg_constraint WHERE conrelid = 'tc_dupc'::regclass;
  conname | contype 
 ---------+---------
@@ -1913,11 +1912,11 @@ FETCH ALL FROM tc_xc;
 
 COMMIT;
 -- Turning the setting off does not affect the session's temporary objects:
--- they stay in memory, and new ones join them (SET says so, and SHOW shows
--- it).  DISCARD TEMP drops them.
+-- they stay in memory, and new ones join them (SET says so, and leaves it
+-- on).  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;
 WARNING:  the session keeps its temporary objects in memory until it ends
-DETAIL:  gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema.
+DETAIL:  gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema; it stays on.
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
 -------------------------------
@@ -1972,19 +1971,24 @@ SELECT tc_disk_rows();
 (1 row)
 
 -- A session that kept its temporary schema in memory keeps it there, also
--- when it makes it again after a rollback with the setting off.
+-- when it makes it again after a rollback with the setting reset to off
+-- (RESET does not warn; SHOW shows where the objects go).
 \c
 SET gp_enable_temp_memory_catalog = on;
 BEGIN;
 CREATE TEMP TABLE tc_sticky0 (a int) DISTRIBUTED BY (a);
 ROLLBACK;
-SET gp_enable_temp_memory_catalog = off;
-WARNING:  the session keeps its temporary objects in memory until it ends
-DETAIL:  gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema.
+RESET gp_enable_temp_memory_catalog;
 SHOW gp_enable_temp_memory_catalog;
  gp_enable_temp_memory_catalog 
 -------------------------------
  on
+(1 row)
+
+SELECT reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
+ reset_val 
+-----------
+ off
 (1 row)
 
 CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
