@@ -161,6 +161,28 @@ SELECT gp_inject_fault('start_prepare', 'reset', dbid)
 14: INSERT INTO tc_2pc VALUES (100);
 14: SELECT count(*) FROM tc_2pc x JOIN tc_2pc y ON x.a = y.a + 1;
 14: SELECT count(*) FROM tc_perm;
+-- So do TRUNCATE and ADD COLUMN of it: all segments keep it as it was.
+SELECT gp_inject_fault('start_prepare', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+14: BEGIN;
+14: TRUNCATE tc_2pc;
+14: INSERT INTO tc_perm SELECT generate_series(1, 10);
+14: COMMIT;
+SELECT gp_inject_fault('start_prepare', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+14: SELECT gp_segment_id, count(*) FROM tc_2pc GROUP BY 1 ORDER BY 1;
+SELECT gp_inject_fault('start_prepare', 'error', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+14: BEGIN;
+14: ALTER TABLE tc_2pc ADD COLUMN b int;
+14: INSERT INTO tc_perm SELECT generate_series(1, 10);
+14: COMMIT;
+SELECT gp_inject_fault('start_prepare', 'reset', dbid)
+  FROM gp_segment_configuration WHERE role = 'p' AND content = 1;
+14: SELECT gp_segment_id, count(*) FROM gp_dist_random('pg_attribute')
+      WHERE attrelid = 'tc_2pc'::regclass AND attnum > 0 GROUP BY 1 ORDER BY 1;
+14: INSERT INTO tc_2pc VALUES (200);
+14: SELECT count(*) FROM tc_2pc;
 -- A temporary table created in a rolled back subtransaction of a prepared
 -- transaction does not come back.
 14: BEGIN;
@@ -458,6 +480,44 @@ SELECT gp_inject_fault('tempcat_used_objects_full', 'reset', dbid)
 38q:
 4: CALL tc_wait_gone();
 4: SELECT to_regclass('tc_gone_ord') IS NULL AS rolled_back;
+
+-- More objects that temporary objects use: a sequence of a default, the
+-- function of a check constraint, the function of a trigger, and the schema
+-- of a type; other sessions cannot drop them, also with CASCADE.
+CREATE SCHEMA tc_sch;
+CREATE TYPE tc_sch.tc_st AS (x int);
+CREATE SEQUENCE tc_seq;
+CREATE FUNCTION tc_pos(int) RETURNS bool LANGUAGE sql IMMUTABLE AS 'SELECT $1 > 0';
+CREATE FUNCTION tc_trf() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NEW; END';
+CREATE TABLE tc_perm2 (a int) DISTRIBUTED BY (a);
+47: SET gp_enable_temp_memory_catalog = on;
+47: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+47: CREATE TEMP TABLE tc_uses (a int DEFAULT nextval('tc_seq') CHECK (tc_pos(a)), s tc_sch.tc_st) DISTRIBUTED BY (a);
+47: CREATE TRIGGER tc_uses_tr BEFORE INSERT ON tc_uses FOR EACH ROW EXECUTE FUNCTION tc_trf();
+47: INSERT INTO tc_uses (s) VALUES (ROW(1));
+2: DROP SEQUENCE tc_seq;
+2: DROP SEQUENCE tc_seq CASCADE;
+2: DROP FUNCTION tc_pos(int) CASCADE;
+2: DROP FUNCTION tc_trf() CASCADE;
+2: DROP SCHEMA tc_sch CASCADE;
+-- pg_dump and gpcheckcat work meanwhile, and see nothing of them.
+47: CREATE TEMP VIEW tc_uses_v AS SELECT a FROM tc_uses;
+!\retcode pg_dump -s isolation2test | grep -c 'tc_uses' || true;
+!\retcode gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1;
+-- A session that ends while another one has a transaction open does not
+-- disturb it.
+48: BEGIN;
+48: INSERT INTO tc_perm2 SELECT generate_series(1, 10);
+47q:
+48: SELECT count(*) FROM tc_perm2;
+48: COMMIT;
+48: CALL tc_wait_gone();
+48: DROP SEQUENCE tc_seq;
+48: DROP FUNCTION tc_pos(int);
+48: DROP FUNCTION tc_trf();
+48: DROP SCHEMA tc_sch CASCADE;
+48: DROP TABLE tc_perm2;
+48q:
 
 -- After a gang reset, the writer QE of the session that is gone may still
 -- hold the blocks of its OIDs on a segment as it exits (here a fault keeps

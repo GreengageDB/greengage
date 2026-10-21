@@ -78,9 +78,10 @@ SELECT count(*) FROM oid_tc_second;
 DROP TABLE oid_skip, oid_tc_first, oid_tc_second;
 
 -- Scenario 4: a session lets go of a block once none of its objects has an
--- OID of it, but the block of its current run: the counter, back at it,
--- does not skip it then.  (The fault makes the session use up its run, so
--- that the next object takes the next one, from where the counter is put.)
+-- OID of it, but the block of its current run (and of the last OID it got):
+-- the counter, back at it, does not skip it then.  (The fault makes the
+-- session use up its run, so that the next object takes the next one, from
+-- where the counter is put.)
 SELECT ((gp_get_next_oid_master()::bigint / 4096) + 2) * 4096 AS rel_oid \gset
 SELECT gp_set_next_oid_master(:rel_oid);
 SELECT gp_inject_fault('tempcat_run_near_end', 'skip', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = -1;
@@ -97,7 +98,7 @@ SELECT gp_inject_fault('tempcat_run_near_end', 'reset', dbid) FROM gp_segment_co
 CREATE FUNCTION pg_temp.oid_rel_f4() RETURNS int LANGUAGE sql AS 'SELECT 1';
 CREATE TEMP TABLE oid_rel_u (a int) DISTRIBUTED BY (a);
 SELECT 'oid_rel_u'::regclass::oid::bigint / 4096 = :cur_oid::bigint / 4096 AS in_current_block;
-DROP TABLE oid_rel_t;
+DROP TABLE oid_rel_t, oid_rel_u;
 DROP FUNCTION pg_temp.oid_rel_f3(), pg_temp.oid_rel_f4();
 SELECT gp_set_next_oid_master((:rel_oid - 2)::oid);
 CREATE TABLE oid_rel_ord (a int) DISTRIBUTED BY (a);
@@ -113,7 +114,7 @@ SELECT count(*) = 0 AS current_block_skipped FROM (
 	UNION ALL SELECT oid FROM pg_type WHERE typrelid = 'oid_rel_ord2'::regclass
 	UNION ALL SELECT t.typarray FROM pg_type t WHERE t.typrelid = 'oid_rel_ord2'::regclass
 ) o WHERE oid::bigint / 4096 = :cur_oid::bigint / 4096;
-DROP TABLE oid_rel_ord, oid_rel_ord2, oid_rel_u;
+DROP TABLE oid_rel_ord, oid_rel_ord2;
 DROP FUNCTION pg_temp.oid_rel_f1(), pg_temp.oid_rel_f2();
 
 -- Scenario 5: an ordinary object can have an OID of a session's run, from
@@ -181,3 +182,50 @@ SELECT count(*) > 0 AS got_dead_oids FROM oid_dead_oids WHERE (cat, oid) IN (
 INSERT INTO oid_tc5_next SELECT generate_series(1, 10);
 SELECT count(*) FROM oid_tc5_next;
 DROP TABLE oid_tc5_next, oid_tc5_first, oid_dead_oids;
+
+-- Scenario 7: the counter checks a block for holders when it comes to it,
+-- not when it jumps forward within the block it gives OIDs from, though the
+-- session holds it: here the segments took OIDs for out-of-line values, and
+-- cdb_sync_oid_to_segments() moves the coordinator's counter past theirs.
+-- (A segment does not skip blocks for those OIDs either.)
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT ((gp_get_next_oid_master()::bigint / 4096) + 2) * 4096 AS jump_oid \gset
+SELECT gp_set_next_oid_master(:jump_oid);
+SELECT gp_set_next_oid_segments(:jump_oid);
+CREATE TEMP TABLE oid_tc7 (a int, b text) DISTRIBUTED BY (a);
+SELECT 'oid_tc7'::regclass::oid::bigint / 4096 = :jump_oid::bigint / 4096 AS in_block;
+INSERT INTO oid_tc7 SELECT i, (SELECT string_agg(md5(i::text || j::text), '')
+	FROM generate_series(1, 400) j) FROM generate_series(1, 120) i;
+SELECT gp_get_next_oid_master() AS qd_next \gset
+SELECT max(o) > :qd_next AS segments_ahead,
+	max(o)::bigint / 4096 = :jump_oid::bigint / 4096 AS segments_in_block
+FROM gp_get_next_oid_segments() o;
+CREATE TABLE oid_tc7_ord (a int) DISTRIBUTED BY (a);
+ALTER TABLE oid_tc7_ord ADD COLUMN b text;
+SELECT gp_get_next_oid_master()::bigint / 4096 = :jump_oid::bigint / 4096 AS counter_in_block;
+DROP TABLE oid_tc7, oid_tc7_ord;
+
+-- Scenario 8: on a segment, a session can hold a block for OIDs (from the
+-- coordinator) ahead of the segment's counter in it, after the counter gave
+-- OIDs of it: objects created there in utility mode do not get them.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SELECT ((gp_get_next_oid_master()::bigint / 4096) + 2) * 4096 AS mid_oid \gset
+SELECT gp_set_next_oid_master(:mid_oid + 8);
+SELECT gp_set_next_oid_segments(:mid_oid);
+SELECT port AS seg0_port FROM gp_segment_configuration WHERE content = 0 AND role = 'p' \gset
+\setenv SEG0_PORT :seg0_port
+\! PGOPTIONS='-c gp_role=utility' psql -X -q -p $SEG0_PORT -d oid_wraparound -c "CREATE FUNCTION oid_u8f() RETURNS int LANGUAGE sql AS 'SELECT 1'"
+CREATE FUNCTION pg_temp.oid_tc8_f() RETURNS int LANGUAGE sql AS 'SELECT 1';
+SELECT count(*) AS ahead_of_segments FROM gp_get_next_oid_segments() o
+WHERE o < (SELECT oid FROM pg_proc WHERE proname = 'oid_tc8_f');
+\! PGOPTIONS='-c gp_role=utility' psql -X -q -p $SEG0_PORT -d oid_wraparound -c "DO \$\$ BEGIN FOR i IN 1..30 LOOP EXECUTE format('CREATE FUNCTION oid_u8_%s() RETURNS int LANGUAGE sql AS ''SELECT 1''', i); END LOOP; END \$\$"
+SELECT count(*) AS shared_oids FROM (
+	SELECT oid FROM gp_dist_random('pg_proc') WHERE gp_segment_id = 0
+	GROUP BY oid HAVING count(*) > 1) d;
+SELECT count(*) AS utility_in_block FROM gp_dist_random('pg_proc')
+WHERE gp_segment_id = 0 AND proname LIKE 'oid\_u8\_%'
+	AND oid::bigint / 4096 = :mid_oid::bigint / 4096;
+\! PGOPTIONS='-c gp_role=utility' psql -X -q -p $SEG0_PORT -d oid_wraparound -c "DO \$\$ BEGIN FOR i IN 1..30 LOOP EXECUTE format('DROP FUNCTION oid_u8_%s()', i); END LOOP; DROP FUNCTION oid_u8f(); END \$\$"
+DROP FUNCTION pg_temp.oid_tc8_f();

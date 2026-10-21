@@ -640,12 +640,13 @@ struct config_bool ConfigureNamesBool_gp[] =
 			gettext_noop("Takes effect when the session's temporary schema is "
 						 "created: the catalog rows of objects in it are then "
 						 "kept in session memory instead of the on-disk "
-						 "catalog, for the rest of the session."),
+						 "catalog, for the rest of the session.  SHOW shows "
+						 "where they go."),
 			GUC_NOT_IN_SAMPLE
 		},
 		&gp_enable_temp_memory_catalog,
 		false,
-		NULL, NULL, NULL
+		tempcat_check_enable, NULL, tempcat_show_enable
 	},
 	{
 		{"gp_enable_hashjoin_size_heuristic", PGC_USERSET, QUERY_TUNING_METHOD,

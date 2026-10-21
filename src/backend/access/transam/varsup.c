@@ -597,9 +597,8 @@ GetNewObjectIdUnderLock(void)
 
 	/*
 	 * GPDB: skip the blocks of OIDs that sessions keeping their temporary
-	 * objects in memory hold (see tempcat.c).  The counter left them behind
-	 * when they were taken, and comes back to them only after it wrapped
-	 * around.
+	 * objects in memory hold (see tempcat.c), when the counter comes to one:
+	 * after it wrapped around, or jumped to it.
 	 */
 	{
 		bool		skipped;

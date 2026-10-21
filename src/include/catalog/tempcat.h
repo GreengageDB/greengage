@@ -23,6 +23,7 @@
 #include "access/itup.h"
 #include "access/skey.h"
 #include "storage/itemptr.h"
+#include "utils/guc.h"
 #include "utils/relcache.h"
 #include "utils/snapshot.h"
 
@@ -38,6 +39,8 @@
 /* GUCs */
 extern bool gp_enable_temp_memory_catalog;
 extern int	gp_temp_memory_catalog_max_size;
+extern bool tempcat_check_enable(bool *newval, void **extra, GucSource source);
+extern const char *tempcat_show_enable(void);
 
 typedef struct TempcatScanData *TempcatScan;
 

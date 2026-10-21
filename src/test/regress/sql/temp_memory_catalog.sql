@@ -322,13 +322,25 @@ END $$;
 SELECT count(*) FROM pg_class WHERE relname LIKE 'tc_loop%';
 
 -- Creating and dropping temporary tables leaves no dead rows behind in the
--- on-disk catalogs.
+-- on-disk catalogs: not one row inserted or deleted in pg_class,
+-- pg_attribute, pg_type or pg_depend for 200 tables with a primary key.
+CREATE FUNCTION pg_temp.tc_churn_counts() RETURNS TABLE (cat regclass, ins bigint, del bigint)
+  LANGUAGE sql AS $$
+  SELECT c, pg_stat_get_xact_tuples_inserted(c), pg_stat_get_xact_tuples_deleted(c)
+    FROM unnest(ARRAY['pg_class', 'pg_attribute', 'pg_type', 'pg_depend']::regclass[]) c $$;
 BEGIN;
-SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) AS ins_before \gset
-CREATE TEMP TABLE tc_churn (a int PRIMARY KEY, b text) DISTRIBUTED BY (a);
-DROP TABLE tc_churn;
-SELECT pg_stat_get_xact_tuples_inserted('pg_class'::regclass) - :ins_before AS pg_class_inserts;
+CREATE TEMP TABLE tc_churn_before AS SELECT * FROM pg_temp.tc_churn_counts() DISTRIBUTED RANDOMLY;
+DO $$
+BEGIN
+  FOR i IN 1..200 LOOP
+    EXECUTE 'CREATE TEMP TABLE tc_churn (a int PRIMARY KEY, b text) DISTRIBUTED BY (a)';
+    EXECUTE 'DROP TABLE tc_churn';
+  END LOOP;
+END $$;
+SELECT a.cat, a.ins - b.ins AS inserted, a.del - b.del AS deleted
+  FROM pg_temp.tc_churn_counts() a JOIN tc_churn_before b USING (cat) ORDER BY 1;
 COMMIT;
+DROP TABLE tc_churn_before;
 
 -- Catalog rows of temporary objects cannot be added with SQL.
 SET allow_system_table_mods = on;
@@ -378,11 +390,18 @@ DROP FUNCTION tc_kind_rel(name);
 DROP FUNCTION tc_make(int);
 
 -- The setting has no effect on a session whose temporary schema is on disk
+-- (SET says so, and SHOW shows where its temporary objects go); before
+-- that, it decides.
 \c
+SET gp_enable_temp_memory_catalog = on;
+SHOW gp_enable_temp_memory_catalog;
 SET gp_enable_temp_memory_catalog = off;
+SHOW gp_enable_temp_memory_catalog;
 CREATE TEMP TABLE tc_disk (a int) DISTRIBUTED BY (a);
 SELECT tc_in_memory('tc_disk') AS in_memory;
 SET gp_enable_temp_memory_catalog = on;
+SHOW gp_enable_temp_memory_catalog;
+SELECT setting, reset_val FROM pg_settings WHERE name = 'gp_enable_temp_memory_catalog';
 CREATE TEMP TABLE tc_disk2 (a int) DISTRIBUTED BY (a);
 SELECT tc_in_memory('tc_disk2') AS in_memory;
 
@@ -543,6 +562,16 @@ SET gp_enable_temp_memory_catalog = on;
 SET optimizer = off;
 CREATE TEMP TABLE tc_basic (a int, b text) DISTRIBUTED BY (a);
 INSERT INTO tc_basic SELECT i, 'v' || i FROM generate_series(1, 100) i;
+-- A transaction that ran multi-slice queries over its own temporary table
+-- (with reader gangs) can drop it.
+BEGIN;
+CREATE TEMP TABLE tc_ms (a int, b int) DISTRIBUTED BY (a);
+INSERT INTO tc_ms SELECT i, i + 1 FROM generate_series(1, 100) i;
+SELECT count(*) FROM tc_ms x JOIN tc_ms y ON x.b = y.a;
+SELECT count(*) FROM tc_ms x JOIN tc_basic y ON x.b = y.a;
+DROP TABLE tc_ms;
+COMMIT;
+SELECT to_regclass('tc_ms') IS NULL AS dropped;
 -- Cursors and loops over queries run on reader gangs as well.
 BEGIN;
 DECLARE c CURSOR FOR SELECT a, b FROM tc_basic ORDER BY a;
@@ -992,8 +1021,11 @@ FETCH ALL FROM tc_xc;
 COMMIT;
 
 -- Turning the setting off does not affect the session's temporary objects:
--- they stay in memory, and new ones join them.  DISCARD TEMP drops them.
+-- they stay in memory, and new ones join them (SET says so, and SHOW shows
+-- it).  DISCARD TEMP drops them.
 SET gp_enable_temp_memory_catalog = off;
+SHOW gp_enable_temp_memory_catalog;
+SELECT current_setting('gp_enable_temp_memory_catalog');
 SELECT count(*) FROM tc_basic x JOIN tc_basic y ON x.a = y.a + 1;
 CREATE TEMP TABLE tc_after_off (a int) DISTRIBUTED BY (a);
 SELECT tc_in_memory('tc_after_off') AS in_memory;
@@ -1014,6 +1046,7 @@ BEGIN;
 CREATE TEMP TABLE tc_sticky0 (a int) DISTRIBUTED BY (a);
 ROLLBACK;
 SET gp_enable_temp_memory_catalog = off;
+SHOW gp_enable_temp_memory_catalog;
 CREATE TEMP TABLE tc_sticky (a int) DISTRIBUTED BY (a);
 INSERT INTO tc_sticky VALUES (1);
 SELECT count(*), tc_in_memory('tc_sticky') AS in_memory FROM tc_sticky;

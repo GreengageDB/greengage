@@ -566,9 +566,9 @@ tempcat_getoid(HeapTuple tup, TupleDesc desc, AttrNumber attno)
  * tables of the session using it, which stand in for the pg_class rows that
  * vac_update_datfrozenxid() cannot see.
  *
- * Per block of OIDs: the process of this node holding it (pgprocno + 1, or
- * 0; see "Blocks of OIDs").  And which ordinary objects the temporary
- * objects of sessions use (tempcat_use_object()).
+ * Per block of OIDs: the number of processes of this node holding it (see
+ * "Blocks of OIDs").  And which ordinary objects the temporary objects of
+ * sessions use (tempcat_use_object()).
  * ----------------------------------------------------------------
  */
 #define TEMPCAT_OID_BLOCK_BITS	12
@@ -624,7 +624,7 @@ typedef struct TempcatSharedData
 static TempcatSharedData *TempcatShared = NULL;
 static HTAB *TempcatUsedObjects = NULL;
 
-/* The holders of the blocks of OIDs; NULL if pgprocnos do not fit */
+/* The numbers of holders of the blocks of OIDs; NULL if they do not fit */
 static uint16 *TempcatBlocks = NULL;
 
 static inline int
@@ -983,8 +983,19 @@ tempcat_attach(void)
  * of the OIDs of held blocks, as it cannot see the objects
  * (tempcat_oid_maybe_live()).  A process lets go of a block once none of
  * its rows in memory, of any visibility, has an OID of it, but the block of
- * the coordinator's current run (tempcat_release_unused_blocks()), and of
- * all of them at exit.
+ * the coordinator's current run and the block of the last OID it got
+ * (tempcat_release_unused_blocks()), and of all of them at exit.
+ *
+ * The coordinator's counter checks a block when it comes to it: when it
+ * starts on it, or jumps to it (it wrapped around, or was moved, e.g. by
+ * cdb_sync_oid_to_segments()).  Not when it goes on, or jumps forward,
+ * within the block it gives OIDs from: the runs taken from it since lie
+ * behind it.  On a segment, the OIDs that a writer QE holds a block for come
+ * from the coordinator, and can lie ahead of the segment's counter in its
+ * block: there, the counter checks the block each time.  But not for a QE,
+ * which takes OIDs of its own only for out-of-line values (the coordinator
+ * gives it those of catalog rows): no OID of a temporary object conflicts
+ * with them, so it skips nothing.
  *
  * After a gang reset, the writer QEs of the session that are gone may still
  * hold blocks whose OIDs the new ones get, until they exit: a block has two
@@ -1006,6 +1017,9 @@ static HTAB *tc_blocks = NULL;
 /* Blocks may have been left without rows; see tempcat_release_unused_blocks() */
 static bool tc_release_wanted = false;
 
+/* The block of the last OID this process got for its temporary objects */
+static uint32 tc_last_block = PG_UINT32_MAX;
+
 /*
  * Coordinator: the next OID to give from the run taken from the counter,
  * and the last one, or InvalidOid if none is left; and the size of the next
@@ -1024,20 +1038,26 @@ tempcat_oid_block_last(Oid oid)
 
 /*
  * The OID counter is at 'nextOid' (caller holds OidGenLock): if it came to
- * another block since it went on from an OID given (see
- * tempcat_note_oid_counter()), or jumped (it wrapped around, or was moved),
- * skip the blocks that processes hold.  Returns the OID to go on from, and
- * sets *skipped if it differs.
+ * another block than the one it gave the last OID from (see
+ * tempcat_note_oid_counter()), or jumped back, skip the blocks that
+ * processes hold.  Returns the OID to go on from, and sets *skipped if it
+ * differs.
  */
 Oid
 tempcat_skip_held_blocks(Oid nextOid, bool *skipped)
 {
+	Oid			counter_next;
 	uint32		nskipped = 0;
 
 	*skipped = false;
-	if (TempcatBlocks == NULL ||
-		(nextOid == TempcatShared->counter_next &&
-		 (nextOid & (TEMPCAT_OID_BLOCK_SIZE - 1)) != 0))
+	if (TempcatBlocks == NULL || Gp_role == GP_ROLE_EXECUTE)
+		return nextOid;
+	counter_next = TempcatShared->counter_next;
+	if (IS_QUERY_DISPATCHER() &&
+		(counter_next & (TEMPCAT_OID_BLOCK_SIZE - 1)) != 0 &&
+		(nextOid >> TEMPCAT_OID_BLOCK_BITS) ==
+		(counter_next >> TEMPCAT_OID_BLOCK_BITS) &&
+		nextOid >= counter_next)
 		return nextOid;
 	while (TempcatBlocks[nextOid >> TEMPCAT_OID_BLOCK_BITS] != 0)
 	{
@@ -1120,6 +1140,8 @@ tempcat_hold_block(Oid oid)
 	Assert(TempcatBlocks[block] < PG_UINT16_MAX);
 	TempcatBlocks[block]++;
 	LWLockRelease(OidGenLock);
+	/* (in case no row with an OID of it comes) */
+	tc_release_wanted = true;
 	return b;
 }
 
@@ -1181,6 +1203,7 @@ tempcat_activate(Oid oid)
 		st->databaseId = MyDatabaseId;
 	}
 	(void) tempcat_hold_block(oid);
+	tc_last_block = oid >> TEMPCAT_OID_BLOCK_BITS;
 }
 
 /*
@@ -1310,9 +1333,12 @@ tempcat_owns_oid(Oid catalog, Oid oid)
 
 /*
  * Let go of the blocks that none of our rows in memory has an OID of any
- * more, but the block of the coordinator's current run, and forget the OIDs
- * of them that we owned (given to objects whose creation did not get as far
- * as their rows, if any).  When the session goes idle, or starts its next
+ * more, and forget the OIDs of them that we owned (given to objects whose
+ * creation did not get as far as their rows, if any).  But not of the block
+ * of the coordinator's current run, nor of the block of the last OID we
+ * got: the next ones likely come from it, and a session that creates and
+ * drops a temporary table over and over would let go of it and take it
+ * again each time.  When the session goes idle, or starts its next
  * transaction, after the outcome of the finished ones was applied to the
  * rows: no OID that was given is waiting for its row then.
  */
@@ -1331,7 +1357,7 @@ tempcat_release_unused_blocks(void)
 	hash_seq_init(&seq, tc_blocks);
 	while ((b = hash_seq_search(&seq)) != NULL)
 	{
-		if (b->rows > 0 || b->block == current)
+		if (b->rows > 0 || b->block == current || b->block == tc_last_block)
 			continue;
 		tempcat_let_go_of_block(b);
 		(void) hash_search(tc_blocks, &b->block, HASH_REMOVE, NULL);
@@ -2209,11 +2235,71 @@ tempcat_want_temp_oid(Oid catalog, const char *objname, Oid namespaceOid,
 }
 
 /*
+ * Where the session keeps its temporary objects, once it has made its
+ * temporary schema: from then on gp_enable_temp_memory_catalog no longer
+ * matters.  In memory for good if it has an area (see
+ * tempcat_want_temp_oid()), on disk otherwise (until a rollback undoes the
+ * schema).  Returns -1 while it has no temporary schema yet, 1 for memory, 0
+ * for disk.
+ */
+static int
+tempcat_settled_in_memory(void)
+{
+	Oid			tempNamespaceId;
+	Oid			tempToastNamespaceId;
+
+	if (tc_area != NULL)
+		return 1;
+	GetTempNamespaceState(&tempNamespaceId, &tempToastNamespaceId);
+	return OidIsValid(tempNamespaceId) ? 0 : -1;
+}
+
+/*
+ * Check hook of gp_enable_temp_memory_catalog: a SET that cannot change
+ * where the session keeps its temporary objects any more says so.  On the
+ * coordinator only (the segments get the SET too), and for a SET in the
+ * session, not for the values of the configuration, the role or the
+ * database.
+ */
+bool
+tempcat_check_enable(bool *newval, void **extra, GucSource source)
+{
+	int			settled;
+
+	if (source != PGC_S_SESSION || Gp_role == GP_ROLE_EXECUTE ||
+		tempcat_is_reader())
+		return true;
+	settled = tempcat_settled_in_memory();
+	if (settled >= 0 && *newval != (settled == 1))
+		ereport(WARNING,
+				(settled == 1 ?
+				 errmsg("the session keeps its temporary objects in memory until it ends") :
+				 errmsg("the session keeps its temporary objects on disk until it ends"),
+				 errdetail("gp_enable_temp_memory_catalog takes effect when a session creates its temporary schema.")));
+	return true;
+}
+
+/*
+ * Show hook of gp_enable_temp_memory_catalog: where the session's temporary
+ * objects actually go.
+ */
+const char *
+tempcat_show_enable(void)
+{
+	int			settled = tempcat_settled_in_memory();
+
+	if (settled >= 0)
+		return settled == 1 ? "on" : "off";
+	return gp_enable_temp_memory_catalog ? "on" : "off";
+}
+
+/*
  * Only relations, types, functions and operators can be created in a
  * temporary namespace kept in memory: other objects (operator classes,
- * collations, text search objects, statistics objects, ...) would get
- * on-disk catalog rows pointing at the namespace that other sessions cannot
- * see.  Called by oid_dispatch.c on the coordinator.
+ * collations, text search objects, ...) would get on-disk catalog rows
+ * pointing at the namespace that other sessions cannot see.  (Statistics
+ * objects, which go with their table, are kept in memory, and do not come
+ * here.)  Called by oid_dispatch.c on the coordinator.
  */
 void
 tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
