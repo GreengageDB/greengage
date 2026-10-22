@@ -178,6 +178,22 @@ Feature: gpcheckcat tests
         Then gpcheckcat should print "2 columns, containing volatile expressions as defaults, have violated replicated table's distribution policy" to stdout
         And the user runs "dropdb constraint_db"
 
+    Scenario: gpcheckcat should report range partition boundaries stored with a collation other than the key's
+        Given the user runs "dropdb --if-exists part_collation_db"
+        And the user runs "createdb --template=template0 --lc-collate=en_US.utf8 --lc-ctype=en_US.utf8 part_collation_db"
+        Then createdb should return a return code of 0
+        And the user runs "psql part_collation_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/part_bound_collation.sql"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -R part_bound_collation part_collation_db"
+        Then gpcheckcat should return a return code of 3
+        And gpcheckcat should print "2 range partitioned table\(s\) have boundaries stored with a collation other than the partitioning key's" to stdout
+        When the user runs "psql part_collation_db -c 'DROP TABLE c_old, c_old_sub'"
+        Then psql should return a return code of 0
+        When the user runs "gpcheckcat -R part_bound_collation part_collation_db"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should print "Found no catalog issue" to stdout
+        And the user runs "dropdb part_collation_db"
+
     Scenario: gpcheckcat should report, but not repair, invalid policy issues
         Given database "policy_db" is dropped and recreated
           And the path "gpcheckcat.repair.*" is removed from current working directory

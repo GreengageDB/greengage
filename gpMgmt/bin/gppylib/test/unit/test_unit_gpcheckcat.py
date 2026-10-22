@@ -475,6 +475,57 @@ class GpCheckCatTestCase(GpTestCase):
         self.assertEqual(mock_connect2.query.dictresult.call_count, 0)
         self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
 
+    def test_checkPartitionBoundCollation_no_issues(self):
+        self.db_connection.query.return_value.dictresult.return_value = []
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
+
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundCollation_with_issues(self, mock_myprint):
+        # t2 has a default subpartition in each of its two partitions, so
+        # 2 tables are reported, with all 3 default partitions logged.
+        self.db_connection.query.return_value.dictresult.return_value = [
+            {'tablename': 'public.t1', 'defaultpart': 'public.t1_1_prt_d'},
+            {'tablename': 'public.t2', 'defaultpart': 'public.t2_1_prt_1_2_prt_d'},
+            {'tablename': 'public.t2', 'defaultpart': 'public.t2_1_prt_2_2_prt_d'},
+        ]
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertEqual(mock_myprint.call_count, 1)
+        self.assertIn('2 range partitioned table(s)', mock_myprint.call_args[0][0])
+        self.subject.logger.error.assert_any_call('range partition boundary collation has 2 issue(s)')
+        self.subject.logger.error.assert_has_calls([
+            call('  table public.t1, default partition public.t1_1_prt_d'),
+            call('  table public.t2, default partition public.t2_1_prt_1_2_prt_d'),
+            call('  table public.t2, default partition public.t2_1_prt_2_2_prt_d'),
+        ])
+
+    def test_checkPartitionBoundCollation_with_error_on_execution(self):
+        self.db_connection.query.side_effect = Exception("Simulated error during execution")
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(self.db_connection.query.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
+    @patch('gpcheckcat.connect2')
+    def test_checkPartitionBoundCollation_exception_on_connect(self, mock_connect2):
+        mock_connect2.side_effect = Exception("Simulated error during connection")
+
+        self.subject.checkPartitionBoundCollation()
+
+        self.assertEqual(mock_connect2.call_count, 1)
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+
     def test_checkMixDistPolicy_with_error_on_execution(self):
         # Mocking the database connection to raise an exception during execution
 
