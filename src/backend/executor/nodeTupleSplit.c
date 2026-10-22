@@ -205,14 +205,16 @@ ExecTupleSplit(PlanState *pstate)
 			memcpy(node->isnull_orig, node->outerslot->tts_isnull,
 		           node->outerslot->tts_nvalid * sizeof(bool));
 		}
-
-		/*
-		 * Reset the isnull array to the original state. The previous split
-		 * of the same tuple nulled out columns not related to its DQA, and
-		 * the filter below may reference them.
-		 */
-		memcpy(node->outerslot->tts_isnull, node->isnull_orig,
-			   node->outerslot->tts_nvalid * sizeof(bool));
+		else
+		{
+			/*
+			 * Reset the isnull array to the original state. The previous
+			 * split of the same tuple nulled out columns not related to its
+			 * DQA, and the filter below may reference them.
+			 */
+			memcpy(node->outerslot->tts_isnull, node->isnull_orig,
+				   node->outerslot->tts_nvalid * sizeof(bool));
+		}
 
 		econtext->ecxt_outertuple = node->outerslot;
 
