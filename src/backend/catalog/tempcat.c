@@ -182,7 +182,8 @@ typedef enum TempcatKeyType
 {
 	TCK_NONE,
 	TCK_OID,
-	TCK_NAME
+	TCK_NAME,
+	TCK_OID_INT2				/* an OID column and an int2 one (keyattr2) */
 } TempcatKeyType;
 
 #define TEMPCAT_NKEYS 2
@@ -202,6 +203,7 @@ typedef struct TempcatCatalogDef
 
 	AttrNumber	keyattr[TEMPCAT_NKEYS]; /* hashed lookup columns */
 	TempcatKeyType keytype[TEMPCAT_NKEYS];
+	AttrNumber	keyattr2[TEMPCAT_NKEYS];	/* the int2 column of TCK_OID_INT2 */
 } TempcatCatalogDef;
 
 #define REL RelationRelationId
@@ -210,8 +212,13 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 {
 	{RelationRelationId, Anum_pg_class_oid, REL, 0,
 	{Anum_pg_class_oid, Anum_pg_class_relname}, {TCK_OID, TCK_NAME}},
+	/*
+	 * A column of a relation is looked up by both (the relation's own are by
+	 * its OID): the relation's rows would be gone through for each column.
+	 */
 	{AttributeRelationId, Anum_pg_attribute_attrelid, REL, 0,
-	{Anum_pg_attribute_attrelid, 0}, {TCK_OID, TCK_NONE}},
+		{Anum_pg_attribute_attrelid, Anum_pg_attribute_attrelid},
+		{TCK_OID_INT2, TCK_OID}, {Anum_pg_attribute_attnum, 0}},
 	{TypeRelationId, Anum_pg_type_oid, TypeRelationId, 0,
 	{Anum_pg_type_oid, Anum_pg_type_typname}, {TCK_OID, TCK_NAME}},
 	{NamespaceRelationId, Anum_pg_namespace_oid, NamespaceRelationId, 0,
@@ -228,7 +235,8 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{TriggerRelationId, Anum_pg_trigger_tgrelid, REL, 0,
 	{Anum_pg_trigger_tgrelid, Anum_pg_trigger_oid}, {TCK_OID, TCK_OID}},
 	{StatisticRelationId, Anum_pg_statistic_starelid, REL, 0,
-	{Anum_pg_statistic_starelid, 0}, {TCK_OID, TCK_NONE}},
+		{Anum_pg_statistic_starelid, Anum_pg_statistic_starelid},
+		{TCK_OID_INT2, TCK_OID}, {Anum_pg_statistic_staattnum, 0}},
 	{DescriptionRelationId, Anum_pg_description_objoid, InvalidOid,
 		Anum_pg_description_classoid,
 	{Anum_pg_description_objoid, 0}, {TCK_OID, TCK_NONE}},
@@ -2981,6 +2989,7 @@ tempcat_tid_hash(ItemPointer tid)
 static uint32
 tempcat_key_hash(TempcatKeyType type, Datum value)
 {
+	Assert(type != TCK_OID_INT2);
 	if (type == TCK_OID)
 		return DatumGetUInt32(hash_uint32(DatumGetObjectId(value)));
 	else
@@ -2991,6 +3000,13 @@ tempcat_key_hash(TempcatKeyType type, Datum value)
 		return DatumGetUInt32(hash_any((const unsigned char *) s,
 									   strnlen(s, NAMEDATALEN)));
 	}
+}
+
+static inline uint32
+tempcat_key_hash2(Datum oid, Datum int2)
+{
+	return hash_combine(DatumGetUInt32(hash_uint32(DatumGetObjectId(oid))),
+						DatumGetUInt32(hash_uint32((uint32) DatumGetInt16(int2))));
 }
 
 /* Does the catalog still hold an entry (of any visibility) for 'oid'? */
@@ -3007,7 +3023,8 @@ tempcat_memory_has_oid(int catidx, Oid oid)
 		dsa_pointer np;
 
 		/* the oid column is always attribute 1 */
-		if (def->keyattr[k] != 1 || h->nbuckets == 0)
+		if (def->keyattr[k] != 1 || def->keytype[k] != TCK_OID ||
+			h->nbuckets == 0)
 			continue;
 
 		np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
@@ -3136,7 +3153,17 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 		if (def->keytype[k] == TCK_NONE)
 			continue;
 		value = heap_getattr(tup, def->keyattr[k], desc, &isnull);
-		e->keyhash[k] = isnull ? 0 : tempcat_key_hash(def->keytype[k], value);
+		if (def->keytype[k] == TCK_OID_INT2)
+		{
+			bool		isnull2;
+			Datum		value2 = heap_getattr(tup, def->keyattr2[k], desc,
+											  &isnull2);
+
+			e->keyhash[k] = isnull || isnull2 ? 0 :
+				tempcat_key_hash2(value, value2);
+		}
+		else
+			e->keyhash[k] = isnull ? 0 : tempcat_key_hash(def->keytype[k], value);
 	}
 
 	/* link into the catalog's list */
@@ -4677,11 +4704,93 @@ tempcat_compare_itup(TempcatScan scan, HeapTuple a,
 	return 0;
 }
 
-static int
-tempcat_qsort_cmp(const void *a, const void *b, void *arg)
+/* A row to sort, with the values of the index's key columns. */
+typedef struct TempcatSortRow
 {
-	return tempcat_compare((TempcatScan) arg,
-						   *(const HeapTuple *) a, *(const HeapTuple *) b);
+	HeapTuple	tuple;
+	Datum	   *values;
+	bool	   *isnull;
+} TempcatSortRow;
+
+static int
+tempcat_sort_cmp(const void *a, const void *b, void *arg)
+{
+	const TempcatSortRow *ra = (const TempcatSortRow *) a;
+	const TempcatSortRow *rb = (const TempcatSortRow *) b;
+	TempcatScan scan = (TempcatScan) arg;
+	int			i;
+
+	for (i = 0; i < scan->nidxkeys; i++)
+	{
+		int			cmp = tempcat_compare_key(scan, i,
+											  ra->values[i], ra->isnull[i],
+											  rb->values[i], rb->isnull[i]);
+
+		if (cmp != 0)
+			return cmp;
+	}
+	return 0;
+}
+
+/*
+ * Sort the rows of the scan by its index key.  The key columns are taken
+ * from each row once, not at each comparison: a relation's relcache entry
+ * reads all its columns, defaults and the like each time it is built, and
+ * the rows of a wide one are sorted then.
+ */
+static void
+tempcat_sort(TempcatScan scan)
+{
+	int			n = scan->ntuples;
+	int			nkeys = scan->nidxkeys;
+	TempcatSortRow *rows = palloc(sizeof(TempcatSortRow) * n);
+	Datum	   *values = palloc(sizeof(Datum) * n * nkeys);
+	bool	   *isnull = palloc(sizeof(bool) * n * nkeys);
+	int			r;
+	int			i;
+
+	for (r = 0; r < n; r++)
+	{
+		rows[r].tuple = scan->tuples[r];
+		rows[r].values = &values[r * nkeys];
+		rows[r].isnull = &isnull[r * nkeys];
+		for (i = 0; i < nkeys; i++)
+			rows[r].values[i] =
+				heap_getattr(rows[r].tuple,
+							 scan->irel->rd_index->indkey.values[i],
+							 scan->heapdesc, &rows[r].isnull[i]);
+	}
+	qsort_arg(rows, n, sizeof(TempcatSortRow), tempcat_sort_cmp, scan);
+	for (r = 0; r < n; r++)
+		scan->tuples[r] = rows[r].tuple;
+	pfree(isnull);
+	pfree(values);
+	pfree(rows);
+}
+
+/*
+ * Does the scan have an equality key on column 'attno', whose argument
+ * ('*arg') has the column's type 'typid'?  It must have it for the hash to
+ * match: index scan keys can be cross-type (e.g. name = text).
+ */
+static bool
+tempcat_scan_key_arg(int nkeys, ScanKey key, AttrNumber attno, Oid typid,
+					 Datum *arg)
+{
+	int			i;
+
+	for (i = 0; i < nkeys; i++)
+	{
+		if (key[i].sk_attno == attno &&
+			key[i].sk_strategy == BTEqualStrategyNumber &&
+			!(key[i].sk_flags & SK_ISNULL) &&
+			(key[i].sk_subtype == InvalidOid || key[i].sk_subtype == typid))
+		{
+			*arg = key[i].sk_argument;
+			return true;
+		}
+	}
+	return false;
 }
 
 /*
@@ -4726,27 +4835,35 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 	if (snapshot == NULL)
 		snapshot = GetCatalogSnapshot(RelationGetRelid(rel));
 
-	/* Use a hashed column if the scan has an equality key on it. */
+	/* Use a hashed key if the scan has equality keys on its columns. */
 	for (k = 0; k < TEMPCAT_NKEYS && usekey < 0; k++)
 	{
-		if (def->keytype[k] == TCK_NONE)
-			continue;
-		for (i = 0; i < nkeys; i++)
+		Datum		arg;
+		Datum		arg2;
+
+		switch (def->keytype[k])
 		{
-			/*
-			 * The argument must have the column's type for the hash to
-			 * match: index scan keys can be cross-type (e.g. name = text).
-			 */
-			if (key[i].sk_attno == def->keyattr[k] &&
-				key[i].sk_strategy == BTEqualStrategyNumber &&
-				!(key[i].sk_flags & SK_ISNULL) &&
-				(key[i].sk_subtype == InvalidOid ||
-				 key[i].sk_subtype == (def->keytype[k] == TCK_OID ? OIDOID : NAMEOID)))
-			{
-				usekey = k;
-				usehash = tempcat_key_hash(def->keytype[k], key[i].sk_argument);
+			case TCK_NONE:
 				break;
-			}
+			case TCK_OID_INT2:
+				if (tempcat_scan_key_arg(nkeys, key, def->keyattr[k], OIDOID,
+										 &arg) &&
+					tempcat_scan_key_arg(nkeys, key, def->keyattr2[k], INT2OID,
+										 &arg2))
+				{
+					usekey = k;
+					usehash = tempcat_key_hash2(arg, arg2);
+				}
+				break;
+			default:
+				if (tempcat_scan_key_arg(nkeys, key, def->keyattr[k],
+										 def->keytype[k] == TCK_OID ? OIDOID : NAMEOID,
+										 &arg))
+				{
+					usekey = k;
+					usehash = tempcat_key_hash(def->keytype[k], arg);
+				}
+				break;
 		}
 	}
 
@@ -4846,8 +4963,7 @@ tempcat_beginscan(Relation rel, Relation irel, Snapshot snapshot,
 		for (i = 0; i < scan->nidxkeys; i++)
 			scan->procs[i] = index_getprocinfo(irel, i + 1, BTORDER_PROC);
 		if (scan->ntuples > 1)
-			qsort_arg(scan->tuples, scan->ntuples, sizeof(HeapTuple),
-					  tempcat_qsort_cmp, scan);
+			tempcat_sort(scan);
 	}
 
 	return scan;
