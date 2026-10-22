@@ -30,6 +30,12 @@ DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)
 (PARTITION p1 START ('A') END ('b'), PARTITION p2 START ('b') END ('C'));
 
+CREATE TABLE src_ovl (id int, k text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (k)
+(PARTITION p1 START ('A') END ('b'), PARTITION p2 START ('B') END ('Bb'),
+ PARTITION p3 START ('Bc') END ('C'));
+
 CREATE TABLE src_sub (id int, k text)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (id)
@@ -76,6 +82,14 @@ DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)
 (PARTITION p1 START ('a') END ('b'), PARTITION p2 START ('b') END ('c'));
 SELECT copy_bounds('c_old_rev', 'src_rev');
+
+-- Reported by both checks: under "C", p1 covers the ranges of p2 and p3.
+CREATE TABLE c_old_ovl (id int, k text COLLATE "C")
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (k)
+(PARTITION p1 START ('a') END ('b'), PARTITION p2 START ('b') END ('c'),
+ PARTITION p3 START ('c') END ('d'));
+SELECT copy_bounds('c_old_ovl', 'src_ovl');
 
 RESET allow_system_table_mods;
 

@@ -749,7 +749,16 @@ def checkPartitionBoundOrder():
 
         invalid = {}
         for level in getStaleRangePartitionLevels(db):
-            partitions = findInvalidRangesForKeyCollation(db, level)
+            # check the other levels even if one of them fails
+            try:
+                partitions = findInvalidRangesForKeyCollation(db, level)
+            except Exception as e:
+                GV.checkStatus = False
+                setError(ERROR_NOREPAIR)
+                myprint('[ERROR] executing test: checkPartitionBoundOrder for table %s'
+                        % level['tablename'])
+                myprint('  Execution error: ' + str(e))
+                continue
             if partitions:
                 invalid.setdefault(level['tablename'], []).extend(partitions)
 
@@ -781,8 +790,9 @@ def checkPartitionBoundOrder():
 def findInvalidRangesForKeyCollation(db, level):
     """
     Return the partitions of a range partitioning level whose ranges are
-    reversed, or overlap the previous range of the same parent, when the
-    boundaries are compared using the collation of the partitioning key.
+    reversed, or overlap a range of the same parent that starts before them,
+    when the boundaries are compared using the collation of the partitioning
+    key.
     """
     rules = db.query('''
         SELECT quote_literal(coalesce(r.parname, c.relname)) AS name,
@@ -810,16 +820,17 @@ def findInvalidRangesForKeyCollation(db, level):
         o AS (
             SELECT r.*,
                    row_number() OVER w AS n,
-                   lag(e) OVER w AS prev_e,
-                   lag(e IS NULL) OVER w AS prev_open,
-                   lag(eincl) OVER w AS prev_eincl
+                   bool_or(e IS NULL) OVER prev AS prev_open,
+                   max(e) OVER prev AS prev_e,
+                   max(CASE WHEN eincl THEN e END) OVER prev AS prev_incl_e
             FROM r
-            WINDOW w AS (PARTITION BY parent ORDER BY s NULLS FIRST)
+            WINDOW w AS (PARTITION BY parent ORDER BY s NULLS FIRST),
+                   prev AS (w ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
         )
         SELECT name FROM o
         WHERE s > e
             OR (n > 1 AND (prev_open OR s IS NULL OR prev_e > s
-                           OR (prev_e = s AND prev_eincl AND sincl)))
+                           OR (prev_incl_e = s AND sincl)))
         ORDER BY name
     ''' % values)
     return [row['name'] for row in curs.dictresult()]
