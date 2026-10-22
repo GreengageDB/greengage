@@ -296,51 +296,51 @@ select tableoid::regclass, * from rp_sub order by id;
 
 --
 -- Tables created by earlier versions have the database default collation
--- stored in their boundaries. Rows must still be routed, and ALTER TABLE must
--- still compare boundaries, using the key's collation. To get such boundaries,
--- copy them from a table with the same boundaries and a default-collation key.
+-- stored in their boundaries, and keep comparing the boundaries using it.
+-- Partitions added to such a table must get the same collation, so that all
+-- boundaries of a level are compared the same way. To get such tables, copy
+-- the boundaries and their order from a table with the same partitions and a
+-- default-collation key. The values below sort the same in every collation.
 --
 set allow_system_table_mods = on;
 create function copy_bounds(target regclass, source regclass) returns void
 language sql as $$
 	update pg_partition_rule r
-	set parrangestart = s.parrangestart, parrangeend = s.parrangeend
+	set parrangestart = s.parrangestart, parrangeend = s.parrangeend,
+	    parlistvalues = s.parlistvalues, parruleord = s.parruleord
 	from pg_partition p, pg_partition ps, pg_partition_rule s
 	where r.paroid = p.oid and p.parrelid = target
 	  and s.paroid = ps.oid and ps.parrelid = source
 	  and s.parname = r.parname;
 $$;
-create table rp_c_old (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('0') end ('b'),
- partition p2 start ('b') end ('z'));
-create table rp_c_old_add (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p2 start ('a') end ('z'));
-create table rp_en_old (id int, k text collate coll_en)
-distributed by (id)
-partition by range (k)
-(partition p1 start ('0') end ('b'),
- partition p2 start ('b') end ('z'));
-create table rp_en_old_add (id int, k text collate coll_en)
-distributed by (id)
-partition by range (k)
-(partition p2 start ('B') end ('z'));
 create table rp_def_old (id int, k text)
 distributed by (id)
 partition by range (k)
-(partition p1 start ('0') end ('b'),
- partition p2 start ('b') end ('z'));
-create table rp_def_old_c_add (id int, k text)
+(partition p1 start ('a') end ('m'),
+ partition p2 start ('m') end ('t'),
+ default partition other);
+create table rp_c_old (id int, k text collate "C")
 distributed by (id)
 partition by range (k)
-(partition p2 start ('a') end ('z'));
-create table rp_def_old_en_add (id int, k text)
+(partition p1 start ('a') end ('m'),
+ partition p2 start ('m') end ('t'),
+ default partition other);
+create table rp_en_old (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
-(partition p2 start ('B') end ('z'));
+(partition p1 start ('a') end ('m'),
+ partition p2 start ('m') end ('t'),
+ default partition other);
+create table lp_def_old (id int, k text)
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ default partition other);
+create table lp_c_old (id int, k text collate "C")
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ default partition other);
 select copy_bounds('rp_c_old', 'rp_def_old');
  copy_bounds 
 -------------
@@ -353,159 +353,83 @@ select copy_bounds('rp_en_old', 'rp_def_old');
  
 (1 row)
 
-select copy_bounds('rp_c_old_add', 'rp_def_old_c_add');
- copy_bounds 
--------------
- 
-(1 row)
-
-select copy_bounds('rp_en_old_add', 'rp_def_old_en_add');
+select copy_bounds('lp_c_old', 'lp_def_old');
  copy_bounds 
 -------------
  
 (1 row)
 
 reset allow_system_table_mods;
--- The copied boundaries are shown without COLLATE.
-select tablename, partitionname, partitionrangestart, partitionrangeend
+alter table rp_c_old split partition p1 at ('g') into (partition p1a, partition p1b);
+alter table rp_c_old split default partition start ('t') end ('w')
+  into (partition p3, default partition);
+alter table rp_c_old drop default partition;
+alter table rp_c_old add partition p4 start ('w') end ('y');
+alter table rp_en_old split partition p1 at ('g') into (partition p1a, partition p1b);
+alter table rp_en_old split default partition start ('t') end ('w')
+  into (partition p3, default partition);
+alter table rp_en_old drop default partition;
+alter table rp_en_old add partition p4 start ('w') end ('y');
+alter table lp_c_old split default partition at ('c')
+  into (partition p2, default partition);
+alter table lp_c_old drop default partition;
+alter table lp_c_old add partition p3 values ('d');
+-- No boundary is shown with COLLATE.
+select tablename, partitionname, partitionrangestart, partitionrangeend,
+       partitionlistvalues
 from pg_partitions
 where schemaname = 'partition_collation'
-  and tablename in ('rp_c_old', 'rp_en_old', 'rp_c_old_add', 'rp_en_old_add')
-order by tablename, partitionname;
-   tablename   | partitionname | partitionrangestart | partitionrangeend 
----------------+---------------+---------------------+-------------------
- rp_c_old      | p1            | '0'::text           | 'b'::text
- rp_c_old      | p2            | 'b'::text           | 'z'::text
- rp_c_old_add  | p2            | 'a'::text           | 'z'::text
- rp_en_old     | p1            | '0'::text           | 'b'::text
- rp_en_old     | p2            | 'b'::text           | 'z'::text
- rp_en_old_add | p2            | 'B'::text           | 'z'::text
-(6 rows)
-
--- 'C' sorts before 'b' in "C" and after 'b' in en_US.utf8.
-insert into rp_c_old values (1, 'a'), (2, 'x'), (3, 'C');
-select tableoid::regclass, * from rp_c_old order by id;
-     tableoid      | id | k 
--------------------+----+---
- rp_c_old_1_prt_p1 |  1 | a
- rp_c_old_1_prt_p2 |  2 | x
- rp_c_old_1_prt_p1 |  3 | C
-(3 rows)
-
-alter table rp_c_old truncate partition for ('C');
-alter table rp_c_old split partition p1 at ('C') into (partition p1a, partition p1b);
-select tableoid::regclass, * from rp_c_old order by id;
-     tableoid      | id | k 
--------------------+----+---
- rp_c_old_1_prt_p2 |  2 | x
-(1 row)
-
-insert into rp_en_old values (1, 'a'), (2, 'x'), (3, 'C');
-select tableoid::regclass, * from rp_en_old order by id;
-      tableoid      | id | k 
---------------------+----+---
- rp_en_old_1_prt_p1 |  1 | a
- rp_en_old_1_prt_p2 |  2 | x
- rp_en_old_1_prt_p2 |  3 | C
-(3 rows)
-
-alter table rp_en_old truncate partition for ('C');
-alter table rp_en_old split partition p2 at ('C') into (partition p2a, partition p2b);
-select tableoid::regclass, * from rp_en_old order by id;
-      tableoid      | id | k 
---------------------+----+---
- rp_en_old_1_prt_p1 |  1 | a
-(1 row)
-
-alter table rp_c_old_add add partition p1 start ('B') end ('a');
-alter table rp_en_old_add add partition p1 start ('a') end ('B');
-select tablename, partitionname, partitionrangestart, partitionrangeend
-from pg_partitions
-where schemaname = 'partition_collation'
-  and tablename in ('rp_c_old', 'rp_en_old', 'rp_c_old_add', 'rp_en_old_add')
-order by tablename, partitionname;
-   tablename   | partitionname |    partitionrangestart    |     partitionrangeend     
----------------+---------------+---------------------------+---------------------------
- rp_c_old      | p1a           | '0'::text COLLATE "C"     | 'C'::text COLLATE "C"
- rp_c_old      | p1b           | 'C'::text COLLATE "C"     | 'b'::text COLLATE "C"
- rp_c_old      | p2            | 'b'::text                 | 'z'::text
- rp_c_old_add  | p1            | 'B'::text COLLATE "C"     | 'a'::text COLLATE "C"
- rp_c_old_add  | p2            | 'a'::text                 | 'z'::text
- rp_en_old     | p1            | '0'::text                 | 'b'::text
- rp_en_old     | p2a           | 'b'::text COLLATE coll_en | 'C'::text COLLATE coll_en
- rp_en_old     | p2b           | 'C'::text COLLATE coll_en | 'z'::text COLLATE coll_en
- rp_en_old_add | p1            | 'a'::text COLLATE coll_en | 'B'::text COLLATE coll_en
- rp_en_old_add | p2            | 'B'::text                 | 'z'::text
-(10 rows)
-
--- Tables created by earlier versions also store their partitions in the order
--- of the database default collation. Partitions must still be found using the
--- key's collation. Store the partitions in the order of the other collation:
--- p1, p2, p3 for the "C" key and p3, p1, p2 for the en_US.utf8 key.
-create table rp_c_old_ord (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('a') end ('c'),
- partition p2 start ('d') end ('e'),
- partition p3 start ('X') end ('Y'));
-create table rp_en_old_ord (id int, k text collate coll_en)
-distributed by (id)
-partition by range (k)
-(partition p1 start ('a') end ('c'),
- partition p2 start ('d') end ('e'),
- partition p3 start ('X') end ('Y'));
-set allow_system_table_mods = on;
-update pg_partition_rule r
-set parruleord = 10 + case r.parname when 'p1' then 1 when 'p2' then 2 else 3 end
-from pg_partition p
-where r.paroid = p.oid and p.parrelid = 'rp_c_old_ord'::regclass;
-update pg_partition_rule r
-set parruleord = 10 + case r.parname when 'p3' then 1 when 'p1' then 2 else 3 end
-from pg_partition p
-where r.paroid = p.oid and p.parrelid = 'rp_en_old_ord'::regclass;
-update pg_partition_rule r
-set parruleord = parruleord - 10
-from pg_partition p
-where r.paroid = p.oid
-  and p.parrelid in ('rp_c_old_ord'::regclass, 'rp_en_old_ord'::regclass);
-reset allow_system_table_mods;
-select tablename, partitionname, partitionposition
-from pg_partitions
-where schemaname = 'partition_collation'
-  and tablename in ('rp_c_old_ord', 'rp_en_old_ord')
+  and tablename in ('rp_c_old', 'rp_en_old', 'lp_c_old')
 order by tablename, partitionposition;
-   tablename   | partitionname | partitionposition 
----------------+---------------+-------------------
- rp_c_old_ord  | p1            |                 1
- rp_c_old_ord  | p2            |                 2
- rp_c_old_ord  | p3            |                 3
- rp_en_old_ord | p3            |                 1
- rp_en_old_ord | p1            |                 2
- rp_en_old_ord | p2            |                 3
-(6 rows)
+ tablename | partitionname | partitionrangestart | partitionrangeend | partitionlistvalues  
+-----------+---------------+---------------------+-------------------+----------------------
+ lp_c_old  | p1            |                     |                   | 'a'::text, 'b'::text
+ lp_c_old  | p2            |                     |                   | 'c'::text
+ lp_c_old  | p3            |                     |                   | 'd'::text
+ rp_c_old  | p1a           | 'a'::text           | 'g'::text         | 
+ rp_c_old  | p1b           | 'g'::text           | 'm'::text         | 
+ rp_c_old  | p2            | 'm'::text           | 't'::text         | 
+ rp_c_old  | p3            | 't'::text           | 'w'::text         | 
+ rp_c_old  | p4            | 'w'::text           | 'y'::text         | 
+ rp_en_old | p1a           | 'a'::text           | 'g'::text         | 
+ rp_en_old | p1b           | 'g'::text           | 'm'::text         | 
+ rp_en_old | p2            | 'm'::text           | 't'::text         | 
+ rp_en_old | p3            | 't'::text           | 'w'::text         | 
+ rp_en_old | p4            | 'w'::text           | 'y'::text         | 
+(13 rows)
 
--- 'Xb' is in p3 for both keys, so only row 3 is removed.
-insert into rp_c_old_ord values (1, 'b'), (2, 'dd'), (3, 'Xa');
-alter table rp_c_old_ord truncate partition for ('Xb');
-select tableoid::regclass, * from rp_c_old_ord order by id;
-       tableoid        | id | k  
------------------------+----+----
- rp_c_old_ord_1_prt_p1 |  1 | b
- rp_c_old_ord_1_prt_p2 |  2 | dd
-(2 rows)
+insert into rp_c_old values (1, 'c'), (2, 'h'), (3, 'n'), (4, 'u'), (5, 'x');
+select tableoid::regclass, * from rp_c_old order by id;
+      tableoid      | id | k 
+--------------------+----+---
+ rp_c_old_1_prt_p1a |  1 | c
+ rp_c_old_1_prt_p1b |  2 | h
+ rp_c_old_1_prt_p2  |  3 | n
+ rp_c_old_1_prt_p3  |  4 | u
+ rp_c_old_1_prt_p4  |  5 | x
+(5 rows)
 
-insert into rp_en_old_ord values (1, 'b'), (2, 'dd'), (3, 'Xa');
-alter table rp_en_old_ord truncate partition for ('Xb');
-select tableoid::regclass, * from rp_en_old_ord order by id;
-        tableoid        | id | k  
-------------------------+----+----
- rp_en_old_ord_1_prt_p1 |  1 | b
- rp_en_old_ord_1_prt_p2 |  2 | dd
-(2 rows)
+insert into rp_en_old values (1, 'c'), (2, 'h'), (3, 'n'), (4, 'u'), (5, 'x');
+select tableoid::regclass, * from rp_en_old order by id;
+      tableoid       | id | k 
+---------------------+----+---
+ rp_en_old_1_prt_p1a |  1 | c
+ rp_en_old_1_prt_p1b |  2 | h
+ rp_en_old_1_prt_p2  |  3 | n
+ rp_en_old_1_prt_p3  |  4 | u
+ rp_en_old_1_prt_p4  |  5 | x
+(5 rows)
 
-drop table rp_c_old, rp_en_old, rp_c_old_add, rp_en_old_add;
-drop table rp_c_old_ord, rp_en_old_ord;
-drop table rp_def_old, rp_def_old_c_add, rp_def_old_en_add;
+insert into lp_c_old values (1, 'a'), (2, 'c'), (3, 'd');
+select tableoid::regclass, * from lp_c_old order by id;
+     tableoid      | id | k 
+-------------------+----+---
+ lp_c_old_1_prt_p1 |  1 | a
+ lp_c_old_1_prt_p2 |  2 | c
+ lp_c_old_1_prt_p3 |  3 | d
+(3 rows)
+
+drop table rp_c_old, rp_en_old, rp_def_old, lp_c_old, lp_def_old;
 drop function copy_bounds(regclass, regclass);
 --
 -- Partition boundaries carry the collation of the partitioning key.

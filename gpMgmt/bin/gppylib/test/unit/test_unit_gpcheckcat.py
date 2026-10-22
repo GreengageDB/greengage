@@ -31,7 +31,7 @@ class GpCheckCatTestCase(GpTestCase):
             patch('pygresql.pgdb'),
         ])
 
-        self.subject.logger = Mock(spec=['log', 'info', 'debug', 'error', 'fatal'])
+        self.subject.logger = Mock(spec=['log', 'info', 'debug', 'warning', 'error', 'fatal'])
         self.unique_index_violation_check.runCheck.return_value = []
         self.leaked_schema_dropper = Mock(spec=['drop_leaked_schemas'])
         self.leaked_schema_dropper.drop_leaked_schemas.return_value = []
@@ -486,25 +486,21 @@ class GpCheckCatTestCase(GpTestCase):
 
     @patch('gpcheckcat.myprint')
     def test_checkPartitionBoundCollation_with_issues(self, mock_myprint):
-        # t2 has a default subpartition in each of its two partitions, so
-        # 2 tables are reported, with all 3 default partitions logged.
+        # Affected tables are reported as a warning, which does not fail the run.
         self.db_connection.query.return_value.dictresult.return_value = [
-            {'tablename': 'public.t1', 'defaultpart': 'public.t1_1_prt_d'},
-            {'tablename': 'public.t2', 'defaultpart': 'public.t2_1_prt_1_2_prt_d'},
-            {'tablename': 'public.t2', 'defaultpart': 'public.t2_1_prt_2_2_prt_d'},
+            {'tablename': 'public.t1'},
+            {'tablename': 'public.t2'},
         ]
 
         self.subject.checkPartitionBoundCollation()
 
-        self.assertFalse(self.subject.GV.checkStatus)
-        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.assertTrue(self.subject.GV.checkStatus)
+        self.subject.setError.assert_not_called()
         self.assertEqual(mock_myprint.call_count, 1)
-        self.assertIn('2 range partitioned table(s)', mock_myprint.call_args[0][0])
-        self.subject.logger.error.assert_any_call('range partition boundary collation has 2 issue(s)')
-        self.subject.logger.error.assert_has_calls([
-            call('  table public.t1, default partition public.t1_1_prt_d'),
-            call('  table public.t2, default partition public.t2_1_prt_1_2_prt_d'),
-            call('  table public.t2, default partition public.t2_1_prt_2_2_prt_d'),
+        self.assertIn('[WARNING]: 2 range partitioned table(s)', mock_myprint.call_args[0][0])
+        self.subject.logger.warning.assert_has_calls([
+            call('  table public.t1'),
+            call('  table public.t2'),
         ])
 
     def test_checkPartitionBoundCollation_with_error_on_execution(self):

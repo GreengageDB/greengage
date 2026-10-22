@@ -185,12 +185,14 @@ Feature: gpcheckcat tests
         And the user runs "psql part_collation_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/part_bound_collation.sql"
         Then psql should return a return code of 0
         When the user runs "gpcheckcat -R part_bound_collation part_collation_db"
-        Then gpcheckcat should return a return code of 3
-        And gpcheckcat should print "2 range partitioned table\(s\) have boundaries stored with a collation other than the partitioning key's" to stdout
-        When the user runs "psql part_collation_db -c 'DROP TABLE c_old, c_old_sub'"
+        Then gpcheckcat should return a return code of 0
+        And gpcheckcat should print "\[WARNING\]: 3 range partitioned table\(s\) compare partition boundaries using the database default collation instead of the partitioning key's collation" to stdout
+        And gpcheckcat should print "Found no catalog issue" to stdout
+        When the user runs "psql part_collation_db -c 'DROP TABLE c_old, c_old_sub, c_old_nodef'"
         Then psql should return a return code of 0
         When the user runs "gpcheckcat -R part_bound_collation part_collation_db"
         Then gpcheckcat should return a return code of 0
+        And gpcheckcat should not print "WARNING" to stdout
         And gpcheckcat should print "Found no catalog issue" to stdout
         And the user runs "dropdb part_collation_db"
 

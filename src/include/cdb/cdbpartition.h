@@ -41,9 +41,7 @@ typedef struct PartitionRangeState
 	FmgrInfo *ltfuncs_inverse; /* comparator partRule < expr */
 	FmgrInfo *lefuncs_inverse; /* comparator partRule <= expr */
 	int last_rule; /* cache offset to the last rule and test if it matches */
-	PartitionRule **rules; /* unused */
-	Oid *keycollations; /* collation of each partitioning key column */
-	HTAB *sortedrules_cache; /* sorted rules of each PartitionNode */
+	PartitionRule **rules;
 } PartitionRangeState;
 
 /* likewise, for list */
@@ -112,9 +110,6 @@ max_partition_attr(PartitionNode *pn);
 
 extern List *
 get_partition_attrs(PartitionNode *pn);
-
-extern Oid
-get_partition_key_collation(Partition *part, int keyno);
 
 extern int 
 num_partition_levels(PartitionNode *pn);

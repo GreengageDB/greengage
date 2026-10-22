@@ -20,13 +20,11 @@
 #include "access/genam.h"
 #include "access/hash.h"
 #include "access/heapam.h"
-#include "access/nbtree.h"
 #include "access/reloptions.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
-#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_exttable.h"
 #include "catalog/pg_inherits.h"
@@ -1932,6 +1930,73 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
 	return 1;
 }								/* end del_part_template */
 
+/*
+ * inherit_bound_collations
+ *   Give the boundaries of a new partition rule the collation of the
+ *   boundaries of an existing rule of the same partitioning level and parent.
+ *
+ * Tables created by older versions store the boundaries with the database
+ * default collation instead of the key's, and compare them using it. A
+ * partition added to such a table must use the same collation, so that all
+ * boundaries of a level are compared the same way.
+ */
+static void
+inherit_bound_collations(Oid paroid, Oid parentoid, char parkind,
+						 Node *rangestart, Node *rangeend, List *listvalues)
+{
+	Relation	rel;
+	ScanKeyData scankey[2];
+	SysScanDesc sscan;
+	HeapTuple	tuple;
+	List	   *sibvals = NIL;
+	ListCell   *lc;
+	int			keyno;
+
+	rel = heap_open(PartitionRuleRelationId, AccessShareLock);
+	ScanKeyInit(&scankey[0], Anum_pg_partition_rule_paroid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(paroid));
+	ScanKeyInit(&scankey[1], Anum_pg_partition_rule_parparentrule,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(parentoid));
+	sscan = systable_beginscan(rel, PartitionRuleParoidParparentruleParruleordIndexId, true,
+							   NULL, 2, scankey);
+	while (HeapTupleIsValid(tuple = systable_getnext(sscan)))
+	{
+		PartitionRule *sibling = ruleMakePartitionRule(tuple);
+
+		if (parkind == 'r')
+			sibvals = (List *) (sibling->parrangestart ? sibling->parrangestart :
+								sibling->parrangeend);
+		else if (sibling->parlistvalues)
+			sibvals = linitial(sibling->parlistvalues);
+		if (sibvals)
+			break;
+	}
+	systable_endscan(sscan);
+	heap_close(rel, AccessShareLock);
+
+	keyno = 0;
+	foreach(lc, sibvals)
+	{
+		Oid			collation = ((Const *) lfirst(lc))->constcollid;
+		ListCell   *lcvals;
+
+		if (parkind == 'r')
+		{
+			if (rangestart)
+				((Const *) list_nth((List *) rangestart, keyno))->constcollid = collation;
+			if (rangeend)
+				((Const *) list_nth((List *) rangeend, keyno))->constcollid = collation;
+		}
+		else
+		{
+			foreach(lcvals, listvalues)
+				((Const *) list_nth((List *) lfirst(lcvals), keyno))->constcollid = collation;
+		}
+		keyno++;
+	}
+}
 
 /*
  * add_part_to_catalog() - add a partition to the catalog
@@ -2203,6 +2268,11 @@ add_part_to_catalog(Oid relid, PartitionBy *pby,
 			systable_endscan(sscan);
 			heap_close(partrulerel, AccessShareLock);
 		}
+
+		if (!bTemplate_Only && !el->isDefault)
+			inherit_bound_collations(paroid, parentoid,
+									 pby->partType == PARTTYP_RANGE ? 'r' : 'l',
+									 rangestart, rangeend, (List *) listvalues);
 
 		rule->paroid = paroid;
 		rule->parchildrelid = relid;
@@ -4043,7 +4113,6 @@ compare_partn_opfuncid(PartitionNode *partnode,
 		{
 			Oid			lhsid = tupdesc->attrs[attno - 1]->atttypid;
 			Oid			rhsid = lhsid;
-			Oid			collation = tupdesc->attrs[attno - 1]->attcollation;
 			Oid			opfuncid;
 			Datum		res;
 			Datum		d = values[attno - 1];
@@ -4054,7 +4123,7 @@ compare_partn_opfuncid(PartitionNode *partnode,
 			}
 
 			opfuncid = cdb_retrieve_btree_op(opclass, lhsid, rhsid, strategy);
-			res = OidFunctionCall2Coll(opfuncid, collation, c->constvalue, d);
+			res = OidFunctionCall2Coll(opfuncid, c->constcollid, c->constvalue, d);
 
 			if (!DatumGetBool(res))
 				return false;
@@ -4066,30 +4135,6 @@ compare_partn_opfuncid(PartitionNode *partnode,
 
 	return true;
 }								/* end compare_partn_opfuncid */
-
-/*
- * get_partition_key_collation
- *   Return the collation of a partitioning key column.
- *
- * Partition bounds must be compared using the collation of the key column,
- * not the collation stored in the bound's Const, as tables created by old
- * versions may have the database default collation stored there.
- */
-Oid
-get_partition_key_collation(Partition *part, int keyno)
-{
-	Oid			typid;
-	int32		typmod;
-	Oid			collid;
-
-	Assert(part != NULL);
-	Assert(keyno >= 0 && keyno < part->parnatts);
-
-	get_atttypetypmodcoll(part->parrelid, part->paratts[keyno],
-						  &typid, &typmod, &collid);
-
-	return collid;
-}
 
 /*
  *	Given a partition-by-list PartitionNode, search for
@@ -4413,7 +4458,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangestartincl /* strictly_less */ , false /* is_direct */ );
-		res = FunctionCall2Coll(finfo, rs->keycollations[keyno], c->constvalue, tupval);
+		res = FunctionCall2Coll(finfo, c->constcollid, c->constvalue, tupval);
 
 		if (!DatumGetBool(res))
 			return -1;
@@ -4435,7 +4480,7 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		 * strictly_less = true)
 		 */
 		finfo = get_less_than_comparator(keyno, rs, opclass, c->consttype, exprTypeOid, !rule->parrangeendincl /* strictly_less */ , true /* is_direct */ );
-		res = FunctionCall2Coll(finfo, rs->keycollations[keyno], tupval, c->constvalue);
+		res = FunctionCall2Coll(finfo, c->constcollid, tupval, c->constvalue);
 
 		if (!DatumGetBool(res))
 		{
@@ -4443,116 +4488,6 @@ range_test(Datum tupval, Oid exprTypeOid, PartitionRangeState *rs, int keyno,
 		}
 	}
 	return 0;
-}
-
-/* Element of SortedRangeRules->rules */
-typedef struct SortedRangeRule
-{
-	PartitionRule *rule;
-	int			ruleno;			/* position of rule in partnode->rules */
-} SortedRangeRule;
-
-/* Entry of PartitionRangeState->sortedrules_cache */
-typedef struct SortedRangeRules
-{
-	PartitionNode *partnode;	/* hash key */
-	SortedRangeRule *rules;		/* partnode->rules, sorted by START */
-} SortedRangeRules;
-
-typedef struct RangeRuleSortContext
-{
-	FmgrInfo	cmpfunc;
-	Oid			collation;
-} RangeRuleSortContext;
-
-/* qsort_arg comparator of range rules by START, see get_sorted_range_rules() */
-static int
-range_rule_start_cmp(const void *a, const void *b, void *arg)
-{
-	PartitionRule *rulea = ((const SortedRangeRule *) a)->rule;
-	PartitionRule *ruleb = ((const SortedRangeRule *) b)->rule;
-	RangeRuleSortContext *cxt = (RangeRuleSortContext *) arg;
-	bool		hasstarta = PointerIsValid(rulea->parrangestart);
-	bool		hasstartb = PointerIsValid(ruleb->parrangestart);
-	int			cmp;
-
-	/* a rule with no START comes first */
-	if (!hasstarta || !hasstartb)
-		cmp = (int) hasstarta - (int) hasstartb;
-	else
-	{
-		Const	   *starta = (Const *) linitial((List *) rulea->parrangestart);
-		Const	   *startb = (Const *) linitial((List *) ruleb->parrangestart);
-
-		cmp = DatumGetInt32(FunctionCall2Coll(&cxt->cmpfunc, cxt->collation,
-											  starta->constvalue,
-											  startb->constvalue));
-	}
-
-	if (cmp != 0)
-		return cmp;
-
-	return rulea->parruleord - ruleb->parruleord;
-}
-
-/*
- * get_sorted_range_rules
- *   Return the rules of a range partitioning level as an array sorted by
- *   START, using the collation of the partitioning key.
- *
- * The rules are stored in the order of parruleord. Tables created by older
- * versions ordered them using the database default collation, which differs
- * from the key's collation if the key has a non-default one, while the binary
- * search in selectRangePartition() needs them in the key's order. Only such
- * keys are sorted; for any other key the stored order is already right.
- */
-static SortedRangeRule *
-get_sorted_range_rules(PartitionNode *partnode, PartitionRangeState *rs)
-{
-	SortedRangeRules *entry;
-	bool		found;
-
-	entry = (SortedRangeRules *) hash_search(rs->sortedrules_cache, &partnode,
-											 HASH_ENTER, &found);
-	if (!found)
-	{
-		Oid			collation = rs->keycollations[0];
-		SortedRangeRule *rules;
-		ListCell   *lc;
-		int			i = 0;
-
-		entry->rules = NULL;
-
-		rules = palloc(sizeof(SortedRangeRule) * list_length(partnode->rules));
-		foreach(lc, partnode->rules)
-		{
-			rules[i].rule = (PartitionRule *) lfirst(lc);
-			rules[i].ruleno = i;
-			i++;
-		}
-
-		if (OidIsValid(collation) && collation != DEFAULT_COLLATION_OID)
-		{
-			Oid			opclass = partnode->part->parclass[0];
-			Oid			opcintype = get_opclass_input_type(opclass);
-			Oid			cmpproc;
-			RangeRuleSortContext cxt;
-
-			cmpproc = get_opfamily_proc(get_opclass_family(opclass), opcintype,
-										opcintype, BTORDER_PROC);
-			if (!OidIsValid(cmpproc))
-				elog(ERROR, "missing support function %d(%u,%u) for operator class %u",
-					 BTORDER_PROC, opcintype, opcintype, opclass);
-			fmgr_info(cmpproc, &cxt.cmpfunc);
-			cxt.collation = collation;
-
-			qsort_arg(rules, i, sizeof(SortedRangeRule), range_rule_start_cmp, &cxt);
-		}
-
-		entry->rules = rules;
-	}
-
-	return entry->rules;
 }
 
 /*
@@ -4574,7 +4509,6 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 	PartitionRule *rule = NULL;
 	PartitionNode *pNode = NULL;
 	PartitionRangeState *rs = NULL;
-	SortedRangeRule *sortedrules;
 	MemoryContext oldcxt = NULL;
 
 	Assert(partnode->part->parkind == 'r');
@@ -4585,8 +4519,6 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 	}
 	else
 	{
-		HASHCTL		hashctl;
-
 		/*
 		 * We're still in our caller's memory context so the memory will
 		 * persist long enough for us.
@@ -4596,23 +4528,23 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		rs->ltfuncs_direct = palloc0(sizeof(FmgrInfo) * natts);
 		rs->lefuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
 		rs->ltfuncs_inverse = palloc0(sizeof(FmgrInfo) * natts);
-		rs->keycollations = palloc(sizeof(Oid) * natts);
-		for (int keyno = 0; keyno < natts; keyno++)
-			rs->keycollations[keyno] = get_partition_key_collation(partnode->part, keyno);
 
 		/*
-		 * The rules are sorted on first use for each PartitionNode of this
-		 * level, see get_sorted_range_rules().
+		 * Unrolling the rules into an array currently works for the top level
+		 * partition only
 		 */
-		rs->rules = NULL;
-		MemSet(&hashctl, 0, sizeof(hashctl));
-		hashctl.keysize = sizeof(PartitionNode *);
-		hashctl.entrysize = sizeof(SortedRangeRules);
-		hashctl.hash = tag_hash;
-		hashctl.hcxt = CurrentMemoryContext;
-		rs->sortedrules_cache = hash_create("sorted range partition rules", 16,
-											&hashctl,
-											HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+		if (partnode->part->parlevel == 0)
+		{
+			int			i = 0;
+			ListCell   *lc;
+
+			rs->rules = palloc(sizeof(PartitionRule *) * list_length(rules));
+
+			foreach(lc, rules)
+				rs->rules[i++] = (PartitionRule *) lfirst(lc);
+		}
+		else
+			rs->rules = NULL;
 	}
 
 	/*
@@ -4626,9 +4558,6 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 		rs->lefuncs_inverse[keyno].fn_oid = InvalidOid;
 		rs->ltfuncs_inverse[keyno].fn_oid = InvalidOid;
 	}
-
-	/* The sorted rules are cached, so keep them out of part_cxt */
-	sortedrules = get_sorted_range_rules(partnode, rs);
 
 	if (accessMethods && accessMethods->part_cxt)
 		oldcxt = MemoryContextSwitchTo(accessMethods->part_cxt);
@@ -4663,7 +4592,10 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 
 		mid = low + (high - low) / 2;
 
-		rule = sortedrules[mid].rule;
+		if (rs->rules)
+			rule = rs->rules[mid];
+		else
+			rule = (PartitionRule *) list_nth(rules, mid);
 
 		if (isnull[attno - 1])
 		{
@@ -4724,7 +4656,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				Oid			dTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 
 				if (j != mid)
-					rule = sortedrules[j].rule;
+					rule = (PartitionRule *) list_nth(rules, j);
 
 				if (isnull[attno - 1])
 				{
@@ -4777,7 +4709,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 				int			ret;
 				Oid			dTypeOid = tupdesc->attrs[attno - 1]->atttypid;
 
-				rule = sortedrules[j].rule;
+				rule = (PartitionRule *) list_nth(rules, j);
 
 				if (isnull[attno - 1])
 				{
@@ -4820,15 +4752,7 @@ selectRangePartition(PartitionNode *partnode, Datum *values, bool *isnull,
 
 l_fin_range:
 	if (pSearch)
-	{
-		/*
-		 * searchpoint is a position in sortedrules, callers expect one in
-		 * rules. The rules are empty if there is only a default partition.
-		 */
-		if (searchpoint < list_length(rules))
-			searchpoint = sortedrules[searchpoint].ruleno;
 		*pSearch = searchpoint;
-	}
 
 	if (oldcxt)
 		MemoryContextSwitchTo(oldcxt);
@@ -5473,6 +5397,35 @@ apply_template_storage_encodings(CreateStmt *ct, Oid relid, Oid paroid,
 }
 
 /*
+ * get_partition_bound_collation
+ *   Return the collation stored with the boundaries of the existing
+ *   partitions of a partitioning level for the given key column, or
+ *   InvalidOid if there are none.
+ */
+static Oid
+get_partition_bound_collation(PartitionNode *pNode, int keyno)
+{
+	ListCell   *lc;
+
+	foreach(lc, pNode->rules)
+	{
+		PartitionRule *rule = (PartitionRule *) lfirst(lc);
+		List	   *vals;
+
+		if (pNode->part->parkind == 'r')
+			vals = (List *) (rule->parrangestart ? rule->parrangestart :
+							 rule->parrangeend);
+		else
+			vals = rule->parlistvalues ? linitial(rule->parlistvalues) : NIL;
+
+		if (list_length(vals) > keyno)
+			return ((Const *) list_nth(vals, keyno))->constcollid;
+	}
+
+	return InvalidOid;
+}
+
+/*
  * atpxPart_validate_spec: kludge up a PartitionBy statement and use
  * validate_partition_spec to transform and validate a partition
  * boundary spec.
@@ -5500,8 +5453,35 @@ atpxPart_validate_spec(PartitionBy *pBy,
 
 	int			result;
 	PartitionNode *pNode_tmpl = NULL;
+	int			keyno;
 
 	Assert(pNode != NULL && pNode->part != NULL);
+
+	/*
+	 * Tables created by older versions store the boundaries with the database
+	 * default collation instead of the key's, and compare them using it. Give
+	 * new boundaries of an existing level the collation of the existing ones,
+	 * so that all boundaries of the level are compared the same way.
+	 */
+	for (keyno = 0; keyno < pNode->part->parnatts; keyno++)
+	{
+		Oid			boundcoll = get_partition_bound_collation(pNode, keyno);
+		char	   *attname;
+		ListCell   *lc;
+
+		if (!OidIsValid(boundcoll))
+			continue;
+
+		attname = get_attname(pNode->part->parrelid,
+							  pNode->part->paratts[keyno]);
+		foreach(lc, schema)
+		{
+			ColumnDef  *def = (ColumnDef *) lfirst(lc);
+
+			if (strcmp(def->colname, attname) == 0)
+				def->collOid = boundcoll;
+		}
+	}
 
 	spec->partElem = list_make1(pelem);
 

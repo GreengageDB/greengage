@@ -40,7 +40,7 @@ PARTITION BY RANGE (k)
 (PARTITION p1 START ('a') END ('c'), DEFAULT PARTITION d);
 SELECT copy_bounds('c_old', 'src');
 
--- Reported, with both default subpartitions.
+-- Reported: the subpartitions have a "C" key.
 CREATE TABLE c_old_sub (id int, k text COLLATE "C")
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (id)
@@ -57,7 +57,7 @@ PARTITION BY RANGE (k)
 (PARTITION p1 START ('a') END ('c'), DEFAULT PARTITION d);
 SELECT copy_bounds('en_old', 'src');
 
--- Not reported: without a default partition, no row can be misplaced.
+-- Reported, also without a default partition.
 CREATE TABLE c_old_nodef (id int, k text COLLATE "C")
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)

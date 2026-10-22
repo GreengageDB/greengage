@@ -5239,7 +5239,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 						{
 							Insist(exprType((Node *)n) == exprType((Node *)start));
 							res = OidFunctionCall2Coll(funcid,
-													   get_partition_key_collation(prule1->pNode->part, 0),
+													   start->constcollid,
 													   start->constvalue,
 													   atval->constvalue);
 
@@ -5266,7 +5266,7 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 							{
 								end = linitial((List *)prule1->topRule->parrangeend);
 								res = OidFunctionCall2Coll(funcid,
-														   get_partition_key_collation(prule1->pNode->part, 0),
+														   end->constcollid,
 														   atval->constvalue,
 														   end->constvalue);
 
