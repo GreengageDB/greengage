@@ -15,6 +15,7 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "access/tempcat.h"
 #include "access/htup_details.h"
 #include "access/table.h"
 #include "access/xact.h"
@@ -1614,6 +1615,38 @@ DropRole(DropRoleStmt *stmt)
 		 * her.  We keep the lock until the end of transaction.
 		 */
 		LockSharedObject(AuthIdRelationId, roleid, 0, AccessExclusiveLock);
+
+		/*
+		 * Live sessions' temporary objects owned by this role are not in
+		 * pg_shdepend (their rows are virtual); their ownership edges are
+		 * published to the shared-memory registry instead.
+		 */
+		{
+			ObjectAddress roleobj;
+			ObjectAddress tempDepender;
+
+			ObjectAddressSet(roleobj, AuthIdRelationId, roleid);
+			if (tempcat_registry_has_dependents(&roleobj,
+												SHARED_DEPENDENCY_OWNER,
+												&tempDepender))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop role %s because %s belongs to another session",
+								role,
+								getTempObjectDescription(&tempDepender)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+
+			/* The registry also carries the ACL edges of temporary objects. */
+			if (tempcat_registry_has_dependents(&roleobj,
+												SHARED_DEPENDENCY_ACL,
+												&tempDepender))
+				ereport(ERROR,
+						(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+						 errmsg("cannot drop role %s because privileges are granted on %s",
+								role,
+								getTempObjectDescription(&tempDepender)),
+						 errhint("Disconnect that session, or drop the temporary object in it, and retry.")));
+		}
 
 		/* Check for pg_shdepend entries depending on this role */
 		if (checkSharedDependencies(AuthIdRelationId, roleid,

@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
@@ -333,6 +334,30 @@ performDeletion(const ObjectAddress *object,
 	ObjectAddresses *targetObjects;
 
 	/*
+	 * The target may be referenced by dependency edges of temporary objects
+	 * of another live session.  Those edges live in the temp memory catalog
+	 * of the owning backend and so cannot be found in the pg_depend walk
+	 * below; the shared-memory registry is the only place this session can
+	 * see them.  Refuse here: not even CASCADE could delete the dependent,
+	 * it belongs to the other session's memory.  The owning session skips
+	 * this: its own virtual rows are merged into its pg_depend scans, so
+	 * the normal walk below reports and handles them.
+	 */
+	{
+		ObjectAddress tempDepender;
+
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescription(object)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
+
+	/*
 	 * We save some cycles by opening pg_depend just once and passing the
 	 * Relation pointer down to all the recursive deletion steps.
 	 */
@@ -395,6 +420,26 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	/* No work if no objects... */
 	if (objects->numrefs <= 0)
 		return;
+
+	/*
+	 * Refuse when a temporary object of another live session depends on any
+	 * of the targets; see the matching check in performDeletion().
+	 */
+	for (i = 0; i < objects->numrefs; i++)
+	{
+		const ObjectAddress *object = &objects->refs[i];
+		ObjectAddress tempDepender;
+
+		if (tempcat_registry_has_dependents(object, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescription(object)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
 
 	/*
 	 * We save some cycles by opening pg_depend just once and passing the
@@ -1066,6 +1111,39 @@ reportDependentObjects(const ObjectAddresses *targetObjects,
 	int			numReportedClient = 0;
 	int			numNotReportedClient = 0;
 	int			i;
+
+	/*
+	 * Another live session's temporary dependents are invisible to the walk
+	 * above; consult the registry, before the quiet early-return.  Original
+	 * targets are already refused by the entry checks.
+	 */
+	for (i = 0; i < targetObjects->numrefs; i++)
+	{
+		const ObjectAddress *object = &targetObjects->refs[i];
+		const ObjectAddressExtra *extra = &targetObjects->extras[i];
+		ObjectAddress tempDepender;
+
+		if (extra->flags & DEPFLAG_ORIGINAL)
+			continue;
+
+		if (!tempcat_registry_has_dependents(object, 0, &tempDepender))
+			continue;
+
+		if (origObject)
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop %s because temporary objects in other sessions depend on it",
+							getObjectDescription(origObject)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   getObjectDescription(object)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot drop desired object(s) because temporary objects in other sessions depend on them"),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
 
 	/*
 	 * If we need to delete any partition-dependent objects, make sure that

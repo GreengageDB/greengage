@@ -34,6 +34,8 @@
 #include "catalog/pg_language.h"
 #include "catalog/pg_tablespace.h"
 #include "catalog/pg_type.h"
+#include "commands/dbcommands.h"
+#include "postmaster/postmaster.h"
 #include "cdb/memquota.h"
 #include "cdb/cdbdisp_query.h"
 #include "cdb/cdbdispatchresult.h"
@@ -2509,4 +2511,90 @@ gp_check_libpq_events(PG_FUNCTION_ARGS)
 	PQfinish(conn);
 
 	PG_RETURN_BOOL(true);
+}
+
+/*
+ * Helpers for two-session temp memory catalog tests.
+ *
+ * tempcat_dep_session_exec() runs SQL in a second backend whose connection
+ * stays open across calls, emulating "the other session is still connected"
+ * (temporary table metadata lives in that backend's memory).  The connection
+ * parameters come from the environment, so it lands in the same cluster,
+ * database and with the same user as this session.  Returns the command
+ * status of the last statement; raises ERROR if the second session failed.
+ *
+ * tempcat_dep_session_disconnect() closes the second session: its backend
+ * exits and drops the temporary tables it created.
+ */
+static PGconn *tempcat_dep_session_conn = NULL;
+
+PG_FUNCTION_INFO_V1(tempcat_dep_session_exec);
+Datum
+tempcat_dep_session_exec(PG_FUNCTION_ARGS)
+{
+	char	   *sql = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	PGresult   *res;
+	ExecStatusType status;
+	char	   *cmdstatus;
+
+	if (tempcat_dep_session_conn == NULL)
+	{
+		/*
+		 * Connect to the same cluster, database and user as this session.
+		 * The environment cannot be trusted here: PQconnectdb("") would
+		 * default the database name to the user name, which need not exist.
+		 */
+		const char *host = getenv("PGHOST");
+		char	   *dbname = get_database_name(MyDatabaseId);
+		char	   *conninfo = psprintf("host=%s port=%d dbname=%s user=%s "
+									   "application_name=tempcat_dep_session",
+									   host ? host : "localhost",
+									   PostPortNumber,
+									   dbname,
+									   GetUserNameFromId(GetUserId(), false));
+
+		tempcat_dep_session_conn = PQconnectdb(conninfo);
+		pfree(conninfo);
+		pfree(dbname);
+		if (PQstatus(tempcat_dep_session_conn) != CONNECTION_OK)
+		{
+			char	   *err = pchomp(PQerrorMessage(tempcat_dep_session_conn));
+
+			PQfinish(tempcat_dep_session_conn);
+			tempcat_dep_session_conn = NULL;
+			ereport(ERROR,
+					(errmsg("could not connect second session"),
+					 errdetail("%s", err)));
+		}
+	}
+
+	res = PQexec(tempcat_dep_session_conn, sql);
+	status = PQresultStatus(res);
+	if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK)
+	{
+		char	   *err = pchomp(PQerrorMessage(tempcat_dep_session_conn));
+
+		PQclear(res);
+		ereport(ERROR,
+				(errmsg("second session failed to execute: %s", sql),
+				 errdetail("%s", err)));
+	}
+
+	cmdstatus = pstrdup(PQcmdStatus(res));
+	PQclear(res);
+
+	PG_RETURN_TEXT_P(cstring_to_text(cmdstatus));
+}
+
+PG_FUNCTION_INFO_V1(tempcat_dep_session_disconnect);
+Datum
+tempcat_dep_session_disconnect(PG_FUNCTION_ARGS)
+{
+	if (tempcat_dep_session_conn != NULL)
+	{
+		PQfinish(tempcat_dep_session_conn);
+		tempcat_dep_session_conn = NULL;
+	}
+
+	PG_RETURN_VOID();
 }

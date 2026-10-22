@@ -29,6 +29,7 @@
 #include "access/tableam.h"
 #include "access/sysattr.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/tupconvert.h"
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -341,6 +342,8 @@ static void ATSimpleRecursion(List **wqueue, Relation rel,
 static void ATCheckPartitionsNotInUse(Relation rel, LOCKMODE lockmode);
 static void ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cmd,
 								  LOCKMODE lockmode);
+static void tempcat_check_no_temp_dependents(Oid classid, Oid objid,
+											 const char *objdesc);
 static List *find_typed_table_dependencies(Oid typeOid, const char *typeName,
 										   DropBehavior behavior);
 static void ATPrepAddColumn(List **wqueue, Relation rel, bool recurse, bool recursing,
@@ -670,6 +673,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 */
 	namespaceId =
 		RangeVarGetAndCheckCreationNamespace(stmt->relation, NoLock, NULL);
+
+	BEGIN_TEMP_TABLE_SCOPE(stmt->relation->relpersistence == RELPERSISTENCE_TEMP);
 
 	/*
 	 * Security check: disallow creating temp tables from security-restricted
@@ -1570,6 +1575,8 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 	 * visible to anyone else anyway, until commit).
 	 */
 	relation_close(rel, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return address;
 }
@@ -3775,6 +3782,10 @@ renameatt_internal(Oid myrelid,
 		ListCell   *lo,
 				   *li;
 
+		if (!recursing)
+			tempcat_check_no_temp_dependents(RelationRelationId, myrelid,
+											 get_rel_name(myrelid));
+
 		/*
 		 * we need the number of parents for each child so that the recursive
 		 * calls to renameatt() can determine whether there are any parents
@@ -3999,6 +4010,10 @@ rename_constraint_internal(Oid myrelid,
 					   *child_numparents;
 			ListCell   *lo,
 					   *li;
+
+			if (!recursing)
+				tempcat_check_no_temp_dependents(RelationRelationId, myrelid,
+												 get_rel_name(myrelid));
 
 			child_oids = find_all_inheritors(myrelid, AccessExclusiveLock,
 											 &child_numparents);
@@ -5029,6 +5044,8 @@ ATController(AlterTableStmt *parsetree,
 
 	cdb_sync_oid_to_segments();
 
+	BEGIN_TEMP_TABLE_SCOPE(rel->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
+
 	/* Phase 1: preliminary examination of commands, create work queue */
 	/*
 	 * In QE, we receive an already-prepped work queue from the QD.
@@ -5081,6 +5098,8 @@ ATController(AlterTableStmt *parsetree,
 		parsetree->lockmode = lockmode;
 		parsetree->wqueue = wqueue;
 	}
+
+	END_TEMP_TABLE_SCOPE();
 }
 
 /*
@@ -7119,6 +7138,29 @@ ATWrongRelkindError(Relation rel, int allowed_targets)
 }
 
 /*
+ * Refuse ALTER recursion over another session's temporary dependents:
+ * the recursion cannot see them, let alone reach into their session.
+ * May over-refuse: the registry does not record *why* they are dependent.
+ */
+static void
+tempcat_check_no_temp_dependents(Oid classid, Oid objid, const char *objdesc)
+{
+	ObjectAddress obj;
+	ObjectAddress tempDepender;
+
+	ObjectAddressSet(obj, classid, objid);
+	if (tempcat_registry_has_dependents(&obj, 0, &tempDepender))
+		ereport(ERROR,
+				(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+				 errmsg("cannot alter %s because temporary objects in other sessions depend on it",
+						objdesc),
+				 errdetail("%s depends on %s",
+						   getTempObjectDescription(&tempDepender),
+						   objdesc),
+				 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+}
+
+/*
  * ATSimpleRecursion
  *
  * Simple table recursion sufficient for most ALTER TABLE operations.
@@ -7130,6 +7172,11 @@ static void
 ATSimpleRecursion(List **wqueue, Relation rel,
 				  AlterTableCmd *cmd, bool recurse, LOCKMODE lockmode)
 {
+	if (recurse)
+		tempcat_check_no_temp_dependents(RelationRelationId,
+										 RelationGetRelid(rel),
+										 RelationGetRelationName(rel));
+
 	/*
 	 * Propagate to children, if desired and if there are (or might be) any
 	 * children.
@@ -7227,6 +7274,11 @@ ATTypedTableRecursion(List **wqueue, Relation rel, AlterTableCmd *cmd,
 
 	Assert(rel->rd_rel->relkind == RELKIND_COMPOSITE_TYPE);
 
+	/* Typed tables depend on the type, not on the type's relation. */
+	tempcat_check_no_temp_dependents(TypeRelationId,
+									 rel->rd_rel->reltype,
+									 format_type_be(rel->rd_rel->reltype));
+
 	children = find_typed_table_dependencies(rel->rd_rel->reltype,
 											 RelationGetRelationName(rel),
 											 cmd->behavior);
@@ -7274,6 +7326,28 @@ find_composite_type_dependencies(Oid typeOid, Relation origRelation,
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+
+	/*
+	 * Temporary objects of other sessions that use this type have no
+	 * pg_depend rows visible here; their edges are published to the
+	 * shared-memory registry.  The rewrite or check below cannot be
+	 * propagated into another backend's memory.
+	 */
+	{
+		ObjectAddress typeobj;
+		ObjectAddress tempDepender;
+
+		ObjectAddressSet(typeobj, TypeRelationId, typeOid);
+		if (tempcat_registry_has_dependents(&typeobj, 0, &tempDepender))
+			ereport(ERROR,
+					(errcode(ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST),
+					 errmsg("cannot alter type %s because temporary objects in other sessions depend on it",
+							format_type_be(typeOid)),
+					 errdetail("%s depends on %s",
+							   getTempObjectDescription(&tempDepender),
+							   format_type_be(typeOid)),
+					 errhint("Disconnect the session that holds the temporary objects, or drop them in it, and retry.")));
+	}
 
 	/*
 	 * We scan pg_depend to find those things that depend on the given type.
@@ -8117,6 +8191,11 @@ ATExecAddColumn(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * routines, we have to do this one level of recursion at a time; we can't
 	 * use find_all_inheritors to do it in one pass.
 	 */
+	if (!recursing)
+		tempcat_check_no_temp_dependents(RelationRelationId,
+										 RelationGetRelid(rel),
+										 RelationGetRelationName(rel));
+
 	children = find_inheritance_children(RelationGetRelid(rel), lockmode);
 
 	/*
@@ -9733,6 +9812,11 @@ ATExecDropColumn(List **wqueue, Relation rel, const char *colName,
 	 * routines, we have to do this one level of recursion at a time; we can't
 	 * use find_all_inheritors to do it in one pass.
 	 */
+	if (!recursing)
+		tempcat_check_no_temp_dependents(RelationRelationId,
+										 RelationGetRelid(rel),
+										 RelationGetRelationName(rel));
+
 	children = find_inheritance_children(RelationGetRelid(rel), lockmode);
 
 	if (children)
@@ -10216,6 +10300,11 @@ ATAddCheckConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * routines, we have to do this one level of recursion at a time; we can't
 	 * use find_all_inheritors to do it in one pass.
 	 */
+	if (!recursing)
+		tempcat_check_no_temp_dependents(RelationRelationId,
+										 RelationGetRelid(rel),
+										 RelationGetRelationName(rel));
+
 	children = find_inheritance_children(RelationGetRelid(rel), lockmode);
 
 	/*
@@ -12963,6 +13052,11 @@ ATExecDropConstraint(Relation rel, const char *constrName,
 	 * routines, we have to do this one level of recursion at a time; we can't
 	 * use find_all_inheritors to do it in one pass.
 	 */
+	if (!recursing)
+		tempcat_check_no_temp_dependents(RelationRelationId,
+										 RelationGetRelid(rel),
+										 RelationGetRelationName(rel));
+
 	if (!is_no_inherit_constraint)
 		children = find_inheritance_children(RelationGetRelid(rel), lockmode);
 	else

@@ -21,6 +21,7 @@
 #include "access/multixact.h"
 #include "access/relation.h"
 #include "access/table.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "access/xlog.h"
@@ -288,6 +289,7 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 	table_close(rel, NoLock);
 
 	/* fill in pg_sequence */
+	BEGIN_TEMP_TABLE_SCOPE(seq->sequence->relpersistence == RELPERSISTENCE_TEMP);
 	rel = table_open(SequenceRelationId, RowExclusiveLock);
 	tupDesc = RelationGetDescr(rel);
 
@@ -307,6 +309,7 @@ DefineSequence(ParseState *pstate, CreateSeqStmt *seq)
 
 	heap_freetuple(tuple);
 	table_close(rel, RowExclusiveLock);
+	END_TEMP_TABLE_SCOPE();
 
 	return address;
 }

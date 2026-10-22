@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "access/multixact.h"
 #include "access/tableam.h"
+#include "access/tempcat.h"
 #include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
@@ -290,6 +291,8 @@ DefineQueryRewrite(const char *rulename,
 	 * Note that this lock level should match the one used in DefineRule.
 	 */
 	event_relation = table_open(event_relid, AccessExclusiveLock);
+
+	BEGIN_TEMP_TABLE_SCOPE(event_relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP);
 
 	/*
 	 * Verify relation is of a type that rules can sensibly be applied to.
@@ -716,6 +719,8 @@ DefineQueryRewrite(const char *rulename,
 
 	/* Close rel, but keep lock till commit... */
 	table_close(event_relation, NoLock);
+
+	END_TEMP_TABLE_SCOPE();
 
 	return address;
 }

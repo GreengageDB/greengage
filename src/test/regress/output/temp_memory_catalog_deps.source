@@ -1,0 +1,650 @@
+--
+-- TEMP_MEMORY_CATALOG_DEPS
+-- The dependency rows of temporary objects are virtual like every other
+-- row of the object, and their edges are published to a shared-memory
+-- registry: another session can neither see the rows nor drop or alter a
+-- referenced shared object (column type, index expression function, owner
+-- role, domain) while the owning session is alive.  The registry also
+-- guarantees that the owner keeps access to its own objects, that
+-- cascades and ALTER recursion are refused rather than silently skipped,
+-- and that ACL edges of temporary objects stay off disk.
+--
+-- The second backend is kept connected by tempcat_dep_session_exec(), so
+-- the temporary table metadata in its memory stays alive while this
+-- session attempts the drops.  Expected errors are asserted in DO blocks
+-- because their DETAIL lines contain OIDs that are not stable across runs.
+--
+CREATE FUNCTION tempcat_dep_session_exec(text) RETURNS text
+	AS '@abs_builddir@/regress@DLSUFFIX@', 'tempcat_dep_session_exec'
+	LANGUAGE C STRICT;
+CREATE FUNCTION tempcat_dep_session_disconnect() RETURNS void
+	AS '@abs_builddir@/regress@DLSUFFIX@', 'tempcat_dep_session_disconnect'
+	LANGUAGE C;
+-- Assert that a statement fails with ERRCODE_DEPENDENT_OBJECTS_STILL_EXIST
+-- and its message mentions needle.
+CREATE FUNCTION tempcat_assert_blocked(stmt text, needle text) RETURNS void
+AS $$
+BEGIN
+	EXECUTE stmt;
+	RAISE EXCEPTION 'statement unexpectedly succeeded: %', stmt;
+EXCEPTION WHEN dependent_objects_still_exist THEN
+	IF position(needle in SQLERRM) = 0 THEN
+		RAISE EXCEPTION 'wrong error message: %', SQLERRM;
+	END IF;
+END;
+$$ LANGUAGE plpgsql;
+-- Run a DROP that may transiently fail with ERRCODE_DEPENDENT_OBJECTS_
+-- STILL_EXIST while the second session's segment backends finish their
+-- exit cleanup, until they have.
+CREATE FUNCTION tempcat_retry_drop(stmt text) RETURNS void AS $$
+DECLARE
+	tries int := 0;
+BEGIN
+	LOOP
+		BEGIN
+			EXECUTE stmt;
+			RETURN;
+		EXCEPTION WHEN dependent_objects_still_exist THEN
+			tries := tries + 1;
+			IF tries >= 100 THEN
+				RAISE EXCEPTION 'still blocked after retries: %', stmt;
+			END IF;
+			PERFORM pg_sleep(0.1);
+		END;
+	END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+-- Objects that the temporary tables will depend on
+CREATE TYPE dty AS (x int);
+CREATE FUNCTION dfn(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
+CREATE ROLE drole;
+CREATE ROLE drole2;
+GRANT TEMP ON DATABASE regression TO drole;
+GRANT USAGE ON TYPE dty TO drole;
+-- Session A: enable the temp memory catalog and create temporary tables
+-- that depend on the objects above (dep_r is owned by drole)
+SELECT tempcat_dep_session_exec('SET gp_enable_temp_memory_catalog = on');
+ tempcat_dep_session_exec 
+--------------------------
+ SET
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$
+	CREATE TEMP TABLE dep_t (a int, c dty) DISTRIBUTED BY (a);
+	INSERT INTO dep_t VALUES (1, ROW(1));
+	CREATE INDEX dep_i ON dep_t (dfn(a));
+	SET ROLE drole;
+	CREATE TEMP TABLE dep_r (a int) DISTRIBUTED BY (a);
+	RESET ROLE;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ RESET
+(1 row)
+
+-- The dependency rows are not on disk: this session sees none of them, the
+-- edges live in the shared-memory registry instead.  (Column a of dep_t
+-- depends on int4, which is pinned, so it records no row at all.)
+SELECT count(*) FROM pg_depend
+ WHERE refclassid = 'pg_type'::regclass AND refobjid = 'dty'::regtype
+   AND deptype = 'n';
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_depend
+ WHERE refclassid = 'pg_proc'::regclass AND refobjid = 'dfn(int)'::regprocedure
+   AND deptype = 'n';
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_shdepend
+ WHERE refclassid = 'pg_authid'::regclass
+   AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'drole')
+   AND deptype = 'o';
+ count 
+-------
+     0
+(1 row)
+
+-- While session A is connected, this session cannot drop the depended-on
+-- objects, with or without CASCADE, and cannot dispose of the temporary
+-- objects through the role instead
+SELECT tempcat_assert_blocked('DROP TYPE dty',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP FUNCTION dfn(int)',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP TYPE dty CASCADE',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP OWNED BY drole',
+	'belongs to another session');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('REASSIGN OWNED BY drole TO drole2',
+	'belongs to another session');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP ROLE drole',
+	'belongs to another session');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- start_ignore
+-- One raw demonstration of the reporting, ignored in the diff because the
+-- DETAIL line contains the temporary table's OID.
+DROP TYPE dty;
+ERROR:  cannot drop type dty because temporary objects in other sessions depend on it
+DETAIL:  column 2 of temporary relation 17589 in another session depends on type dty
+HINT:  Disconnect the session that holds the temporary objects, or drop them in it, and retry.
+-- end_ignore
+-- Every row of a temporary object is virtual, not just its pg_class rows:
+-- while session A holds them, this session sees no pg_attrdef,
+-- pg_constraint, pg_trigger, pg_rewrite, pg_sequence or pg_description rows
+-- for them either.
+CREATE TABLE dep_probe(k text, v bigint);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'k' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+CREATE FUNCTION dfn2(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 2';
+CREATE FUNCTION dfn3(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 3';
+CREATE FUNCTION dfn4() RETURNS trigger AS $t$ BEGIN RETURN NULL; END $t$ LANGUAGE plpgsql;
+CREATE DOMAIN ddom AS int;
+SELECT tempcat_dep_session_exec($q$
+	CREATE TEMP TABLE dep_td (a int DEFAULT dfn2(1)) DISTRIBUTED BY (a);
+	CREATE TEMP TABLE dep_tc (a int CHECK (dfn3(a) > 0)) DISTRIBUTED BY (a);
+	CREATE TEMP TABLE dep_tt (a int) DISTRIBUTED BY (a);
+	CREATE TRIGGER dep_tg BEFORE INSERT ON dep_tt
+		FOR EACH ROW EXECUTE PROCEDURE dfn4();
+	COMMENT ON TABLE dep_tt IS 'temporary';
+	CREATE TEMP VIEW dep_tv AS SELECT a FROM dep_tt;
+	CREATE TEMP SEQUENCE dep_ts;
+	CREATE TEMP TABLE dep_tdm (a ddom) DISTRIBUTED BY (a);
+	INSERT INTO dep_probe
+		SELECT 'td', 'dep_td'::regclass UNION ALL
+		SELECT 'tc', 'dep_tc'::regclass UNION ALL
+		SELECT 'tt', 'dep_tt'::regclass UNION ALL
+		SELECT 'tv', 'dep_tv'::regclass UNION ALL
+		SELECT 'ts', 'dep_ts'::regclass;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 5
+(1 row)
+
+SELECT count(*) FROM pg_attrdef
+ WHERE adrelid = (SELECT v FROM dep_probe WHERE k = 'td');
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_constraint
+ WHERE conrelid = (SELECT v FROM dep_probe WHERE k = 'tc');
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_trigger
+ WHERE tgrelid = (SELECT v FROM dep_probe WHERE k = 'tt');
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_rewrite
+ WHERE ev_class = (SELECT v FROM dep_probe WHERE k = 'tv');
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_sequence
+ WHERE seqrelid = (SELECT v FROM dep_probe WHERE k = 'ts');
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_description
+ WHERE objoid = (SELECT v FROM dep_probe WHERE k = 'tt')
+   AND classoid = 'pg_class'::regclass;
+ count 
+-------
+     0
+(1 row)
+
+-- The functions those rows use cannot be dropped while session A holds
+-- them, with or without CASCADE: the dependents are virtual rows of
+-- another session, which this session could neither describe nor delete.
+SELECT tempcat_assert_blocked('DROP FUNCTION dfn2(int)',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP FUNCTION dfn2(int) CASCADE',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP FUNCTION dfn3(int)',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP FUNCTION dfn4()',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- The same for altering a shared type or domain that a temporary column
+-- uses: the change could not be propagated into another session's memory
+SELECT tempcat_assert_blocked('ALTER DOMAIN ddom ADD CONSTRAINT ddom_chk CHECK (VALUE > 0)',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('ALTER TYPE dty ALTER ATTRIBUTE x TYPE text',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- Session A drops its temporary objects, and the functions become droppable
+SELECT tempcat_dep_session_exec($q$
+	DROP TABLE dep_td;
+	DROP TABLE dep_tc;
+	DROP VIEW dep_tv;
+	DROP SEQUENCE dep_ts;
+	DROP TABLE dep_tt;
+	DROP TABLE dep_tdm;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DROP TABLE
+(1 row)
+
+DROP FUNCTION dfn2(int);
+DROP FUNCTION dfn3(int);
+DROP FUNCTION dfn4();
+DROP DOMAIN ddom;
+-- The OIDs of a live session's temporary objects are reserved in the
+-- shared registry: when the coordinator's OID counter is pointed directly
+-- at one, the next object gets a different OID instead of colliding (and
+-- later being destroyed by the temporary object's drop).
+CREATE FUNCTION gp_set_next_oid_master(oid) RETURNS void
+	AS '@abs_builddir@/regress@DLSUFFIX@', 'gp_set_next_oid'
+	LANGUAGE C VOLATILE;
+SELECT tempcat_dep_session_exec($q$
+	CREATE TEMP TABLE dep_to (a int) DISTRIBUTED BY (a);
+	INSERT INTO dep_probe SELECT 'to', 'dep_to'::regclass;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT gp_set_next_oid_master((SELECT v FROM dep_probe WHERE k = 'to'));
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE dep_perm (a int) DISTRIBUTED BY (a);
+SELECT 'dep_perm'::regclass::oid <>
+	(SELECT v FROM dep_probe WHERE k = 'to');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$ DROP TABLE dep_to; $q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DROP TABLE
+(1 row)
+
+INSERT INTO dep_perm VALUES (1);
+SELECT a FROM dep_perm;
+ a 
+---
+ 1
+(1 row)
+
+DROP TABLE dep_perm;
+DROP FUNCTION gp_set_next_oid_master(oid);
+DROP TABLE dep_probe;
+-- A rolled-back DROP of a temporary table must not lose the table.
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_rb(i int)');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_dep_session_exec('INSERT INTO dep_rb VALUES (1),(2)');
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 2
+(1 row)
+
+SELECT tempcat_dep_session_exec('BEGIN');
+ tempcat_dep_session_exec 
+--------------------------
+ BEGIN
+(1 row)
+
+SELECT tempcat_dep_session_exec('DROP TABLE dep_rb');
+ tempcat_dep_session_exec 
+--------------------------
+ DROP TABLE
+(1 row)
+
+SELECT tempcat_dep_session_exec('ROLLBACK');
+ tempcat_dep_session_exec 
+--------------------------
+ ROLLBACK
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$
+	DO $d$
+	BEGIN
+		IF (SELECT count(*) FROM dep_rb) <> 2 THEN
+			RAISE EXCEPTION 'temporary table lost rows after a rolled-back DROP';
+		END IF;
+	END
+	$d$
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DO
+(1 row)
+
+-- The owning session can drop its own temporary objects after its queries
+-- were dispatched (reader gangs received the serialized catalog).
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_own(a int)');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_dep_session_exec('CREATE TEMP VIEW dep_own_v AS SELECT a FROM dep_own');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE VIEW
+(1 row)
+
+SELECT tempcat_dep_session_exec('INSERT INTO dep_own VALUES (42)');
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT tempcat_dep_session_exec('SELECT count(*) FROM dep_own_v');
+ tempcat_dep_session_exec 
+--------------------------
+ SELECT 1
+(1 row)
+
+SELECT tempcat_dep_session_exec('DROP TABLE dep_own CASCADE');
+ tempcat_dep_session_exec 
+--------------------------
+ DROP TABLE
+(1 row)
+
+-- A CASCADE that reaches an owned sequence through an invisible pg_depend
+-- edge must be refused.
+CREATE SEQUENCE dep_seq;
+CREATE TABLE dep_seqt(i int DEFAULT nextval('dep_seq'));
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+ALTER SEQUENCE dep_seq OWNED BY dep_seqt.i;
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_seqd(i int DEFAULT nextval(''dep_seq''))');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_dep_session_exec('INSERT INTO dep_seqd VALUES (default)');
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP TABLE dep_seqt',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_dep_session_exec('INSERT INTO dep_seqd VALUES (default)');
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 1
+(1 row)
+
+-- ALTER TABLE recursion must not silently skip another session's temporary
+-- inheritance child.
+CREATE TABLE dep_parent(i int);
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_child(a int) INHERITS (dep_parent)');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_assert_blocked('ALTER TABLE dep_parent ADD COLUMN j int',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- ALTER TYPE recursion over typed tables must not skip another session's
+-- temporary typed table either.
+CREATE TYPE dep_type AS (i int);
+CREATE TABLE dep_typed OF dep_type;
+NOTICE:  Table doesn't have 'DISTRIBUTED BY' clause -- Using column named 'i' as the Greengage Database data distribution key for this table.
+HINT:  The 'DISTRIBUTED BY' clause determines the distribution of data. Make sure column(s) chosen are the optimal data distribution key to minimize skew.
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_typed_temp OF dep_type');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_assert_blocked('ALTER TYPE dep_type ADD ATTRIBUTE j int CASCADE',
+	'temporary objects in other sessions depend on it');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+-- GRANT on a temporary table records its shared dependency row in the
+-- temp memory catalog, not on disk; DROP ROLE and DROP OWNED refuse on
+-- the published ACL edge, and REVOKE removes it again.
+CREATE ROLE dep_acl;
+SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_aclt(i int)');
+ tempcat_dep_session_exec 
+--------------------------
+ CREATE TABLE
+(1 row)
+
+SELECT tempcat_dep_session_exec('GRANT SELECT ON dep_aclt TO dep_acl');
+ tempcat_dep_session_exec 
+--------------------------
+ GRANT
+(1 row)
+
+SELECT count(*) FROM pg_shdepend
+ WHERE refclassid = 'pg_authid'::regclass
+   AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'dep_acl');
+ count 
+-------
+     0
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP ROLE dep_acl',
+	'privileges are granted on temporary relation');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_assert_blocked('DROP OWNED BY dep_acl',
+	'privileges are granted on temporary relation');
+ tempcat_assert_blocked 
+------------------------
+ 
+(1 row)
+
+SELECT tempcat_dep_session_exec('REVOKE SELECT ON dep_aclt FROM dep_acl');
+ tempcat_dep_session_exec 
+--------------------------
+ REVOKE
+(1 row)
+
+DROP ROLE dep_acl;
+-- Disconnect session A: its backend exit drops the temporary tables and
+-- with them the dependency rows (the exit cleanup is asynchronous, so wait
+-- for it).
+SELECT tempcat_dep_session_disconnect();
+ tempcat_dep_session_disconnect 
+--------------------------------
+ 
+(1 row)
+
+DO $$
+DECLARE
+	n int := 1;
+	tries int := 0;
+BEGIN
+	WHILE n > 0 AND tries < 100 LOOP
+		SELECT count(*) INTO n FROM pg_shdepend
+		 WHERE refclassid = 'pg_authid'::regclass
+		   AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'drole')
+		   AND deptype = 'o';
+		IF n > 0 THEN
+			PERFORM pg_sleep(0.1);
+			tries := tries + 1;
+		END IF;
+	END LOOP;
+	IF n > 0 THEN
+		RAISE EXCEPTION 'second session exit cleanup did not complete';
+	END IF;
+END;
+$$;
+-- The objects A's edges blocked become droppable again; the edges can
+-- linger a moment while A's gangs tear down, so retry.
+DO $$
+DECLARE
+	tries int := 0;
+BEGIN
+	LOOP
+		BEGIN
+			EXECUTE 'DROP TABLE dep_seqt';
+			EXECUTE 'DROP TABLE dep_parent';
+			EXECUTE 'DROP TYPE dep_type CASCADE';
+			EXIT;
+		EXCEPTION WHEN dependent_objects_still_exist THEN
+			tries := tries + 1;
+			IF tries > 20 THEN
+				RAISE;
+			END IF;
+			PERFORM pg_sleep(0.5);
+		END;
+	END LOOP;
+END;
+$$;
+NOTICE:  drop cascades to table dep_typed
+-- The dependency rows are gone, and the drops succeed
+SELECT count(*) FROM pg_depend
+ WHERE refclassid = 'pg_type'::regclass AND refobjid = 'dty'::regtype
+   AND deptype = 'n';
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_depend
+ WHERE refclassid = 'pg_proc'::regclass AND refobjid = 'dfn(int)'::regprocedure
+   AND deptype = 'n';
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_shdepend
+ WHERE refclassid = 'pg_authid'::regclass
+   AND refobjid = (SELECT oid FROM pg_roles WHERE rolname = 'drole')
+   AND deptype = 'o';
+ count 
+-------
+     0
+(1 row)
+
+SELECT tempcat_retry_drop('DROP TYPE dty');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP FUNCTION dfn(int)');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP OWNED BY drole');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP ROLE drole');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+DROP ROLE drole2;
+DROP FUNCTION tempcat_assert_blocked(text, text);
+DROP FUNCTION tempcat_retry_drop(text);
+DROP FUNCTION tempcat_dep_session_exec(text);
+DROP FUNCTION tempcat_dep_session_disconnect();
