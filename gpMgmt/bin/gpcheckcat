@@ -748,11 +748,13 @@ def checkPartitionBoundOrder():
         db = connect2(GV.cfg[GV.master_dbid])
 
         invalid = {}
+        failed = False
         for level in getStaleRangePartitionLevels(db):
             # check the other levels even if one of them fails
             try:
                 partitions = findInvalidRangesForKeyCollation(db, level)
             except Exception as e:
+                failed = True
                 GV.checkStatus = False
                 setError(ERROR_NOREPAIR)
                 myprint('[ERROR] executing test: checkPartitionBoundOrder for table %s'
@@ -763,7 +765,8 @@ def checkPartitionBoundOrder():
                 invalid.setdefault(level['tablename'], []).extend(partitions)
 
         if not invalid:
-            logger.info('[OK] range partition boundary order')
+            logger.info('[FAIL] range partition boundary order' if failed
+                        else '[OK] range partition boundary order')
             return
 
         GV.checkStatus = False

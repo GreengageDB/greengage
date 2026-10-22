@@ -33,7 +33,7 @@ PARTITION BY RANGE (k)
 CREATE TABLE src_ovl (id int, k text)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)
-(PARTITION p1 START ('A') END ('b'), PARTITION p2 START ('B') END ('Bb'),
+(PARTITION p1 START ('A') END ('b'), PARTITION p2 START ('Ba') END ('Bb'),
  PARTITION p3 START ('Bc') END ('C'));
 
 CREATE TABLE src_sub (id int, k text)

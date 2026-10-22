@@ -592,6 +592,23 @@ class GpCheckCatTestCase(GpTestCase):
                       mock_myprint.call_args[0][0])
         self.subject.logger.error.assert_any_call('  table public.t2, partitions p2')
 
+    @patch('gpcheckcat.myprint')
+    def test_checkPartitionBoundOrder_error_without_invalid_ranges(self, mock_myprint):
+        # A failed level must not be reported as OK, even if no other level
+        # has invalid ranges.
+        results = self._partitionBoundResults()
+        results[1] = Exception("Simulated error during execution")
+        del results[2]
+        self.db_connection.query.side_effect = results
+
+        self.subject.checkPartitionBoundOrder()
+
+        self.assertFalse(self.subject.GV.checkStatus)
+        self.subject.setError.assert_any_call(self.subject.ERROR_NOREPAIR)
+        self.subject.logger.info.assert_any_call('[FAIL] range partition boundary order')
+        self.assertNotIn(call('[OK] range partition boundary order'),
+                         self.subject.logger.info.call_args_list)
+
     def test_checkPartitionBoundOrder_with_error_on_execution(self):
         self.db_connection.query.side_effect = Exception("Simulated error during execution")
 

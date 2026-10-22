@@ -182,7 +182,7 @@ Feature: gpcheckcat tests
         Given the user runs "dropdb --if-exists part_collation_db"
         And the user runs "createdb --template=template0 --lc-collate=en_US.utf8 --lc-ctype=en_US.utf8 part_collation_db"
         Then createdb should return a return code of 0
-        And the user runs "psql part_collation_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/part_bound_collation.sql"
+        And the user runs "psql -v ON_ERROR_STOP=1 part_collation_db -f test/behave/mgmt_utils/steps/data/gpcheckcat/part_bound_collation.sql"
         Then psql should return a return code of 0
         When the user runs "gpcheckcat -R part_bound_collation part_collation_db"
         Then gpcheckcat should return a return code of 0
