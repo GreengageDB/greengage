@@ -38,7 +38,6 @@
 #include "utils/relmapper.h"
 #include "utils/syscache.h"
 
-<<<<<<< HEAD
 #include "access/tableam.h"
 #include "catalog/pg_appendonly.h"
 #include "libpq-fe.h"
@@ -48,12 +47,6 @@
 #include "cdb/cdbvars.h"
 #include "utils/snapmgr.h"
 
-/* Divide by two and round towards positive infinity. */
-#define half_rounded(x)   (((x) + ((x) < 0 ? 0 : 1)) / 2)
-||||||| e1c1c30f635
-/* Divide by two and round towards positive infinity. */
-#define half_rounded(x)   (((x) + ((x) < 0 ? 0 : 1)) / 2)
-=======
 /* Divide by two and round away from zero */
 #define half_rounded(x)   (((x) + ((x) < 0 ? -1 : 1)) / 2)
 
@@ -78,7 +71,6 @@ static const struct size_pretty_unit size_pretty_units[] = {
 	{"PB", 20 * 1024 - 1, true, 50},
 	{NULL, 0, false, 0}
 };
->>>>>>> 3b231596ccf
 
 static int64 calculate_total_relation_size(Relation rel);
 
