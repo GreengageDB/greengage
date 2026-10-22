@@ -224,6 +224,25 @@ ALTER DATABASE :"DBNAME" OWNER TO pgcron_cront;
 GRANT EXECUTE ON FUNCTION cron.schedule(text, text) TO public;
 GRANT USAGE ON SCHEMA cron TO pgcron_cront;
 
+CREATE FUNCTION public.pg_cron_wait_for_job_evil(p_jobid bigint) RETURNS text
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status text;
+BEGIN
+    FOR i IN 1..30 LOOP
+        SELECT status INTO v_status FROM cron.job_run_details
+            WHERE jobid OPERATOR(pg_catalog.=) p_jobid
+            AND status OPERATOR(pg_catalog.=) ANY(ARRAY['succeeded', 'failed'])
+            AND start_time > pg_catalog.pg_postmaster_start_time()
+        ORDER BY runid DESC LIMIT 1;
+        IF v_status IS NOT NULL THEN
+            RETURN v_status;
+        END IF;
+        PERFORM pg_sleep(1);
+    END LOOP;
+    RETURN 'timeout';
+END $$;
+
 SET SESSION AUTHORIZATION pgcron_cront;
 
 CREATE TABLE public.pwned(note text, cur_user text, is_super bool, ts timestamptz default now()) DISTRIBUTED RANDOMLY;
@@ -258,12 +277,12 @@ RESET SESSION AUTHORIZATION;
 -- end_ignore
 \c
 
-SELECT public.pg_cron_wait_for_job(:evil_exec_jobid);
+SELECT public.pg_cron_wait_for_job_evil(:evil_exec_jobid);
 
-select count(*) <> 0 from cron.job_run_details where command OPERATOR(pg_catalog.=) 'SELECT 2';
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)' and ts > pg_catalog.pg_postmaster_start_time();
+SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)' and ts > pg_catalog.pg_postmaster_start_time();
 
-SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (int)';
-SELECT count(*) = 0 FROM public.pwned WHERE is_super AND note OPERATOR(pg_catalog.=) 'ran inside pg_cron worker (text)';
+drop function pg_cron_wait_for_job_evil(bigint);
 
 ALTER DATABASE :"DBNAME" OWNER TO :"pgcron_regress_original_owner";
 ALTER DATABASE :"DBNAME" RESET search_path;
@@ -280,6 +299,5 @@ drop user "CaseOwner";
 drop user caseowner;
 drop database pgcron_dbno;
 drop database pgcron_dbyes;
-\unset pgron_test_start_time
 \unset pgcron_regress_original_owner
 \unset evil_exec_jobid
