@@ -525,6 +525,32 @@ SELECT pg_temp.tc_fill('table') AS tc_tables_fresh \gset
 SELECT pg_temp.tc_fill('enum') > 10 AS enums;
 SELECT pg_temp.tc_fill('table') >= :tc_tables_fresh - 2 AS tables_after_peak;
 
+-- Rows of new objects leave room to the new versions of rows that dropping
+-- objects writes (of pg_attribute, for each default of a table dropped): a
+-- session whose area is full can still drop its objects.
+\c
+SET gp_enable_temp_memory_catalog = on;
+SET gp_temp_memory_catalog_max_size = '1MB';
+DO $$
+BEGIN
+  EXECUTE format('CREATE TEMP TABLE tc_defs (%s) DISTRIBUTED RANDOMLY',
+                 (SELECT string_agg(format('c%s int DEFAULT %s', g, g), ', ')
+                    FROM generate_series(1, 300) g));
+END $$;
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('CREATE TEMP TABLE tc_room%s (a int) DISTRIBUTED BY (a)', i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+CREATE TEMP TABLE tc_room_more (a int) DISTRIBUTED BY (a);
+DROP TABLE tc_defs;
+DISCARD TEMP;
+
 -- Segments of the area that empty go back to the OS when the session goes
 -- idle: its memory falls by most of the area (bodies that do not compress).
 \c

@@ -23,10 +23,10 @@ CREATE FUNCTION tcf_in_memory(regclass) RETURNS bool LANGUAGE sql AS $$
   SELECT (ctid::text::point)[1] >= 32768 FROM pg_class WHERE oid = $1 $$;
 
 -- 1. The writer QE of a session dies on segment 0: the gang is reset, and
--- the session's temporary objects are gone, as on disk; it makes new ones.
--- With later OIDs, of the same block: the old writer QE may hold the block
--- on the segment for a while on its way out (e.g. when the coordinator lost
--- its connection to it), which the new one shares then.
+-- the session's temporary objects are gone, as on disk; it makes new ones,
+-- kept in memory on all nodes, also as the old writer QE may hold the blocks
+-- of their OIDs on the segment for a while on its way out (e.g. when the
+-- coordinator lost its connection to it), which the new one shares then.
 CREATE TYPE tcf_comp AS (x int);
 1: SET gp_enable_temp_memory_catalog = on;
 1: CREATE TEMP TABLE tcf_t (c tcf_comp, a int) DISTRIBUTED BY (a);
@@ -38,9 +38,9 @@ CREATE TYPE tcf_comp AS (x int);
 1: SELECT to_regclass('tcf_t') IS NULL AS gone;
 1: CREATE TEMP TABLE tcf_t2 (a int) DISTRIBUTED BY (a);
 1: INSERT INTO tcf_t2 SELECT generate_series(1, 30);
-1: SELECT count(*), tcf_in_memory('tcf_t2') AS in_memory,
-     'tcf_t2'::regclass::oid > (SELECT max(o) FROM tcf_mem) AS later_oid
-     FROM tcf_t2;
+1: SELECT count(*), tcf_in_memory('tcf_t2') AS in_memory FROM tcf_t2;
+1: SELECT count(*), bool_and((ctid::text::point)[1] >= 32768) AS in_memory
+     FROM gp_dist_random('pg_class') WHERE oid = 'tcf_t2'::regclass;
 2: DROP TYPE tcf_comp;
 1q:
 DELETE FROM tcf_sess;

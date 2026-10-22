@@ -405,7 +405,7 @@ struct dsa_area
 
 	/*
 	 * GPDB: charge the segments that this backend creates (and frees) to its
-	 * vmem (gp_vmem_protect_limit, resource groups).
+	 * vmem (gp_vmem_protect_limit).
 	 */
 	bool		vmem_tracked;
 };
@@ -1124,6 +1124,30 @@ dsa_get_total_size(dsa_area *area)
 	LWLockRelease(DSA_AREA_LOCK(area));
 
 	return size;
+}
+
+/*
+ * GPDB: roughly how many bytes of allocations of whole pages an area that
+ * has its first segment only can make, up to its size limit: the pages of
+ * that segment and of those it may still create, but their metadata (a
+ * page of it for each 256 kB at worst), and a superblock of span objects.
+ */
+size_t
+dsa_get_usable_size(dsa_area *area)
+{
+	size_t		size;
+	size_t		rest = 0;
+
+	LWLockAcquire(DSA_AREA_LOCK(area), LW_SHARED);
+	size = area->control->segment_header.usable_pages * FPM_PAGE_SIZE;
+	if (area->control->max_total_segment_size >
+		area->control->total_segment_size)
+		rest = area->control->max_total_segment_size -
+			area->control->total_segment_size;
+	LWLockRelease(DSA_AREA_LOCK(area));
+
+	size += rest - rest / 64;
+	return size > DSA_SUPERBLOCK_SIZE ? size - DSA_SUPERBLOCK_SIZE : 0;
 }
 
 /*

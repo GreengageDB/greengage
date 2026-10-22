@@ -156,6 +156,7 @@
 #include "utils/datum.h"
 #include "utils/dsa.h"
 #include "utils/faultinjector.h"
+#include "utils/freepage.h"
 #include "utils/fmgroids.h"
 #include "utils/gpexpand.h"
 #include "utils/guc.h"
@@ -349,6 +350,7 @@ typedef struct TempcatRoot
 	TempcatCatalog catalogs[TEMPCAT_NCATALOGS];
 	dsa_pointer bins[TEMPCAT_NBINS];
 	Size		taken;			/* of the area for blocks and big chunks */
+	Size		inuse;			/* of that, by chunks in use */
 	/*
 	 * the home buckets of the hash tables, TEMPCAT_HASH_MIN each: of the
 	 * catalogs' keys in use, then of 'tids'
@@ -779,6 +781,9 @@ tempcat_memory_bytes(void)
 /* The limit of the session's area, as set when it was created */
 static size_t tc_area_limit = 0;
 
+/* Roughly how much of it rows can take, see tempcat_kept_room() */
+static size_t tc_area_capacity = 0;
+
 /*
  * Did any session keep its temporary objects in memory since the shared
  * memory was set up?  Then the postmaster removes temporary files after a
@@ -802,8 +807,9 @@ tempcat_areas_created(void)
  * all.  As the area grows, it leaves the room to others on all nodes.
  *
  * The area's memory is the session's, though shared: charge it to the
- * session's vmem (gp_vmem_protect_limit, resource groups), its first segment
- * here and later ones as the area grows (dsa_set_vmem_tracked()).  Charge it
+ * session's vmem (gp_vmem_protect_limit; resource groups do not limit it),
+ * its first segment here and later ones as the area grows
+ * (dsa_set_vmem_tracked()).  Charge it
  * before creating the area, so that a refusal costs nothing;
  * dsa_try_create() can still fail with an error (e.g. out of local memory),
  * which must not leave vmem charged.
@@ -862,6 +868,7 @@ tempcat_create_area(bool headroom)
 	/* (in the first segment, which has room for it) */
 	{
 		int			nhomes = 1;	/* tids' */
+		Size		rootsize;
 		dsa_pointer home;
 		int			c;
 		int			k;
@@ -870,9 +877,13 @@ tempcat_create_area(bool headroom)
 			for (k = 0; k < TEMPCAT_NKEYS; k++)
 				if (tempcat_catalogs[c].keytype[k] != TCK_NONE)
 					nhomes++;
-		rootptr = dsa_allocate0(area, offsetof(TempcatRoot, home_buckets) +
-								sizeof(dsa_pointer) * TEMPCAT_HASH_MIN * nhomes);
+		rootsize = offsetof(TempcatRoot, home_buckets) +
+			sizeof(dsa_pointer) * TEMPCAT_HASH_MIN * nhomes;
+		rootptr = dsa_allocate0(area, rootsize);
 		tc_root = dsa_get_address(area, rootptr);
+		tc_area_capacity = dsa_get_usable_size(area);
+		tc_area_capacity -= Min(tc_area_capacity,
+								TYPEALIGN(FPM_PAGE_SIZE, rootsize));
 
 		home = rootptr + offsetof(TempcatRoot, home_buckets);
 		for (c = 0; c < TEMPCAT_NCATALOGS; c++)
@@ -2445,6 +2456,32 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 }
 
 /*
+ * A segment received a pre-assigned OID for an object that is not a
+ * temporary object of this session kept in memory: it must not be the OID
+ * of one, which the coordinator would have let go of as it no longer knows
+ * of the object (e.g. one that DISCARD ALL dropped there only, before the
+ * coordinator dispatched DISCARD TEMP), and gave again after the OID counter
+ * wrapped around.  The unique index on the OID would refuse it on disk.
+ */
+void
+tempcat_check_ordinary_oid(Relation relation, Oid oid)
+{
+	if (tempcat_owns_oid(RelationGetRelid(relation), oid))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("OID of a new object is already used by a temporary object of this session in catalog \"%s\" on this node",
+						RelationGetRelationName(relation)),
+				 errhint("Run DISCARD TEMP, or reconnect.")));
+}
+
+/* Does the session keep its temporary objects in memory? */
+bool
+tempcat_in_memory(void)
+{
+	return tc_area != NULL;
+}
+
+/*
  * A segment received the OID of a label of enum type 'typid', which comes
  * with a preassignment of its own (GetPreassignedOidForEnum()).  For a label
  * of a temporary enum of ours, do what tempcat_note_preassigned_oid() does:
@@ -2667,6 +2704,7 @@ tempcat_alloc_ext(Size size, bool grow)
 		c->size = need | TCC_BIG | TCC_INUSE;
 		c->prev_size = 0;
 		tc_root->taken += need;
+		tc_root->inuse += need;
 		return cp + TCC_HDR;
 	}
 
@@ -2745,6 +2783,7 @@ tempcat_alloc_ext(Size size, bool grow)
 		csize = need;
 	}
 	c->size = csize | TCC_INUSE;
+	tc_root->inuse += csize;
 	return cp + TCC_HDR;
 }
 
@@ -2764,6 +2803,7 @@ tempcat_free(dsa_pointer dp)
 	uint32		size;
 
 	Assert(c->size & TCC_INUSE);
+	tc_root->inuse -= TCC_SIZE(c);
 	if (c->size & TCC_BIG)
 	{
 		tc_root->taken -= TCC_SIZE(c);
@@ -3081,13 +3121,29 @@ tempcat_new_tid(void)
 }
 
 /*
+ * Room of the area that rows of new objects leave to new versions of rows:
+ * dropping an object updates rows of others (e.g. pg_attribute.atthasdef
+ * for each default of a table, pg_class.relchecks for each check
+ * constraint), and must not run out of room where the session could create
+ * objects up to it, or the session could not drop its objects any more.
+ * Of the room that rows can take, roughly (tc_area_capacity: the area's
+ * metadata, its root and the blocks' headers take the rest of its limit).
+ */
+static inline Size
+tempcat_kept_room(void)
+{
+	return tc_area_capacity / 8;
+}
+
+/*
  * Create an entry for a tuple and link it into the catalog's list and hash
- * tables.  Returns InvalidDsaPointer if the area is out of memory, in which
+ * tables.  Returns InvalidDsaPointer if the area is out of memory, or if
+ * 'keep_room' and the entry would take of tempcat_kept_room(), in which
  * case nothing has changed.  Caller holds the exclusive lock.
  */
 static dsa_pointer
 tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
-					 TransactionId xmin, CommandId cmin)
+					 TransactionId xmin, CommandId cmin, bool keep_room)
 {
 	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
 	TempcatCatalog *cat = &tc_root->catalogs[catidx];
@@ -3096,6 +3152,7 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	TempcatEntry *e;
 	HeapTupleHeader hdr;
 	int			nnodes = 1;		/* the TID's */
+	Size		size;
 	int			k;
 
 	/* (the block of its OID first, see tempcat_count_block_row()) */
@@ -3115,8 +3172,12 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 		nnodes++;
 	}
 	tempcat_hash_prepare(&tc_root->tids);
-	ep = tempcat_alloc(MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
-					   nnodes * sizeof(TempcatHashNode));
+	size = MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
+		nnodes * sizeof(TempcatHashNode);
+	if (keep_room &&
+		tc_root->inuse + size + tempcat_kept_room() > tc_area_capacity)
+		return InvalidDsaPointer;
+	ep = tempcat_alloc(size);
 #ifdef FAULT_INJECTOR
 	/* Test hook: the area runs full for a row. */
 	if (DsaPointerIsValid(ep) &&
@@ -4334,11 +4395,14 @@ tempcat_report_full(uint32 len)
 	size_t		total = dsa_get_total_size(tc_area);
 
 	/*
-	 * (well short of the limit, by more than the last segment could have
-	 * been and than the row needs: the room left to others, or the session's
-	 * vmem, see tempcat_create_area())
+	 * (rows well short of the limit, with tempcat_kept_room(), and the area too,
+	 * by more than the last segment could have been and than the row needs:
+	 * the room left to others, or the session's vmem, see
+	 * tempcat_create_area())
 	 */
-	if (total + MAXALIGN(sizeof(TempcatEntry)) + len < limit - limit / 8)
+	if (tc_root->inuse + MAXALIGN(sizeof(TempcatEntry)) + len +
+		tempcat_kept_room() <= tc_area_capacity &&
+		total + MAXALIGN(sizeof(TempcatEntry)) + len < limit - limit / 8)
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("out of room for the catalog rows of temporary objects"),
@@ -4359,13 +4423,14 @@ tempcat_report_full(uint32 len)
  */
 static dsa_pointer
 tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
-								TransactionId xid, CommandId cid)
+								TransactionId xid, CommandId cid,
+								bool keep_room)
 {
 	dsa_pointer ep;
 
-	ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
+	ep = tempcat_entry_create(catidx, tup, desc, xid, cid, keep_room);
 	if (!DsaPointerIsValid(ep) && tempcat_reclaim_dead() > 0)
-		ep = tempcat_entry_create(catidx, tup, desc, xid, cid);
+		ep = tempcat_entry_create(catidx, tup, desc, xid, cid, keep_room);
 	return ep;
 }
 
@@ -4395,7 +4460,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	ep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
-										 xid, cid);
+										 xid, cid, true);
 	if (DsaPointerIsValid(ep))
 		tempcat_add_pending(ep);
 	LWLockRelease(&tc_root->lock);
@@ -4513,7 +4578,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
 	tempcat_reserve_pending(2);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	newep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
-											xid, cid);
+											xid, cid, false);
 	if (!DsaPointerIsValid(newep))
 	{
 		LWLockRelease(&tc_root->lock);

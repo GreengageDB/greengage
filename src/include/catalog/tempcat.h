@@ -55,6 +55,8 @@ extern Oid	tempcat_allocate_oid(Relation relation, Oid indexId,
 extern void tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 										 AttrNumber oidcolumn, Oid oid);
 extern void tempcat_note_enum_label_oid(Relation enumrel, Oid typid, Oid oid);
+extern void tempcat_check_ordinary_oid(Relation relation, Oid oid);
+extern bool tempcat_in_memory(void);
 extern bool tempcat_owns_oid(Oid catalog, Oid oid);
 extern Oid	tempcat_skip_held_blocks(Oid nextOid, bool *skipped);
 extern void tempcat_note_oid_counter(Oid nextOid);

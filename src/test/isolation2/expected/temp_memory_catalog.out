@@ -430,9 +430,11 @@ CREATE TABLE
 DROP TABLE tc_perm;
 DROP TABLE
 
--- Concurrent sessions get OIDs of separate runs: same names, different
--- OIDs, and locks on their own temporary tables do not conflict.
-CREATE TABLE tc_oids (session int, reloid oid) DISTRIBUTED REPLICATED;
+-- Concurrent sessions number the rows they keep in memory each on its own:
+-- rows of objects of the same name have the same TIDs then (and different
+-- OIDs), yet changing them in two open transactions does not conflict, as
+-- no lock is taken on TIDs of rows in memory; nor do locks on the tables.
+CREATE TABLE tc_oids (session int, reloid oid, tid tid) DISTRIBUTED REPLICATED;
 CREATE TABLE
 15: SET gp_enable_temp_memory_catalog = on;
 SET
@@ -446,22 +448,34 @@ CREATE TABLE
 INSERT 0 10
 16: INSERT INTO tc_conc SELECT generate_series(1, 20);
 INSERT 0 20
-15: INSERT INTO tc_oids SELECT 1, 'tc_conc'::regclass;
+15: INSERT INTO tc_oids SELECT 1, oid, ctid FROM pg_class WHERE oid = 'tc_conc'::regclass;
 INSERT 0 1
-16: INSERT INTO tc_oids SELECT 2, 'tc_conc'::regclass;
+16: INSERT INTO tc_oids SELECT 2, oid, ctid FROM pg_class WHERE oid = 'tc_conc'::regclass;
 INSERT 0 1
-SELECT count(DISTINCT reloid) AS distinct_oids FROM tc_oids;
- distinct_oids 
----------------
- 2             
+SELECT count(DISTINCT reloid) AS distinct_oids, count(DISTINCT tid) AS distinct_tids FROM tc_oids;
+ distinct_oids | distinct_tids 
+---------------+---------------
+ 2             | 1             
 (1 row)
 15: BEGIN;
 BEGIN
-15: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
-LOCK TABLE
+15: ALTER TABLE tc_conc ADD COLUMN b int;
+ALTER TABLE
+15: GRANT SELECT ON tc_conc TO PUBLIC;
+GRANT
+15: COMMENT ON TABLE tc_conc IS 'fifteen';
+COMMENT
 16: BEGIN;
 BEGIN
+16: ALTER TABLE tc_conc ADD COLUMN b int;
+ALTER TABLE
+16: GRANT SELECT ON tc_conc TO PUBLIC;
+GRANT
+16: COMMENT ON TABLE tc_conc IS 'sixteen';
+COMMENT
 16: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE
+15: LOCK TABLE tc_conc IN ACCESS EXCLUSIVE MODE;
 LOCK TABLE
 16: SELECT count(*) FROM tc_conc;
  count 
@@ -603,9 +617,8 @@ DROP TABLE
 
 -- The writer QE of a session that is gone may still be on its way out,
 -- holding the blocks of its OIDs (here, on segment 0, a fault holds it
--- there): the next session does not wait for it, as it gets later OIDs.
-CREATE TABLE tc_old_oid (o oid) DISTRIBUTED REPLICATED;
-CREATE TABLE
+-- there): the next session goes on meanwhile, with its rows in memory on
+-- all nodes.
 12: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
 12: SET gp_enable_temp_memory_catalog = on;
@@ -614,8 +627,6 @@ SET
 CREATE TABLE
 12: INSERT INTO tc_t SELECT generate_series(1, 10);
 INSERT 0 10
-12: INSERT INTO tc_old_oid SELECT 'tc_t'::regclass;
-INSERT 0 1
 SELECT gp_inject_fault('tempcat_release_blocks', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
  gp_inject_fault 
 -----------------
@@ -635,10 +646,15 @@ SET
 CREATE TABLE
 13: INSERT INTO tc_t SELECT generate_series(1, 10);
 INSERT 0 10
-13: SELECT count(*), tc_in_memory('tc_t') AS in_memory, 'tc_t'::regclass::oid > (SELECT o FROM tc_old_oid) AS later_oid FROM tc_t;
- count | in_memory | later_oid 
--------+-----------+-----------
- 10    | t         | t         
+13: SELECT count(*), tc_in_memory('tc_t') AS in_memory FROM tc_t;
+ count | in_memory 
+-------+-----------
+ 10    | t         
+(1 row)
+13: SELECT count(*), bool_and((ctid::text::point)[1] >= 32768) AS in_memory FROM gp_dist_random('pg_class') WHERE oid = 'tc_t'::regclass;
+ count | in_memory 
+-------+-----------
+ 3     | t         
 (1 row)
 SELECT gp_inject_fault('tempcat_release_blocks', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' AND content = 0;
  gp_inject_fault 
@@ -648,8 +664,6 @@ SELECT gp_inject_fault('tempcat_release_blocks', 'reset', dbid) FROM gp_segment_
 13q: ... <quitting>
 4: CALL tc_wait_gone();
 CALL
-DROP TABLE tc_old_oid;
-DROP TABLE
 
 -- A transaction that creates the session's first temporary objects is
 -- rolled back after it was prepared on some segments (here as PREPARE
@@ -851,48 +865,85 @@ DROP DATABASE
 
 -- A session whose wait for a DROP in progress of an object it uses was
 -- canceled in a subtransaction that rolled back waits for it again at the
--- next use in the transaction (here for a DROP in progress, of a session that used the
--- object itself).
-CREATE TYPE tc_sub_comp AS (x int);
-CREATE TYPE
+-- next use in the transaction (here for a DROP in progress, of a session
+-- that used the object itself).  The wait is for the transaction of the
+-- DROP, which the session that uses the object marked it with: a text
+-- search configuration, unlike most objects, is not locked as a dependency
+-- on it is recorded, which would wait before.
+CREATE TEXT SEARCH CONFIGURATION tc_sub_cfg (COPY = english);
+CREATE TEXT SEARCH CONFIGURATION
+CREATE TABLE tc_waiter (pid int) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE PROCEDURE tc_wait_waiting() LANGUAGE plpgsql AS $$ BEGIN FOR i IN 1..600 LOOP IF EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted AND gp_segment_id = -1 AND pid = (SELECT pid FROM tc_waiter)) THEN RETURN; END IF; PERFORM pg_sleep(0.1); END LOOP; RAISE EXCEPTION 'the session did not wait'; END $$;
+CREATE PROCEDURE
 32: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
 32: SET gp_enable_temp_memory_catalog = on;
 SET
-32: CREATE TEMP TABLE tc_sx (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+32: CREATE TEMP TABLE tc_sx (a int, b text DEFAULT to_tsvector('tc_sub_cfg'::regconfig, 'x')::text) DISTRIBUTED BY (a);
 CREATE TABLE
 32: BEGIN;
 BEGIN
-32: DROP TYPE tc_sub_comp CASCADE;
-DROP TYPE
+32: DROP TEXT SEARCH CONFIGURATION tc_sub_cfg CASCADE;
+DROP TEXT SEARCH CONFIGURATION
 33: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
 INSERT 0 1
+33: INSERT INTO tc_waiter SELECT pg_backend_pid();
+INSERT 0 1
 33: SET gp_enable_temp_memory_catalog = on;
-SET
-33: SET lock_timeout = '500ms';
 SET
 33: BEGIN;
 BEGIN
 33: SAVEPOINT s1;
 SAVEPOINT
-33: CREATE TEMP TABLE tc_sa (c tc_sub_comp) DISTRIBUTED RANDOMLY;
-ERROR:  canceling statement due to lock timeout
+33&: CREATE TEMP TABLE tc_sa (a int, b text DEFAULT to_tsvector('tc_sub_cfg'::regconfig, 'x')::text) DISTRIBUTED BY (a);  <waiting ...>
+4: CALL tc_wait_waiting();
+CALL
+4: SELECT locktype, mode FROM pg_locks WHERE NOT granted AND gp_segment_id = -1 AND pid = (SELECT pid FROM tc_waiter);
+ locktype      | mode      
+---------------+-----------
+ transactionid | ShareLock 
+(1 row)
+4: SELECT pg_cancel_backend((SELECT pid FROM tc_waiter));
+ pg_cancel_backend 
+-------------------
+ t                 
+(1 row)
+33<:  <... completed>
+ERROR:  canceling statement due to user request
 33: ROLLBACK TO SAVEPOINT s1;
 ROLLBACK
-33: CREATE TEMP TABLE tc_sb (c tc_sub_comp) DISTRIBUTED RANDOMLY;
-ERROR:  canceling statement due to lock timeout
+33&: CREATE TEMP TABLE tc_sb (a int, b text DEFAULT to_tsvector('tc_sub_cfg'::regconfig, 'x')::text) DISTRIBUTED BY (a);  <waiting ...>
+4: CALL tc_wait_waiting();
+CALL
+4: SELECT locktype, mode FROM pg_locks WHERE NOT granted AND gp_segment_id = -1 AND pid = (SELECT pid FROM tc_waiter);
+ locktype      | mode      
+---------------+-----------
+ transactionid | ShareLock 
+(1 row)
+4: SELECT pg_cancel_backend((SELECT pid FROM tc_waiter));
+ pg_cancel_backend 
+-------------------
+ t                 
+(1 row)
+33<:  <... completed>
+ERROR:  canceling statement due to user request
 33: ROLLBACK;
 ROLLBACK
 32: ROLLBACK;
 ROLLBACK
-33: CREATE TEMP TABLE tc_sb (c tc_sub_comp) DISTRIBUTED RANDOMLY;
+33: CREATE TEMP TABLE tc_sb (a int, b text DEFAULT to_tsvector('tc_sub_cfg'::regconfig, 'x')::text) DISTRIBUTED BY (a);
 CREATE TABLE
 33q: ... <quitting>
 32q: ... <quitting>
 4: CALL tc_wait_gone();
 CALL
-DROP TYPE tc_sub_comp;
-DROP TYPE
+DROP TEXT SEARCH CONFIGURATION tc_sub_cfg;
+DROP TEXT SEARCH CONFIGURATION
+DROP PROCEDURE tc_wait_waiting();
+DROP PROCEDURE
+DROP TABLE tc_waiter;
+DROP TABLE
 
 -- While gpexpand runs (here its catalog lock is taken as it does), a
 -- session cannot change its temporary objects kept in memory, as on disk:
@@ -1168,6 +1219,71 @@ DROP DATABASE tc_tmpl;
 DROP DATABASE
 DROP ROLE tc_copy_role;
 DROP ROLE
+
+-- DISCARD ALL drops the session's temporary objects kept in memory on the
+-- segments too (it dispatches DISCARD TEMP): a backend that a connection
+-- pooler reuses does not fill its memory there with the objects of earlier
+-- clients, whose OIDs the coordinator could give other objects again.
+53: SET gp_enable_temp_memory_catalog = on;
+SET
+53: CREATE TEMP TABLE tc_disc (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+53: DISCARD ALL;
+DISCARD ALL
+53: SELECT count(*) FROM gp_dist_random('pg_class') WHERE relname = 'tc_disc';
+ count 
+-------
+ 0     
+(1 row)
+53: CREATE TEMP TABLE tc_disc (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+53q: ... <quitting>
+
+-- A session that ends in the middle of a transaction that wrote error logs
+-- of COPY ... LOG ERRORS for its temporary tables kept in memory removes
+-- them, and the persistent ones of its temporary schema: nothing knows of
+-- them once the rows in memory are gone.  (On disk, the error logs of a
+-- rolled back COPY stay.)
+CREATE TABLE tc_logs (n bigint) DISTRIBUTED REPLICATED;
+CREATE TABLE
+CREATE FUNCTION tc_count_logs() RETURNS bigint LANGUAGE sql AS $$ SELECT count(*) FROM (SELECT pg_ls_dir('errlog', true, false) AS f FROM gp_dist_random('gp_id') UNION ALL SELECT pg_ls_dir('errlogpersistent', true, false) FROM gp_dist_random('gp_id')) s WHERE f LIKE (SELECT oid FROM pg_database WHERE datname = current_database())::text || '\_%' $$;
+CREATE FUNCTION
+INSERT INTO tc_logs SELECT tc_count_logs();
+INSERT 0 1
+52: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+INSERT 0 1
+52: SET gp_enable_temp_memory_catalog = on;
+SET
+52: BEGIN;
+BEGIN
+52: CREATE TEMP TABLE tc_el (a int) DISTRIBUTED BY (a);
+CREATE TABLE
+52: COPY tc_el FROM PROGRAM 'printf "1\nx\n2\ny\n3\nz\n"' LOG ERRORS SEGMENT REJECT LIMIT 10;
+COPY 3
+52: CREATE EXTERNAL WEB TABLE pg_temp.tc_ext (a int) EXECUTE 'printf "1\nx\n"' FORMAT 'text' LOG ERRORS PERSISTENTLY SEGMENT REJECT LIMIT 10;
+CREATE EXTERNAL TABLE
+52: SELECT count(*) FROM tc_ext;
+ count 
+-------
+ 3     
+(1 row)
+52: SELECT tc_in_memory('tc_el') AS in_memory, tc_count_logs() > (SELECT n FROM tc_logs) AS logged;
+ in_memory | logged 
+-----------+--------
+ t         | t      
+(1 row)
+52q: ... <quitting>
+4: CALL tc_wait_gone();
+CALL
+4: SELECT tc_count_logs() = (SELECT n FROM tc_logs) AS logs_removed;
+ logs_removed 
+--------------
+ t            
+(1 row)
+DROP FUNCTION tc_count_logs();
+DROP FUNCTION
+DROP TABLE tc_logs;
+DROP TABLE
 
 -- A session that keeps its temporary objects in memory can import a
 -- snapshot until it has made its first temporary object, also one in the

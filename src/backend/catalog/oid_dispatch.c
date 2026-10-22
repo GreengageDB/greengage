@@ -452,6 +452,8 @@ GetNewOrPreassignedOidExt(Relation relation, Oid indexId, AttrNumber oidcolumn,
 		/* A temporary object of this session in the in-memory catalog? */
 		if (!IsBinaryUpgrade && searchkey->tempcat)
 			tempcat_note_preassigned_oid(relation, indexId, oidcolumn, oid);
+		else if (!IsBinaryUpgrade)
+			tempcat_check_ordinary_oid(relation, oid);
 
 		/*
 		 * During normal operation, all OIDs are preassigned unless the object
