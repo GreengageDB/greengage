@@ -75,6 +75,9 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 	nspdesc = table_open(NamespaceRelationId, RowExclusiveLock);
 	tupDesc = nspdesc->rd_att;
 
+	/* covers the OID allocation: GetNewOidWithIndex() reserves virtual rows */
+	BEGIN_TEMP_TABLE_SCOPE(isTemp);
+
 	/* initialize nulls and values */
 	for (i = 0; i < Natts_pg_namespace; i++)
 	{
@@ -96,8 +99,6 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 
 
 	tup = heap_form_tuple(tupDesc, values, nulls);
-
-	BEGIN_TEMP_TABLE_SCOPE(isTemp);
 
 	CatalogTupleInsert(nspdesc, tup);
 	Assert(OidIsValid(nspoid));

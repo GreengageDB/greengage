@@ -188,8 +188,12 @@ typedef struct TempcatDepEdge
 extern void tempcat_registry_init(void);
 extern Size tempcat_registry_shmem_size(void);
 
-/* replace this backend's published edges with the given set */
-extern void tempcat_registry_publish(int nedges, const TempcatDepEdge *edges);
+/*
+ * Replace this backend's published edges and OID reservations with the
+ * given sets (regenerated from the committed snapshot).
+ */
+extern void tempcat_registry_publish(int nedges, const TempcatDepEdge *edges,
+									 int noids, const Oid *oids);
 
 /* delete this backend's published edges (session end) */
 extern void tempcat_registry_unpublish(void);
@@ -205,5 +209,20 @@ extern void tempcat_registry_unpublish_on_exit(int code, Datum arg);
 extern bool tempcat_registry_has_dependents(const ObjectAddress *referenced,
 											char deptype,
 											ObjectAddress *depender);
+
+/*
+ * OID reservation for virtual catalog rows, consulted by the OID
+ * allocator's collision loop (GetNewOidWithIndex): catalog indexes cannot
+ * see virtual rows, so the wrap-around check would otherwise miss them.
+ */
+extern bool tempcat_registry_oid_taken(Oid oid);
+extern void tempcat_registry_reserve_oid(Oid oid);
+
+/*
+ * Glue for the OID allocator: reserve the OID and mark this session's
+ * registry state as pending, so the next commit or abort regenerates it
+ * from the committed snapshot.
+ */
+extern void tempcat_note_reserved_oid(Oid oid);
 
 #endif   /* _TEMP_CAT_H */

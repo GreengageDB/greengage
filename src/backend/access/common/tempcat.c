@@ -52,10 +52,12 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_type_d.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_statistic.h"
 #include "storage/bufmgr.h"
+#include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
@@ -162,14 +164,80 @@ static bool TempcatRegistryExitHookRegistered = false;
 static bool TempcatDeserializing = false;
 
 /*
- * TupleDesc copies of pg_depend and pg_shdepend, captured on first local
- * insert of such a row: the commit-time edge sync runs after the
- * transaction state is already TRANS_DEFAULT, where relations cannot be
- * opened anymore (relation_open asserts IsTransactionState()).
+ * TupleDesc copies of the catalogs that received virtual rows, captured
+ * at insert time: the commit-time sync runs after the transaction state
+ * is already TRANS_DEFAULT, where relations cannot be opened anymore
+ * (relation_open asserts IsTransactionState()).  hasoid records whether
+ * the catalog's first column is the row's OID, which PG12 stores as a
+ * regular attribute.
  */
-static TupleDesc TempcatDepTupleDesc = NULL;
-static TupleDesc TempcatShdepTupleDesc = NULL;
-static TupleDesc TempcatInheritsTupleDesc = NULL;
+typedef struct TempcatDescCacheEntry
+{
+	Oid			relid;
+	bool		hasoid;
+	TupleDesc	desc;
+} TempcatDescCacheEntry;
+
+static TempcatDescCacheEntry TempcatDescCache[128];
+static int		TempcatDescCacheLen = 0;
+
+static void
+TempcatDescCacheInsert(Relation rel)
+{
+	TupleDesc	desc;
+	Form_pg_attribute attr0;
+	MemoryContext oldctx;
+	int			i;
+
+	for (i = 0; i < TempcatDescCacheLen; i++)
+		if (TempcatDescCache[i].relid == RelationGetRelid(rel))
+			return;
+
+	Assert(TempcatDescCacheLen < (int) lengthof(TempcatDescCache));
+
+	oldctx = MemoryContextSwitchTo(TopMemoryContext);
+	desc = CreateTupleDescCopy(RelationGetDescr(rel));
+	MemoryContextSwitchTo(oldctx);
+
+	attr0 = TupleDescAttr(desc, 0);
+	TempcatDescCache[TempcatDescCacheLen].relid = RelationGetRelid(rel);
+	TempcatDescCache[TempcatDescCacheLen].hasoid =
+		(attr0->attnum == 1 && attr0->atttypid == OIDOID &&
+		 namestrcmp(&attr0->attname, "oid") == 0);
+	TempcatDescCache[TempcatDescCacheLen].desc = desc;
+	TempcatDescCacheLen++;
+}
+
+static TupleDesc
+TempcatDescCacheLookup(Oid relid, bool *hasoid)
+{
+	int			i;
+
+	for (i = 0; i < TempcatDescCacheLen; i++)
+	{
+		if (TempcatDescCache[i].relid == relid)
+		{
+			*hasoid = TempcatDescCache[i].hasoid;
+			return TempcatDescCache[i].desc;
+		}
+	}
+
+	*hasoid = false;
+	return NULL;
+}
+
+/*
+ * Called by the OID allocator (GetNewOidWithIndex) when it hands out an
+ * OID for a virtual catalog row: reserve it cluster-wide immediately, and
+ * mark the registry state as pending so the next commit/abort regenerates
+ * it from the committed snapshot.
+ */
+void
+tempcat_note_reserved_oid(Oid oid)
+{
+	TempcatPublishPending = true;
+	tempcat_registry_reserve_oid(oid);
+}
 
 /*
  * Fetch a NOT NULL attribute; a virtual pg_depend/pg_shdepend row with a
@@ -199,6 +267,9 @@ TempcatRegistrySyncFromCommitted(void)
 	TempcatDepEdge *edges = NULL;
 	int			nedges = 0;
 	int			maxedges = 0;
+	Oid		   *oids = NULL;
+	int			noids = 0;
+	int			maxoids = 0;
 	dlist_iter	iter;
 
 	if (!TempcatRegistryExitHookRegistered)
@@ -215,28 +286,38 @@ TempcatRegistrySyncFromCommitted(void)
 			TempcatSnapshotRelationData *entry =
 				dlist_container(TempcatSnapshotRelationData, node, iter.cur);
 			TupleDesc	tupDesc;
+			bool		hasoid;
+			bool		is_edge_catalog;
 			Oid			dbid;
 			dlist_iter	tupIter;
 
 			if (entry->relid == DependRelationId)
 			{
-				tupDesc = TempcatDepTupleDesc;
+				is_edge_catalog = true;
 				dbid = MyDatabaseId;
 			}
 			else if (entry->relid == SharedDependRelationId)
 			{
-				tupDesc = TempcatShdepTupleDesc;
+				is_edge_catalog = true;
 				dbid = InvalidOid;	/* pg_shdepend is cluster-wide */
 			}
 			else if (entry->relid == InheritsRelationId)
 			{
-				tupDesc = TempcatInheritsTupleDesc;
+				is_edge_catalog = true;
 				dbid = MyDatabaseId;
 			}
 			else
-				continue;
+			{
+				/* Other catalogs contribute their OIDs only. */
+				is_edge_catalog = false;
+				dbid = InvalidOid;
+			}
 
-			/* Rows not written by this backend have no cached descriptor. */
+			/*
+			 * Rows not written by this backend (deserialized reader
+			 * state) have no cached descriptor.
+			 */
+			tupDesc = TempcatDescCacheLookup(entry->relid, &hasoid);
 			if (tupDesc == NULL)
 				continue;
 
@@ -245,6 +326,28 @@ TempcatRegistrySyncFromCommitted(void)
 				DListHeapTuple *dlist_tup = (DListHeapTuple *) tupIter.cur;
 				HeapTuple	tup = dlist_tup->tup;
 				TempcatDepEdge *edge;
+
+				if (hasoid)
+				{
+					Datum		oiddatum;
+					bool		isnull;
+
+					oiddatum = heap_getattr(tup, 1, tupDesc, &isnull);
+					Assert(!isnull);
+
+					if (noids >= maxoids)
+					{
+						maxoids = (maxoids == 0) ? 32 : maxoids * 2;
+						if (oids == NULL)
+							oids = palloc(maxoids * sizeof(Oid));
+						else
+							oids = repalloc(oids, maxoids * sizeof(Oid));
+					}
+					oids[noids++] = DatumGetObjectId(oiddatum);
+				}
+
+				if (!is_edge_catalog)
+					continue;
 
 				if (nedges >= maxedges)
 				{
@@ -295,10 +398,12 @@ TempcatRegistrySyncFromCommitted(void)
 		}
 	}
 
-	tempcat_registry_publish(nedges, edges);
+	tempcat_registry_publish(nedges, edges, noids, oids);
 
 	if (edges != NULL)
 		pfree(edges);
+	if (oids != NULL)
+		pfree(oids);
 }
 
 /*****************************************************************************
@@ -636,8 +741,17 @@ tempcat_abort_transaction(void)
 
 	TempcatSnapshotUnwind();
 
-	/* The uncommitted edges were never published; don't publish them now. */
-	TempcatPublishPending = false;
+	/*
+	 * Roll back the registry state to the committed snapshot: OIDs
+	 * reserved by aborted allocations must stop blocking the allocator.
+	 * The uncommitted edges were never published, so this only shrinks
+	 * the OID set.
+	 */
+	if (TempcatPublishPending)
+	{
+		TempcatRegistrySyncFromCommitted();
+		TempcatPublishPending = false;
+	}
 }
 
 /*
@@ -866,39 +980,17 @@ tempcat_insert(Relation relation, HeapTuple htup)
 	pgstat_count_heap_insert(relation, 1);
 	TempcatDirtyFlag = true;
 
+	TempcatDescCacheInsert(relation);
+
 	/*
 	 * Rows of these catalogs feed the shared-memory registry; deserialized
 	 * rows belong to the publishing session and must not be republished.
 	 */
-	if (RelationGetRelid(relation) == DependRelationId ||
-		RelationGetRelid(relation) == SharedDependRelationId ||
-		RelationGetRelid(relation) == InheritsRelationId)
-	{
-		TupleDesc  *desc;
-
-		switch (RelationGetRelid(relation))
-		{
-			case DependRelationId:
-				desc = &TempcatDepTupleDesc;
-				break;
-			case SharedDependRelationId:
-				desc = &TempcatShdepTupleDesc;
-				break;
-			default:
-				desc = &TempcatInheritsTupleDesc;
-				break;
-		}
-		if (*desc == NULL)
-		{
-			MemoryContext oldctx = MemoryContextSwitchTo(TopMemoryContext);
-
-			*desc = CreateTupleDescCopy(RelationGetDescr(relation));
-			MemoryContextSwitchTo(oldctx);
-		}
-
-		if (!TempcatDeserializing)
-			TempcatPublishPending = true;
-	}
+	if (!TempcatDeserializing &&
+		(RelationGetRelid(relation) == DependRelationId ||
+		 RelationGetRelid(relation) == SharedDependRelationId ||
+		 RelationGetRelid(relation) == InheritsRelationId))
+		TempcatPublishPending = true;
 }
 
 /*

@@ -25,6 +25,7 @@
 #include "access/sysattr.h"
 #include "access/table.h"
 #include "access/transam.h"
+#include "access/tempcat.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -611,6 +612,7 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	SysScanDesc scan;
 	ScanKeyData key;
 	bool		collides;
+	bool		tempcat_reserve = IsTempTableScopeFor(relation);
 
 	/* Only system relations are supported */
 	Assert(IsSystemRelation(relation));
@@ -649,6 +651,14 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 		if (!collides && !IsOidAcceptable(newOid))
 			collides = true;
 
+		/*
+		 * A virtual temp memory catalog row is not in this index: check
+		 * the shared reservation registry instead, or the counter could
+		 * wrap onto another session's (or our own) temporary object.
+		 */
+		if (!collides && tempcat_registry_oid_taken(newOid))
+			collides = true;
+
 		systable_endscan(scan);
 	} while (collides);
 
@@ -663,6 +673,10 @@ GetNewOidWithIndex(Relation relation, Oid indexId, AttrNumber oidcolumn)
 	if (Gp_role == GP_ROLE_EXECUTE && RelationNeedsSynchronizedOIDs(relation))
 		elog(PANIC, "allocated OID %u for relation \"%s\" in segment",
 			 newOid, RelationGetRelationName(relation));
+
+	/* Reserve the OID of a virtual row before the caller can insert it. */
+	if (tempcat_reserve)
+		tempcat_note_reserved_oid(newOid);
 
 	return newOid;
 }

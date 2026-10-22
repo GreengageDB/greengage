@@ -33,6 +33,27 @@ EXCEPTION WHEN dependent_objects_still_exist THEN
 	END IF;
 END;
 $$ LANGUAGE plpgsql;
+-- Run a DROP that may transiently fail with ERRCODE_DEPENDENT_OBJECTS_
+-- STILL_EXIST while the second session's segment backends finish their
+-- exit cleanup, until they have.
+CREATE FUNCTION tempcat_retry_drop(stmt text) RETURNS void AS $$
+DECLARE
+	tries int := 0;
+BEGIN
+	LOOP
+		BEGIN
+			EXECUTE stmt;
+			RETURN;
+		EXCEPTION WHEN dependent_objects_still_exist THEN
+			tries := tries + 1;
+			IF tries >= 100 THEN
+				RAISE EXCEPTION 'still blocked after retries: %', stmt;
+			END IF;
+			PERFORM pg_sleep(0.1);
+		END;
+	END LOOP;
+END;
+$$ LANGUAGE plpgsql;
 -- Objects that the temporary tables will depend on
 CREATE TYPE dty AS (x int);
 CREATE FUNCTION dfn(int) RETURNS int IMMUTABLE LANGUAGE sql AS 'SELECT $1 + 1';
@@ -139,7 +160,7 @@ SELECT tempcat_assert_blocked('DROP ROLE drole',
 -- DETAIL line contains the temporary table's OID.
 DROP TYPE dty;
 ERROR:  cannot drop type dty because temporary objects in other sessions depend on it
-DETAIL:  column 2 of temporary relation 17588 in another session depends on type dty
+DETAIL:  column 2 of temporary relation 17589 in another session depends on type dty
 HINT:  Disconnect the session that holds the temporary objects, or drop them in it, and retry.
 -- end_ignore
 -- Every row of a temporary object is virtual, not just its pg_class rows:
@@ -283,6 +304,51 @@ DROP FUNCTION dfn2(int);
 DROP FUNCTION dfn3(int);
 DROP FUNCTION dfn4();
 DROP DOMAIN ddom;
+-- The OIDs of a live session's temporary objects are reserved in the
+-- shared registry: when the coordinator's OID counter is pointed directly
+-- at one, the next object gets a different OID instead of colliding (and
+-- later being destroyed by the temporary object's drop).
+CREATE FUNCTION gp_set_next_oid_master(oid) RETURNS void
+	AS '@abs_builddir@/regress@DLSUFFIX@', 'gp_set_next_oid'
+	LANGUAGE C VOLATILE;
+SELECT tempcat_dep_session_exec($q$
+	CREATE TEMP TABLE dep_to (a int) DISTRIBUTED BY (a);
+	INSERT INTO dep_probe SELECT 'to', 'dep_to'::regclass;
+$q$);
+ tempcat_dep_session_exec 
+--------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT gp_set_next_oid_master((SELECT v FROM dep_probe WHERE k = 'to'));
+ gp_set_next_oid_master 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE dep_perm (a int) DISTRIBUTED BY (a);
+SELECT 'dep_perm'::regclass::oid <>
+	(SELECT v FROM dep_probe WHERE k = 'to');
+ ?column? 
+----------
+ t
+(1 row)
+
+SELECT tempcat_dep_session_exec($q$ DROP TABLE dep_to; $q$);
+ tempcat_dep_session_exec 
+--------------------------
+ DROP TABLE
+(1 row)
+
+INSERT INTO dep_perm VALUES (1);
+SELECT a FROM dep_perm;
+ a 
+---
+ 1
+(1 row)
+
+DROP TABLE dep_perm;
+DROP FUNCTION gp_set_next_oid_master(oid);
 DROP TABLE dep_probe;
 -- A rolled-back DROP of a temporary table must not lose the table.
 SELECT tempcat_dep_session_exec('CREATE TEMP TABLE dep_rb(i int)');
@@ -553,11 +619,32 @@ SELECT count(*) FROM pg_shdepend
      0
 (1 row)
 
-DROP TYPE dty;
-DROP FUNCTION dfn(int);
-DROP OWNED BY drole;
-DROP ROLE drole;
+SELECT tempcat_retry_drop('DROP TYPE dty');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP FUNCTION dfn(int)');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP OWNED BY drole');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
+SELECT tempcat_retry_drop('DROP ROLE drole');
+ tempcat_retry_drop 
+--------------------
+ 
+(1 row)
+
 DROP ROLE drole2;
 DROP FUNCTION tempcat_assert_blocked(text, text);
+DROP FUNCTION tempcat_retry_drop(text);
 DROP FUNCTION tempcat_dep_session_exec(text);
 DROP FUNCTION tempcat_dep_session_disconnect();
