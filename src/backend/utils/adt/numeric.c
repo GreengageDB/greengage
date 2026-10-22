@@ -10638,17 +10638,9 @@ power_var(const NumericVar *base, const NumericVar *exp, NumericVar *result)
 		return;
 	}
 
-<<<<<<< HEAD
+	quick_init_var(&abs_base);
 	quick_init_var(&ln_base);
 	quick_init_var(&ln_num);
-||||||| e1c1c30f635
-	init_var(&ln_base);
-	init_var(&ln_num);
-=======
-	init_var(&abs_base);
-	init_var(&ln_base);
-	init_var(&ln_num);
->>>>>>> 3b231596ccf
 
 	/*
 	 * If base is negative, insist that exp be an integer.  The result is then
