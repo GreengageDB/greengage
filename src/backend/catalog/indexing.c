@@ -18,8 +18,10 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_subscription.h"
 #include "catalog/pg_subscription_rel.h"
 #include "executor/executor.h"
@@ -236,6 +238,13 @@ CatalogTupleInsert(Relation heapRel, HeapTuple tup)
 
 	CatalogTupleCheckConstraints(heapRel, tup);
 
+	/* GPDB: a row of a temporary object kept in memory, see tempcat.c */
+	if (tempcat_route_insert(heapRel, tup))
+	{
+		tempcat_insert(heapRel, tup);
+		return;
+	}
+
 	indstate = CatalogOpenIndexes(heapRel);
 
 	simple_heap_insert(heapRel, tup);
@@ -258,9 +267,58 @@ CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 {
 	CatalogTupleCheckConstraints(heapRel, tup);
 
+	/* GPDB: a row of a temporary object kept in memory, see tempcat.c */
+	if (tempcat_route_insert(heapRel, tup))
+	{
+		tempcat_insert(heapRel, tup);
+		return;
+	}
+
 	simple_heap_insert(heapRel, tup);
 
 	CatalogIndexInsert(indstate, tup);
+}
+
+/*
+ * GPDB: update a catalog row in memory, or one whose new version goes to
+ * memory (see tempcat.c), and return true; return false for an ordinary
+ * update on disk.  Whether a row is kept in memory follows the object that
+ * owns it (tempcat_route_insert()): should an update change that, the new
+ * version goes where it belongs, not where the old one is.  'indstate' may
+ * be NULL.
+ */
+static bool
+CatalogTupleUpdateTempcat(Relation heapRel, ItemPointer otid, HeapTuple tup,
+						  CatalogIndexState indstate)
+{
+	bool		in_memory = tempcat_route_insert(heapRel, tup);
+
+	if (IsTempcatTid(otid))
+	{
+		if (in_memory)
+			tempcat_update(heapRel, otid, tup, GetCurrentCommandId(true));
+		else
+		{
+			tempcat_delete(heapRel, otid, GetCurrentCommandId(true));
+			simple_heap_insert(heapRel, tup);
+			if (indstate != NULL)
+				CatalogIndexInsert(indstate, tup);
+			else
+			{
+				indstate = CatalogOpenIndexes(heapRel);
+				CatalogIndexInsert(indstate, tup);
+				CatalogCloseIndexes(indstate);
+			}
+		}
+		return true;
+	}
+	if (in_memory)
+	{
+		simple_heap_delete(heapRel, otid);
+		tempcat_insert(heapRel, tup);
+		return true;
+	}
+	return false;
 }
 
 /*
@@ -280,6 +338,9 @@ CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
 	CatalogIndexState indstate;
 
 	CatalogTupleCheckConstraints(heapRel, tup);
+
+	if (CatalogTupleUpdateTempcat(heapRel, otid, tup, NULL))
+		return;
 
 	indstate = CatalogOpenIndexes(heapRel);
 
@@ -302,6 +363,9 @@ CatalogTupleUpdateWithInfo(Relation heapRel, ItemPointer otid, HeapTuple tup,
 						   CatalogIndexState indstate)
 {
 	CatalogTupleCheckConstraints(heapRel, tup);
+
+	if (CatalogTupleUpdateTempcat(heapRel, otid, tup, indstate))
+		return;
 
 	simple_heap_update(heapRel, otid, tup);
 

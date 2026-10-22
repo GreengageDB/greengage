@@ -41,6 +41,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_stat_last_operation_d.h"
 #include "catalog/pg_stat_last_shoperation_d.h"
 #include "commands/cluster.h"
@@ -1915,6 +1916,13 @@ vac_update_datfrozenxid(void)
 	/* chicken out if bogus data found */
 	if (bogus)
 		return;
+
+	/*
+	 * GPDB: temporary tables of other sessions whose pg_class rows are kept
+	 * in memory (see tempcat.c) were not seen above; take their published
+	 * horizons into account.
+	 */
+	tempcat_fold_frozen_horizon(&newFrozenXid, &newMinMulti);
 
 	Assert(TransactionIdIsNormal(newFrozenXid));
 	Assert(MultiXactIdIsValid(newMinMulti));

@@ -144,3 +144,14 @@ CREATE SCHEMA mdt_schema;
 SELECT * FROM pg_stat_last_operation_testview_schema WHERE nspname LIKE 'mdt_%';
 DROP SCHEMA mdt_schema;
 SELECT * FROM pg_stat_last_operation_testview_schema WHERE nspname LIKE 'mdt_%';
+
+-- POLICY
+CREATE TABLE mdt_policy_t (a int) DISTRIBUTED BY (a);
+CREATE POLICY mdt_policy ON mdt_policy_t USING (a > 0);
+SELECT oid AS mdt_policy_oid FROM pg_policy WHERE polname = 'mdt_policy' \gset
+SELECT staactionname, stasubtype FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :mdt_policy_oid;
+DROP POLICY mdt_policy ON mdt_policy_t;
+SELECT count(*) FROM pg_stat_last_operation
+ WHERE classid = 'pg_policy'::regclass AND objid = :mdt_policy_oid;
+DROP TABLE mdt_policy_t;

@@ -43,6 +43,7 @@
 #include "access/xlog.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_proc.h"
+#include "catalog/tempcat.h"
 #include "executor/instrument.h"
 #include "common/ip.h"
 #include "executor/instrument.h"
@@ -255,6 +256,20 @@ static HTAB *pgStatFunctions = NULL;
 static bool have_function_stats = false;
 
 /*
+ * GPDB: tables and functions whose statistics to purge once the counts still
+ * pending for them are sent; see pgstat_purge_relation().
+ */
+typedef struct PgStatPurgeList
+{
+	Oid		   *oids;
+	int			n;
+	int			max;
+} PgStatPurgeList;
+
+static PgStatPurgeList pgStatPurgeTables;
+static PgStatPurgeList pgStatPurgeFunctions;
+
+/*
  * Tuple insertion/deletion counts for an open transaction can't be propagated
  * into PgStat_TableStatus counters until we know if it is going to commit
  * or abort.  Hence, we keep these counts in per-subxact structs that live
@@ -376,6 +391,8 @@ static bool pgstat_db_requested(Oid databaseid);
 
 static void pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg);
 static void pgstat_send_funcstats(void);
+static void pgstat_send_purges(void);
+static void pgstat_purge_add(PgStatPurgeList *list, Oid oid);
 static void pgstat_send_slru(void);
 static HTAB *pgstat_collect_oids(Oid catalogid, AttrNumber anum_oid);
 
@@ -903,7 +920,8 @@ pgstat_report_stat(bool force)
 	/* Don't expend a clock check if nothing to do */
 	if ((pgStatTabList == NULL || pgStatTabList->tsa_used == 0) &&
 		pgStatXactCommit == 0 && pgStatXactRollback == 0 &&
-		!have_function_stats)
+		!have_function_stats &&
+		pgStatPurgeTables.n == 0 && pgStatPurgeFunctions.n == 0)
 		return;
 
 	/*
@@ -990,6 +1008,9 @@ pgstat_report_stat(bool force)
 	/* Now, send function statistics */
 	pgstat_send_funcstats();
 
+	/* GPDB: then forget the dropped objects' statistics, see above */
+	pgstat_send_purges();
+
 	/* Send WAL statistics */
 	pgstat_report_wal();
 
@@ -1039,6 +1060,92 @@ pgstat_send_tabstat(PgStat_MsgTabstat *tsmsg)
 
 	pgstat_setheader(&tsmsg->m_hdr, PGSTAT_MTYPE_TABSTAT);
 	pgstat_send(tsmsg, len);
+}
+
+/*
+ * GPDB: ask the collector to forget the statistics of a table (or index,
+ * ...) of this database that was dropped, after the counts still pending for
+ * it, which would otherwise bring them back.  pgstat_vacuum_stat() does that
+ * for the tables it cannot find any more, but keeps the statistics of the
+ * temporary tables that live sessions keep in memory (see tempcat.c), which
+ * it cannot see; those sessions purge the statistics of the ones they drop.
+ */
+void
+pgstat_purge_relation(Oid relid)
+{
+	pgstat_purge_add(&pgStatPurgeTables, relid);
+}
+
+/* GPDB: likewise for a function */
+void
+pgstat_purge_function(Oid funcid)
+{
+	pgstat_purge_add(&pgStatPurgeFunctions, funcid);
+}
+
+static void
+pgstat_purge_add(PgStatPurgeList *list, Oid oid)
+{
+	if (list->n >= list->max)
+	{
+		int			newmax = Max(64, list->max * 2);
+
+		if (list->oids == NULL)
+			list->oids = MemoryContextAlloc(TopMemoryContext,
+											sizeof(Oid) * newmax);
+		else
+			list->oids = repalloc(list->oids, sizeof(Oid) * newmax);
+		list->max = newmax;
+	}
+	list->oids[list->n++] = oid;
+}
+
+/* GPDB: send the purges queued by pgstat_purge_relation() and _function() */
+static void
+pgstat_send_purges(void)
+{
+	int			i;
+
+	if (pgStatSock != PGINVALID_SOCKET && pgStatPurgeTables.n > 0)
+	{
+		PgStat_MsgTabpurge msg;
+
+		msg.m_databaseid = MyDatabaseId;
+		msg.m_nentries = 0;
+		for (i = 0; i < pgStatPurgeTables.n; i++)
+		{
+			msg.m_tableid[msg.m_nentries++] = pgStatPurgeTables.oids[i];
+			if (msg.m_nentries >= PGSTAT_NUM_TABPURGE ||
+				i == pgStatPurgeTables.n - 1)
+			{
+				pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_TABPURGE);
+				pgstat_send(&msg, offsetof(PgStat_MsgTabpurge, m_tableid[0]) +
+							msg.m_nentries * sizeof(Oid));
+				msg.m_nentries = 0;
+			}
+		}
+	}
+	if (pgStatSock != PGINVALID_SOCKET && pgStatPurgeFunctions.n > 0)
+	{
+		PgStat_MsgFuncpurge msg;
+
+		msg.m_databaseid = MyDatabaseId;
+		msg.m_nentries = 0;
+		for (i = 0; i < pgStatPurgeFunctions.n; i++)
+		{
+			msg.m_functionid[msg.m_nentries++] = pgStatPurgeFunctions.oids[i];
+			if (msg.m_nentries >= PGSTAT_NUM_FUNCPURGE ||
+				i == pgStatPurgeFunctions.n - 1)
+			{
+				pgstat_setheader(&msg.m_hdr, PGSTAT_MTYPE_FUNCPURGE);
+				pgstat_send(&msg, offsetof(PgStat_MsgFuncpurge, m_functionid[0]) +
+							msg.m_nentries * sizeof(Oid));
+				msg.m_nentries = 0;
+			}
+		}
+	}
+	pgStatPurgeTables.n = 0;
+	pgStatPurgeFunctions.n = 0;
 }
 
 /*
@@ -1182,6 +1289,13 @@ pgstat_vacuum_stat(void)
 			continue;
 
 		/*
+		 * GPDB: nor drop the statistics of temporary tables that other
+		 * sessions keep in memory, which we cannot see (see tempcat.c)
+		 */
+		if (tempcat_oid_maybe_live(tabid, MyDatabaseId))
+			continue;
+
+		/*
 		 * Not there, so add this table's Oid to the message
 		 */
 		msg.m_tableid[msg.m_nentries++] = tabid;
@@ -1239,6 +1353,10 @@ pgstat_vacuum_stat(void)
 			CHECK_FOR_INTERRUPTS();
 
 			if (hash_search(htab, (void *) &funcid, HASH_FIND, NULL) != NULL)
+				continue;
+
+			/* GPDB: see above */
+			if (tempcat_oid_maybe_live(funcid, MyDatabaseId))
 				continue;
 
 			/*

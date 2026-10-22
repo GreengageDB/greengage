@@ -105,6 +105,7 @@
 #include "access/xlog.h"
 #include "bootstrap/bootstrap.h"
 #include "catalog/pg_control.h"
+#include "catalog/tempcat.h"
 #include "common/file_perm.h"
 #include "common/ip.h"
 #include "common/string.h"
@@ -4544,6 +4545,9 @@ PostmasterStateMachine(void)
 	 */
 	if (FatalError && pmState == PM_NO_CHILDREN)
 	{
+		/* (see below; read before the shared memory goes) */
+		bool		remove_temp_files = tempcat_areas_created();
+
 		ereport(LOG,
 				(errmsg("all server processes terminated; reinitializing")));
 
@@ -4557,6 +4561,16 @@ PostmasterStateMachine(void)
 
 		/* re-read control file into local memory */
 		LocalProcessControlFile(true);
+
+		/*
+		 * GPDB: remove the crashed sessions' temporary files and temporary
+		 * relation files, if any session kept the catalog rows of its
+		 * temporary tables in memory (see tempcat.c): no catalog rows are
+		 * left that could lead anybody to their files.  (Like PostgreSQL 14's
+		 * remove_temp_files_after_crash.)
+		 */
+		if (remove_temp_files)
+			RemovePgTempFiles();
 
 		reset_shared(PostPortNumber);
 

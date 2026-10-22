@@ -420,6 +420,7 @@ plan_tree_mutator(Node *node,
 				newidxonlyscan->indexid = idxonlyscan->indexid;
 				/* MUTATE(newidxonlyscan->indexid, idxonlyscan->indexid, List *); */
 				MUTATE(newidxonlyscan->indexqual, idxonlyscan->indexqual, List *);
+				MUTATE(newidxonlyscan->recheckqual, idxonlyscan->recheckqual, List *);
 				MUTATE(newidxonlyscan->indextlist, idxonlyscan->indextlist, List *);
 				/* indxorderdir  is  scalar */
 				return (Node *) newidxonlyscan;

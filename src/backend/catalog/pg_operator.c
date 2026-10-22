@@ -29,6 +29,7 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "miscadmin.h"
 #include "parser/parse_oper.h"
 #include "utils/acl.h"
@@ -483,6 +484,10 @@ OperatorCreate(const char *operatorName,
 	}
 	else
 		negatorId = InvalidOid;
+
+	/* GPDB: see tempcat.c */
+	tempcat_check_operator_link(operatorNamespace, commutatorId);
+	tempcat_check_operator_link(operatorNamespace, negatorId);
 
 	/*
 	 * set up values in the operator tuple

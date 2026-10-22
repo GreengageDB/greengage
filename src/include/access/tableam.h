@@ -60,7 +60,13 @@ typedef enum ScanOptions
 	SO_ALLOW_PAGEMODE = 1 << 6,
 
 	/* unregister snapshot at scan end? */
-	SO_TEMP_SNAPSHOT = 1 << 7
+	SO_TEMP_SNAPSHOT = 1 << 7,
+
+	/*
+	 * GPDB: after the heap of a catalog, return the catalog rows of this
+	 * session's temporary objects kept in memory (see heap_getnext())?
+	 */
+	SO_TEMPCAT = 1 << 9
 } ScanOptions;
 
 /*
@@ -873,7 +879,7 @@ table_beginscan_es(Relation rel, Snapshot snapshot,
 				   List *targetList, List *qual, bool *proj, List *constraintList)
 {
 	uint32		flags = SO_TYPE_SEQSCAN |
-	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE;
+	SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE | SO_TEMPCAT;
 
 	if (rel->rd_tableam->scan_begin_extractcolumns)
 		return rel->rd_tableam->scan_begin_extractcolumns(rel, snapshot,

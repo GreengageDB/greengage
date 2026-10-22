@@ -54,6 +54,7 @@
 #include <unistd.h>
 #ifndef WIN32
 #include <sys/mman.h>
+#include <sys/statvfs.h>
 #endif
 #include <sys/stat.h>
 #ifdef HAVE_SYS_IPC_H
@@ -1043,4 +1044,30 @@ errcode_for_dynamic_shared_memory(void)
 		errcode(ERRCODE_OUT_OF_MEMORY);
 	else
 		errcode_for_file_access();
+}
+
+/*
+ * GPDB: report the free and total space of the file system holding the
+ * segments that dynamic_shared_memory_type selects (/dev/shm for posix).
+ * Returns false if unknown: for System V shared memory, and for mmap, whose
+ * segments are files in pg_dynshmem on the data directory's file system,
+ * which the database itself fills (a share of it says nothing about the
+ * room left for segments).
+ */
+bool
+dsm_impl_free_space(Size *free_bytes, Size *total_bytes)
+{
+#ifdef USE_DSM_POSIX
+	struct statvfs st;
+
+	if (dynamic_shared_memory_type != DSM_IMPL_POSIX)
+		return false;
+	if (statvfs("/dev/shm", &st) != 0)
+		return false;
+	*free_bytes = (Size) st.f_bavail * st.f_frsize;
+	*total_bytes = (Size) st.f_blocks * st.f_frsize;
+	return true;
+#else
+	return false;
+#endif
 }

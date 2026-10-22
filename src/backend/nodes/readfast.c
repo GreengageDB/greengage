@@ -945,6 +945,7 @@ _readOidAssignment(void)
 	READ_OID_FIELD(keyOid1);
 	READ_OID_FIELD(keyOid2);
 	READ_OID_FIELD(oid);
+	READ_BOOL_FIELD(tempcat);
 	READ_DONE();
 }
 

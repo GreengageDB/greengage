@@ -263,6 +263,8 @@ typedef struct
 
 	Oid			oid;			/* OID to assign */
 
+	/* GPDB: of a temporary object kept in memory, see tempcat.c */
+	bool		tempcat;
 } OidAssignment;
 
 /*

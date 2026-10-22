@@ -15,6 +15,7 @@
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/tempcat.h"
 #include "commands/async.h"
 #include "commands/discard.h"
 #include "commands/prepare.h"
@@ -94,9 +95,12 @@ DiscardAll(bool isTopLevel)
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
+		/* (but see the end) */
 		ereport(NOTICE,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 				 errmsg("command without clusterwide effect"),
+				 tempcat_in_memory() ?
+				 errdetail("The session's temporary objects, kept in memory, are dropped on the segments too.") : 0,
 				 errhint("Consider alternatives as DEALLOCATE ALL, or DISCARD TEMP if a clusterwide effect is desired.")));
 	}
 
@@ -110,4 +114,15 @@ DiscardAll(bool isTopLevel)
 	ResetPlanCache();
 	ResetTempTableNamespace();
 	ResetSequenceCaches();
+
+	/*
+	 * GPDB: the segments keep the temporary objects of a session that keeps
+	 * them in memory there too: they would fill the session's memory there
+	 * (e.g. of a backend that a connection pooler reuses), and their OIDs,
+	 * which the coordinator gives again after its OID counter wrapped around,
+	 * would collide with those of other objects there.  Drop them there as
+	 * DISCARD TEMP does.
+	 */
+	if (Gp_role == GP_ROLE_DISPATCH && tempcat_in_memory())
+		CdbDispatchCommand("DISCARD TEMP", DF_NEED_TWO_PHASE, NULL);
 }

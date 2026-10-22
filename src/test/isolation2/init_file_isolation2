@@ -42,6 +42,10 @@ s/requested \d+ bytes//
 m/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./
 s/^DETAIL:  Process \d+ waits for ShareLock on transaction \d+; blocked by process \d+./DETAIL:  Process PID waits for ShareLock on transaction XID; blocked by process PID./
 
+# sessions whose temporary objects use an object (tempcat.c)
+m/^DETAIL:  The sessions of processes [\d, ]+ keep them in memory\./
+s/^DETAIL:  The sessions of processes [\d, ]+ keep them in memory\./DETAIL:  The sessions of processes PIDS keep them in memory./
+
 # For resource queue deadlock
 m/.*Process \d+ waits for ExclusiveLock on resource queue \d+; blocked by process \d+./
 s/.*Process \d+ waits for ExclusiveLock on resource queue \d+; blocked by process \d+./Process PID waits for ExclusiveLock on resource queue OID; blocked by process PID./

@@ -61,6 +61,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "catalog/pg_type_encoding.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/comment.h"
@@ -272,18 +273,32 @@ deleteObjectsInList(ObjectAddresses *targetObjects, Relation *depRel,
 	/*
 	 * Delete all the objects in the proper order, except that if told to, we
 	 * should skip the original object(s).
+	 *
+	 * GPDB: dropping objects may take of the room that the session's
+	 * temporary objects kept in memory leave (see tempcat.c).
 	 */
-	for (i = 0; i < targetObjects->numrefs; i++)
+	tempcat_dropping(true);
+	PG_TRY();
 	{
-		ObjectAddress *thisobj = targetObjects->refs + i;
-		ObjectAddressExtra *thisextra = targetObjects->extras + i;
+		for (i = 0; i < targetObjects->numrefs; i++)
+		{
+			ObjectAddress *thisobj = targetObjects->refs + i;
+			ObjectAddressExtra *thisextra = targetObjects->extras + i;
 
-		if ((flags & PERFORM_DELETION_SKIP_ORIGINAL) &&
-			(thisextra->flags & DEPFLAG_ORIGINAL))
-			continue;
+			if ((flags & PERFORM_DELETION_SKIP_ORIGINAL) &&
+				(thisextra->flags & DEPFLAG_ORIGINAL))
+				continue;
 
-		deleteOneObject(thisobj, depRel, flags);
+			deleteOneObject(thisobj, depRel, flags);
+		}
 	}
+	PG_CATCH();
+	{
+		tempcat_dropping(false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	tempcat_dropping(false);
 }
 
 /*
@@ -542,6 +557,14 @@ findDependentObjects(const ObjectAddress *object,
 	 */
 	if (object_address_present_add_flags(object, objflags, targetObjects))
 		return;
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory may depend on
+	 * the object through rows that cannot be seen here: fail if any does
+	 * (see tempcat.c).
+	 */
+	tempcat_lock_out_users(object->classId, object->objectId,
+						   object->objectSubId);
 
 	/*
 	 * The target object might be internally dependent on some other object

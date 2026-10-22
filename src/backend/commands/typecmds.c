@@ -78,6 +78,7 @@
 
 #include "catalog/oid_dispatch.h"
 #include "catalog/pg_type_encoding.h"
+#include "catalog/tempcat.h"
 #include "cdb/cdbvars.h"
 #include "cdb/cdbdisp_query.h"
 
@@ -3023,6 +3024,13 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 
 	/* since this function recurses, it could be driven to stack overflow */
 	check_stack_depth();
+
+	/*
+	 * GPDB: temporary objects of other sessions kept in memory may use the
+	 * domain through rows that cannot be seen here: fail if any does (see
+	 * tempcat.c).
+	 */
+	tempcat_lock_out_users(TypeRelationId, domainOid, 0);
 
 	/*
 	 * We scan pg_depend to find those things that depend on the domain. (We

@@ -70,6 +70,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/tempcat.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
 #include "executor/executor.h"
@@ -1570,6 +1571,14 @@ heap_create_with_catalog(const char *relname,
 	}
 
 	/*
+	 * GPDB: an error log of COPY ... LOG ERRORS that a node going down left
+	 * under the OID of a temporary table kept in memory: no catalog row of it
+	 * was left to drop it with, and the OID counter gives the OID again, to
+	 * any relation, after it wrapped around (see tempcat_before_exit()).
+	 */
+	ErrorLogDelete(MyDatabaseId, relid);
+
+	/*
 	 * Other sessions' catalog scans can't find this until we commit.  Hence,
 	 * it doesn't hurt to hold AccessExclusiveLock.  Do it here so callers
 	 * can't accidentally vary in their lock mode or acquisition timing.
@@ -1757,6 +1766,9 @@ heap_create_with_catalog(const char *relname,
 	 * creating the same relation name in parallel but hadn't committed yet
 	 * when we checked for a duplicate name above.
 	 */
+	/* GPDB: see tempcat.c */
+	if (OidIsValid(reloftypeid))
+		tempcat_check_typed_table(relid, reloftypeid);
 	AddNewRelationTuple(pg_class_desc,
 						new_rel_desc,
 						relid,

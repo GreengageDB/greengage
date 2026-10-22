@@ -43,10 +43,12 @@
 
 #include <math.h>
 
+#include "access/genam.h"
 #include "access/relscan.h"
 #include "access/tableam.h"
 #include "access/transam.h"
 #include "access/visibilitymap.h"
+#include "catalog/tempcat.h"
 #include "executor/execdebug.h"
 #include "executor/nodeBitmapHeapscan.h"
 #include "miscadmin.h"
@@ -71,6 +73,8 @@ static inline void BitmapPrefetch(BitmapHeapScanState *node,
 								  TableScanDesc scan);
 static bool BitmapShouldInitializeSharedState(ParallelBitmapHeapState *pstate);
 static void ExecEagerFreeBitmapHeapScan(BitmapHeapScanState *node);
+static TupleTableSlot *BitmapHeapNextTempcat(BitmapHeapScanState *node);
+static void BitmapHeapEndTempcat(BitmapHeapScanState *node);
 
 
 /*
@@ -129,6 +133,18 @@ BitmapHeapNext(BitmapHeapScanState *node)
 	else
 		shared_tbmiterator = node->shared_tbmiterator;
 	tbmres = node->tbmres;
+
+	/* GPDB: past the heap, see BitmapHeapNextTempcat() */
+	if (unlikely(node->tempscan != NULL))
+		return BitmapHeapNextTempcat(node);
+
+	/*
+	 * GPDB: called again after the end of the scan, whose bitmap was freed
+	 * then (ExecEagerFreeBitmapHeapScan()): there is nothing more, as
+	 * upstream, which keeps the exhausted iterator.
+	 */
+	if (node->initialized && pstate == NULL && tbmiterator == NULL)
+		return ExecClearTuple(slot);
 
 	/*
 	 * If we haven't yet performed the underlying index scan, do it, and begin
@@ -374,10 +390,81 @@ BitmapHeapNext(BitmapHeapScanState *node)
 
 	ExecEagerFreeBitmapHeapScan(node);
 
+	/* GPDB: past the heap, see BitmapHeapNextTempcat() */
+	if (!node->tempcat_done && pstate == NULL)
+	{
+		PlanState  *child = outerPlanState(node);
+		IndexScanDesc iscan = NULL;
+
+		node->tempcat_done = true;
+
+		/*
+		 * The keys of an index scan that every row returned passes, if
+		 * there is one, preselect the rows in memory.
+		 */
+		if (IsA(child, BitmapAndState))
+			child = ((BitmapAndState *) child)->bitmapplans[0];
+		if (IsA(child, BitmapIndexScanState) &&
+			((BitmapIndexScanState *) child)->biss_NumArrayKeys == 0)
+			iscan = ((BitmapIndexScanState *) child)->biss_ScanDesc;
+
+		if (iscan != NULL)
+			node->tempscan = tempcat_begin_index_scan(node->ss.ss_currentRelation,
+													  iscan->indexRelation,
+													  node->ss.ps.state->es_snapshot,
+													  iscan->numberOfKeys,
+													  iscan->keyData);
+		else
+			node->tempscan = tempcat_begin_index_scan(node->ss.ss_currentRelation,
+													  NULL,
+													  node->ss.ps.state->es_snapshot,
+													  0, NULL);
+		if (node->tempscan != NULL)
+			return BitmapHeapNextTempcat(node);
+	}
+
 	/*
 	 * if we get here it means we are at the end of the scan..
 	 */
 	return ExecClearTuple(slot);
+}
+
+/*
+ * GPDB: after the heap, a bitmap heap scan of a catalog returns the catalog
+ * rows of this session's temporary objects kept in memory (see tempcat.c)
+ * that pass the original quals of the bitmap.
+ */
+static TupleTableSlot *
+BitmapHeapNextTempcat(BitmapHeapScanState *node)
+{
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	HeapTuple	tup;
+
+	while ((tup = tempcat_next_virtual(node->tempscan)) != NULL)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		ExecForceStoreHeapTuple(tup, slot, false);
+		slot->tts_tid = tup->t_self;
+		slot->tts_tableOid = RelationGetRelid(node->ss.ss_currentRelation);
+
+		econtext->ecxt_scantuple = slot;
+		if (ExecQualAndReset(node->bitmapqualorig, econtext))
+			return slot;
+		InstrCountFiltered2(node, 1);
+	}
+
+	BitmapHeapEndTempcat(node);
+	return ExecClearTuple(slot);
+}
+
+static void
+BitmapHeapEndTempcat(BitmapHeapScanState *node)
+{
+	if (node->tempscan != NULL)
+		tempcat_endscan(node->tempscan);
+	node->tempscan = NULL;
 }
 
 /*
@@ -672,6 +759,8 @@ ExecReScanBitmapHeapScan(BitmapHeapScanState *node)
 	node->shared_prefetch_iterator = NULL;
 	node->vmbuffer = InvalidBuffer;
 	node->pvmbuffer = InvalidBuffer;
+	BitmapHeapEndTempcat(node);
+	node->tempcat_done = false;
 
 	ExecScanReScan(&node->ss);
 
@@ -708,6 +797,9 @@ ExecEndBitmapHeapScan(BitmapHeapScanState *node)
 	if (node->ss.ps.ps_ResultTupleSlot)
 		ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
+
+	/* GPDB: and the scan of catalog rows in memory */
+	BitmapHeapEndTempcat(node);
 
 	/*
 	 * close down subplans

@@ -17,11 +17,13 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/transam.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/tempcat.h"
 #include "commands/extension.h"
 #include "miscadmin.h"
 #include "storage/lmgr.h"
@@ -86,6 +88,9 @@ recordMultipleDependencies(const ObjectAddress *depender,
 
 	for (i = 0; i < nreferenced; i++, referenced++)
 	{
+		/* GPDB: see tempcat.c */
+		tempcat_check_dependency(depender, referenced);
+
 		/*
 		 * If the referenced object is pinned by the system, there's no real
 		 * need to record dependencies on it.  This saves lots of space in
@@ -400,6 +405,12 @@ changeDependencyFor(Oid classId, Oid objectId,
 
 	newIsPinned = isObjectPinned(&objAddr, depRel);
 
+	/* GPDB: see tempcat.c */
+	depAddr.classId = classId;
+	depAddr.objectId = objectId;
+	depAddr.objectSubId = 0;
+	tempcat_check_dependency(&depAddr, &objAddr);
+
 	if (oldIsPinned)
 	{
 		table_close(depRel, RowExclusiveLock);
@@ -629,6 +640,15 @@ isObjectPinned(const ObjectAddress *object, Relation rel)
 	SysScanDesc scan;
 	HeapTuple	tup;
 	ScanKeyData key[2];
+
+	/*
+	 * GPDB: initdb pins the objects it made (setup_depend()), all with OIDs
+	 * below FirstNormalObjectId, which the OID counter never gives again.
+	 * The look-up would go through all rows that reference the object, e.g.
+	 * of all objects of a schema, among those kept in memory (see tempcat.c).
+	 */
+	if (object->objectId >= FirstNormalObjectId)
+		return false;
 
 	ScanKeyInit(&key[0],
 				Anum_pg_depend_refclassid,

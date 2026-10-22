@@ -14,6 +14,7 @@
 #define SHAREDSNAPSHOT_H
 
 #include "storage/proc.h"
+#include "utils/dsa.h"
 #include "utils/combocid.h"
 #include "utils/snapshot.h"
 
@@ -49,6 +50,10 @@ typedef struct SharedSnapshotSlot
 	/* for debugging only */
 	FullTransactionId	fullXid;
 	TimestampTz		startTimestamp;
+
+	/* writer's in-memory temp catalog area, see tempcat.c */
+	volatile dsa_handle		tempcat_handle;
+	volatile dsa_pointer	tempcat_root;
 } SharedSnapshotSlot;
 
 extern volatile SharedSnapshotSlot *SharedLocalSnapshotSlot;
@@ -61,6 +66,8 @@ extern char *SharedSnapshotDump(void);
 extern void SharedSnapshotRemove(volatile SharedSnapshotSlot *slot, char *creatorDescription);
 extern void addSharedSnapshot(char *creatorDescription, int id);
 extern void lookupSharedSnapshot(char *lookerDescription, char *creatorDescription, int id);
+extern bool SharedSnapshotGetTempcatArea(int32 sessionId, dsa_handle *handle,
+										 dsa_pointer *root);
 
 extern void dumpSharedLocalSnapshot_forCursor(void);
 extern void readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext distributedTransactionContext);
@@ -68,5 +75,12 @@ extern void readSharedLocalSnapshot_forCursor(Snapshot snapshot, DtxContext dist
 extern void AtEOXact_SharedSnapshot(void);
 
 #define NUM_SHARED_SNAPSHOT_SLOTS (2 * MaxBackends)
+
+/*
+ * The subtransaction XIDs of the writer's snapshot that its slot carries to
+ * the readers; with more, the slot's snapshot is marked as overflowed, and
+ * readers look the XIDs up in pg_subtrans.
+ */
+#define SHARED_SNAPSHOT_MAX_SUBXIDS (4 * PGPROC_MAX_CACHED_SUBXIDS)
 
 #endif   /* SHAREDSNAPSHOT_H */

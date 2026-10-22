@@ -49,6 +49,7 @@
 #include "catalog/pg_proc_callback.h"
 #include "catalog/pg_transform.h"
 #include "catalog/pg_type.h"
+#include "catalog/tempcat.h"
 #include "commands/alter.h"
 #include "commands/defrem.h"
 #include "commands/proclang.h"
@@ -1882,6 +1883,13 @@ CreateCast(CreateCastStmt *stmt)
 
 	sourcetypeid = typenameTypeId(NULL, stmt->sourcetype);
 	targettypeid = typenameTypeId(NULL, stmt->targettype);
+
+	/*
+	 * GPDB: pg_cast rows are not kept in memory, so they cannot refer to
+	 * temporary types kept in memory (see tempcat.c).
+	 */
+	tempcat_check_unsupported(TypeRelationId, sourcetypeid, "casts");
+	tempcat_check_unsupported(TypeRelationId, targettypeid, "casts");
 	sourcetyptype = get_typtype(sourcetypeid);
 	targettyptype = get_typtype(targettypeid);
 
@@ -2289,6 +2297,9 @@ CreateTransform(CreateTransformStmt *stmt)
 	 * Get the type
 	 */
 	typeid = typenameTypeId(NULL, stmt->type_name);
+
+	/* GPDB: see CreateCast() */
+	tempcat_check_unsupported(TypeRelationId, typeid, "transforms");
 	typtype = get_typtype(typeid);
 
 	if (typtype == TYPTYPE_PSEUDO)
