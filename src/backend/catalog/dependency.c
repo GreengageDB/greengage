@@ -273,18 +273,32 @@ deleteObjectsInList(ObjectAddresses *targetObjects, Relation *depRel,
 	/*
 	 * Delete all the objects in the proper order, except that if told to, we
 	 * should skip the original object(s).
+	 *
+	 * GPDB: dropping objects may take of the room that the session's
+	 * temporary objects kept in memory leave (see tempcat.c).
 	 */
-	for (i = 0; i < targetObjects->numrefs; i++)
+	tempcat_dropping(true);
+	PG_TRY();
 	{
-		ObjectAddress *thisobj = targetObjects->refs + i;
-		ObjectAddressExtra *thisextra = targetObjects->extras + i;
+		for (i = 0; i < targetObjects->numrefs; i++)
+		{
+			ObjectAddress *thisobj = targetObjects->refs + i;
+			ObjectAddressExtra *thisextra = targetObjects->extras + i;
 
-		if ((flags & PERFORM_DELETION_SKIP_ORIGINAL) &&
-			(thisextra->flags & DEPFLAG_ORIGINAL))
-			continue;
+			if ((flags & PERFORM_DELETION_SKIP_ORIGINAL) &&
+				(thisextra->flags & DEPFLAG_ORIGINAL))
+				continue;
 
-		deleteOneObject(thisobj, depRel, flags);
+			deleteOneObject(thisobj, depRel, flags);
+		}
 	}
+	PG_CATCH();
+	{
+		tempcat_dropping(false);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	tempcat_dropping(false);
 }
 
 /*

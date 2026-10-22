@@ -1528,6 +1528,7 @@ typedef struct TempcatUsed
 	TempcatUsedKey key;
 	bool		counted;		/* in TempcatUsedObjects */
 	bool		locked;			/* or locked instead, see above */
+	bool		seen;			/* see tempcat_recompute_used() */
 } TempcatUsed;
 
 /* Some of tc_used could not be counted, see above */
@@ -1802,8 +1803,8 @@ tempcat_unuse(TempcatUsed *used)
  * session there until the transaction ends.)  So it must not raise an
  * error, which a commit or an abort could not handle: it allocates nothing.
  * It looks up the rows that refer to each object the session uses
- * (tempcat_still_used()), not the other way round: after any error, and at
- * the end of each transaction with DDL, rows may be many.
+ * (tempcat_see_used_object()), not the other way round: after any error,
+ * and at the end of each transaction with DDL, rows may be many.
  */
 static bool
 tempcat_entry_gone(TempcatEntry *e, bool committing)
@@ -1823,16 +1824,35 @@ tempcat_entry_gone(TempcatEntry *e, bool committing)
 	return false;
 }
 
+/* Mark the object (or column) as still used, see above. */
+static void
+tempcat_see_used(Oid classId, Oid objectId, int32 subId)
+{
+	TempcatUsedKey key;
+	TempcatUsed *used;
+
+	memset(&key, 0, sizeof(key));
+	key.classId = classId;
+	key.objectId = objectId;
+	key.objectSubId = subId;
+	used = hash_search(tc_used, &key, HASH_FIND, NULL);
+	if (used != NULL)
+		used->seen = true;
+}
+
 /*
- * Does a row of ours in memory, of pg_depend or pg_shdepend, still refer to
- * the object (or column), see above?  By the hash of the referenced OID: the
- * session's rows may be many, the objects they use few.
+ * Mark the object, and those of its columns, as still used that rows of ours
+ * in memory, of pg_depend or pg_shdepend, refer to, see above.  By the hash
+ * of the referenced OID, once for the object and all its columns: the
+ * session's rows may be many, the objects they use few, and rows referring
+ * to columns of an object (e.g. of a view of all columns of a wide table)
+ * are in one chain.
  */
-static bool
-tempcat_still_used(const TempcatUsedKey *key, bool committing)
+static void
+tempcat_see_used_object(Oid classId, Oid objectId, bool committing)
 {
 	static const Oid catalogs[] = {DependRelationId, SharedDependRelationId};
-	uint32		hash = tempcat_key_hash(TCK_OID, ObjectIdGetDatum(key->objectId));
+	uint32		hash = tempcat_key_hash(TCK_OID, ObjectIdGetDatum(objectId));
 	int			i;
 
 	for (i = 0; i < lengthof(catalogs); i++)
@@ -1873,24 +1893,21 @@ tempcat_still_used(const TempcatUsedKey *key, bool committing)
 			{
 				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
 
-				if (form->refclassid == key->classId &&
-					form->refobjid == key->objectId &&
-					(key->objectSubId == 0 ||
-					 form->refobjsubid == key->objectSubId))
-					return true;
+				if (form->refclassid != classId || form->refobjid != objectId)
+					continue;
+				tempcat_see_used(classId, objectId, 0);
+				if (form->refobjsubid != 0)
+					tempcat_see_used(classId, objectId, form->refobjsubid);
 			}
 			else
 			{
 				Form_pg_shdepend form = (Form_pg_shdepend) ((char *) hdr + hdr->t_hoff);
 
-				if (form->refclassid == key->classId &&
-					form->refobjid == key->objectId &&
-					key->objectSubId == 0)
-					return true;
+				if (form->refclassid == classId && form->refobjid == objectId)
+					tempcat_see_used(classId, objectId, 0);
 			}
 		}
 	}
-	return false;
 }
 
 static void
@@ -1906,8 +1923,24 @@ tempcat_recompute_used(bool committing)
 
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
+		used->seen = false;
+
+	/*
+	 * (A column is noted with its whole object, see tempcat_use_object(), so
+	 * looking at the objects covers the columns.)
+	 */
+	hash_seq_init(&seq, tc_used);
+	while ((used = hash_seq_search(&seq)) != NULL)
 	{
-		if (tempcat_still_used(&used->key, committing))
+		if (used->key.objectSubId == 0)
+			tempcat_see_used_object(used->key.classId, used->key.objectId,
+									committing);
+	}
+
+	hash_seq_init(&seq, tc_used);
+	while ((used = hash_seq_search(&seq)) != NULL)
+	{
+		if (used->seen)
 		{
 			locked |= used->locked;
 			continue;
@@ -3172,6 +3205,18 @@ tempcat_kept_room(void)
 			   Min((Size) 1024 * 1024, tc_area_capacity / 4));
 }
 
+/* Objects are being dropped (deleteObjectsInList()), see below */
+static int	tc_dropping = 0;
+
+void
+tempcat_dropping(bool start)
+{
+	if (start)
+		tc_dropping++;
+	else
+		tc_dropping--;
+}
+
 /* Would rows of 'need' more bytes take of tempcat_kept_room()? */
 static inline bool
 tempcat_takes_kept_room(Size need)
@@ -3182,10 +3227,12 @@ tempcat_takes_kept_room(Size need)
 /*
  * Let the area grow into the room of dynamic shared memory that it leaves to
  * others (see tempcat_create_area()), or not any more.  For new versions of
- * rows no bigger than the old ones, such as dropping objects writes: the
- * area may stop growing there before it comes to its limit, short of
+ * rows no bigger than the old ones that dropping objects writes: the area
+ * may stop growing there before it comes to its limit, short of
  * tempcat_kept_room(), and the session could not drop its objects any more.
- * It still stops at its limit.
+ * Only for dropping objects (tc_dropping), not other changes of rows (e.g.
+ * of the relfilenode of the tables truncated in a transaction), which would
+ * take that room all the same.  It still stops at its limit.
  */
 static void
 tempcat_use_headroom(bool use)
@@ -4656,7 +4703,7 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	newep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
 											xid, cid, olde->len);
-	if (!DsaPointerIsValid(newep) &&
+	if (!DsaPointerIsValid(newep) && tc_dropping > 0 &&
 		MAXALIGN(row->t_len) <= MAXALIGN(olde->len))
 	{
 		tempcat_use_headroom(true);
