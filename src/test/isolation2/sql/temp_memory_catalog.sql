@@ -500,9 +500,10 @@ CREATE TABLE tc_perm2 (a int) DISTRIBUTED BY (a);
 2: DROP FUNCTION tc_pos(int) CASCADE;
 2: DROP FUNCTION tc_trf() CASCADE;
 2: DROP SCHEMA tc_sch CASCADE;
--- pg_dump and gpcheckcat work meanwhile, and see nothing of them.
+-- pg_dump works meanwhile and dumps what they use (it never dumps
+-- temporary schemas), and gpcheckcat sees nothing of them.
 47: CREATE TEMP VIEW tc_uses_v AS SELECT a FROM tc_uses;
-!\retcode out=$(pg_dump -s isolation2test) && ! echo "$out" | grep -q 'tc_uses';
+!\retcode out=$(pg_dump -s isolation2test) && echo "$out" | grep -q 'CREATE SEQUENCE public.tc_seq' && echo "$out" | grep -q 'CREATE TYPE tc_sch.tc_st';
 !\retcode d=$(mktemp -d) && (cd "$d" && gpcheckcat -R 'missing_extraneous, dependency, owner' isolation2test > /dev/null 2>&1); rc=$?; rm -rf "$d"; exit $rc;
 -- A session that ends while another one has a transaction open does not
 -- disturb it.
@@ -576,6 +577,27 @@ CREATE ROLE tc_copy_role;
 DROP DATABASE tc_copy;
 DROP DATABASE tc_tmpl;
 DROP ROLE tc_copy_role;
+
+-- A session that keeps its temporary objects in memory can import a
+-- snapshot until it has made its first temporary object, also one in the
+-- transaction that imported it, but not after.
+50: BEGIN ISOLATION LEVEL REPEATABLE READ;
+50: @post_run 'TOKEN=`echo "${RAW_STR}" | awk \'NR==3\' | awk \'{print $1}\'` && echo exported': SELECT pg_export_snapshot();
+51: SET gp_enable_temp_memory_catalog = on;
+51: INSERT INTO tc_sess VALUES (current_setting('gp_session_id')::int);
+51: BEGIN ISOLATION LEVEL REPEATABLE READ;
+51: @pre_run 'echo "${RAW_STR}" | sed "s#@TOKEN#${TOKEN}#"': SET TRANSACTION SNAPSHOT '@TOKEN';
+51: CREATE TEMP TABLE tc_imp (a int) DISTRIBUTED BY (a);
+51: INSERT INTO tc_imp SELECT generate_series(1, 10);
+51: SELECT count(*), tc_in_memory('tc_imp') AS in_memory FROM tc_imp;
+51: COMMIT;
+51: BEGIN ISOLATION LEVEL REPEATABLE READ;
+51: @pre_run 'echo "${RAW_STR}" | sed "s#@TOKEN#${TOKEN}#"': SET TRANSACTION SNAPSHOT '@TOKEN';
+51: ROLLBACK;
+50: COMMIT;
+50q:
+51q:
+4: CALL tc_wait_gone();
 
 4: DROP TABLE tc_sess;
 4: DROP PROCEDURE tc_wait_gone();

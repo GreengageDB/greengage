@@ -46,8 +46,6 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
-#include "catalog/tempcat.h"
-#include "cdb/cdbsreh.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
@@ -4212,14 +4210,6 @@ InitTempTableNamespace(void)
 								  true);
 	/* Advance command counter to make namespace visible */
 	CommandCounterIncrement();
-
-	/*
-	 * GPDB: persistent error logs of COPY ... LOG ERRORS that a session which
-	 * did not exit cleanly left under this OID of a temporary namespace kept
-	 * in memory (see heap_create_with_catalog()).
-	 */
-	if (tempcat_owns_oid(NamespaceRelationId, namespaceId))
-		PersistentErrorLogDelete(MyDatabaseId, namespaceId, NULL);
 
 	/*
 	 * If the corresponding toast-table namespace doesn't exist yet, create

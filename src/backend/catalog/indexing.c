@@ -282,10 +282,10 @@ CatalogTupleInsertWithInfo(Relation heapRel, HeapTuple tup,
 /*
  * GPDB: update a catalog row in memory, or one whose new version goes to
  * memory (see tempcat.c), and return true; return false for an ordinary
- * update on disk.  A row of a temporary object's dependency on another
- * object is kept in memory if that object is the session's temporary
- * object too, and on disk otherwise, so the new version of such a row may
- * not go where the old one is.  'indstate' may be NULL.
+ * update on disk.  Whether a row is kept in memory follows the object that
+ * owns it (tempcat_route_insert()): should an update change that, the new
+ * version goes where it belongs, not where the old one is.  'indstate' may
+ * be NULL.
  */
 static bool
 CatalogTupleUpdateTempcat(Relation heapRel, ItemPointer otid, HeapTuple tup,

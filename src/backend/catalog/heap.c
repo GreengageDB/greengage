@@ -1572,12 +1572,12 @@ heap_create_with_catalog(const char *relname,
 
 	/*
 	 * GPDB: an error log of COPY ... LOG ERRORS that a session which did not
-	 * exit cleanly left under the OID of a temporary table kept in memory,
-	 * which the OID counter gives again after it wrapped around: no catalog
-	 * row of it was left to drop it with (see tempcat.c).
+	 * exit cleanly left under the OID of a temporary table kept in memory: no
+	 * catalog row of it was left to drop it with, and the OID counter gives
+	 * the OID again, to any relation, after it wrapped around (see
+	 * tempcat.c).
 	 */
-	if (tempcat_owns_oid(RelationRelationId, relid))
-		ErrorLogDelete(MyDatabaseId, relid);
+	ErrorLogDelete(MyDatabaseId, relid);
 
 	/*
 	 * Other sessions' catalog scans can't find this until we commit.  Hence,

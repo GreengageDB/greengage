@@ -783,7 +783,8 @@ tempcat_areas_created(void)
 
 /*
  * Create the session's area (writer only).  Returns false if it cannot be
- * created: no slot of the DSM control segment to spare, or no space.
+ * created: no slot of the DSM control segment to spare, no space, or the
+ * session's vmem would go over its limit.
  *
  * The coordinator decides whether a session keeps its temporary objects in
  * memory, and leaves room to other users of dynamic shared memory
@@ -2310,11 +2311,11 @@ tempcat_check_namespace_object(Oid catalog, Oid namespaceOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("default privileges cannot be set for a temporary schema kept in memory"),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			 errmsg("only relations, types, functions and operators can be created in a temporary schema kept in memory"),
-			 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+			 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /*
@@ -2424,7 +2425,7 @@ tempcat_note_preassigned_oid(Relation relation, Oid indexId,
 		ereport(ERROR,
 				(errcode(ERRCODE_OUT_OF_MEMORY),
 				 errmsg("could not create the in-memory catalog of temporary objects on this node"),
-				 errdetail("Dynamic shared memory, or slots for its segments, ran out."),
+				 errdetail("The session's memory, dynamic shared memory, or slots for its segments ran out."),
 				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 	tempcat_activate(oid);
 	tempcat_check_preassigned_oid(relation, indexId, oidcolumn, oid);
@@ -2470,7 +2471,7 @@ tempcat_check_inheritance(Oid relid, Oid parentid)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("temporary tables kept in memory cannot inherit from ordinary table \"%s\"",
 						get_rel_name(parentid)),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /*
@@ -2487,7 +2488,7 @@ tempcat_check_typed_table(Oid relid, Oid typid)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("temporary tables kept in memory cannot be typed tables of ordinary type %s",
 						format_type_be(typid)),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /*
@@ -2508,7 +2509,7 @@ tempcat_check_operator_link(Oid namespaceOid, Oid otherOprOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("temporary operators kept in memory and ordinary operators cannot be commutators or negators of each other"),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /*
@@ -2528,7 +2529,7 @@ tempcat_check_dependency(const ObjectAddress *depender,
 				 errmsg("ordinary objects cannot depend on temporary objects kept in memory"),
 				 errdetail("The new object would depend on %s.",
 						   getObjectDescription(referenced)),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /*
@@ -2542,7 +2543,7 @@ tempcat_check_unsupported(Oid catalog, Oid objectId, const char *what)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("%s are not supported for temporary objects kept in memory", what),
-				 errhint("Turn off gp_enable_temp_memory_catalog before the session creates its first temporary object.")));
+				 errhint("Reconnect with gp_enable_temp_memory_catalog off to keep the session's temporary objects on disk.")));
 }
 
 /* ----------------------------------------------------------------
@@ -5214,7 +5215,8 @@ tempcat_check_import_snapshot(void)
 	if (tc_area != NULL)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot import a snapshot in a session that keeps its temporary objects in memory")));
+				 errmsg("cannot import a snapshot in a session that keeps its temporary objects in memory"),
+				 errhint("Import it in a session with gp_enable_temp_memory_catalog off, or before the session creates its first temporary object.")));
 }
 
 /*

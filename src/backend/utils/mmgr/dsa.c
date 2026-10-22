@@ -595,9 +595,23 @@ dsa_attach(dsa_handle handle)
 
 	area = attach_internal(dsm_segment_address(segment), segment, handle);
 
-	/* Clean up when the control segment detaches. */
-	on_dsm_detach(segment, &dsa_on_dsm_detach_release_in_place,
-				  PointerGetDatum(dsm_segment_address(segment)));
+	/*
+	 * GPDB: until the callback below is there, nothing would release the
+	 * reference that we took if we fail (e.g. out of local memory): the area
+	 * would stay until the node restarts.
+	 */
+	PG_TRY();
+	{
+		/* Clean up when the control segment detaches. */
+		on_dsm_detach(segment, &dsa_on_dsm_detach_release_in_place,
+					  PointerGetDatum(dsm_segment_address(segment)));
+	}
+	PG_CATCH();
+	{
+		dsa_release_in_place(dsm_segment_address(segment));
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
 	return area;
 }
