@@ -2,38 +2,26 @@
 -- Range partition bounds must be compared using the partition key's
 -- collation, not the database default collation.
 --
--- To catch that whatever the database default is, every scenario runs twice:
--- once with a "C" key and once with an en_US.utf8 key. At least one of the
--- two differs from the default. On the en_US key only distinct letters are
+-- The tests run in a database with a C default, and the partitioning keys
+-- have an en_US.utf8 collation, so comparing with the default collation, or
+-- comparing bytes, gives different results. Only distinct letters are
 -- compared, because glibc versions disagree on how 'a' and 'A' are ordered.
 --
 -- en_US.utf8 orders 'a' < 'B' < 'c', while "C" orders 'B' < 'a' < 'c'.
 --
-create schema partition_collation;
-set search_path = partition_collation;
+set client_min_messages = warning;
+drop database if exists partition_collation;
+create database partition_collation with encoding = 'UTF8'
+  lc_collate = 'C' lc_ctype = 'C' template = template0;
+\c partition_collation
 set client_min_messages = warning;
 
 create collation coll_en (locale = 'en_US.utf8');
 
 --
--- Routing.
+-- Routing. 'B' sorts between 'a' and 'c', so it belongs to p1. It used to be
+-- put in the default partition without any error.
 --
--- "C" key: 'B' sorts before 'a', so it belongs to the default partition.
--- With an en_US default, inserting it used to fail.
-create table rp_c (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('a') end ('c'),
- default partition other);
-
-insert into rp_c values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
--- The tableoid queries show which partition each row was stored in. A row in
--- the wrong partition is still returned by queries on the parent table, so
--- checking query results alone would not catch it.
-select tableoid::regclass, * from rp_c order by id;
-
--- en_US key: 'B' sorts between 'a' and 'c', so it belongs to p1. With a "C"
--- default it used to be put in the default partition without any error.
 create table rp_en (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -41,31 +29,14 @@ partition by range (k)
  default partition other);
 
 insert into rp_en values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+-- The tableoid queries show which partition each row was stored in. A row in
+-- the wrong partition is still returned by queries on the parent table, so
+-- checking query results alone would not catch it.
 select tableoid::regclass, * from rp_en order by id;
 
 --
 -- COPY, and UPDATE of the partitioning key, must route rows the same way.
 --
-create table rp_c_dml (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('a') end ('c'),
- default partition other);
-
-copy rp_c_dml from stdin;
-1	B
-2	a
-\.
-select tableoid::regclass, * from rp_c_dml order by id;
-
--- Row 1 moves into p1 and row 2 moves into the default partition. Moving a
--- row to another partition with UPDATE is only supported by GPORCA.
-set optimizer = on;
-update rp_c_dml set k = 'b' where id = 1;
-update rp_c_dml set k = 'B' where id = 2;
-reset optimizer;
-select tableoid::regclass, * from rp_c_dml order by id;
-
 create table rp_en_dml (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -78,7 +49,8 @@ copy rp_en_dml from stdin;
 \.
 select tableoid::regclass, * from rp_en_dml order by id;
 
--- Row 1 moves into the default partition and row 2 moves into p1.
+-- Row 1 moves into the default partition and row 2 moves into p1. Moving a
+-- row to another partition with UPDATE is only supported by GPORCA.
 set optimizer = on;
 update rp_en_dml set k = 'd' where id = 1;
 update rp_en_dml set k = 'B' where id = 2;
@@ -87,17 +59,8 @@ select tableoid::regclass, * from rp_en_dml order by id;
 
 --
 -- CREATE with bounds that are only ordered correctly under the key's
--- collation. These used to fail with "START greater than END".
+-- collation. This used to fail with "START greater than END".
 --
-create table rp_c_bounds (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('B') end ('a'),
- partition p2 start ('a') end ('z'));
-
-insert into rp_c_bounds values (1, 'B'), (2, 'b'), (3, 'Zz'), (4, 'a');
-select tableoid::regclass, * from rp_c_bounds order by id;
-
 create table rp_en_bounds (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -108,18 +71,9 @@ insert into rp_en_bounds values (1, 'aZ'), (2, 'Bb'), (3, 'c');
 select tableoid::regclass, * from rp_en_bounds order by id;
 
 --
--- ADD PARTITION must check the new bounds with the key's collation too.
--- These used to fail with "new partition overlaps existing partition".
+-- ADD PARTITION must check the new bounds with the key's collation too. This
+-- used to fail with "new partition overlaps existing partition".
 --
-create table rp_c_add (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p2 start ('a') end ('z'));
-
-alter table rp_c_add add partition p1 start ('B') end ('a');
-insert into rp_c_add values (1, 'B'), (2, 'b');
-select tableoid::regclass, * from rp_c_add order by id;
-
 create table rp_en_add (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -131,19 +85,9 @@ select tableoid::regclass, * from rp_en_add order by id;
 
 --
 -- SPLIT PARTITION AT must check that the AT value is inside the partition
--- with the key's collation. These used to fail with "AT clause parameter is
+-- with the key's collation. This used to fail with "AT clause parameter is
 -- not a member of the target partition specification".
 --
-create table rp_c_split (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('B') end ('a'),
- partition p2 start ('a') end ('z'));
-
-alter table rp_c_split split partition p1 at ('Q') into (partition p1a, partition p1b);
-insert into rp_c_split values (1, 'C'), (2, 'R'), (3, 'b');
-select tableoid::regclass, * from rp_c_split order by id;
-
 create table rp_en_split (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -157,17 +101,6 @@ select tableoid::regclass, * from rp_en_split order by id;
 -- SPLIT DEFAULT PARTITION must check the new bounds with the key's collation
 -- and move the matching rows out of the default partition.
 --
-create table rp_c_split_def (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p2 start ('a') end ('z'),
- default partition other);
-
-insert into rp_c_split_def values (1, 'B'), (2, 'zz');
-alter table rp_c_split_def split default partition start ('B') end ('a')
-into (partition other, partition p1);
-select tableoid::regclass, * from rp_c_split_def order by id;
-
 create table rp_en_split_def (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -181,20 +114,9 @@ select tableoid::regclass, * from rp_en_split_def order by id;
 
 --
 -- PARTITION FOR (value) must find the partition with the key's collation.
--- Both collations order these bounds the same way, but 'C' sorts before 'b'
--- in "C" and after 'b' in en_US.utf8.
+-- Both collations order these bounds the same way, but 'C' sorts after 'b'
+-- in en_US.utf8 and before 'b' in "C".
 --
-create table rp_c_for (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('0') end ('b'),
- partition p2 start ('b') end ('z'));
-
-insert into rp_c_for values (1, 'a'), (2, 'x');
--- 'C' is in p1, so only row 1 is removed.
-alter table rp_c_for truncate partition for ('C');
-select tableoid::regclass, * from rp_c_for order by id;
-
 create table rp_en_for (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -227,12 +149,70 @@ insert into rp_sub values (1, 'C', 'C'), (2, 'x', 'a');
 select tableoid::regclass, * from rp_sub order by id;
 
 --
+-- Partition boundaries carry the collation of the partitioning key.
+--
+select tablename, partitionname, partitionrangestart, partitionrangeend
+from pg_partitions
+where tablename = 'rp_en' and not partitionisdefault;
+
+-- Each subpartition level, and the subpartition template, carries the
+-- collation of its own key.
+select partitionlevel, partitiontablename, partitionrangestart, partitionrangeend
+from pg_partitions
+where tablename = 'rp_sub'
+order by partitionlevel, partitiontablename;
+
+select partitionlevel, partitionname, partitionrangestart, partitionrangeend
+from pg_partition_templates
+where tablename = 'rp_sub'
+order by partitionname;
+
+-- LIST values carry the collation of the partitioning key too, including
+-- values added by ADD PARTITION and SPLIT PARTITION.
+create table lp_en (id int, k text collate coll_en)
+distributed by (id)
+partition by list (k)
+(partition p1 values ('a', 'b'),
+ partition p2 values ('c', 'd'));
+
+alter table lp_en add partition p3 values ('e');
+alter table lp_en split partition p2 at ('c') into (partition p2a, partition p2b);
+
+select partitionname, partitionlistvalues
+from pg_partitions
+where tablename = 'lp_en'
+order by partitionname;
+
+--
+-- The partition definition is printed in the CREATE TABLE syntax, which has
+-- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
+-- output, then create a copy of each table from it and insert the same rows.
+--
+select pg_get_partition_def('rp_en'::regclass, true);
+select pg_get_partition_def('rp_sub'::regclass, true);
+select pg_get_partition_template_def('rp_sub'::regclass, true, false);
+select pg_get_partition_def('lp_en'::regclass, true);
+
+do $$
+begin
+	execute 'create table rp_en_copy (id int, k text collate coll_en) distributed by (id) '
+		|| pg_get_partition_def('rp_en'::regclass);
+	execute 'create table rp_sub_copy (id int, k1 text collate "C", k2 text collate coll_en) distributed by (id) '
+		|| pg_get_partition_def('rp_sub'::regclass);
+end
+$$;
+
+insert into rp_en_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
+select tableoid::regclass, * from rp_en_copy order by id;
+
+insert into rp_sub_copy values (1, 'C', 'C'), (2, 'x', 'a');
+select tableoid::regclass, * from rp_sub_copy order by id;
+
+--
 -- Tables created by earlier versions have the database default collation
--- stored in their boundaries, and keep comparing the boundaries using it.
--- Partitions added to such a table must get the same collation, so that all
--- boundaries of a level are compared the same way. To get such tables, copy
--- the boundaries and their order from a table with the same partitions and a
--- default-collation key. The values below sort the same in every collation.
+-- stored in their boundaries, and keep comparing the boundaries using it. To
+-- get such tables, copy the boundaries and their order from a table with the
+-- same partitions and a default-collation key.
 --
 set allow_system_table_mods = on;
 create function copy_bounds(target regclass, source regclass) returns void
@@ -252,12 +232,6 @@ partition by range (k)
 (partition p1 start ('a') end ('m'),
  partition p2 start ('m') end ('t'),
  default partition other);
-create table rp_c_old (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('a') end ('m'),
- partition p2 start ('m') end ('t'),
- default partition other);
 create table rp_en_old (id int, k text collate coll_en)
 distributed by (id)
 partition by range (k)
@@ -265,27 +239,46 @@ partition by range (k)
  partition p2 start ('m') end ('t'),
  default partition other);
 
+create table rp_def_old_nodef (id int, k text)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'));
+create table rp_en_old_nodef (id int, k text collate coll_en)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'));
+
 create table lp_def_old (id int, k text)
 distributed by (id)
 partition by list (k)
 (partition p1 values ('a', 'b'),
  default partition other);
-create table lp_c_old (id int, k text collate "C")
+create table lp_en_old (id int, k text collate coll_en)
 distributed by (id)
 partition by list (k)
 (partition p1 values ('a', 'b'),
  default partition other);
 
-select copy_bounds('rp_c_old', 'rp_def_old');
 select copy_bounds('rp_en_old', 'rp_def_old');
-select copy_bounds('lp_c_old', 'lp_def_old');
+select copy_bounds('rp_en_old_nodef', 'rp_def_old_nodef');
+select copy_bounds('lp_en_old', 'lp_def_old');
 reset allow_system_table_mods;
 
-alter table rp_c_old split partition p1 at ('g') into (partition p1a, partition p1b);
-alter table rp_c_old split default partition start ('t') end ('w')
-  into (partition p3, default partition);
-alter table rp_c_old drop default partition;
-alter table rp_c_old add partition p4 start ('w') end ('y');
+-- 'B' sorts before 'a' in "C", so it is still put in the default partition.
+insert into rp_en_old values (1, 'B');
+select tableoid::regclass, * from rp_en_old order by id;
+
+-- A new range must be ordered under the stored collation and under the
+-- key's collation. ['a', 'B') is ordered in en_US.utf8 but not in "C", and
+-- ['B', 'a') is ordered in "C" but not in en_US.utf8, so both are rejected.
+alter table rp_en_old_nodef add partition p2 start ('a') end ('B');
+alter table rp_en_old_nodef add partition p2 start ('B') end ('a');
+alter table rp_en_old split default partition start ('B') end ('a')
+  into (partition p0, default partition);
+
+-- Partitions added to such a table get the collation of its existing
+-- boundaries, so no boundary is shown with COLLATE.
+alter table rp_en_old_nodef add partition p2 start ('q') end ('s');
 
 alter table rp_en_old split partition p1 at ('g') into (partition p1a, partition p1b);
 alter table rp_en_old split default partition start ('t') end ('w')
@@ -293,175 +286,23 @@ alter table rp_en_old split default partition start ('t') end ('w')
 alter table rp_en_old drop default partition;
 alter table rp_en_old add partition p4 start ('w') end ('y');
 
-alter table lp_c_old split default partition at ('c')
+alter table lp_en_old split default partition at ('c')
   into (partition p2, default partition);
-alter table lp_c_old drop default partition;
-alter table lp_c_old add partition p3 values ('d');
+alter table lp_en_old drop default partition;
+alter table lp_en_old add partition p3 values ('d');
 
--- No boundary is shown with COLLATE.
 select tablename, partitionname, partitionrangestart, partitionrangeend,
        partitionlistvalues
 from pg_partitions
-where schemaname = 'partition_collation'
-  and tablename in ('rp_c_old', 'rp_en_old', 'lp_c_old')
+where tablename in ('rp_en_old', 'rp_en_old_nodef', 'lp_en_old')
 order by tablename, partitionposition;
 
-insert into rp_c_old values (1, 'c'), (2, 'h'), (3, 'n'), (4, 'u'), (5, 'x');
-select tableoid::regclass, * from rp_c_old order by id;
 insert into rp_en_old values (1, 'c'), (2, 'h'), (3, 'n'), (4, 'u'), (5, 'x');
 select tableoid::regclass, * from rp_en_old order by id;
-insert into lp_c_old values (1, 'a'), (2, 'c'), (3, 'd');
-select tableoid::regclass, * from lp_c_old order by id;
-
-drop table rp_c_old, rp_en_old, rp_def_old, lp_c_old, lp_def_old;
-drop function copy_bounds(regclass, regclass);
-
---
--- Partition boundaries carry the collation of the partitioning key.
---
-select tablename, partitionname, partitionrangestart, partitionrangeend
-from pg_partitions
-where schemaname = 'partition_collation' and tablename in ('rp_c', 'rp_en')
-  and not partitionisdefault
-order by tablename;
-
--- Each subpartition level, and the subpartition template, carries the
--- collation of its own key.
-select partitionlevel, partitiontablename, partitionrangestart, partitionrangeend
-from pg_partitions
-where schemaname = 'partition_collation' and tablename = 'rp_sub'
-order by partitionlevel, partitiontablename;
-
-select partitionlevel, partitionname, partitionrangestart, partitionrangeend
-from pg_partition_templates
-where schemaname = 'partition_collation' and tablename = 'rp_sub'
-order by partitionname;
-
--- LIST values carry the collation of the partitioning key too, including
--- values added by ADD PARTITION and SPLIT PARTITION.
-create table lp_c (id int, k text collate "C")
-distributed by (id)
-partition by list (k)
-(partition p1 values ('a', 'b'),
- partition p2 values ('c', 'd'));
-
-alter table lp_c add partition p3 values ('e');
-alter table lp_c split partition p2 at ('c') into (partition p2a, partition p2b);
-
-create table lp_en (id int, k text collate coll_en)
-distributed by (id)
-partition by list (k)
-(partition p1 values ('a', 'b'),
- partition p2 values ('c', 'd'));
-
-alter table lp_en add partition p3 values ('e');
-alter table lp_en split partition p2 at ('c') into (partition p2a, partition p2b);
-
-select tablename, partitionname, partitionlistvalues
-from pg_partitions
-where schemaname = 'partition_collation' and tablename in ('lp_c', 'lp_en')
-order by tablename, partitionname;
-
---
--- The partition definition is printed in the CREATE TABLE syntax, which has
--- no COLLATE clause for boundaries, and pg_dump relies on it. Check the
--- output, then create a copy of each table from it and insert the same rows.
---
-select pg_get_partition_def('rp_c'::regclass, true);
-select pg_get_partition_def('rp_en'::regclass, true);
-select pg_get_partition_def('rp_sub'::regclass, true);
-select pg_get_partition_template_def('rp_sub'::regclass, true, false);
-select pg_get_partition_def('lp_c'::regclass, true);
-select pg_get_partition_def('lp_en'::regclass, true);
-
-do $$
-begin
-	execute 'create table rp_c_copy (id int, k text collate "C") distributed by (id) '
-		|| pg_get_partition_def('rp_c'::regclass);
-	execute 'create table rp_en_copy (id int, k text collate coll_en) distributed by (id) '
-		|| pg_get_partition_def('rp_en'::regclass);
-	execute 'create table rp_sub_copy (id int, k1 text collate "C", k2 text collate coll_en) distributed by (id) '
-		|| pg_get_partition_def('rp_sub'::regclass);
-end
-$$;
-
-insert into rp_c_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
-select tableoid::regclass, * from rp_c_copy order by id;
-
-insert into rp_en_copy values (1, 'B'), (2, 'a'), (3, 'b'), (4, 'd');
-select tableoid::regclass, * from rp_en_copy order by id;
-
-insert into rp_sub_copy values (1, 'C', 'C'), (2, 'x', 'a');
-select tableoid::regclass, * from rp_sub_copy order by id;
-
-reset search_path;
-drop schema partition_collation cascade;
-reset client_min_messages;
-
---
--- A partition added to a table created by an earlier version must have a
--- range that is ordered under the collation stored in the table's existing
--- boundaries, and under the key's collation. To know the stored collation,
--- use a database with an en_US.utf8 default.
---
-set client_min_messages = warning;
-drop database if exists partition_collation_en;
-create database partition_collation_en with lc_collate = 'en_US.utf8'
-  lc_ctype = 'en_US.utf8' template = template0;
-\c partition_collation_en
-set client_min_messages = warning;
-
-set allow_system_table_mods = on;
-create function copy_bounds(target regclass, source regclass) returns void
-language sql as $$
-	update pg_partition_rule r
-	set parrangestart = s.parrangestart, parrangeend = s.parrangeend,
-	    parruleord = s.parruleord
-	from pg_partition p, pg_partition ps, pg_partition_rule s
-	where r.paroid = p.oid and p.parrelid = target
-	  and s.paroid = ps.oid and ps.parrelid = source
-	  and s.parname = r.parname;
-$$;
-
-create table rp_def_old (id int, k text)
-distributed by (id)
-partition by range (k)
-(partition p1 start ('m') end ('p'));
-create table rp_c_old (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('m') end ('p'));
-
-create table rp_def_old_def (id int, k text)
-distributed by (id)
-partition by range (k)
-(partition p1 start ('m') end ('p'), default partition other);
-create table rp_c_old_def (id int, k text collate "C")
-distributed by (id)
-partition by range (k)
-(partition p1 start ('m') end ('p'), default partition other);
-
-select copy_bounds('rp_c_old', 'rp_def_old');
-select copy_bounds('rp_c_old_def', 'rp_def_old_def');
-reset allow_system_table_mods;
-
--- 'B' sorts after 'a' in en_US.utf8, so ['B', 'a') is rejected, although it
--- is ordered in "C".
-alter table rp_c_old add partition p2 start ('B') end ('a');
-alter table rp_c_old_def split default partition start ('B') end ('a')
-  into (partition p2, default partition);
-
--- ['a', 'B') is ordered in en_US.utf8 but not in "C", so it is rejected too.
-alter table rp_c_old add partition p2 start ('a') end ('B');
-
--- ['q', 's') is ordered in both.
-alter table rp_c_old add partition p3 start ('q') end ('s');
-select partitionname, partitionrangestart, partitionrangeend
-from pg_partitions
-where tablename = 'rp_c_old'
-order by partitionposition;
-insert into rp_c_old values (1, 'n'), (2, 'r');
-select tableoid::regclass, * from rp_c_old order by id;
+insert into rp_en_old_nodef values (1, 'n'), (2, 'r');
+select tableoid::regclass, * from rp_en_old_nodef order by id;
+insert into lp_en_old values (1, 'a'), (2, 'c'), (3, 'd');
+select tableoid::regclass, * from lp_en_old order by id;
 
 \c regression
-drop database partition_collation_en;
+drop database partition_collation;
