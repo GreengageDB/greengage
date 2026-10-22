@@ -25,6 +25,11 @@ DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)
 (PARTITION p1 START ('a') END ('c'));
 
+CREATE TABLE src_rev (id int, k text)
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (k)
+(PARTITION p1 START ('A') END ('b'), PARTITION p2 START ('b') END ('C'));
+
 CREATE TABLE src_sub (id int, k text)
 DISTRIBUTED BY (id)
 PARTITION BY RANGE (id)
@@ -63,6 +68,14 @@ DISTRIBUTED BY (id)
 PARTITION BY RANGE (k)
 (PARTITION p1 START ('a') END ('c'));
 SELECT copy_bounds('c_old_nodef', 'src_nodef');
+
+-- Reported by both checks: p2 is valid under en_US.utf8 but its START is
+-- greater than its END under "C", so the table cannot be recreated as it is.
+CREATE TABLE c_old_rev (id int, k text COLLATE "C")
+DISTRIBUTED BY (id)
+PARTITION BY RANGE (k)
+(PARTITION p1 START ('a') END ('b'), PARTITION p2 START ('b') END ('c'));
+SELECT copy_bounds('c_old_rev', 'src_rev');
 
 RESET allow_system_table_mods;
 
