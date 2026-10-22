@@ -3455,7 +3455,6 @@ alter_table_cmd:
 					n->newowner = $3;
 					$$ = (Node *)n;
 				}
-<<<<<<< HEAD
 			/* ALTER TABLE <name> SET ACCESS METHOD <amname> WITH (<reloptions>) */
 			| SET ACCESS METHOD name OptWith
 				{
@@ -3486,15 +3485,6 @@ alter_table_cmd:
 										"SET ACCESS METHOD clause or the options in the WITH clause.")));
 					}
 					n->def = (Node *) $5;
-||||||| e1c1c30f635
-=======
-			/* ALTER TABLE <name> SET ACCESS METHOD <amname> */
-			| SET ACCESS METHOD name
-				{
-					AlterTableCmd *n = makeNode(AlterTableCmd);
-					n->subtype = AT_SetAccessMethod;
-					n->name = $4;
->>>>>>> 3b231596ccf
 					$$ = (Node *)n;
 				}
 			/* ALTER TABLE <name> SET TABLESPACE <tablespacename> */

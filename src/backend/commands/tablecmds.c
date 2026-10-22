@@ -164,181 +164,6 @@ static List *on_commits = NIL;
  * In GPDB, these are in nodes/altertablenodes.h
  */
 
-<<<<<<< HEAD
-||||||| e1c1c30f635
-#define AT_PASS_UNSET			-1	/* UNSET will cause ERROR */
-#define AT_PASS_DROP			0	/* DROP (all flavors) */
-#define AT_PASS_ALTER_TYPE		1	/* ALTER COLUMN TYPE */
-#define AT_PASS_OLD_INDEX		2	/* re-add existing indexes */
-#define AT_PASS_OLD_CONSTR		3	/* re-add existing constraints */
-/* We could support a RENAME COLUMN pass here, but not currently used */
-#define AT_PASS_ADD_COL			4	/* ADD COLUMN */
-#define AT_PASS_ADD_CONSTR		5	/* ADD constraints (initial examination) */
-#define AT_PASS_COL_ATTRS		6	/* set column attributes, eg NOT NULL */
-#define AT_PASS_ADD_INDEXCONSTR	7	/* ADD index-based constraints */
-#define AT_PASS_ADD_INDEX		8	/* ADD indexes */
-#define AT_PASS_ADD_OTHERCONSTR	9	/* ADD other constraints, defaults */
-#define AT_PASS_MISC			10	/* other stuff */
-#define AT_NUM_PASSES			11
-
-typedef struct AlteredTableInfo
-{
-	/* Information saved before any work commences: */
-	Oid			relid;			/* Relation to work on */
-	char		relkind;		/* Its relkind */
-	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
-
-	/*
-	 * Transiently set during Phase 2, normally set to NULL.
-	 *
-	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
-	 * returns control.  This can be exploited by ATExecCmd subroutines to
-	 * close/reopen across transaction boundaries.
-	 */
-	Relation	rel;
-
-	/* Information saved by Phase 1 for Phase 2: */
-	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
-	/* Information saved by Phases 1/2 for Phase 3: */
-	List	   *constraints;	/* List of NewConstraint */
-	List	   *newvals;		/* List of NewColumnValue */
-	List	   *afterStmts;		/* List of utility command parsetrees */
-	bool		verify_new_notnull; /* T if we should recheck NOT NULL */
-	int			rewrite;		/* Reason for forced rewrite, if any */
-	Oid			newTableSpace;	/* new tablespace; 0 means no change */
-	bool		chgPersistence; /* T if SET LOGGED/UNLOGGED is used */
-	char		newrelpersistence;	/* if above is true */
-	Expr	   *partition_constraint;	/* for attach partition validation */
-	/* true, if validating default due to some other attach/detach */
-	bool		validate_default;
-	/* Objects to rebuild after completing ALTER TYPE operations */
-	List	   *changedConstraintOids;	/* OIDs of constraints to rebuild */
-	List	   *changedConstraintDefs;	/* string definitions of same */
-	List	   *changedIndexOids;	/* OIDs of indexes to rebuild */
-	List	   *changedIndexDefs;	/* string definitions of same */
-	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
-	char	   *clusterOnIndex; /* index to use for CLUSTER */
-	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
-	List	   *changedStatisticsDefs;	/* string definitions of same */
-} AlteredTableInfo;
-
-/* Struct describing one new constraint to check in Phase 3 scan */
-/* Note: new NOT NULL constraints are handled elsewhere */
-typedef struct NewConstraint
-{
-	char	   *name;			/* Constraint name, or NULL if none */
-	ConstrType	contype;		/* CHECK or FOREIGN */
-	Oid			refrelid;		/* PK rel, if FOREIGN */
-	Oid			refindid;		/* OID of PK's index, if FOREIGN */
-	Oid			conid;			/* OID of pg_constraint entry, if FOREIGN */
-	Node	   *qual;			/* Check expr or CONSTR_FOREIGN Constraint */
-	ExprState  *qualstate;		/* Execution state for CHECK expr */
-} NewConstraint;
-
-/*
- * Struct describing one new column value that needs to be computed during
- * Phase 3 copy (this could be either a new column with a non-null default, or
- * a column that we're changing the type of).  Columns without such an entry
- * are just copied from the old table during ATRewriteTable.  Note that the
- * expr is an expression over *old* table values, except when is_generated
- * is true; then it is an expression over columns of the *new* tuple.
- */
-typedef struct NewColumnValue
-{
-	AttrNumber	attnum;			/* which column */
-	Expr	   *expr;			/* expression to compute */
-	ExprState  *exprstate;		/* execution state */
-	bool		is_generated;	/* is it a GENERATED expression? */
-} NewColumnValue;
-
-=======
-#define AT_PASS_UNSET			-1	/* UNSET will cause ERROR */
-#define AT_PASS_DROP			0	/* DROP (all flavors) */
-#define AT_PASS_ALTER_TYPE		1	/* ALTER COLUMN TYPE */
-#define AT_PASS_OLD_INDEX		2	/* re-add existing indexes */
-#define AT_PASS_OLD_CONSTR		3	/* re-add existing constraints */
-/* We could support a RENAME COLUMN pass here, but not currently used */
-#define AT_PASS_ADD_COL			4	/* ADD COLUMN */
-#define AT_PASS_ADD_CONSTR		5	/* ADD constraints (initial examination) */
-#define AT_PASS_COL_ATTRS		6	/* set column attributes, eg NOT NULL */
-#define AT_PASS_ADD_INDEXCONSTR	7	/* ADD index-based constraints */
-#define AT_PASS_ADD_INDEX		8	/* ADD indexes */
-#define AT_PASS_ADD_OTHERCONSTR	9	/* ADD other constraints, defaults */
-#define AT_PASS_MISC			10	/* other stuff */
-#define AT_NUM_PASSES			11
-
-typedef struct AlteredTableInfo
-{
-	/* Information saved before any work commences: */
-	Oid			relid;			/* Relation to work on */
-	char		relkind;		/* Its relkind */
-	TupleDesc	oldDesc;		/* Pre-modification tuple descriptor */
-
-	/*
-	 * Transiently set during Phase 2, normally set to NULL.
-	 *
-	 * ATRewriteCatalogs sets this when it starts, and closes when ATExecCmd
-	 * returns control.  This can be exploited by ATExecCmd subroutines to
-	 * close/reopen across transaction boundaries.
-	 */
-	Relation	rel;
-
-	/* Information saved by Phase 1 for Phase 2: */
-	List	   *subcmds[AT_NUM_PASSES]; /* Lists of AlterTableCmd */
-	/* Information saved by Phases 1/2 for Phase 3: */
-	List	   *constraints;	/* List of NewConstraint */
-	List	   *newvals;		/* List of NewColumnValue */
-	List	   *afterStmts;		/* List of utility command parsetrees */
-	bool		verify_new_notnull; /* T if we should recheck NOT NULL */
-	int			rewrite;		/* Reason for forced rewrite, if any */
-	Oid			newAccessMethod;	/* new access method; 0 means no change */
-	Oid			newTableSpace;	/* new tablespace; 0 means no change */
-	bool		chgPersistence; /* T if SET LOGGED/UNLOGGED is used */
-	char		newrelpersistence;	/* if above is true */
-	Expr	   *partition_constraint;	/* for attach partition validation */
-	/* true, if validating default due to some other attach/detach */
-	bool		validate_default;
-	/* Objects to rebuild after completing ALTER TYPE operations */
-	List	   *changedConstraintOids;	/* OIDs of constraints to rebuild */
-	List	   *changedConstraintDefs;	/* string definitions of same */
-	List	   *changedIndexOids;	/* OIDs of indexes to rebuild */
-	List	   *changedIndexDefs;	/* string definitions of same */
-	char	   *replicaIdentityIndex;	/* index to reset as REPLICA IDENTITY */
-	char	   *clusterOnIndex; /* index to use for CLUSTER */
-	List	   *changedStatisticsOids;	/* OIDs of statistics to rebuild */
-	List	   *changedStatisticsDefs;	/* string definitions of same */
-} AlteredTableInfo;
-
-/* Struct describing one new constraint to check in Phase 3 scan */
-/* Note: new NOT NULL constraints are handled elsewhere */
-typedef struct NewConstraint
-{
-	char	   *name;			/* Constraint name, or NULL if none */
-	ConstrType	contype;		/* CHECK or FOREIGN */
-	Oid			refrelid;		/* PK rel, if FOREIGN */
-	Oid			refindid;		/* OID of PK's index, if FOREIGN */
-	Oid			conid;			/* OID of pg_constraint entry, if FOREIGN */
-	Node	   *qual;			/* Check expr or CONSTR_FOREIGN Constraint */
-	ExprState  *qualstate;		/* Execution state for CHECK expr */
-} NewConstraint;
-
-/*
- * Struct describing one new column value that needs to be computed during
- * Phase 3 copy (this could be either a new column with a non-null default, or
- * a column that we're changing the type of).  Columns without such an entry
- * are just copied from the old table during ATRewriteTable.  Note that the
- * expr is an expression over *old* table values, except when is_generated
- * is true; then it is an expression over columns of the *new* tuple.
- */
-typedef struct NewColumnValue
-{
-	AttrNumber	attnum;			/* which column */
-	Expr	   *expr;			/* expression to compute */
-	ExprState  *exprstate;		/* execution state */
-	bool		is_generated;	/* is it a GENERATED expression? */
-} NewColumnValue;
-
->>>>>>> 3b231596ccf
 /*
  * Error-reporting support for RemoveRelations
  */
@@ -668,11 +493,7 @@ static ObjectAddress ATExecClusterOn(Relation rel, const char *indexName,
 									 LOCKMODE lockmode);
 static void ATExecDropCluster(Relation rel, LOCKMODE lockmode);
 static void ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname);
-<<<<<<< HEAD
 static void ATExecSetAccessMethodNoStorage(Relation rel, Oid newAccessMethod);
-||||||| e1c1c30f635
-=======
->>>>>>> 3b231596ccf
 static bool ATPrepChangePersistence(Relation rel, bool toLogged);
 static void ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel,
 								const char *tablespacename, LOCKMODE lockmode);
@@ -5585,34 +5406,22 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_DROP;
 			break;
 		case AT_SetAccessMethod:	/* SET ACCESS METHOD */
-<<<<<<< HEAD
-			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW);
-
-			/* check if another access method change was already requested */
-			if (OidIsValid(tab->newAccessMethod))
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("cannot have multiple SET ACCESS METHOD subcommands")));
-
-			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-				ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
-||||||| e1c1c30f635
-=======
 			ATSimplePermissions(cmd->subtype, rel, ATT_TABLE | ATT_MATVIEW);
 
-			/* partitioned tables don't have an access method */
-			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-				ereport(ERROR,
-						(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						 errmsg("cannot change access method of a partitioned table")));
-
 			/* check if another access method change was already requested */
 			if (OidIsValid(tab->newAccessMethod))
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("cannot have multiple SET ACCESS METHOD subcommands")));
 
->>>>>>> 3b231596ccf
+			/*
+			 * GPDB: unlike upstream, partitioned tables are allowed here; the
+			 * command recurses to the partitions (unless ONLY is given) and
+			 * records the new AM on the parent (see
+			 * ATExecSetAccessMethodNoStorage).
+			 */
+			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+				ATSimpleRecursion(wqueue, rel, cmd, recurse, lockmode, context);
 			ATPrepSetAccessMethod(tab, rel, cmd->name);
 			pass = AT_PASS_MISC;	/* does not matter; no work in Phase 2 */
 			break;
@@ -6167,7 +5976,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			/* nothing to do here, oid columns don't exist anymore */
 			break;
 		case AT_SetAccessMethod:	/* SET ACCESS METHOD */
-<<<<<<< HEAD
 			/* Set reloptions if specified any. Otherwise handled specially in Phase 3. */
 			{
 				bool aoopt_changed = false;
@@ -6199,10 +6007,6 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab,
 			 */
 			if (OidIsValid(tab->newAccessMethod) && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
 				ATExecSetAccessMethodNoStorage(rel, tab->newAccessMethod);
-||||||| e1c1c30f635
-=======
-			/* handled specially in Phase 3 */
->>>>>>> 3b231596ccf
 			break;
 		case AT_SetTableSpace:	/* SET TABLESPACE */
 
@@ -6763,15 +6567,6 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 				NewAccessMethod = OldHeap->rd_rel->relam;
 
 			/*
-			 * Select destination access method (same as original unless user
-			 * requested a change)
-			 */
-			if (OidIsValid(tab->newAccessMethod))
-				NewAccessMethod = tab->newAccessMethod;
-			else
-				NewAccessMethod = OldHeap->rd_rel->relam;
-
-			/*
 			 * Select persistence of transient table (same as original unless
 			 * user requested a change)
 			 */
@@ -6811,15 +6606,8 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode,
 			 * unlogged anyway.
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, NewAccessMethod,
-<<<<<<< HEAD
 									   tab->new_crsds, persistence, lockmode,
 									   hasIndexes, false);
-||||||| e1c1c30f635
-			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, persistence,
-									   lockmode);
-=======
-									   persistence, lockmode);
->>>>>>> 3b231596ccf
 
 			/*
 			 * Copy the heap data into the new table with the desired
@@ -7707,11 +7495,7 @@ ATGetQueueEntry(List **wqueue, Relation rel)
 	tab->relkind = rel->rd_rel->relkind;
 	tab->oldDesc = CreateTupleDescCopyConstr(RelationGetDescr(rel));
 	tab->newAccessMethod = InvalidOid;
-<<<<<<< HEAD
 	tab->new_crsds = NIL;
-||||||| e1c1c30f635
-=======
->>>>>>> 3b231596ccf
 	tab->newTableSpace = InvalidOid;
 	tab->newrelpersistence = RELPERSISTENCE_PERMANENT;
 	tab->chgPersistence = false;
@@ -16045,28 +15829,6 @@ ATExecDropCluster(Relation rel, LOCKMODE lockmode)
 						   GetUserId(),
 						   "ALTER", "SET WITHOUT CLUSTER"
 				);
-}
-
-/*
- * Preparation phase for SET ACCESS METHOD
- *
- * Check that access method exists.  If it is the same as the table's current
- * access method, it is a no-op.  Otherwise, a table rewrite is necessary.
- */
-static void
-ATPrepSetAccessMethod(AlteredTableInfo *tab, Relation rel, const char *amname)
-{
-	Oid			amoid;
-
-	/* Check that the table access method exists */
-	amoid = get_table_am_oid(amname, false);
-
-	if (rel->rd_rel->relam == amoid)
-		return;
-
-	/* Save info for Phase 3 to do the real work */
-	tab->rewrite |= AT_REWRITE_ACCESS_METHOD;
-	tab->newAccessMethod = amoid;
 }
 
 /*

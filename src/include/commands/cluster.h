@@ -36,7 +36,6 @@ extern void check_index_is_clusterable(Relation OldHeap, Oid indexOid,
 									   bool recheck, LOCKMODE lockmode);
 extern void mark_index_clustered(Relation rel, Oid indexOid, bool is_internal);
 
-<<<<<<< HEAD
 extern Oid make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
 						 List *NewEncodings,
 						 char relpersistence,
@@ -50,13 +49,6 @@ extern Oid make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid New
 									  bool createAoBlockDirectory,
 									  bool makeCdbPolicy,
 									  char *colprefix);
-||||||| e1c1c30f635
-extern Oid	make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, char relpersistence,
-						  LOCKMODE lockmode);
-=======
-extern Oid	make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
-						  char relpersistence, LOCKMODE lockmode);
->>>>>>> 3b231596ccf
 extern void finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 							 bool is_system_catalog,
 							 bool swap_toast_by_content,

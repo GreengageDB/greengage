@@ -651,12 +651,7 @@ rebuild_relation(Relation OldHeap, Oid indexOid, bool verbose)
 
 	/* Create the transient table that will receive the re-ordered data */
 	OIDNewHeap = make_new_heap(tableOid, tableSpace,
-<<<<<<< HEAD
 							   accessMethod, NULL,
-||||||| e1c1c30f635
-=======
-							   accessMethod,
->>>>>>> 3b231596ccf
 							   relpersistence,
 							   AccessExclusiveLock,
 							   true /* createAoBlockDirectory */,
@@ -694,22 +689,14 @@ make_column_name(char *prefix, char *colname)
  * duplicates the logical structure of the OldHeap; but will have the
  * specified physical storage properties NewTableSpace, NewAccessMethod, and
  * relpersistence.
-<<<<<<< HEAD
  *
  * Specify a colprefix can create a table with different colname, incase
  * column conflict issue happens in REFRESH MATERIALIZED VIEW operation.
-||||||| e1c1c30f635
- * duplicates the logical structure of the OldHeap, but is placed in
- * NewTableSpace which might be different from OldHeap's.  Also, it's built
- * with the specified persistence, which might differ from the original's.
-=======
->>>>>>> 3b231596ccf
  *
  * After this, the caller should load the new heap with transferred/modified
  * data, then call finish_heap_swap to complete the operation.
  */
 Oid
-<<<<<<< HEAD
 make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
 			  List *NewEncodings,
 			  char relpersistence,
@@ -717,13 +704,6 @@ make_new_heap_with_colname(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMetho
 			  bool createAoBlockDirectory,
 			  bool makeCdbPolicy,
 			  char *colprefix)
-||||||| e1c1c30f635
-make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, char relpersistence,
-			  LOCKMODE lockmode)
-=======
-make_new_heap(Oid OIDOldHeap, Oid NewTableSpace, Oid NewAccessMethod,
-			  char relpersistence, LOCKMODE lockmode)
->>>>>>> 3b231596ccf
 {
 	TupleDesc	OldHeapDesc;
 	char		NewHeapName[NAMEDATALEN];
