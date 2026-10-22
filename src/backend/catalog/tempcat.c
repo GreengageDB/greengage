@@ -187,7 +187,7 @@ typedef enum TempcatKeyType
 	TCK_OID_INT2				/* an OID column and an int2 one (keyattr2) */
 } TempcatKeyType;
 
-#define TEMPCAT_NKEYS 2
+#define TEMPCAT_NKEYS 3
 
 typedef struct TempcatCatalogDef
 {
@@ -229,8 +229,10 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{AttrDefaultRelationId, Anum_pg_attrdef_adrelid, REL, 0,
 	{Anum_pg_attrdef_adrelid, Anum_pg_attrdef_oid}, {TCK_OID, TCK_OID}},
 	/* conrelid, or contypid for domain constraints; see tempcat_route_insert() */
+	/* (by name too: names chosen for constraints are checked in a schema) */
 	{ConstraintRelationId, Anum_pg_constraint_conrelid, REL, 0,
-	{Anum_pg_constraint_conrelid, Anum_pg_constraint_oid}, {TCK_OID, TCK_OID}},
+		{Anum_pg_constraint_conrelid, Anum_pg_constraint_oid, Anum_pg_constraint_conname},
+		{TCK_OID, TCK_OID, TCK_NAME}},
 	{RewriteRelationId, Anum_pg_rewrite_ev_class, REL, 0,
 	{Anum_pg_rewrite_ev_class, Anum_pg_rewrite_oid}, {TCK_OID, TCK_OID}},
 	{TriggerRelationId, Anum_pg_trigger_tgrelid, REL, 0,
@@ -255,8 +257,10 @@ static const TempcatCatalogDef tempcat_catalogs[] =
 	{Anum_pg_appendonly_relid, 0}, {TCK_OID, TCK_NONE}},
 	{FastSequenceRelationId, Anum_gp_fastsequence_objid, REL, 0,
 	{Anum_gp_fastsequence_objid, 0}, {TCK_OID, TCK_NONE}},
+	/* (as pg_attribute: column-oriented tables look up each column's) */
 	{AttributeEncodingRelationId, Anum_pg_attribute_encoding_attrelid, REL, 0,
-	{Anum_pg_attribute_encoding_attrelid, 0}, {TCK_OID, TCK_NONE}},
+		{Anum_pg_attribute_encoding_attrelid, Anum_pg_attribute_encoding_attrelid},
+		{TCK_OID_INT2, TCK_OID}, {Anum_pg_attribute_encoding_attnum, 0}},
 	{PartitionTemplateRelationId, Anum_gp_partition_template_relid, REL, 0,
 	{Anum_gp_partition_template_relid, 0}, {TCK_OID, TCK_NONE}},
 	{PolicyRelationId, Anum_pg_policy_polrelid, REL, 0,
@@ -483,6 +487,7 @@ static void tempcat_forget_if_gone(int catidx, Oid objoid);
 static int	tempcat_reclaim_dead(void);
 static bool tempcat_memory_has_oid(int catidx, Oid oid);
 static void tempcat_forget_used_objects(void);
+static uint32 tempcat_key_hash(TempcatKeyType type, Datum value);
 
 /* OIDs assigned by this session to its temporary objects, see below */
 static HTAB *tc_owned = NULL;
@@ -784,6 +789,13 @@ static size_t tc_area_limit = 0;
 /* Roughly how much of it rows can take, see tempcat_kept_room() */
 static size_t tc_area_capacity = 0;
 
+/* What of the area its root takes */
+static size_t tc_area_root_size = 0;
+
+/* The room of dynamic shared memory it leaves to others, see below */
+static Size tc_min_free_space = 0;
+static uint32 tc_min_free_slots = 0;
+
 /*
  * Did any session keep its temporary objects in memory since the shared
  * memory was set up?  Then the postmaster removes temporary files after a
@@ -860,9 +872,11 @@ tempcat_create_area(bool headroom)
 		uint32		nmax;
 
 		if (dsm_impl_free_space(&free_bytes, &total_bytes))
-			dsa_set_min_free_space(area, total_bytes / TEMPCAT_DSM_HEADROOM_DIV);
+			tc_min_free_space = total_bytes / TEMPCAT_DSM_HEADROOM_DIV;
 		if (dsm_free_slots(&nfree, &nmax))
-			dsa_set_min_free_slots(area, nmax / TEMPCAT_DSM_HEADROOM_DIV);
+			tc_min_free_slots = nmax / TEMPCAT_DSM_HEADROOM_DIV;
+		dsa_set_min_free_space(area, tc_min_free_space);
+		dsa_set_min_free_slots(area, tc_min_free_slots);
 	}
 
 	/* (in the first segment, which has room for it) */
@@ -881,9 +895,9 @@ tempcat_create_area(bool headroom)
 			sizeof(dsa_pointer) * TEMPCAT_HASH_MIN * nhomes;
 		rootptr = dsa_allocate0(area, rootsize);
 		tc_root = dsa_get_address(area, rootptr);
+		tc_area_root_size = TYPEALIGN(FPM_PAGE_SIZE, rootsize);
 		tc_area_capacity = dsa_get_usable_size(area);
-		tc_area_capacity -= Min(tc_area_capacity,
-								TYPEALIGN(FPM_PAGE_SIZE, rootsize));
+		tc_area_capacity -= Min(tc_area_capacity, tc_area_root_size);
 
 		home = rootptr + offsetof(TempcatRoot, home_buckets);
 		for (c = 0; c < TEMPCAT_NCATALOGS; c++)
@@ -1514,7 +1528,6 @@ typedef struct TempcatUsed
 	TempcatUsedKey key;
 	bool		counted;		/* in TempcatUsedObjects */
 	bool		locked;			/* or locked instead, see above */
-	bool		seen;			/* see tempcat_recompute_used() */
 } TempcatUsed;
 
 /* Some of tc_used could not be counted, see above */
@@ -1787,8 +1800,10 @@ tempcat_unuse(TempcatUsed *used)
  * for them does not find the session among the users any more.  (Not at the
  * rollback of a subtransaction: a DROP that waited for its locks finds the
  * session there until the transaction ends.)  So it must not raise an
- * error, which a commit or an abort could not handle: it allocates nothing,
- * marking the objects still used in tc_used itself.
+ * error, which a commit or an abort could not handle: it allocates nothing.
+ * It looks up the rows that refer to each object the session uses
+ * (tempcat_still_used()), not the other way round: after any error, and at
+ * the end of each transaction with DDL, rows may be many.
  */
 static bool
 tempcat_entry_gone(TempcatEntry *e, bool committing)
@@ -1808,30 +1823,82 @@ tempcat_entry_gone(TempcatEntry *e, bool committing)
 	return false;
 }
 
-/* Mark the object (or column) as still used, see above. */
-static void
-tempcat_see_used(Oid classId, Oid objectId, int32 subId)
+/*
+ * Does a row of ours in memory, of pg_depend or pg_shdepend, still refer to
+ * the object (or column), see above?  By the hash of the referenced OID: the
+ * session's rows may be many, the objects they use few.
+ */
+static bool
+tempcat_still_used(const TempcatUsedKey *key, bool committing)
 {
-	TempcatUsedKey key;
-	TempcatUsed *used;
+	static const Oid catalogs[] = {DependRelationId, SharedDependRelationId};
+	uint32		hash = tempcat_key_hash(TCK_OID, ObjectIdGetDatum(key->objectId));
+	int			i;
 
-	memset(&key, 0, sizeof(key));
-	key.classId = classId;
-	key.objectId = objectId;
-	key.objectSubId = subId;
-	used = hash_search(tc_used, &key, HASH_FIND, NULL);
-	if (used != NULL)
-		used->seen = true;
+	for (i = 0; i < lengthof(catalogs); i++)
+	{
+		bool		depend = (catalogs[i] == DependRelationId);
+		AttrNumber	refattr = depend ? Anum_pg_depend_refobjid :
+			Anum_pg_shdepend_refobjid;
+		int			catidx = tempcat_catalog_index(catalogs[i]);
+		const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
+		TempcatHash *h = NULL;
+		dsa_pointer np;
+		int			k;
+
+		for (k = 0; k < TEMPCAT_NKEYS; k++)
+		{
+			if (def->keytype[k] == TCK_OID && def->keyattr[k] == refattr)
+				h = &tc_root->catalogs[catidx].keys[k];
+		}
+		Assert(h != NULL);
+		if (h->nbuckets == 0)
+			continue;
+
+		np = ((dsa_pointer *) TC_ADDR(h->buckets))[hash & (h->nbuckets - 1)];
+		while (DsaPointerIsValid(np))
+		{
+			TempcatHashNode *node = TC_ADDR(np);
+			TempcatEntry *e;
+			HeapTupleHeader hdr;
+
+			np = node->next;
+			if (node->hash != hash)
+				continue;
+			e = TC_ADDR(node->entry);
+			if (tempcat_entry_gone(e, committing))
+				continue;
+			hdr = TCE_DATA(e);
+			if (depend)
+			{
+				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
+
+				if (form->refclassid == key->classId &&
+					form->refobjid == key->objectId &&
+					(key->objectSubId == 0 ||
+					 form->refobjsubid == key->objectSubId))
+					return true;
+			}
+			else
+			{
+				Form_pg_shdepend form = (Form_pg_shdepend) ((char *) hdr + hdr->t_hoff);
+
+				if (form->refclassid == key->classId &&
+					form->refobjid == key->objectId &&
+					key->objectSubId == 0)
+					return true;
+			}
+		}
+	}
+	return false;
 }
 
 static void
 tempcat_recompute_used(bool committing)
 {
-	static const Oid catalogs[] = {DependRelationId, SharedDependRelationId};
 	HASH_SEQ_STATUS seq;
 	TempcatUsed *used;
 	bool		locked = false;
-	int			i;
 
 	tc_used_dirty = false;
 	if (tc_used == NULL || hash_get_num_entries(tc_used) == 0 || tc_area == NULL)
@@ -1839,42 +1906,8 @@ tempcat_recompute_used(bool committing)
 
 	hash_seq_init(&seq, tc_used);
 	while ((used = hash_seq_search(&seq)) != NULL)
-		used->seen = false;
-	for (i = 0; i < lengthof(catalogs); i++)
 	{
-		int			catidx = tempcat_catalog_index(catalogs[i]);
-		dsa_pointer ep;
-
-		for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
-		{
-			TempcatEntry *e = TC_ADDR(ep);
-			HeapTupleHeader hdr = TCE_DATA(e);
-
-			ep = e->next;
-			if (tempcat_entry_gone(e, committing))
-				continue;
-			if (catalogs[i] == DependRelationId)
-			{
-				Form_pg_depend form = (Form_pg_depend) ((char *) hdr + hdr->t_hoff);
-
-				tempcat_see_used(form->refclassid, form->refobjid, 0);
-				if (form->refobjsubid != 0)
-					tempcat_see_used(form->refclassid, form->refobjid,
-									 form->refobjsubid);
-			}
-			else
-			{
-				Form_pg_shdepend form = (Form_pg_shdepend) ((char *) hdr + hdr->t_hoff);
-
-				tempcat_see_used(form->refclassid, form->refobjid, 0);
-			}
-		}
-	}
-
-	hash_seq_init(&seq, tc_used);
-	while ((used = hash_seq_search(&seq)) != NULL)
-	{
-		if (used->seen)
+		if (tempcat_still_used(&used->key, committing))
 		{
 			locked |= used->locked;
 			continue;
@@ -3126,24 +3159,52 @@ tempcat_new_tid(void)
  * for each default of a table, pg_class.relchecks for each check
  * constraint), and must not run out of room where the session could create
  * objects up to it, or the session could not drop its objects any more.
- * Of the room that rows can take, roughly (tc_area_capacity: the area's
- * metadata, its root and the blocks' headers take the rest of its limit).
+ * An eighth of the room that rows can take up to the limit of the area
+ * (tc_area_capacity: its metadata, its root and the blocks' headers take
+ * the rest), but at least 1 MB unless that is more than a quarter: the new
+ * versions of the rows of one table with as many defaults as columns, and
+ * the bucket arrays they make grow, take about that much.
  */
 static inline Size
 tempcat_kept_room(void)
 {
-	return tc_area_capacity / 8;
+	return Max(tc_area_capacity / 8,
+			   Min((Size) 1024 * 1024, tc_area_capacity / 4));
+}
+
+/* Would rows of 'need' more bytes take of tempcat_kept_room()? */
+static inline bool
+tempcat_takes_kept_room(Size need)
+{
+	return tc_root->inuse + need + tempcat_kept_room() > tc_area_capacity;
+}
+
+/*
+ * Let the area grow into the room of dynamic shared memory that it leaves to
+ * others (see tempcat_create_area()), or not any more.  For new versions of
+ * rows no bigger than the old ones, such as dropping objects writes: the
+ * area may stop growing there before it comes to its limit, short of
+ * tempcat_kept_room(), and the session could not drop its objects any more.
+ * It still stops at its limit.
+ */
+static void
+tempcat_use_headroom(bool use)
+{
+	dsa_set_min_free_space(tc_area, use ? 0 : tc_min_free_space);
+	dsa_set_min_free_slots(tc_area, use ? 0 : tc_min_free_slots);
 }
 
 /*
  * Create an entry for a tuple and link it into the catalog's list and hash
  * tables.  Returns InvalidDsaPointer if the area is out of memory, or if
  * 'keep_room' and the entry would take of tempcat_kept_room(), in which
- * case nothing has changed.  Caller holds the exclusive lock.
+ * case nothing has changed.  For a new version of a row of 'old_len' bytes
+ * (or 0), only what it takes more counts.  Caller holds the exclusive lock.
  */
 static dsa_pointer
 tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
-					 TransactionId xmin, CommandId cmin, bool keep_room)
+					 TransactionId xmin, CommandId cmin, bool keep_room,
+					 uint32 old_len)
 {
 	const TempcatCatalogDef *def = &tempcat_catalogs[catidx];
 	TempcatCatalog *cat = &tc_root->catalogs[catidx];
@@ -3174,9 +3235,16 @@ tempcat_entry_create(int catidx, HeapTuple tup, TupleDesc desc,
 	tempcat_hash_prepare(&tc_root->tids);
 	size = MAXALIGN(sizeof(TempcatEntry)) + MAXALIGN(tup->t_len) +
 		nnodes * sizeof(TempcatHashNode);
-	if (keep_room &&
-		tc_root->inuse + size + tempcat_kept_room() > tc_area_capacity)
-		return InvalidDsaPointer;
+	if (keep_room)
+	{
+		Size		need = size;
+
+		if (old_len > 0)
+			need = MAXALIGN(tup->t_len) > MAXALIGN(old_len) ?
+				MAXALIGN(tup->t_len) - MAXALIGN(old_len) : 0;
+		if (need > 0 && tempcat_takes_kept_room(need))
+			return InvalidDsaPointer;
+	}
 	ep = tempcat_alloc(size);
 #ifdef FAULT_INJECTOR
 	/* Test hook: the area runs full for a row. */
@@ -3302,8 +3370,17 @@ tempcat_entry_copy(TempcatEntry *e, Oid relid)
 	 */
 	hdr->t_infomask &= ~HEAP_XACT_MASK;
 	hdr->t_infomask |= HEAP_XMAX_INVALID;
+
+	/*
+	 * A committed row is shown frozen, as VACUUM would have made it on disk
+	 * before its xmin wraps around: it is the session's own, and its later
+	 * snapshots all follow the commit.  Else code that compares the xmin
+	 * with that of a snapshot (e.g. for pg_index.indcheckxmin) would take it
+	 * for a later one again once 2^31 transactions went by.  (The raw xmin
+	 * stays, as the xmin system column shows it.)
+	 */
 	if (e->flags & TCE_XMIN_COMMITTED)
-		hdr->t_infomask |= HEAP_XMIN_COMMITTED;
+		hdr->t_infomask |= HEAP_XMIN_FROZEN;
 	HeapTupleHeaderSetXmin(hdr, e->xmin);
 	HeapTupleHeaderSetXmax(hdr, e->xmax);
 	HeapTupleHeaderSetCmin(hdr, e->cmin);
@@ -4424,13 +4501,13 @@ tempcat_report_full(uint32 len)
 static dsa_pointer
 tempcat_entry_create_or_reclaim(int catidx, HeapTuple tup, TupleDesc desc,
 								TransactionId xid, CommandId cid,
-								bool keep_room)
+								uint32 old_len)
 {
 	dsa_pointer ep;
 
-	ep = tempcat_entry_create(catidx, tup, desc, xid, cid, keep_room);
+	ep = tempcat_entry_create(catidx, tup, desc, xid, cid, true, old_len);
 	if (!DsaPointerIsValid(ep) && tempcat_reclaim_dead() > 0)
-		ep = tempcat_entry_create(catidx, tup, desc, xid, cid, keep_room);
+		ep = tempcat_entry_create(catidx, tup, desc, xid, cid, true, old_len);
 	return ep;
 }
 
@@ -4460,7 +4537,7 @@ tempcat_insert(Relation rel, HeapTuple tup)
 	tempcat_reserve_pending(1);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	ep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
-										 xid, cid, true);
+										 xid, cid, 0);
 	if (DsaPointerIsValid(ep))
 		tempcat_add_pending(ep);
 	LWLockRelease(&tc_root->lock);
@@ -4578,7 +4655,24 @@ tempcat_update(Relation rel, ItemPointer otid, HeapTuple newtup,
 	tempcat_reserve_pending(2);
 	LWLockAcquire(&tc_root->lock, LW_EXCLUSIVE);
 	newep = tempcat_entry_create_or_reclaim(catidx, row, RelationGetDescr(rel),
-											xid, cid, false);
+											xid, cid, olde->len);
+	if (!DsaPointerIsValid(newep) &&
+		MAXALIGN(row->t_len) <= MAXALIGN(olde->len))
+	{
+		tempcat_use_headroom(true);
+		PG_TRY();
+		{
+			newep = tempcat_entry_create(catidx, row, RelationGetDescr(rel),
+										 xid, cid, false, 0);
+		}
+		PG_CATCH();
+		{
+			tempcat_use_headroom(false);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+		tempcat_use_headroom(false);
+	}
 	if (!DsaPointerIsValid(newep))
 	{
 		LWLockRelease(&tc_root->lock);

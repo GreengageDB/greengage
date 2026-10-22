@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/transam.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
@@ -1272,6 +1273,10 @@ isSharedObjectPinned(Oid classId, Oid objectId, Relation sdepRel)
 	ScanKeyData key[2];
 	SysScanDesc scan;
 	HeapTuple	tup;
+
+	/* GPDB: as in isObjectPinned() */
+	if (objectId >= FirstNormalObjectId)
+		return false;
 
 	ScanKeyInit(&key[0],
 				Anum_pg_shdepend_refclassid,

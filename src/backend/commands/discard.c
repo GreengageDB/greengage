@@ -95,9 +95,12 @@ DiscardAll(bool isTopLevel)
 	 */
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
+		/* (but see the end) */
 		ereport(NOTICE,
 				(errcode(ERRCODE_GP_FEATURE_NOT_YET),
 				 errmsg("command without clusterwide effect"),
+				 tempcat_in_memory() ?
+				 errdetail("The session's temporary objects, kept in memory, are dropped on the segments too.") : 0,
 				 errhint("Consider alternatives as DEALLOCATE ALL, or DISCARD TEMP if a clusterwide effect is desired.")));
 	}
 

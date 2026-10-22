@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/table.h"
+#include "access/transam.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_constraint.h"
@@ -639,6 +640,15 @@ isObjectPinned(const ObjectAddress *object, Relation rel)
 	SysScanDesc scan;
 	HeapTuple	tup;
 	ScanKeyData key[2];
+
+	/*
+	 * GPDB: initdb pins the objects it made (setup_depend()), all with OIDs
+	 * below FirstNormalObjectId, which the OID counter never gives again.
+	 * The look-up would go through all rows that reference the object, e.g.
+	 * of all objects of a schema, among those kept in memory (see tempcat.c).
+	 */
+	if (object->objectId >= FirstNormalObjectId)
+		return false;
 
 	ScanKeyInit(&key[0],
 				Anum_pg_depend_refclassid,

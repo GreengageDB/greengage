@@ -314,6 +314,8 @@ typedef struct
 	dsa_area_pool pools[DSA_NUM_SIZE_CLASSES];
 	/* The total size of all active segments. */
 	size_t		total_segment_size;
+	/* GPDB: their usable pages, see dsa_get_usable_size() */
+	size_t		total_usable_pages;
 	/* The maximum total size of backing storage we are allowed. */
 	size_t		max_total_segment_size;
 	/* Highest used segment index in the history of this area. */
@@ -1127,10 +1129,10 @@ dsa_get_total_size(dsa_area *area)
 }
 
 /*
- * GPDB: roughly how many bytes of allocations of whole pages an area that
- * has its first segment only can make, up to its size limit: the pages of
- * that segment and of those it may still create, but their metadata (a
- * page of it for each 256 kB at worst), and a superblock of span objects.
+ * GPDB: roughly how many bytes of allocations of whole pages the area can
+ * make up to its size limit: the pages of the segments it has, and of those
+ * it may still create, but their metadata (a page of it for each 256 kB at
+ * worst); less a superblock of span objects.
  */
 size_t
 dsa_get_usable_size(dsa_area *area)
@@ -1139,7 +1141,7 @@ dsa_get_usable_size(dsa_area *area)
 	size_t		rest = 0;
 
 	LWLockAcquire(DSA_AREA_LOCK(area), LW_SHARED);
-	size = area->control->segment_header.usable_pages * FPM_PAGE_SIZE;
+	size = area->control->total_usable_pages * FPM_PAGE_SIZE;
 	if (area->control->max_total_segment_size >
 		area->control->total_segment_size)
 		rest = area->control->max_total_segment_size -
@@ -1454,6 +1456,7 @@ create_internal(void *place, size_t size,
 	control->handle = control_handle;
 	control->max_total_segment_size = (size_t) -1;
 	control->total_segment_size = size;
+	control->total_usable_pages = usable_pages;
 	memset(&control->segment_handles[0], 0,
 		   sizeof(dsm_handle) * DSA_MAX_SEGMENTS);
 	control->segment_handles[0] = control_handle;
@@ -2106,6 +2109,7 @@ free_segment_if_empty(dsa_area *area, dsa_segment_map *segment_map)
 	segment_map->header->freed = true;
 	Assert(area->control->total_segment_size >= segment_map->header->size);
 	area->control->total_segment_size -= segment_map->header->size;
+	area->control->total_usable_pages -= segment_map->header->usable_pages;
 	if (segment_map->header->vmem_pid == MyProcPid)
 		VmemTracker_ReleaseVmem(segment_map->header->size);
 	dsm_unpin_segment(dsm_segment_handle(segment_map->segment));
@@ -2480,6 +2484,7 @@ make_new_segment(dsa_area *area, size_t requested_pages)
 		area->high_segment_index = new_index;
 	/* Track total size of all segments. */
 	area->control->total_segment_size += total_size;
+	area->control->total_usable_pages += usable_pages;
 	Assert(area->control->total_segment_size <=
 		   area->control->max_total_segment_size);
 
