@@ -823,32 +823,14 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	 */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-<<<<<<< HEAD
-					 "SELECT _$newdata FROM %s _$newdata "
-					 "WHERE _$newdata IS NOT NULL AND EXISTS "
-					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
-					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
-					 "AND _$newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "_$newdata.ctid and _$newdata2.gp_segment_id = "
-					 "_$newdata.gp_segment_id)",
-					 tempname, tempname);
-||||||| e1c1c30f635
-					 "SELECT _$newdata FROM %s _$newdata "
-					 "WHERE _$newdata IS NOT NULL AND EXISTS "
-					 "(SELECT 1 FROM %s _$newdata2 WHERE _$newdata2 IS NOT NULL "
-					 "AND _$newdata2 OPERATOR(pg_catalog.*=) _$newdata "
-					 "AND _$newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "_$newdata.ctid)",
-					 tempname, tempname);
-=======
 					 "SELECT newdata.*::%s FROM %s newdata "
 					 "WHERE newdata.* IS NOT NULL AND EXISTS "
 					 "(SELECT 1 FROM %s newdata2 WHERE newdata2.* IS NOT NULL "
 					 "AND newdata2.* OPERATOR(pg_catalog.*=) newdata.* "
 					 "AND newdata2.ctid OPERATOR(pg_catalog.<>) "
-					 "newdata.ctid)",
+					 "newdata.ctid and newdata2.gp_segment_id = "
+					 "newdata.gp_segment_id)",
 					 tempname, tempname, tempname);
->>>>>>> 3b231596ccf
 	if (SPI_execute(querybuf.data, false, 1) != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 	if (SPI_processed > 0)
@@ -878,21 +860,21 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Start building the query for creating the diff table. */
 	resetStringInfo(&querybuf);
 
+	/*
+	 * 	GGDB: we have to use "newdata.*" instead of "newdata.*::%s",
+	 * 	because DISTRIBUTED BY clause requres us to expand all columns.
+	 * 	Either way, newdata is interpreted as a tables reference.
+	 *
+	 * 	However, this creates another issue. If any column in "newdata" is named "tid" or "sid",
+	 * 	it will collide with the alias for "mv.ctid" or "mv.gp_segment_id", resulting in an error.
+	 * 	As a workaround, we add a prefix to all columns in "newdata"
+	 * 	in make_new_heap_with_colname()
+	 */
 	appendStringInfo(&querybuf,
 					 "CREATE TEMP TABLE %s AS "
-<<<<<<< HEAD
-					 "SELECT _$mv.ctid AS tid, _$mv.gp_segment_id as sid, _$newdata.* "
-					 "FROM %s _$mv FULL JOIN %s _$newdata ON (",
-					 diffname, matviewname, tempname);
-||||||| e1c1c30f635
-					 "SELECT _$mv.ctid AS tid, _$newdata "
-					 "FROM %s _$mv FULL JOIN %s _$newdata ON (",
-					 diffname, matviewname, tempname);
-=======
-					 "SELECT mv.ctid AS tid, newdata.*::%s AS newdata "
+					 "SELECT mv.ctid AS tid, mv.gp_segment_id as sid, newdata.* "
 					 "FROM %s mv FULL JOIN %s newdata ON (",
-					 diffname, tempname, matviewname, tempname);
->>>>>>> 3b231596ccf
+					 diffname, matviewname, tempname);
 
 	/*
 	 * Get the list of index OIDs for the table from the relcache, and look up
@@ -986,19 +968,9 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 				if (foundUniqueIndex)
 					appendStringInfoString(&querybuf, " AND ");
 
-<<<<<<< HEAD
-				leftop = quote_qualified_identifier("_$newdata",
-													NameStr(newattr->attname));
-				rightop = quote_qualified_identifier("_$mv",
-||||||| e1c1c30f635
-				leftop = quote_qualified_identifier("_$newdata",
-													NameStr(attr->attname));
-				rightop = quote_qualified_identifier("_$mv",
-=======
 				leftop = quote_qualified_identifier("newdata",
-													NameStr(attr->attname));
+													NameStr(newattr->attname));
 				rightop = quote_qualified_identifier("mv",
->>>>>>> 3b231596ccf
 													 NameStr(attr->attname));
 
 				generate_operator_clause(&querybuf,
@@ -1028,20 +1000,10 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 
 
 	appendStringInfoString(&querybuf,
-<<<<<<< HEAD
-						   " AND _$newdata.* OPERATOR(pg_catalog.*=) _$mv.*) "
-						   "WHERE _$newdata.* IS NULL OR _$mv.* IS NULL "
-						   "ORDER BY tid ");
-	appendStringInfoString(&querybuf, distributed);
-||||||| e1c1c30f635
-						   " AND _$newdata OPERATOR(pg_catalog.*=) _$mv) "
-						   "WHERE _$newdata IS NULL OR _$mv IS NULL "
-						   "ORDER BY tid");
-=======
 						   " AND newdata.* OPERATOR(pg_catalog.*=) mv.*) "
 						   "WHERE newdata.* IS NULL OR mv.* IS NULL "
-						   "ORDER BY tid");
->>>>>>> 3b231596ccf
+						   "ORDER BY tid ");
+	appendStringInfoString(&querybuf, distributed);
 
 	/* Create the temporary "diff" table. */
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_UTILITY)
@@ -1066,22 +1028,10 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 	/* Deletes must come before inserts; do them first. */
 	resetStringInfo(&querybuf);
 	appendStringInfo(&querybuf,
-<<<<<<< HEAD
-					 "DELETE FROM %s _$mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
-					 "(SELECT _$diff.tid FROM %s _$diff "
-					 "WHERE _$diff.tid = _$mv.ctid and _$diff.sid = _$mv.gp_segment_id and"
-	 				 " _$diff.tid IS NOT NULL)",
-||||||| e1c1c30f635
-					 "DELETE FROM %s _$mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
-					 "(SELECT _$diff.tid FROM %s _$diff "
-					 "WHERE _$diff.tid IS NOT NULL "
-					 "AND _$diff._$newdata IS NULL)",
-=======
 					 "DELETE FROM %s mv WHERE ctid OPERATOR(pg_catalog.=) ANY "
 					 "(SELECT diff.tid FROM %s diff "
-					 "WHERE diff.tid IS NOT NULL "
-					 "AND diff.newdata IS NULL)",
->>>>>>> 3b231596ccf
+					 "WHERE diff.tid = mv.ctid and diff.sid = mv.gp_segment_id and"
+					 " diff.tid IS NOT NULL)",
 					 matviewname, diffname);
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_DELETE)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
@@ -1098,18 +1048,8 @@ refresh_by_match_merge(Oid matviewOid, Oid tempOid, Oid relowner,
 			appendStringInfo(&querybuf, " %s,", NameStr(attr->attname));
 	}
 	appendStringInfo(&querybuf,
-<<<<<<< HEAD
-					 " FROM %s _$diff WHERE tid IS NULL",
+					 " FROM %s diff WHERE tid IS NULL",
 					 diffname);
-||||||| e1c1c30f635
-					 "INSERT INTO %s SELECT (_$diff._$newdata).* "
-					 "FROM %s _$diff WHERE tid IS NULL",
-					 matviewname, diffname);
-=======
-					 "INSERT INTO %s SELECT (diff.newdata).* "
-					 "FROM %s diff WHERE tid IS NULL",
-					 matviewname, diffname);
->>>>>>> 3b231596ccf
 	if (SPI_exec(querybuf.data, 0) != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 
