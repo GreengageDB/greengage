@@ -397,3 +397,71 @@ select tableoid::regclass, * from rp_sub_copy order by id;
 reset search_path;
 drop schema partition_collation cascade;
 reset client_min_messages;
+
+--
+-- A partition added to a table created by an earlier version must have a
+-- range that is ordered under the collation stored in the table's existing
+-- boundaries, and under the key's collation. To know the stored collation,
+-- use a database with an en_US.utf8 default.
+--
+set client_min_messages = warning;
+drop database if exists partition_collation_en;
+create database partition_collation_en with lc_collate = 'en_US.utf8'
+  lc_ctype = 'en_US.utf8' template = template0;
+\c partition_collation_en
+set client_min_messages = warning;
+
+set allow_system_table_mods = on;
+create function copy_bounds(target regclass, source regclass) returns void
+language sql as $$
+	update pg_partition_rule r
+	set parrangestart = s.parrangestart, parrangeend = s.parrangeend,
+	    parruleord = s.parruleord
+	from pg_partition p, pg_partition ps, pg_partition_rule s
+	where r.paroid = p.oid and p.parrelid = target
+	  and s.paroid = ps.oid and ps.parrelid = source
+	  and s.parname = r.parname;
+$$;
+
+create table rp_def_old (id int, k text)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'));
+create table rp_c_old (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'));
+
+create table rp_def_old_def (id int, k text)
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'), default partition other);
+create table rp_c_old_def (id int, k text collate "C")
+distributed by (id)
+partition by range (k)
+(partition p1 start ('m') end ('p'), default partition other);
+
+select copy_bounds('rp_c_old', 'rp_def_old');
+select copy_bounds('rp_c_old_def', 'rp_def_old_def');
+reset allow_system_table_mods;
+
+-- 'B' sorts after 'a' in en_US.utf8, so ['B', 'a') is rejected, although it
+-- is ordered in "C".
+alter table rp_c_old add partition p2 start ('B') end ('a');
+alter table rp_c_old_def split default partition start ('B') end ('a')
+  into (partition p2, default partition);
+
+-- ['a', 'B') is ordered in en_US.utf8 but not in "C", so it is rejected too.
+alter table rp_c_old add partition p2 start ('a') end ('B');
+
+-- ['q', 's') is ordered in both.
+alter table rp_c_old add partition p3 start ('q') end ('s');
+select partitionname, partitionrangestart, partitionrangeend
+from pg_partitions
+where tablename = 'rp_c_old'
+order by partitionposition;
+insert into rp_c_old values (1, 'n'), (2, 'r');
+select tableoid::regclass, * from rp_c_old order by id;
+
+\c regression
+drop database partition_collation_en;

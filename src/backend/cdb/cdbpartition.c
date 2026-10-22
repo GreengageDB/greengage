@@ -1941,7 +1941,7 @@ del_part_template(Oid rootrelid, int16 parlevel, Oid parent)
  * boundaries of a level are compared the same way.
  */
 static void
-inherit_bound_collations(Oid paroid, Oid parentoid, char parkind,
+inherit_bound_collations(Oid paroid, Oid parentoid, PartitionByType parttype,
 						 Node *rangestart, Node *rangeend, List *listvalues)
 {
 	Relation	rel;
@@ -1965,7 +1965,7 @@ inherit_bound_collations(Oid paroid, Oid parentoid, char parkind,
 	{
 		PartitionRule *sibling = ruleMakePartitionRule(tuple);
 
-		if (parkind == 'r')
+		if (parttype == PARTTYP_RANGE)
 			sibvals = (List *) (sibling->parrangestart ? sibling->parrangestart :
 								sibling->parrangeend);
 		else if (sibling->parlistvalues)
@@ -1976,13 +1976,18 @@ inherit_bound_collations(Oid paroid, Oid parentoid, char parkind,
 	systable_endscan(sscan);
 	heap_close(rel, AccessShareLock);
 
+	/*
+	 * sibvals has one Const per partitioning key column: the START or END of
+	 * a range, or one value tuple of a list, whose key may have several
+	 * columns.
+	 */
 	keyno = 0;
 	foreach(lc, sibvals)
 	{
 		Oid			collation = ((Const *) lfirst(lc))->constcollid;
 		ListCell   *lcvals;
 
-		if (parkind == 'r')
+		if (parttype == PARTTYP_RANGE)
 		{
 			if (rangestart)
 				((Const *) list_nth((List *) rangestart, keyno))->constcollid = collation;
@@ -2270,8 +2275,7 @@ add_part_to_catalog(Oid relid, PartitionBy *pby,
 		}
 
 		if (!bTemplate_Only && !el->isDefault)
-			inherit_bound_collations(paroid, parentoid,
-									 pby->partType == PARTTYP_RANGE ? 'r' : 'l',
+			inherit_bound_collations(paroid, parentoid, pby->partType,
 									 rangestart, rangeend, (List *) listvalues);
 
 		rule->paroid = paroid;
