@@ -4007,12 +4007,8 @@ getPolicies(Archive *fout, TableInfo tblinfo[], int numTables)
 			if (!(tbinfo->dobj.dump & DUMP_COMPONENT_POLICY))
 				continue;
 
-<<<<<<< HEAD
 			tbinfo->dobj.components |= DUMP_COMPONENT_POLICY;
 
-||||||| e1c1c30f635
-=======
->>>>>>> 3b231596ccf
 			polinfo[j].dobj.objType = DO_POLICY;
 			polinfo[j].dobj.catId.tableoid =
 				atooid(PQgetvalue(res, j, i_tableoid));
@@ -8283,16 +8279,63 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 	}
 	appendPQExpBufferChar(tbloids, '}');
 
-<<<<<<< HEAD
 	resetPQExpBuffer(query);
-  if (fout->remoteVersion >= 90000)
+	if (fout->remoteVersion >= 130000)
+	{
+		/*
+		 * NB: think not to use pretty=true in pg_get_triggerdef.  It could
+		 * result in non-forward-compatible dumps of WHEN clauses due to
+		 * under-parenthesization.
+		 *
+		 * NB: We need to see tgisinternal triggers in partitions, in case the
+		 * tgenabled flag has been changed from the parent.
+		 */
+		appendPQExpBuffer(query,
+						  "SELECT t.tgrelid, t.tgname, "
+						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
+						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal\n"
+						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
+						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
+						  "LEFT JOIN pg_catalog.pg_trigger u ON (u.oid = t.tgparentid) "
+						  "WHERE (NOT t.tgisinternal OR t.tgenabled != u.tgenabled) "
+						  "ORDER BY t.tgrelid, t.tgname",
+						  tbloids->data);
+	}
+	else if (fout->remoteVersion >= 110000)
+	{
+		/*
+		 * NB: We need to see tgisinternal triggers in partitions, in case the
+		 * tgenabled flag has been changed from the parent. No tgparentid in
+		 * version 11-12, so we have to match them via pg_depend.
+		 *
+		 * See above about pretty=true in pg_get_triggerdef.
+		 */
+		appendPQExpBuffer(query,
+						  "SELECT t.tgrelid, t.tgname, "
+						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
+						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
+						  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal "
+						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
+						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
+						  "LEFT JOIN pg_catalog.pg_depend AS d ON "
+						  " d.classid = 'pg_catalog.pg_trigger'::pg_catalog.regclass AND "
+						  " d.refclassid = 'pg_catalog.pg_trigger'::pg_catalog.regclass AND "
+						  " d.objid = t.oid "
+						  "LEFT JOIN pg_catalog.pg_trigger AS pt ON pt.oid = refobjid "
+						  "WHERE (NOT t.tgisinternal OR t.tgenabled != pt.tgenabled) "
+						  "ORDER BY t.tgrelid, t.tgname",
+						  tbloids->data);
+	}
+	else if (fout->remoteVersion >= 90000)
 	{
 		/* See above about pretty=true in pg_get_triggerdef */
 		appendPQExpBuffer(query,
 						  "SELECT t.tgrelid, t.tgname, "
 						  "t.tgfoid::pg_catalog.regproc AS tgfname, "
 						  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-						  "t.tgenabled, t.tableoid, t.oid "
+						  "t.tgenabled, false as tgisinternal, "
+						  "t.tableoid, t.oid "
 						  "FROM unnest('%s'::pg_catalog.oid[]) AS src(tbloid)\n"
 						  "JOIN pg_catalog.pg_trigger t ON (src.tbloid = t.tgrelid) "
 						  "WHERE NOT t.tgisinternal "
@@ -8336,6 +8379,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 	i_tgconstrrelid = PQfnumber(res, "tgconstrrelid");
 	i_tgconstrrelname = PQfnumber(res, "tgconstrrelname");
 	i_tgenabled = PQfnumber(res, "tgenabled");
+	i_tgisinternal = PQfnumber(res, "tgisinternal");
 	i_tgdeferrable = PQfnumber(res, "tgdeferrable");
 	i_tginitdeferred = PQfnumber(res, "tginitdeferred");
 	i_tgdef = PQfnumber(res, "tgdef");
@@ -8363,175 +8407,10 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 		 * order.
 		 */
 		while (++curtblindx < numTables)
-||||||| e1c1c30f635
-		resetPQExpBuffer(query);
-		if (fout->remoteVersion >= 90000)
-=======
-		resetPQExpBuffer(query);
-		if (fout->remoteVersion >= 130000)
->>>>>>> 3b231596ccf
 		{
-<<<<<<< HEAD
 			tbinfo = &tblinfo[curtblindx];
 			if (tbinfo->dobj.catId.oid == tgrelid)
 				break;
-||||||| e1c1c30f635
-			/*
-			 * NB: think not to use pretty=true in pg_get_triggerdef.  It
-			 * could result in non-forward-compatible dumps of WHEN clauses
-			 * due to under-parenthesization.
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT tgname, "
-							  "tgfoid::pg_catalog.regproc AS tgfname, "
-							  "pg_catalog.pg_get_triggerdef(oid, false) AS tgdef, "
-							  "tgenabled, tableoid, oid "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND NOT tgisinternal",
-							  tbinfo->dobj.catId.oid);
-		}
-		else if (fout->remoteVersion >= 80300)
-		{
-			/*
-			 * We ignore triggers that are tied to a foreign-key constraint
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT tgname, "
-							  "tgfoid::pg_catalog.regproc AS tgfname, "
-							  "tgtype, tgnargs, tgargs, tgenabled, "
-							  "tgisconstraint, tgconstrname, tgdeferrable, "
-							  "tgconstrrelid, tginitdeferred, tableoid, oid, "
-							  "tgconstrrelid::pg_catalog.regclass AS tgconstrrelname "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND tgconstraint = 0",
-							  tbinfo->dobj.catId.oid);
-		}
-		else
-		{
-			/*
-			 * We ignore triggers that are tied to a foreign-key constraint,
-			 * but in these versions we have to grovel through pg_constraint
-			 * to find out
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT tgname, "
-							  "tgfoid::pg_catalog.regproc AS tgfname, "
-							  "tgtype, tgnargs, tgargs, tgenabled, "
-							  "tgisconstraint, tgconstrname, tgdeferrable, "
-							  "tgconstrrelid, tginitdeferred, tableoid, oid, "
-							  "tgconstrrelid::pg_catalog.regclass AS tgconstrrelname "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND (NOT tgisconstraint "
-							  " OR NOT EXISTS"
-							  "  (SELECT 1 FROM pg_catalog.pg_depend d "
-							  "   JOIN pg_catalog.pg_constraint c ON (d.refclassid = c.tableoid AND d.refobjid = c.oid) "
-							  "   WHERE d.classid = t.tableoid AND d.objid = t.oid AND d.deptype = 'i' AND c.contype = 'f'))",
-							  tbinfo->dobj.catId.oid);
-=======
-			/*
-			 * NB: think not to use pretty=true in pg_get_triggerdef.  It
-			 * could result in non-forward-compatible dumps of WHEN clauses
-			 * due to under-parenthesization.
-			 *
-			 * NB: We need to see tgisinternal triggers in partitions, in case
-			 * the tgenabled flag has been changed from the parent.
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT t.tgname, "
-							  "t.tgfoid::pg_catalog.regproc AS tgfname, "
-							  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-							  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal "
-							  "FROM pg_catalog.pg_trigger t "
-							  "LEFT JOIN pg_catalog.pg_trigger u ON u.oid = t.tgparentid "
-							  "WHERE t.tgrelid = '%u'::pg_catalog.oid "
-							  "AND (NOT t.tgisinternal OR t.tgenabled != u.tgenabled)",
-							  tbinfo->dobj.catId.oid);
-		}
-		else if (fout->remoteVersion >= 110000)
-		{
-			/*
-			 * NB: We need to see tgisinternal triggers in partitions, in case
-			 * the tgenabled flag has been changed from the parent. No
-			 * tgparentid in version 11-12, so we have to match them via
-			 * pg_depend.
-			 *
-			 * See above about pretty=true in pg_get_triggerdef.
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT t.tgname, "
-							  "t.tgfoid::pg_catalog.regproc AS tgfname, "
-							  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-							  "t.tgenabled, t.tableoid, t.oid, t.tgisinternal "
-							  "FROM pg_catalog.pg_trigger t "
-							  "LEFT JOIN pg_catalog.pg_depend AS d ON "
-							  " d.classid = 'pg_catalog.pg_trigger'::pg_catalog.regclass AND "
-							  " d.refclassid = 'pg_catalog.pg_trigger'::pg_catalog.regclass AND "
-							  " d.objid = t.oid "
-							  "LEFT JOIN pg_catalog.pg_trigger AS pt ON pt.oid = refobjid "
-							  "WHERE t.tgrelid = '%u'::pg_catalog.oid "
-							  "AND (NOT t.tgisinternal%s)",
-							  tbinfo->dobj.catId.oid,
-							  tbinfo->ispartition ?
-							  " OR t.tgenabled != pt.tgenabled" : "");
-		}
-		else if (fout->remoteVersion >= 90000)
-		{
-			/* See above about pretty=true in pg_get_triggerdef */
-			appendPQExpBuffer(query,
-							  "SELECT t.tgname, "
-							  "t.tgfoid::pg_catalog.regproc AS tgfname, "
-							  "pg_catalog.pg_get_triggerdef(t.oid, false) AS tgdef, "
-							  "t.tgenabled, false as tgisinternal, "
-							  "t.tableoid, t.oid "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND NOT tgisinternal",
-							  tbinfo->dobj.catId.oid);
-		}
-		else if (fout->remoteVersion >= 80300)
-		{
-			/*
-			 * We ignore triggers that are tied to a foreign-key constraint
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT tgname, "
-							  "tgfoid::pg_catalog.regproc AS tgfname, "
-							  "tgtype, tgnargs, tgargs, tgenabled, "
-							  "false as tgisinternal, "
-							  "tgisconstraint, tgconstrname, tgdeferrable, "
-							  "tgconstrrelid, tginitdeferred, tableoid, oid, "
-							  "tgconstrrelid::pg_catalog.regclass AS tgconstrrelname "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND tgconstraint = 0",
-							  tbinfo->dobj.catId.oid);
-		}
-		else
-		{
-			/*
-			 * We ignore triggers that are tied to a foreign-key constraint,
-			 * but in these versions we have to grovel through pg_constraint
-			 * to find out
-			 */
-			appendPQExpBuffer(query,
-							  "SELECT tgname, "
-							  "tgfoid::pg_catalog.regproc AS tgfname, "
-							  "tgtype, tgnargs, tgargs, tgenabled, "
-							  "tgisconstraint, tgconstrname, tgdeferrable, "
-							  "tgconstrrelid, tginitdeferred, tableoid, oid, "
-							  "tgconstrrelid::pg_catalog.regclass AS tgconstrrelname "
-							  "FROM pg_catalog.pg_trigger t "
-							  "WHERE tgrelid = '%u'::pg_catalog.oid "
-							  "AND (NOT tgisconstraint "
-							  " OR NOT EXISTS"
-							  "  (SELECT 1 FROM pg_catalog.pg_depend d "
-							  "   JOIN pg_catalog.pg_constraint c ON (d.refclassid = c.tableoid AND d.refobjid = c.oid) "
-							  "   WHERE d.classid = t.tableoid AND d.objid = t.oid AND d.deptype = 'i' AND c.contype = 'f'))",
-							  tbinfo->dobj.catId.oid);
->>>>>>> 3b231596ccf
 		}
 		if (curtblindx >= numTables)
 			fatal("unrecognized table OID %u", tgrelid);
@@ -8540,60 +8419,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 		tbinfo->triggers = tginfo + j;
 		tbinfo->numTriggers = numtrigs;
 
-<<<<<<< HEAD
 		for (int c = 0; c < numtrigs; c++, j++)
-||||||| e1c1c30f635
-		ntups = PQntuples(res);
-
-		i_tableoid = PQfnumber(res, "tableoid");
-		i_oid = PQfnumber(res, "oid");
-		i_tgname = PQfnumber(res, "tgname");
-		i_tgfname = PQfnumber(res, "tgfname");
-		i_tgtype = PQfnumber(res, "tgtype");
-		i_tgnargs = PQfnumber(res, "tgnargs");
-		i_tgargs = PQfnumber(res, "tgargs");
-		i_tgisconstraint = PQfnumber(res, "tgisconstraint");
-		i_tgconstrname = PQfnumber(res, "tgconstrname");
-		i_tgconstrrelid = PQfnumber(res, "tgconstrrelid");
-		i_tgconstrrelname = PQfnumber(res, "tgconstrrelname");
-		i_tgenabled = PQfnumber(res, "tgenabled");
-		i_tgdeferrable = PQfnumber(res, "tgdeferrable");
-		i_tginitdeferred = PQfnumber(res, "tginitdeferred");
-		i_tgdef = PQfnumber(res, "tgdef");
-
-		tginfo = (TriggerInfo *) pg_malloc(ntups * sizeof(TriggerInfo));
-
-		tbinfo->numTriggers = ntups;
-		tbinfo->triggers = tginfo;
-
-		for (j = 0; j < ntups; j++)
-=======
-		ntups = PQntuples(res);
-
-		i_tableoid = PQfnumber(res, "tableoid");
-		i_oid = PQfnumber(res, "oid");
-		i_tgname = PQfnumber(res, "tgname");
-		i_tgfname = PQfnumber(res, "tgfname");
-		i_tgtype = PQfnumber(res, "tgtype");
-		i_tgnargs = PQfnumber(res, "tgnargs");
-		i_tgargs = PQfnumber(res, "tgargs");
-		i_tgisconstraint = PQfnumber(res, "tgisconstraint");
-		i_tgconstrname = PQfnumber(res, "tgconstrname");
-		i_tgconstrrelid = PQfnumber(res, "tgconstrrelid");
-		i_tgconstrrelname = PQfnumber(res, "tgconstrrelname");
-		i_tgenabled = PQfnumber(res, "tgenabled");
-		i_tgisinternal = PQfnumber(res, "tgisinternal");
-		i_tgdeferrable = PQfnumber(res, "tgdeferrable");
-		i_tginitdeferred = PQfnumber(res, "tginitdeferred");
-		i_tgdef = PQfnumber(res, "tgdef");
-
-		tginfo = (TriggerInfo *) pg_malloc(ntups * sizeof(TriggerInfo));
-
-		tbinfo->numTriggers = ntups;
-		tbinfo->triggers = tginfo;
-
-		for (j = 0; j < ntups; j++)
->>>>>>> 3b231596ccf
 		{
 			tginfo[j].dobj.objType = DO_TRIGGER;
 			tginfo[j].dobj.catId.tableoid = atooid(PQgetvalue(res, j, i_tableoid));
@@ -9099,7 +8925,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 {
 	DumpOptions *dopt = fout->dopt;
 	PQExpBuffer q = createPQExpBuffer();
-<<<<<<< HEAD
 	PQExpBuffer tbloids = createPQExpBuffer();
 	PQExpBuffer checkoids = createPQExpBuffer();
 	PGresult   *res;
@@ -9140,29 +8965,6 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 	 */
 	appendPQExpBufferChar(tbloids, '{');
 	appendPQExpBufferChar(checkoids, '{');
-||||||| e1c1c30f635
-=======
-	int			i_attnum;
-	int			i_attname;
-	int			i_atttypname;
-	int			i_atttypmod;
-	int			i_attstattarget;
-	int			i_attstorage;
-	int			i_typstorage;
-	int			i_attidentity;
-	int			i_attgenerated;
-	int			i_attisdropped;
-	int			i_attlen;
-	int			i_attalign;
-	int			i_attislocal;
-	int			i_attnotnull;
-	int			i_attoptions;
-	int			i_attcollation;
-	int			i_attcompression;
-	int			i_attfdwoptions;
-	int			i_attmissingval;
-	int			i_atthasdef;
->>>>>>> 3b231596ccf
 
 	for (int i = 0; i < numTables; i++)
 	{
@@ -9377,45 +9179,11 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 		tbinfo->attencoding = (char **) pg_malloc(numatts * sizeof(char*));
 		hasdefaults = false;
 
-<<<<<<< HEAD
 		for (int j = 0; j < numatts; j++, r++)
-||||||| e1c1c30f635
-		for (int j = 0; j < ntups; j++)
-=======
-		i_attnum = PQfnumber(res, "attnum");
-		i_attname = PQfnumber(res, "attname");
-		i_atttypname = PQfnumber(res, "atttypname");
-		i_atttypmod = PQfnumber(res, "atttypmod");
-		i_attstattarget = PQfnumber(res, "attstattarget");
-		i_attstorage = PQfnumber(res, "attstorage");
-		i_typstorage = PQfnumber(res, "typstorage");
-		i_attidentity = PQfnumber(res, "attidentity");
-		i_attgenerated = PQfnumber(res, "attgenerated");
-		i_attisdropped = PQfnumber(res, "attisdropped");
-		i_attlen = PQfnumber(res, "attlen");
-		i_attalign = PQfnumber(res, "attalign");
-		i_attislocal = PQfnumber(res, "attislocal");
-		i_attnotnull = PQfnumber(res, "attnotnull");
-		i_attoptions = PQfnumber(res, "attoptions");
-		i_attcollation = PQfnumber(res, "attcollation");
-		i_attcompression = PQfnumber(res, "attcompression");
-		i_attfdwoptions = PQfnumber(res, "attfdwoptions");
-		i_attmissingval = PQfnumber(res, "attmissingval");
-		i_atthasdef = PQfnumber(res, "atthasdef");
-
-		for (int j = 0; j < ntups; j++)
->>>>>>> 3b231596ccf
 		{
-<<<<<<< HEAD
 			if (j + 1 != atoi(PQgetvalue(res, r, i_attnum)))
-||||||| e1c1c30f635
-			if (j + 1 != atoi(PQgetvalue(res, j, PQfnumber(res, "attnum"))))
-=======
-			if (j + 1 != atoi(PQgetvalue(res, j, i_attnum)))
->>>>>>> 3b231596ccf
 				fatal("invalid column numbering in table \"%s\"",
 					  tbinfo->dobj.name);
-<<<<<<< HEAD
 			tbinfo->attnames[j] = pg_strdup(PQgetvalue(res, r, i_attname));
 			tbinfo->atttypnames[j] = pg_strdup(PQgetvalue(res, r, i_atttypname));
 			tbinfo->atttypmod[j] = atoi(PQgetvalue(res, r, i_atttypmod));
@@ -9424,27 +9192,7 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			tbinfo->typstorage[j] = *(PQgetvalue(res, r, i_typstorage));
 			tbinfo->attidentity[j] = *(PQgetvalue(res, r, i_attidentity));
 			tbinfo->attgenerated[j] = *(PQgetvalue(res, r, i_attgenerated));
-||||||| e1c1c30f635
-			tbinfo->attnames[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attname")));
-			tbinfo->atttypnames[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "atttypname")));
-			tbinfo->atttypmod[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "atttypmod")));
-			tbinfo->attstattarget[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "attstattarget")));
-			tbinfo->attstorage[j] = *(PQgetvalue(res, j, PQfnumber(res, "attstorage")));
-			tbinfo->typstorage[j] = *(PQgetvalue(res, j, PQfnumber(res, "typstorage")));
-			tbinfo->attidentity[j] = *(PQgetvalue(res, j, PQfnumber(res, "attidentity")));
-			tbinfo->attgenerated[j] = *(PQgetvalue(res, j, PQfnumber(res, "attgenerated")));
-=======
-			tbinfo->attnames[j] = pg_strdup(PQgetvalue(res, j, i_attname));
-			tbinfo->atttypnames[j] = pg_strdup(PQgetvalue(res, j, i_atttypname));
-			tbinfo->atttypmod[j] = atoi(PQgetvalue(res, j, i_atttypmod));
-			tbinfo->attstattarget[j] = atoi(PQgetvalue(res, j, i_attstattarget));
-			tbinfo->attstorage[j] = *(PQgetvalue(res, j, i_attstorage));
-			tbinfo->typstorage[j] = *(PQgetvalue(res, j, i_typstorage));
-			tbinfo->attidentity[j] = *(PQgetvalue(res, j, i_attidentity));
-			tbinfo->attgenerated[j] = *(PQgetvalue(res, j, i_attgenerated));
->>>>>>> 3b231596ccf
 			tbinfo->needs_override = tbinfo->needs_override || (tbinfo->attidentity[j] == ATTRIBUTE_IDENTITY_ALWAYS);
-<<<<<<< HEAD
 			tbinfo->attisdropped[j] = (PQgetvalue(res, r, i_attisdropped)[0] == 't');
 			tbinfo->attlen[j] = atoi(PQgetvalue(res, r, i_attlen));
 			tbinfo->attalign[j] = *(PQgetvalue(res, r, i_attalign));
@@ -9455,44 +9203,15 @@ getTableAttrs(Archive *fout, TableInfo *tblinfo, int numTables)
 			tbinfo->attcompression[j] = *(PQgetvalue(res, r, i_attcompression));
 			tbinfo->attfdwoptions[j] = pg_strdup(PQgetvalue(res, r, i_attfdwoptions));
 			tbinfo->attmissingval[j] = pg_strdup(PQgetvalue(res, r, i_attmissingval));
-||||||| e1c1c30f635
-			tbinfo->attisdropped[j] = (PQgetvalue(res, j, PQfnumber(res, "attisdropped"))[0] == 't');
-			tbinfo->attlen[j] = atoi(PQgetvalue(res, j, PQfnumber(res, "attlen")));
-			tbinfo->attalign[j] = *(PQgetvalue(res, j, PQfnumber(res, "attalign")));
-			tbinfo->attislocal[j] = (PQgetvalue(res, j, PQfnumber(res, "attislocal"))[0] == 't');
-			tbinfo->notnull[j] = (PQgetvalue(res, j, PQfnumber(res, "attnotnull"))[0] == 't');
-			tbinfo->attoptions[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attoptions")));
-			tbinfo->attcollation[j] = atooid(PQgetvalue(res, j, PQfnumber(res, "attcollation")));
-			tbinfo->attcompression[j] = *(PQgetvalue(res, j, PQfnumber(res, "attcompression")));
-			tbinfo->attfdwoptions[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attfdwoptions")));
-			tbinfo->attmissingval[j] = pg_strdup(PQgetvalue(res, j, PQfnumber(res, "attmissingval")));
-=======
-			tbinfo->attisdropped[j] = (PQgetvalue(res, j, i_attisdropped)[0] == 't');
-			tbinfo->attlen[j] = atoi(PQgetvalue(res, j, i_attlen));
-			tbinfo->attalign[j] = *(PQgetvalue(res, j, i_attalign));
-			tbinfo->attislocal[j] = (PQgetvalue(res, j, i_attislocal)[0] == 't');
-			tbinfo->notnull[j] = (PQgetvalue(res, j, i_attnotnull)[0] == 't');
-			tbinfo->attoptions[j] = pg_strdup(PQgetvalue(res, j, i_attoptions));
-			tbinfo->attcollation[j] = atooid(PQgetvalue(res, j, i_attcollation));
-			tbinfo->attcompression[j] = *(PQgetvalue(res, j, i_attcompression));
-			tbinfo->attfdwoptions[j] = pg_strdup(PQgetvalue(res, j, i_attfdwoptions));
-			tbinfo->attmissingval[j] = pg_strdup(PQgetvalue(res, j, i_attmissingval));
->>>>>>> 3b231596ccf
 			tbinfo->attrdefs[j] = NULL; /* fix below */
-<<<<<<< HEAD
 			if (PQgetvalue(res, r, i_atthasdef)[0] == 't')
-||||||| e1c1c30f635
-			if (PQgetvalue(res, j, PQfnumber(res, "atthasdef"))[0] == 't')
-=======
-			if (PQgetvalue(res, j, i_atthasdef)[0] == 't')
->>>>>>> 3b231596ccf
 				hasdefaults = true;
 			/* these flags will be set in flagInhAttrs() */
 			tbinfo->inhNotNull[j] = false;
 
 			/* column storage attributes */
-			if (!PQgetisnull(res, r, PQfnumber(res, "attencoding")))
-				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, PQfnumber(res, "attencoding")));
+			if (!PQgetisnull(res, r, i_attencoding))
+				tbinfo->attencoding[j] = pg_strdup(PQgetvalue(res, r, i_attencoding));
 			else
 				tbinfo->attencoding[j] = NULL;
 		}
