@@ -958,6 +958,37 @@ ERROR:  out of room for the catalog rows of temporary objects
 DETAIL:  The session keeps them in up to 1024 kB of memory.
 DROP TABLE tc_defs;
 DISCARD TEMP;
+-- Dropping objects may go beyond the limit, up to twice that, for the new
+-- versions of rows it writes, which defaults of columns added later make
+-- big (here more than the room kept): such a table can be dropped, also at
+-- commit, which would roll back the transaction otherwise.
+CREATE TEMP TABLE tc_keep (a int) DISTRIBUTED BY (a);
+BEGIN;
+INSERT INTO tc_keep SELECT generate_series(1, 10);
+CREATE TEMP TABLE tc_fast (a int) ON COMMIT DROP DISTRIBUTED BY (a);
+DO $$
+BEGIN
+  FOR i IN 1..1000 LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE tc_fast ADD COLUMN c%s text DEFAULT repeat(md5(%L), 56)', i, i);
+    EXCEPTION WHEN out_of_memory THEN
+      EXIT;
+    END;
+  END LOOP;
+END $$;
+COMMIT;
+SELECT count(*) FROM tc_keep;
+ count 
+-------
+    10
+(1 row)
+
+SELECT to_regclass('tc_fast') IS NULL AS dropped;
+ dropped 
+---------
+ t
+(1 row)
+
 -- Segments of the area that empty go back to the OS when the session goes
 -- idle: its memory falls by most of the area (bodies that do not compress).
 \c
