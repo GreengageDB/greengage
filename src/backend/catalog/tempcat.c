@@ -136,6 +136,7 @@
 #include "catalog/pg_type_encoding.h"
 #include "catalog/tempcat.h"
 #include "cdb/cdbendpoint.h"
+#include "cdb/cdbsreh.h"
 #include "commands/tablespace.h"
 #include "cdb/cdbvars.h"
 #include "miscadmin.h"
@@ -2155,9 +2156,12 @@ tempcat_key_is_temp(Oid catalog, const char *objname, Oid namespaceOid,
 		case PolicyRelationId:
 			return tempcat_owns_oid(RelationRelationId, keyOid1);
 
+		/*
+		 * (keyOid2 is the constraint type, not the domain: constraints of
+		 * domains come with 'temp', see GetNewOidForDomainConstraint())
+		 */
 		case ConstraintRelationId:
-			return tempcat_owns_oid(RelationRelationId, keyOid1) ||
-				tempcat_owns_oid(TypeRelationId, keyOid2);
+			return tempcat_owns_oid(RelationRelationId, keyOid1);
 
 		default:
 			return false;
@@ -3966,8 +3970,29 @@ tempcat_before_exit(int code, Datum arg)
 
 		if (!TransactionIdIsValid(e->xmax) ||
 			tempcat_xid_status(e->xmax) != TCX_COMMITTED)
+		{
 			tempcat_unlink_files((Form_pg_class) ((char *) hdr + hdr->t_hoff));
+			/* (COPY ... LOG ERRORS; nothing drops them otherwise) */
+			ErrorLogDelete(MyDatabaseId, tempcat_entry_oid(e));
+		}
 		pgstat_purge_relation(tempcat_entry_oid(e));
+		ep = e->next;
+	}
+
+	/*
+	 * The persistent error logs of our temporary schemas stay after their
+	 * tables until the schema is dropped, which nothing does once its rows
+	 * in memory are gone: remove them, rather than look for those of a new
+	 * schema's OID each time one is created.  (A node going down
+	 * leaves them, as nothing knows of the schema any more; its OID comes
+	 * again only after the OID counter wrapped around.)
+	 */
+	catidx = tempcat_catalog_index(NamespaceRelationId);
+	for (ep = tc_root->catalogs[catidx].head; DsaPointerIsValid(ep);)
+	{
+		TempcatEntry *e = TC_ADDR(ep);
+
+		PersistentErrorLogDelete(MyDatabaseId, tempcat_entry_oid(e), NULL);
 		ep = e->next;
 	}
 

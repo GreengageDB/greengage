@@ -26,7 +26,6 @@
 #include "utils/syscache.h"
 
 #include "catalog/oid_dispatch.h"
-#include "cdb/cdbsreh.h"
 
 
 /* ----------------
@@ -99,13 +98,6 @@ NamespaceCreate(const char *nspName, Oid ownerId, bool isTemp)
 
 	CatalogTupleInsert(nspdesc, tup);
 	Assert(OidIsValid(nspoid));
-
-	/*
-	 * GPDB: persistent error logs of COPY ... LOG ERRORS that a session which
-	 * did not exit cleanly left under this OID of a temporary namespace kept
-	 * in memory (see heap_create_with_catalog()).
-	 */
-	PersistentErrorLogDelete(MyDatabaseId, nspoid, NULL);
 
 	table_close(nspdesc, RowExclusiveLock);
 

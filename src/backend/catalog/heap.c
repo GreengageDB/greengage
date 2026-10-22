@@ -1571,11 +1571,10 @@ heap_create_with_catalog(const char *relname,
 	}
 
 	/*
-	 * GPDB: an error log of COPY ... LOG ERRORS that a session which did not
-	 * exit cleanly left under the OID of a temporary table kept in memory: no
-	 * catalog row of it was left to drop it with, and the OID counter gives
-	 * the OID again, to any relation, after it wrapped around (see
-	 * tempcat.c).
+	 * GPDB: an error log of COPY ... LOG ERRORS that a node going down left
+	 * under the OID of a temporary table kept in memory: no catalog row of it
+	 * was left to drop it with, and the OID counter gives the OID again, to
+	 * any relation, after it wrapped around (see tempcat_before_exit()).
 	 */
 	ErrorLogDelete(MyDatabaseId, relid);
 
