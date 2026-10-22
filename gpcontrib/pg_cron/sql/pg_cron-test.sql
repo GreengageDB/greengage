@@ -177,8 +177,7 @@ DECLARE
 BEGIN
     FOR i IN 1..30 LOOP
         SELECT status INTO v_status FROM cron.job_run_details
-            WHERE jobid OPERATOR(pg_catalog.=) p_jobid 
-            AND status OPERATOR(pg_catalog.=) ANY(ARRAY['succeeded', 'failed'])
+            WHERE jobid = p_jobid AND status IN ('succeeded', 'failed')
         ORDER BY runid DESC LIMIT 1;
         IF v_status IS NOT NULL THEN
             RETURN v_status;
@@ -216,6 +215,7 @@ WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
 DELETE FROM cron.job_run_details
     WHERE jobid OPERATOR(pg_catalog.=) :hba_job_id;
 DROP ROLE pg_cron_hba_test;
+DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 
 SELECT pg_get_userbyid(datdba) AS pgcron_regress_original_owner
 FROM pg_database WHERE datname = current_database() \gset
@@ -269,7 +269,6 @@ ALTER DATABASE :"DBNAME" OWNER TO :"pgcron_regress_original_owner";
 ALTER DATABASE :"DBNAME" RESET search_path;
 
 -- cleaning
-DROP FUNCTION public.pg_cron_wait_for_job(bigint);
 DROP EXTENSION pg_cron;
 drop operator public.=(int8, int8);
 drop operator public.=(text, text);
