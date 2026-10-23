@@ -91,7 +91,7 @@ class GGShrink:
         },
         {
             'trigger': 'move_to_STATE_PREPARE_SHRINK_SCHEMA_STARTED',
-            'source': 'STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_DONE',
+            'source': ['STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_DONE', 'STATE_SHRINK_TABLES_DONE'],
             'dest': 'STATE_PREPARE_SHRINK_SCHEMA_STARTED'
         },
         {
@@ -151,7 +151,7 @@ class GGShrink:
         },
         {
             'trigger': 'move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START',
-            'source': 'STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE',
+            'source': ['STATE_SHRINK_ROLLBACK_RESTORE_TARGET_SEGMENT_COUNT_DONE', 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE'],
             'dest': 'STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START'
         },
         {
@@ -263,8 +263,23 @@ class GGShrink:
             if bool(row[0]) is False:
                 self.logger.info("Cluster restarted after previous run, trying to repopulate the relation queue")
                 return 'STATE_BACKUP_CATALOG_AND_UPDATE_TARGET_SEGMENT_COUNT_STARTED'
-        
+
+            # 'STATE_SHRINK_TABLES_DONE' is stored both before another round of table list
+            # repopulation and before catalog shrink, so re-run the check for tables
+            # not yet rebalanced instead of moving forward blindly
+            if prev_state == 'STATE_SHRINK_TABLES_DONE':
+                return 'STATE_SHRINK_TABLES_DONE'
+
         return self.states_main_shrink_flow[prev_idx + 1]
+
+    def get_rollback_state_after_interrupt(self, prev_state) -> str:
+        # 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE' is stored both before another round
+        # of table list repopulation and before rebalance schema drop, so re-run the check
+        # for tables not yet rolled back instead of moving forward blindly
+        if prev_state == 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE':
+            return 'STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE'
+
+        return self.states_rollback_flow[self.states_rollback_flow.index(prev_state) + 1]
 
     def on_every_state(self) -> None:
         if self.shutdown_requested:
@@ -369,7 +384,7 @@ class GGShrink:
                 self.logger.info('Continue interrupted shrink rollback operation...')
                 self.logger.info(f"Previous run stopped after state '{state_from_prev_run}', trying to continue from the next state...")
                 try:
-                    next_state = self.states_rollback_flow[ self.states_rollback_flow.index(state_from_prev_run) + 1 ]
+                    next_state = self.get_rollback_state_after_interrupt(state_from_prev_run)
                 except:
                     self.logger.error("Can't determine next rollback state")
                     self.trigger('move_to_STATE_ERROR')
@@ -440,8 +455,16 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_TABLES_DONE(self) -> None:
-        self.logger.info('Tables rebalance complete')
-        self.trigger('move_to_STATE_SHRINK_CATALOG_STARTED')
+        self.logger.info('Checking for tables that were not rebalanced...')
+        not_rebalanced_tables = self.collect_not_rebalanced_tables(False)
+        if not_rebalanced_tables:
+            self.logger.info(f'Found {len(not_rebalanced_tables)} table(s) not yet rebalanced, rebuilding the list of tables to rebalance:')
+            for table in not_rebalanced_tables:
+                self.logger.info(f'    {table}')
+            self.trigger('move_to_STATE_PREPARE_SHRINK_SCHEMA_STARTED')
+        else:
+            self.logger.info('Tables rebalance complete')
+            self.trigger('move_to_STATE_SHRINK_CATALOG_STARTED')
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_CATALOG_STARTED(self) -> None:
@@ -561,6 +584,7 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_DONE(self) -> None:
+        self.logger.info(f'Initiated list of tables to roll back after rebalance')
         self.trigger('move_to_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_START')
 
     @wrap_func_with_faults
@@ -572,7 +596,16 @@ class GGShrink:
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_SHRINKED_TABLES_DONE(self) -> None:
-        self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START')
+        self.logger.info('Checking for tables that were not rolled back after rebalance...')
+        not_rolled_back_tables = self.collect_not_rebalanced_tables(True)
+        if not_rolled_back_tables:
+            self.logger.info(f'Found {len(not_rolled_back_tables)} table(s) not yet rolled back, rebuilding the list of tables to roll back:')
+            for table in not_rolled_back_tables:
+                self.logger.info(f'    {table}')
+            self.trigger('move_to_STATE_SHRINK_ROLLBACK_PREPARE_SCHEMA_START')
+        else:
+            self.logger.info('Tables rollback after rebalance complete')
+            self.trigger('move_to_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START')
 
     @wrap_func_with_faults
     def on_enter_STATE_SHRINK_ROLLBACK_DROP_SCHEMA_START(self) -> None:
@@ -681,10 +714,16 @@ class GGShrink:
             return long_func
 
         def table_exists(self, conn: dbconn.Connection) -> bool:
+            # The table could be dropped after the list of tables was built, and another
+            # relation (for example, a view) could be created with the same name. So check
+            # the relation is still of a kind we rebalance (see get_tables_to_rebalance_from_where()).
             if dbconn.querySingleton(conn, f"""
                 SELECT count(1)
                 FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
-                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}'
+                JOIN gp_distribution_policy p ON c.oid = p.localoid
+                LEFT JOIN pg_exttable pe ON (c.oid = pe.reloid AND pe.writable)
+                WHERE c.relname = '{escape_string(self.rel_name)}' AND n.nspname = '{escape_string(self.schema_name)}' AND
+                c.relkind IN ('r', 'p', 'm', 'f') AND (c.relkind != 'f' OR pe.reloid IS NOT NULL)
                 """) == 0:
                 return False
             return True
@@ -789,9 +828,33 @@ class GGShrink:
             finally:
                 pass
 
+    def collect_databases_to_process(self) -> List[str]:
+        cursor = dbconn.query(self.conn, 'SELECT datname FROM pg_database')
+        databases_to_process = []
+        for record in cursor:
+            database_name = record[0]
+            if database_name != 'template0':
+                databases_to_process.append(database_name)
+        return databases_to_process
+
+    def get_tables_to_rebalance_from_where(self, is_rollback: bool) -> str:
+        # FROM and WHERE clauses selecting the relations that still need to be rebalanced (or
+        # rolled back). Shared by the list initiation and by the check for not rebalanced
+        # tables, so both always agree on the set of relations.
+        # Foreign tables are included only if they are writable external tables.
+        cmp = '<=' if is_rollback else '>'
+        return f'''FROM pg_class c
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            JOIN gp_distribution_policy p ON c.oid = p.localoid
+            LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
+            WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
+            (c.relkind != 'f' OR pe.reloid IS NOT NULL) AND
+            c.relpersistence != 't' AND
+            p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
+            n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')'''
+
     def prepare_shrink_schema(self, is_rollback: bool) -> None:
         status = 'done' if is_rollback else 'none'
-        cmp = '<=' if is_rollback else '>'
 
         dbconn.execSQL(self.conn, 'BEGIN')
 
@@ -799,12 +862,7 @@ class GGShrink:
         # for the case we re-enter this state after we were interrupted right after it
         self.rebalance_schema.clearTablesToRebalanceWithStatus(status)
 
-        cursor = dbconn.query(self.conn, 'SELECT datname FROM pg_database')
-        databases_to_process = []
-        for record in cursor:
-            database_name = record[0]
-            if database_name != 'template0':
-                databases_to_process.append(database_name)
+        databases_to_process = self.collect_databases_to_process()
 
         if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
             if is_rollback:
@@ -816,8 +874,8 @@ class GGShrink:
                 # and multiply by the number of original segments (as here CTAS is used as well - we will re-create data on each segment).
                 str_data_move_size = f'''
                     CASE
-                        WHEN p.policytype = 'r' THEN (__ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments) / p.numsegments) * {self.gparray.get_segment_count()}
-                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, p.numsegments)
+                        WHEN p.policytype = 'r' THEN (pg_temp.ggrebalance_get_data_move_size(c.oid, p.numsegments) / p.numsegments) * {self.gparray.get_segment_count()}
+                        ELSE pg_temp.ggrebalance_get_data_move_size(c.oid, p.numsegments)
                     END AS data_move_size'''
             else:
                 # In case of normal shrink operation, function 'ggrebalance_get_data_move_size()'
@@ -827,7 +885,7 @@ class GGShrink:
                 str_data_move_size = f'''
                     CASE
                         WHEN p.policytype = 'r' THEN 0
-                        ELSE __ggrebalance_temp_schema.ggrebalance_get_data_move_size(c.oid, {self.shrink_plan.getTargetSegmentCount()})
+                        ELSE pg_temp.ggrebalance_get_data_move_size(c.oid, {self.shrink_plan.getTargetSegmentCount()})
                     END AS data_move_size'''
         else:
             str_data_move_size = '0 as data_move_size'
@@ -836,10 +894,8 @@ class GGShrink:
             dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
             with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
                 if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
-                    # 'public' schema may be missing, so create our own temp schema to carry the function
-                    dbconn.execSQL(conn, 'CREATE SCHEMA __ggrebalance_temp_schema');
                     dbconn.execSQL(conn, f'''
-                        CREATE OR REPLACE FUNCTION __ggrebalance_temp_schema.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
+                        CREATE OR REPLACE FUNCTION pg_temp.ggrebalance_get_data_move_size(p_rel_oid OID, gp_segment_id_limit INT)
                         RETURNS NUMERIC
                         AS $$
                         WITH cte AS MATERIALIZED (
@@ -849,24 +905,26 @@ class GGShrink:
                         ) SELECT sum(pg_catalog.pg_relation_size(cte.oid)) FROM cte;
                         $$ LANGUAGE sql STABLE''')
                 cursor = self.execSqlInThread(conn,
-                    f'''SELECT n.nspname, c.relname, c.relkind, pe.writable is not null as external_writable, {str_data_move_size}
-                    FROM pg_class c
-                    JOIN pg_namespace n ON c.relnamespace = n.oid
-                    JOIN gp_distribution_policy p ON c.oid = p.localoid
-                    LEFT JOIN pg_exttable pe on (c.oid=pe.reloid and pe.writable)
-                    WHERE c.relkind IN ('r', 'p', 'm', 'f') AND c.relispartition = FALSE AND
-                    c.relpersistence != 't' AND
-                    p.numsegments {cmp} {self.shrink_plan.getTargetSegmentCount()} AND
-                    n.nspname NOT IN ('pg_catalog', 'information_schema', '{self.rebalance_schema.getSchemaName()}')''')
-                for schema_name, rel_name, rel_kind, external_writable, data_move_size in cursor:
-                    if rel_kind == 'f' and not external_writable:
-                        continue
+                    f'''SELECT n.nspname, c.relname, {str_data_move_size}
+                    {self.get_tables_to_rebalance_from_where(is_rollback)}''')
+                for schema_name, rel_name, data_move_size in cursor:
                     self.rebalance_schema.addTableToRebalance(db, schema_name, rel_name, status, data_move_size)
 
-                if self.rebalance_schema.getProgressType() == self.rebalance_schema.ProgressType.PROGRESS_DETAILED:
-                    dbconn.execSQL(conn, 'DROP SCHEMA __ggrebalance_temp_schema CASCADE')
-
         dbconn.execSQL(self.conn, 'COMMIT')
+
+    def collect_not_rebalanced_tables(self, is_rollback: bool) -> List[str]:
+        not_rebalanced_tables = []
+        databases_to_process = self.collect_databases_to_process()
+        for db in databases_to_process:
+            dburl = dbconn.DbURL(dbname=db, port=self.gpEnv.getCoordinatorPort())
+            with closing(dbconn.connect(dburl, encoding='UTF8')) as conn:
+                cursor = dbconn.query(conn,
+                    f'''SELECT n.nspname, c.relname
+                    {self.get_tables_to_rebalance_from_where(is_rollback)}
+                    ORDER BY n.nspname, c.relname''')
+                for schema_name, rel_name in cursor:
+                    not_rebalanced_tables.append(f'"{db}"."{schema_name}"."{rel_name}"')
+        return not_rebalanced_tables
 
     def rebalance_tables(self, original_status: str, target_status: str, target_segment_count: int) -> None:
         cursor = self.rebalance_schema.getTablesToRebalanceWithStatus(original_status)

@@ -21,10 +21,6 @@ case "$(uname -s)" in
         BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/')"
     fi
 
-    if [ -f /etc/redos-release ]; then
-        BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}" | sed 's/-/_/')"
-    fi
-
     if [ -z "${BLD_ARCH_HOST}" ] && [ -f /etc/os-release ]; then
         BLD_ARCH_HOST="$(. /etc/os-release; echo "${ID}${VERSION_ID}_$(uname -m)")"
     fi
