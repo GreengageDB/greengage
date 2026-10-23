@@ -1,4 +1,8 @@
 #!/bin/bash
+# Some packages, for example KRB5, not installing properly without this option
+export DEBIAN_FRONTEND=noninteractive
+
+set -eo pipefail
 
 apt-get update
 apt-get install -y \
@@ -50,7 +54,7 @@ apt-get install -y \
 	zlib1g-dev
 
 curl -fsSL --proto '=https' --proto-redir '=https' \
-	https://greengagedb.org/repositories/gpg  \
+	https://greengagedb.org/repositories/gpg | \
 	gpg --dearmor -o /etc/apt/keyrings/greengagedb.gpg
 echo "deb [signed-by=/etc/apt/keyrings/greengagedb.gpg] \
 	https://greengagedb.org/repositories/ubuntu/$(lsb_release -sr)/x86_64 \
